@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from ccs_platform.api.deps import ProfileContext, get_db, get_profile_context
 from ccs_platform.api.v1.schemas import (
+    PaginatedRuntimeSettings,
     RuntimeSettingCreate,
     RuntimeSettingOut,
     RuntimeSettingsSeedRequest,
@@ -23,17 +24,43 @@ from ccs_platform.db import models
 router = APIRouter(prefix="/runtime-settings", tags=["runtime-settings"])
 
 
-@router.get("", response_model=list[RuntimeSettingOut])
+@router.get("", response_model=PaginatedRuntimeSettings)
 def list_runtime_settings(
     db: Session = Depends(get_db),
     profile: ProfileContext = Depends(get_profile_context),
-) -> list[RuntimeSettingOut]:
+    page: int = 1,
+    page_size: int = 100,
+    search: str | None = None,
+) -> PaginatedRuntimeSettings:
+    page = max(page, 1)
+    page_size = min(max(page_size, 1), 1000)
+
+    query = select(models.RuntimeSetting).where(models.RuntimeSetting.profile_id == profile.profile_id)
+    count_query = select(func.count(models.RuntimeSetting.id)).where(models.RuntimeSetting.profile_id == profile.profile_id)
+
+    if search:
+        token = f"%{search.strip().upper()}%"
+        predicate = or_(
+            func.upper(models.RuntimeSetting.key).like(token),
+            func.upper(func.coalesce(models.RuntimeSetting.bank_code, "")).like(token),
+            func.upper(func.coalesce(models.RuntimeSetting.description, "")).like(token),
+        )
+        query = query.where(predicate)
+        count_query = count_query.where(predicate)
+
+    total = int(db.execute(count_query).scalar_one())
     rows = db.execute(
-        select(models.RuntimeSetting)
-        .where(models.RuntimeSetting.profile_id == profile.profile_id)
+        query
         .order_by(models.RuntimeSetting.bank_code.asc(), models.RuntimeSetting.key.asc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
     ).scalars().all()
-    return [RuntimeSettingOut.model_validate(row) for row in rows]
+    return PaginatedRuntimeSettings(
+        total=total,
+        page=page,
+        page_size=page_size,
+        items=[RuntimeSettingOut.model_validate(row) for row in rows],
+    )
 
 
 @router.post("", response_model=RuntimeSettingOut)

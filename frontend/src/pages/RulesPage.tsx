@@ -3,34 +3,48 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { JsonView } from '../components/JsonView';
 import { Panel } from '../components/Panel';
+import { TablePagination } from '../components/TablePagination';
 
 export function RulesPage() {
   const [categories, setCategories] = useState<any[]>([]);
   const [rules, setRules] = useState<any[]>([]);
+  const [rulesPage, setRulesPage] = useState(1);
+  const [rulesPageSize, setRulesPageSize] = useState(100);
+  const [rulesTotal, setRulesTotal] = useState(0);
+  const [rulesSearch, setRulesSearch] = useState('');
   const [categoryName, setCategoryName] = useState('');
   const [newRule, setNewRule] = useState({
     name: '',
     category_name: '',
     match_type: 'contains',
     pattern: '',
-    bank_code: '',
-    card_last4: '',
-    priority: 100,
     active: true,
   });
-  const [ruleTest, setRuleTest] = useState({ bank_code: 'FAB', card_last4: '', merchant_normalized: '' });
+  const [ruleTest, setRuleTest] = useState({ merchant_normalized: '' });
   const [ruleTestResult, setRuleTestResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function load() {
+  async function load(nextPage = rulesPage, nextPageSize = rulesPageSize, nextSearch = rulesSearch) {
     try {
       setError(null);
+      const ruleParams = new URLSearchParams();
+      ruleParams.set('page', String(nextPage));
+      ruleParams.set('page_size', String(nextPageSize));
+      if (nextSearch.trim()) {
+        ruleParams.set('search', nextSearch.trim());
+      }
       const [catRows, ruleRows] = await Promise.all([
         api.get<any[]>('/categories'),
-        api.get<any[]>('/category-rules'),
+        api.get<any>(`/category-rules?${ruleParams.toString()}`),
       ]);
       setCategories(catRows);
-      setRules(ruleRows);
+      const nextTotal = Number(ruleRows.total || 0);
+      setRulesTotal(nextTotal);
+      setRules(ruleRows.items || []);
+      const totalPages = Math.max(1, Math.ceil(nextTotal / Math.max(nextPageSize, 1)));
+      if (nextPage > totalPages) {
+        setRulesPage(totalPages);
+      }
     } catch (err) {
       setError((err as Error).message);
     }
@@ -49,22 +63,16 @@ export function RulesPage() {
 
   async function createRule() {
     try {
-      await api.post('/category-rules', {
-        ...newRule,
-        bank_code: newRule.bank_code.trim() || null,
-        card_last4: newRule.card_last4.trim() || null,
-      });
+      await api.post('/category-rules', newRule);
       setNewRule({
         name: '',
         category_name: '',
         match_type: 'contains',
         pattern: '',
-        bank_code: '',
-        card_last4: '',
-        priority: 100,
         active: true,
       });
-      load();
+      setRulesPage(1);
+      load(1, rulesPageSize, rulesSearch);
     } catch (err) {
       setError((err as Error).message);
     }
@@ -72,11 +80,7 @@ export function RulesPage() {
 
   async function testRule() {
     try {
-      const result = await api.post('/category-rules/test', {
-        ...ruleTest,
-        bank_code: ruleTest.bank_code.toUpperCase(),
-        card_last4: ruleTest.card_last4.trim() || null,
-      });
+      const result = await api.post('/category-rules/test', ruleTest);
       setRuleTestResult(result);
     } catch (err) {
       setError((err as Error).message);
@@ -85,7 +89,7 @@ export function RulesPage() {
 
   useEffect(() => {
     load();
-  }, []);
+  }, [rulesPage, rulesPageSize, rulesSearch]);
 
   return (
     <div className="grid">
@@ -94,7 +98,7 @@ export function RulesPage() {
         <div className="row">
           <input value={categoryName} onChange={(e) => setCategoryName(e.target.value)} placeholder="New category" />
           <button className="primary" onClick={createCategory}>Add Category</button>
-          <button className="ghost" onClick={load}>Refresh</button>
+          <button className="ghost" onClick={() => load()}>Refresh</button>
         </div>
         <div className="row" style={{ marginTop: '0.6rem' }}>
           {categories.map((cat) => <span key={cat.id} className="badge">{cat.name}</span>)}
@@ -111,19 +115,25 @@ export function RulesPage() {
             <option value="regex">regex</option>
           </select>
           <input value={newRule.pattern} onChange={(e) => setNewRule((p) => ({ ...p, pattern: e.target.value }))} placeholder="Pattern" />
-          <input value={newRule.bank_code} onChange={(e) => setNewRule((p) => ({ ...p, bank_code: e.target.value.toUpperCase() }))} placeholder="Bank (optional)" />
-          <input value={newRule.card_last4} onChange={(e) => setNewRule((p) => ({ ...p, card_last4: e.target.value }))} placeholder="Card last4 (optional)" />
-          <input
-            type="number"
-            value={newRule.priority}
-            onChange={(e) => setNewRule((p) => ({ ...p, priority: Number(e.target.value) }))}
-            style={{ width: '90px' }}
-          />
           <button className="primary" onClick={createRule}>Add Rule</button>
         </div>
+        <p className="muted" style={{ marginTop: '0.55rem' }}>
+          Matching is automatic: the most specific matching pattern (longest keyword) wins.
+        </p>
       </Panel>
 
       <Panel title="Rules">
+        <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.6rem' }}>
+          <input
+            value={rulesSearch}
+            onChange={(event) => {
+              setRulesPage(1);
+              setRulesSearch(event.target.value);
+            }}
+            placeholder="Search rules"
+          />
+          <button className="ghost" onClick={() => load()}>Refresh</button>
+        </div>
         <div className="table-wrap">
           <table>
             <thead>
@@ -133,8 +143,6 @@ export function RulesPage() {
                 <th>Category</th>
                 <th>Match</th>
                 <th>Pattern</th>
-                <th>Scope</th>
-                <th>Priority</th>
               </tr>
             </thead>
             <tbody>
@@ -145,19 +153,26 @@ export function RulesPage() {
                   <td>{rule.category_name}</td>
                   <td>{rule.match_type}</td>
                   <td>{rule.pattern}</td>
-                  <td>{rule.bank_code || '*'} / {rule.card_last4 || '*'}</td>
-                  <td>{rule.priority}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+        <TablePagination
+          page={rulesPage}
+          pageSize={rulesPageSize}
+          total={rulesTotal}
+          itemLabel="rules"
+          onPageChange={setRulesPage}
+          onPageSizeChange={(next) => {
+            setRulesPageSize(next);
+            setRulesPage(1);
+          }}
+        />
       </Panel>
 
       <Panel title="Rule Test">
         <div className="row">
-          <input value={ruleTest.bank_code} onChange={(e) => setRuleTest((p) => ({ ...p, bank_code: e.target.value }))} placeholder="Bank" />
-          <input value={ruleTest.card_last4} onChange={(e) => setRuleTest((p) => ({ ...p, card_last4: e.target.value }))} placeholder="Card last4 (optional)" />
           <input value={ruleTest.merchant_normalized} onChange={(e) => setRuleTest((p) => ({ ...p, merchant_normalized: e.target.value }))} placeholder="Merchant normalized" />
           <button className="primary" onClick={testRule}>Test</button>
         </div>

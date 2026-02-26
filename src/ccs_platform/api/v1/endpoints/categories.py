@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from ccs_platform.db import models
@@ -14,6 +14,7 @@ from ccs_platform.api.v1.schemas import (
     CategoryRuleTestRequest,
     CategoryRuleTestResponse,
     CategoryRuleUpdate,
+    PaginatedCategoryRules,
 )
 from ccs_platform.domain.categorization.engine import categorize, ensure_category
 
@@ -35,12 +36,42 @@ def create_category(payload: CategoryCreate, db: Session = Depends(get_db)) -> C
     return CategoryOut.model_validate(category)
 
 
-@router.get("/category-rules", response_model=list[CategoryRuleOut])
-def list_category_rules(db: Session = Depends(get_db)) -> list[CategoryRuleOut]:
+@router.get("/category-rules", response_model=PaginatedCategoryRules)
+def list_category_rules(
+    db: Session = Depends(get_db),
+    page: int = 1,
+    page_size: int = 100,
+    search: str | None = None,
+) -> PaginatedCategoryRules:
+    page = max(page, 1)
+    page_size = min(max(page_size, 1), 1000)
+
+    query = select(models.CategoryRule)
+    count_query = select(func.count(models.CategoryRule.id))
+
+    if search:
+        token = f"%{search.strip().upper()}%"
+        predicate = or_(
+            func.upper(models.CategoryRule.name).like(token),
+            func.upper(models.CategoryRule.category_name).like(token),
+            func.upper(models.CategoryRule.pattern).like(token),
+        )
+        query = query.where(predicate)
+        count_query = count_query.where(predicate)
+
+    total = int(db.execute(count_query).scalar_one())
     rows = db.execute(
-        select(models.CategoryRule).order_by(models.CategoryRule.priority.asc(), models.CategoryRule.id.asc())
+        query
+        .order_by(func.length(models.CategoryRule.pattern).desc(), models.CategoryRule.id.asc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
     ).scalars().all()
-    return [CategoryRuleOut.model_validate(row) for row in rows]
+    return PaginatedCategoryRules(
+        total=total,
+        page=page,
+        page_size=page_size,
+        items=[CategoryRuleOut.model_validate(row) for row in rows],
+    )
 
 
 @router.post("/category-rules", response_model=CategoryRuleOut)
@@ -55,9 +86,9 @@ def create_category_rule(
         category_name=payload.category_name,
         match_type=payload.match_type,
         pattern=payload.pattern,
-        bank_code=payload.bank_code.upper() if payload.bank_code else None,
-        card_last4=payload.card_last4,
-        priority=payload.priority,
+        bank_code=None,
+        card_last4=None,
+        priority=100,
         active=payload.active,
     )
     db.add(row)
@@ -82,6 +113,9 @@ def patch_category_rule(
 
     for key, value in updates.items():
         setattr(row, key, value)
+    row.bank_code = None
+    row.card_last4 = None
+    row.priority = 100
 
     db.commit()
     db.refresh(row)
@@ -95,8 +129,6 @@ def test_category_rule(
 ) -> CategoryRuleTestResponse:
     category, rule = categorize(
         db,
-        bank_code=payload.bank_code.upper(),
-        card_last4=payload.card_last4,
         merchant_normalized=payload.merchant_normalized,
     )
     return CategoryRuleTestResponse(

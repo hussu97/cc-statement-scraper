@@ -86,32 +86,26 @@ def test_statement_identity_ignores_timestamp_like_reference() -> None:
     assert identity.statement_reference.startswith("AUTO-FAB-2026-01-31-2777")
 
 
-def test_category_priority_respects_bank_scoping() -> None:
+def test_category_matching_prefers_most_specific_pattern() -> None:
     with _session() as db:
         db.add(models.Bank(code="FAB", name="FAB", supports_historical_month_selection=False, supports_multi_month=False, supports_headless=True))
         db.add(models.Category(name="Travel"))
         db.add(models.Category(name="Dining"))
         db.add(
             models.CategoryRule(
-                name="global-dining",
+                name="generic-dining",
                 category_name="Dining",
                 match_type=models.MatchType.CONTAINS,
                 pattern="CAFE",
-                bank_code=None,
-                card_last4=None,
-                priority=50,
                 active=True,
             )
         )
         db.add(
             models.CategoryRule(
-                name="fab-travel",
+                name="specific-travel",
                 category_name="Travel",
                 match_type=models.MatchType.CONTAINS,
-                pattern="CAFE",
-                bank_code="FAB",
-                card_last4=None,
-                priority=10,
+                pattern="NORTH CAFE DUBAI",
                 active=True,
             )
         )
@@ -126,7 +120,37 @@ def test_category_priority_respects_bank_scoping() -> None:
 
         assert category == "Travel"
         assert matched_rule is not None
-        assert matched_rule.name == "fab-travel"
+        assert matched_rule.name == "specific-travel"
+
+
+def test_category_matching_ignores_legacy_scope_fields() -> None:
+    with _session() as db:
+        db.add(models.Bank(code="FAB", name="FAB", supports_historical_month_selection=False, supports_multi_month=False, supports_headless=True))
+        db.add(models.Category(name="Transport"))
+        db.add(
+            models.CategoryRule(
+                name="legacy-scoped-transport",
+                category_name="Transport",
+                match_type=models.MatchType.CONTAINS,
+                pattern="CAREEM HALA",
+                bank_code="ADCB",
+                card_last4="9999",
+                priority=1,
+                active=True,
+            )
+        )
+        db.commit()
+
+        category, matched_rule = categorize(
+            db,
+            bank_code="FAB",
+            card_last4="2777",
+            merchant_normalized="CAREEM HALA DUBAI",
+        )
+
+        assert category == "Transport"
+        assert matched_rule is not None
+        assert matched_rule.name == "legacy-scoped-transport"
 
 
 def test_replace_semantics_delete_old_statement_lines() -> None:

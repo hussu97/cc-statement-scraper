@@ -10,11 +10,39 @@ from sqlalchemy.orm import Session
 
 from ccs_platform.db import models
 from ccs_platform.api.deps import ProfileContext, get_db, get_profile_context
-from ccs_platform.api.v1.schemas import JobOut, PaginatedStatementLines, PaginatedStatements
+from ccs_platform.api.v1.schemas import (
+    JobOut,
+    PaginatedStatementLines,
+    PaginatedStatements,
+    StatementDateUpdate,
+    StatementOut,
+)
 from ccs_platform.application.statements.serializers import to_line_out, to_statement_out
+from ccs_platform.domain.parsing.utils import statement_month_from_date
 
 
 router = APIRouter(prefix="/statements", tags=["statements"])
+
+
+def _enqueue_reparse_job(
+    *,
+    request: Request,
+    db: Session,
+    profile_id: int,
+    payload: dict[str, int | bool],
+) -> JobOut:
+    job = models.Job(
+        profile_id=profile_id,
+        job_type=models.JobType.REPARSE_STATEMENT,
+        status=models.JobStatus.QUEUED,
+        payload_json=payload,
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    request.app.state.job_runner.enqueue(job.id)
+    return JobOut.model_validate(job)
 
 
 @router.get("", response_model=PaginatedStatements)
@@ -22,14 +50,14 @@ def list_statements(
     db: Session = Depends(get_db),
     profile: ProfileContext = Depends(get_profile_context),
     page: int = 1,
-    page_size: int = 50,
+    page_size: int = 100,
     bank_codes: list[str] | None = Query(default=None),
     statement_reference: str | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
 ) -> PaginatedStatements:
     page = max(page, 1)
-    page_size = min(max(page_size, 1), 200)
+    page_size = min(max(page_size, 1), 1000)
 
     query = select(models.Statement).where(models.Statement.profile_id == profile.profile_id)
     count_query = select(func.count(models.Statement.id)).where(models.Statement.profile_id == profile.profile_id)
@@ -77,6 +105,20 @@ def list_statements(
     )
 
 
+@router.post("/reparse-all", response_model=JobOut)
+def reparse_all_statements(
+    request: Request,
+    db: Session = Depends(get_db),
+    profile: ProfileContext = Depends(get_profile_context),
+) -> JobOut:
+    return _enqueue_reparse_job(
+        request=request,
+        db=db,
+        profile_id=profile.profile_id,
+        payload={"all_statements": True},
+    )
+
+
 @router.get("/{statement_id}")
 def get_statement(
     statement_id: int,
@@ -100,17 +142,106 @@ def get_statement(
     return to_statement_out(row, line_count=count)
 
 
+@router.patch("/{statement_id}", response_model=StatementOut)
+def patch_statement_date(
+    statement_id: int,
+    payload: StatementDateUpdate,
+    db: Session = Depends(get_db),
+    profile: ProfileContext = Depends(get_profile_context),
+) -> StatementOut:
+    statement = db.execute(
+        select(models.Statement).where(
+            models.Statement.id == statement_id,
+            models.Statement.profile_id == profile.profile_id,
+        )
+    ).scalar_one_or_none()
+    if not statement:
+        raise HTTPException(status_code=404, detail="Statement not found")
+
+    line_rows = db.execute(
+        select(models.StatementLine).where(models.StatementLine.statement_id == statement.id)
+    ).scalars().all()
+    line_count = len(line_rows)
+
+    old_date = statement.statement_date
+    old_period_end = statement.statement_period_end
+    new_date = payload.statement_date
+    if new_date == old_date:
+        return to_statement_out(statement, line_count=line_count)
+
+    conflict = db.execute(
+        select(models.Statement.id).where(
+            models.Statement.profile_id == profile.profile_id,
+            models.Statement.id != statement.id,
+            models.Statement.bank_code == statement.bank_code,
+            models.Statement.statement_reference == statement.statement_reference,
+            models.Statement.statement_date == new_date,
+        )
+    ).scalar_one_or_none()
+    if conflict is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Statement date update conflicts with an existing statement identity "
+                "(bank_code + statement_reference + statement_date)."
+            ),
+        )
+
+    statement.statement_date = new_date
+    if statement.statement_period_end == old_date:
+        statement.statement_period_end = new_date
+
+    statement_month = statement_month_from_date(new_date)
+    metadata = dict(statement.metadata_json) if isinstance(statement.metadata_json, dict) else {}
+    metadata["statement_date"] = new_date.isoformat()
+    metadata["statement_month"] = statement_month
+    if statement.statement_period_end is not None:
+        metadata["statement_period_end"] = statement.statement_period_end.isoformat()
+    statement.metadata_json = metadata
+
+    updated_line_storage_records = 0
+    for line in line_rows:
+        raw = dict(line.raw_json) if isinstance(line.raw_json, dict) else {}
+        if raw.get("statement_month") != statement_month:
+            updated_line_storage_records += 1
+        raw["statement_month"] = statement_month
+        line.raw_json = raw
+
+    db.add(
+        models.AuditEvent(
+            profile_id=profile.profile_id,
+            event_type="statement_date_updated",
+            entity_type="statement",
+            entity_id=str(statement.id),
+            payload_json={
+                "bank_code": statement.bank_code,
+                "statement_reference": statement.statement_reference,
+                "old_statement_date": old_date.isoformat(),
+                "new_statement_date": new_date.isoformat(),
+                "old_statement_period_end": old_period_end.isoformat() if old_period_end else None,
+                "new_statement_period_end": (
+                    statement.statement_period_end.isoformat() if statement.statement_period_end else None
+                ),
+                "updated_line_storage_records": updated_line_storage_records,
+            },
+        )
+    )
+    db.commit()
+    db.refresh(statement)
+    return to_statement_out(statement, line_count=line_count)
+
+
 @router.get("/{statement_id}/lines", response_model=PaginatedStatementLines)
 def list_statement_lines(
     statement_id: int,
     db: Session = Depends(get_db),
     profile: ProfileContext = Depends(get_profile_context),
     page: int = 1,
-    page_size: int = 200,
+    page_size: int = 100,
     search: str | None = None,
 ) -> PaginatedStatementLines:
     page = max(page, 1)
-    page_size = min(max(page_size, 1), 500)
+    page_size = min(max(page_size, 1), 1000)
 
     statement = db.execute(
         select(models.Statement).where(
@@ -202,18 +333,12 @@ def reparse_statement(
     if not statement:
         raise HTTPException(status_code=404, detail="Statement not found")
 
-    job = models.Job(
+    return _enqueue_reparse_job(
+        request=request,
+        db=db,
         profile_id=profile.profile_id,
-        job_type=models.JobType.REPARSE_STATEMENT,
-        status=models.JobStatus.QUEUED,
-        payload_json={"statement_id": statement_id},
+        payload={"statement_id": statement_id},
     )
-    db.add(job)
-    db.commit()
-    db.refresh(job)
-
-    request.app.state.job_runner.enqueue(job.id)
-    return JobOut.model_validate(job)
 
 
 @router.delete("/{statement_id}")

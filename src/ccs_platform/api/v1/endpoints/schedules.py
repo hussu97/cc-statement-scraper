@@ -3,29 +3,44 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ccs_platform.db import models
 from ccs_platform.api.deps import ProfileContext, get_db, get_profile_context
-from ccs_platform.api.v1.schemas import ScheduleCreate, ScheduleOut, ScheduleUpdate
+from ccs_platform.api.v1.schemas import PaginatedSchedules, ScheduleCreate, ScheduleOut, ScheduleUpdate
 from ccs_platform.application.jobs.scheduler import compute_next_run
 
 
 router = APIRouter(prefix="/schedules", tags=["schedules"])
 
 
-@router.get("", response_model=list[ScheduleOut])
+@router.get("", response_model=PaginatedSchedules)
 def list_schedules(
     db: Session = Depends(get_db),
     profile: ProfileContext = Depends(get_profile_context),
-) -> list[ScheduleOut]:
+    page: int = 1,
+    page_size: int = 100,
+) -> PaginatedSchedules:
+    page = max(page, 1)
+    page_size = min(max(page_size, 1), 1000)
+
+    count_query = select(func.count(models.Schedule.id)).where(models.Schedule.profile_id == profile.profile_id)
+    total = int(db.execute(count_query).scalar_one())
+
     rows = db.execute(
         select(models.Schedule)
         .where(models.Schedule.profile_id == profile.profile_id)
         .order_by(models.Schedule.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
     ).scalars().all()
-    return [ScheduleOut.model_validate(row) for row in rows]
+    return PaginatedSchedules(
+        total=total,
+        page=page,
+        page_size=page_size,
+        items=[ScheduleOut.model_validate(row) for row in rows],
+    )
 
 
 @router.post("", response_model=ScheduleOut)

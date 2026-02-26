@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Callable
 
 from ccs_platform.adapters.banks.browser.banks import adcb, enbd, fab, sib
@@ -22,6 +23,7 @@ from ccs_platform.core.bank_config import AppConfig
 LoginHandler = Callable[[Any, logging.Logger], None]
 LoginSelectorVisible = Callable[[Any], bool]
 DownloadHandler = Callable[[Any, Any, logging.Logger, dict], int]
+CHROMIUM_SINGLETON_FILES = ("SingletonLock", "SingletonCookie", "SingletonSocket")
 
 
 LOGIN_HANDLERS: dict[str, LoginHandler] = {
@@ -230,6 +232,71 @@ def _manual_download_fallback(
         pass
 
 
+def _clear_stale_chromium_profile_artifacts(profile_dir: Path, bank_code: str, logger: logging.Logger) -> None:
+    for artifact_name in CHROMIUM_SINGLETON_FILES:
+        artifact_path = profile_dir / artifact_name
+        try:
+            if artifact_path.exists() or artifact_path.is_symlink():
+                artifact_path.unlink(missing_ok=True)
+                logger.warning(
+                    "%s: removed stale Chromium profile artifact %s",
+                    bank_code,
+                    artifact_name,
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "%s: unable to remove profile artifact %s (%s)",
+                bank_code,
+                artifact_name,
+                exc,
+            )
+
+
+def _launch_bank_context(
+    *,
+    playwright: Any,
+    profile_dir: Path,
+    headless: bool,
+    incoming_dir: Path,
+    bank_code: str,
+    logger: logging.Logger,
+) -> Any:
+    max_attempts = 3
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return playwright.chromium.launch_persistent_context(
+                user_data_dir=str(profile_dir),
+                headless=headless,
+                accept_downloads=True,
+                downloads_path=str(incoming_dir),
+            )
+        except Exception as exc:  # noqa: BLE001
+            message = str(exc).lower()
+            lock_error = (
+                "processsingleton" in message
+                or "profile is already in use" in message
+                or "singletonlock" in message
+            )
+            if not lock_error:
+                raise
+            if attempt >= max_attempts:
+                raise BrowserDownloadError(
+                    f"{bank_code}: Chromium profile is locked at {profile_dir}. "
+                    "Close other Chrome instances using this profile and retry."
+                ) from exc
+            logger.warning(
+                "%s: profile lock detected (attempt %d/%d); retrying",
+                bank_code,
+                attempt,
+                max_attempts,
+            )
+            # Stale singleton artifacts are common after abrupt process exits.
+            _clear_stale_chromium_profile_artifacts(profile_dir, bank_code, logger)
+            time.sleep(float(attempt))
+
+    raise BrowserDownloadError(f"{bank_code}: failed to launch browser context")
+
+
 def run_end_to_end_downloads(
     *,
     app_config: AppConfig,
@@ -257,20 +324,23 @@ def run_end_to_end_downloads(
             portal_url = bank_cfg.get("portal_url")
             profile_dir = app_config.paths.state_dir / "browser_profiles" / bank_code
             profile_dir.mkdir(parents=True, exist_ok=True)
+            run_stamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            context = None
+            page = None
 
             logger.info("%s: opening portal %s", bank_code, portal_url)
 
-            context = playwright.chromium.launch_persistent_context(
-                user_data_dir=str(profile_dir),
-                headless=headless,
-                accept_downloads=True,
-                downloads_path=str(app_config.paths.incoming_dir),
-            )
-
-            page = context.pages[0] if context.pages else context.new_page()
-            run_stamp = datetime.now().strftime("%Y%m%d%H%M%S")
-
             try:
+                context = _launch_bank_context(
+                    playwright=playwright,
+                    profile_dir=profile_dir,
+                    headless=headless,
+                    incoming_dir=app_config.paths.incoming_dir,
+                    bank_code=bank_code,
+                    logger=logger,
+                )
+                page = context.pages[0] if context.pages else context.new_page()
+
                 page.goto(portal_url, wait_until="domcontentloaded", timeout=60000)
                 page.wait_for_timeout(1200)
                 safe_screenshot(
@@ -337,21 +407,27 @@ def run_end_to_end_downloads(
             except BrowserDownloadError as exc:
                 results[bank_code] = f"FAILED {exc}"
                 logger.error("%s: %s", bank_code, exc)
-                safe_screenshot(
-                    page,
-                    app_config.paths.root / "logs" / f"{run_stamp}_{bank_code}_error.png",
-                    logger,
-                )
+                if page is not None:
+                    safe_screenshot(
+                        page,
+                        app_config.paths.root / "logs" / f"{run_stamp}_{bank_code}_error.png",
+                        logger,
+                    )
             except Exception as exc:  # noqa: BLE001
                 results[bank_code] = f"FAILED unexpected_error={exc}"
                 logger.exception("%s: unexpected automation error", bank_code)
-                safe_screenshot(
-                    page,
-                    app_config.paths.root / "logs" / f"{run_stamp}_{bank_code}_exception.png",
-                    logger,
-                )
+                if page is not None:
+                    safe_screenshot(
+                        page,
+                        app_config.paths.root / "logs" / f"{run_stamp}_{bank_code}_exception.png",
+                        logger,
+                    )
             finally:
-                context.close()
+                if context is not None:
+                    try:
+                        context.close()
+                    except Exception:  # noqa: BLE001
+                        logger.warning("%s: failed to close browser context cleanly", bank_code)
 
     return results
 

@@ -21,7 +21,7 @@ class PlatformSettings(BaseSettings):
     timezone: str = "Asia/Dubai"
 
     storage_backend: str = "local"
-    local_storage_dir: Path = ROOT_DIR / "data" / "archive" / "platform"
+    local_storage_dir: Path = ROOT_DIR / "data" / "archive"
 
     s3_endpoint_url: str | None = None
     s3_region: str | None = None
@@ -34,7 +34,7 @@ class PlatformSettings(BaseSettings):
 
     job_poll_interval_seconds: int = 5
     schedule_poll_interval_seconds: int = 30
-    max_worker_threads: int = 2
+    max_worker_threads: int = 1
     embedded_worker: bool = True
 
     cors_allow_origins: str = "*"

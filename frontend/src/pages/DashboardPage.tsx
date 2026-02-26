@@ -40,6 +40,35 @@ function dateInput(value: Date): string {
   return value.toISOString().slice(0, 10);
 }
 
+function monthWindowFromBucket(bucket: string): { dateFrom: string; dateTo: string } | null {
+  const match = /^(\d{4})-(\d{2})$/.exec((bucket || '').trim());
+  if (!match) {
+    return null;
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return null;
+  }
+
+  const lastDay = new Date(year, month, 0).getDate();
+  return {
+    dateFrom: `${match[1]}-${match[2]}-01`,
+    dateTo: `${match[1]}-${match[2]}-${String(lastDay).padStart(2, '0')}`,
+  };
+}
+
+function toggleSingleSelection(values: string[], raw: string): string[] {
+  const token = raw.trim();
+  if (!token) {
+    return values;
+  }
+  if (values.length === 1 && values[0] === token) {
+    return [];
+  }
+  return [token];
+}
+
 function defaultLastTwelveMonthsWindow(): Pick<DashboardFiltersValue, 'dateFrom' | 'dateTo'> {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth() - 11, 1);
@@ -115,7 +144,8 @@ export function DashboardPage() {
   const [categoryTrendSeries, setCategoryTrendSeries] = useState<StackedSeriesResponse>(EMPTY_STACKED);
   const [bankBreakdown, setBankBreakdown] = useState<BreakdownPoint[]>([]);
   const [categoryBreakdown, setCategoryBreakdown] = useState<BreakdownPoint[]>([]);
-  const [topMerchants, setTopMerchants] = useState<BreakdownPoint[]>([]);
+  const [topMerchantsDebit, setTopMerchantsDebit] = useState<BreakdownPoint[]>([]);
+  const [topMerchantsCredit, setTopMerchantsCredit] = useState<BreakdownPoint[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -163,9 +193,13 @@ export function DashboardPage() {
         const params = dashboardQueryParams(filters, debouncedMerchantSearch);
         const commonSuffix = toQuerySuffix(params);
         const categoryTrendParams = new URLSearchParams(params);
-        categoryTrendParams.set('top_n', '6');
-        const topMerchantsParams = new URLSearchParams(params);
-        topMerchantsParams.set('limit', '10');
+        categoryTrendParams.set('top_n', '12');
+        const topMerchantsDebitParams = new URLSearchParams(params);
+        topMerchantsDebitParams.set('limit', '10');
+        topMerchantsDebitParams.set('direction', 'debit');
+        const topMerchantsCreditParams = new URLSearchParams(params);
+        topMerchantsCreditParams.set('limit', '10');
+        topMerchantsCreditParams.set('direction', 'credit');
 
         const [
           overviewResp,
@@ -174,7 +208,8 @@ export function DashboardPage() {
           categoryTrendResp,
           bankBreakdownResp,
           categoryBreakdownResp,
-          topMerchantsResp,
+          topMerchantsDebitResp,
+          topMerchantsCreditResp,
         ] = await Promise.all([
           api.get<DashboardOverview>(`/dashboard/overview${commonSuffix}`, { signal: controller.signal }),
           api.get<TrendSeriesResponse>(`/dashboard/trend-series${commonSuffix}`, {
@@ -192,7 +227,10 @@ export function DashboardPage() {
           api.get<BreakdownPoint[]>(`/dashboard/category-breakdown${commonSuffix}`, {
             signal: controller.signal,
           }),
-          api.get<BreakdownPoint[]>(`/dashboard/top-merchants?${topMerchantsParams.toString()}`, {
+          api.get<BreakdownPoint[]>(`/dashboard/top-merchants?${topMerchantsDebitParams.toString()}`, {
+            signal: controller.signal,
+          }),
+          api.get<BreakdownPoint[]>(`/dashboard/top-merchants?${topMerchantsCreditParams.toString()}`, {
             signal: controller.signal,
           }),
         ]);
@@ -203,7 +241,8 @@ export function DashboardPage() {
         setCategoryTrendSeries(categoryTrendResp);
         setBankBreakdown(bankBreakdownResp);
         setCategoryBreakdown(categoryBreakdownResp);
-        setTopMerchants(topMerchantsResp);
+        setTopMerchantsDebit(topMerchantsDebitResp);
+        setTopMerchantsCredit(topMerchantsCreditResp);
       } catch (loadError) {
         if (!isAbortError(loadError)) {
           setError((loadError as Error).message);
@@ -216,6 +255,67 @@ export function DashboardPage() {
     loadDashboardData();
     return () => controller.abort();
   }, [filterSignature, debouncedMerchantSearch]);
+
+  const topCategoriesSpent = useMemo(
+    () => categoryBreakdown.filter((point) => point.value > 0).slice(0, 10),
+    [categoryBreakdown],
+  );
+
+  function applyChartFilter(
+    updater: (value: DashboardFiltersValue) => DashboardFiltersValue,
+    bucket?: string,
+  ) {
+    setFilters((prev) => {
+      const next = updater(prev);
+      if (!bucket) {
+        return next;
+      }
+      const monthWindow = monthWindowFromBucket(bucket);
+      if (!monthWindow) {
+        return next;
+      }
+      return {
+        ...next,
+        dateFrom: monthWindow.dateFrom,
+        dateTo: monthWindow.dateTo,
+      };
+    });
+  }
+
+  function handleBankClick(bankCode: string, bucket?: string) {
+    const bank = bankCode.trim().toUpperCase();
+    if (!bank) {
+      return;
+    }
+    applyChartFilter((prev) => ({ ...prev, bankCodes: toggleSingleSelection(prev.bankCodes, bank) }), bucket);
+  }
+
+  function handleCategoryClick(categoryName: string, bucket?: string) {
+    const category = categoryName.trim();
+    if (!category) {
+      return;
+    }
+    if (category === 'Other') {
+      applyChartFilter((prev) => ({ ...prev }), bucket);
+      return;
+    }
+    applyChartFilter((prev) => ({ ...prev, categories: toggleSingleSelection(prev.categories, category) }), bucket);
+  }
+
+  function handleMerchantClick(merchantName: string, bucket?: string) {
+    const merchant = merchantName.trim();
+    if (!merchant) {
+      return;
+    }
+    applyChartFilter(
+      (prev) => ({
+        ...prev,
+        merchantSearch:
+          prev.merchantSearch.trim().toUpperCase() === merchant.toUpperCase() ? '' : merchant,
+      }),
+      bucket,
+    );
+  }
 
   const momLabel =
     overview.mom_delta_pct === null
@@ -260,34 +360,67 @@ export function DashboardPage() {
       </section>
 
       <Panel title="Spend Trend Over Time">
-        <p className="muted">Monthly debit and credit shown as side-by-side bars.</p>
-        <SpendTrendChart points={trendSeries.points} />
+        <p className="muted">Monthly debit and credit shown as side-by-side bars. Click a month to filter.</p>
+        <SpendTrendChart
+          points={trendSeries.points}
+          onBarClick={({ bucket }) => applyChartFilter((prev) => ({ ...prev }), bucket)}
+        />
       </Panel>
 
       <div className="dashboard-split">
         <Panel title="Bank Spend Trend">
-          <p className="muted">Debit trend broken out by bank.</p>
-          <StackedTrendChart data={bankTrendSeries} mode="bar" />
+          <p className="muted">Debit trend broken out by bank. Click a segment to filter bank + month.</p>
+          <StackedTrendChart
+            data={bankTrendSeries}
+            mode="bar"
+            onPointClick={({ seriesKey, bucket }) => handleBankClick(seriesKey, bucket)}
+          />
         </Panel>
 
         <Panel title="Category Spend Trend">
-          <p className="muted">Top categories over time, split as separate lines (not cumulative).</p>
-          <StackedTrendChart data={categoryTrendSeries} mode="line" />
+          <p className="muted">Top categories over time, split as separate lines (not cumulative). Click a point to filter.</p>
+          <StackedTrendChart
+            data={categoryTrendSeries}
+            mode="line"
+            onPointClick={({ seriesKey, bucket }) => handleCategoryClick(seriesKey, bucket)}
+          />
         </Panel>
       </div>
 
       <div className="dashboard-split">
         <Panel title="Current Window Bank Mix">
-          <DonutBreakdownChart data={bankBreakdown} />
+          <DonutBreakdownChart data={bankBreakdown} onSliceClick={(key) => handleBankClick(key)} />
         </Panel>
 
         <Panel title="Current Window Category Mix">
-          <DonutBreakdownChart data={categoryBreakdown} />
+          <DonutBreakdownChart data={categoryBreakdown} onSliceClick={(key) => handleCategoryClick(key)} />
         </Panel>
       </div>
 
       <Panel title="Top Merchants (Debit)">
-        <TopMerchantsBarChart data={topMerchants} />
+        <TopMerchantsBarChart
+          data={topMerchantsDebit}
+          emptyMessage="No debit merchant data for this selection."
+          onBarClick={(point) => handleMerchantClick(point.key)}
+        />
+      </Panel>
+
+      <Panel title="Top Merchants (Credit)">
+        <TopMerchantsBarChart
+          data={topMerchantsCredit}
+          color="#f97316"
+          emptyMessage="No credit merchant data for this selection."
+          onBarClick={(point) => handleMerchantClick(point.key)}
+        />
+      </Panel>
+
+      <Panel title="Top Categories (Debit)">
+        <TopMerchantsBarChart
+          data={topCategoriesSpent}
+          color="#1d4ed8"
+          emptyMessage="No category spend data for this selection."
+          onBarClick={(point) => handleCategoryClick(point.key)}
+        />
       </Panel>
     </div>
   );

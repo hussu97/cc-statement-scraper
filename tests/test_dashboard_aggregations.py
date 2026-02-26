@@ -13,6 +13,7 @@ from ccs_platform.application.analytics.dashboard import (
     fetch_category_trend_series,
     fetch_filter_meta,
     fetch_overview,
+    fetch_top_merchants,
     fetch_trend_series,
 )
 
@@ -301,3 +302,27 @@ def test_overview_mom_delta_uses_debit_not_net() -> None:
         assert payload["total_spend_aed"] == 580.0
         assert payload["total_credits_aed"] == 210.0
         assert payload["mom_delta_pct"] == -28.57
+
+
+def test_top_merchants_supports_debit_and_credit_direction() -> None:
+    with _session() as db:
+        profile_id = _seed(db)
+
+        debit_rows = fetch_top_merchants(
+            db,
+            filters=DashboardFilters(profile_id=profile_id),
+            direction="debit",
+            limit=5,
+        )
+        credit_rows = fetch_top_merchants(
+            db,
+            filters=DashboardFilters(profile_id=profile_id),
+            direction="credit",
+            limit=5,
+        )
+
+        assert debit_rows[0]["key"] == "AMAZON"
+        assert debit_rows[0]["value"] == 200.0
+
+        assert credit_rows[0]["key"] == "REVERSAL"
+        assert credit_rows[0]["value"] == 190.0

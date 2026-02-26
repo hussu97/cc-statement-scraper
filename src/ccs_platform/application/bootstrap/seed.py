@@ -46,67 +46,52 @@ def _seed_categories_and_rules(db: Session) -> None:
     # Keep user-managed rules, but refresh YAML-backed seed rules on every startup.
     db.execute(delete(models.CategoryRule).where(models.CategoryRule.name.like("seed-%")))
 
-    priority = 10
-
-    for rule in rules_doc.get("bank_card_rules", []):
-        category = rule.get("category", "Uncategorized")
-        ensure_category(db, category)
-        bank_code = str(rule.get("bank", "")).upper() or None
-        card_last4 = str(rule.get("card_last4", "")).strip() or None
-        for keyword in rule.get("keywords", []):
-            db.add(
-                models.CategoryRule(
-                    name=f"seed-bank-card-{bank_code}-{card_last4}-{keyword}",
-                    category_name=category,
-                    match_type=models.MatchType.CONTAINS,
-                    pattern=str(keyword).upper(),
-                    bank_code=bank_code,
-                    card_last4=card_last4,
-                    priority=priority,
-                    active=True,
+    all_rule_sections = [
+        rules_doc.get("global_rules", []),
+        rules_doc.get("bank_rules", []),
+        rules_doc.get("bank_card_rules", []),
+    ]
+    seed_index = 0
+    for section in all_rule_sections:
+        for rule in section:
+            category = rule.get("category", "Uncategorized")
+            ensure_category(db, category)
+            for keyword in rule.get("keywords", []):
+                pattern = str(keyword).upper()
+                if not pattern:
+                    continue
+                db.add(
+                    models.CategoryRule(
+                        name=f"seed-{seed_index}-{pattern}",
+                        category_name=category,
+                        match_type=models.MatchType.CONTAINS,
+                        pattern=pattern,
+                        bank_code=None,
+                        card_last4=None,
+                        priority=100,
+                        active=True,
+                    )
                 )
-            )
-            priority += 1
+                seed_index += 1
 
-    for rule in rules_doc.get("bank_rules", []):
-        category = rule.get("category", "Uncategorized")
-        ensure_category(db, category)
-        bank_code = str(rule.get("bank", "")).upper() or None
-        for keyword in rule.get("keywords", []):
-            db.add(
-                models.CategoryRule(
-                    name=f"seed-bank-{bank_code}-{keyword}",
-                    category_name=category,
-                    match_type=models.MatchType.CONTAINS,
-                    pattern=str(keyword).upper(),
-                    bank_code=bank_code,
-                    card_last4=None,
-                    priority=priority,
-                    active=True,
-                )
-            )
-            priority += 1
-
-    for rule in rules_doc.get("global_rules", []):
-        category = rule.get("category", "Uncategorized")
-        ensure_category(db, category)
-        for keyword in rule.get("keywords", []):
-            db.add(
-                models.CategoryRule(
-                    name=f"seed-global-{keyword}",
-                    category_name=category,
-                    match_type=models.MatchType.CONTAINS,
-                    pattern=str(keyword).upper(),
-                    bank_code=None,
-                    card_last4=None,
-                    priority=priority,
-                    active=True,
-                )
-            )
-            priority += 1
+    # Scope and numeric priority are deprecated; normalize all persisted rules.
+    db.execute(
+        update(models.CategoryRule)
+        .where(models.CategoryRule.bank_code.is_not(None))
+        .values(bank_code=None)
+    )
+    db.execute(
+        update(models.CategoryRule)
+        .where(models.CategoryRule.card_last4.is_not(None))
+        .values(card_last4=None)
+    )
+    db.execute(update(models.CategoryRule).values(priority=100))
 
     ensure_category(db, "Uncategorized")
     _merge_category_alias_if_unused(db, source="Groceries", target="Grocery")
+    _merge_category_alias_if_unused(db, source="Subscriptions", target="Subscription")
+    _merge_category_alias_if_unused(db, source="Online Shopping", target="Shopping")
+    _merge_category_alias_if_unused(db, source="Fines", target="Fines/Govt Services")
 
 
 def seed_defaults(db: Session) -> None:

@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 
 import { api } from '../api';
 import { Panel } from '../components/Panel';
+import { TablePagination } from '../components/TablePagination';
+import { useActiveProfileKey } from '../profileStore';
+import { formatLocalDateTime } from '../utils/datetime';
 
 function currentDubaiMonthToken(): string {
   const parts = new Intl.DateTimeFormat('en-GB', {
@@ -16,8 +19,12 @@ function currentDubaiMonthToken(): string {
 }
 
 export function SchedulesPage() {
+  const activeProfileKey = useActiveProfileKey();
   const defaultMonth = currentDubaiMonthToken();
   const [schedules, setSchedules] = useState<any[]>([]);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(100);
+  const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: 'Monthly scrape',
@@ -31,8 +38,17 @@ export function SchedulesPage() {
   async function load() {
     try {
       setError(null);
-      const rows = await api.get<any[]>('/schedules');
-      setSchedules(rows);
+      const params = new URLSearchParams();
+      params.set('page', String(page));
+      params.set('page_size', String(pageSize));
+      const data = await api.get<any>(`/schedules?${params.toString()}`);
+      const nextTotal = Number(data.total || 0);
+      setTotal(nextTotal);
+      setSchedules(data.items || []);
+      const totalPages = Math.max(1, Math.ceil(nextTotal / Math.max(pageSize, 1)));
+      if (page > totalPages) {
+        setPage(totalPages);
+      }
     } catch (err) {
       setError((err as Error).message);
     }
@@ -71,8 +87,12 @@ export function SchedulesPage() {
   }
 
   useEffect(() => {
+    setPage(1);
+  }, [activeProfileKey]);
+
+  useEffect(() => {
     load();
-  }, []);
+  }, [activeProfileKey, page, pageSize]);
 
   return (
     <div className="grid">
@@ -117,8 +137,8 @@ export function SchedulesPage() {
                   <td>{item.name}</td>
                   <td>{item.status}</td>
                   <td>{item.rrule}</td>
-                  <td>{item.next_run_at ? new Date(item.next_run_at).toLocaleString() : '-'}</td>
-                  <td>{item.last_run_at ? new Date(item.last_run_at).toLocaleString() : '-'}</td>
+                  <td>{formatLocalDateTime(item.next_run_at)}</td>
+                  <td>{formatLocalDateTime(item.last_run_at)}</td>
                   <td>
                     <button className="ghost" onClick={() => toggle(item)}>
                       {item.status === 'active' ? 'Pause' : 'Activate'}
@@ -130,6 +150,17 @@ export function SchedulesPage() {
             </tbody>
           </table>
         </div>
+        <TablePagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          itemLabel="schedules"
+          onPageChange={setPage}
+          onPageSizeChange={(next) => {
+            setPageSize(next);
+            setPage(1);
+          }}
+        />
       </Panel>
     </div>
   );

@@ -59,6 +59,18 @@ def _copy_with_bounds(filters: DashboardFilters, *, date_from: date, date_to: da
     )
 
 
+def _copy_with_direction(filters: DashboardFilters, *, direction: str | None) -> DashboardFilters:
+    return DashboardFilters(
+        profile_id=filters.profile_id,
+        bank_codes=filters.bank_codes,
+        categories=filters.categories,
+        date_from=filters.date_from,
+        date_to=filters.date_to,
+        merchant_search=filters.merchant_search,
+        direction=direction,
+    )
+
+
 def _apply_filters(query, *, filters: DashboardFilters, include_dates: bool = True):
     clauses = [models.Statement.profile_id == filters.profile_id]
 
@@ -296,7 +308,7 @@ def fetch_bank_trend_series(db: Session, *, filters: DashboardFilters) -> dict[s
     }
 
 
-def fetch_category_trend_series(db: Session, *, filters: DashboardFilters, top_n: int = 6) -> dict[str, Any]:
+def fetch_category_trend_series(db: Session, *, filters: DashboardFilters, top_n: int = 12) -> dict[str, Any]:
     top_n = max(1, min(top_n, 20))
 
     start, end = _effective_bounds(db, filters=filters)
@@ -422,16 +434,28 @@ def fetch_bank_breakdown(db: Session, *, filters: DashboardFilters) -> list[dict
     ]
 
 
-def fetch_top_merchants(db: Session, *, filters: DashboardFilters, limit: int = 20) -> list[dict[str, float | str]]:
+def fetch_top_merchants(
+    db: Session,
+    *,
+    filters: DashboardFilters,
+    limit: int = 20,
+    direction: str = "debit",
+) -> list[dict[str, float | str]]:
     cap = max(1, min(limit, 100))
+    normalized_direction = (direction or "debit").strip().lower()
+    if normalized_direction not in {"debit", "credit"}:
+        normalized_direction = "debit"
+
+    amount_expr = _credit_case() if normalized_direction == "credit" else _debit_case()
+    scoped_filters = _copy_with_direction(filters, direction=normalized_direction)
     merchant = func.coalesce(models.StatementLine.merchant_normalized, models.StatementLine.merchant_raw).label("key")
     query = (
-        select(merchant, func.sum(_debit_case()).label("value"))
+        select(merchant, func.sum(amount_expr).label("value"))
         .select_from(models.StatementLine)
         .join(models.Statement)
     )
-    query = _apply_filters(query, filters=filters)
-    query = query.group_by(merchant).order_by(func.sum(_debit_case()).desc(), merchant.asc()).limit(cap)
+    query = _apply_filters(query, filters=scoped_filters)
+    query = query.group_by(merchant).order_by(func.sum(amount_expr).desc(), merchant.asc()).limit(cap)
 
     rows = db.execute(query).all()
     return [

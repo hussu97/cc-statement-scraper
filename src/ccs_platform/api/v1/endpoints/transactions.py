@@ -34,7 +34,7 @@ def list_transactions(
     sort_dir: str = "desc",
 ):
     page = max(page, 1)
-    page_size = min(max(page_size, 1), 500)
+    page_size = min(max(page_size, 1), 1000)
 
     query = (
         select(models.StatementLine, models.Statement)
@@ -43,6 +43,11 @@ def list_transactions(
     )
     count_query = (
         select(func.count(models.StatementLine.id))
+        .join(models.Statement)
+        .where(models.Statement.profile_id == profile.profile_id)
+    )
+    sum_query = (
+        select(func.coalesce(func.sum(models.StatementLine.amount_aed), 0))
         .join(models.Statement)
         .where(models.Statement.profile_id == profile.profile_id)
     )
@@ -78,6 +83,7 @@ def list_transactions(
         where = and_(*clauses)
         query = query.where(where)
         count_query = count_query.where(where)
+        sum_query = sum_query.where(where)
 
     sort_field_map = {
         "transaction_date": models.StatementLine.transaction_date,
@@ -91,6 +97,7 @@ def list_transactions(
     sort_expr = sort_col.desc() if sort_dir.lower() == "desc" else sort_col.asc()
 
     total = int(db.execute(count_query).scalar_one())
+    filtered_amount_aed_sum = float(db.execute(sum_query).scalar_one() or 0)
     rows = db.execute(
         query.order_by(sort_expr, models.StatementLine.id.desc())
         .offset((page - 1) * page_size)
@@ -106,6 +113,7 @@ def list_transactions(
 
     return {
         "total": total,
+        "filtered_amount_aed_sum": filtered_amount_aed_sum,
         "page": page,
         "page_size": page_size,
         "items": items,
