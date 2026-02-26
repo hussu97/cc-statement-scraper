@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from ccs_platform.api.deps import ActorContext, get_db, require_operator_role
 from ccs_platform.db import models
-from ccs_platform.api.deps import get_db
 from ccs_platform.api.v1.schemas import (
     CategoryCreate,
     CategoryOut,
@@ -29,7 +29,11 @@ def list_categories(db: Session = Depends(get_db)) -> list[CategoryOut]:
 
 
 @router.post("/categories", response_model=CategoryOut)
-def create_category(payload: CategoryCreate, db: Session = Depends(get_db)) -> CategoryOut:
+def create_category(
+    payload: CategoryCreate,
+    db: Session = Depends(get_db),
+    actor: ActorContext = Depends(require_operator_role),
+) -> CategoryOut:
     category = ensure_category(db, payload.name)
     db.commit()
     db.refresh(category)
@@ -78,6 +82,7 @@ def list_category_rules(
 def create_category_rule(
     payload: CategoryRuleCreate,
     db: Session = Depends(get_db),
+    actor: ActorContext = Depends(require_operator_role),
 ) -> CategoryRuleOut:
     ensure_category(db, payload.category_name)
 
@@ -102,6 +107,7 @@ def patch_category_rule(
     rule_id: int,
     payload: CategoryRuleUpdate,
     db: Session = Depends(get_db),
+    actor: ActorContext = Depends(require_operator_role),
 ) -> CategoryRuleOut:
     row = db.get(models.CategoryRule, rule_id)
     if not row:

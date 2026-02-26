@@ -1,0 +1,53 @@
+# Baseline NetworkPolicy template for Kubernetes-style deployments.
+# Adapt namespace/labels before applying.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ccs-platform-default-deny
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ccs-platform-allow-reverse-proxy-to-api
+spec:
+  podSelector:
+    matchLabels:
+      app: ccs-platform-api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: ccs-platform-reverse-proxy
+      ports:
+        - protocol: TCP
+          port: 8040
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ccs-platform-worker-egress-allowlist
+spec:
+  podSelector:
+    matchLabels:
+      app: ccs-platform-worker
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 5432
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443

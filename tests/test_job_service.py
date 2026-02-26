@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -26,13 +28,13 @@ def test_create_or_get_job_dedupes_same_payload() -> None:
         profile = _seed_profile(db)
         payload = {"banks": ["ENBD"], "months": ["2025-11"], "download": False}
 
-        first, first_created = create_or_get_job(
+        first, first_created, first_requeued = create_or_get_job(
             db,
             profile_id=profile.id,
             job_type=models.JobType.SCRAPE,
             payload_json=payload,
         )
-        second, second_created = create_or_get_job(
+        second, second_created, second_requeued = create_or_get_job(
             db,
             profile_id=profile.id,
             job_type=models.JobType.SCRAPE,
@@ -41,6 +43,8 @@ def test_create_or_get_job_dedupes_same_payload() -> None:
 
         assert first_created is True
         assert second_created is False
+        assert first_requeued is False
+        assert second_requeued is False
         assert first.id == second.id
         assert first.idempotency_key == second.idempotency_key
         assert first.queue_name == "scrape"
@@ -50,14 +54,14 @@ def test_create_or_get_job_without_auto_idempotency_creates_new_rows() -> None:
     with _session() as db:
         profile = _seed_profile(db)
 
-        first, _ = create_or_get_job(
+        first, _, _ = create_or_get_job(
             db,
             profile_id=profile.id,
             job_type=models.JobType.UPLOAD,
             payload_json={"uploads": [{"filename": "a.pdf"}]},
             auto_idempotency=False,
         )
-        second, _ = create_or_get_job(
+        second, _, _ = create_or_get_job(
             db,
             profile_id=profile.id,
             job_type=models.JobType.UPLOAD,
@@ -75,7 +79,7 @@ def test_create_or_get_job_without_auto_idempotency_creates_new_rows() -> None:
 def test_create_or_get_job_applies_default_max_attempts() -> None:
     with _session() as db:
         profile = _seed_profile(db)
-        job, _ = create_or_get_job(
+        job, _, _ = create_or_get_job(
             db,
             profile_id=profile.id,
             job_type=models.JobType.REPARSE_STATEMENT,
@@ -83,3 +87,84 @@ def test_create_or_get_job_applies_default_max_attempts() -> None:
         )
 
         assert job.max_attempts == default_max_attempts(models.JobType.REPARSE_STATEMENT)
+
+
+def test_create_or_get_job_requeues_cancelled_auto_idempotent_job() -> None:
+    with _session() as db:
+        profile = _seed_profile(db)
+        payload = {"banks": ["ENBD"], "months": ["2025-11"], "download": False}
+
+        first, first_created, first_requeued = create_or_get_job(
+            db,
+            profile_id=profile.id,
+            job_type=models.JobType.SCRAPE,
+            payload_json=payload,
+        )
+        assert first_created is True
+        assert first_requeued is False
+
+        now = datetime.now(UTC)
+        first.status = models.JobStatus.CANCELLED
+        first.started_at = now
+        first.finished_at = now
+        first.next_retry_at = now
+        first.last_heartbeat_at = now
+        first.cancel_requested_at = now
+        first.result_json = {"old": True}
+        first.error_message = "cancelled"
+        first.attempt_count = 2
+        first.progress_percent = 100
+        db.flush()
+
+        second, second_created, second_requeued = create_or_get_job(
+            db,
+            profile_id=profile.id,
+            job_type=models.JobType.SCRAPE,
+            payload_json=payload,
+        )
+
+        assert second_created is False
+        assert second_requeued is True
+        assert second.id == first.id
+        assert second.status == models.JobStatus.QUEUED
+        assert second.started_at is None
+        assert second.finished_at is None
+        assert second.next_retry_at is None
+        assert second.last_heartbeat_at is None
+        assert second.cancel_requested_at is None
+        assert second.result_json is None
+        assert second.error_message is None
+        assert second.attempt_count == 0
+        assert second.progress_percent == 0
+
+
+def test_create_or_get_job_does_not_requeue_cancelled_explicit_idempotency() -> None:
+    with _session() as db:
+        profile = _seed_profile(db)
+        payload = {"statement_ids": [1]}
+
+        first, first_created, first_requeued = create_or_get_job(
+            db,
+            profile_id=profile.id,
+            job_type=models.JobType.RECLASSIFY,
+            payload_json=payload,
+            idempotency_key="manual-key-1",
+        )
+        assert first_created is True
+        assert first_requeued is False
+
+        first.status = models.JobStatus.CANCELLED
+        db.flush()
+
+        second, second_created, second_requeued = create_or_get_job(
+            db,
+            profile_id=profile.id,
+            job_type=models.JobType.RECLASSIFY,
+            payload_json=payload,
+            idempotency_key="manual-key-1",
+        )
+
+        assert second.id == first.id
+        assert second_created is False
+        assert second_requeued is False
+        assert second.status == models.JobStatus.CANCELLED

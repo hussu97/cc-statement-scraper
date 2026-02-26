@@ -16,7 +16,7 @@ DEFAULT_PROFILES: tuple[tuple[str, str, bool], ...] = (
 
 DEFAULT_PROFILE_BANKS: dict[str, set[str]] = {
     DEFAULT_PROFILE_KEY: {"FAB", "ADCB", "ENBD", "SIB"},
-    SECONDARY_PROFILE_KEY: {"MASHREQ", "EIB"},
+    SECONDARY_PROFILE_KEY: {"MASHREQ", "EIB", "ENBD"},
 }
 
 
@@ -61,10 +61,8 @@ def ensure_profile_seeds(db: Session) -> None:
         select(models.ProfileBank.profile_id, models.ProfileBank.bank_code)
     ).all()
     mapped_by_profile: dict[int, set[str]] = {}
-    mapped_profiles_by_bank: dict[str, set[int]] = {}
     for profile_id, bank_code in mappings:
         mapped_by_profile.setdefault(profile_id, set()).add(bank_code)
-        mapped_profiles_by_bank.setdefault(bank_code, set()).add(profile_id)
 
     for profile_key, default_codes in DEFAULT_PROFILE_BANKS.items():
         profile = existing.get(profile_key)
@@ -80,12 +78,11 @@ def ensure_profile_seeds(db: Session) -> None:
             codes_to_add = desired - current
         elif profile_key == SECONDARY_PROFILE_KEY:
             # One-time onboarding for newly introduced secondary-profile defaults.
+            # Shared banks across profiles are allowed (e.g. ENBD in both Hussain and Tejasvie).
             if not current:
                 codes_to_add = desired - current
             else:
-                for bank_code in (desired - current):
-                    if not mapped_profiles_by_bank.get(bank_code):
-                        codes_to_add.add(bank_code)
+                codes_to_add = desired - current
 
         if not codes_to_add:
             continue

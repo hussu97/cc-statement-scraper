@@ -11,6 +11,8 @@ services:
     volumes:
       - ${CCS_DATA_DIR:-../data}:/app/data
       - ${CCS_LOGS_DIR:-../logs}:/app/logs
+    networks:
+      - app_internal
     expose:
       - "8040"
     restart: unless-stopped
@@ -27,6 +29,8 @@ services:
     volumes:
       - ${CCS_DATA_DIR:-../data}:/app/data
       - ${CCS_LOGS_DIR:-../logs}:/app/logs
+    networks:
+      - app_internal
     restart: unless-stopped
 
   frontend:
@@ -35,6 +39,8 @@ services:
       dockerfile: deploy/Dockerfile.frontend
     expose:
       - "8080"
+    networks:
+      - app_internal
     restart: unless-stopped
 
   reverse-proxy:
@@ -51,8 +57,16 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    networks:
+      - app_internal
+      - edge_public
     restart: unless-stopped
 
 volumes:
   caddy_data:
   caddy_config:
+
+networks:
+  app_internal:
+    internal: true
+  edge_public:

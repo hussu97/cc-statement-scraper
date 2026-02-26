@@ -424,25 +424,8 @@ curl -sS -u admin:ChangeThisPasswordNow! \
 Backup:
 
 ```bash
-TS=$(date +%F_%H-%M-%S)
-mkdir -p /opt/ccs/backups/$TS
-
-# consistent SQLite backup via sqlite shell inside API container
-
-docker compose --env-file /opt/ccs/.env.production -f /opt/ccs/credit-card-scraper/deploy/docker-compose.prod.yml \
-  exec api sh -lc "python - <<'PY'
-import sqlite3
-src='/app/data/state/platform.db'
-out='/app/data/state/platform_backup_${TS}.db'
-con=sqlite3.connect(src)
-bk=sqlite3.connect(out)
-con.backup(bk)
-bk.close(); con.close()
-print(out)
-PY"
-
-cp /opt/ccs/data/state/platform_backup_${TS}.db /opt/ccs/backups/$TS/
-tar -czf /opt/ccs/backups/$TS/archive_and_logs.tgz /opt/ccs/data/archive /opt/ccs/logs
+cd /opt/ccs/credit-card-scraper
+PYTHONPATH=src python scripts/backup_platform_state.py --label nightly
 ```
 
 Restore:
@@ -452,13 +435,20 @@ Restore:
 cd /opt/ccs/credit-card-scraper/deploy
 docker compose --env-file /opt/ccs/.env.production -f docker-compose.prod.yml down
 
-# restore DB + archive
-cp /opt/ccs/backups/<TIMESTAMP>/platform_backup_<TIMESTAMP>.db /opt/ccs/data/state/platform.db
-tar -xzf /opt/ccs/backups/<TIMESTAMP>/archive_and_logs.tgz -C /
+# restore DB + archive (force required for overwrite)
+cd /opt/ccs/credit-card-scraper
+PYTHONPATH=src python scripts/restore_platform_backup.py /opt/ccs/backups/<ARCHIVE_NAME>.tar.gz --force
 
 # restart
 
 docker compose --env-file /opt/ccs/.env.production -f docker-compose.prod.yml up -d
+```
+
+Monthly drill:
+
+```bash
+cd /opt/ccs/credit-card-scraper
+PYTHONPATH=src python scripts/backup_restore_drill.py --label monthly
 ```
 
 ---
@@ -844,7 +834,13 @@ gcloud sql instances describe ccs-pg
 - Verify backups and perform one restore drill in non-prod
 - Review failed jobs in `/api/v1/jobs`
 - Review runtime settings for stale/rotated credentials
-- Trim old logs and old artifacts based on retention policy
+- Run retention dry-run and apply if counts are expected:
+  - `PYTHONPATH=src python scripts/enforce_retention.py`
+  - `PYTHONPATH=src python scripts/enforce_retention.py --apply`
+- Run staging load/perf budget check:
+  - `PYTHONPATH=src python scripts/load_test_api.py --base-url <STAGING_URL> --duration 60 --concurrency 12`
+- Evaluate SLO policy against metrics:
+  - `PYTHONPATH=src python scripts/evaluate_slo.py --metrics-url <STAGING_URL>/api/v1/metrics`
 
 ## 8.3 Credential rotation
 
@@ -879,11 +875,14 @@ gcloud sql instances describe ccs-pg
 - [ ] Private/admin-only access verified
 - [ ] `CCS_PLATFORM_EMBEDDED_WORKER=false` verified
 - [ ] DB migrations applied (`alembic upgrade head`)
+- [ ] Migration preflight passed (`PYTHONPATH=src python scripts/migration_preflight.py`)
 - [ ] Runtime settings seeded and verified
 - [ ] API + worker + frontend healthy
 - [ ] Upload, scrape, reparse, reclassify smoke-tested
 - [ ] Dashboard loads with expected data
 - [ ] Backup job configured and restore tested
+- [ ] Retention enforcement job scheduled and validated
+- [ ] Load budget and SLO evaluation completed on staging
 - [ ] Log access and alerting path verified
 - [ ] Rollback command tested once
 

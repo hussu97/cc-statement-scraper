@@ -1,0 +1,16 @@
+objectives:
+  api_availability:
+    target: 0.995
+    alert_below: 0.99
+  api_avg_latency_ms:
+    target: 500
+    alert_above: 800
+  job_success_rate:
+    target: 0.98
+    alert_below: 0.95
+  queue_backlog_slo:
+    required_status: ok
+on_call:
+  primary_channel: pagerduty
+  escalation_minutes: 15
+  runbook: docs/operations/slo-alert-policy.md

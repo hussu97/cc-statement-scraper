@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from ccs_platform.api.v1.endpoints import (
+    auth,
     banks,
     categories,
     dashboard,
@@ -18,6 +19,7 @@ from ccs_platform.api.v1.endpoints import (
 
 router = APIRouter()
 router.include_router(system.router)
+router.include_router(auth.router)
 router.include_router(profiles.router)
 router.include_router(banks.router)
 router.include_router(jobs.router)

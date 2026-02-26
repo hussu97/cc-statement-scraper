@@ -1,10 +1,17 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from ccs_platform.api.deps import ProfileContext, get_db, get_profile_context
+from ccs_platform.api.audit import append_audit_event
+from ccs_platform.api.deps import (
+    ActorContext,
+    ProfileContext,
+    get_db,
+    get_profile_context,
+    require_admin_role,
+)
 from ccs_platform.api.v1.schemas import (
     PaginatedRuntimeSettings,
     RuntimeSettingCreate,
@@ -50,8 +57,10 @@ def _to_runtime_setting_out(row: models.RuntimeSetting) -> RuntimeSettingOut:
 
 @router.get("", response_model=PaginatedRuntimeSettings)
 def list_runtime_settings(
+    request: Request,
     db: Session = Depends(get_db),
     profile: ProfileContext = Depends(get_profile_context),
+    actor: ActorContext = Depends(require_admin_role),
     page: int = 1,
     page_size: int = 100,
     search: str | None = None,
@@ -90,8 +99,10 @@ def list_runtime_settings(
 @router.post("", response_model=RuntimeSettingOut)
 def create_or_update_runtime_setting(
     payload: RuntimeSettingCreate,
+    request: Request,
     db: Session = Depends(get_db),
     profile: ProfileContext = Depends(get_profile_context),
+    actor: ActorContext = Depends(require_admin_role),
 ) -> RuntimeSettingOut:
     row = upsert_runtime_setting(
         db,
@@ -101,6 +112,20 @@ def create_or_update_runtime_setting(
         bank_code=payload.bank_code,
         is_secret=payload.is_secret,
         description=payload.description,
+    )
+    append_audit_event(
+        db,
+        profile_id=profile.profile_id,
+        event_type="runtime_setting_upserted",
+        entity_type="runtime_setting",
+        entity_id=row.key,
+        payload_json={
+            "bank_code": row.bank_code,
+            "is_secret": row.is_secret,
+            "description": row.description,
+            "has_value": bool(row.value),
+        },
+        request=request,
     )
     db.commit()
     db.refresh(row)
@@ -112,8 +137,10 @@ def create_or_update_runtime_setting(
 def patch_runtime_setting(
     key: str,
     payload: RuntimeSettingUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     profile: ProfileContext = Depends(get_profile_context),
+    actor: ActorContext = Depends(require_admin_role),
 ) -> RuntimeSettingOut:
     normalized_key = normalize_runtime_key(key)
     row = db.execute(
@@ -125,7 +152,8 @@ def patch_runtime_setting(
     if row is None:
         raise HTTPException(status_code=404, detail=f"Runtime setting not found: {normalized_key}")
 
-    next_value = decode_runtime_setting_row_value(row) if payload.value is None else payload.value
+    before_value = decode_runtime_setting_row_value(row) if row.value else ""
+    next_value = before_value if payload.value is None else payload.value
     row = upsert_runtime_setting(
         db,
         profile_id=profile.profile_id,
@@ -134,6 +162,26 @@ def patch_runtime_setting(
         bank_code=payload.bank_code,
         is_secret=payload.is_secret,
         description=payload.description,
+    )
+    before_audit: dict[str, object] = {"has_value": bool(before_value)}
+    after_audit: dict[str, object] = {"has_value": bool(next_value)}
+    if not row.is_secret:
+        before_audit["value"] = before_value
+        after_audit["value"] = next_value
+    append_audit_event(
+        db,
+        profile_id=profile.profile_id,
+        event_type="runtime_setting_updated",
+        entity_type="runtime_setting",
+        entity_id=row.key,
+        payload_json={
+            "bank_code": row.bank_code,
+            "is_secret": row.is_secret,
+            "description": row.description,
+            "before": before_audit,
+            "after": after_audit,
+        },
+        request=request,
     )
     db.commit()
     db.refresh(row)
@@ -144,8 +192,10 @@ def patch_runtime_setting(
 @router.post("/seed-from-env")
 def seed_runtime_settings(
     payload: RuntimeSettingsSeedRequest,
+    request: Request,
     db: Session = Depends(get_db),
     profile: ProfileContext = Depends(get_profile_context),
+    actor: ActorContext = Depends(require_admin_role),
 ) -> dict[str, object]:
     try:
         result = seed_runtime_settings_from_env(
@@ -158,6 +208,19 @@ def seed_runtime_settings(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    append_audit_event(
+        db,
+        profile_id=profile.profile_id,
+        event_type="runtime_settings_seeded",
+        entity_type="runtime_settings",
+        entity_id=profile.profile_key,
+        payload_json={
+            "source_mode": payload.source_mode,
+            "overwrite_existing": payload.overwrite_existing,
+            **result,
+        },
+        request=request,
+    )
     db.commit()
     applied = apply_runtime_settings_to_process_env(db, profile_id=profile.profile_id)
     return {

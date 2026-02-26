@@ -147,3 +147,65 @@ def test_worker_loop_recovers_stale_running_jobs() -> None:
                 row = db.get(models.Job, job_id)
                 if row is not None:
                     db.delete(row)
+
+
+def test_worker_loop_respects_active_job_capacity() -> None:
+    init_db()
+    profile_id = _ensure_profile()
+    runner = _FakeRunner()
+    settings = PlatformSettings(worker_queues="default", max_worker_threads=4, worker_max_active_jobs=2)
+    loop = WorkerLoop(settings=settings, job_runner=runner)  # type: ignore[arg-type]
+
+    created_job_ids: list[int] = []
+    with db_session() as db:
+        now = datetime.now(UTC)
+        for offset in range(3):
+            row = models.Job(
+                profile_id=profile_id,
+                job_type=models.JobType.RECLASSIFY,
+                queue_name="default",
+                status=models.JobStatus.QUEUED,
+                payload_json={"offset": offset},
+                created_at=now + timedelta(seconds=offset),
+            )
+            db.add(row)
+            db.flush()
+            created_job_ids.append(row.id)
+
+    try:
+        loop._dispatch_queued_jobs()
+        assert len(runner.enqueued) == 2
+
+        with db_session() as db:
+            running_count = len(
+                db.execute(
+                    select(models.Job.id)
+                    .where(models.Job.id.in_(created_job_ids), models.Job.status == models.JobStatus.RUNNING)
+                ).scalars().all()
+            )
+            queued_count = len(
+                db.execute(
+                    select(models.Job.id)
+                    .where(models.Job.id.in_(created_job_ids), models.Job.status == models.JobStatus.QUEUED)
+                ).scalars().all()
+            )
+            assert running_count == 2
+            assert queued_count == 1
+
+        loop._dispatch_queued_jobs()
+        assert len(runner.enqueued) == 2
+
+        with db_session() as db:
+            completed = db.get(models.Job, runner.enqueued[0])
+            assert completed is not None
+            completed.status = models.JobStatus.SUCCEEDED
+
+        loop._cleanup_in_flight()
+        loop._dispatch_queued_jobs()
+        assert len(runner.enqueued) == 3
+    finally:
+        with db_session() as db:
+            for job_id in created_job_ids:
+                row = db.get(models.Job, job_id)
+                if row is not None:
+                    db.delete(row)

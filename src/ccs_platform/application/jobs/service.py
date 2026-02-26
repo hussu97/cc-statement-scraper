@@ -25,6 +25,12 @@ DEFAULT_QUEUE_BY_JOB_TYPE: dict[models.JobType, str] = {
     models.JobType.BANK_CONNECTION_TEST: "scrape",
 }
 
+AUTO_IDEMPOTENCY_PREFIX = "auto:"
+REQUEUEABLE_AUTO_IDEMPOTENT_STATUSES = {
+    models.JobStatus.CANCELLED,
+    models.JobStatus.FAILED,
+}
+
 
 def default_max_attempts(job_type: models.JobType) -> int:
     return max(1, int(DEFAULT_MAX_ATTEMPTS.get(job_type, 1)))
@@ -72,7 +78,7 @@ def create_or_get_job(
     auto_idempotency: bool = True,
     max_attempts: int | None = None,
     queue_name: str | None = None,
-) -> tuple[models.Job, bool]:
+) -> tuple[models.Job, bool, bool]:
     normalized_payload = _normalized_payload(payload_json)
     resolved_idempotency_key = _normalized_idempotency_key(idempotency_key)
     if resolved_idempotency_key is None and auto_idempotency:
@@ -91,7 +97,26 @@ def create_or_get_job(
             )
         ).scalar_one_or_none()
         if existing is not None:
-            return existing, False
+            if (
+                resolved_idempotency_key.startswith(AUTO_IDEMPOTENCY_PREFIX)
+                and existing.status in REQUEUEABLE_AUTO_IDEMPOTENT_STATUSES
+            ):
+                existing.status = models.JobStatus.QUEUED
+                existing.queue_name = (queue_name or default_queue_name(job_type)).strip().lower()
+                existing.payload_json = normalized_payload
+                existing.max_attempts = max_attempts if max_attempts is not None else default_max_attempts(job_type)
+                existing.attempt_count = 0
+                existing.progress_percent = 0
+                existing.result_json = None
+                existing.error_message = None
+                existing.started_at = None
+                existing.finished_at = None
+                existing.next_retry_at = None
+                existing.last_heartbeat_at = None
+                existing.cancel_requested_at = None
+                db.flush()
+                return existing, False, True
+            return existing, False, False
 
     job = models.Job(
         profile_id=profile_id,
@@ -105,4 +130,4 @@ def create_or_get_job(
     )
     db.add(job)
     db.flush()
-    return job, True
+    return job, True, False

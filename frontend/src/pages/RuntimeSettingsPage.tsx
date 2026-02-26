@@ -135,7 +135,7 @@ export function RuntimeSettingsPage() {
   async function seedFromEnv() {
     try {
       setError(null);
-      const result = await api.post<any>('/runtime-settings/seed-from-env', { overwrite_existing: false });
+      const result = await api.post<any>('/runtime-settings/seed-from-env', { overwrite_existing: true });
       setStatusMessage(
         `Seeded from ${result.env_file}: inserted ${result.inserted}, updated ${result.updated}, skipped ${result.skipped}`,
       );

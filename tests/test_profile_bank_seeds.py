@@ -52,7 +52,7 @@ def test_profile_seed_assigns_secondary_defaults_to_tejasvie_only() -> None:
         )
 
         assert hussain_banks == {"FAB", "ADCB", "ENBD", "SIB"}
-        assert tejasvie_banks == {"MASHREQ", "EIB"}
+        assert tejasvie_banks == {"MASHREQ", "EIB", "ENBD"}
 
 
 def test_profile_seed_backfills_new_secondary_bank_for_existing_profile() -> None:
@@ -88,4 +88,4 @@ def test_profile_seed_backfills_new_secondary_bank_for_existing_profile() -> Non
             ).scalars().all()
         )
 
-        assert tejasvie_banks == {"MASHREQ", "EIB"}
+        assert tejasvie_banks == {"MASHREQ", "EIB", "ENBD"}

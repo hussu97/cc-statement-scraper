@@ -8,7 +8,7 @@ import uuid
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from starlette.middleware.sessions import SessionMiddleware
 
 from ccs_platform.core.logging import configure_logging
 from ccs_platform.core.metrics import METRICS
@@ -24,28 +24,10 @@ from ccs_platform.application.jobs.worker_loop import WorkerLoop
 logger = logging.getLogger(__name__)
 
 
-def _extract_api_token(request: Request) -> str | None:
-    auth_header = request.headers.get("Authorization")
-    if auth_header:
-        scheme, _, token = auth_header.partition(" ")
-        if scheme.lower() == "bearer" and token.strip():
-            return token.strip()
-
-    token_header = request.headers.get("X-Admin-Token")
-    if token_header and token_header.strip():
-        return token_header.strip()
-    return None
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
     configure_logging(level_name=settings.log_level)
-
-    if settings.api_auth_enabled() and not settings.api_auth_token:
-        raise RuntimeError(
-            "API auth is enabled but CCS_PLATFORM_API_AUTH_TOKEN is not set."
-        )
 
     init_db()
     with db_session() as db:
@@ -83,6 +65,14 @@ def create_app() -> FastAPI:
 
     origins = [token.strip() for token in settings.cors_allow_origins.split(",") if token.strip()]
     app.add_middleware(
+        SessionMiddleware,
+        secret_key=settings.session_secret_key,
+        session_cookie=settings.session_cookie_name,
+        max_age=max(300, int(settings.session_max_age_seconds)),
+        same_site="lax",
+        https_only=settings.session_cookie_is_secure(),
+    )
+    app.add_middleware(
         CORSMiddleware,
         allow_origins=origins if origins else ["*"],
         allow_credentials=True,
@@ -92,27 +82,19 @@ def create_app() -> FastAPI:
 
     app.include_router(api_v1_router, prefix=settings.api_prefix)
 
-    api_prefix = settings.api_prefix.rstrip("/")
-    exempt_paths = settings.api_auth_exempt_path_set()
-
     @app.middleware("http")
     async def guard_and_log_requests(request: Request, call_next):
         request_id = request.headers.get(settings.request_id_header) or uuid.uuid4().hex
         start = time.perf_counter()
-        response = None
         status_code = 500
+        request.state.request_id = request_id
+        request.state.actor_role = ""
+        request.state.actor_subject = "anonymous"
+        request.state.authenticated_email = None
+        request.state.default_profile_key = None
 
         try:
-            if settings.api_auth_enabled():
-                path = request.url.path
-                is_api_path = path == api_prefix or path.startswith(f"{api_prefix}/")
-                if is_api_path and path not in exempt_paths:
-                    token = _extract_api_token(request)
-                    if token != settings.api_auth_token:
-                        response = JSONResponse(status_code=401, content={"detail": "Unauthorized"})
-
-            if response is None:
-                response = await call_next(request)
+            response = await call_next(request)
 
             status_code = response.status_code
             response.headers[settings.request_id_header] = request_id

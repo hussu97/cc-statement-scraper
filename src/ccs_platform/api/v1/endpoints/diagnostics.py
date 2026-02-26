@@ -3,8 +3,15 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from ccs_platform.api.audit import append_audit_event
 from ccs_platform.db import models
-from ccs_platform.api.deps import ProfileContext, get_db, get_profile_context
+from ccs_platform.api.deps import (
+    ActorContext,
+    ProfileContext,
+    get_db,
+    get_profile_context,
+    require_operator_role,
+)
 from ccs_platform.api.v1.schemas import BankConnectionTestRequest, JobOut, ParserValidateRequest
 from ccs_platform.api.v1.endpoints.job_utils import request_idempotency_key
 from ccs_platform.application.banks.capabilities import get_enabled_banks
@@ -20,15 +27,25 @@ def parser_validate(
     request: Request,
     db: Session = Depends(get_db),
     profile: ProfileContext = Depends(get_profile_context),
+    actor: ActorContext = Depends(require_operator_role),
 ) -> JobOut:
-    job, created = create_or_get_job(
+    job, created, requeued = create_or_get_job(
         db,
         profile_id=profile.profile_id,
         job_type=models.JobType.PARSER_VALIDATE,
         payload_json=payload.model_dump(),
         idempotency_key=request_idempotency_key(request),
     )
-    if created:
+    if created or requeued:
+        append_audit_event(
+            db,
+            profile_id=profile.profile_id,
+            event_type="job_enqueued",
+            entity_type="job",
+            entity_id=str(job.id),
+            payload_json={"job_type": job.job_type.value, "queue_name": job.queue_name},
+            request=request,
+        )
         db.commit()
         db.refresh(job)
         request.app.state.job_dispatcher.publish(job.id)
@@ -42,6 +59,7 @@ def bank_connection_test(
     request: Request,
     db: Session = Depends(get_db),
     profile: ProfileContext = Depends(get_profile_context),
+    actor: ActorContext = Depends(require_operator_role),
 ) -> JobOut:
     allowed = {
         bank.code for bank in get_enabled_banks(db, requested=[payload.bank_code], profile_id=profile.profile_id)
@@ -52,14 +70,23 @@ def bank_connection_test(
             detail=f"Bank {payload.bank_code.upper()} is not enabled for profile {profile.profile_key}",
         )
 
-    job, created = create_or_get_job(
+    job, created, requeued = create_or_get_job(
         db,
         profile_id=profile.profile_id,
         job_type=models.JobType.BANK_CONNECTION_TEST,
         payload_json=payload.model_dump(),
         idempotency_key=request_idempotency_key(request),
     )
-    if created:
+    if created or requeued:
+        append_audit_event(
+            db,
+            profile_id=profile.profile_id,
+            event_type="job_enqueued",
+            entity_type="job",
+            entity_id=str(job.id),
+            payload_json={"job_type": job.job_type.value, "queue_name": job.queue_name},
+            request=request,
+        )
         db.commit()
         db.refresh(job)
         request.app.state.job_dispatcher.publish(job.id)

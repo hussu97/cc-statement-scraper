@@ -1,34 +1,53 @@
 import { useSyncExternalStore } from 'react';
 
-const STORAGE_KEY = 'ccs_admin_token';
+const STORAGE_KEY = 'ccs_auth_user';
+
+export type AuthUser = {
+  email: string;
+  display_name: string;
+  default_profile_key: string;
+  role: string;
+};
 
 type Listener = () => void;
 
 const listeners = new Set<Listener>();
 
-function readInitialToken(): string {
+function readInitialUser(): AuthUser | null {
   if (typeof window === 'undefined') {
-    return '';
+    return null;
   }
-  return window.localStorage.getItem(STORAGE_KEY) || '';
+  const raw = window.localStorage.getItem(STORAGE_KEY);
+  if (!raw) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(raw) as AuthUser;
+    if (!parsed?.email) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
 }
 
-let adminToken = readInitialToken();
+let authUser: AuthUser | null = readInitialUser();
 
 function notify() {
   listeners.forEach((listener) => listener());
 }
 
-export function getAdminToken(): string {
-  return adminToken;
+export function getAuthUser(): AuthUser | null {
+  return authUser;
 }
 
-export function setAdminToken(token: string): void {
-  adminToken = token.trim();
+export function setAuthUser(user: AuthUser | null): void {
+  authUser = user;
 
   if (typeof window !== 'undefined') {
-    if (adminToken) {
-      window.localStorage.setItem(STORAGE_KEY, adminToken);
+    if (authUser) {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(authUser));
     } else {
       window.localStorage.removeItem(STORAGE_KEY);
     }
@@ -37,8 +56,8 @@ export function setAdminToken(token: string): void {
   notify();
 }
 
-export function clearAdminToken(): void {
-  setAdminToken('');
+export function clearAuthUser(): void {
+  setAuthUser(null);
 }
 
 function subscribe(listener: Listener): () => void {
@@ -46,6 +65,6 @@ function subscribe(listener: Listener): () => void {
   return () => listeners.delete(listener);
 }
 
-export function useAdminToken(): string {
-  return useSyncExternalStore(subscribe, getAdminToken, () => '');
+export function useAuthUser(): AuthUser | null {
+  return useSyncExternalStore(subscribe, getAuthUser, () => null);
 }
