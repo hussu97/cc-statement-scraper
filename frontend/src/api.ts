@@ -1,5 +1,5 @@
 import { getActiveProfileKey } from './profileStore';
-import { getAdminToken } from './authStore';
+import { clearAuthUser } from './authStore';
 
 export type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
 
@@ -23,12 +23,6 @@ async function request<T>(
     headers['X-Profile-Key'] = getActiveProfileKey();
   }
 
-  const token = getAdminToken();
-  const hasAuthorization = !!headers.Authorization || !!headers.authorization;
-  if (token && !hasAuthorization) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
   let payload: BodyInit | undefined;
   if (body instanceof FormData) {
     payload = body;
@@ -41,8 +35,13 @@ async function request<T>(
     method,
     headers,
     body: payload,
+    credentials: 'include',
     ...init,
   });
+
+  if (resp.status === 401) {
+    clearAuthUser();
+  }
 
   if (!resp.ok) {
     const text = await resp.text();

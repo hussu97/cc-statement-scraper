@@ -8,8 +8,16 @@ from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from ccs_platform.api.audit import append_audit_event
 from ccs_platform.db import models
-from ccs_platform.api.deps import ProfileContext, get_db, get_profile_context
+from ccs_platform.api.deps import (
+    ActorContext,
+    ProfileContext,
+    get_db,
+    get_profile_context,
+    require_admin_role,
+    require_operator_role,
+)
 from ccs_platform.api.v1.schemas import (
     JobOut,
     PaginatedStatementLines,
@@ -33,14 +41,23 @@ def _enqueue_reparse_job(
     profile_id: int,
     payload: dict[str, int | bool],
 ) -> JobOut:
-    job, created = create_or_get_job(
+    job, created, requeued = create_or_get_job(
         db,
         profile_id=profile_id,
         job_type=models.JobType.REPARSE_STATEMENT,
         payload_json=payload,
         idempotency_key=request_idempotency_key(request),
     )
-    if created:
+    if created or requeued:
+        append_audit_event(
+            db,
+            profile_id=profile_id,
+            event_type="statement_reparse_enqueued",
+            entity_type="job",
+            entity_id=str(job.id),
+            payload_json={"job_type": job.job_type.value, "payload_json": payload},
+            request=request,
+        )
         db.commit()
         db.refresh(job)
         request.app.state.job_dispatcher.publish(job.id)
@@ -112,6 +129,7 @@ def reparse_all_statements(
     request: Request,
     db: Session = Depends(get_db),
     profile: ProfileContext = Depends(get_profile_context),
+    actor: ActorContext = Depends(require_operator_role),
 ) -> JobOut:
     return _enqueue_reparse_job(
         request=request,
@@ -148,8 +166,10 @@ def get_statement(
 def patch_statement_date(
     statement_id: int,
     payload: StatementDateUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     profile: ProfileContext = Depends(get_profile_context),
+    actor: ActorContext = Depends(require_operator_role),
 ) -> StatementOut:
     statement = db.execute(
         select(models.Statement).where(
@@ -209,24 +229,24 @@ def patch_statement_date(
         raw["statement_month"] = statement_month
         line.raw_json = raw
 
-    db.add(
-        models.AuditEvent(
-            profile_id=profile.profile_id,
-            event_type="statement_date_updated",
-            entity_type="statement",
-            entity_id=str(statement.id),
-            payload_json={
-                "bank_code": statement.bank_code,
-                "statement_reference": statement.statement_reference,
-                "old_statement_date": old_date.isoformat(),
-                "new_statement_date": new_date.isoformat(),
-                "old_statement_period_end": old_period_end.isoformat() if old_period_end else None,
-                "new_statement_period_end": (
-                    statement.statement_period_end.isoformat() if statement.statement_period_end else None
-                ),
-                "updated_line_storage_records": updated_line_storage_records,
-            },
-        )
+    append_audit_event(
+        db,
+        profile_id=profile.profile_id,
+        event_type="statement_date_updated",
+        entity_type="statement",
+        entity_id=str(statement.id),
+        payload_json={
+            "bank_code": statement.bank_code,
+            "statement_reference": statement.statement_reference,
+            "old_statement_date": old_date.isoformat(),
+            "new_statement_date": new_date.isoformat(),
+            "old_statement_period_end": old_period_end.isoformat() if old_period_end else None,
+            "new_statement_period_end": (
+                statement.statement_period_end.isoformat() if statement.statement_period_end else None
+            ),
+            "updated_line_storage_records": updated_line_storage_records,
+        },
+        request=request,
     )
     db.commit()
     db.refresh(statement)
@@ -325,6 +345,7 @@ def reparse_statement(
     request: Request,
     db: Session = Depends(get_db),
     profile: ProfileContext = Depends(get_profile_context),
+    actor: ActorContext = Depends(require_operator_role),
 ) -> JobOut:
     statement = db.execute(
         select(models.Statement).where(
@@ -346,8 +367,10 @@ def reparse_statement(
 @router.delete("/{statement_id}")
 def delete_statement(
     statement_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     profile: ProfileContext = Depends(get_profile_context),
+    actor: ActorContext = Depends(require_admin_role),
 ):
     statement = db.execute(
         select(models.Statement).where(
@@ -358,18 +381,18 @@ def delete_statement(
     if not statement:
         raise HTTPException(status_code=404, detail="Statement not found")
 
-    db.add(
-        models.AuditEvent(
-            profile_id=profile.profile_id,
-            event_type="statement_deleted",
-            entity_type="statement",
-            entity_id=str(statement.id),
-            payload_json={
-                "bank_code": statement.bank_code,
-                "statement_reference": statement.statement_reference,
-                "statement_date": statement.statement_date.isoformat(),
-            },
-        )
+    append_audit_event(
+        db,
+        profile_id=profile.profile_id,
+        event_type="statement_deleted",
+        entity_type="statement",
+        entity_id=str(statement.id),
+        payload_json={
+            "bank_code": statement.bank_code,
+            "statement_reference": statement.statement_reference,
+            "statement_date": statement.statement_date.isoformat(),
+        },
+        request=request,
     )
     db.delete(statement)
     db.commit()

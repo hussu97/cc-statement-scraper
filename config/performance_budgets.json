@@ -1,0 +1,7 @@
+{
+  "api_smoke": {
+    "max_error_rate": 0.02,
+    "max_p95_ms": 1500,
+    "min_rps": 5.0
+  }
+}

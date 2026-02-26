@@ -27,6 +27,7 @@ dependencies = [
   "python-multipart>=0.0.9",
   "google-cloud-storage>=2.16",
   "cryptography>=43.0",
+  "itsdangerous>=2.2",
 ]
 
 [project.optional-dependencies]

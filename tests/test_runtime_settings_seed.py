@@ -47,12 +47,26 @@ def test_seed_runtime_settings_from_env_file_and_apply(monkeypatch, tmp_path) ->
 
         rows = db.execute(select(models.RuntimeSetting)).scalars().all()
         by_key = {row.key: row for row in rows}
-        assert by_key["FAB_USERNAME"].value == "env-wins"
+        # env_file_then_env prefers .env file values first.
+        assert by_key["FAB_USERNAME"].value == "user-fab"
         assert by_key["FAB_PASSWORD"].is_secret is True
         assert by_key["SIB_USER_ID"].value == "user-sib"
         assert by_key["EIB_USERNAME"].value == "user-eib"
         assert by_key["MASHREQ_USERNAME"].value == "user-mashreq"
         assert by_key["CCS_DOWNLOADS_DIR"].is_secret is False
+
+        # env mode uses process environment values.
+        seed_runtime_settings_from_env(
+            db,
+            profile_id=profile.id,
+            env_file=env_path,
+            source_mode="env",
+            overwrite_existing=True,
+        )
+        db.flush()
+        rows = db.execute(select(models.RuntimeSetting)).scalars().all()
+        by_key = {row.key: row for row in rows}
+        assert by_key["FAB_USERNAME"].value == "env-wins"
 
         monkeypatch.setenv("FAB_USERNAME", "stale-value")
         applied = apply_runtime_settings_to_process_env(db, profile_id=profile.id)

@@ -1,28 +1,36 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
+import { api } from '../api';
 import { routeLabel } from '../navigation';
-import { clearAdminToken, setAdminToken, useAdminToken } from '../authStore';
+import { clearAuthUser, useAuthUser } from '../authStore';
 import { useActiveProfileKey } from '../profileStore';
 import { MobileDrawerNav } from './MobileDrawerNav';
 import { SidebarNav } from './SidebarNav';
 
 export function AppShell() {
+  const navigate = useNavigate();
   const location = useLocation();
   const activeProfileKey = useActiveProfileKey();
-  const token = useAdminToken();
+  const authUser = useAuthUser();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [tokenDraft, setTokenDraft] = useState(token);
 
   useEffect(() => {
     setDrawerOpen(false);
   }, [location.pathname]);
 
-  useEffect(() => {
-    setTokenDraft(token);
-  }, [token]);
-
   const title = useMemo(() => routeLabel(location.pathname), [location.pathname]);
+
+  async function logout() {
+    try {
+      await api.post<void>('/auth/logout');
+    } catch {
+      // Ignore logout transport errors and clear local session state.
+    } finally {
+      clearAuthUser();
+      navigate('/login', { replace: true });
+    }
+  }
 
   return (
     <div className="app-shell">
@@ -43,29 +51,10 @@ export function AppShell() {
           </div>
 
           <div className="app-bar-right">
-            <input
-              type="password"
-              value={tokenDraft}
-              onChange={(event) => setTokenDraft(event.target.value)}
-              placeholder="Admin API token"
-              className="token-input"
-            />
-            <button
-              type="button"
-              className="ghost"
-              onClick={() => setAdminToken(tokenDraft)}
-            >
-              Save Token
+            <span className="badge">{authUser?.email || 'Unknown user'}</span>
+            <button type="button" className="ghost" onClick={logout}>
+              Log out
             </button>
-            <button
-              type="button"
-              className="ghost"
-              onClick={() => clearAdminToken()}
-              disabled={!token}
-            >
-              Clear
-            </button>
-            <span className="badge">{token ? 'API token set' : 'No API token'}</span>
           </div>
         </header>
 

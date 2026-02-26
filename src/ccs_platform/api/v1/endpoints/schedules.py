@@ -2,12 +2,19 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from ccs_platform.api.audit import append_audit_event
 from ccs_platform.db import models
-from ccs_platform.api.deps import ProfileContext, get_db, get_profile_context
+from ccs_platform.api.deps import (
+    ActorContext,
+    ProfileContext,
+    get_db,
+    get_profile_context,
+    require_operator_role,
+)
 from ccs_platform.api.v1.schemas import PaginatedSchedules, ScheduleCreate, ScheduleOut, ScheduleUpdate
 from ccs_platform.application.jobs.scheduler import compute_next_run
 
@@ -46,8 +53,10 @@ def list_schedules(
 @router.post("", response_model=ScheduleOut)
 def create_schedule(
     payload: ScheduleCreate,
+    request: Request,
     db: Session = Depends(get_db),
     profile: ProfileContext = Depends(get_profile_context),
+    actor: ActorContext = Depends(require_operator_role),
 ) -> ScheduleOut:
     next_run = compute_next_run(
         payload.rrule,
@@ -66,6 +75,21 @@ def create_schedule(
         next_run_at=next_run,
     )
     db.add(row)
+    append_audit_event(
+        db,
+        profile_id=profile.profile_id,
+        event_type="schedule_created",
+        entity_type="schedule",
+        entity_id=row.name,
+        payload_json={
+            "job_type": row.job_type.value,
+            "rrule": row.rrule,
+            "timezone": row.timezone,
+            "status": row.status.value,
+            "next_run_at": row.next_run_at.isoformat() if row.next_run_at is not None else None,
+        },
+        request=request,
+    )
     db.commit()
     db.refresh(row)
     return ScheduleOut.model_validate(row)
@@ -75,8 +99,10 @@ def create_schedule(
 def patch_schedule(
     schedule_id: int,
     payload: ScheduleUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     profile: ProfileContext = Depends(get_profile_context),
+    actor: ActorContext = Depends(require_operator_role),
 ) -> ScheduleOut:
     row = db.execute(
         select(models.Schedule).where(
@@ -87,6 +113,13 @@ def patch_schedule(
     if not row:
         raise HTTPException(status_code=404, detail="Schedule not found")
 
+    before = {
+        "name": row.name,
+        "status": row.status.value,
+        "rrule": row.rrule,
+        "timezone": row.timezone,
+        "next_run_at": row.next_run_at.isoformat() if row.next_run_at is not None else None,
+    }
     updates = payload.model_dump(exclude_unset=True)
     for key, value in updates.items():
         setattr(row, key, value)
@@ -98,6 +131,24 @@ def patch_schedule(
             now_utc=datetime.now(UTC),
         )
 
+    append_audit_event(
+        db,
+        profile_id=profile.profile_id,
+        event_type="schedule_updated",
+        entity_type="schedule",
+        entity_id=str(row.id),
+        payload_json={
+            "before": before,
+            "after": {
+                "name": row.name,
+                "status": row.status.value,
+                "rrule": row.rrule,
+                "timezone": row.timezone,
+                "next_run_at": row.next_run_at.isoformat() if row.next_run_at is not None else None,
+            },
+        },
+        request=request,
+    )
     db.commit()
     db.refresh(row)
     return ScheduleOut.model_validate(row)
@@ -106,8 +157,10 @@ def patch_schedule(
 @router.delete("/{schedule_id}")
 def delete_schedule(
     schedule_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     profile: ProfileContext = Depends(get_profile_context),
+    actor: ActorContext = Depends(require_operator_role),
 ):
     row = db.execute(
         select(models.Schedule).where(
@@ -117,6 +170,20 @@ def delete_schedule(
     ).scalar_one_or_none()
     if not row:
         raise HTTPException(status_code=404, detail="Schedule not found")
+    append_audit_event(
+        db,
+        profile_id=profile.profile_id,
+        event_type="schedule_deleted",
+        entity_type="schedule",
+        entity_id=str(row.id),
+        payload_json={
+            "name": row.name,
+            "job_type": row.job_type.value,
+            "rrule": row.rrule,
+            "status": row.status.value,
+        },
+        request=request,
+    )
     db.delete(row)
     db.commit()
     return {"deleted": True, "schedule_id": schedule_id}

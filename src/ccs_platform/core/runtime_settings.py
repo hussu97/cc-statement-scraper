@@ -260,29 +260,54 @@ def seed_runtime_settings_from_env(
             profile_key=resolved_profile_key,
         )
 
+    def _value_for_spec(key: str) -> str:
+        if resolved_source_mode == "none":
+            return ""
+
+        process_default = process_default_values.get(key, "")
+        process_profile = process_profile_values.get(key, "")
+        file_default = env_default_values.get(key, "")
+        file_profile = env_profile_values.get(key, "")
+
+        if blank_values:
+            # Non-default profiles only ingest profile-scoped keys.
+            if resolved_source_mode == "env":
+                return process_profile
+            if resolved_source_mode == "env_file":
+                return file_profile
+            # env_file_then_env: prefer .env profile-scoped value, then process env.
+            return file_profile or process_profile
+
+        if resolved_source_mode == "env":
+            return process_profile or process_default
+        if resolved_source_mode == "env_file":
+            return file_profile or file_default
+        # env_file_then_env: prefer .env (updated source of truth), then process env fallback.
+        return file_profile or file_default or process_profile or process_default
+
     seed_values: dict[str, str] = {}
 
     # Keep spec catalog deterministic even when .env is incomplete.
     for spec in DEFAULT_RUNTIME_SETTING_SPECS:
-        value = ""
-        if blank_values:
-            # For non-default profiles we only seed explicit profile-scoped values.
-            value = process_profile_values.get(spec.key, "") or env_profile_values.get(spec.key, "")
-        else:
-            value = (
-                process_profile_values.get(spec.key, "")
-                or process_default_values.get(spec.key, "")
-                or env_profile_values.get(spec.key, "")
-                or env_default_values.get(spec.key, "")
-            )
-        seed_values[spec.key] = value
+        seed_values[spec.key] = _value_for_spec(spec.key)
 
-    # Include extra supported keys from .env as part of catalog for this profile.
-    extra_source = env_profile_values if blank_values else {**env_default_values, **env_profile_values}
+    # Include extra supported keys from discovered env sources as part of catalog.
+    if blank_values:
+        extra_source = {
+            **env_profile_values,
+            **process_profile_values,
+        }
+    else:
+        extra_source = {
+            **env_default_values,
+            **env_profile_values,
+            **process_default_values,
+            **process_profile_values,
+        }
     for key, value in extra_source.items():
         if key in seed_values or not is_supported_runtime_key(key):
             continue
-        seed_values[key] = value
+        seed_values[key] = _value_for_spec(key)
 
     existing_by_key = {
         row.key: row

@@ -86,6 +86,18 @@ def _create_app_with_env(monkeypatch: pytest.MonkeyPatch, **kwargs: str) -> obje
     return create_app()
 
 
+def _login_default(client: TestClient) -> dict[str, object]:
+    resp = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "h_abbasi97@hotmail.com",
+            "password": "Apple123!",
+        },
+    )
+    assert resp.status_code == 200
+    return resp.json()
+
+
 def test_health_endpoint() -> None:
     with TestClient(app) as client:
         resp = client.get('/api/v1/health')
@@ -104,6 +116,7 @@ def test_health_ready_and_metrics_endpoints() -> None:
         assert 'database' in ready_payload['checks']
         assert 'storage' in ready_payload['checks']
 
+        _login_default(client)
         metrics_resp = client.get('/api/v1/metrics')
         assert metrics_resp.status_code == 200
         metrics_payload = metrics_resp.json()
@@ -112,10 +125,59 @@ def test_health_ready_and_metrics_endpoints() -> None:
         assert isinstance(metrics_payload['requests'].get('total'), int)
         assert 'queue_backlog' in metrics_payload['jobs']
         assert 'total_queued' in metrics_payload['jobs']['queue_backlog']
+        assert 'slo' in metrics_payload['jobs']['queue_backlog']
+        assert metrics_payload['jobs']['queue_backlog']['slo']['status'] in {'ok', 'breached'}
+
+
+def test_health_ready_degrades_when_queue_slo_breached(monkeypatch: pytest.MonkeyPatch) -> None:
+    backlog_app = _create_app_with_env(
+        monkeypatch,
+        CCS_PLATFORM_EMBEDDED_WORKER="false",
+        CCS_PLATFORM_QUEUE_BACKLOG_SLO_DEFAULT="0",
+    )
+
+    created_job_id: int | None = None
+    try:
+        with TestClient(backlog_app) as client:
+            _login_default(client)
+            with db_session() as db:
+                profile = db.execute(
+                    select(models.Profile).where(models.Profile.key == "alice")
+                ).scalar_one()
+                queued = models.Job(
+                    profile_id=profile.id,
+                    job_type=models.JobType.RECLASSIFY,
+                    queue_name="default",
+                    status=models.JobStatus.QUEUED,
+                    payload_json={},
+                )
+                db.add(queued)
+                db.flush()
+                created_job_id = queued.id
+
+            ready_resp = client.get("/api/v1/health/ready")
+            assert ready_resp.status_code == 503
+            ready_payload = ready_resp.json()
+            assert ready_payload["status"] == "degraded"
+            assert ready_payload["checks"]["job_queue"]["status"] == "error"
+            assert ready_payload["checks"]["job_queue"]["slo"]["status"] == "breached"
+
+            metrics_resp = client.get("/api/v1/metrics")
+            assert metrics_resp.status_code == 200
+            metrics_payload = metrics_resp.json()
+            assert metrics_payload["jobs"]["queue_backlog"]["slo"]["status"] == "breached"
+    finally:
+        if created_job_id is not None:
+            with db_session() as db:
+                row = db.get(models.Job, created_job_id)
+                if row is not None:
+                    db.delete(row)
+        get_settings.cache_clear()
 
 
 def test_banks_seeded() -> None:
     with TestClient(app) as client:
+        _login_default(client)
         resp = client.get('/api/v1/banks')
         assert resp.status_code == 200
         codes = {row['code'] for row in resp.json()}
@@ -124,6 +186,7 @@ def test_banks_seeded() -> None:
 
 def test_dashboard_endpoints_available() -> None:
     with TestClient(app) as client:
+        _login_default(client)
         trend_resp = client.get('/api/v1/dashboard/trend-series')
         assert trend_resp.status_code == 200
         assert isinstance(trend_resp.json().get('points'), list)
@@ -155,6 +218,7 @@ def test_dashboard_endpoints_available() -> None:
 
 def test_scrape_job_accepts_month_range() -> None:
     with TestClient(app) as client:
+        _login_default(client)
         resp = client.post(
             '/api/v1/jobs/scrape',
             json={
@@ -182,6 +246,7 @@ def test_scrape_job_dedupes_duplicate_payload() -> None:
         'login_timeout_minutes': 20,
     }
     with TestClient(app) as client:
+        _login_default(client)
         first = client.post('/api/v1/jobs/scrape', json=body)
         assert first.status_code == 200
         first_payload = first.json()
@@ -194,8 +259,137 @@ def test_scrape_job_dedupes_duplicate_payload() -> None:
         assert first_payload['idempotency_key'] == second_payload['idempotency_key']
 
 
+def test_scrape_job_requeues_cancelled_duplicate_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    workerless_app = _create_app_with_env(
+        monkeypatch,
+        CCS_PLATFORM_EMBEDDED_WORKER="false",
+    )
+    timeout_minutes = 5 + (int(uuid.uuid4().hex[:2], 16) % 56)
+    body = {
+        "banks": ["ENBD"],
+        "month_from": "2025-10",
+        "month_to": "2025-10",
+        "download": False,
+        "headless": True,
+        "login_timeout_minutes": timeout_minutes,
+    }
+
+    try:
+        with TestClient(workerless_app) as client:
+            _login_default(client)
+            first = client.post("/api/v1/jobs/scrape", json=body)
+            assert first.status_code == 200
+            first_payload = first.json()
+            job_id = int(first_payload["id"])
+
+            cancel = client.post(f"/api/v1/jobs/{job_id}/cancel")
+            assert cancel.status_code == 200
+            assert cancel.json()["status"] == "cancelled"
+
+            second = client.post("/api/v1/jobs/scrape", json=body)
+            assert second.status_code == 200
+            second_payload = second.json()
+
+            assert second_payload["id"] == job_id
+            assert second_payload["status"] == "queued"
+            assert second_payload["cancel_requested_at"] is None
+            assert second_payload["finished_at"] is None
+
+        with db_session() as db:
+            job_items = db.execute(
+                select(models.JobItem.id).where(models.JobItem.job_id == job_id)
+            ).scalars().all()
+            assert len(job_items) == 1
+    finally:
+        get_settings.cache_clear()
+
+
+def test_reclassify_job_honors_idempotency_key_header(monkeypatch: pytest.MonkeyPatch) -> None:
+    workerless_app = _create_app_with_env(
+        monkeypatch,
+        CCS_PLATFORM_EMBEDDED_WORKER="false",
+    )
+
+    created_job_id: int | None = None
+    idem_key = f"reclassify-{uuid.uuid4().hex}"
+    try:
+        with TestClient(workerless_app) as client:
+            _login_default(client)
+            headers = {"Idempotency-Key": idem_key}
+            first = client.post(
+                "/api/v1/jobs/reclassify",
+                json={"statement_ids": [1]},
+                headers=headers,
+            )
+            assert first.status_code == 200
+            first_payload = first.json()
+            created_job_id = first_payload["id"]
+
+            second = client.post(
+                "/api/v1/jobs/reclassify",
+                json={"statement_ids": [2]},
+                headers=headers,
+            )
+            assert second.status_code == 200
+            second_payload = second.json()
+
+            assert first_payload["id"] == second_payload["id"]
+            assert second_payload["idempotency_key"] == idem_key
+    finally:
+        if created_job_id is not None:
+            with db_session() as db:
+                row = db.get(models.Job, created_job_id)
+                if row is not None:
+                    db.delete(row)
+        get_settings.cache_clear()
+
+
+def test_workbook_export_idempotency_header_avoids_duplicate_exports(monkeypatch: pytest.MonkeyPatch) -> None:
+    workerless_app = _create_app_with_env(
+        monkeypatch,
+        CCS_PLATFORM_EMBEDDED_WORKER="false",
+    )
+
+    created_job_id: int | None = None
+    idem_key = f"export-{uuid.uuid4().hex}"
+    try:
+        with TestClient(workerless_app) as client:
+            _login_default(client)
+            headers = {"Idempotency-Key": idem_key}
+            first = client.post("/api/v1/exports/workbook", json={"year": 2025}, headers=headers)
+            assert first.status_code == 200
+            first_payload = first.json()
+            created_job_id = first_payload["id"]
+
+            second = client.post("/api/v1/exports/workbook", json={"year": 2025}, headers=headers)
+            assert second.status_code == 200
+            second_payload = second.json()
+
+            assert first_payload["id"] == second_payload["id"]
+
+        with db_session() as db:
+            export_ids = db.execute(
+                select(models.Export.id).where(models.Export.job_id == created_job_id)
+            ).scalars().all()
+            assert len(export_ids) == 1
+    finally:
+        if created_job_id is not None:
+            with db_session() as db:
+                export_rows = db.execute(
+                    select(models.Export).where(models.Export.job_id == created_job_id)
+                ).scalars().all()
+                for export_row in export_rows:
+                    db.delete(export_row)
+
+                job_row = db.get(models.Job, created_job_id)
+                if job_row is not None:
+                    db.delete(job_row)
+        get_settings.cache_clear()
+
+
 def test_reparse_all_enqueues_profile_scoped_job() -> None:
     with TestClient(app) as client:
+        _login_default(client)
         resp = client.post('/api/v1/statements/reparse-all')
         assert resp.status_code == 200
         payload = resp.json()
@@ -229,6 +423,7 @@ def test_cancel_running_job_sets_cancel_request_token() -> None:
 
     try:
         with TestClient(app) as client:
+            _login_default(client)
             resp = client.post(f"/api/v1/jobs/{job_id}/cancel")
             assert resp.status_code == 200
             payload = resp.json()
@@ -244,6 +439,7 @@ def test_cancel_running_job_sets_cancel_request_token() -> None:
 
 def test_runtime_settings_list_and_patch() -> None:
     with TestClient(app) as client:
+        _login_default(client)
         list_resp = client.get('/api/v1/runtime-settings')
         assert list_resp.status_code == 200
         list_payload = list_resp.json()
@@ -272,40 +468,69 @@ def test_runtime_settings_list_and_patch() -> None:
         assert {'inserted', 'updated', 'skipped', 'applied_to_process_env'}.issubset(payload.keys())
 
 
-def test_api_auth_token_guard_rejects_requests_without_token(monkeypatch: pytest.MonkeyPatch) -> None:
-    auth_app = _create_app_with_env(
-        monkeypatch,
-        CCS_PLATFORM_REQUIRE_API_AUTH="true",
-        CCS_PLATFORM_API_AUTH_TOKEN="secret-token",
-    )
+def test_login_guard_rejects_unauthenticated_requests() -> None:
+    with TestClient(app) as client:
+        unauthorized = client.get("/api/v1/banks")
+        assert unauthorized.status_code == 401
 
-    try:
-        with TestClient(auth_app) as client:
-            unauthorized = client.get("/api/v1/banks")
-            assert unauthorized.status_code == 401
+        health = client.get("/api/v1/health")
+        assert health.status_code == 200
 
-            health = client.get("/api/v1/health")
-            assert health.status_code == 200
+        me = client.get("/api/v1/auth/me")
+        assert me.status_code == 401
 
-            authorized = client.get(
-                "/api/v1/banks",
-                headers={"Authorization": "Bearer secret-token"},
-            )
-            assert authorized.status_code == 200
-    finally:
-        get_settings.cache_clear()
+
+@pytest.mark.parametrize(
+    ("email", "default_profile_key"),
+    (
+        ("h_abbasi97@hotmail.com", "alice"),
+        ("bob@example.com", "bob"),
+    ),
+)
+def test_login_and_me_endpoints_for_seeded_accounts(email: str, default_profile_key: str) -> None:
+    with TestClient(app) as client:
+        login = client.post(
+            "/api/v1/auth/login",
+            json={"email": email, "password": "Apple123!"},
+        )
+        assert login.status_code == 200
+        login_payload = login.json()
+        assert login_payload["user"]["email"] == email
+        assert login_payload["user"]["default_profile_key"] == default_profile_key
+
+        me = client.get("/api/v1/auth/me")
+        assert me.status_code == 200
+        me_payload = me.json()
+        assert me_payload["user"]["email"] == email
+        assert me_payload["user"]["default_profile_key"] == default_profile_key
+
+        logout = client.post("/api/v1/auth/logout")
+        assert logout.status_code == 204
+
+        after_logout = client.get("/api/v1/auth/me")
+        assert after_logout.status_code == 401
+
+
+def test_login_rejects_invalid_password() -> None:
+    with TestClient(app) as client:
+        resp = client.post(
+            "/api/v1/auth/login",
+            json={"email": "h_abbasi97@hotmail.com", "password": "wrong-password"},
+        )
+        assert resp.status_code == 401
 
 
 def test_runtime_settings_hide_secret_values_in_production(monkeypatch: pytest.MonkeyPatch) -> None:
     prod_app = _create_app_with_env(
         monkeypatch,
         CCS_PLATFORM_ENVIRONMENT="production",
-        CCS_PLATFORM_REQUIRE_API_AUTH="false",
+        CCS_PLATFORM_SESSION_COOKIE_SECURE="false",
         CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY="V33IhV4J0EAOQnq2STxwJK6I2Gv5u9W1tnM0B8f9Lh4=",
     )
 
     try:
         with TestClient(prod_app) as client:
+            _login_default(client)
             patch_resp = client.patch(
                 "/api/v1/runtime-settings/FAB_USERNAME",
                 json={"value": "prod-secret-user"},
@@ -319,8 +544,46 @@ def test_runtime_settings_hide_secret_values_in_production(monkeypatch: pytest.M
         get_settings.cache_clear()
 
 
+def test_runtime_setting_patch_emits_actor_audit_event(monkeypatch: pytest.MonkeyPatch) -> None:
+    auth_app = _create_app_with_env(monkeypatch)
+
+    try:
+        with TestClient(auth_app) as client:
+            _login_default(client)
+            patch_resp = client.patch(
+                "/api/v1/runtime-settings/FAB_USERNAME",
+                json={"value": "audit-user"},
+            )
+            assert patch_resp.status_code == 200
+
+        with db_session() as db:
+            profile = db.execute(
+                select(models.Profile).where(models.Profile.key == "alice")
+            ).scalar_one()
+            audit = db.execute(
+                select(models.AuditEvent)
+                .where(
+                    models.AuditEvent.profile_id == profile.id,
+                    models.AuditEvent.event_type == "runtime_setting_updated",
+                    models.AuditEvent.entity_type == "runtime_setting",
+                    models.AuditEvent.entity_id == "FAB_USERNAME",
+                )
+                .order_by(models.AuditEvent.id.desc())
+            ).scalars().first()
+
+            assert audit is not None
+            assert isinstance(audit.payload_json, dict)
+            actor = audit.payload_json.get("actor")
+            assert isinstance(actor, dict)
+            assert actor.get("role") == "admin"
+            assert str(actor.get("subject", "")).startswith("user:")
+    finally:
+        get_settings.cache_clear()
+
+
 def test_jobs_and_schedules_list_are_paginated() -> None:
     with TestClient(app) as client:
+        _login_default(client)
         job_resp = client.post('/api/v1/jobs/reclassify', json={})
         assert job_resp.status_code == 200
 
@@ -339,6 +602,7 @@ def test_jobs_and_schedules_list_are_paginated() -> None:
 
 def test_profiles_endpoint_and_profile_scoping() -> None:
     with TestClient(app) as client:
+        _login_default(client)
         profiles_resp = client.get('/api/v1/profiles')
         assert profiles_resp.status_code == 200
         profiles = profiles_resp.json()
@@ -383,6 +647,7 @@ def test_patch_statement_date_updates_db_and_storage_metadata() -> None:
 
     try:
         with TestClient(app) as client:
+            _login_default(client)
             resp = client.patch(
                 f"/api/v1/statements/{statement_id}",
                 json={"statement_date": "2026-02-01"},
@@ -422,6 +687,7 @@ def test_patch_statement_date_updates_db_and_storage_metadata() -> None:
             assert audit.payload_json is not None
             assert audit.payload_json.get("old_statement_date") == "2026-01-31"
             assert audit.payload_json.get("new_statement_date") == "2026-02-01"
+            assert isinstance(audit.payload_json.get("actor"), dict)
     finally:
         _delete_statement(statement_id)
 
@@ -443,6 +709,7 @@ def test_patch_statement_date_rejects_conflicting_statement_identity() -> None:
 
     try:
         with TestClient(app) as client:
+            _login_default(client)
             resp = client.patch(
                 f"/api/v1/statements/{source_statement_id}",
                 json={"statement_date": "2026-02-28"},
@@ -464,6 +731,7 @@ def test_patch_statement_date_is_profile_scoped() -> None:
 
     try:
         with TestClient(app) as client:
+            _login_default(client)
             resp = client.patch(
                 f"/api/v1/statements/{statement_id}",
                 json={"statement_date": "2026-02-10"},
@@ -553,6 +821,7 @@ def test_transactions_filtered_amount_sum_is_not_page_limited() -> None:
 
     try:
         with TestClient(app) as client:
+            _login_default(client)
             resp = client.get(
                 f"/api/v1/transactions?merchant_search={token}&page=1&page_size=1"
             )
@@ -597,6 +866,7 @@ def test_category_rule_test_uses_most_specific_match_without_scope() -> None:
 
     try:
         with TestClient(app) as client:
+            _login_default(client)
             resp = client.post(
                 "/api/v1/category-rules/test",
                 json={"merchant_normalized": f"{token} cafe"},

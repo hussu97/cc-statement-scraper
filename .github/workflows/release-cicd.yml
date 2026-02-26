@@ -1,0 +1,178 @@
+name: Release CI/CD
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  backend-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Static sanity checks
+        run: |
+          python -m compileall src scripts
+
+      - name: Run test suite
+        run: |
+          python -m pytest -q
+
+      - name: Migration preflight
+        env:
+          CCS_PLATFORM_DATABASE_URL: sqlite:///./ci_release.db
+        run: |
+          PYTHONPATH=src python scripts/migration_preflight.py --skip-database-state
+
+      - name: Security gate (dependency + static checks)
+        run: |
+          pip install pip-audit bandit
+          pip-audit -r requirements.txt --strict
+          bandit -q -r src -x tests
+
+  frontend-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Build frontend
+        run: npm run build
+        working-directory: frontend
+
+  build-release-artifact:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    needs:
+      - backend-gates
+      - frontend-gates
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build release image
+        env:
+          IMAGE_REF: ghcr.io/${{ github.repository }}/ccs-platform-app:${{ github.sha }}
+        run: |
+          docker build -f deploy/Dockerfile.app -t "$IMAGE_REF" .
+          echo "IMAGE_REF=$IMAGE_REF" >> "$GITHUB_ENV"
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push release image
+        run: docker push "$IMAGE_REF"
+
+      - name: Generate release manifest
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+          RELEASE_IMAGE: ${{ env.IMAGE_REF }}
+        run: |
+          python - <<'PY'
+          from datetime import UTC, datetime
+          import json
+          import os
+          from pathlib import Path
+
+          manifest = {
+              "generated_at": datetime.now(UTC).isoformat(),
+              "git_sha": os.getenv("RELEASE_SHA"),
+              "image": os.getenv("RELEASE_IMAGE"),
+              "environment": "production",
+          }
+          out = Path("artifacts/release-manifest.json")
+          out.parent.mkdir(parents=True, exist_ok=True)
+          out.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+          print(json.dumps(manifest, indent=2))
+          PY
+
+      - name: Upload release manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-manifest
+          path: artifacts/release-manifest.json
+
+  promote-staging:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    needs:
+      - build-release-artifact
+    environment:
+      name: staging
+    steps:
+      - name: Download release manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: release-manifest
+          path: artifacts
+
+      - name: Stage promotion
+        run: |
+          echo "Promoting release artifact to staging"
+          cat artifacts/release-manifest.json
+
+  promote-production:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    needs:
+      - promote-staging
+    environment:
+      name: production
+    steps:
+      - name: Download release manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: release-manifest
+          path: artifacts
+
+      - name: Production promotion
+        run: |
+          echo "Promoting staged artifact to production"
+          cat artifacts/release-manifest.json

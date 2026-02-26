@@ -10,9 +10,16 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
+from ccs_platform.api.audit import append_audit_event
 from ccs_platform.core.bank_config import load_app_config
 from ccs_platform.db import models
-from ccs_platform.api.deps import ProfileContext, get_db, get_profile_context
+from ccs_platform.api.deps import (
+    ActorContext,
+    ProfileContext,
+    get_db,
+    get_profile_context,
+    require_operator_role,
+)
 from ccs_platform.api.v1.schemas import JobOut, PaginatedJobs, ReclassifyJobRequest, ScrapeJobRequest
 from ccs_platform.api.v1.endpoints.job_utils import request_idempotency_key
 from ccs_platform.application.banks.capabilities import get_enabled_banks, resolve_requested_months
@@ -159,6 +166,7 @@ def create_scrape_job(
     request: Request,
     db: Session = Depends(get_db),
     profile: ProfileContext = Depends(get_profile_context),
+    actor: ActorContext = Depends(require_operator_role),
 ) -> JobOut:
     requested_banks = sorted({token.upper().strip() for token in (payload.banks or []) if token and token.strip()})
     banks = get_enabled_banks(db, requested_banks or None, profile_id=profile.profile_id)
@@ -190,7 +198,7 @@ def create_scrape_job(
         "headless": payload.headless,
         "login_timeout_minutes": payload.login_timeout_minutes,
     }
-    job, created = create_or_get_job(
+    job, created, requeued = create_or_get_job(
         db,
         profile_id=profile.profile_id,
         job_type=models.JobType.SCRAPE,
@@ -209,6 +217,21 @@ def create_scrape_job(
                         status="queued",
                     )
                 )
+    if created or requeued:
+        append_audit_event(
+            db,
+            profile_id=profile.profile_id,
+            event_type="job_enqueued",
+            entity_type="job",
+            entity_id=str(job.id),
+            payload_json={
+                "job_type": job.job_type.value,
+                "queue_name": job.queue_name,
+                "payload_json": payload_json,
+                "requeued": requeued,
+            },
+            request=request,
+        )
         db.commit()
         db.refresh(job)
         request.app.state.job_dispatcher.publish(job.id)
@@ -222,6 +245,7 @@ async def create_upload_job(
     files: list[UploadFile] = File(...),
     db: Session = Depends(get_db),
     profile: ProfileContext = Depends(get_profile_context),
+    actor: ActorContext = Depends(require_operator_role),
 ) -> JobOut:
     if not files:
         raise HTTPException(status_code=400, detail="No files uploaded")
@@ -272,7 +296,7 @@ async def create_upload_job(
     if not uploads:
         raise HTTPException(status_code=400, detail="Uploaded files were empty")
 
-    job, _ = create_or_get_job(
+    job, created, requeued = create_or_get_job(
         db,
         profile_id=profile.profile_id,
         job_type=models.JobType.UPLOAD,
@@ -280,18 +304,34 @@ async def create_upload_job(
         idempotency_key=request_idempotency_key(request),
         auto_idempotency=False,
     )
+    if not (created or requeued):
+        for item in uploads:
+            Path(item.get("temp_path", "")).unlink(missing_ok=True)
+    else:
+        append_audit_event(
+            db,
+            profile_id=profile.profile_id,
+            event_type="job_enqueued",
+            entity_type="job",
+            entity_id=str(job.id),
+            payload_json={"job_type": job.job_type.value, "queue_name": job.queue_name},
+            request=request,
+        )
     db.commit()
     db.refresh(job)
 
-    request.app.state.job_dispatcher.publish(job.id)
+    if created or requeued:
+        request.app.state.job_dispatcher.publish(job.id)
     return _job_to_out(job)
 
 
 @router.post("/{job_id}/cancel", response_model=JobOut)
 def cancel_job(
     job_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     profile: ProfileContext = Depends(get_profile_context),
+    actor: ActorContext = Depends(require_operator_role),
 ) -> JobOut:
     job = db.execute(
         select(models.Job).where(models.Job.id == job_id, models.Job.profile_id == profile.profile_id)
@@ -299,6 +339,7 @@ def cancel_job(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
+    previous_status = job.status.value
     if job.status in {models.JobStatus.SUCCEEDED, models.JobStatus.FAILED}:
         raise HTTPException(status_code=409, detail="Completed jobs cannot be cancelled")
     if job.status == models.JobStatus.QUEUED:
@@ -313,6 +354,21 @@ def cancel_job(
 
     if job.cancel_requested_at is None and job.status == models.JobStatus.CANCELLED:
         job.cancel_requested_at = datetime.now(UTC)
+    append_audit_event(
+        db,
+        profile_id=profile.profile_id,
+        event_type="job_cancel_requested",
+        entity_type="job",
+        entity_id=str(job.id),
+        payload_json={
+            "before_status": previous_status,
+            "after_status": job.status.value,
+            "cancel_requested_at": (
+                job.cancel_requested_at.isoformat() if job.cancel_requested_at is not None else None
+            ),
+        },
+        request=request,
+    )
     db.commit()
     db.refresh(job)
     return _job_to_out(job)
@@ -324,15 +380,25 @@ def create_reclassify_job(
     request: Request,
     db: Session = Depends(get_db),
     profile: ProfileContext = Depends(get_profile_context),
+    actor: ActorContext = Depends(require_operator_role),
 ) -> JobOut:
-    job, created = create_or_get_job(
+    job, created, requeued = create_or_get_job(
         db,
         profile_id=profile.profile_id,
         job_type=models.JobType.RECLASSIFY,
         payload_json=payload.model_dump(),
         idempotency_key=request_idempotency_key(request),
     )
-    if created:
+    if created or requeued:
+        append_audit_event(
+            db,
+            profile_id=profile.profile_id,
+            event_type="job_enqueued",
+            entity_type="job",
+            entity_id=str(job.id),
+            payload_json={"job_type": job.job_type.value, "queue_name": job.queue_name},
+            request=request,
+        )
         db.commit()
         db.refresh(job)
         request.app.state.job_dispatcher.publish(job.id)

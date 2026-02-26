@@ -5,8 +5,15 @@ from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ccs_platform.api.audit import append_audit_event
 from ccs_platform.db import models
-from ccs_platform.api.deps import ProfileContext, get_db, get_profile_context
+from ccs_platform.api.deps import (
+    ActorContext,
+    ProfileContext,
+    get_db,
+    get_profile_context,
+    require_operator_role,
+)
 from ccs_platform.api.v1.schemas import ExportOut, JobOut, WorkbookExportRequest
 from ccs_platform.api.v1.endpoints.job_utils import request_idempotency_key
 from ccs_platform.application.jobs.service import create_or_get_job
@@ -21,7 +28,20 @@ def create_workbook_export(
     request: Request,
     db: Session = Depends(get_db),
     profile: ProfileContext = Depends(get_profile_context),
+    actor: ActorContext = Depends(require_operator_role),
 ) -> JobOut:
+    idempotency_key = request_idempotency_key(request)
+    if idempotency_key:
+        existing = db.execute(
+            select(models.Job).where(
+                models.Job.profile_id == profile.profile_id,
+                models.Job.job_type == models.JobType.EXPORT_WORKBOOK,
+                models.Job.idempotency_key == idempotency_key,
+            )
+        ).scalar_one_or_none()
+        if existing is not None:
+            return JobOut.model_validate(existing)
+
     export_row = models.Export(
         profile_id=profile.profile_id,
         export_type="workbook",
@@ -30,20 +50,31 @@ def create_workbook_export(
     db.add(export_row)
     db.flush()
 
-    job, _ = create_or_get_job(
+    job, created, requeued = create_or_get_job(
         db,
         profile_id=profile.profile_id,
         job_type=models.JobType.EXPORT_WORKBOOK,
         payload_json={"year": payload.year, "export_id": export_row.id},
-        idempotency_key=request_idempotency_key(request),
+        idempotency_key=idempotency_key,
         auto_idempotency=False,
     )
 
     export_row.job_id = job.id
+    if created:
+        append_audit_event(
+            db,
+            profile_id=profile.profile_id,
+            event_type="job_enqueued",
+            entity_type="job",
+            entity_id=str(job.id),
+            payload_json={"job_type": job.job_type.value, "queue_name": job.queue_name, "export_id": export_row.id},
+            request=request,
+        )
     db.commit()
     db.refresh(job)
 
-    request.app.state.job_dispatcher.publish(job.id)
+    if created or requeued:
+        request.app.state.job_dispatcher.publish(job.id)
     return JobOut.model_validate(job)
 
 

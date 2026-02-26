@@ -381,6 +381,80 @@ def _choose_option(
         return False
 
 
+def _native_select_contains_target(select_element: Any, mode: str, target_score: int | None) -> bool:
+    if target_score is None:
+        return True
+    options = _extract_select_options(select_element)
+    for opt in options:
+        text = (opt.get("text") or opt.get("value") or "").strip()
+        low = text.lower()
+        if opt.get("disabled"):
+            continue
+        if not text:
+            continue
+        if any(token in low for token in ["select", "choose", "please"]):
+            continue
+        score = _score_option_text(text, mode)
+        if score == target_score:
+            return True
+    return False
+
+
+def _native_select_group_contains_target(selects: list[Any], mode: str, target_score: int | None) -> bool:
+    if target_score is None:
+        return True
+    if not selects:
+        return False
+    for select in selects:
+        if _native_select_contains_target(select, mode, target_score):
+            return True
+    return False
+
+
+def _visible_native_selects_by_mode(page: Any) -> tuple[list[Any], list[Any], list[Any]]:
+    selects = page.locator("select")
+    try:
+        count = min(selects.count(), 8)
+    except Exception:  # noqa: BLE001
+        count = 0
+
+    classified: list[tuple[Any, str]] = []
+    for idx in range(count):
+        select = selects.nth(idx)
+        try:
+            if not select.is_visible():
+                continue
+        except Exception:  # noqa: BLE001
+            continue
+        mode = _classify_native_select_mode(select)
+        if not mode:
+            continue
+        classified.append((select, mode))
+
+    year_selects = [select for select, mode in classified if mode == "year"]
+    month_selects = [select for select, mode in classified if mode == "month"]
+    combined_selects = [select for select, mode in classified if mode == "combined"]
+    return year_selects, month_selects, combined_selects
+
+
+def _target_period_not_present_in_native_controls(page: Any, target_year: int, target_month: int) -> bool:
+    year_selects, month_selects, combined_selects = _visible_native_selects_by_mode(page)
+    target_combined = target_year * 100 + target_month
+
+    # Explicit year+month controls: missing year means requested period cannot be selected.
+    if year_selects and month_selects:
+        if not _native_select_group_contains_target(year_selects, "year", target_year):
+            return True
+        return False
+
+    # Combined month-year controls: missing exact period means unavailable.
+    if combined_selects:
+        if not _native_select_group_contains_target(combined_selects, "combined", target_combined):
+            return True
+
+    return False
+
+
 def _select_from_material_dropdown(
     page: Any,
     label: str,
@@ -485,6 +559,127 @@ def _select_from_material_dropdown(
     except Exception:  # noqa: BLE001
         page.keyboard.press("Escape")
         return False
+
+
+def _has_material_dropdown_label(page: Any, label: str) -> bool:
+    try:
+        return page.locator(f".form-element-container:has(label:has-text('{label}'))").count() > 0
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _collect_material_dropdown_scores(page: Any, label: str, mode: str) -> set[int] | None:
+    container = page.locator(f".form-element-container:has(label:has-text('{label}'))")
+    if container.count() == 0:
+        return None
+
+    trigger_selectors = [
+        ".mat-select-trigger",
+        ".mat-form-field-flex",
+        ".mat-form-field-infix",
+    ]
+
+    opened = False
+    for selector in trigger_selectors:
+        locator = container.locator(selector)
+        try:
+            count = min(locator.count(), 4)
+        except Exception:  # noqa: BLE001
+            count = 0
+        for idx in range(count):
+            item = locator.nth(idx)
+            try:
+                if not item.is_visible():
+                    continue
+                item.click(timeout=2500)
+                page.wait_for_timeout(450)
+                opened = True
+                break
+            except Exception:  # noqa: BLE001
+                continue
+        if opened:
+            break
+
+    if not opened:
+        return None
+
+    options = page.locator(".cdk-overlay-container [role='option'], .cdk-overlay-container mat-option")
+    try:
+        option_count = min(options.count(), 120)
+    except Exception:  # noqa: BLE001
+        option_count = 0
+
+    scores: set[int] = set()
+    for idx in range(option_count):
+        option = options.nth(idx)
+        try:
+            if not option.is_visible():
+                continue
+            text = (option.inner_text() or "").strip()
+            if not text:
+                continue
+            score = _score_option_text(text, mode)
+            if score is not None:
+                scores.add(score)
+        except Exception:  # noqa: BLE001
+            continue
+
+    try:
+        page.keyboard.press("Escape")
+    except Exception:  # noqa: BLE001
+        pass
+    page.wait_for_timeout(180)
+    return scores
+
+
+def _material_dropdown_contains_target(page: Any, label: str, mode: str, target_score: int | None) -> bool | None:
+    if target_score is None:
+        return True
+    scores = _collect_material_dropdown_scores(page, label, mode)
+    if scores is None:
+        return None
+    return target_score in scores
+
+
+def _target_period_not_present_in_material_controls(
+    page: Any,
+    logger: logging.Logger,
+    target_year: int,
+    target_month: int,
+) -> bool:
+    has_year_label = _has_material_dropdown_label(page, "Year")
+    has_month_label = _has_material_dropdown_label(page, "Month")
+    if not has_year_label and not has_month_label:
+        return False
+
+    if has_year_label:
+        year_present = _material_dropdown_contains_target(page, "Year", "year", target_year)
+        if year_present is False:
+            logger.info("ENBD: requested year %s not present in material year dropdown options", target_year)
+            return True
+        if year_present is True:
+            # Pick year once so ENBD can refresh month options for that specific year.
+            if _select_from_material_dropdown(
+                page,
+                "Year",
+                "year",
+                logger,
+                target_score=target_year,
+                strict_target=True,
+            ):
+                page.wait_for_timeout(420)
+
+    if has_month_label:
+        month_present = _material_dropdown_contains_target(page, "Month", "month", target_month)
+        if month_present is False:
+            logger.info(
+                "ENBD: requested month %s not present in material month dropdown options for year %s",
+                target_month,
+                target_year,
+            )
+            return True
+
+    return False
 
 
 def _select_from_any_material_dropdown(
@@ -700,6 +895,14 @@ def _select_statement_period(
 
         # Try explicit year+month controls first.
         if year_selects and month_selects:
+            if strict_target and not _native_select_group_contains_target(year_selects, "year", target_year):
+                _log_period_selection_snapshot(page, logger)
+                logger.info(
+                    "ENBD: requested year %s not present in year dropdown options",
+                    target_year,
+                )
+                return False
+
             selected_year = False
             for select in year_selects:
                 selected_year = _choose_option(
@@ -732,6 +935,15 @@ def _select_statement_period(
                 if refreshed_months:
                     month_selects = refreshed_months
 
+            if strict_target and not _native_select_group_contains_target(month_selects, "month", target_month):
+                _log_period_selection_snapshot(page, logger)
+                logger.info(
+                    "ENBD: requested month %s not present in month dropdown options for year %s",
+                    target_month,
+                    target_year,
+                )
+                return False
+
             selected_month = False
             for select in month_selects:
                 selected_month = _choose_option(
@@ -747,6 +959,19 @@ def _select_statement_period(
                 return True
 
         # Combined month-year control fallback.
+        if strict_target and combined_selects and not _native_select_group_contains_target(
+            combined_selects,
+            "combined",
+            target_combined,
+        ):
+            _log_period_selection_snapshot(page, logger)
+            logger.info(
+                "ENBD: requested period %s-%02d not present in combined dropdown options",
+                target_year,
+                target_month,
+            )
+            return False
+
         for select in combined_selects:
             if _choose_option(
                 select,
@@ -766,13 +991,20 @@ def _select_statement_period(
         logger,
         target_score=target_year,
         strict_target=strict_target,
-    ) or _select_from_any_material_dropdown(
-        page,
-        "year",
-        logger,
-        target_score=target_year,
-        strict_target=strict_target,
     )
+    if not selected_year:
+        if _has_material_dropdown_label(page, "Year"):
+            # Labelled dropdown exists but target was not selected.
+            if strict_target:
+                return False
+        else:
+            selected_year = _select_from_any_material_dropdown(
+                page,
+                "year",
+                logger,
+                target_score=target_year,
+                strict_target=strict_target,
+            )
     selected_month = _select_from_material_dropdown(
         page,
         "Month",
@@ -780,13 +1012,19 @@ def _select_statement_period(
         logger,
         target_score=target_month,
         strict_target=strict_target,
-    ) or _select_from_any_material_dropdown(
-        page,
-        "month",
-        logger,
-        target_score=target_month,
-        strict_target=strict_target,
     )
+    if not selected_month:
+        if _has_material_dropdown_label(page, "Month"):
+            if strict_target:
+                return False
+        else:
+            selected_month = _select_from_any_material_dropdown(
+                page,
+                "month",
+                logger,
+                target_score=target_month,
+                strict_target=strict_target,
+            )
     if selected_year and selected_month:
         page.wait_for_timeout(600)
         return True
@@ -812,6 +1050,24 @@ def _select_statement_period_with_retry(
     target_month: int | None = None,
     attempts: int = 3,
 ) -> bool:
+    if target_year is not None and target_month is not None:
+        if _target_period_not_present_in_native_controls(page, target_year, target_month):
+            _log_period_selection_snapshot(page, logger)
+            logger.info(
+                "ENBD: requested period %s-%02d is unavailable in native dropdown controls",
+                target_year,
+                target_month,
+            )
+            return False
+        if _target_period_not_present_in_material_controls(page, logger, target_year, target_month):
+            _log_period_selection_snapshot(page, logger)
+            logger.info(
+                "ENBD: requested period %s-%02d is unavailable in material dropdown controls",
+                target_year,
+                target_month,
+            )
+            return False
+
     for attempt in range(max(1, attempts)):
         selected = _select_statement_period(
             page,
@@ -822,6 +1078,13 @@ def _select_statement_period_with_retry(
         )
         if selected:
             return True
+
+        if target_year is not None and target_month is not None:
+            if _target_period_not_present_in_native_controls(page, target_year, target_month):
+                return False
+            if _target_period_not_present_in_material_controls(page, logger, target_year, target_month):
+                return False
+
         if attempt < attempts - 1:
             _dismiss_overlays(page, logger)
             page.wait_for_timeout(900 + (attempt * 300))

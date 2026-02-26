@@ -1,3 +1,4 @@
+from ccs_platform.api.v1.schemas.auth import AuthUserOut, LoginRequest, LoginResponse
 from ccs_platform.api.v1.schemas.banks import BankOut
 from ccs_platform.api.v1.schemas.categories import (
     CategoryCreate,
@@ -48,6 +49,7 @@ from ccs_platform.api.v1.schemas.statements import (
 from ccs_platform.api.v1.schemas.transactions import TransactionBulkCategoryPatch, TransactionCategoryPatch
 
 __all__ = [
+    "AuthUserOut",
     "BankConnectionTestRequest",
     "BankOut",
     "BreakdownPoint",
@@ -64,6 +66,8 @@ __all__ = [
     "ExportOut",
     "JobItemOut",
     "JobOut",
+    "LoginRequest",
+    "LoginResponse",
     "PaginatedJobs",
     "PaginatedStatementLines",
     "PaginatedStatements",

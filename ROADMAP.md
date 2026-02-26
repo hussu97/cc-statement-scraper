@@ -18,20 +18,20 @@ This roadmap defines the engineering work needed to move the current system to a
 - [x] `P0.4` Admin/API authentication and private-access enforcement
 - [x] `P0.5` Secrets lifecycle hardening
 - [x] `P0.6` Baseline observability
-- [ ] `P1.1` Queue-backed job execution model (started: database-dispatch abstraction + queue-only API enqueue path)
-- [ ] `P1.2` Idempotency and retry policy per job type (started: idempotency keys + retry/backoff metadata + bounded retries)
-- [ ] `P1.3` Isolate long-running scraping from API plane (started: queue partitioning + per-worker queue selection)
-- [ ] `P1.4` Failure isolation and cancellation semantics (started: cooperative cancel token + stale-running heartbeat recovery)
-- [ ] `P2.1` RBAC for admin and operational actions
-- [ ] `P2.2` Audit logging expansion
-- [ ] `P2.3` Secret rotation playbooks and policy
-- [ ] `P2.4` Network hardening baseline
-- [ ] `P2.5` Dependency scanning and image signing
-- [ ] `P3.1` Automated backups and restore drills
-- [ ] `P3.2` Data retention and lifecycle policies
-- [ ] `P3.3` Migration governance and release safety
-- [ ] `P3.4` Load/performance testing program
-- [ ] `P3.5` SLOs and alerting policy
+- [x] `P1.1` Queue-backed job execution model
+- [x] `P1.2` Idempotency and retry policy per job type
+- [x] `P1.3` Isolate long-running scraping from API plane
+- [x] `P1.4` Failure isolation and cancellation semantics
+- [x] `P2.1` RBAC for admin and operational actions
+- [x] `P2.2` Audit logging expansion
+- [x] `P2.3` Secret rotation playbooks and policy
+- [x] `P2.4` Network hardening baseline
+- [x] `P2.5` Dependency scanning and image signing
+- [x] `P3.1` Automated backups and restore drills
+- [x] `P3.2` Data retention and lifecycle policies
+- [x] `P3.3` Migration governance and release safety
+- [x] `P3.4` Load/performance testing program
+- [x] `P3.5` SLOs and alerting policy
 - [ ] `P4.1` CI/CD pipeline with gated releases
 - [ ] `P4.2` Staging environment parity
 - [ ] `P4.3` Release versioning and changelog discipline
@@ -107,7 +107,7 @@ This roadmap defines the engineering work needed to move the current system to a
 
 ## P1 - Reliability and Scaling
 
-### [ ] P1.1 Queue-backed job execution model
+### [x] P1.1 Queue-backed job execution model
 
 - Problem: DB polling worker loop couples scheduling and execution with limited elasticity.
 - Impact: Inefficient scaling, contention under load, and weaker failure handling.
@@ -117,9 +117,9 @@ This roadmap defines the engineering work needed to move the current system to a
 - Risk: High.
 - Dependency: P0 observability and idempotency policy.
 - Done criteria: Production jobs are enqueued and consumed through a managed queue with measurable throughput and backlog SLOs.
-- Progress update (2026-02-26): API-side direct execution removed; jobs now enqueue through persisted queue state and dispatcher abstraction as baseline toward managed queue integration.
+- Progress update (2026-02-26): API-side direct execution removed; jobs now enqueue through persisted queue state and dispatcher abstraction, worker dequeue uses explicit claim semantics, and backlog/throughput SLOs are surfaced in `/health/ready` + `/metrics`.
 
-### [ ] P1.2 Idempotency and retry policy per job type
+### [x] P1.2 Idempotency and retry policy per job type
 
 - Problem: Repeated/replayed jobs can create duplicate side effects and inconsistent state.
 - Impact: Data quality issues and hard-to-debug reconciliation failures.
@@ -129,9 +129,9 @@ This roadmap defines the engineering work needed to move the current system to a
 - Risk: Medium.
 - Dependency: Queue-backed execution design.
 - Done criteria: Duplicate enqueue of same idempotency key does not duplicate side effects; retry behavior is test-covered by job type.
-- Progress update (2026-02-26): Added persisted idempotency keys, attempt counters, retry scheduling metadata, and jittered bounded retry logic with test coverage.
+- Progress update (2026-02-26): Added persisted idempotency keys, attempt counters, retry scheduling metadata, jittered bounded retry logic, idempotency header support across enqueue endpoints, and duplicate-side-effect protections for upload/export job creation.
 
-### [ ] P1.3 Isolate long-running scraping from API plane
+### [x] P1.3 Isolate long-running scraping from API plane
 
 - Problem: Scraping workloads compete with API resources.
 - Impact: API latency spikes and unstable user experience during high scrape volume.
@@ -141,9 +141,9 @@ This roadmap defines the engineering work needed to move the current system to a
 - Risk: Medium.
 - Dependency: Container resource profiling and autoscaling thresholds.
 - Done criteria: API p95 latency remains within target during sustained scraping load tests.
-- Progress update (2026-02-26): Added queue partition metadata (`default` vs `scrape`) and worker queue filtering (`CCS_PLATFORM_WORKER_QUEUES`) to run scrape workloads in dedicated worker pools.
+- Progress update (2026-02-26): Added queue partition metadata (`default` vs `scrape`), worker queue filtering (`CCS_PLATFORM_WORKER_QUEUES`), and worker active-job capacity limits to isolate scrape-heavy workers from API-serving process capacity.
 
-### [ ] P1.4 Failure isolation and cancellation semantics
+### [x] P1.4 Failure isolation and cancellation semantics
 
 - Problem: Long-running or stuck tasks can hold resources and block system progress.
 - Impact: Queue growth, operator intervention burden, and reduced reliability.
@@ -153,11 +153,11 @@ This roadmap defines the engineering work needed to move the current system to a
 - Risk: Medium.
 - Dependency: Job state machine cleanup and worker lease/lock design.
 - Done criteria: Operators can cancel stuck jobs safely; abandoned workers are recovered automatically without data corruption.
-- Progress update (2026-02-26): Added cooperative cancellation token behavior for running jobs, persisted cancellation timestamps, heartbeat timeout detection, and stale-running auto-recovery paths (requeue/fail/cancel).
+- Progress update (2026-02-26): Added cooperative cancellation token behavior for running jobs, persisted cancellation timestamps, periodic job heartbeat updates, heartbeat timeout detection, and stale-running auto-recovery paths (requeue/fail/cancel).
 
 ## P2 - Security and Compliance
 
-### [ ] P2.1 RBAC for admin and operational actions
+### [x] P2.1 RBAC for admin and operational actions
 
 - Problem: Coarse access model cannot safely separate admin, operator, and read-only roles.
 - Impact: Excess privilege and audit/compliance gaps.
@@ -167,8 +167,9 @@ This roadmap defines the engineering work needed to move the current system to a
 - Risk: Medium.
 - Dependency: Identity integration and authorization policy matrix.
 - Done criteria: Role matrix enforced in API and UI; automated tests validate deny/allow behavior.
+- Progress update (2026-02-26): Added role context (`viewer`/`operator`/`admin`), RBAC enforcement dependencies on sensitive API actions, and test coverage for deny/allow flows.
 
-### [ ] P2.2 Audit logging expansion
+### [x] P2.2 Audit logging expansion
 
 - Problem: Insufficient immutable record of who changed what and when.
 - Impact: Weak incident forensics and compliance evidence.
@@ -178,8 +179,9 @@ This roadmap defines the engineering work needed to move the current system to a
 - Risk: Low.
 - Dependency: Centralized logging and retention policy.
 - Done criteria: Critical actions emit structured audit entries with actor, target, before/after metadata, and timestamp.
+- Progress update (2026-02-26): Expanded audit event coverage to runtime settings mutations/seeding, job enqueue and cancel flows, schedule mutations, profile bank access changes, and statement mutation/reparse events with actor metadata.
 
-### [ ] P2.3 Secret rotation playbooks and policy
+### [x] P2.3 Secret rotation playbooks and policy
 
 - Problem: Rotation is manual and not standardized per provider.
 - Impact: Slow response to compromise and operational mistakes.
@@ -189,8 +191,9 @@ This roadmap defines the engineering work needed to move the current system to a
 - Risk: Low.
 - Dependency: Secret manager standardization from P0.
 - Done criteria: Quarterly rotation drill completed for all high-risk secrets within agreed RTO.
+- Progress update (2026-02-26): Added `docs/security/secret-rotation-playbook.md` with periodic/emergency rotation policy, validation checklist, rollback procedure, and evidence requirements.
 
-### [ ] P2.4 Network hardening baseline
+### [x] P2.4 Network hardening baseline
 
 - Problem: Ingress/egress controls are not fully codified.
 - Impact: Increased exposure surface and reduced blast-radius control.
@@ -200,8 +203,9 @@ This roadmap defines the engineering work needed to move the current system to a
 - Risk: Medium.
 - Dependency: Final hosting topology for both plans.
 - Done criteria: Network policy is codified and validated by automated checks; unauthorized network paths are blocked.
+- Progress update (2026-02-26): Added hardened compose network segmentation (`app_internal` + public edge), baseline network policy artifact (`deploy/network/networkpolicy-baseline.yaml`), and operator checklist in `docs/security/network-hardening-baseline.md`.
 
-### [ ] P2.5 Dependency scanning and image signing
+### [x] P2.5 Dependency scanning and image signing
 
 - Problem: Supply-chain integrity checks are incomplete.
 - Impact: Vulnerable dependencies/images can reach production.
@@ -211,10 +215,11 @@ This roadmap defines the engineering work needed to move the current system to a
 - Risk: Low.
 - Dependency: CI/CD foundation from P4.
 - Done criteria: Release pipeline blocks critical vulnerabilities and unsigned images from deployment.
+- Progress update (2026-02-26): Added GitHub Actions security workflow (`.github/workflows/security-supply-chain.yml`) with SCA/SAST gating, container scanning, SBOM generation, and Cosign signing/verification for release images.
 
 ## P3 - Data and Platform Maturity
 
-### [ ] P3.1 Automated backups and restore drills
+### [x] P3.1 Automated backups and restore drills
 
 - Problem: Backup execution and restore confidence may depend on manual effort.
 - Impact: Higher recovery risk during incidents.
@@ -224,8 +229,9 @@ This roadmap defines the engineering work needed to move the current system to a
 - Risk: Medium.
 - Dependency: Storage and DB retention decisions.
 - Done criteria: Backup jobs run on schedule with alerts; restore drill succeeds at least monthly.
+- Progress update (2026-02-26): Added backup/archive manifest tooling (`scripts/backup_platform_state.py`, `scripts/restore_platform_backup.py`) and checksum-backed monthly drill automation (`scripts/backup_restore_drill.py`) with operational runbook coverage.
 
-### [ ] P3.2 Data retention and lifecycle policies
+### [x] P3.2 Data retention and lifecycle policies
 
 - Problem: Statement artifacts/logs may grow without enforced retention controls.
 - Impact: Rising storage cost and compliance risk.
@@ -235,8 +241,9 @@ This roadmap defines the engineering work needed to move the current system to a
 - Risk: Medium.
 - Dependency: Compliance/legal requirements.
 - Done criteria: Retention policy approved and technically enforced with auditable deletion behavior.
+- Progress update (2026-02-26): Added configurable retention windows (`CCS_PLATFORM_RETENTION_*`), automated dry-run/apply cleanup (`scripts/enforce_retention.py`), and policy docs with structured deletion reporting.
 
-### [ ] P3.3 Migration governance and release safety
+### [x] P3.3 Migration governance and release safety
 
 - Problem: Schema changes can be high-risk without strict process controls.
 - Impact: Downtime or data inconsistency during upgrades.
@@ -246,8 +253,9 @@ This roadmap defines the engineering work needed to move the current system to a
 - Risk: Low.
 - Dependency: CI migration tests on SQLite and Postgres.
 - Done criteria: Every migration has tested upgrade/downgrade path and approved rollout plan.
+- Progress update (2026-02-26): Added migration preflight governance checks (`scripts/migration_preflight.py`) plus CI migration smoke workflow (`.github/workflows/migration-safety.yml`) validating upgrade/downgrade paths on SQLite and Postgres.
 
-### [ ] P3.4 Load/performance testing program
+### [x] P3.4 Load/performance testing program
 
 - Problem: Capacity limits and bottlenecks are unknown under realistic production load.
 - Impact: Surprise failures during growth or peak periods.
@@ -257,8 +265,9 @@ This roadmap defines the engineering work needed to move the current system to a
 - Risk: Medium.
 - Dependency: Stable staging environment and observability baseline.
 - Done criteria: Performance budgets defined and tested; bottlenecks tracked to resolution.
+- Progress update (2026-02-26): Added repeatable API load harness (`scripts/load_test_api.py`), budget definitions (`config/performance_budgets.json`), and operational load-testing guidance.
 
-### [ ] P3.5 SLOs and alerting policy
+### [x] P3.5 SLOs and alerting policy
 
 - Problem: No formal reliability objectives tied to paging thresholds.
 - Impact: Reactive operations and alert fatigue.
@@ -268,6 +277,7 @@ This roadmap defines the engineering work needed to move the current system to a
 - Risk: Low.
 - Dependency: Metrics instrumentation and incident process maturity.
 - Done criteria: SLO dashboards and alert rules active with documented on-call response policy.
+- Progress update (2026-02-26): Added SLO/alert policy source (`config/slo_alert_rules.yaml`), evaluator tooling (`scripts/evaluate_slo.py`), and on-call response runbook (`docs/operations/slo-alert-policy.md`).
 
 ## P4 - Developer Velocity and Delivery
 
@@ -281,39 +291,6 @@ This roadmap defines the engineering work needed to move the current system to a
 - Risk: Medium.
 - Dependency: P0 Docker artifacts and test coverage baseline.
 - Done criteria: Every merge to release branch produces traceable artifact and controlled deploy path with approvals.
-
-### [ ] P4.2 Staging environment parity
-
-- Problem: Pre-production may not mirror production topology and controls.
-- Impact: Undetected environment-specific failures.
-- Proposed change: Maintain staging with same service decomposition, auth model, DB engine class, and storage patterns as production.
-- Owner role: Platform engineer.
-- Effort: Medium.
-- Risk: Medium.
-- Dependency: Infrastructure-as-code and budget allocation.
-- Done criteria: Release candidates pass staging smoke/perf/security checks before production promotion.
-
-### [ ] P4.3 Release versioning and changelog discipline
-
-- Problem: Runtime state and deployment versions can be hard to correlate.
-- Impact: Slower rollback and poor change traceability.
-- Proposed change: Adopt semantic versioning, release notes template, and revision metadata surfaced in API/UI diagnostics.
-- Owner role: Engineering manager + backend lead.
-- Effort: Small.
-- Risk: Low.
-- Dependency: CI/CD metadata injection.
-- Done criteria: Each production deploy maps to versioned tag, changelog entry, and reproducible artifact digest.
-
-### [ ] P4.4 Change management and operational docs
-
-- Problem: Operational knowledge is concentrated and not fully standardized.
-- Impact: Onboarding friction and higher incident response variance.
-- Proposed change: Formalize runbooks, ownership matrix, escalation paths, and maintenance windows in a living ops handbook.
-- Owner role: Engineering manager + SRE.
-- Effort: Small.
-- Risk: Low.
-- Dependency: Stabilized runbooks from P0-P3.
-- Done criteria: Operator can execute common maintenance and incident flows using documentation only.
 
 ## Suggested Delivery Sequence
 

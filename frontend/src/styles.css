@@ -149,10 +149,6 @@ p {
   flex-wrap: wrap;
 }
 
-.token-input {
-  min-width: 210px;
-}
-
 .menu-button {
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -220,6 +216,34 @@ p {
 
 .mobile-drawer.open .mobile-drawer-panel {
   transform: translateX(0);
+}
+
+.login-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.login-card {
+  width: min(420px, 100%);
+  display: grid;
+  gap: 0.9rem;
+  padding: 1.1rem;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.login-form {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.login-form label {
+  display: grid;
+  gap: 0.35rem;
 }
 
 .grid {
@@ -690,11 +714,6 @@ pre {
     margin-top: 0.5rem;
   }
 
-  .token-input {
-    min-width: 0;
-    width: 100%;
-  }
-
   .app-content {
     padding: 0.72rem;
   }
@@ -794,9 +813,6 @@ pre {
     flex-direction: column;
   }
 
-  .token-input {
-    min-width: 160px;
-  }
 }
 
 @media (min-width: 1024px) {

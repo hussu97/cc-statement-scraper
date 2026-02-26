@@ -3,9 +3,10 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy import func, select, text
 
+from ccs_platform.api.deps import AuthenticatedUserContext, get_authenticated_user_context
 from ccs_platform.core.metrics import METRICS
 from ccs_platform.core.settings import PlatformSettings
 from ccs_platform.db import models
@@ -187,7 +188,10 @@ def health_ready(request: Request, response: Response) -> dict[str, Any]:
 
 
 @router.get("/metrics")
-def metrics(request: Request) -> dict[str, Any]:
+def metrics(
+    request: Request,
+    _user: AuthenticatedUserContext = Depends(get_authenticated_user_context),
+) -> dict[str, Any]:
     snapshot = METRICS.snapshot()
     snapshot["jobs"]["queue_backlog"] = _queue_backlog_snapshot(request.app.state.settings)
     return snapshot

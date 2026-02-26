@@ -1,4 +1,5 @@
 from ccs_platform.api.v1.endpoints import (
+    auth,
     banks,
     categories,
     dashboard,
@@ -14,6 +15,7 @@ from ccs_platform.api.v1.endpoints import (
 )
 
 __all__ = [
+    "auth",
     "banks",
     "categories",
     "dashboard",

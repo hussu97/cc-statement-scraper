@@ -138,6 +138,7 @@ Scrape month selection in admin is range-based:
 Environment variables:
 - `CCS_PLATFORM_STORAGE_BACKEND=local|gcs`
 - `CCS_PLATFORM_LOCAL_STORAGE_DIR=...`
+- `CCS_PLATFORM_BACKUPS_DIR=...`
 - `CCS_PLATFORM_DATABASE_URL=...`
 - `CCS_PLATFORM_TIMEZONE=Asia/Dubai`
 - `CCS_PLATFORM_EMBEDDED_WORKER=true|false`
@@ -147,13 +148,26 @@ Environment variables:
 - `CCS_PLATFORM_JOB_RETRY_JITTER_SECONDS=15`
 - `CCS_PLATFORM_JOB_RETRY_MAX_DELAY_SECONDS=900`
 - `CCS_PLATFORM_JOB_HEARTBEAT_TIMEOUT_SECONDS=1800`
+- `CCS_PLATFORM_RETENTION_JOBS_DAYS=90`
+- `CCS_PLATFORM_RETENTION_EXPORTS_DAYS=90`
+- `CCS_PLATFORM_RETENTION_AUDIT_EVENTS_DAYS=365`
+- `CCS_PLATFORM_RETENTION_LOGS_DAYS=30`
+- `CCS_PLATFORM_RETENTION_UPLOADS_DAYS=14`
+- `CCS_PLATFORM_RETENTION_BACKUPS_DAYS=30`
 - `CCS_PLATFORM_ENVIRONMENT=development|production`
-- `CCS_PLATFORM_REQUIRE_API_AUTH=true|false`
-- `CCS_PLATFORM_API_AUTH_TOKEN=...` (required when auth is enabled)
+- `CCS_PLATFORM_REQUIRE_LOGIN=true|false`
+- `CCS_PLATFORM_SESSION_COOKIE_NAME=ccs_session`
+- `CCS_PLATFORM_SESSION_MAX_AGE_SECONDS=1209600`
+- `CCS_PLATFORM_SESSION_SECRET_KEY=...`
 - `CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY=...` (required in production by default)
 - `CCS_PLATFORM_RUNTIME_SETTINGS_REQUIRE_ENCRYPTION=true|false`
 - `CCS_PLATFORM_RUNTIME_SETTINGS_SEED_SOURCE=env|env_file|env_file_then_env|none`
 - `CCS_PLATFORM_RUNTIME_SETTINGS_ENV_FILE=/path/to/.env`
+
+Admin UI login accounts:
+- `h_abbasi97@hotmail.com` (defaults to profile `alice`)
+- `bob@example.com` (defaults to profile `bob`)
+- Password for both accounts: `Apple123!`
 
 GCS mode also needs:
 - `CCS_PLATFORM_GCS_BUCKET`
@@ -185,6 +199,21 @@ PYTHONPATH=src python scripts/reencrypt_runtime_secrets.py
 CCS_PLATFORM_RUNTIME_SETTINGS_OLD_ENCRYPTION_KEY=... \
 CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY=... \
 PYTHONPATH=src python scripts/rotate_runtime_setting_secrets.py --dry-run
+
+# Migration governance preflight
+PYTHONPATH=src python scripts/migration_preflight.py
+
+# Backup/restore and monthly drill
+PYTHONPATH=src python scripts/backup_platform_state.py --label nightly
+PYTHONPATH=src python scripts/backup_restore_drill.py --label monthly
+
+# Retention policy dry-run/apply
+PYTHONPATH=src python scripts/enforce_retention.py
+PYTHONPATH=src python scripts/enforce_retention.py --apply
+
+# Load/perf budgets and SLO policy evaluation
+PYTHONPATH=src python scripts/load_test_api.py --base-url http://127.0.0.1:8040 --duration 60 --concurrency 12
+PYTHONPATH=src python scripts/evaluate_slo.py --metrics-url http://127.0.0.1:8040/api/v1/metrics
 ```
 
 ## Notes

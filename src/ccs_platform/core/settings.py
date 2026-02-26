@@ -30,6 +30,7 @@ class PlatformSettings(BaseSettings):
 
     uploads_temp_dir: Path = ROOT_DIR / "data" / "incoming"
     logs_dir: Path = ROOT_DIR / "logs"
+    backups_dir: Path = ROOT_DIR / "data" / "backups"
 
     job_poll_interval_seconds: int = 5
     schedule_poll_interval_seconds: int = 30
@@ -46,6 +47,12 @@ class PlatformSettings(BaseSettings):
     queue_backlog_slo_default: int = 100
     queue_backlog_slo_scrape: int = 20
     queue_oldest_age_slo_seconds: int = 900
+    retention_jobs_days: int = 90
+    retention_exports_days: int = 90
+    retention_audit_events_days: int = 365
+    retention_logs_days: int = 30
+    retention_uploads_days: int = 14
+    retention_backups_days: int = 30
 
     cors_allow_origins: str = "*"
     log_level: str = "INFO"
@@ -53,9 +60,12 @@ class PlatformSettings(BaseSettings):
     request_id_header: str = "X-Request-ID"
 
     allow_legacy_sqlite_reset: bool | None = None
-    require_api_auth: bool | None = None
-    api_auth_token: str | None = None
-    api_auth_exempt_paths: str = "/api/v1/health,/api/v1/health/ready"
+    require_login: bool = True
+    session_cookie_name: str = "ccs_session"
+    session_max_age_seconds: int = 1209600
+    session_secret_key: str = "change-this-in-production"
+    session_cookie_secure: bool | None = None
+    rbac_enabled: bool | None = None
 
     runtime_settings_expose_secrets: bool | None = None
     runtime_settings_require_encryption: bool | None = None
@@ -80,14 +90,18 @@ class PlatformSettings(BaseSettings):
             return not self.is_production()
         return self.allow_legacy_sqlite_reset
 
-    def api_auth_enabled(self) -> bool:
-        if self.require_api_auth is None:
-            return self.is_production()
-        return self.require_api_auth
+    def login_required(self) -> bool:
+        return bool(self.require_login)
 
-    def api_auth_exempt_path_set(self) -> set[str]:
-        paths = {path.strip() for path in self.api_auth_exempt_paths.split(",") if path.strip()}
-        return paths or {f"{self.api_prefix}/health"}
+    def session_cookie_is_secure(self) -> bool:
+        if self.session_cookie_secure is None:
+            return self.is_production()
+        return self.session_cookie_secure
+
+    def rbac_enforced(self) -> bool:
+        if self.rbac_enabled is None:
+            return self.is_production()
+        return self.rbac_enabled
 
     def secret_value_readback_enabled(self) -> bool:
         if self.runtime_settings_expose_secrets is None:
@@ -121,8 +135,9 @@ class PlatformSettings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_settings() -> PlatformSettings:
-    settings = PlatformSettings()
+    settings = PlatformSettings(_env_file=ROOT_DIR / ".env", _env_file_encoding="utf-8")
     settings.local_storage_dir.mkdir(parents=True, exist_ok=True)
     settings.uploads_temp_dir.mkdir(parents=True, exist_ok=True)
     settings.logs_dir.mkdir(parents=True, exist_ok=True)
+    settings.backups_dir.mkdir(parents=True, exist_ok=True)
     return settings
