@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import io
 import uuid
 from datetime import UTC, datetime
 
@@ -8,27 +7,36 @@ from ccs_platform.adapters.storage.base import StorageAdapter, StoredObject
 from ccs_platform.core.settings import PlatformSettings
 
 
-class S3StorageAdapter(StorageAdapter):
-    backend_name = "s3"
+class GCSStorageAdapter(StorageAdapter):
+    backend_name = "gcs"
 
     def __init__(self, settings: PlatformSettings) -> None:
         self.settings = settings
         try:
-            import boto3
+            from google.cloud import storage
         except Exception as exc:  # noqa: BLE001
-            raise RuntimeError("boto3 is required for S3 storage backend") from exc
+            raise RuntimeError(
+                "google-cloud-storage is required for GCS storage backend"
+            ) from exc
 
-        if not settings.s3_bucket:
-            raise RuntimeError("CCS_PLATFORM_S3_BUCKET is required for s3 storage backend")
+        if not settings.gcs_bucket:
+            raise RuntimeError("CCS_PLATFORM_GCS_BUCKET is required for gcs storage backend")
 
-        self.bucket = settings.s3_bucket
-        self.client = boto3.client(
-            "s3",
-            endpoint_url=settings.s3_endpoint_url,
-            region_name=settings.s3_region,
-            aws_access_key_id=settings.s3_access_key_id,
-            aws_secret_access_key=settings.s3_secret_access_key,
-        )
+        credentials_file = settings.gcs_credentials_file
+        if credentials_file:
+            if not credentials_file.exists():
+                raise RuntimeError(
+                    "CCS_PLATFORM_GCS_CREDENTIALS_FILE points to a non-existent file"
+                )
+            self.client = storage.Client.from_service_account_json(
+                str(credentials_file),
+                project=settings.gcs_project,
+            )
+        else:
+            self.client = storage.Client(project=settings.gcs_project)
+
+        self.bucket = settings.gcs_bucket
+        self.bucket_ref = self.client.bucket(self.bucket)
 
     def _save(
         self,
@@ -37,6 +45,7 @@ class S3StorageAdapter(StorageAdapter):
         folder: str,
         filename: str,
         profile_key: str | None = None,
+        content_type: str = "application/octet-stream",
     ) -> StoredObject:
         ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
         safe_name = filename.replace("/", "_").replace("\\", "_")
@@ -48,7 +57,8 @@ class S3StorageAdapter(StorageAdapter):
                 scoped_folder = f"{scoped_folder}/{normalized_folder}"
         key_prefix = f"{scoped_folder}/" if scoped_folder else ""
         key = f"{key_prefix}{ts}_{uuid.uuid4().hex}_{safe_name}"
-        self.client.upload_fileobj(io.BytesIO(content), self.bucket, key)
+        blob = self.bucket_ref.blob(key)
+        blob.upload_from_string(content, content_type=content_type)
         return StoredObject(backend=self.backend_name, key=key)
 
     def save_pdf(
@@ -65,6 +75,7 @@ class S3StorageAdapter(StorageAdapter):
             folder="",
             filename=f"{source_prefix}_{filename}",
             profile_key=profile_key,
+            content_type="application/pdf",
         )
 
     def save_binary(
@@ -78,5 +89,5 @@ class S3StorageAdapter(StorageAdapter):
         return self._save(content=content, folder=folder, filename=filename, profile_key=profile_key)
 
     def read_bytes(self, key: str) -> bytes:
-        obj = self.client.get_object(Bucket=self.bucket, Key=key)
-        return obj["Body"].read()
+        blob = self.bucket_ref.blob(key)
+        return blob.download_as_bytes()

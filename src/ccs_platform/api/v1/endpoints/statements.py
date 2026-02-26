@@ -18,6 +18,7 @@ from ccs_platform.api.v1.schemas import (
     StatementOut,
 )
 from ccs_platform.application.statements.serializers import to_line_out, to_statement_out
+from ccs_platform.application.jobs.service import create_or_get_job
 from ccs_platform.domain.parsing.utils import statement_month_from_date
 
 
@@ -31,17 +32,16 @@ def _enqueue_reparse_job(
     profile_id: int,
     payload: dict[str, int | bool],
 ) -> JobOut:
-    job = models.Job(
+    job, created = create_or_get_job(
+        db,
         profile_id=profile_id,
         job_type=models.JobType.REPARSE_STATEMENT,
-        status=models.JobStatus.QUEUED,
         payload_json=payload,
     )
-    db.add(job)
-    db.commit()
-    db.refresh(job)
-
-    request.app.state.job_runner.enqueue(job.id)
+    if created:
+        db.commit()
+        db.refresh(job)
+        request.app.state.job_dispatcher.publish(job.id)
     return JobOut.model_validate(job)
 
 

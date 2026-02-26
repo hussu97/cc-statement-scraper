@@ -3,6 +3,7 @@ from __future__ import annotations
 import fnmatch
 import os
 from pathlib import Path
+from datetime import UTC, datetime
 
 import pdfplumber
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
@@ -14,6 +15,7 @@ from ccs_platform.db import models
 from ccs_platform.api.deps import ProfileContext, get_db, get_profile_context
 from ccs_platform.api.v1.schemas import JobOut, PaginatedJobs, ReclassifyJobRequest, ScrapeJobRequest
 from ccs_platform.application.banks.capabilities import get_enabled_banks, resolve_requested_months
+from ccs_platform.application.jobs.service import create_or_get_job
 
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -53,6 +55,12 @@ def _infer_bank_code_from_text(pdf_text: str) -> str | None:
     if not text.strip():
         return None
 
+    # EIB statements usually include explicit Emirates Islamic markers.
+    if "EMIRATES ISLAMIC BANK" in text or "EMIRATES ISLAMIC" in text or "EMIRATESISLAMIC" in text:
+        return "EIB"
+    if "EIB" in text and "STATEMENT PERIOD:" in text and "CARD TYPE:" in text:
+        return "EIB"
+
     # ENBD statements reliably include these markers in headers.
     if "EMIRATES NBD" in text or "EMIRATES NATIONAL BANK OF DUBAI" in text:
         return "ENBD"
@@ -82,6 +90,12 @@ def _infer_bank_code_from_text(pdf_text: str) -> str | None:
         return "SIB"
     if "SIB DIGITAL" in text and "STATEMENT" in text:
         return "SIB"
+
+    # Mashreq statements include these bank markers.
+    if "MASHREQ BANK" in text or "MASHREQBANK" in text:
+        return "MASHREQ"
+    if "MASHREQ" in text and "E-STATEMENT" in text:
+        return "MASHREQ"
 
     return None
 
@@ -168,37 +182,34 @@ def create_scrape_job(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    job = models.Job(
+    payload_json = {
+        "banks": [bank.code for bank in banks],
+        "months": months,
+        "download": payload.download,
+        "headless": payload.headless,
+        "login_timeout_minutes": payload.login_timeout_minutes,
+    }
+    job, created = create_or_get_job(
+        db,
         profile_id=profile.profile_id,
         job_type=models.JobType.SCRAPE,
-        status=models.JobStatus.QUEUED,
-        payload_json={
-            "banks": [bank.code for bank in banks],
-            "months": months,
-            "download": payload.download,
-            "headless": payload.headless,
-            "login_timeout_minutes": payload.login_timeout_minutes,
-        },
+        payload_json=payload_json,
     )
-    db.add(job)
-    db.flush()
 
-    for bank in banks:
-        for month in months:
-            db.add(
-                models.JobItem(
-                    job_id=job.id,
-                    bank_code=bank.code,
-                    target_month=month,
-                    status="queued",
+    if created:
+        for bank in banks:
+            for month in months:
+                db.add(
+                    models.JobItem(
+                        job_id=job.id,
+                        bank_code=bank.code,
+                        target_month=month,
+                        status="queued",
+                    )
                 )
-            )
-
-    db.commit()
-    db.refresh(job)
-
-    runner = request.app.state.job_runner
-    runner.enqueue(job.id)
+        db.commit()
+        db.refresh(job)
+        request.app.state.job_dispatcher.publish(job.id)
 
     return _job_to_out(job)
 
@@ -259,17 +270,17 @@ async def create_upload_job(
     if not uploads:
         raise HTTPException(status_code=400, detail="Uploaded files were empty")
 
-    job = models.Job(
+    job, _ = create_or_get_job(
+        db,
         profile_id=profile.profile_id,
         job_type=models.JobType.UPLOAD,
-        status=models.JobStatus.QUEUED,
         payload_json={"uploads": uploads},
+        auto_idempotency=False,
     )
-    db.add(job)
     db.commit()
     db.refresh(job)
 
-    request.app.state.job_runner.enqueue(job.id)
+    request.app.state.job_dispatcher.publish(job.id)
     return _job_to_out(job)
 
 
@@ -289,6 +300,7 @@ def cancel_job(
         raise HTTPException(status_code=409, detail="Completed jobs cannot be cancelled")
 
     job.status = models.JobStatus.CANCELLED
+    job.cancel_requested_at = datetime.now(UTC)
     db.commit()
     db.refresh(job)
     return _job_to_out(job)
@@ -301,15 +313,15 @@ def create_reclassify_job(
     db: Session = Depends(get_db),
     profile: ProfileContext = Depends(get_profile_context),
 ) -> JobOut:
-    job = models.Job(
+    job, created = create_or_get_job(
+        db,
         profile_id=profile.profile_id,
         job_type=models.JobType.RECLASSIFY,
-        status=models.JobStatus.QUEUED,
         payload_json=payload.model_dump(),
     )
-    db.add(job)
-    db.commit()
-    db.refresh(job)
+    if created:
+        db.commit()
+        db.refresh(job)
+        request.app.state.job_dispatcher.publish(job.id)
 
-    request.app.state.job_runner.enqueue(job.id)
     return _job_to_out(job)

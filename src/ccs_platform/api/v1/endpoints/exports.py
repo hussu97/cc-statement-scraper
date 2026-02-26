@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from ccs_platform.db import models
 from ccs_platform.api.deps import ProfileContext, get_db, get_profile_context
 from ccs_platform.api.v1.schemas import ExportOut, JobOut, WorkbookExportRequest
+from ccs_platform.application.jobs.service import create_or_get_job
 
 
 router = APIRouter(prefix="/exports", tags=["exports"])
@@ -28,20 +29,19 @@ def create_workbook_export(
     db.add(export_row)
     db.flush()
 
-    job = models.Job(
+    job, _ = create_or_get_job(
+        db,
         profile_id=profile.profile_id,
         job_type=models.JobType.EXPORT_WORKBOOK,
-        status=models.JobStatus.QUEUED,
         payload_json={"year": payload.year, "export_id": export_row.id},
+        auto_idempotency=False,
     )
-    db.add(job)
-    db.flush()
 
     export_row.job_id = job.id
     db.commit()
     db.refresh(job)
 
-    request.app.state.job_runner.enqueue(job.id)
+    request.app.state.job_dispatcher.publish(job.id)
     return JobOut.model_validate(job)
 
 

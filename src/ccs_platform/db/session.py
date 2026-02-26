@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import logging
 from typing import Generator
 
 from sqlalchemy import create_engine
@@ -19,8 +20,13 @@ def _engine_kwargs(database_url: str) -> dict:
 
 
 settings = get_settings()
-engine = create_engine(settings.database_url, **_engine_kwargs(settings.database_url))
+database_url = settings.resolved_database_url()
+engine = create_engine(database_url, **_engine_kwargs(database_url))
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+logger = logging.getLogger(__name__)
+
+if settings.database_url != database_url:
+    logger.info("Normalized database URL driver to psycopg for Postgres backend.")
 
 
 def get_db() -> Generator[Session, None, None]:
@@ -47,7 +53,8 @@ def db_session() -> Generator[Session, None, None]:
 def init_db() -> None:
     from ccs_platform.db import models  # noqa: F401
 
-    # Legacy local SQLite files from pre-profile builds are reset in-place.
+    # Legacy local SQLite files from pre-profile builds are optionally reset in-place.
+    # In production this is disabled by default to avoid destructive startup behavior.
     if engine.dialect.name == "sqlite":
         inspector = inspect(engine)
         required_columns = {
@@ -72,6 +79,17 @@ def init_db() -> None:
                 break
 
         if requires_reset:
-            Base.metadata.drop_all(bind=engine)
+            if settings.sqlite_legacy_reset_enabled():
+                logger.warning(
+                    "SQLite schema mismatch detected; applying destructive legacy reset because "
+                    "CCS_PLATFORM_ALLOW_LEGACY_SQLITE_RESET is enabled."
+                )
+                Base.metadata.drop_all(bind=engine)
+            else:
+                raise RuntimeError(
+                    "SQLite schema mismatch detected. Refusing destructive reset. "
+                    "Run migrations (alembic upgrade head) or set "
+                    "CCS_PLATFORM_ALLOW_LEGACY_SQLITE_RESET=true for an explicit one-time reset."
+                )
 
     Base.metadata.create_all(bind=engine)

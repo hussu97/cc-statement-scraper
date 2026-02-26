@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import fnmatch
 import os
+import random
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from ccs_platform.adapters.banks.browser.downloader import BrowserDownloadError, run_end_to_end_downloads
 from ccs_platform.core.bank_config import load_app_config
+from ccs_platform.core.metrics import METRICS
 from ccs_platform.core.runtime_settings import apply_runtime_settings_to_process_env
 from ccs_platform.adapters.banks.parsers import parse_adcb_statement, parse_enbd_statement, parse_fab_statement
 from ccs_platform.db import models
@@ -47,40 +49,108 @@ class JobRunner:
         self.executor.shutdown(wait=False, cancel_futures=True)
 
     def enqueue(self, job_id: int) -> None:
+        METRICS.record_job_event("enqueued")
         self.executor.submit(self._run_job, job_id)
+
+    def _compute_retry_delay_seconds(self, *, job_id: int, attempt_count: int) -> int:
+        base_seconds = max(1, int(self.settings.job_retry_base_seconds))
+        max_seconds = max(base_seconds, int(self.settings.job_retry_max_delay_seconds))
+        jitter_seconds = max(0, int(self.settings.job_retry_jitter_seconds))
+
+        exponent = max(0, attempt_count - 1)
+        delay = min(max_seconds, base_seconds * (2**exponent))
+        if jitter_seconds <= 0:
+            return delay
+
+        rng = random.Random(f"{job_id}:{attempt_count}")
+        jitter = rng.randint(0, jitter_seconds)
+        return min(max_seconds, delay + jitter)
+
+    def _schedule_retry(self, db: Session, job: models.Job, *, error_message: str) -> bool:
+        max_attempts = max(1, int(job.max_attempts or 1))
+        if int(job.attempt_count or 0) >= max_attempts:
+            return False
+
+        now = datetime.now(UTC)
+        delay_seconds = self._compute_retry_delay_seconds(
+            job_id=job.id,
+            attempt_count=int(job.attempt_count or 1),
+        )
+        job.status = models.JobStatus.QUEUED
+        job.next_retry_at = now + timedelta(seconds=delay_seconds)
+        job.error_message = error_message
+        job.progress_percent = 0
+        job.finished_at = None
+        job.last_heartbeat_at = now
+        db.commit()
+
+        METRICS.record_job_event("retry_scheduled")
+        return True
 
     def _run_job(self, job_id: int) -> None:
         with SessionLocal() as db:
             job = db.get(models.Job, job_id)
             if not job:
+                METRICS.record_job_event("missing")
                 return
             if job.status == models.JobStatus.CANCELLED:
+                METRICS.record_job_event("cancelled_before_start")
+                return
+            if job.status not in {models.JobStatus.QUEUED, models.JobStatus.RUNNING}:
+                METRICS.record_job_event("skip_not_runnable")
                 return
 
-            job.status = models.JobStatus.RUNNING
-            job.started_at = datetime.now(UTC)
-            job.progress_percent = 1
+            now = datetime.now(UTC)
+            if job.next_retry_at is not None and job.next_retry_at > now:
+                METRICS.record_job_event("retry_not_due")
+                return
+
+            if job.status == models.JobStatus.QUEUED:
+                job.status = models.JobStatus.RUNNING
+            job.started_at = now
+            job.next_retry_at = None
+            job.progress_percent = max(1, int(job.progress_percent or 0))
+            job.attempt_count = int(job.attempt_count or 0) + 1
+            job.last_heartbeat_at = now
             db.commit()
+            METRICS.record_job_event("started")
 
             try:
                 result = self._dispatch_job(db, job)
                 db.refresh(job)
+                outcome = "succeeded"
                 if job.status != models.JobStatus.CANCELLED:
                     job.status = models.JobStatus.SUCCEEDED
+                else:
+                    outcome = "cancelled"
                 job.progress_percent = 100
                 job.result_json = result
                 job.finished_at = datetime.now(UTC)
+                job.next_retry_at = None
+                job.error_message = None
+                job.last_heartbeat_at = datetime.now(UTC)
                 db.commit()
+                METRICS.record_job_event(outcome)
             except Exception as exc:  # noqa: BLE001
                 db.rollback()
                 job = db.get(models.Job, job_id)
                 if not job:
+                    METRICS.record_job_event("missing_after_error")
                     return
-                if job.status != models.JobStatus.CANCELLED:
-                    job.status = models.JobStatus.FAILED
+                if job.status == models.JobStatus.CANCELLED:
+                    job.finished_at = datetime.now(UTC)
+                    job.last_heartbeat_at = datetime.now(UTC)
+                    db.commit()
+                    METRICS.record_job_event("cancelled")
+                    return
+                if self._schedule_retry(db, job, error_message=str(exc)):
+                    return
+                job.status = models.JobStatus.FAILED
                 job.error_message = str(exc)
                 job.finished_at = datetime.now(UTC)
+                job.last_heartbeat_at = datetime.now(UTC)
                 db.commit()
+                METRICS.record_job_event("failed")
 
     def _dispatch_job(self, db: Session, job: models.Job) -> dict[str, Any]:
         profile = db.get(models.Profile, job.profile_id)
@@ -113,6 +183,7 @@ class JobRunner:
 
     def _update_progress(self, db: Session, job: models.Job, progress: int) -> None:
         job.progress_percent = max(0, min(progress, 99))
+        job.last_heartbeat_at = datetime.now(UTC)
         db.commit()
 
     def _find_latest_matching_pdf(self, app_config, bank_code: str) -> Path | None:
@@ -754,7 +825,9 @@ class JobRunner:
             "FAB": ["FAB_USERNAME", "FAB_PASSWORD"],
             "ADCB": ["ADCB_CID", "ADCB_LOGIN_PASSWORD"],
             "ENBD": ["ENBD_USERNAME", "ENBD_PASSWORD"],
+            "EIB": ["EIB_USERNAME", "EIB_PASSWORD"],
             "SIB": ["SIB_USER_ID", "SIB_PASSWORD", "SIB_PDF_PASSWORD"],
+            "MASHREQ": ["MASHREQ_USERNAME", "MASHREQ_PASSWORD"],
         }
         required_env = required_env_map.get(bank_code)
         if not required_env:

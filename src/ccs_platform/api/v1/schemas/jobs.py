@@ -28,10 +28,16 @@ class JobOut(BaseModel):
     payload_json: dict[str, Any] | None
     result_json: dict[str, Any] | None
     error_message: str | None
+    idempotency_key: str | None
+    attempt_count: int
+    max_attempts: int
     progress_percent: int
     created_at: datetime
     started_at: datetime | None
     finished_at: datetime | None
+    next_retry_at: datetime | None
+    last_heartbeat_at: datetime | None
+    cancel_requested_at: datetime | None
     items: list[JobItemOut] = []
 
 

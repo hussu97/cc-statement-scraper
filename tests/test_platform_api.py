@@ -3,10 +3,12 @@ from __future__ import annotations
 import uuid
 from datetime import date, time
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from ccs_platform.main import app
+from ccs_platform.core.settings import get_settings
+from ccs_platform.main import app, create_app
 from ccs_platform.db import db_session, models
 
 
@@ -77,11 +79,37 @@ def _delete_statement(statement_id: int) -> None:
             db.delete(row)
 
 
+def _create_app_with_env(monkeypatch: pytest.MonkeyPatch, **kwargs: str) -> object:
+    for key, value in kwargs.items():
+        monkeypatch.setenv(key, value)
+    get_settings.cache_clear()
+    return create_app()
+
+
 def test_health_endpoint() -> None:
     with TestClient(app) as client:
         resp = client.get('/api/v1/health')
         assert resp.status_code == 200
-        assert resp.json() == {'status': 'ok'}
+        payload = resp.json()
+        assert payload['status'] == 'ok'
+
+
+def test_health_ready_and_metrics_endpoints() -> None:
+    with TestClient(app) as client:
+        ready_resp = client.get('/api/v1/health/ready')
+        assert ready_resp.status_code == 200
+        ready_payload = ready_resp.json()
+        assert ready_payload['status'] == 'ok'
+        assert 'checks' in ready_payload
+        assert 'database' in ready_payload['checks']
+        assert 'storage' in ready_payload['checks']
+
+        metrics_resp = client.get('/api/v1/metrics')
+        assert metrics_resp.status_code == 200
+        metrics_payload = metrics_resp.json()
+        assert 'requests' in metrics_payload
+        assert 'jobs' in metrics_payload
+        assert isinstance(metrics_payload['requests'].get('total'), int)
 
 
 def test_banks_seeded() -> None:
@@ -141,6 +169,28 @@ def test_scrape_job_accepts_month_range() -> None:
         assert payload['payload_json']['months'] == ['2024-01', '2024-02', '2024-03']
 
 
+def test_scrape_job_dedupes_duplicate_payload() -> None:
+    body = {
+        'banks': ['ENBD'],
+        'month_from': '2025-11',
+        'month_to': '2025-11',
+        'download': False,
+        'headless': True,
+        'login_timeout_minutes': 20,
+    }
+    with TestClient(app) as client:
+        first = client.post('/api/v1/jobs/scrape', json=body)
+        assert first.status_code == 200
+        first_payload = first.json()
+
+        second = client.post('/api/v1/jobs/scrape', json=body)
+        assert second.status_code == 200
+        second_payload = second.json()
+
+        assert first_payload['id'] == second_payload['id']
+        assert first_payload['idempotency_key'] == second_payload['idempotency_key']
+
+
 def test_reparse_all_enqueues_profile_scoped_job() -> None:
     with TestClient(app) as client:
         resp = client.post('/api/v1/statements/reparse-all')
@@ -185,6 +235,53 @@ def test_runtime_settings_list_and_patch() -> None:
         assert seed_resp.status_code == 200
         payload = seed_resp.json()
         assert {'inserted', 'updated', 'skipped', 'applied_to_process_env'}.issubset(payload.keys())
+
+
+def test_api_auth_token_guard_rejects_requests_without_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    auth_app = _create_app_with_env(
+        monkeypatch,
+        CCS_PLATFORM_REQUIRE_API_AUTH="true",
+        CCS_PLATFORM_API_AUTH_TOKEN="secret-token",
+    )
+
+    try:
+        with TestClient(auth_app) as client:
+            unauthorized = client.get("/api/v1/banks")
+            assert unauthorized.status_code == 401
+
+            health = client.get("/api/v1/health")
+            assert health.status_code == 200
+
+            authorized = client.get(
+                "/api/v1/banks",
+                headers={"Authorization": "Bearer secret-token"},
+            )
+            assert authorized.status_code == 200
+    finally:
+        get_settings.cache_clear()
+
+
+def test_runtime_settings_hide_secret_values_in_production(monkeypatch: pytest.MonkeyPatch) -> None:
+    prod_app = _create_app_with_env(
+        monkeypatch,
+        CCS_PLATFORM_ENVIRONMENT="production",
+        CCS_PLATFORM_REQUIRE_API_AUTH="false",
+        CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY="V33IhV4J0EAOQnq2STxwJK6I2Gv5u9W1tnM0B8f9Lh4=",
+    )
+
+    try:
+        with TestClient(prod_app) as client:
+            patch_resp = client.patch(
+                "/api/v1/runtime-settings/FAB_USERNAME",
+                json={"value": "prod-secret-user"},
+            )
+            assert patch_resp.status_code == 200
+            patched = patch_resp.json()
+            assert patched["is_secret"] is True
+            assert patched["value"] == ""
+            assert patched["has_value"] is True
+    finally:
+        get_settings.cache_clear()
 
 
 def test_jobs_and_schedules_list_are_paginated() -> None:

@@ -14,6 +14,11 @@ DEFAULT_PROFILES: tuple[tuple[str, str, bool], ...] = (
     (SECONDARY_PROFILE_KEY, "Tejasvie", False),
 )
 
+DEFAULT_PROFILE_BANKS: dict[str, set[str]] = {
+    DEFAULT_PROFILE_KEY: {"FAB", "ADCB", "ENBD", "SIB"},
+    SECONDARY_PROFILE_KEY: {"MASHREQ", "EIB"},
+}
+
 
 def _normalize_profile_key(value: str) -> str:
     return value.strip().lower()
@@ -51,10 +56,42 @@ def ensure_profile_seeds(db: Session) -> None:
     if not banks:
         return
 
-    if DEFAULT_PROFILE_KEY in created_keys:
-        hussain_profile = existing[DEFAULT_PROFILE_KEY]
-        for bank_code in banks:
-            db.add(models.ProfileBank(profile_id=hussain_profile.id, bank_code=bank_code))
+    available_banks = set(banks)
+    mappings = db.execute(
+        select(models.ProfileBank.profile_id, models.ProfileBank.bank_code)
+    ).all()
+    mapped_by_profile: dict[int, set[str]] = {}
+    mapped_profiles_by_bank: dict[str, set[int]] = {}
+    for profile_id, bank_code in mappings:
+        mapped_by_profile.setdefault(profile_id, set()).add(bank_code)
+        mapped_profiles_by_bank.setdefault(bank_code, set()).add(profile_id)
+
+    for profile_key, default_codes in DEFAULT_PROFILE_BANKS.items():
+        profile = existing.get(profile_key)
+        if profile is None:
+            continue
+        desired = {code for code in default_codes if code in available_banks}
+        if not desired:
+            continue
+
+        current = mapped_by_profile.get(profile.id, set())
+        codes_to_add: set[str] = set()
+        if profile_key in created_keys:
+            codes_to_add = desired - current
+        elif profile_key == SECONDARY_PROFILE_KEY:
+            # One-time onboarding for newly introduced secondary-profile defaults.
+            if not current:
+                codes_to_add = desired - current
+            else:
+                for bank_code in (desired - current):
+                    if not mapped_profiles_by_bank.get(bank_code):
+                        codes_to_add.add(bank_code)
+
+        if not codes_to_add:
+            continue
+
+        for bank_code in sorted(codes_to_add):
+            db.add(models.ProfileBank(profile_id=profile.id, bank_code=bank_code))
 
 
 def get_default_profile(db: Session) -> models.Profile:

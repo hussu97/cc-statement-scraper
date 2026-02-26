@@ -50,6 +50,20 @@ banks:
       - alias: enbd_primary
         last4: "7205"
 
+  EIB:
+    bank_name: Emirates Islamic Bank
+    portal_url: https://login.emiratesislamic.ae/
+    parser: eib
+    file_glob_patterns:
+      - "*Emirates Islamic*Statement*.pdf"
+      - "*EIB*Statement*.pdf"
+    date_formats:
+      - "%d/%m/%Y"
+      - "%d-%b-%y"
+    currency_defaults:
+      statement: AED
+    cards: []
+
   SIB:
     bank_name: Sharjah Islamic Bank
     portal_url: https://online.sib.ae/index.html?lang=en-US
@@ -65,3 +79,22 @@ banks:
       statement: AED
     pdf_password_env: SIB_PDF_PASSWORD
     cards: []
+
+  MASHREQ:
+    bank_name: Mashreq Bank
+    portal_url: https://digital.mashreqbank.com/onlinebanking/
+    parser: mashreq
+    file_glob_patterns:
+      - "*MASHREQ*Statement*.pdf"
+      - "*Mashreq*Statement*.pdf"
+      - "*E-Statement*.pdf"
+    date_formats:
+      - "%d/%m/%Y"
+      - "%d-%m-%Y"
+      - "%d %b %Y"
+      - "%d %B %Y"
+    currency_defaults:
+      statement: AED
+    cards:
+      - alias: mashreq_primary
+        last4: "0353"

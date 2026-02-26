@@ -46,13 +46,19 @@ def test_resolve_requested_months_normalizes_latest() -> None:
 
 def test_build_bank_scrape_config_is_bank_specific() -> None:
     enbd = build_bank_scrape_config('ENBD', '2025-11')
+    eib = build_bank_scrape_config('EIB', '2025-11')
     fab = build_bank_scrape_config('FAB', '2025-11')
     adcb = build_bank_scrape_config('ADCB', '2025-11')
     sib = build_bank_scrape_config('SIB', '2025-11')
+    mashreq = build_bank_scrape_config('MASHREQ', '2025-11')
 
     assert enbd['requested_month'] == '2025-11'
     assert enbd['enbd_statement_year'] == 2025
     assert enbd['enbd_statement_month'] == 11
+
+    assert eib['requested_month'] == '2025-11'
+    assert eib['eib_statement_year'] == 2025
+    assert eib['eib_statement_month'] == 11
 
     assert fab['requested_month'] == '2025-11'
     assert fab['fab_statement_period'] == '2025-11'
@@ -66,6 +72,11 @@ def test_build_bank_scrape_config_is_bank_specific() -> None:
     assert sib['sib_statement_period'] == '2025-11'
     assert sib['sib_statement_year'] == 2025
     assert sib['sib_statement_month'] == 11
+
+    assert mashreq['requested_month'] == '2025-11'
+    assert mashreq['mashreq_statement_period'] == '2025-11'
+    assert mashreq['mashreq_statement_year'] == 2025
+    assert mashreq['mashreq_statement_month'] == 11
 
 
 def test_latest_only_bank_supports_current_month_only_when_no_static_capability() -> None:
@@ -122,10 +133,34 @@ def test_static_capabilities_enable_enbd_multi_month_even_if_row_is_stale() -> N
     assert supports_multi_month(bank) is True
 
 
+def test_static_capabilities_enable_eib_multi_month_even_if_row_is_stale() -> None:
+    bank = models.Bank(
+        code='EIB',
+        name='EIB',
+        supports_historical_month_selection=False,
+        supports_multi_month=False,
+        supports_headless=True,
+    )
+    assert supports_multi_month(bank) is True
+    assert is_month_supported(bank, "2024-01") is True
+
+
 def test_static_capabilities_enable_sib_multi_month_even_if_row_is_stale() -> None:
     bank = models.Bank(
         code='SIB',
         name='SIB',
+        supports_historical_month_selection=False,
+        supports_multi_month=False,
+        supports_headless=True,
+    )
+    assert supports_multi_month(bank) is True
+    assert is_month_supported(bank, "2024-01") is True
+
+
+def test_static_capabilities_enable_mashreq_multi_month_even_if_row_is_stale() -> None:
+    bank = models.Bank(
+        code='MASHREQ',
+        name='MASHREQ',
         supports_historical_month_selection=False,
         supports_multi_month=False,
         supports_headless=True,
