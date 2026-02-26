@@ -79,7 +79,15 @@ def decode_runtime_setting_value(*, value: str, is_secret: bool) -> str:
         return ""
     if not is_secret:
         return value
-    return decode_secret(value)
+    try:
+        return decode_secret(value)
+    except RuntimeError:
+        settings = get_settings()
+        if settings.runtime_settings_encryption_required():
+            raise
+        # Development fallback: keep startup usable even if old encrypted
+        # values exist but no key is configured in current environment.
+        return ""
 
 
 def encode_runtime_setting_value(*, value: str, is_secret: bool) -> str:

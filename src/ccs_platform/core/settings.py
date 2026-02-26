@@ -35,10 +35,12 @@ class PlatformSettings(BaseSettings):
     schedule_poll_interval_seconds: int = 30
     max_worker_threads: int = 1
     embedded_worker: bool = True
+    worker_queues: str = "default,scrape"
     job_dispatch_backend: str = "database"
     job_retry_base_seconds: int = 30
     job_retry_jitter_seconds: int = 15
     job_retry_max_delay_seconds: int = 900
+    job_heartbeat_timeout_seconds: int = 1800
 
     cors_allow_origins: str = "*"
     log_level: str = "INFO"
@@ -97,6 +99,14 @@ class PlatformSettings(BaseSettings):
         if raw:
             return raw
         return "env" if self.is_production() else "env_file_then_env"
+
+    def worker_queue_set(self) -> set[str]:
+        tokens = {
+            token.strip().lower()
+            for token in self.worker_queues.split(",")
+            if token.strip()
+        }
+        return tokens or {"default", "scrape"}
 
 
 @lru_cache(maxsize=1)

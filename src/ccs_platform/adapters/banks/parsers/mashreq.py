@@ -19,11 +19,21 @@ from ccs_platform.domain.parsing.utils import (
 BANK_CODE = "MASHREQ"
 BANK_NAME = "Mashreq Bank"
 
-_DATE_TOKEN = r"(?:\d{1,2}[/-]\d{1,2}[/-](?:\d{2}|\d{4})|\d{1,2}\s+[A-Za-z]{3,9}\s+(?:\d{2}|\d{4}))"
+_DATE_TOKEN = r"(?:\d{1,2}[/-]\d{1,2}(?:[/-](?:\d{4}|\d{2}))?|\d{1,2}\s+[A-Za-z]{3,9}\s+(?:\d{4}|\d{2}))"
+_ROW_RE_SHORT = re.compile(
+    r"^(?P<txn_date>\d{1,2}[/-]\d{1,2})\s+"
+    r"(?P<posting_date>\d{1,2}[/-]\d{1,2})\s+"
+    r"(?P<description>.+?)\s+"
+    r"(?P<reference>[A-Z0-9]{8,})\s+"
+    r"(?:(?P<currency>[A-Z]{3})\s+)?"
+    r"(?P<amount>[+-]?\d[\d,]*\.\d{2})(?P<suffix>\s*(?:CR|DR))?$",
+    re.IGNORECASE,
+)
 _ROW_RE = re.compile(
     rf"^(?P<txn_date>{_DATE_TOKEN})\s+"
     rf"(?:(?P<posting_date>{_DATE_TOKEN})\s+)?"
     r"(?P<description>.+?)\s+"
+    r"(?:(?P<reference>[A-Z0-9]{8,})\s+)?"
     r"(?:(?P<currency>[A-Z]{3})\s+)?"
     r"(?P<amount>[+-]?\d[\d,]*\.\d{2})(?P<suffix>\s*(?:CR|DR))?$",
     re.IGNORECASE,
@@ -78,6 +88,29 @@ def _parse_flexible_date(raw: str) -> date | None:
         except Exception:  # noqa: BLE001
             continue
     return None
+
+
+def _parse_day_month(raw: str, *, anchor: date | None) -> date | None:
+    token = raw.strip()
+    match = re.match(r"^(?P<day>\d{1,2})[/-](?P<month>\d{1,2})$", token)
+    if not match:
+        return _parse_flexible_date(token)
+
+    day = int(match.group("day"))
+    month = int(match.group("month"))
+    if day < 1 or day > 31 or month < 1 or month > 12:
+        return None
+
+    base_year = anchor.year if anchor else datetime.now().year
+    # Statement date is the closing date; transactions with month greater than
+    # statement month belong to the previous year (e.g., Dec rows in Jan statement).
+    if anchor and month > anchor.month:
+        base_year -= 1
+
+    try:
+        return date(base_year, month, day)
+    except ValueError:
+        return None
 
 
 def _extract_statement_reference(lines: list[str]) -> str | None:
@@ -161,16 +194,20 @@ def parse_mashreq_statement(pdf_path: str | Path) -> StatementParseResult:
                 if masked_match:
                     card_last4 = masked_match.group(1)
 
-        row_match = _ROW_RE.match(line)
+        row_match = _ROW_RE_SHORT.match(line) or _ROW_RE.match(line)
         if not row_match:
             continue
 
-        txn_date = _parse_flexible_date(row_match.group("txn_date"))
+        txn_date = _parse_day_month(row_match.group("txn_date"), anchor=statement_date or period_end)
         if txn_date is None:
             continue
 
         posting_token = row_match.group("posting_date")
-        posting_date = _parse_flexible_date(posting_token) if posting_token else txn_date
+        posting_date = (
+            _parse_day_month(posting_token, anchor=statement_date or period_end)
+            if posting_token
+            else txn_date
+        )
         if posting_date is None:
             posting_date = txn_date
 

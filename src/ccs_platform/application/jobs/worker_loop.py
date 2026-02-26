@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from ccs_platform.db import models
+from ccs_platform.core.metrics import METRICS
 from ccs_platform.core.settings import PlatformSettings
 from ccs_platform.db.session import SessionLocal
 from ccs_platform.application.jobs.runner import JobRunner
@@ -22,6 +23,8 @@ class WorkerLoop:
         self.job_runner = job_runner
         self._in_flight: set[int] = set()
         self._running = True
+        self._worker_queues = settings.worker_queue_set()
+        self._all_queues = "*" in self._worker_queues or "all" in self._worker_queues
 
     def stop(self) -> None:
         self._running = False
@@ -45,6 +48,68 @@ class WorkerLoop:
             }
             self._in_flight.difference_update(done)
 
+    def _scope_job_query_to_worker_queues(self, stmt):
+        if self._all_queues:
+            return stmt
+        return stmt.where(models.Job.queue_name.in_(sorted(self._worker_queues)))
+
+    def _recover_stale_running_jobs(self) -> None:
+        timeout_seconds = max(30, int(self.settings.job_heartbeat_timeout_seconds))
+        now = datetime.now(UTC)
+        stale_before = now - timedelta(seconds=timeout_seconds)
+
+        with SessionLocal() as db:
+            query = select(models.Job).where(models.Job.status == models.JobStatus.RUNNING)
+            query = self._scope_job_query_to_worker_queues(query)
+            query = query.where(
+                or_(
+                    (models.Job.last_heartbeat_at.is_not(None) & (models.Job.last_heartbeat_at <= stale_before)),
+                    (
+                        models.Job.last_heartbeat_at.is_(None)
+                        & models.Job.started_at.is_not(None)
+                        & (models.Job.started_at <= stale_before)
+                    ),
+                )
+            )
+            stale_jobs = db.execute(query).scalars().all()
+            if not stale_jobs:
+                return
+
+            requeued = 0
+            cancelled = 0
+            failed = 0
+            for job in stale_jobs:
+                if job.cancel_requested_at is not None:
+                    job.status = models.JobStatus.CANCELLED
+                    job.finished_at = now
+                    job.error_message = "Cancelled after heartbeat timeout."
+                    cancelled += 1
+                    METRICS.record_job_event("stale_cancelled")
+                elif int(job.attempt_count or 0) < max(1, int(job.max_attempts or 1)):
+                    job.status = models.JobStatus.QUEUED
+                    job.next_retry_at = now
+                    job.progress_percent = 0
+                    job.error_message = "Recovered stale running job due to heartbeat timeout."
+                    requeued += 1
+                    METRICS.record_job_event("stale_requeued")
+                else:
+                    job.status = models.JobStatus.FAILED
+                    job.finished_at = now
+                    job.error_message = "Job heartbeat timeout exceeded and max attempts exhausted."
+                    failed += 1
+                    METRICS.record_job_event("stale_failed")
+
+                job.last_heartbeat_at = now
+
+            db.commit()
+            logger.warning(
+                "Recovered stale running jobs | requeued=%s cancelled=%s failed=%s timeout_seconds=%s",
+                requeued,
+                cancelled,
+                failed,
+                timeout_seconds,
+            )
+
     def _dispatch_queued_jobs(self) -> None:
         # Enforce strict serialization: only one active worker job at a time.
         if self._in_flight:
@@ -52,38 +117,41 @@ class WorkerLoop:
 
         with SessionLocal() as db:
             now = datetime.now(UTC)
-            running_job_id = db.execute(
-                select(models.Job.id)
-                .where(models.Job.status == models.JobStatus.RUNNING)
-                .order_by(models.Job.started_at.asc())
-                .limit(1)
-            ).scalar_one_or_none()
+            running_query = select(models.Job.id).where(models.Job.status == models.JobStatus.RUNNING)
+            running_query = self._scope_job_query_to_worker_queues(running_query)
+            running_query = running_query.order_by(models.Job.started_at.asc()).limit(1)
+            running_job_id = db.execute(running_query).scalar_one_or_none()
             if running_job_id is not None:
                 return
 
-            next_job = db.execute(
+            next_query = (
                 select(models.Job)
                 .where(models.Job.status == models.JobStatus.QUEUED)
                 .where(models.Job.next_retry_at.is_(None))
                 .order_by(models.Job.created_at.asc())
                 .limit(1)
-            ).scalar_one_or_none()
+            )
+            next_query = self._scope_job_query_to_worker_queues(next_query)
+            next_job = db.execute(next_query).scalar_one_or_none()
             if next_job is None:
-                next_job = db.execute(
+                retry_query = (
                     select(models.Job)
                     .where(models.Job.status == models.JobStatus.QUEUED)
                     .where(models.Job.next_retry_at.is_not(None))
                     .where(models.Job.next_retry_at <= now)
                     .order_by(models.Job.next_retry_at.asc(), models.Job.created_at.asc())
                     .limit(1)
-                ).scalar_one_or_none()
+                )
+                retry_query = self._scope_job_query_to_worker_queues(retry_query)
+                next_job = db.execute(retry_query).scalar_one_or_none()
             if next_job is None:
                 return
 
             # Claim the job before enqueueing so multiple worker processes
             # do not dispatch in parallel.
             next_job.status = models.JobStatus.RUNNING
-            next_job.started_at = datetime.now(UTC)
+            next_job.started_at = now
+            next_job.last_heartbeat_at = now
             next_job.progress_percent = 1
             db.commit()
             next_job_id = next_job.id
@@ -146,6 +214,7 @@ class WorkerLoop:
         logger.info("Worker loop started")
         self.ensure_schedule_next_runs()
         while self._running:
+            self._recover_stale_running_jobs()
             self._cleanup_in_flight()
             self._trigger_due_schedules()
             self._dispatch_queued_jobs()

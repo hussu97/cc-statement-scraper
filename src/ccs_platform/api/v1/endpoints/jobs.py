@@ -298,9 +298,18 @@ def cancel_job(
 
     if job.status in {models.JobStatus.SUCCEEDED, models.JobStatus.FAILED}:
         raise HTTPException(status_code=409, detail="Completed jobs cannot be cancelled")
+    if job.status == models.JobStatus.QUEUED:
+        job.status = models.JobStatus.CANCELLED
+        job.finished_at = datetime.now(UTC)
+    elif job.status == models.JobStatus.RUNNING:
+        # Signal cooperative cancellation; runner observes this token.
+        job.cancel_requested_at = datetime.now(UTC)
+    elif job.status == models.JobStatus.CANCELLED:
+        if job.finished_at is None:
+            job.finished_at = datetime.now(UTC)
 
-    job.status = models.JobStatus.CANCELLED
-    job.cancel_requested_at = datetime.now(UTC)
+    if job.cancel_requested_at is None and job.status == models.JobStatus.CANCELLED:
+        job.cancel_requested_at = datetime.now(UTC)
     db.commit()
     db.refresh(job)
     return _job_to_out(job)

@@ -16,6 +16,7 @@ class Job(Base):
         Index("ix_jobs_status", "status"),
         Index("ix_jobs_job_type", "job_type"),
         Index("ix_jobs_created_at", "created_at"),
+        Index("ix_jobs_queue_status_created", "queue_name", "status", "created_at"),
         Index("ix_jobs_next_retry_at", "next_retry_at"),
         Index(
             "uq_jobs_profile_type_idempotency",
@@ -29,6 +30,7 @@ class Job(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     profile_id: Mapped[int] = mapped_column(ForeignKey("profiles.id", ondelete="RESTRICT"), nullable=False)
     job_type: Mapped[JobType] = mapped_column(Enum(JobType), nullable=False)
+    queue_name: Mapped[str] = mapped_column(String(32), nullable=False, default="default")
     status: Mapped[JobStatus] = mapped_column(Enum(JobStatus), nullable=False, default=JobStatus.QUEUED)
 
     payload_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)

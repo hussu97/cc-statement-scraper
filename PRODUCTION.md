@@ -187,7 +187,17 @@ Configure envs in:
 | `CCS_PLATFORM_GCS_CREDENTIALS_FILE` | No | Optional (local/non-GCP runtimes) | No | `/var/secrets/google/storage-sa.json` | env |
 | `CCS_PLATFORM_TIMEZONE` | Yes | Yes | No | `Asia/Dubai` | env |
 | `CCS_PLATFORM_EMBEDDED_WORKER` | Yes | Yes | No | `false` | env |
+| `CCS_PLATFORM_JOB_DISPATCH_BACKEND` | Yes | Yes | No | `database` | env |
+| `CCS_PLATFORM_WORKER_QUEUES` | Optional | Optional | No | `default,scrape` | env |
+| `CCS_PLATFORM_JOB_RETRY_BASE_SECONDS` | Optional | Optional | No | `30` | env |
+| `CCS_PLATFORM_JOB_RETRY_JITTER_SECONDS` | Optional | Optional | No | `15` | env |
+| `CCS_PLATFORM_JOB_RETRY_MAX_DELAY_SECONDS` | Optional | Optional | No | `900` | env |
+| `CCS_PLATFORM_JOB_HEARTBEAT_TIMEOUT_SECONDS` | Optional | Optional | No | `1800` | env |
 | `CCS_PLATFORM_CORS_ALLOW_ORIGINS` | Yes | Yes | No | `https://admin.example.com` | env |
+| `CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY` | Yes (prod) | Yes (prod) | Yes | `<FERNET_KEY>` | Secret Manager / env |
+| `CCS_PLATFORM_RUNTIME_SETTINGS_REQUIRE_ENCRYPTION` | Optional | Optional | No | `true` | env |
+| `CCS_PLATFORM_RUNTIME_SETTINGS_SEED_SOURCE` | Optional | Optional | No | `env` (prod default) | env |
+| `CCS_PLATFORM_RUNTIME_SETTINGS_ENV_FILE` | Optional | Optional | No | `/app/.env` | env |
 | `CCS_DOWNLOADS_DIR` | Yes | Yes | No | `/app/data/incoming/downloads` (Plan 1), `/tmp/downloads` (Plan 2) | env |
 | `FAB_USERNAME` | Yes | Yes | Yes | `fab_user` | Secret Manager / env |
 | `FAB_PASSWORD` | Yes | Yes | Yes | `***` | Secret Manager / env |
@@ -406,7 +416,7 @@ curl -sS -u admin:ChangeThisPasswordNow! \
   -H 'Content-Type: application/json' \
   -X POST \
   https://admin.example.com/api/v1/runtime-settings/seed-from-env \
-  -d '{"overwrite_existing": true}'
+  -d '{"overwrite_existing": true, "source_mode": "env"}'
 ```
 
 ## 5.9 Backup and restore (SQLite + archive)
@@ -567,6 +577,7 @@ upsert_secret SIB_USER_ID "<SIB_USER_ID>"
 upsert_secret SIB_PASSWORD "<SIB_PASSWORD>"
 upsert_secret SIB_PDF_PASSWORD "<SIB_PDF_PASSWORD>"
 upsert_secret SIB_SECURE_IMAGE_TEMPLATE_BASE64 ""
+upsert_secret CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY "<FERNET_KEY>"
 ```
 
 ## 6.7 Deploy API service
@@ -580,8 +591,8 @@ gcloud run deploy ccs-api \
   --ingress internal-and-cloud-load-balancing \
   --no-allow-unauthenticated \
   --add-cloudsql-instances "$CLOUDSQL_CONN" \
-  --set-env-vars "PYTHONPATH=/app/src,CCS_PLATFORM_STORAGE_BACKEND=gcs,CCS_PLATFORM_GCS_BUCKET=${BUCKET},CCS_PLATFORM_GCS_PROJECT=${PROJECT_ID},CCS_PLATFORM_TIMEZONE=Asia/Dubai,CCS_PLATFORM_EMBEDDED_WORKER=false,CCS_PLATFORM_CORS_ALLOW_ORIGINS=https://${APP_DOMAIN},CCS_DOWNLOADS_DIR=/tmp/downloads" \
-  --set-secrets "CCS_PLATFORM_DATABASE_URL=CCS_PLATFORM_DATABASE_URL:latest,FAB_USERNAME=FAB_USERNAME:latest,FAB_PASSWORD=FAB_PASSWORD:latest,ADCB_CID=ADCB_CID:latest,ADCB_LOGIN_PASSWORD=ADCB_LOGIN_PASSWORD:latest,ADCB_PDF_PASSWORD=ADCB_PDF_PASSWORD:latest,ENBD_USERNAME=ENBD_USERNAME:latest,ENBD_PASSWORD=ENBD_PASSWORD:latest,SIB_USER_ID=SIB_USER_ID:latest,SIB_PASSWORD=SIB_PASSWORD:latest,SIB_PDF_PASSWORD=SIB_PDF_PASSWORD:latest,SIB_SECURE_IMAGE_TEMPLATE_BASE64=SIB_SECURE_IMAGE_TEMPLATE_BASE64:latest" \
+  --set-env-vars "PYTHONPATH=/app/src,CCS_PLATFORM_STORAGE_BACKEND=gcs,CCS_PLATFORM_GCS_BUCKET=${BUCKET},CCS_PLATFORM_GCS_PROJECT=${PROJECT_ID},CCS_PLATFORM_TIMEZONE=Asia/Dubai,CCS_PLATFORM_EMBEDDED_WORKER=false,CCS_PLATFORM_CORS_ALLOW_ORIGINS=https://${APP_DOMAIN},CCS_PLATFORM_RUNTIME_SETTINGS_SEED_SOURCE=env,CCS_DOWNLOADS_DIR=/tmp/downloads" \
+  --set-secrets "CCS_PLATFORM_DATABASE_URL=CCS_PLATFORM_DATABASE_URL:latest,CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY=CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY:latest,FAB_USERNAME=FAB_USERNAME:latest,FAB_PASSWORD=FAB_PASSWORD:latest,ADCB_CID=ADCB_CID:latest,ADCB_LOGIN_PASSWORD=ADCB_LOGIN_PASSWORD:latest,ADCB_PDF_PASSWORD=ADCB_PDF_PASSWORD:latest,ENBD_USERNAME=ENBD_USERNAME:latest,ENBD_PASSWORD=ENBD_PASSWORD:latest,SIB_USER_ID=SIB_USER_ID:latest,SIB_PASSWORD=SIB_PASSWORD:latest,SIB_PDF_PASSWORD=SIB_PDF_PASSWORD:latest,SIB_SECURE_IMAGE_TEMPLATE_BASE64=SIB_SECURE_IMAGE_TEMPLATE_BASE64:latest" \
   --command python \
   --args "-m,ccs_platform.cli,api,--host,0.0.0.0,--port,8080"
 ```
@@ -601,14 +612,28 @@ gcloud run jobs create ccs-migrate \
 gcloud run jobs execute ccs-migrate --region "$REGION" --wait
 ```
 
-## 6.9 Deploy worker (Cloud Run worker pool)
+## 6.9 Deploy worker pools (Cloud Run worker pool)
+
+Deploy a default queue worker (`CCS_PLATFORM_WORKER_QUEUES=default`):
 
 ```bash
-gcloud beta run worker-pools deploy ccs-worker \
+gcloud beta run worker-pools deploy ccs-worker-default \
   --image "$APP_IMAGE" \
   --region "$REGION" \
-  --set-env-vars "PYTHONPATH=/app/src,CCS_PLATFORM_STORAGE_BACKEND=gcs,CCS_PLATFORM_GCS_BUCKET=${BUCKET},CCS_PLATFORM_GCS_PROJECT=${PROJECT_ID},CCS_PLATFORM_TIMEZONE=Asia/Dubai,CCS_PLATFORM_EMBEDDED_WORKER=false,CCS_DOWNLOADS_DIR=/tmp/downloads" \
-  --set-secrets "CCS_PLATFORM_DATABASE_URL=CCS_PLATFORM_DATABASE_URL:latest,FAB_USERNAME=FAB_USERNAME:latest,FAB_PASSWORD=FAB_PASSWORD:latest,ADCB_CID=ADCB_CID:latest,ADCB_LOGIN_PASSWORD=ADCB_LOGIN_PASSWORD:latest,ADCB_PDF_PASSWORD=ADCB_PDF_PASSWORD:latest,ENBD_USERNAME=ENBD_USERNAME:latest,ENBD_PASSWORD=ENBD_PASSWORD:latest,SIB_USER_ID=SIB_USER_ID:latest,SIB_PASSWORD=SIB_PASSWORD:latest,SIB_PDF_PASSWORD=SIB_PDF_PASSWORD:latest,SIB_SECURE_IMAGE_TEMPLATE_BASE64=SIB_SECURE_IMAGE_TEMPLATE_BASE64:latest" \
+  --set-env-vars "PYTHONPATH=/app/src,CCS_PLATFORM_STORAGE_BACKEND=gcs,CCS_PLATFORM_GCS_BUCKET=${BUCKET},CCS_PLATFORM_GCS_PROJECT=${PROJECT_ID},CCS_PLATFORM_TIMEZONE=Asia/Dubai,CCS_PLATFORM_EMBEDDED_WORKER=false,CCS_PLATFORM_RUNTIME_SETTINGS_SEED_SOURCE=env,CCS_PLATFORM_WORKER_QUEUES=default,CCS_DOWNLOADS_DIR=/tmp/downloads" \
+  --set-secrets "CCS_PLATFORM_DATABASE_URL=CCS_PLATFORM_DATABASE_URL:latest,CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY=CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY:latest,FAB_USERNAME=FAB_USERNAME:latest,FAB_PASSWORD=FAB_PASSWORD:latest,ADCB_CID=ADCB_CID:latest,ADCB_LOGIN_PASSWORD=ADCB_LOGIN_PASSWORD:latest,ADCB_PDF_PASSWORD=ADCB_PDF_PASSWORD:latest,ENBD_USERNAME=ENBD_USERNAME:latest,ENBD_PASSWORD=ENBD_PASSWORD:latest,SIB_USER_ID=SIB_USER_ID:latest,SIB_PASSWORD=SIB_PASSWORD:latest,SIB_PDF_PASSWORD=SIB_PDF_PASSWORD:latest,SIB_SECURE_IMAGE_TEMPLATE_BASE64=SIB_SECURE_IMAGE_TEMPLATE_BASE64:latest" \
+  --command python \
+  --args "-m,ccs_platform.cli,worker"
+```
+
+Deploy a scrape queue worker (`CCS_PLATFORM_WORKER_QUEUES=scrape`):
+
+```bash
+gcloud beta run worker-pools deploy ccs-worker-scrape \
+  --image "$APP_IMAGE" \
+  --region "$REGION" \
+  --set-env-vars "PYTHONPATH=/app/src,CCS_PLATFORM_STORAGE_BACKEND=gcs,CCS_PLATFORM_GCS_BUCKET=${BUCKET},CCS_PLATFORM_GCS_PROJECT=${PROJECT_ID},CCS_PLATFORM_TIMEZONE=Asia/Dubai,CCS_PLATFORM_EMBEDDED_WORKER=false,CCS_PLATFORM_RUNTIME_SETTINGS_SEED_SOURCE=env,CCS_PLATFORM_WORKER_QUEUES=scrape,CCS_DOWNLOADS_DIR=/tmp/downloads" \
+  --set-secrets "CCS_PLATFORM_DATABASE_URL=CCS_PLATFORM_DATABASE_URL:latest,CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY=CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY:latest,FAB_USERNAME=FAB_USERNAME:latest,FAB_PASSWORD=FAB_PASSWORD:latest,ADCB_CID=ADCB_CID:latest,ADCB_LOGIN_PASSWORD=ADCB_LOGIN_PASSWORD:latest,ADCB_PDF_PASSWORD=ADCB_PDF_PASSWORD:latest,ENBD_USERNAME=ENBD_USERNAME:latest,ENBD_PASSWORD=ENBD_PASSWORD:latest,SIB_USER_ID=SIB_USER_ID:latest,SIB_PASSWORD=SIB_PASSWORD:latest,SIB_PDF_PASSWORD=SIB_PDF_PASSWORD:latest,SIB_SECURE_IMAGE_TEMPLATE_BASE64=SIB_SECURE_IMAGE_TEMPLATE_BASE64:latest" \
   --command python \
   --args "-m,ccs_platform.cli,worker"
 ```
@@ -824,7 +849,10 @@ gcloud sql instances describe ccs-pg
 ## 8.3 Credential rotation
 
 - Rotate bank credentials in secret store
-- Re-seed runtime settings (`/runtime-settings/seed-from-env` with overwrite)
+- Run runtime secret rotation drill (dry run then apply):
+  - `CCS_PLATFORM_RUNTIME_SETTINGS_OLD_ENCRYPTION_KEY=... CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY=... PYTHONPATH=src python scripts/rotate_runtime_setting_secrets.py --dry-run`
+  - `CCS_PLATFORM_RUNTIME_SETTINGS_OLD_ENCRYPTION_KEY=... CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY=... PYTHONPATH=src python scripts/rotate_runtime_setting_secrets.py`
+- Re-seed runtime settings (`/runtime-settings/seed-from-env` with overwrite and `source_mode=env`)
 - Restart API and worker
 
 ## 8.4 Incident triage flow

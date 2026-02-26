@@ -147,13 +147,16 @@ def seed_runtime_settings(
     db: Session = Depends(get_db),
     profile: ProfileContext = Depends(get_profile_context),
 ) -> dict[str, object]:
-    result = seed_runtime_settings_from_env(
-        db,
-        profile_id=profile.profile_id,
-        overwrite_existing=payload.overwrite_existing,
-        blank_values=profile.profile_key != "alice",
-        source_mode=payload.source_mode,
-    )
+    try:
+        result = seed_runtime_settings_from_env(
+            db,
+            profile_id=profile.profile_id,
+            overwrite_existing=payload.overwrite_existing,
+            blank_values=profile.profile_key != "alice",
+            source_mode=payload.source_mode,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     db.commit()
     applied = apply_runtime_settings_to_process_env(db, profile_id=profile.profile_id)
     return {

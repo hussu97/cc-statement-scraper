@@ -24,6 +24,7 @@ class JobOut(BaseModel):
 
     id: int
     job_type: JobType
+    queue_name: str
     status: JobStatus
     payload_json: dict[str, Any] | None
     result_json: dict[str, Any] | None

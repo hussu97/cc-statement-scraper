@@ -20,9 +20,18 @@ DEFAULT_MAX_ATTEMPTS: dict[models.JobType, int] = {
     models.JobType.REPARSE_STATEMENT: 2,
 }
 
+DEFAULT_QUEUE_BY_JOB_TYPE: dict[models.JobType, str] = {
+    models.JobType.SCRAPE: "scrape",
+    models.JobType.BANK_CONNECTION_TEST: "scrape",
+}
+
 
 def default_max_attempts(job_type: models.JobType) -> int:
     return max(1, int(DEFAULT_MAX_ATTEMPTS.get(job_type, 1)))
+
+
+def default_queue_name(job_type: models.JobType) -> str:
+    return DEFAULT_QUEUE_BY_JOB_TYPE.get(job_type, "default")
 
 
 def _normalized_payload(payload_json: dict[str, Any] | None) -> dict[str, Any]:
@@ -62,6 +71,7 @@ def create_or_get_job(
     idempotency_key: str | None = None,
     auto_idempotency: bool = True,
     max_attempts: int | None = None,
+    queue_name: str | None = None,
 ) -> tuple[models.Job, bool]:
     normalized_payload = _normalized_payload(payload_json)
     resolved_idempotency_key = _normalized_idempotency_key(idempotency_key)
@@ -86,6 +96,7 @@ def create_or_get_job(
     job = models.Job(
         profile_id=profile_id,
         job_type=job_type,
+        queue_name=(queue_name or default_queue_name(job_type)).strip().lower(),
         status=models.JobStatus.QUEUED,
         payload_json=normalized_payload,
         idempotency_key=resolved_idempotency_key,
