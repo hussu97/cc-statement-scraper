@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from ccs_platform.db import models
 from ccs_platform.api.deps import ProfileContext, get_db, get_profile_context
 from ccs_platform.api.v1.schemas import ExportOut, JobOut, WorkbookExportRequest
+from ccs_platform.api.v1.endpoints.job_utils import request_idempotency_key
 from ccs_platform.application.jobs.service import create_or_get_job
 
 
@@ -34,6 +35,7 @@ def create_workbook_export(
         profile_id=profile.profile_id,
         job_type=models.JobType.EXPORT_WORKBOOK,
         payload_json={"year": payload.year, "export_id": export_row.id},
+        idempotency_key=request_idempotency_key(request),
         auto_idempotency=False,
     )
 

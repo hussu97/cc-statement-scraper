@@ -81,3 +81,57 @@ def test_seed_runtime_settings_none_source_mode_keeps_blank_values(tmp_path) -> 
         rows = db.execute(select(models.RuntimeSetting)).scalars().all()
         by_key = {row.key: row for row in rows}
         assert by_key["FAB_USERNAME"].value == ""
+
+
+def test_seed_runtime_settings_supports_profile_scoped_env_keys(tmp_path) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "\n".join(
+            [
+                "FAB_USERNAME=legacy-fallback",
+                "HUSSAIN_FAB_USERNAME=hussain-fab-user",
+                "HUSSAIN_ENBD_USERNAME=hussain-enbd-user",
+                "TEJASVIE_MASHREQ_USERNAME=tejasvie-mashreq-user",
+                "TEJASVIE_MASHREQ_PASSWORD=tejasvie-mashreq-pass",
+                "TEJASVIE_CCS_DOWNLOADS_DIR=/tmp/tejasvie-downloads",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with _session() as db:
+        hussain = models.Profile(key="hussain", name="Hussain", is_default=True)
+        tejasvie = models.Profile(key="tejasvie", name="Tejasvie", is_default=False)
+        db.add_all([hussain, tejasvie])
+        db.flush()
+
+        hussain_result = seed_runtime_settings_from_env(
+            db,
+            profile_id=hussain.id,
+            profile_key=hussain.key,
+            env_file=env_path,
+            source_mode="env_file",
+            blank_values=False,
+        )
+        tejasvie_result = seed_runtime_settings_from_env(
+            db,
+            profile_id=tejasvie.id,
+            profile_key=tejasvie.key,
+            env_file=env_path,
+            source_mode="env_file",
+            blank_values=True,
+        )
+        db.flush()
+
+        assert hussain_result["profile_key"] == "hussain"
+        assert tejasvie_result["profile_key"] == "tejasvie"
+
+        rows = db.execute(select(models.RuntimeSetting)).scalars().all()
+        by_profile_key = {(row.profile_id, row.key): row for row in rows}
+
+        assert by_profile_key[(hussain.id, "FAB_USERNAME")].value == "hussain-fab-user"
+        assert by_profile_key[(hussain.id, "ENBD_USERNAME")].value == "hussain-enbd-user"
+        # Non-default profile with blank_values only accepts explicit TEJASVIE_* keys.
+        assert by_profile_key[(tejasvie.id, "MASHREQ_USERNAME")].value == "tejasvie-mashreq-user"
+        assert by_profile_key[(tejasvie.id, "MASHREQ_PASSWORD")].value == "tejasvie-mashreq-pass"
+        assert by_profile_key[(tejasvie.id, "FAB_USERNAME")].value == ""

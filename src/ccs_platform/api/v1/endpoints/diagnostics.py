@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from ccs_platform.db import models
 from ccs_platform.api.deps import ProfileContext, get_db, get_profile_context
 from ccs_platform.api.v1.schemas import BankConnectionTestRequest, JobOut, ParserValidateRequest
+from ccs_platform.api.v1.endpoints.job_utils import request_idempotency_key
 from ccs_platform.application.banks.capabilities import get_enabled_banks
 from ccs_platform.application.jobs.service import create_or_get_job
 
@@ -25,6 +26,7 @@ def parser_validate(
         profile_id=profile.profile_id,
         job_type=models.JobType.PARSER_VALIDATE,
         payload_json=payload.model_dump(),
+        idempotency_key=request_idempotency_key(request),
     )
     if created:
         db.commit()
@@ -55,6 +57,7 @@ def bank_connection_test(
         profile_id=profile.profile_id,
         job_type=models.JobType.BANK_CONNECTION_TEST,
         payload_json=payload.model_dump(),
+        idempotency_key=request_idempotency_key(request),
     )
     if created:
         db.commit()

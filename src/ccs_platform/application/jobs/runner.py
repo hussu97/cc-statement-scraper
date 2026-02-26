@@ -3,6 +3,7 @@ from __future__ import annotations
 import fnmatch
 import os
 import random
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -69,6 +70,28 @@ class JobRunner:
         jitter = rng.randint(0, jitter_seconds)
         return min(max_seconds, delay + jitter)
 
+    def _heartbeat_loop(self, *, job_id: int, stop_event: threading.Event) -> None:
+        interval_seconds = max(1, int(self.settings.job_heartbeat_interval_seconds))
+        terminal_states = {
+            models.JobStatus.SUCCEEDED,
+            models.JobStatus.FAILED,
+            models.JobStatus.CANCELLED,
+        }
+
+        while not stop_event.wait(interval_seconds):
+            try:
+                with SessionLocal() as hb_db:
+                    row = hb_db.get(models.Job, job_id)
+                    if row is None:
+                        return
+                    if row.status in terminal_states:
+                        return
+                    row.last_heartbeat_at = datetime.now(UTC)
+                    hb_db.commit()
+            except Exception:  # noqa: BLE001
+                METRICS.record_job_event("heartbeat_error")
+                return
+
     def _schedule_retry(self, db: Session, job: models.Job, *, error_message: str) -> bool:
         max_attempts = max(1, int(job.max_attempts or 1))
         if int(job.attempt_count or 0) >= max_attempts:
@@ -127,6 +150,14 @@ class JobRunner:
             db.commit()
             METRICS.record_job_event("started")
 
+            heartbeat_stop = threading.Event()
+            heartbeat_thread = threading.Thread(
+                target=self._heartbeat_loop,
+                kwargs={"job_id": job_id, "stop_event": heartbeat_stop},
+                daemon=True,
+            )
+            heartbeat_thread.start()
+
             try:
                 result = self._dispatch_job(db, job)
                 db.refresh(job)
@@ -170,6 +201,9 @@ class JobRunner:
                 job.last_heartbeat_at = datetime.now(UTC)
                 db.commit()
                 METRICS.record_job_event("failed")
+            finally:
+                heartbeat_stop.set()
+                heartbeat_thread.join(timeout=2)
 
     def _dispatch_job(self, db: Session, job: models.Job) -> dict[str, Any]:
         profile = db.get(models.Profile, job.profile_id)

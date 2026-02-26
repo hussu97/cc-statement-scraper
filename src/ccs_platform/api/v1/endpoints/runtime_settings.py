@@ -151,6 +151,7 @@ def seed_runtime_settings(
         result = seed_runtime_settings_from_env(
             db,
             profile_id=profile.profile_id,
+            profile_key=profile.profile_key,
             overwrite_existing=payload.overwrite_existing,
             blank_values=profile.profile_key != "hussain",
             source_mode=payload.source_mode,
