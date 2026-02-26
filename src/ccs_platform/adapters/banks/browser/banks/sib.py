@@ -1,0 +1,1022 @@
+from __future__ import annotations
+
+import logging
+import os
+import re
+from pathlib import Path
+from typing import Any
+
+from ccs_platform.adapters.banks.browser.shared import (
+    BrowserDownloadError,
+    attempt_download_capture,
+    require_env,
+    save_download,
+    text_snapshot,
+)
+
+
+MONTH_INDEX = {
+    "jan": 1,
+    "january": 1,
+    "feb": 2,
+    "february": 2,
+    "mar": 3,
+    "march": 3,
+    "apr": 4,
+    "april": 4,
+    "may": 5,
+    "jun": 6,
+    "june": 6,
+    "jul": 7,
+    "july": 7,
+    "aug": 8,
+    "august": 8,
+    "sep": 9,
+    "sept": 9,
+    "september": 9,
+    "oct": 10,
+    "october": 10,
+    "nov": 11,
+    "november": 11,
+    "dec": 12,
+    "december": 12,
+}
+
+MONTH_NAMES = {
+    1: "January",
+    2: "February",
+    3: "March",
+    4: "April",
+    5: "May",
+    6: "June",
+    7: "July",
+    8: "August",
+    9: "September",
+    10: "October",
+    11: "November",
+    12: "December",
+}
+
+
+def _normalize_requested_months(value: Any) -> list[str]:
+    if isinstance(value, str):
+        token = value.strip()
+        return [token] if token else []
+    if isinstance(value, list):
+        tokens: list[str] = []
+        seen: set[str] = set()
+        for item in value:
+            token = str(item or "").strip()
+            if not token or token in seen:
+                continue
+            seen.add(token)
+            tokens.append(token)
+        return tokens
+    return []
+
+
+def _parse_requested_month(value: str | None) -> tuple[int | None, int | None]:
+    raw = (value or "").strip().lower()
+    if not raw or raw == "latest":
+        return None, None
+    if not re.match(r"^\d{4}-\d{2}$", raw):
+        return None, None
+    year = int(raw[:4])
+    month = int(raw[5:7])
+    if month < 1 or month > 12:
+        return None, None
+    return year, month
+
+
+def _snapshot_pdf_mtimes(directory: Path) -> dict[Path, int]:
+    if not directory.exists():
+        return {}
+    state: dict[Path, int] = {}
+    for path in directory.iterdir():
+        if not path.is_file() or path.suffix.lower() != ".pdf":
+            continue
+        try:
+            state[path.resolve()] = path.stat().st_mtime_ns
+        except FileNotFoundError:
+            continue
+    return state
+
+
+def _latest_new_pdf(before: dict[Path, int], directory: Path) -> Path | None:
+    after = _snapshot_pdf_mtimes(directory)
+    candidates: list[Path] = []
+    for path, mtime in after.items():
+        if path not in before or mtime > before[path]:
+            candidates.append(path)
+    if not candidates:
+        return None
+    return max(candidates, key=lambda p: p.stat().st_mtime_ns)
+
+
+def _click_first_visible(
+    page: Any,
+    selectors: list[str],
+    logger: logging.Logger,
+    *,
+    action_name: str,
+    timeout_ms: int = 2500,
+) -> bool:
+    for selector in selectors:
+        locator = page.locator(selector)
+        try:
+            count = min(locator.count(), 8)
+        except Exception:  # noqa: BLE001
+            count = 0
+        for idx in range(count):
+            item = locator.nth(idx)
+            try:
+                if not item.is_visible():
+                    continue
+                item.click(timeout=timeout_ms)
+                logger.info("SIB: clicked %s via %s", action_name, selector)
+                return True
+            except Exception:  # noqa: BLE001
+                continue
+    return False
+
+
+def _fill_first_visible_input(
+    page: Any,
+    selectors: list[str],
+    value: str,
+    logger: logging.Logger,
+    *,
+    field_name: str,
+) -> bool:
+    for selector in selectors:
+        locator = page.locator(selector)
+        try:
+            count = min(locator.count(), 6)
+        except Exception:  # noqa: BLE001
+            count = 0
+        for idx in range(count):
+            item = locator.nth(idx)
+            try:
+                if not item.is_visible():
+                    continue
+                item.fill(value, timeout=3000)
+                logger.info("SIB: filled %s via %s", field_name, selector)
+                return True
+            except Exception:  # noqa: BLE001
+                continue
+    return False
+
+
+def _has_visible_password_input(page: Any) -> bool:
+    selectors = [
+        "input#originalP:visible",
+        "input[type='password']:visible",
+        "input[aria-label*='password' i]:visible",
+        "input[placeholder*='password' i]:visible",
+    ]
+    for selector in selectors:
+        locator = page.locator(selector)
+        try:
+            if locator.count() > 0 and locator.first.is_visible():
+                return True
+        except Exception:  # noqa: BLE001
+            continue
+    return False
+
+
+def _click_shadow_best_match(page: Any, terms: list[str], logger: logging.Logger, *, action_name: str) -> bool:
+    lowered_terms = [term.strip().lower() for term in terms if term and term.strip()]
+    if not lowered_terms:
+        return False
+
+    clicked = page.evaluate(
+        """
+        (terms) => {
+          const norm = (value) => (value || '').toString().replace(/\\s+/g, ' ').trim().toLowerCase();
+          const isVisible = (el) => {
+            if (!el) return false;
+            const style = getComputedStyle(el);
+            if (style.display === 'none' || style.visibility === 'hidden') return false;
+            const rect = el.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0;
+          };
+          const all = [];
+          const walk = (root) => {
+            for (const el of root.querySelectorAll('*')) {
+              all.push(el);
+              if (el.shadowRoot) walk(el.shadowRoot);
+            }
+          };
+          walk(document);
+
+          let best = null;
+          for (const el of all) {
+            if (!isVisible(el)) continue;
+            const tag = (el.tagName || '').toLowerCase();
+            const role = norm(el.getAttribute && el.getAttribute('role'));
+            if (
+              tag !== 'button' &&
+              tag !== 'a' &&
+              tag !== 'sib-button' &&
+              role !== 'button' &&
+              role !== 'tab' &&
+              tag !== 'div' &&
+              tag !== 'span' &&
+              tag !== 'li'
+            ) {
+              continue;
+            }
+
+            const content = norm(
+              [
+                el.innerText || '',
+                el.textContent || '',
+                el.getAttribute && el.getAttribute('aria-label'),
+                el.getAttribute && el.getAttribute('title'),
+                el.getAttribute && el.getAttribute('name'),
+                el.id || '',
+                el.className || '',
+              ].join(' ')
+            );
+            if (!content) continue;
+
+            let score = 0;
+            for (const term of terms) {
+              if (content.includes(term)) score += 1;
+            }
+            if (!score) continue;
+            if (!best || score > best.score) {
+              best = { el, score };
+            }
+          }
+
+          if (!best) return false;
+          try {
+            best.el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, composed: true }));
+            return true;
+          } catch (e) {
+            try {
+              best.el.click();
+              return true;
+            } catch (e2) {
+              return false;
+            }
+          }
+        }
+        """,
+        lowered_terms,
+    )
+    if clicked:
+        logger.info("SIB: clicked %s via shadow-tree fallback terms=%s", action_name, lowered_terms)
+    return bool(clicked)
+
+
+def _resolve_pam_template_base64(page: Any) -> str:
+    configured = (os.getenv("SIB_SECURE_IMAGE_TEMPLATE_BASE64") or "").strip()
+    if configured:
+        return configured
+
+    resolved = page.evaluate(
+        """
+        () => {
+          const all = [];
+          const walk = (root) => {
+            for (const el of root.querySelectorAll('*')) {
+              all.push(el);
+              if (el.shadowRoot) walk(el.shadowRoot);
+            }
+          };
+          walk(document);
+          for (const el of all) {
+            const mode = el && el.loginModeData;
+            if (!mode || typeof mode !== 'object') continue;
+            const data = mode.data;
+            if (typeof data === 'string' && data.length > 100) {
+              return data;
+            }
+          }
+          return '';
+        }
+        """
+    )
+    return str(resolved or "").strip()
+
+
+def _maybe_select_secure_image(page: Any, logger: logging.Logger) -> None:
+    template = _resolve_pam_template_base64(page)
+    selection = page.evaluate(
+        """
+        async (payload) => {
+          const norm = (value) => (value || '').toString().replace(/\\s+/g, ' ').trim().toLowerCase();
+          const isVisible = (el) => {
+            if (!el) return false;
+            const style = getComputedStyle(el);
+            if (style.display === 'none' || style.visibility === 'hidden') return false;
+            const rect = el.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0;
+          };
+          const all = [];
+          const walk = (root) => {
+            for (const el of root.querySelectorAll('*')) {
+              all.push(el);
+              if (el.shadowRoot) walk(el.shadowRoot);
+            }
+          };
+          walk(document);
+
+          const candidates = all.filter((el) => {
+            return (
+              (el.tagName || '').toLowerCase() === 'img' &&
+              el.classList &&
+              el.classList.contains('selectimg') &&
+              isVisible(el)
+            );
+          });
+          if (!candidates.length) {
+            return { selected: false, reason: 'no_candidates', candidate_count: 0 };
+          }
+
+          const secureTerms = ['burj', 'khalifa'];
+          const metadataScore = (img) => {
+            const txt = norm(
+              [
+                img.alt || '',
+                img.title || '',
+                img.getAttribute('aria-label') || '',
+                img.getAttribute('name') || '',
+                img.className || '',
+                img.parentElement ? img.parentElement.innerText : '',
+              ].join(' ')
+            );
+            let score = 0;
+            for (const term of secureTerms) {
+              if (txt.includes(term)) score += 1;
+            }
+            return score;
+          };
+
+          let templateSrc = (payload.template || '').trim();
+          if (templateSrc && !templateSrc.startsWith('data:image')) {
+            templateSrc = `data:image/png;base64,${templateSrc}`;
+          }
+
+          if (!templateSrc) {
+            for (const el of all) {
+              const mode = el && el.loginModeData;
+              if (!mode || typeof mode !== 'object') continue;
+              const data = mode.data;
+              if (typeof data === 'string' && data.length > 100) {
+                templateSrc = data.startsWith('data:image') ? data : `data:image/png;base64,${data}`;
+                break;
+              }
+            }
+          }
+
+          const toAbsSrc = (src) => {
+            if (!src) return '';
+            if (src.startsWith('data:image')) return src;
+            try {
+              return new URL(src, window.location.origin).toString();
+            } catch (e) {
+              return src;
+            }
+          };
+
+          const cache = new Map();
+          const toVector = async (src) => {
+            const key = toAbsSrc(src);
+            if (!key) throw new Error('empty-src');
+            if (cache.has(key)) return cache.get(key);
+
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.src = key;
+            if (img.decode) {
+              await img.decode();
+            } else {
+              await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = reject;
+              });
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = 16;
+            canvas.height = 16;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) throw new Error('canvas-context-missing');
+            ctx.drawImage(img, 0, 0, 16, 16);
+            const data = ctx.getImageData(0, 0, 16, 16).data;
+            const vec = [];
+            for (let idx = 0; idx < data.length; idx += 4) {
+              vec.push((data[idx] + data[idx + 1] + data[idx + 2]) / 3);
+            }
+            cache.set(key, vec);
+            return vec;
+          };
+
+          const similarity = (a, b) => {
+            if (!a || !b || a.length !== b.length || !a.length) return 0;
+            let diff = 0;
+            for (let idx = 0; idx < a.length; idx += 1) {
+              diff += Math.abs(a[idx] - b[idx]);
+            }
+            return 1 - diff / (a.length * 255);
+          };
+
+          let templateVector = null;
+          if (templateSrc) {
+            try {
+              templateVector = await toVector(templateSrc);
+            } catch (e) {
+              templateVector = null;
+            }
+          }
+
+          let best = null;
+          const scores = [];
+          for (let idx = 0; idx < candidates.length; idx += 1) {
+            const img = candidates[idx];
+            const src = img.getAttribute('src') || img.src || '';
+            const meta = metadataScore(img);
+            let imageSim = 0;
+            if (templateVector && src) {
+              try {
+                const vec = await toVector(src);
+                imageSim = similarity(templateVector, vec);
+              } catch (e) {
+                imageSim = 0;
+              }
+            }
+
+            const total = meta * 10 + imageSim;
+            scores.push({ index: idx, meta, similarity: imageSim, total });
+
+            if (!best || total > best.total || (total === best.total && idx < best.index)) {
+              best = { index: idx, total, meta, similarity: imageSim };
+            }
+          }
+
+          if (!best) {
+            return {
+              selected: false,
+              reason: 'scoring_failed',
+              candidate_count: candidates.length,
+              used_template: !!templateVector,
+            };
+          }
+
+          const target = candidates[best.index];
+          let clickTarget = target;
+          for (let hop = 0; hop < 3 && clickTarget; hop += 1) {
+            const tag = (clickTarget.tagName || '').toLowerCase();
+            const role = clickTarget.getAttribute && clickTarget.getAttribute('role');
+            if (tag === 'button' || tag === 'a' || role === 'button' || tag === 'img') break;
+            clickTarget = clickTarget.parentElement;
+          }
+
+          try {
+            clickTarget.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, composed: true }));
+          } catch (e) {
+            try {
+              target.click();
+            } catch (e2) {
+              return {
+                selected: false,
+                reason: 'click_failed',
+                candidate_count: candidates.length,
+                used_template: !!templateVector,
+                best_index: best.index,
+                best_score: best.total,
+                scores,
+              };
+            }
+          }
+
+          return {
+            selected: true,
+            reason: 'selected',
+            candidate_count: candidates.length,
+            used_template: !!templateVector,
+            best_index: best.index,
+            best_score: best.total,
+            best_meta_score: best.meta,
+            best_similarity: best.similarity,
+            scores,
+          };
+        }
+        """,
+        {"template": template},
+    )
+
+    if not selection:
+        return
+    if not selection.get("candidate_count"):
+        return
+    if selection.get("selected"):
+        logger.info(
+            "SIB: secure image selected (candidates=%s index=%s score=%.4f template=%s)",
+            selection.get("candidate_count"),
+            selection.get("best_index"),
+            float(selection.get("best_score") or 0.0),
+            bool(selection.get("used_template")),
+        )
+    else:
+        logger.warning(
+            "SIB: secure image selection fallback had no click (reason=%s candidates=%s)",
+            selection.get("reason"),
+            selection.get("candidate_count"),
+        )
+
+
+def login(page: Any, logger: logging.Logger) -> None:
+    user_id = require_env("SIB_USER_ID")
+    password = require_env("SIB_PASSWORD")
+
+    page.wait_for_timeout(1200)
+
+    if not _has_visible_password_input(page):
+        _fill_first_visible_input(
+            page,
+            selectors=[
+                "input#useridtextbox",
+                "input[aria-label*='user' i]",
+                "input[placeholder*='user' i]",
+                "input[id*='user' i]",
+                "input[name*='user' i]",
+                "input:visible",
+            ],
+            value=user_id,
+            logger=logger,
+            field_name="user ID",
+        )
+        page.wait_for_timeout(400)
+
+        for _ in range(3):
+            clicked = _click_first_visible(
+                page,
+                selectors=[
+                    "sib-button#proceed",
+                    "#proceed",
+                    "button:has-text('Secure Login')",
+                    "[role='button']:has-text('Secure Login')",
+                    "text=Secure Login",
+                ],
+                logger=logger,
+                action_name="Secure Login",
+            )
+            if not clicked:
+                clicked = _click_shadow_best_match(page, ["secure login"], logger, action_name="Secure Login")
+            page.wait_for_timeout(1400)
+            if _has_visible_password_input(page):
+                break
+
+    if not _has_visible_password_input(page):
+        raise BrowserDownloadError("SIB: password input not found after Secure Login")
+
+    _maybe_select_secure_image(page, logger)
+
+    filled_password = _fill_first_visible_input(
+        page,
+        selectors=[
+            "input#originalP",
+            "input[aria-label*='password' i]",
+            "input[placeholder*='password' i]",
+            "input[type='password']",
+        ],
+        value=password,
+        logger=logger,
+        field_name="password",
+    )
+    if not filled_password:
+        raise BrowserDownloadError("SIB: password field not found")
+
+    clicked_continue = _click_first_visible(
+        page,
+        selectors=[
+            "button:has-text('Continue')",
+            "[role='button']:has-text('Continue')",
+            "sib-button:has-text('Continue')",
+            "text=Continue",
+        ],
+        logger=logger,
+        action_name="Continue",
+    )
+    if not clicked_continue:
+        clicked_continue = _click_shadow_best_match(page, ["continue"], logger, action_name="Continue")
+    if not clicked_continue:
+        raise BrowserDownloadError("SIB: Continue button not found on login screen")
+
+    logger.info("SIB: login submitted")
+
+
+def login_selector_visible(page: Any) -> bool:
+    try:
+        user_input_visible = page.locator(
+            "input#useridtextbox, input[aria-label*='user' i], input[placeholder*='user' i], input[id*='user' i]"
+        ).count() > 0
+    except Exception:  # noqa: BLE001
+        user_input_visible = False
+
+    try:
+        secure_login_visible = page.locator(
+            "sib-button#proceed, #proceed, button:has-text('Secure Login'), [role='button']:has-text('Secure Login')"
+        ).count() > 0
+    except Exception:  # noqa: BLE001
+        secure_login_visible = False
+
+    low = text_snapshot(page).lower()
+    if "secure login" in low and ("enter user id" in low or "user id" in low):
+        return True
+    return bool(user_input_visible and secure_login_visible)
+
+
+def _popup_has_download_controls(page: Any) -> bool:
+    try:
+        if page.locator("button:has-text('Download Statement')").count() > 0:
+            return True
+    except Exception:  # noqa: BLE001
+        pass
+    low = text_snapshot(page).lower()
+    return "download statement" in low
+
+
+def _open_estatement_popup(page: Any, logger: logging.Logger) -> bool:
+    if _popup_has_download_controls(page):
+        return True
+
+    for _ in range(10):
+        # Best-effort path: open Credit Card section then E-statement.
+        _click_shadow_best_match(page, ["credit card"], logger, action_name="Credit Card")
+        page.wait_for_timeout(800)
+        clicked_estatement = _click_first_visible(
+            page,
+            selectors=[
+                "a:has-text('E-statement')",
+                "button:has-text('E-statement')",
+                "[role='button']:has-text('E-statement')",
+                "text=E-statement",
+                "text=Estatement",
+            ],
+            logger=logger,
+            action_name="E-statement",
+        )
+        if not clicked_estatement:
+            clicked_estatement = _click_shadow_best_match(
+                page,
+                ["e-statement"],
+                logger,
+                action_name="E-statement",
+            )
+        if not clicked_estatement:
+            clicked_estatement = _click_shadow_best_match(
+                page,
+                ["estatement"],
+                logger,
+                action_name="E-statement",
+            )
+
+        page.wait_for_timeout(1000)
+        if _popup_has_download_controls(page):
+            logger.info("SIB: E-statement popup detected")
+            return True
+
+        page.mouse.wheel(0, 450)
+        page.wait_for_timeout(450)
+
+    return _popup_has_download_controls(page)
+
+
+def _select_native_dropdown_value(
+    page: Any,
+    *,
+    mode: str,
+    target_year: int | None,
+    target_month: int | None,
+) -> bool:
+    month_aliases = {name: value for name, value in MONTH_INDEX.items()}
+    result = page.evaluate(
+        """
+        ({ mode, targetYear, targetMonth, monthAliases }) => {
+          const norm = (value) => (value || '').toString().replace(/\\s+/g, ' ').trim().toLowerCase();
+          const isVisible = (el) => {
+            if (!el) return false;
+            const style = getComputedStyle(el);
+            if (style.display === 'none' || style.visibility === 'hidden') return false;
+            const rect = el.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0;
+          };
+
+          const all = [];
+          const walk = (root) => {
+            for (const el of root.querySelectorAll('*')) {
+              all.push(el);
+              if (el.shadowRoot) walk(el.shadowRoot);
+            }
+          };
+          walk(document);
+
+          const selects = all.filter((el) => (el.tagName || '').toLowerCase() === 'select' && isVisible(el));
+          if (!selects.length) return false;
+
+          const optionMonth = (text) => {
+            const low = norm(text);
+            const numMatch = low.match(/\\b(0?[1-9]|1[0-2])\\b/);
+            if (numMatch) return parseInt(numMatch[1], 10);
+            for (const [name, idx] of Object.entries(monthAliases)) {
+              if (low.includes(name)) return idx;
+            }
+            return null;
+          };
+
+          for (const select of selects) {
+            const options = Array.from(select.options || []);
+            if (!options.length) continue;
+
+            let match = null;
+            if (mode === 'year' && targetYear) {
+              match = options.find((opt) => {
+                const txt = `${opt.textContent || ''} ${opt.value || ''}`;
+                return txt.includes(String(targetYear));
+              });
+            } else if (mode === 'month' && targetMonth) {
+              match = options.find((opt) => {
+                const txt = `${opt.textContent || ''} ${opt.value || ''}`;
+                const monthVal = optionMonth(txt);
+                return monthVal === targetMonth;
+              });
+            }
+
+            if (!match || !match.value) continue;
+            select.value = match.value;
+            select.dispatchEvent(new Event('input', { bubbles: true }));
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+            return true;
+          }
+          return false;
+        }
+        """,
+        {
+            "mode": mode,
+            "targetYear": target_year,
+            "targetMonth": target_month,
+            "monthAliases": month_aliases,
+        },
+    )
+    return bool(result)
+
+
+def _select_custom_dropdown_value(
+    page: Any,
+    logger: logging.Logger,
+    *,
+    mode: str,
+    target_year: int | None,
+    target_month: int | None,
+) -> bool:
+    if mode == "year" and target_year is not None:
+        open_terms = ["year"]
+        value_terms = [str(target_year)]
+    elif mode == "month" and target_month is not None:
+        open_terms = ["month"]
+        value_terms = [
+            str(target_month),
+            f"{target_month:02d}",
+            MONTH_NAMES.get(target_month, ""),
+            MONTH_NAMES.get(target_month, "")[:3],
+        ]
+    else:
+        return False
+
+    _click_shadow_best_match(page, open_terms, logger, action_name=f"open {mode} selector")
+    page.wait_for_timeout(350)
+    for value in value_terms:
+        token = value.strip().lower()
+        if not token:
+            continue
+        if _click_shadow_best_match(page, [token], logger, action_name=f"select {mode}={value}"):
+            page.wait_for_timeout(350)
+            return True
+    return False
+
+
+def _select_statement_period(
+    page: Any,
+    logger: logging.Logger,
+    *,
+    requested_month: str | None,
+    target_year: int | None = None,
+    target_month: int | None = None,
+) -> bool:
+    if target_year is None or target_month is None:
+        parsed_year, parsed_month = _parse_requested_month(requested_month)
+        target_year = target_year if target_year is not None else parsed_year
+        target_month = target_month if target_month is not None else parsed_month
+
+    if target_year is None or target_month is None:
+        return True
+
+    selected_year = _select_native_dropdown_value(
+        page,
+        mode="year",
+        target_year=target_year,
+        target_month=target_month,
+    ) or _select_custom_dropdown_value(
+        page,
+        logger,
+        mode="year",
+        target_year=target_year,
+        target_month=target_month,
+    )
+    selected_month = _select_native_dropdown_value(
+        page,
+        mode="month",
+        target_year=target_year,
+        target_month=target_month,
+    ) or _select_custom_dropdown_value(
+        page,
+        logger,
+        mode="month",
+        target_year=target_year,
+        target_month=target_month,
+    )
+
+    if selected_year and selected_month:
+        logger.info("SIB: selected statement period year=%s month=%s", target_year, target_month)
+        return True
+
+    logger.info(
+        "SIB: statement period not available for year=%s month=%s (selected_year=%s selected_month=%s)",
+        target_year,
+        target_month,
+        selected_year,
+        selected_month,
+    )
+    return False
+
+
+def _download_statement(page: Any, incoming_dir: Path, logger: logging.Logger) -> Path | None:
+    controls = [
+        "button:has-text('Download Statement')",
+        "[role='button']:has-text('Download Statement')",
+        "a:has-text('Download Statement')",
+        "text=Download Statement",
+    ]
+
+    for selector in controls:
+        locator = page.locator(selector)
+        try:
+            count = min(locator.count(), 5)
+        except Exception:  # noqa: BLE001
+            count = 0
+        for idx in range(count):
+            item = locator.nth(idx)
+            try:
+                if not item.is_visible():
+                    continue
+                with page.expect_download(timeout=18000) as download_info:
+                    item.click(timeout=3500)
+                path = save_download(download_info.value, incoming_dir, "SIB", logger)
+                logger.info("SIB: statement downloaded via explicit control")
+                return path
+            except Exception:  # noqa: BLE001
+                continue
+
+    before = _snapshot_pdf_mtimes(incoming_dir)
+    try:
+        with page.expect_download(timeout=12000) as download_info:
+            if not _click_shadow_best_match(
+                page,
+                ["download statement"],
+                logger,
+                action_name="Download Statement",
+            ):
+                raise RuntimeError("download_statement_click_not_found")
+        path = save_download(download_info.value, incoming_dir, "SIB", logger)
+        logger.info("SIB: statement downloaded via shadow fallback control")
+        return path
+    except Exception:  # noqa: BLE001
+        pass
+
+    fallback_downloads = attempt_download_capture(page, incoming_dir, "SIB", logger)
+    if fallback_downloads > 0:
+        return _latest_new_pdf(before, incoming_dir)
+    return None
+
+
+def _close_estatement_popup(page: Any, logger: logging.Logger) -> None:
+    closed = _click_first_visible(
+        page,
+        selectors=[
+            "button:has-text('Close')",
+            "button:has-text('Cancel')",
+            "[role='button']:has-text('Close')",
+            "[role='button']:has-text('Cancel')",
+        ],
+        logger=logger,
+        action_name="popup close",
+        timeout_ms=1500,
+    )
+    if not closed:
+        _click_shadow_best_match(page, ["close"], logger, action_name="popup close")
+    try:
+        page.keyboard.press("Escape")
+    except Exception:  # noqa: BLE001
+        pass
+    page.wait_for_timeout(350)
+
+
+def _download_requested_months(
+    page: Any,
+    incoming_dir: Path,
+    logger: logging.Logger,
+    requested_months: list[str],
+) -> tuple[int, dict[str, Any]]:
+    diagnostics: dict[str, Any] = {
+        "requested_months": requested_months,
+        "downloaded": [],
+        "skipped_unavailable": [],
+        "failed": [],
+    }
+
+    downloaded = 0
+    for month_token in requested_months:
+        target_year, target_month = _parse_requested_month(month_token)
+        if target_year is None or target_month is None:
+            diagnostics["failed"].append({"month": month_token, "reason": "invalid_month_token"})
+            continue
+
+        if not _open_estatement_popup(page, logger):
+            diagnostics["failed"].append({"month": month_token, "reason": "estatement_popup_not_opened"})
+            continue
+
+        if not _select_statement_period(
+            page,
+            logger,
+            requested_month=month_token,
+            target_year=target_year,
+            target_month=target_month,
+        ):
+            diagnostics["skipped_unavailable"].append(
+                {"month": month_token, "reason": "statement_period_not_available"}
+            )
+            _close_estatement_popup(page, logger)
+            continue
+
+        path = _download_statement(page, incoming_dir, logger)
+        if path is None:
+            diagnostics["failed"].append({"month": month_token, "reason": "download_control_not_found_or_failed"})
+            _close_estatement_popup(page, logger)
+            continue
+
+        downloaded += 1
+        diagnostics["downloaded"].append({"month": month_token, "path": str(path)})
+        _close_estatement_popup(page, logger)
+
+    return downloaded, diagnostics
+
+
+def download_latest_statement(
+    page: Any,
+    incoming_dir: Path,
+    logger: logging.Logger,
+    bank_cfg: dict,
+) -> int:
+    requested_months = _normalize_requested_months(bank_cfg.get("requested_months"))
+    requested_month = str(bank_cfg.get("requested_month") or "").strip()
+    if not requested_months and requested_month:
+        requested_months = [requested_month]
+
+    if requested_months:
+        downloaded, diagnostics = _download_requested_months(page, incoming_dir, logger, requested_months)
+        bank_cfg["download_diagnostics"] = diagnostics
+        return downloaded
+
+    if not _open_estatement_popup(page, logger):
+        bank_cfg["download_diagnostics"] = {
+            "requested_months": ["latest"],
+            "downloaded": [],
+            "skipped_unavailable": [{"month": "latest", "reason": "estatement_popup_not_opened"}],
+            "failed": [],
+        }
+        return 0
+
+    path = _download_statement(page, incoming_dir, logger)
+    if path is not None:
+        bank_cfg["download_diagnostics"] = {
+            "requested_months": ["latest"],
+            "downloaded": [{"month": "latest", "path": str(path)}],
+            "skipped_unavailable": [],
+            "failed": [],
+        }
+        _close_estatement_popup(page, logger)
+        return 1
+
+    bank_cfg["download_diagnostics"] = {
+        "requested_months": ["latest"],
+        "downloaded": [],
+        "skipped_unavailable": [],
+        "failed": [{"month": "latest", "reason": "download_control_not_found_or_failed"}],
+    }
+    _close_estatement_popup(page, logger)
+    return 0

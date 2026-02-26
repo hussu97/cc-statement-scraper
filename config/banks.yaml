@@ -1,0 +1,67 @@
+banks:
+  FAB:
+    bank_name: First Abu Dhabi Bank
+    portal_url: https://online.bankfab.com/PersonalBankingWeb/login
+    parser: fab
+    file_glob_patterns:
+      - "*FAB*Statement*.pdf"
+      - "*Credit Card E-Statement*.PDF"
+      - "*CreditCardEStatement*.PDF"
+    date_formats:
+      - "%d-%m-%Y"
+    currency_defaults:
+      statement: AED
+    cards:
+      - alias: fab_main
+        last4: "2777"
+      - alias: fab_supp_2132
+        last4: "2132"
+
+  ADCB:
+    bank_name: Abu Dhabi Central Bank
+    portal_url: https://online.adcb.com/apps/ADCBIB/#_frmLogin
+    parser: adcb
+    target_card_limit_aed: 27000
+    file_glob_patterns:
+      - "*ADCB*Statement*.pdf"
+    date_formats:
+      - "%d/%m/%Y"
+      - "%d/%m/%y"
+    currency_defaults:
+      statement: AED
+    pdf_password_env: ADCB_PDF_PASSWORD
+    cards:
+      - alias: adcb_primary
+        last4: "3687"
+
+  ENBD:
+    bank_name: Emirates National Bank of Dubai
+    portal_url: https://online.emiratesnbd.com/
+    parser: enbd
+    file_glob_patterns:
+      - "*Emirates NBD*Statement*.pdf"
+      - "*ENBD*Statement*.pdf"
+    date_formats:
+      - "%d/%m/%Y"
+      - "%d-%b-%y"
+    currency_defaults:
+      statement: AED
+    cards:
+      - alias: enbd_primary
+        last4: "7205"
+
+  SIB:
+    bank_name: Sharjah Islamic Bank
+    portal_url: https://online.sib.ae/index.html?lang=en-US
+    parser: sib
+    file_glob_patterns:
+      - "*SIB*Statement*.pdf"
+      - "*Sharjah*Islamic*Statement*.pdf"
+      - "*SIB*E-Statement*.pdf"
+    date_formats:
+      - "%d/%m/%Y"
+      - "%d-%m-%Y"
+    currency_defaults:
+      statement: AED
+    pdf_password_env: SIB_PDF_PASSWORD
+    cards: []
