@@ -42,6 +42,9 @@ MONTH_INDEX = {
     "december": 12,
 }
 
+DOWNLOAD_EVENT_TIMEOUT_MS = 22000
+LATE_DOWNLOAD_WAIT_MS = 10000
+
 
 def _normalize_requested_months(value: Any) -> list[str]:
     if isinstance(value, str):
@@ -403,7 +406,12 @@ def _try_popup_download(popup_scope: Any, page: Any, incoming_dir: Path, logger:
 
             for force_click in [False, True]:
                 try:
-                    with page.expect_download(timeout=3500) as download_info:
+                    try:
+                        item.scroll_into_view_if_needed(timeout=1200)
+                    except Exception:  # noqa: BLE001
+                        pass
+
+                    with page.expect_download(timeout=DOWNLOAD_EVENT_TIMEOUT_MS) as download_info:
                         if force_click:
                             item.click(timeout=2500, force=True)
                         else:
@@ -414,7 +422,19 @@ def _try_popup_download(popup_scope: Any, page: Any, incoming_dir: Path, logger:
                         force_click,
                     )
                     return save_download(download_info.value, incoming_dir, "FAB", logger)
-                except Exception:  # noqa: BLE001
+                except Exception as exc:  # noqa: BLE001
+                    # FAB can emit the download event late; wait once before another click.
+                    if "timeout" in str(exc).lower():
+                        try:
+                            late_download = page.wait_for_event("download", timeout=LATE_DOWNLOAD_WAIT_MS)
+                            logger.info(
+                                "FAB: captured late download event after timeout via %s (force=%s)",
+                                description,
+                                force_click,
+                            )
+                            return save_download(late_download, incoming_dir, "FAB", logger)
+                        except Exception:  # noqa: BLE001
+                            continue
                     continue
         return None
 
@@ -434,7 +454,7 @@ def _try_popup_download(popup_scope: Any, page: Any, incoming_dir: Path, logger:
 
     # FAB sometimes binds the click handler to an ancestor element.
     try:
-        with page.expect_download(timeout=3500) as download_info:
+        with page.expect_download(timeout=DOWNLOAD_EVENT_TIMEOUT_MS) as download_info:
             clicked = popup_scope.evaluate(
                 """
                 (root) => {
@@ -467,12 +487,17 @@ def _try_popup_download(popup_scope: Any, page: Any, incoming_dir: Path, logger:
                 }
                 """
             )
-            if not clicked:
-                raise RuntimeError("Download-as-PDF control was not found")
+        if not clicked:
+            raise RuntimeError("Download-as-PDF control was not found")
         logger.info("FAB: triggered statement download via JS ancestor click fallback")
         return save_download(download_info.value, incoming_dir, "FAB", logger)
     except Exception:  # noqa: BLE001
-        pass
+        try:
+            late_download = page.wait_for_event("download", timeout=LATE_DOWNLOAD_WAIT_MS)
+            logger.info("FAB: captured late download event via JS fallback path")
+            return save_download(late_download, incoming_dir, "FAB", logger)
+        except Exception:  # noqa: BLE001
+            pass
 
     fallback_controls = [
         (popup_scope.locator("button:has-text('Download PDF')"), "button Download PDF"),
@@ -497,6 +522,46 @@ def _open_download_statements_modal(page: Any, logger: logging.Logger) -> bool:
             return True
         page.wait_for_timeout(700)
     return False
+
+
+def _wait_for_popup_download_control(popup_scope: Any, page: Any, logger: logging.Logger) -> None:
+    checks = [
+        (
+            popup_scope.get_by_role("button", name=re.compile(r"download\s+as\s*\.pdf", re.IGNORECASE)),
+            "role=button Download as .pdf",
+        ),
+        (popup_scope.locator("button:has-text('Download as .pdf')"), "button Download as .pdf"),
+        (popup_scope.locator("a:has-text('Download as .pdf')"), "link Download as .pdf"),
+        (popup_scope.locator("button:has-text('Download PDF')"), "button Download PDF"),
+        (popup_scope.locator("button:has-text('Download')"), "button Download"),
+    ]
+    for locator, description in checks:
+        try:
+            if locator.count() > 0:
+                locator.first.wait_for(state="visible", timeout=7000)
+                logger.info("FAB: download control ready via %s", description)
+                return
+        except Exception:  # noqa: BLE001
+            continue
+
+    # Fallback to page-level checks when popup scope is stale/re-rendered.
+    for selector in [
+        "button:has-text('Download as .pdf')",
+        "a:has-text('Download as .pdf')",
+        "[role='button']:has-text('Download as .pdf')",
+        "button:has-text('Download PDF')",
+        "button:has-text('Download')",
+    ]:
+        locator = page.locator(selector)
+        try:
+            if locator.count() > 0:
+                locator.first.wait_for(state="visible", timeout=7000)
+                logger.info("FAB: download control ready via page selector %s", selector)
+                return
+        except Exception:  # noqa: BLE001
+            continue
+
+    page.wait_for_timeout(500)
 
 
 def _wait_after_download(page: Any, logger: logging.Logger) -> None:
@@ -563,13 +628,17 @@ def _download_requested_months(
             )
             continue
 
-        page.wait_for_timeout(450)
+        page.wait_for_timeout(500)
+        popup_scope = _resolve_popup_scope(page, logger)
+        _wait_for_popup_download_control(popup_scope, page, logger)
         path = _try_popup_download(popup_scope, page, incoming_dir, logger)
         if path is None and popup_scope is not page:
             path = _try_popup_download(page, page, incoming_dir, logger)
         if path is None:
-            # One short retry for slow-rendering download controls.
-            page.wait_for_timeout(950)
+            # One short retry after controls re-render for selected tenure.
+            page.wait_for_timeout(900)
+            popup_scope = _resolve_popup_scope(page, logger)
+            _wait_for_popup_download_control(popup_scope, page, logger)
             path = _try_popup_download(popup_scope, page, incoming_dir, logger)
             if path is None and popup_scope is not page:
                 path = _try_popup_download(page, page, incoming_dir, logger)
