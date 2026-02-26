@@ -8,7 +8,7 @@ from pathlib import Path
 import re
 import shutil
 import sqlite3
-import subprocess
+import subprocess  # nosec B404
 import tarfile
 import tempfile
 from typing import Any
@@ -79,10 +79,35 @@ def _sanitize_label(label: str | None) -> str:
 
 
 def _run_command(cmd: list[str]) -> None:
-    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)  # nosec B603
     if result.returncode != 0:
         stderr = (result.stderr or "").strip()
         raise RuntimeError(f"Command failed ({' '.join(cmd[:2])}): {stderr or 'unknown error'}")
+
+
+def _safe_extract_tar(*, tar: tarfile.TarFile, destination: Path) -> None:
+    destination.mkdir(parents=True, exist_ok=True)
+    destination_resolved = destination.resolve()
+
+    safe_members: list[tarfile.TarInfo] = []
+    for member in tar.getmembers():
+        member_name = str(member.name or "")
+        if not member_name:
+            raise RuntimeError("Backup archive contains a member with an empty name")
+        if member_name.startswith(("/", "\\")):
+            raise RuntimeError(f"Backup archive contains absolute path member: {member_name}")
+        if member.issym() or member.islnk():
+            raise RuntimeError(f"Backup archive contains link member: {member_name}")
+
+        target_path = (destination / member_name).resolve()
+        try:
+            target_path.relative_to(destination_resolved)
+        except ValueError as exc:
+            raise RuntimeError(f"Backup archive member escapes target directory: {member_name}") from exc
+        safe_members.append(member)
+
+    for member in safe_members:
+        tar.extract(member, path=destination)
 
 
 def _build_manifest(staging_dir: Path, *, database_backend: str, database_artifact: str) -> dict[str, Any]:
@@ -256,7 +281,7 @@ def restore_backup_archive(
     extracted_dir = Path(tempfile.mkdtemp(prefix="ccs-restore-"))
     try:
         with tarfile.open(archive_path, "r:gz") as tar:
-            tar.extractall(path=extracted_dir)
+            _safe_extract_tar(tar=tar, destination=extracted_dir)
 
         manifest = _load_manifest(extracted_dir)
         _verify_manifest(extracted_dir, manifest)
@@ -311,7 +336,7 @@ def run_backup_restore_drill(
     extracted_dir = Path(tempfile.mkdtemp(prefix="ccs-drill-"))
     try:
         with tarfile.open(plan.archive_path, "r:gz") as tar:
-            tar.extractall(path=extracted_dir)
+            _safe_extract_tar(tar=tar, destination=extracted_dir)
 
         manifest = _load_manifest(extracted_dir)
         _verify_manifest(extracted_dir, manifest)

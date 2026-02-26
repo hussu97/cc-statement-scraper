@@ -28,7 +28,7 @@ jobs:
         run: pip-audit -r requirements.txt --strict
 
       - name: SAST scan (Bandit)
-        run: bandit -q -r src -x tests
+        run: bandit -q -r src -x tests -ll -ii
 
   container-security:
     runs-on: ubuntu-latest

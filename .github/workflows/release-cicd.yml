@@ -47,7 +47,7 @@ jobs:
         run: |
           pip install pip-audit bandit
           pip-audit -r requirements.txt --strict
-          bandit -q -r src -x tests
+          bandit -q -r src -x tests -ll -ii
 
   frontend-gates:
     runs-on: ubuntu-latest

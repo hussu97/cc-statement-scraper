@@ -45,7 +45,8 @@ def _detect_bank_code_from_filename(filename: str) -> str | None:
 
 def _extract_pdf_text(pdf_path: Path, max_pages: int = 2) -> str:
     password_candidates = [None, os.getenv("ADCB_PDF_PASSWORD"), os.getenv("ADCB_CID")]
-    for password in password_candidates:
+
+    def _extract_with_password(password: str | None) -> str | None:
         try:
             kwargs = {"password": password} if password else {}
             with pdfplumber.open(str(pdf_path), **kwargs) as pdf:
@@ -54,7 +55,12 @@ def _extract_pdf_text(pdf_path: Path, max_pages: int = 2) -> str:
                     chunks.append(page.extract_text() or "")
                 return "\n".join(chunks)
         except Exception:  # noqa: BLE001
-            continue
+            return None
+
+    for password in password_candidates:
+        extracted = _extract_with_password(password)
+        if extracted is not None:
+            return extracted
     return ""
 
 

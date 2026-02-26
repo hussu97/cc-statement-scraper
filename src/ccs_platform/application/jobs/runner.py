@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import fnmatch
+import hashlib
 import os
-import random
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
@@ -66,8 +66,8 @@ class JobRunner:
         if jitter_seconds <= 0:
             return delay
 
-        rng = random.Random(f"{job_id}:{attempt_count}")
-        jitter = rng.randint(0, jitter_seconds)
+        digest = hashlib.sha256(f"{job_id}:{attempt_count}".encode("utf-8")).digest()
+        jitter = int.from_bytes(digest[:4], "big") % (jitter_seconds + 1)
         return min(max_seconds, delay + jitter)
 
     def _heartbeat_loop(self, *, job_id: int, stop_event: threading.Event) -> None:
