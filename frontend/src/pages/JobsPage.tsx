@@ -118,7 +118,12 @@ export function JobsPage() {
       setJobsPage(1);
       await loadJobs(1, jobsPageSize);
     } catch (err) {
-      setError((err as Error).message);
+      const message = (err as Error).message || '';
+      if (message.includes('HTTP 409')) {
+        setError('An identical scrape job is already queued/running.');
+        return;
+      }
+      setError(message);
     }
   }
 

@@ -26,7 +26,12 @@ DEFAULT_QUEUE_BY_JOB_TYPE: dict[models.JobType, str] = {
 }
 
 AUTO_IDEMPOTENCY_PREFIX = "auto:"
-REQUEUEABLE_AUTO_IDEMPOTENT_STATUSES = {
+ACTIVE_AUTO_IDEMPOTENT_STATUSES = {
+    models.JobStatus.QUEUED,
+    models.JobStatus.RUNNING,
+}
+TERMINAL_AUTO_IDEMPOTENT_STATUSES = {
+    models.JobStatus.SUCCEEDED,
     models.JobStatus.CANCELLED,
     models.JobStatus.FAILED,
 }
@@ -97,26 +102,18 @@ def create_or_get_job(
             )
         ).scalar_one_or_none()
         if existing is not None:
-            if (
-                resolved_idempotency_key.startswith(AUTO_IDEMPOTENCY_PREFIX)
-                and existing.status in REQUEUEABLE_AUTO_IDEMPOTENT_STATUSES
-            ):
-                existing.status = models.JobStatus.QUEUED
-                existing.queue_name = (queue_name or default_queue_name(job_type)).strip().lower()
-                existing.payload_json = normalized_payload
-                existing.max_attempts = max_attempts if max_attempts is not None else default_max_attempts(job_type)
-                existing.attempt_count = 0
-                existing.progress_percent = 0
-                existing.result_json = None
-                existing.error_message = None
-                existing.started_at = None
-                existing.finished_at = None
-                existing.next_retry_at = None
-                existing.last_heartbeat_at = None
-                existing.cancel_requested_at = None
-                db.flush()
-                return existing, False, True
-            return existing, False, False
+            if resolved_idempotency_key.startswith(AUTO_IDEMPOTENCY_PREFIX):
+                if existing.status in TERMINAL_AUTO_IDEMPOTENT_STATUSES:
+                    # Terminal auto-idempotent jobs should not block a new user-triggered run.
+                    # Release the unique key from the old row so the new row can claim it.
+                    existing.idempotency_key = None
+                    db.flush()
+
+                if existing.status in ACTIVE_AUTO_IDEMPOTENT_STATUSES:
+                    return existing, False, False
+            else:
+                # Explicit Idempotency-Key requests are always sticky to the same row.
+                return existing, False, False
 
     job = models.Job(
         profile_id=profile_id,
