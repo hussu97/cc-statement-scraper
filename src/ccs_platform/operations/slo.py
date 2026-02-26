@@ -24,12 +24,12 @@ def _float(value: Any, default: float = 0.0) -> float:
 def evaluate_slo_policy(*, policy: dict[str, Any], metrics: dict[str, Any]) -> dict[str, Any]:
     evaluated_at = datetime.now(UTC).isoformat()
 
-    requests = metrics.get("requests", {}) if isinstance(metrics, dict) else {}
-    status_counts = requests.get("by_status", {}) if isinstance(requests, dict) else {}
-    total_requests = int(requests.get("total", 0) or 0)
+    request_metrics = metrics.get("requests", {}) if isinstance(metrics, dict) else {}
+    status_counts = request_metrics.get("by_status", {}) if isinstance(request_metrics, dict) else {}
+    total_requests = int(request_metrics.get("total", 0) or 0)
     five_xx = sum(int(count) for code, count in dict(status_counts).items() if str(code).startswith("5"))
     availability = 1.0 if total_requests == 0 else max(0.0, (total_requests - five_xx) / total_requests)
-    avg_latency_ms = _float(requests.get("avg_duration_ms", 0.0))
+    avg_latency_ms = _float(request_metrics.get("avg_duration_ms", 0.0))
 
     jobs = metrics.get("jobs", {}) if isinstance(metrics, dict) else {}
     events = jobs.get("events", {}) if isinstance(jobs, dict) else {}

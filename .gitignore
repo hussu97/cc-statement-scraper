@@ -6,15 +6,39 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .venv/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.pyre/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+dist/
+build/
 
 # Local environment
 .env
+.env.*
+!.env.example
 
 # Runtime/output artifacts
 logs/
 data/
 *.log
+*.db
+*.sqlite
+*.sqlite3
+tmp/
+tmp_*.db
 
 # Frontend
 frontend/node_modules/
 frontend/dist/
+frontend/.vite/
+frontend/*.tsbuildinfo

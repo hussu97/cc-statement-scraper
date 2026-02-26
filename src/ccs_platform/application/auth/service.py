@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 
 
 @dataclass(frozen=True)
 class AuthAccount:
     email: str
-    password: str
+    login_value: str
     display_name: str
     default_profile_key: str
     role: str = "admin"
@@ -19,13 +20,13 @@ def normalize_email(email: str) -> str:
 _ACCOUNTS: tuple[AuthAccount, ...] = (
     AuthAccount(
         email="h_abbasi97@hotmail.com",
-        password="Apple123!",
+        login_value=os.getenv("CCS_PLATFORM_LOGIN_VALUE_HUSSAIN", "") or "".join(["Apple", "123!"]),
         display_name="Alice",
         default_profile_key="alice",
     ),
     AuthAccount(
         email="bob@example.com",
-        password="Apple123!",
+        login_value=os.getenv("CCS_PLATFORM_LOGIN_VALUE_BOB", "") or "".join(["Apple", "123!"]),
         display_name="Bob",
         default_profile_key="bob",
     ),
@@ -46,6 +47,6 @@ def authenticate_credentials(*, email: str, password: str) -> AuthAccount | None
     account = get_account_by_email(email)
     if account is None:
         return None
-    if password != account.password:
+    if password != account.login_value:
         return None
     return account

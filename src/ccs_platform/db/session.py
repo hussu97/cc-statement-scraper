@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 import logging
+from pathlib import Path
 from typing import Generator
 
 from sqlalchemy import create_engine
@@ -19,8 +20,31 @@ def _engine_kwargs(database_url: str) -> dict:
     return kwargs
 
 
+def _ensure_sqlite_parent_dir(database_url: str) -> None:
+    if not database_url.startswith("sqlite"):
+        return
+
+    raw_path: str | None = None
+    for prefix in ("sqlite+pysqlite:///", "sqlite:///"):
+        if database_url.startswith(prefix):
+            raw_path = database_url[len(prefix):]
+            break
+
+    if not raw_path:
+        return
+
+    # SQLite in-memory and URI-mode targets do not map to local filesystem paths.
+    if raw_path == ":memory:" or raw_path.startswith("file:"):
+        return
+
+    raw_path = raw_path.split("?", 1)[0]
+    db_path = Path(raw_path).expanduser()
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+
+
 settings = get_settings()
 database_url = settings.resolved_database_url()
+_ensure_sqlite_parent_dir(database_url)
 engine = create_engine(database_url, **_engine_kwargs(database_url))
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 logger = logging.getLogger(__name__)

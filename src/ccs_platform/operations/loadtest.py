@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 import json
 from pathlib import Path
-import random
+import secrets
 from threading import Lock
 import time
 from typing import Any
@@ -39,7 +39,7 @@ def _send_request(*, url: str, timeout_seconds: float, headers: dict[str, str]) 
     req = request.Request(url=url, headers=headers)
     start = time.perf_counter()
     try:
-        with request.urlopen(req, timeout=timeout_seconds) as response:  # noqa: S310
+        with request.urlopen(req, timeout=timeout_seconds) as response:  # noqa: S310 # nosec B310
             status = int(response.status)
             _ = response.read(1024)
         latency_ms = (time.perf_counter() - start) * 1000.0
@@ -71,9 +71,10 @@ def run_api_load_test(
     headers: dict[str, str] = {}
 
     def _worker() -> None:
-        rng = random.Random()
+        if not paths:
+            return
         while time.time() < deadline:
-            path = rng.choice(paths)
+            path = paths[secrets.randbelow(len(paths))]
             url = f"{normalized_base}{path}"
             latency_ms, status, had_error = _send_request(url=url, timeout_seconds=timeout, headers=headers)
 

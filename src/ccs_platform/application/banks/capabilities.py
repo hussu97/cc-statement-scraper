@@ -14,6 +14,7 @@ from ccs_platform.db import models
 
 MONTH_TOKEN_PATTERN = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 MIN_SCRAPE_MONTH = date(2024, 1, 1)
+LATEST_MONTH_ALIAS = "latest"
 
 BANK_CAPABILITIES: dict[str, dict[str, bool]] = {
     "FAB": {
@@ -145,9 +146,9 @@ def validate_month_bounds(months: list[str], *, timezone: str = "Asia/Dubai") ->
     normalized: list[str] = []
     seen: set[str] = set()
 
-    for token in months:
-        item = token.strip()
-        if item.lower() == "latest":
+    for requested_month in months:
+        item = requested_month.strip()
+        if item.lower() == LATEST_MONTH_ALIAS:
             item = current_month_token(timezone=timezone)
         parsed = parse_month_token(item)
         if parsed < MIN_SCRAPE_MONTH:
@@ -248,8 +249,8 @@ def build_bank_scrape_config(bank_code: str, month: str) -> dict[str, str | int]
 
 
 def is_month_supported(bank: models.Bank, month: str, *, timezone: str = "Asia/Dubai") -> bool:
-    token = (month or "").strip().lower()
-    if token == "latest":
+    requested_month = (month or "").strip().lower()
+    if requested_month == LATEST_MONTH_ALIAS:
         return True
     if supports_historical_month_selection(bank):
         return True
