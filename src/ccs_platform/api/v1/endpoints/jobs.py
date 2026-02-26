@@ -211,6 +211,11 @@ def create_scrape_job(
         payload_json=payload_json,
         idempotency_key=request_idempotency_key(request),
     )
+    if not created and job.status in {models.JobStatus.QUEUED, models.JobStatus.RUNNING}:
+        raise HTTPException(
+            status_code=409,
+            detail=f"An identical scrape job is already {job.status.value}.",
+        )
 
     if created:
         for bank in banks:

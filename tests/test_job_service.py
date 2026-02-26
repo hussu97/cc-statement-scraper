@@ -89,7 +89,7 @@ def test_create_or_get_job_applies_default_max_attempts() -> None:
         assert job.max_attempts == default_max_attempts(models.JobType.REPARSE_STATEMENT)
 
 
-def test_create_or_get_job_requeues_cancelled_auto_idempotent_job() -> None:
+def test_create_or_get_job_creates_fresh_after_cancelled_auto_idempotent_job() -> None:
     with _session() as db:
         profile = _seed_profile(db)
         payload = {"banks": ["ENBD"], "months": ["2025-11"], "download": False}
@@ -123,9 +123,9 @@ def test_create_or_get_job_requeues_cancelled_auto_idempotent_job() -> None:
             payload_json=payload,
         )
 
-        assert second_created is False
-        assert second_requeued is True
-        assert second.id == first.id
+        assert second_created is True
+        assert second_requeued is False
+        assert second.id != first.id
         assert second.status == models.JobStatus.QUEUED
         assert second.started_at is None
         assert second.finished_at is None
@@ -136,6 +136,86 @@ def test_create_or_get_job_requeues_cancelled_auto_idempotent_job() -> None:
         assert second.error_message is None
         assert second.attempt_count == 0
         assert second.progress_percent == 0
+        assert second.idempotency_key is not None
+
+        refreshed_first = db.get(models.Job, first.id)
+        assert refreshed_first is not None
+        assert refreshed_first.idempotency_key is None
+
+
+def test_create_or_get_job_creates_fresh_after_succeeded_auto_idempotent_job() -> None:
+    with _session() as db:
+        profile = _seed_profile(db)
+        payload = {"banks": ["ENBD"], "months": ["2025-11"], "download": False}
+
+        first, first_created, first_requeued = create_or_get_job(
+            db,
+            profile_id=profile.id,
+            job_type=models.JobType.SCRAPE,
+            payload_json=payload,
+        )
+        assert first_created is True
+        assert first_requeued is False
+        first_key = first.idempotency_key
+        assert first_key is not None
+
+        first.status = models.JobStatus.SUCCEEDED
+        first.finished_at = datetime.now(UTC)
+        db.flush()
+
+        second, second_created, second_requeued = create_or_get_job(
+            db,
+            profile_id=profile.id,
+            job_type=models.JobType.SCRAPE,
+            payload_json=payload,
+        )
+
+        assert second_created is True
+        assert second_requeued is False
+        assert second.id != first.id
+        assert second.idempotency_key == first_key
+
+        refreshed_first = db.get(models.Job, first.id)
+        assert refreshed_first is not None
+        assert refreshed_first.idempotency_key is None
+
+
+def test_create_or_get_job_creates_fresh_after_failed_auto_idempotent_job() -> None:
+    with _session() as db:
+        profile = _seed_profile(db)
+        payload = {"banks": ["ENBD"], "months": ["2025-11"], "download": False}
+
+        first, first_created, first_requeued = create_or_get_job(
+            db,
+            profile_id=profile.id,
+            job_type=models.JobType.SCRAPE,
+            payload_json=payload,
+        )
+        assert first_created is True
+        assert first_requeued is False
+        first_key = first.idempotency_key
+        assert first_key is not None
+
+        first.status = models.JobStatus.FAILED
+        first.error_message = "failure"
+        first.finished_at = datetime.now(UTC)
+        db.flush()
+
+        second, second_created, second_requeued = create_or_get_job(
+            db,
+            profile_id=profile.id,
+            job_type=models.JobType.SCRAPE,
+            payload_json=payload,
+        )
+
+        assert second_created is True
+        assert second_requeued is False
+        assert second.id != first.id
+        assert second.idempotency_key == first_key
+
+        refreshed_first = db.get(models.Job, first.id)
+        assert refreshed_first is not None
+        assert refreshed_first.idempotency_key is None
 
 
 def test_create_or_get_job_does_not_requeue_cancelled_explicit_idempotency() -> None:

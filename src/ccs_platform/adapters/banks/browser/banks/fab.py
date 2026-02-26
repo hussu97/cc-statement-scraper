@@ -42,8 +42,8 @@ MONTH_INDEX = {
     "december": 12,
 }
 
-DOWNLOAD_EVENT_TIMEOUT_MS = 22000
-LATE_DOWNLOAD_WAIT_MS = 10000
+DOWNLOAD_EVENT_TIMEOUT_MS = 12000
+LATE_DOWNLOAD_WAIT_MS = 5000
 
 
 def _normalize_requested_months(value: Any) -> list[str]:
@@ -564,6 +564,58 @@ def _wait_for_popup_download_control(popup_scope: Any, page: Any, logger: loggin
     page.wait_for_timeout(500)
 
 
+def _wait_for_popup_idle(page: Any, popup_scope: Any, logger: logging.Logger) -> None:
+    busy_selectors = [
+        "[aria-busy='true']",
+        ".mat-progress-spinner",
+        ".mat-spinner",
+        ".loading",
+        ".spinner",
+        ".overlay-loader",
+    ]
+
+    for selector in busy_selectors:
+        targets = [popup_scope.locator(selector), page.locator(selector)] if popup_scope is not page else [page.locator(selector)]
+        for locator in targets:
+            try:
+                if locator.count() > 0 and locator.first.is_visible():
+                    locator.first.wait_for(state="hidden", timeout=5000)
+                    logger.info("FAB: waited for popup busy state to clear via %s", selector)
+            except Exception:  # noqa: BLE001
+                continue
+
+
+def _download_control_enabled(popup_scope: Any, page: Any) -> bool:
+    checks = [
+        popup_scope.get_by_role("button", name=re.compile(r"download\s+as\s*\.pdf", re.IGNORECASE)),
+        popup_scope.locator("button:has-text('Download as .pdf')"),
+        popup_scope.locator("a:has-text('Download as .pdf')"),
+        popup_scope.locator("[role='button']:has-text('Download as .pdf')"),
+        popup_scope.locator("button:has-text('Download PDF')"),
+        popup_scope.locator("button:has-text('Download')"),
+        page.get_by_role("button", name=re.compile(r"download\s+as\s*\.pdf", re.IGNORECASE)),
+        page.locator("button:has-text('Download as .pdf')"),
+        page.locator("a:has-text('Download as .pdf')"),
+    ]
+    for locator in checks:
+        try:
+            count = min(locator.count(), 2)
+        except Exception:  # noqa: BLE001
+            count = 0
+        for idx in range(count):
+            item = locator.nth(idx)
+            try:
+                if not item.is_visible():
+                    continue
+                is_disabled = bool(item.get_attribute("disabled"))
+                aria_disabled = (item.get_attribute("aria-disabled") or "").strip().lower() == "true"
+                if not is_disabled and not aria_disabled:
+                    return True
+            except Exception:  # noqa: BLE001
+                continue
+    return False
+
+
 def _wait_after_download(page: Any, logger: logging.Logger) -> None:
     for selector in [
         ".mat-snack-bar-container",
@@ -597,6 +649,7 @@ def _download_requested_months(
     popup_scope = _resolve_popup_scope(page, logger)
 
     for month_token in requested_months:
+        logger.info("FAB: processing requested statement month=%s", month_token)
         target_year, target_month = _parse_requested_month(month_token)
         if target_year is None or target_month is None:
             diagnostics["failed"].append({"month": month_token, "reason": "invalid_month_token"})
@@ -629,19 +682,22 @@ def _download_requested_months(
             continue
 
         page.wait_for_timeout(500)
-        popup_scope = _resolve_popup_scope(page, logger)
-        _wait_for_popup_download_control(popup_scope, page, logger)
-        path = _try_popup_download(popup_scope, page, incoming_dir, logger)
-        if path is None and popup_scope is not page:
-            path = _try_popup_download(page, page, incoming_dir, logger)
-        if path is None:
-            # One short retry after controls re-render for selected tenure.
-            page.wait_for_timeout(900)
+        path: Path | None = None
+        for attempt in range(2):
             popup_scope = _resolve_popup_scope(page, logger)
+            _wait_for_popup_idle(page, popup_scope, logger)
             _wait_for_popup_download_control(popup_scope, page, logger)
+            if not _download_control_enabled(popup_scope, page):
+                page.wait_for_timeout(900)
+                _wait_for_popup_idle(page, popup_scope, logger)
             path = _try_popup_download(popup_scope, page, incoming_dir, logger)
             if path is None and popup_scope is not page:
                 path = _try_popup_download(page, page, incoming_dir, logger)
+            if path is not None:
+                break
+            if attempt == 0:
+                logger.info("FAB: retrying download click for month=%s after first attempt", month_token)
+                page.wait_for_timeout(1200)
 
         if path is None:
             diagnostics["failed"].append(
