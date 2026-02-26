@@ -3,7 +3,7 @@
 DB-first credit card statement system for FAB, ADCB, ENBD, EIB, SIB, and Mashreq with:
 - Statement header + line canonical storage
 - Deterministic statement replacement on `(bank_code, statement_reference, statement_date)`
-- Async jobs for scrape, upload, reparse, reclassify, exports, and diagnostics
+- Async queued jobs for scrape, upload, reparse, reclassify, exports, and diagnostics
 - FastAPI backend + React admin panel + optional standalone worker
 
 ## Architecture
@@ -29,6 +29,8 @@ DB-first credit card statement system for FAB, ADCB, ENBD, EIB, SIB, and Mashreq
   - `POST /jobs/upload`
   - `POST /jobs/reclassify`
   - `GET /jobs`, `GET /jobs/{id}`, `POST /jobs/{id}/cancel`
+  - idempotency key dedupe and bounded retry metadata per job
+  - queue partitioning (`default` vs `scrape`) and cooperative cancellation tokens
 - Statement APIs:
   - `GET /statements`, `GET /statements/{id}`, `GET /statements/{id}/lines`, `GET /statements/{id}/pdf`
   - `POST /statements/{id}/reparse`, `DELETE /statements/{id}`
@@ -93,6 +95,20 @@ Use this when you want schedule/job processing outside API process.
 PYTHONPATH=src python -m ccs_platform.cli worker
 ```
 
+Queue partitioning:
+- default queue: lightweight jobs (`upload`, `reclassify`, `export_workbook`, `reparse_statement`)
+- scrape queue: browser-heavy jobs (`scrape`, `bank_connection_test`)
+
+Example dedicated workers:
+
+```bash
+# Default queue worker
+CCS_PLATFORM_WORKER_QUEUES=default PYTHONPATH=src python -m ccs_platform.cli worker
+
+# Scrape queue worker
+CCS_PLATFORM_WORKER_QUEUES=scrape PYTHONPATH=src python -m ccs_platform.cli worker
+```
+
 If dashboard calls return 404 for new endpoints like `/api/v1/dashboard/filter-meta`, restart the API process.
 This usually means an older server process is still running without the latest router code.
 
@@ -124,10 +140,20 @@ Environment variables:
 - `CCS_PLATFORM_LOCAL_STORAGE_DIR=...`
 - `CCS_PLATFORM_DATABASE_URL=...`
 - `CCS_PLATFORM_TIMEZONE=Asia/Dubai`
+- `CCS_PLATFORM_EMBEDDED_WORKER=true|false`
+- `CCS_PLATFORM_JOB_DISPATCH_BACKEND=database|inprocess`
+- `CCS_PLATFORM_WORKER_QUEUES=default,scrape`
+- `CCS_PLATFORM_JOB_RETRY_BASE_SECONDS=30`
+- `CCS_PLATFORM_JOB_RETRY_JITTER_SECONDS=15`
+- `CCS_PLATFORM_JOB_RETRY_MAX_DELAY_SECONDS=900`
+- `CCS_PLATFORM_JOB_HEARTBEAT_TIMEOUT_SECONDS=1800`
 - `CCS_PLATFORM_ENVIRONMENT=development|production`
 - `CCS_PLATFORM_REQUIRE_API_AUTH=true|false`
 - `CCS_PLATFORM_API_AUTH_TOKEN=...` (required when auth is enabled)
-- `CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY=...` (recommended in production)
+- `CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY=...` (required in production by default)
+- `CCS_PLATFORM_RUNTIME_SETTINGS_REQUIRE_ENCRYPTION=true|false`
+- `CCS_PLATFORM_RUNTIME_SETTINGS_SEED_SOURCE=env|env_file|env_file_then_env|none`
+- `CCS_PLATFORM_RUNTIME_SETTINGS_ENV_FILE=/path/to/.env`
 
 GCS mode also needs:
 - `CCS_PLATFORM_GCS_BUCKET`
@@ -145,12 +171,20 @@ Or run the helper:
 
 ```bash
 CCS_PLATFORM_DATABASE_URL=postgresql+psycopg://... ./scripts/migrate_db.sh
+
+# Postgres validation (migrations + smoke + Postgres pytest)
+CCS_PLATFORM_DATABASE_URL=postgresql+psycopg://... ./scripts/validate_postgres.sh
 ```
 
 To re-encrypt stored secret runtime settings after setting/rotating `CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY`:
 
 ```bash
 PYTHONPATH=src python scripts/reencrypt_runtime_secrets.py
+
+# Rotation drill from old key to new key
+CCS_PLATFORM_RUNTIME_SETTINGS_OLD_ENCRYPTION_KEY=... \
+CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY=... \
+PYTHONPATH=src python scripts/rotate_runtime_setting_secrets.py --dry-run
 ```
 
 ## Notes

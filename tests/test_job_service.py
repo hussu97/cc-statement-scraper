@@ -43,6 +43,7 @@ def test_create_or_get_job_dedupes_same_payload() -> None:
         assert second_created is False
         assert first.id == second.id
         assert first.idempotency_key == second.idempotency_key
+        assert first.queue_name == "scrape"
 
 
 def test_create_or_get_job_without_auto_idempotency_creates_new_rows() -> None:
@@ -67,6 +68,8 @@ def test_create_or_get_job_without_auto_idempotency_creates_new_rows() -> None:
         assert first.id != second.id
         assert first.idempotency_key is None
         assert second.idempotency_key is None
+        assert first.queue_name == "default"
+        assert second.queue_name == "default"
 
 
 def test_create_or_get_job_applies_default_max_attempts() -> None:

@@ -52,6 +52,9 @@ class JobRunner:
         METRICS.record_job_event("enqueued")
         self.executor.submit(self._run_job, job_id)
 
+    def _is_cancel_requested(self, job: models.Job) -> bool:
+        return job.status == models.JobStatus.CANCELLED or job.cancel_requested_at is not None
+
     def _compute_retry_delay_seconds(self, *, job_id: int, attempt_count: int) -> int:
         base_seconds = max(1, int(self.settings.job_retry_base_seconds))
         max_seconds = max(base_seconds, int(self.settings.job_retry_max_delay_seconds))
@@ -93,7 +96,12 @@ class JobRunner:
             if not job:
                 METRICS.record_job_event("missing")
                 return
-            if job.status == models.JobStatus.CANCELLED:
+            if self._is_cancel_requested(job):
+                if job.status != models.JobStatus.CANCELLED:
+                    job.status = models.JobStatus.CANCELLED
+                    job.finished_at = datetime.now(UTC)
+                    job.last_heartbeat_at = datetime.now(UTC)
+                    db.commit()
                 METRICS.record_job_event("cancelled_before_start")
                 return
             if job.status not in {models.JobStatus.QUEUED, models.JobStatus.RUNNING}:
@@ -101,9 +109,13 @@ class JobRunner:
                 return
 
             now = datetime.now(UTC)
-            if job.next_retry_at is not None and job.next_retry_at > now:
-                METRICS.record_job_event("retry_not_due")
-                return
+            if job.next_retry_at is not None:
+                retry_at = job.next_retry_at
+                if retry_at.tzinfo is None:
+                    retry_at = retry_at.replace(tzinfo=UTC)
+                if retry_at > now:
+                    METRICS.record_job_event("retry_not_due")
+                    return
 
             if job.status == models.JobStatus.QUEUED:
                 job.status = models.JobStatus.RUNNING
@@ -119,9 +131,10 @@ class JobRunner:
                 result = self._dispatch_job(db, job)
                 db.refresh(job)
                 outcome = "succeeded"
-                if job.status != models.JobStatus.CANCELLED:
+                if not self._is_cancel_requested(job):
                     job.status = models.JobStatus.SUCCEEDED
                 else:
+                    job.status = models.JobStatus.CANCELLED
                     outcome = "cancelled"
                 job.progress_percent = 100
                 job.result_json = result
@@ -137,7 +150,8 @@ class JobRunner:
                 if not job:
                     METRICS.record_job_event("missing_after_error")
                     return
-                if job.status == models.JobStatus.CANCELLED:
+                if self._is_cancel_requested(job):
+                    job.status = models.JobStatus.CANCELLED
                     job.finished_at = datetime.now(UTC)
                     job.last_heartbeat_at = datetime.now(UTC)
                     db.commit()
@@ -147,6 +161,11 @@ class JobRunner:
                     return
                 job.status = models.JobStatus.FAILED
                 job.error_message = str(exc)
+                job.result_json = {
+                    "poison_job": True,
+                    "attempt_count": int(job.attempt_count or 0),
+                    "max_attempts": int(job.max_attempts or 0),
+                }
                 job.finished_at = datetime.now(UTC)
                 job.last_heartbeat_at = datetime.now(UTC)
                 db.commit()
@@ -175,10 +194,11 @@ class JobRunner:
         raise ValueError(f"Unsupported job_type: {job.job_type}")
 
     def _assert_not_cancelled(self, db: Session, job_id: int) -> None:
-        status = db.execute(
-            select(models.Job.status).where(models.Job.id == job_id)
-        ).scalar_one()
-        if status == models.JobStatus.CANCELLED:
+        row = db.execute(
+            select(models.Job.status, models.Job.cancel_requested_at).where(models.Job.id == job_id)
+        ).one()
+        status, cancel_requested_at = row
+        if status == models.JobStatus.CANCELLED or cancel_requested_at is not None:
             raise RuntimeError(f"Job {job_id} cancelled")
 
     def _update_progress(self, db: Session, job: models.Job, progress: int) -> None:

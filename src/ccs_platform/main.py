@@ -62,7 +62,7 @@ async def lifespan(app: FastAPI):
 
     loop = None
     thread = None
-    if settings.embedded_worker:
+    if settings.embedded_worker and settings.job_dispatch_backend.strip().lower() != "inprocess":
         loop = WorkerLoop(settings=settings, job_runner=runner)
         thread = Thread(target=loop.run_forever, daemon=True)
         thread.start()

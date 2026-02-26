@@ -14,14 +14,14 @@ This roadmap defines the engineering work needed to move the current system to a
 
 - [x] `P0.1` First-class Docker artifacts and deployment manifests
 - [x] `P0.2` Remove destructive SQLite auto-reset behavior in production paths
-- [ ] `P0.3` Add PostgreSQL as first-class backend (core implementation done; full Postgres integration validation pending)
+- [x] `P0.3` Add PostgreSQL as first-class backend
 - [x] `P0.4` Admin/API authentication and private-access enforcement
-- [ ] `P0.5` Secrets lifecycle hardening (partially done: masking + optional encryption + re-encryption utility; Secret Manager standardization and rotation drill pending)
+- [x] `P0.5` Secrets lifecycle hardening
 - [x] `P0.6` Baseline observability
-- [ ] `P1.1` Queue-backed job execution model
-- [ ] `P1.2` Idempotency and retry policy per job type
-- [ ] `P1.3` Isolate long-running scraping from API plane
-- [ ] `P1.4` Failure isolation and cancellation semantics
+- [ ] `P1.1` Queue-backed job execution model (started: database-dispatch abstraction + queue-only API enqueue path)
+- [ ] `P1.2` Idempotency and retry policy per job type (started: idempotency keys + retry/backoff metadata + bounded retries)
+- [ ] `P1.3` Isolate long-running scraping from API plane (started: queue partitioning + per-worker queue selection)
+- [ ] `P1.4` Failure isolation and cancellation semantics (started: cooperative cancel token + stale-running heartbeat recovery)
 - [ ] `P2.1` RBAC for admin and operational actions
 - [ ] `P2.2` Audit logging expansion
 - [ ] `P2.3` Secret rotation playbooks and policy
@@ -61,7 +61,7 @@ This roadmap defines the engineering work needed to move the current system to a
 - Dependency: Migration health checks and clear operator remediation steps.
 - Done criteria: No production code path performs `drop_all`/schema reset; startup exits non-zero with clear error when migrations are pending.
 
-### [ ] P0.3 Add PostgreSQL as first-class backend (Plan 2)
+### [x] P0.3 Add PostgreSQL as first-class backend (Plan 2)
 
 - Problem: SQLite-first assumptions limit concurrency and managed-cloud suitability.
 - Impact: Limits scaling, durability guarantees, and operational flexibility.
@@ -83,7 +83,7 @@ This roadmap defines the engineering work needed to move the current system to a
 - Dependency: Identity provider decision (IAP/basic auth/OIDC) and session/token strategy.
 - Done criteria: Unauthenticated access to UI/API is blocked; authorization tests cover protected endpoints; security review sign-off complete.
 
-### [ ] P0.5 Secrets lifecycle hardening
+### [x] P0.5 Secrets lifecycle hardening
 
 - Problem: Secrets can drift across env files, runtime settings, and operator workflows.
 - Impact: Increased leakage probability and difficult emergency rotation.
@@ -117,6 +117,7 @@ This roadmap defines the engineering work needed to move the current system to a
 - Risk: High.
 - Dependency: P0 observability and idempotency policy.
 - Done criteria: Production jobs are enqueued and consumed through a managed queue with measurable throughput and backlog SLOs.
+- Progress update (2026-02-26): API-side direct execution removed; jobs now enqueue through persisted queue state and dispatcher abstraction as baseline toward managed queue integration.
 
 ### [ ] P1.2 Idempotency and retry policy per job type
 
@@ -128,6 +129,7 @@ This roadmap defines the engineering work needed to move the current system to a
 - Risk: Medium.
 - Dependency: Queue-backed execution design.
 - Done criteria: Duplicate enqueue of same idempotency key does not duplicate side effects; retry behavior is test-covered by job type.
+- Progress update (2026-02-26): Added persisted idempotency keys, attempt counters, retry scheduling metadata, and jittered bounded retry logic with test coverage.
 
 ### [ ] P1.3 Isolate long-running scraping from API plane
 
@@ -139,6 +141,7 @@ This roadmap defines the engineering work needed to move the current system to a
 - Risk: Medium.
 - Dependency: Container resource profiling and autoscaling thresholds.
 - Done criteria: API p95 latency remains within target during sustained scraping load tests.
+- Progress update (2026-02-26): Added queue partition metadata (`default` vs `scrape`) and worker queue filtering (`CCS_PLATFORM_WORKER_QUEUES`) to run scrape workloads in dedicated worker pools.
 
 ### [ ] P1.4 Failure isolation and cancellation semantics
 
@@ -150,6 +153,7 @@ This roadmap defines the engineering work needed to move the current system to a
 - Risk: Medium.
 - Dependency: Job state machine cleanup and worker lease/lock design.
 - Done criteria: Operators can cancel stuck jobs safely; abandoned workers are recovered automatically without data corruption.
+- Progress update (2026-02-26): Added cooperative cancellation token behavior for running jobs, persisted cancellation timestamps, heartbeat timeout detection, and stale-running auto-recovery paths (requeue/fail/cancel).
 
 ## P2 - Security and Compliance
 

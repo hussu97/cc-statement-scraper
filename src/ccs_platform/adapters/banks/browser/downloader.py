@@ -92,6 +92,7 @@ def _wait_for_authenticated_session(
     timeout_seconds: int,
     scheduled: bool,
     logger: logging.Logger,
+    portal_url: str | None = None,
 ) -> Any:
     def _active_page(current_page: Any) -> Any:
         try:
@@ -120,6 +121,7 @@ def _wait_for_authenticated_session(
     adcb_relogin_attempts = 0
     had_adcb_challenge = False
     adcb_last_login_attempt_unix = start
+    mashreq_relogin_attempts = 0
 
     while time.time() - start < timeout_seconds:
         page = _active_page(page)
@@ -140,7 +142,9 @@ def _wait_for_authenticated_session(
                 otp_challenge_started_unix = None
                 attempted_otp_codes.clear()
 
-        if is_login_failure(low):
+        if code != "MASHREQ" and is_login_failure(low):
+            raise BrowserDownloadError(f"{bank_code}: login failed ({text[:200]})")
+        if code == "MASHREQ" and is_login_failure(low) and not mashreq.is_unauthorized_screen(low):
             raise BrowserDownloadError(f"{bank_code}: login failed ({text[:200]})")
 
         if code == "ADCB" and adcb.handle_concurrent_session_gate(page, logger, low):
@@ -215,6 +219,24 @@ def _wait_for_authenticated_session(
                 logger.info("%s: authenticated session detected", bank_code)
                 return page
             if mashreq.is_unauthorized_screen(low):
+                if mashreq_relogin_attempts < 2 and portal_url:
+                    mashreq_relogin_attempts += 1
+                    pause_seconds = 3 + mashreq_relogin_attempts
+                    logger.warning(
+                        "%s: portal returned 'not authorized'; retrying login (%d/2) after %ds",
+                        bank_code,
+                        mashreq_relogin_attempts,
+                        pause_seconds,
+                    )
+                    time.sleep(float(pause_seconds))
+                    try:
+                        page.goto(portal_url, wait_until="domcontentloaded", timeout=60000)
+                        page.wait_for_timeout(1200)
+                    except Exception:  # noqa: BLE001
+                        pass
+                    mashreq.login(page, logger)
+                    time.sleep(2)
+                    continue
                 raise BrowserDownloadError(
                     f"{bank_code}: portal returned 'not authorized' for this session/credentials"
                 )
@@ -286,6 +308,14 @@ def _launch_bank_context(
     bank_code: str,
     logger: logging.Logger,
 ) -> Any:
+    def _missing_chrome_channel_error(exc: Exception) -> bool:
+        low = str(exc).lower()
+        return (
+            "chromium distribution 'chrome' is not found" in low
+            or "channel \"chrome\"" in low
+            or ("executable doesn't exist" in low and "chrome" in low)
+        )
+
     max_attempts = 3
     for attempt in range(1, max_attempts + 1):
         try:
@@ -297,8 +327,34 @@ def _launch_bank_context(
             }
             if bank_code.upper() == "MASHREQ":
                 launch_kwargs["args"] = ["--disable-blink-features=AutomationControlled"]
+            launch_channel_candidates: list[str | None] = [None]
+            if bank_code.upper() == "MASHREQ":
+                # Mashreq is less likely to trigger "not authorized" anti-bot responses on real Chrome.
+                launch_channel_candidates = ["chrome", None]
 
-            context = playwright.chromium.launch_persistent_context(**launch_kwargs)
+            context = None
+            launch_error: Exception | None = None
+            for channel in launch_channel_candidates:
+                kwargs = dict(launch_kwargs)
+                if channel is not None:
+                    kwargs["channel"] = channel
+                try:
+                    context = playwright.chromium.launch_persistent_context(**kwargs)
+                    break
+                except Exception as channel_exc:  # noqa: BLE001
+                    launch_error = channel_exc
+                    if channel is not None and _missing_chrome_channel_error(channel_exc):
+                        logger.warning(
+                            "%s: chrome channel unavailable, falling back to bundled Chromium",
+                            bank_code,
+                        )
+                        continue
+                    raise
+
+            if context is None:
+                if launch_error is not None:
+                    raise launch_error
+                raise BrowserDownloadError(f"{bank_code}: failed to launch browser context")
             if bank_code.upper() == "MASHREQ":
                 context.add_init_script(
                     """
@@ -395,6 +451,7 @@ def run_end_to_end_downloads(
                     timeout_seconds=timeout_seconds,
                     scheduled=scheduled,
                     logger=logger,
+                    portal_url=portal_url,
                 )
 
                 safe_screenshot(

@@ -51,3 +51,27 @@ def test_secret_value_requires_encryption_key_in_production(monkeypatch: pytest.
     finally:
         get_settings.cache_clear()
         secret_codec._fernet_for_settings.cache_clear()  # type: ignore[attr-defined]
+
+
+def test_decode_encrypted_secret_without_key_in_development_returns_blank(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pytest.importorskip("cryptography", reason="cryptography not installed")
+    monkeypatch.setenv("CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY", "V33IhV4J0EAOQnq2STxwJK6I2Gv5u9W1tnM0B8f9Lh4=")
+    monkeypatch.setenv("CCS_PLATFORM_ENVIRONMENT", "development")
+    get_settings.cache_clear()
+    secret_codec._fernet_for_settings.cache_clear()  # type: ignore[attr-defined]
+
+    try:
+        encoded = encode_runtime_setting_value(value="legacy-secret", is_secret=True)
+    finally:
+        monkeypatch.delenv("CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY", raising=False)
+        get_settings.cache_clear()
+        secret_codec._fernet_for_settings.cache_clear()  # type: ignore[attr-defined]
+
+    try:
+        decoded = decode_runtime_setting_value(value=encoded, is_secret=True)
+        assert decoded == ""
+    finally:
+        get_settings.cache_clear()
+        secret_codec._fernet_for_settings.cache_clear()  # type: ignore[attr-defined]

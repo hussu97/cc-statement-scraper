@@ -18,7 +18,11 @@ def run_worker() -> None:
     settings = get_settings()
     configure_logging(level_name=settings.log_level)
 
-    logger.info("Starting worker process | env=%s", settings.environment)
+    logger.info(
+        "Starting worker process | env=%s queues=%s",
+        settings.environment,
+        ",".join(sorted(settings.worker_queue_set())),
+    )
 
     init_db()
     with db_session() as db:

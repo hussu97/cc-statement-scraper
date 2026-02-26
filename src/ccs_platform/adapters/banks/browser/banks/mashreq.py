@@ -116,7 +116,7 @@ def _click_control_by_terms(
     for _ in range(max(1, attempts)):
         try:
             clicked = page.evaluate(
-                """
+                r"""
                 (payload) => {
                   const includeTerms = payload.include_terms || [];
                   const normalize = (value) => (value || '').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -292,6 +292,97 @@ def _open_cards_page(page: Any, logger: logging.Logger) -> bool:
     )
 
 
+def _is_card_details_page(page: Any) -> bool:
+    low = text_snapshot(page).lower()
+    url = (page.url or "").lower()
+    if "/product/card/activityanddetails/" in url:
+        return True
+    if "activity & details" in low and "card control" in low:
+        return True
+    return False
+
+
+def _click_card_tile_by_last4(page: Any, logger: logging.Logger, last4: str) -> bool:
+    try:
+        clicked = page.evaluate(
+            r"""
+            (payload) => {
+              const last4 = (payload.last4 || '').trim();
+              if (!last4) return false;
+
+              const normalize = (value) => (value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+              const isVisible = (el) => {
+                if (!el) return false;
+                const style = window.getComputedStyle(el);
+                if (style.display === 'none' || style.visibility === 'hidden') return false;
+                const rect = el.getBoundingClientRect();
+                return rect.width > 0 && rect.height > 0;
+              };
+
+              const candidates = [];
+              const nodes = Array.from(document.querySelectorAll('div, a, button, [role="button"], [role="link"]'));
+              for (const node of nodes) {
+                if (!isVisible(node)) continue;
+                const text = normalize(node.innerText || node.textContent || '');
+                if (!text || !text.includes(last4)) continue;
+
+                let clickable = node;
+                for (let depth = 0; depth < 6 && clickable; depth += 1) {
+                  if (!isVisible(clickable)) {
+                    clickable = clickable.parentElement;
+                    continue;
+                  }
+                  const style = window.getComputedStyle(clickable);
+                  const rect = clickable.getBoundingClientRect();
+                  const nativeControl =
+                    clickable.tagName === 'A' ||
+                    clickable.tagName === 'BUTTON' ||
+                    clickable.getAttribute('role') === 'button' ||
+                    clickable.getAttribute('role') === 'link' ||
+                    typeof clickable.onclick === 'function';
+                  const seemsTile = rect.width >= 180 && rect.height >= 44;
+                  if (!nativeControl || !seemsTile) {
+                    clickable = clickable.parentElement;
+                    continue;
+                  }
+
+                  let score = 0;
+                  if (text.includes('primary')) score += 20;
+                  if (text.includes('mashreq') || text.includes('noon')) score += 8;
+                  if (style.cursor === 'pointer') score += 6;
+                  if (rect.x > window.innerWidth * 0.25) score += 10;
+                  score -= Math.min(30, Math.round((rect.width * rect.height) / 12000));
+                  candidates.push({score, x: rect.x, y: rect.y, w: rect.width, h: rect.height, el: clickable});
+                  break;
+                }
+              }
+
+              if (!candidates.length) return false;
+              candidates.sort((a, b) => b.score - a.score);
+              const top = candidates[0];
+              const x = top.x + Math.max(10, Math.min(top.w - 10, Math.floor(top.w / 2)));
+              const y = top.y + Math.max(10, Math.min(top.h - 10, Math.floor(top.h / 2)));
+
+              try { top.el.scrollIntoView({block: 'center', inline: 'center'}); } catch (e) {}
+              try { top.el.dispatchEvent(new MouseEvent('mouseover', {bubbles: true, clientX: x, clientY: y})); } catch (e) {}
+              try { top.el.dispatchEvent(new MouseEvent('mousedown', {bubbles: true, clientX: x, clientY: y})); } catch (e) {}
+              try { top.el.dispatchEvent(new MouseEvent('mouseup', {bubbles: true, clientX: x, clientY: y})); } catch (e) {}
+              try { top.el.dispatchEvent(new MouseEvent('click', {bubbles: true, clientX: x, clientY: y})); return true; } catch (e) {}
+              try { top.el.click(); return true; } catch (e) {}
+              return false;
+            }
+            """,
+            {"last4": last4},
+        )
+    except Exception:  # noqa: BLE001
+        return False
+
+    if bool(clicked):
+        logger.info("MASHREQ: clicked card tile for last4=%s", last4)
+        return True
+    return False
+
+
 def _open_card_details(page: Any, logger: logging.Logger, bank_cfg: dict[str, Any]) -> bool:
     target_last4 = "0353"
     cards = bank_cfg.get("cards", [])
@@ -302,29 +393,74 @@ def _open_card_details(page: Any, logger: logging.Logger, bank_cfg: dict[str, An
                 target_last4 = last4
                 break
 
-    card_selectors = [
-        f"text={target_last4}",
-        f"a:has-text('{target_last4}')",
-        f"button:has-text('{target_last4}')",
-        f"[role='button']:has-text('{target_last4}')",
-    ]
-    if _click_first_visible(page, card_selectors):
-        page.wait_for_timeout(1800)
-        logger.info("MASHREQ: opened card details for last4=%s via selector click", target_last4)
+    if _is_card_details_page(page):
         return True
 
-    return _click_control_by_terms(
-        page,
-        include_terms=[target_last4],
-        logger=logger,
-        action_name=f"card ending {target_last4}",
-    )
+    card_selectors = [
+        f"[role='button']:has-text('{target_last4}')",
+        f"button:has-text('{target_last4}')",
+        f"a:has-text('{target_last4}')",
+        f"text={target_last4}",
+    ]
+
+    for _ in range(5):
+        if _click_card_tile_by_last4(page, logger, target_last4):
+            try:
+                page.wait_for_url("**/product/card/activityAndDetails/**", timeout=10000)
+            except Exception:  # noqa: BLE001
+                pass
+            page.wait_for_timeout(1400)
+            if _is_card_details_page(page):
+                logger.info("MASHREQ: opened card details for last4=%s via card tile click", target_last4)
+                return True
+
+        if _click_first_visible(page, card_selectors):
+            page.wait_for_timeout(1400)
+            if _is_card_details_page(page):
+                logger.info("MASHREQ: opened card details for last4=%s via selector click", target_last4)
+                return True
+
+        if _click_control_by_terms(
+            page,
+            include_terms=[target_last4],
+            logger=logger,
+            action_name=f"card ending {target_last4}",
+            attempts=1,
+        ):
+            page.wait_for_timeout(1400)
+            if _is_card_details_page(page):
+                logger.info("MASHREQ: opened card details for last4=%s via term click", target_last4)
+                return True
+
+        page.wait_for_timeout(700)
+
+    return False
+
+
+def _is_estatement_route(page: Any) -> bool:
+    try:
+        return "/product/estatement/" in (page.url or "").lower()
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _is_estatement_shell(page: Any) -> bool:
+    low = text_snapshot(page).lower()
+    if "estatement" not in low:
+        return False
+    if _is_estatement_route(page):
+        return True
+    if "generated on" in low and "sent on" in low:
+        return True
+    if "subscription details" in low and "manage subscription" in low:
+        return True
+    return False
 
 
 def _is_statement_download_page(page: Any) -> bool:
     try:
         payload = page.evaluate(
-            """
+            r"""
             () => {
               const normalize = (value) => (value || '').replace(/\s+/g, ' ').trim().toLowerCase();
               const isVisible = (el) => {
@@ -364,27 +500,114 @@ def _is_statement_download_page(page: Any) -> bool:
         return False
 
 
+def _click_estatement_action(page: Any, logger: logging.Logger) -> bool:
+    try:
+        clicked = page.evaluate(
+            r"""
+            () => {
+              const normalize = (value) => (value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+              const isVisible = (el) => {
+                if (!el) return false;
+                const style = window.getComputedStyle(el);
+                if (style.display === 'none' || style.visibility === 'hidden') return false;
+                const rect = el.getBoundingClientRect();
+                return rect.width > 0 && rect.height > 0;
+              };
+
+              const candidates = [];
+              const all = Array.from(document.querySelectorAll('div, span, a, button, [role="button"], [role="link"]'));
+              const exactTexts = new Set(['e-statement', 'e-statements', 'estatement', 'estatements']);
+              for (const node of all) {
+                if (!isVisible(node)) continue;
+                const text = normalize(node.innerText || node.textContent || node.getAttribute('aria-label') || node.getAttribute('title') || '');
+                if (!text || !exactTexts.has(text)) continue;
+
+                let clickable = node;
+                for (let depth = 0; depth < 6 && clickable; depth += 1) {
+                  if (!isVisible(clickable)) {
+                    clickable = clickable.parentElement;
+                    continue;
+                  }
+                  const style = window.getComputedStyle(clickable);
+                  const hasNativeControl =
+                    clickable.tagName === 'A' ||
+                    clickable.tagName === 'BUTTON' ||
+                    clickable.getAttribute('role') === 'button' ||
+                    clickable.getAttribute('role') === 'link' ||
+                    typeof clickable.onclick === 'function';
+                  const hasPointer = style.cursor === 'pointer';
+                  if (hasNativeControl || hasPointer) {
+                    const rect = clickable.getBoundingClientRect();
+                    if (rect.width < 16 || rect.height < 16) {
+                      clickable = clickable.parentElement;
+                      continue;
+                    }
+                    // The actionable eStatement tile is in the right-side card actions panel.
+                    if (rect.x < window.innerWidth * 0.55) {
+                      clickable = clickable.parentElement;
+                      continue;
+                    }
+                    let score = 0;
+                    if (text === 'e-statement') score += 30;
+                    if (hasNativeControl) score += 15;
+                    if (hasPointer) score += 10;
+                    score += Math.min(20, Math.round(rect.x / 40));
+                    score -= Math.min(30, Math.round((rect.width * rect.height) / 9000));
+                    candidates.push({score, x: rect.x, y: rect.y, w: rect.width, h: rect.height, el: clickable});
+                    break;
+                  }
+                  clickable = clickable.parentElement;
+                }
+              }
+
+              if (!candidates.length) return false;
+              candidates.sort((a, b) => b.score - a.score);
+              const top = candidates[0];
+              const x = top.x + Math.max(8, Math.min(top.w - 8, Math.floor(top.w / 2)));
+              const y = top.y + Math.max(8, Math.min(top.h - 8, Math.floor(top.h / 2)));
+
+              try { top.el.scrollIntoView({block: 'center', inline: 'center'}); } catch (e) {}
+              try { top.el.dispatchEvent(new MouseEvent('mouseover', {bubbles: true, clientX: x, clientY: y})); } catch (e) {}
+              try { top.el.dispatchEvent(new MouseEvent('mousedown', {bubbles: true, clientX: x, clientY: y})); } catch (e) {}
+              try { top.el.dispatchEvent(new MouseEvent('mouseup', {bubbles: true, clientX: x, clientY: y})); } catch (e) {}
+              try { top.el.dispatchEvent(new MouseEvent('click', {bubbles: true, clientX: x, clientY: y})); return true; } catch (e) {}
+              try { top.el.click(); return true; } catch (e) {}
+              return false;
+            }
+            """
+        )
+    except Exception:  # noqa: BLE001
+        return False
+
+    if bool(clicked):
+        logger.info("MASHREQ: clicked eStatement action tile")
+        return True
+    return False
+
+
 def _open_estatements(page: Any, logger: logging.Logger) -> bool:
-    for _ in range(5):
+    if _is_statement_download_page(page) or _is_estatement_shell(page):
+        logger.info("MASHREQ: already on eStatement page")
+        return True
+
+    for _ in range(4):
         _dismiss_cookie_banner(page, logger)
 
-        _click_control_by_terms(
-            page,
-            include_terms=["card details"],
-            logger=logger,
-            action_name="Card Details tab",
-            attempts=1,
-        )
+        clicked = _click_estatement_action(page, logger)
 
         selectors = [
             "button:has-text('E-Statement')",
             "button:has-text('E-Statements')",
+            "button:has-text('eStatement')",
             "a:has-text('E-Statement')",
             "a:has-text('E-Statements')",
+            "a:has-text('eStatement')",
             "[role='button']:has-text('E-Statement')",
             "[role='button']:has-text('E-Statements')",
+            "[role='button']:has-text('eStatement')",
         ]
-        clicked = _click_first_visible(page, selectors, timeout=2600)
+        if not clicked:
+            clicked = _click_first_visible(page, selectors, timeout=2600)
         if not clicked:
             clicked = _click_control_by_terms(
                 page,
@@ -396,16 +619,37 @@ def _open_estatements(page: Any, logger: logging.Logger) -> bool:
         if not clicked:
             clicked = _click_control_by_terms(
                 page,
+                include_terms=["estatement"],
+                logger=logger,
+                action_name="eStatement control",
+                attempts=2,
+            )
+        if not clicked:
+            clicked = _click_control_by_terms(
+                page,
                 include_terms=["statement"],
                 logger=logger,
                 action_name="Statement control",
                 attempts=1,
             )
 
-        page.wait_for_timeout(1400)
-        if _is_statement_download_page(page):
-            logger.info("MASHREQ: statement download table is visible")
-            return True
+        if not clicked:
+            page.wait_for_timeout(900)
+            continue
+
+        try:
+            page.wait_for_url("**/product/eStatement/**", timeout=15000)
+        except Exception:  # noqa: BLE001
+            pass
+
+        for _inner in range(14):
+            if _is_statement_download_page(page):
+                logger.info("MASHREQ: statement download table is visible")
+                return True
+            if _is_estatement_shell(page):
+                logger.info("MASHREQ: eStatement page shell is visible")
+                return True
+            page.wait_for_timeout(700)
 
     return False
 
@@ -413,7 +657,7 @@ def _open_estatements(page: Any, logger: logging.Logger) -> bool:
 def _scan_statement_month_tokens(page: Any) -> list[str]:
     try:
         tokens = page.evaluate(
-            """
+            r"""
             () => {
               const normalize = (value) => (value || '').replace(/\s+/g, ' ').trim().toLowerCase();
               const isVisible = (el) => {
@@ -447,27 +691,30 @@ def _scan_statement_month_tokens(page: Any) -> list[str]:
               const tokenFromText = (text) => {
                 const line = normalize(text);
                 if (!line) return null;
-
-                let m = line.match(/\b(\d{1,2})[\/-](\d{1,2})[\/-]((?:19|20)?\d{2})\b/);
-                if (m) {
-                  const month = Number(m[2]);
-                  let year = Number(m[3]);
-                  if (year < 100) year += 2000;
-                  if (month >= 1 && month <= 12) {
-                    return `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}`;
+                const tokens = [];
+                const pushToken = (month, year) => {
+                  if (!Number.isFinite(month) || !Number.isFinite(year)) return;
+                  let yy = Number(year);
+                  if (yy < 100) yy += 2000;
+                  if (month >= 1 && month <= 12 && yy >= 1900) {
+                    tokens.push(`${yy.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}`);
                   }
+                };
+
+                const reSlash = /\b(\d{1,2})[\/-](\d{1,2})[\/-]((?:19|20)?\d{2})\b/g;
+                let m;
+                while ((m = reSlash.exec(line)) !== null) {
+                  pushToken(Number(m[2]), Number(m[3]));
                 }
 
-                m = line.match(/\b(\d{1,2})\s+([a-z]{3,9})\s+((?:19|20)?\d{2})\b/);
-                if (m) {
-                  const month = monthMap[m[2]];
-                  let year = Number(m[3]);
-                  if (year < 100) year += 2000;
-                  if (month && year >= 1900) {
-                    return `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}`;
-                  }
+                const reWords = /\b(\d{1,2})\s+([a-z]{3,9})\s+((?:19|20)?\d{2})\b/g;
+                while ((m = reWords.exec(line)) !== null) {
+                  pushToken(Number(monthMap[m[2]] || 0), Number(m[3]));
                 }
-                return null;
+
+                if (!tokens.length) return null;
+                // Mashreq "Sent on" is the second date on the row; prefer it when present.
+                return tokens.length >= 2 ? tokens[1] : tokens[0];
               };
 
               const seen = new Set();
@@ -508,14 +755,19 @@ def _scan_statement_month_tokens(page: Any) -> list[str]:
 
 
 def _wait_for_estatement_rows(page: Any, logger: logging.Logger) -> bool:
-    for _ in range(18):
+    for attempt in range(60):
         if _is_statement_download_page(page):
             tokens = _scan_statement_month_tokens(page)
             logger.info("MASHREQ: detected statement rows for months=%s", tokens)
             return True
 
-        _open_estatements(page, logger)
-        page.wait_for_timeout(700)
+        if _is_estatement_shell(page):
+            page.wait_for_timeout(1000)
+            continue
+
+        if attempt % 10 == 0:
+            _open_estatements(page, logger)
+        page.wait_for_timeout(1000)
 
     logger.info("MASHREQ: statement rows were not detected on E-Statements page")
     return False
@@ -524,7 +776,7 @@ def _wait_for_estatement_rows(page: Any, logger: logging.Logger) -> bool:
 def _row_has_download_for_month(page: Any, month_token: str) -> bool:
     try:
         result = page.evaluate(
-            """
+            r"""
             (payload) => {
               const monthToken = payload.month_token;
               const normalize = (value) => (value || '').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -556,28 +808,29 @@ def _row_has_download_for_month(page: Any, month_token: str) -> bool:
               const tokenFromText = (text) => {
                 const line = normalize(text);
                 if (!line) return null;
-
-                let m = line.match(/\b(\d{1,2})[\/-](\d{1,2})[\/-]((?:19|20)?\d{2})\b/);
-                if (m) {
-                  const month = Number(m[2]);
-                  let year = Number(m[3]);
-                  if (year < 100) year += 2000;
-                  if (month >= 1 && month <= 12) {
-                    return `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}`;
+                const tokens = [];
+                const pushToken = (month, year) => {
+                  if (!Number.isFinite(month) || !Number.isFinite(year)) return;
+                  let yy = Number(year);
+                  if (yy < 100) yy += 2000;
+                  if (month >= 1 && month <= 12 && yy >= 1900) {
+                    tokens.push(`${yy.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}`);
                   }
+                };
+
+                const reSlash = /\b(\d{1,2})[\/-](\d{1,2})[\/-]((?:19|20)?\d{2})\b/g;
+                let m;
+                while ((m = reSlash.exec(line)) !== null) {
+                  pushToken(Number(m[2]), Number(m[3]));
                 }
 
-                m = line.match(/\b(\d{1,2})\s+([a-z]{3,9})\s+((?:19|20)?\d{2})\b/);
-                if (m) {
-                  const month = monthMap[m[2]];
-                  let year = Number(m[3]);
-                  if (year < 100) year += 2000;
-                  if (month && year >= 1900) {
-                    return `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}`;
-                  }
+                const reWords = /\b(\d{1,2})\s+([a-z]{3,9})\s+((?:19|20)?\d{2})\b/g;
+                while ((m = reWords.exec(line)) !== null) {
+                  pushToken(Number(monthMap[m[2]] || 0), Number(m[3]));
                 }
 
-                return null;
+                if (!tokens.length) return null;
+                return tokens.length >= 2 ? tokens[1] : tokens[0];
               };
 
               const rows = Array.from(document.querySelectorAll('table tbody tr, table tr, [role="row"], .mat-row, .MuiTableRow-root'));
@@ -614,7 +867,7 @@ def _click_month_download_and_capture(
     try:
         with page.expect_download(timeout=20000) as download_info:
             clicked = page.evaluate(
-                """
+                r"""
                 (payload) => {
                   const monthToken = payload.month_token;
                   const normalize = (value) => (value || '').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -646,28 +899,29 @@ def _click_month_download_and_capture(
                   const tokenFromText = (text) => {
                     const line = normalize(text);
                     if (!line) return null;
-
-                    let m = line.match(/\b(\d{1,2})[\/-](\d{1,2})[\/-]((?:19|20)?\d{2})\b/);
-                    if (m) {
-                      const month = Number(m[2]);
-                      let year = Number(m[3]);
-                      if (year < 100) year += 2000;
-                      if (month >= 1 && month <= 12) {
-                        return `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}`;
+                    const tokens = [];
+                    const pushToken = (month, year) => {
+                      if (!Number.isFinite(month) || !Number.isFinite(year)) return;
+                      let yy = Number(year);
+                      if (yy < 100) yy += 2000;
+                      if (month >= 1 && month <= 12 && yy >= 1900) {
+                        tokens.push(`${yy.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}`);
                       }
+                    };
+
+                    const reSlash = /\b(\d{1,2})[\/-](\d{1,2})[\/-]((?:19|20)?\d{2})\b/g;
+                    let m;
+                    while ((m = reSlash.exec(line)) !== null) {
+                      pushToken(Number(m[2]), Number(m[3]));
                     }
 
-                    m = line.match(/\b(\d{1,2})\s+([a-z]{3,9})\s+((?:19|20)?\d{2})\b/);
-                    if (m) {
-                      const month = monthMap[m[2]];
-                      let year = Number(m[3]);
-                      if (year < 100) year += 2000;
-                      if (month && year >= 1900) {
-                        return `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}`;
-                      }
+                    const reWords = /\b(\d{1,2})\s+([a-z]{3,9})\s+((?:19|20)?\d{2})\b/g;
+                    while ((m = reWords.exec(line)) !== null) {
+                      pushToken(Number(monthMap[m[2]] || 0), Number(m[3]));
                     }
 
-                    return null;
+                    if (!tokens.length) return null;
+                    return tokens.length >= 2 ? tokens[1] : tokens[0];
                   };
 
                   const rows = Array.from(document.querySelectorAll('table tbody tr, table tr, [role="row"], .mat-row, .MuiTableRow-root'));
