@@ -14,6 +14,7 @@ from ccs_platform.core.bank_config import load_app_config
 from ccs_platform.db import models
 from ccs_platform.api.deps import ProfileContext, get_db, get_profile_context
 from ccs_platform.api.v1.schemas import JobOut, PaginatedJobs, ReclassifyJobRequest, ScrapeJobRequest
+from ccs_platform.api.v1.endpoints.job_utils import request_idempotency_key
 from ccs_platform.application.banks.capabilities import get_enabled_banks, resolve_requested_months
 from ccs_platform.application.jobs.service import create_or_get_job
 
@@ -194,6 +195,7 @@ def create_scrape_job(
         profile_id=profile.profile_id,
         job_type=models.JobType.SCRAPE,
         payload_json=payload_json,
+        idempotency_key=request_idempotency_key(request),
     )
 
     if created:
@@ -275,6 +277,7 @@ async def create_upload_job(
         profile_id=profile.profile_id,
         job_type=models.JobType.UPLOAD,
         payload_json={"uploads": uploads},
+        idempotency_key=request_idempotency_key(request),
         auto_idempotency=False,
     )
     db.commit()
@@ -327,6 +330,7 @@ def create_reclassify_job(
         profile_id=profile.profile_id,
         job_type=models.JobType.RECLASSIFY,
         payload_json=payload.model_dump(),
+        idempotency_key=request_idempotency_key(request),
     )
     if created:
         db.commit()

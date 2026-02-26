@@ -21,6 +21,7 @@ def seed_runtime_settings(db: Session) -> dict[str, Any]:
         profile_result = seed_runtime_settings_from_env(
             db,
             profile_id=profile.id,
+            profile_key=profile.key,
             blank_values=blank_values,
         )
         result_by_profile[profile.key] = profile_result

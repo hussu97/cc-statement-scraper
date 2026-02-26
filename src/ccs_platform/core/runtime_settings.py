@@ -115,20 +115,57 @@ def decode_runtime_setting_row_value(row: models.RuntimeSetting) -> str:
     return decode_runtime_setting_value(value=row.value or "", is_secret=row.is_secret)
 
 
-def _env_file_values(env_file: Path) -> dict[str, str]:
-    if not env_file.exists():
-        return {}
-
-    raw = dotenv_values(env_file)
+def _normalize_raw_env_values(raw_values: dict[str, Any]) -> dict[str, str]:
     values: dict[str, str] = {}
-    for key, value in raw.items():
+    for key, value in raw_values.items():
         if not key:
             continue
         normalized_key = normalize_runtime_key(key)
-        if not is_supported_runtime_key(normalized_key):
-            continue
         values[normalized_key] = "" if value is None else str(value)
     return values
+
+
+def _split_runtime_env_values(
+    values: dict[str, str], *, profile_key: str | None
+) -> tuple[dict[str, str], dict[str, str]]:
+    default_values: dict[str, str] = {}
+    profile_scoped_values: dict[str, str] = {}
+
+    normalized_profile_key = normalize_runtime_key(profile_key or "")
+    profile_prefixes: tuple[str, ...] = ()
+    if normalized_profile_key:
+        profile_prefixes = (
+            f"{normalized_profile_key}__",
+            f"{normalized_profile_key}_",
+        )
+
+    for key, value in values.items():
+        normalized_key = normalize_runtime_key(key)
+        if is_supported_runtime_key(normalized_key):
+            default_values[normalized_key] = value
+
+        if not profile_prefixes:
+            continue
+
+        scoped_key: str | None = None
+        for prefix in profile_prefixes:
+            if normalized_key.startswith(prefix):
+                scoped_key = normalized_key[len(prefix) :]
+                break
+        if scoped_key is None:
+            continue
+        if not is_supported_runtime_key(scoped_key):
+            continue
+        profile_scoped_values[scoped_key] = value
+
+    return default_values, profile_scoped_values
+
+
+def _env_file_values(env_file: Path) -> dict[str, str]:
+    if not env_file.exists():
+        return {}
+    raw = dotenv_values(env_file)
+    return _normalize_raw_env_values(raw)
 
 
 def upsert_runtime_setting(
@@ -185,6 +222,7 @@ def seed_runtime_settings_from_env(
     db: Session,
     *,
     profile_id: int,
+    profile_key: str | None = None,
     env_file: Path | None = None,
     overwrite_existing: bool = False,
     blank_values: bool = False,
@@ -200,30 +238,51 @@ def seed_runtime_settings_from_env(
         )
 
     source_file = env_file if env_file is not None else settings.runtime_settings_env_file
+    resolved_profile_key = (profile_key or "").strip()
+    if not resolved_profile_key:
+        resolved_profile_key = (
+            db.execute(select(models.Profile.key).where(models.Profile.id == profile_id))
+            .scalar_one_or_none()
+            or ""
+        ).strip()
+
     use_env_file = resolved_source_mode in {"env_file", "env_file_then_env"}
     include_process_env = resolved_source_mode in {"env", "env_file_then_env"}
     env_values = _env_file_values(source_file) if (use_env_file and source_file is not None) else {}
+    env_default_values, env_profile_values = _split_runtime_env_values(
+        env_values, profile_key=resolved_profile_key
+    )
+    process_default_values: dict[str, str] = {}
+    process_profile_values: dict[str, str] = {}
+    if include_process_env:
+        process_default_values, process_profile_values = _split_runtime_env_values(
+            _normalize_raw_env_values(dict(os.environ)),
+            profile_key=resolved_profile_key,
+        )
 
     seed_values: dict[str, str] = {}
 
     # Keep spec catalog deterministic even when .env is incomplete.
     for spec in DEFAULT_RUNTIME_SETTING_SPECS:
-        if blank_values:
-            seed_values[spec.key] = ""
-            continue
-
         value = ""
-        if include_process_env:
-            value = os.getenv(spec.key, "")
-        if not value and env_values:
-            value = env_values.get(spec.key, "")
+        if blank_values:
+            # For non-default profiles we only seed explicit profile-scoped values.
+            value = process_profile_values.get(spec.key, "") or env_profile_values.get(spec.key, "")
+        else:
+            value = (
+                process_profile_values.get(spec.key, "")
+                or process_default_values.get(spec.key, "")
+                or env_profile_values.get(spec.key, "")
+                or env_default_values.get(spec.key, "")
+            )
         seed_values[spec.key] = value
 
     # Include extra supported keys from .env as part of catalog for this profile.
-    for key, value in env_values.items():
-        if key in seed_values:
+    extra_source = env_profile_values if blank_values else {**env_default_values, **env_profile_values}
+    for key, value in extra_source.items():
+        if key in seed_values or not is_supported_runtime_key(key):
             continue
-        seed_values[key] = "" if blank_values else value
+        seed_values[key] = value
 
     existing_by_key = {
         row.key: row
@@ -289,6 +348,7 @@ def seed_runtime_settings_from_env(
 
     return {
         "profile_id": profile_id,
+        "profile_key": resolved_profile_key or None,
         "env_file": str(source_file) if source_file is not None else None,
         "source_mode": resolved_source_mode,
         "inserted": inserted,

@@ -53,6 +53,77 @@ class WorkerLoop:
             return stmt
         return stmt.where(models.Job.queue_name.in_(sorted(self._worker_queues)))
 
+    def _claim_next_queued_jobs(self, db, *, limit: int) -> list[int]:
+        if limit <= 0:
+            return []
+
+        now = datetime.now(UTC)
+        claimed_ids: list[int] = []
+
+        def _mark_claimed(row: models.Job) -> None:
+            row.status = models.JobStatus.RUNNING
+            row.started_at = now
+            row.last_heartbeat_at = now
+            row.progress_percent = max(1, int(row.progress_percent or 0))
+            row.next_retry_at = None
+            claimed_ids.append(row.id)
+
+        base_query = self._scope_job_query_to_worker_queues(
+            select(models.Job).where(models.Job.status == models.JobStatus.QUEUED)
+        )
+
+        if db.bind is not None and db.bind.dialect.name == "postgresql":
+            immediate = db.execute(
+                base_query
+                .where(models.Job.next_retry_at.is_(None))
+                .order_by(models.Job.created_at.asc())
+                .limit(limit)
+                .with_for_update(skip_locked=True)
+            ).scalars().all()
+            for row in immediate:
+                _mark_claimed(row)
+
+            remaining = limit - len(immediate)
+            if remaining > 0:
+                retries = db.execute(
+                    base_query
+                    .where(models.Job.next_retry_at.is_not(None))
+                    .where(models.Job.next_retry_at <= now)
+                    .order_by(models.Job.next_retry_at.asc(), models.Job.created_at.asc())
+                    .limit(remaining)
+                    .with_for_update(skip_locked=True)
+                ).scalars().all()
+                for row in retries:
+                    _mark_claimed(row)
+
+            if claimed_ids:
+                db.commit()
+            return claimed_ids
+
+        # SQLite/local fallback without SKIP LOCKED semantics.
+        for _ in range(limit):
+            next_job = db.execute(
+                base_query
+                .where(models.Job.next_retry_at.is_(None))
+                .order_by(models.Job.created_at.asc())
+                .limit(1)
+            ).scalar_one_or_none()
+            if next_job is None:
+                next_job = db.execute(
+                    base_query
+                    .where(models.Job.next_retry_at.is_not(None))
+                    .where(models.Job.next_retry_at <= now)
+                    .order_by(models.Job.next_retry_at.asc(), models.Job.created_at.asc())
+                    .limit(1)
+                ).scalar_one_or_none()
+            if next_job is None:
+                break
+
+            _mark_claimed(next_job)
+            db.commit()
+
+        return claimed_ids
+
     def _recover_stale_running_jobs(self) -> None:
         timeout_seconds = max(30, int(self.settings.job_heartbeat_timeout_seconds))
         now = datetime.now(UTC)
@@ -111,57 +182,19 @@ class WorkerLoop:
             )
 
     def _dispatch_queued_jobs(self) -> None:
-        # Enforce strict serialization: only one active worker job at a time.
-        if self._in_flight:
+        available_slots = self.settings.worker_active_job_limit() - len(self._in_flight)
+        if available_slots <= 0:
             return
 
         with SessionLocal() as db:
-            now = datetime.now(UTC)
-            running_query = select(models.Job.id).where(models.Job.status == models.JobStatus.RUNNING)
-            running_query = self._scope_job_query_to_worker_queues(running_query)
-            running_query = running_query.order_by(models.Job.started_at.asc()).limit(1)
-            running_job_id = db.execute(running_query).scalar_one_or_none()
-            if running_job_id is not None:
-                return
+            claimed_ids = self._claim_next_queued_jobs(db, limit=available_slots)
 
-            next_query = (
-                select(models.Job)
-                .where(models.Job.status == models.JobStatus.QUEUED)
-                .where(models.Job.next_retry_at.is_(None))
-                .order_by(models.Job.created_at.asc())
-                .limit(1)
-            )
-            next_query = self._scope_job_query_to_worker_queues(next_query)
-            next_job = db.execute(next_query).scalar_one_or_none()
-            if next_job is None:
-                retry_query = (
-                    select(models.Job)
-                    .where(models.Job.status == models.JobStatus.QUEUED)
-                    .where(models.Job.next_retry_at.is_not(None))
-                    .where(models.Job.next_retry_at <= now)
-                    .order_by(models.Job.next_retry_at.asc(), models.Job.created_at.asc())
-                    .limit(1)
-                )
-                retry_query = self._scope_job_query_to_worker_queues(retry_query)
-                next_job = db.execute(retry_query).scalar_one_or_none()
-            if next_job is None:
-                return
-
-            # Claim the job before enqueueing so multiple worker processes
-            # do not dispatch in parallel.
-            next_job.status = models.JobStatus.RUNNING
-            next_job.started_at = now
-            next_job.last_heartbeat_at = now
-            next_job.progress_percent = 1
-            db.commit()
-            next_job_id = next_job.id
-
-        if next_job_id in self._in_flight:
-            return
-
-        self._in_flight.add(next_job_id)
-        logger.info("Dispatching queued job | job_id=%s", next_job_id)
-        self.job_runner.enqueue(next_job_id)
+        for job_id in claimed_ids:
+            if job_id in self._in_flight:
+                continue
+            self._in_flight.add(job_id)
+            logger.info("Dispatching queued job | job_id=%s", job_id)
+            self.job_runner.enqueue(job_id)
 
     def _trigger_due_schedules(self) -> None:
         now = datetime.now(UTC)

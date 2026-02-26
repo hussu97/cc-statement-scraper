@@ -81,3 +81,57 @@ def test_seed_runtime_settings_none_source_mode_keeps_blank_values(tmp_path) -> 
         rows = db.execute(select(models.RuntimeSetting)).scalars().all()
         by_key = {row.key: row for row in rows}
         assert by_key["FAB_USERNAME"].value == ""
+
+
+def test_seed_runtime_settings_supports_profile_scoped_env_keys(tmp_path) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "\n".join(
+            [
+                "FAB_USERNAME=legacy-fallback",
+                "ALICE_FAB_USERNAME=alice-fab-user",
+                "ALICE_ENBD_USERNAME=alice-enbd-user",
+                "BOB_MASHREQ_USERNAME=bob-mashreq-user",
+                "BOB_MASHREQ_PASSWORD=bob-mashreq-pass",
+                "BOB_CCS_DOWNLOADS_DIR=/tmp/bob-downloads",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with _session() as db:
+        alice = models.Profile(key="alice", name="Alice", is_default=True)
+        bob = models.Profile(key="bob", name="Bob", is_default=False)
+        db.add_all([alice, bob])
+        db.flush()
+
+        alice_result = seed_runtime_settings_from_env(
+            db,
+            profile_id=alice.id,
+            profile_key=alice.key,
+            env_file=env_path,
+            source_mode="env_file",
+            blank_values=False,
+        )
+        bob_result = seed_runtime_settings_from_env(
+            db,
+            profile_id=bob.id,
+            profile_key=bob.key,
+            env_file=env_path,
+            source_mode="env_file",
+            blank_values=True,
+        )
+        db.flush()
+
+        assert alice_result["profile_key"] == "alice"
+        assert bob_result["profile_key"] == "bob"
+
+        rows = db.execute(select(models.RuntimeSetting)).scalars().all()
+        by_profile_key = {(row.profile_id, row.key): row for row in rows}
+
+        assert by_profile_key[(alice.id, "FAB_USERNAME")].value == "alice-fab-user"
+        assert by_profile_key[(alice.id, "ENBD_USERNAME")].value == "alice-enbd-user"
+        # Non-default profile with blank_values only accepts explicit BOB_* keys.
+        assert by_profile_key[(bob.id, "MASHREQ_USERNAME")].value == "bob-mashreq-user"
+        assert by_profile_key[(bob.id, "MASHREQ_PASSWORD")].value == "bob-mashreq-pass"
+        assert by_profile_key[(bob.id, "FAB_USERNAME")].value == ""

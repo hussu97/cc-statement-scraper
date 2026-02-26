@@ -34,13 +34,18 @@ class PlatformSettings(BaseSettings):
     job_poll_interval_seconds: int = 5
     schedule_poll_interval_seconds: int = 30
     max_worker_threads: int = 1
+    worker_max_active_jobs: int | None = None
     embedded_worker: bool = True
     worker_queues: str = "default,scrape"
     job_dispatch_backend: str = "database"
     job_retry_base_seconds: int = 30
     job_retry_jitter_seconds: int = 15
     job_retry_max_delay_seconds: int = 900
+    job_heartbeat_interval_seconds: int = 15
     job_heartbeat_timeout_seconds: int = 1800
+    queue_backlog_slo_default: int = 100
+    queue_backlog_slo_scrape: int = 20
+    queue_oldest_age_slo_seconds: int = 900
 
     cors_allow_origins: str = "*"
     log_level: str = "INFO"
@@ -107,6 +112,11 @@ class PlatformSettings(BaseSettings):
             if token.strip()
         }
         return tokens or {"default", "scrape"}
+
+    def worker_active_job_limit(self) -> int:
+        if self.worker_max_active_jobs is not None:
+            return max(1, int(self.worker_max_active_jobs))
+        return max(1, int(self.max_worker_threads))
 
 
 @lru_cache(maxsize=1)
