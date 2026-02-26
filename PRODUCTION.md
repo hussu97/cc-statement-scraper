@@ -4,6 +4,7 @@ This document gives you **two complete production paths** for this repo:
 
 - **Plan 1 (Free/Near-Free):** Oracle Always Free VM + Docker Compose + SQLite
 - **Plan 2 (Managed GCP):** Cloud Run + Cloud SQL PostgreSQL + Cloud Storage + Artifact Registry + Secret Manager
+- **Recommended (Hybrid):** Shared production PostgreSQL + shared production GCS + worker(s) running on server and/or local laptop
 
 Locked decisions used in this guide:
 
@@ -11,6 +12,105 @@ Locked decisions used in this guide:
 - Access model: private/admin-only
 - Scraping mode: full scraping enabled in production
 - DB strategy: Plan 1 uses SQLite; Plan 2 uses Cloud SQL PostgreSQL
+
+---
+
+## 0. Recommended Go-Live Topology (Hybrid Worker, Shared DB+GCS)
+
+Use this as the default go-live model:
+
+- **Single source of truth for state:** one production PostgreSQL database.
+- **Single source of truth for document storage:** one production GCS bucket.
+- **Multiple workers allowed:** run worker on prod server, local laptop, or both.
+- **No duplicate decision by local filesystem path:** statement replacement is driven by DB identity `(profile_id, bank_code, statement_reference, statement_date)`.
+
+### 0.1 Topology
+
+- `api` (production): connected to production Postgres + production GCS.
+- `worker` (production): connected to production Postgres + production GCS.
+- `worker` (local laptop, optional): connected to same production Postgres + same production GCS.
+- `frontend`: talks to production API.
+
+### 0.2 Why this works for idempotency
+
+- PDF archival is persisted in DB (`pdf_files`) with checksum + storage key.
+- Statement replacement is DB-transactional by canonical statement identity.
+- Re-upload/re-scrape of the same statement key replaces statement rows deterministically.
+- Local path names are only transient transport; final dedupe/replacement decision is DB-driven.
+
+### 0.3 Required runtime config for this model
+
+Set these on **all runtimes** (prod API, prod worker, local worker):
+
+- `CCS_PLATFORM_DATABASE_URL=postgresql+psycopg://...` (same prod DB)
+- `CCS_PLATFORM_STORAGE_BACKEND=gcs`
+- `CCS_PLATFORM_GCS_BUCKET=<prod-bucket>`
+- `CCS_PLATFORM_GCS_PROJECT=<project-id>`
+- `CCS_PLATFORM_RUNTIME_SETTINGS_SEED_SOURCE=none` (recommended in shared-DB mode; prevents startup env reseeding drift)
+- `CCS_PLATFORM_EMBEDDED_WORKER=false` on API process
+
+Local worker only:
+
+- `CCS_PLATFORM_WORKER_QUEUES=scrape` (recommended)
+- `CCS_PLATFORM_MAX_WORKER_THREADS=1` (recommended for bank portal stability)
+- `CCS_DOWNLOADS_DIR=<local-temp-download-dir>`
+- Optional auth for GCS:
+  - `CCS_PLATFORM_GCS_CREDENTIALS_FILE=<path-to-sa-json>` **or**
+  - `GOOGLE_APPLICATION_CREDENTIALS=<path-to-sa-json>` **or**
+  - `gcloud auth application-default login`
+
+### 0.4 Local machine checklist (what must stay local)
+
+Keep these on your laptop:
+
+- Repo checkout and Python virtualenv.
+- Playwright Chromium installation.
+- A local `.env.local-worker` with non-repo secrets/config.
+- If DB is private: Cloud SQL Auth Proxy (or equivalent private-network tunnel) to reach production Postgres.
+- Local transient folders for:
+  - browser state (`data/state/profiles/...`)
+  - temporary incoming/download files (`data/incoming/...`)
+  - logs (`logs/...`)
+- GCP auth material if not using ADC (service-account JSON file).
+
+You do **not** need local persistent PDF archive in this topology; PDFs are archived to GCS.
+
+### 0.5 Example local worker env file
+
+```bash
+# shared production control plane
+CCS_PLATFORM_DATABASE_URL=postgresql+psycopg://<user>:<pass>@<host>:5432/<db>
+CCS_PLATFORM_STORAGE_BACKEND=gcs
+CCS_PLATFORM_GCS_BUCKET=<prod-bucket>
+CCS_PLATFORM_GCS_PROJECT=<gcp-project>
+CCS_PLATFORM_RUNTIME_SETTINGS_SEED_SOURCE=none
+CCS_PLATFORM_TIMEZONE=Asia/Dubai
+
+# worker behavior
+CCS_PLATFORM_EMBEDDED_WORKER=false
+CCS_PLATFORM_WORKER_QUEUES=scrape
+CCS_PLATFORM_MAX_WORKER_THREADS=1
+CCS_PLATFORM_JOB_DISPATCH_BACKEND=database
+CCS_DOWNLOADS_DIR=/Users/<you>/ccs-downloads
+
+# optional: when not using ADC
+# CCS_PLATFORM_GCS_CREDENTIALS_FILE=/Users/<you>/.config/gcp/ccs-storage-sa.json
+```
+
+Run local worker:
+
+```bash
+cd /Users/hussainabbasi/Documents/GitHub/scrapers/credit-card-scraper
+source .venv/bin/activate
+export $(grep -v '^#' .env.local-worker | xargs)
+python -m ccs_platform.cli worker
+```
+
+### 0.6 Queueing guidance when both prod + local workers are active
+
+- If both listen to `scrape`, DB row-claiming coordinates which worker executes a job.
+- To avoid concurrent portal pressure, keep each scrape worker at low concurrency (`MAX_WORKER_THREADS=1`).
+- If you want strict routing (for example only local machine should scrape), map queue subscriptions accordingly.
 
 ---
 
@@ -29,6 +129,7 @@ Important runtime contract:
 
 - If API and worker run as separate containers/processes, set:
   - `CCS_PLATFORM_EMBEDDED_WORKER=false`
+  - In shared-production DB mode, set `CCS_PLATFORM_RUNTIME_SETTINGS_SEED_SOURCE=none` on all runtimes
 
 ---
 
@@ -61,7 +162,7 @@ Accounts and prerequisites:
 
 ## 3. Shared Docker Baseline
 
-This repo does not currently ship production Docker artifacts. The following commands create a reusable Docker baseline.
+This repo includes production-oriented Docker artifacts under `deploy/`. The following snippets show a reusable baseline.
 
 ### 3.1 Create deployment scaffolding
 
@@ -196,7 +297,7 @@ Configure envs in:
 | `CCS_PLATFORM_CORS_ALLOW_ORIGINS` | Yes | Yes | No | `https://admin.example.com` | env |
 | `CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY` | Yes (prod) | Yes (prod) | Yes | `<FERNET_KEY>` | Secret Manager / env |
 | `CCS_PLATFORM_RUNTIME_SETTINGS_REQUIRE_ENCRYPTION` | Optional | Optional | No | `true` | env |
-| `CCS_PLATFORM_RUNTIME_SETTINGS_SEED_SOURCE` | Optional | Optional | No | `env` (prod default) | env |
+| `CCS_PLATFORM_RUNTIME_SETTINGS_SEED_SOURCE` | Optional | Optional | No | `none` (recommended in shared-DB mode) | env |
 | `CCS_PLATFORM_RUNTIME_SETTINGS_ENV_FILE` | Optional | Optional | No | `/app/.env` | env |
 | `CCS_DOWNLOADS_DIR` | Yes | Yes | No | `/app/data/incoming/downloads` (Plan 1), `/tmp/downloads` (Plan 2) | env |
 | `FAB_USERNAME` | Yes | Yes | Yes | `fab_user` | Secret Manager / env |
@@ -581,7 +682,7 @@ gcloud run deploy ccs-api \
   --ingress internal-and-cloud-load-balancing \
   --no-allow-unauthenticated \
   --add-cloudsql-instances "$CLOUDSQL_CONN" \
-  --set-env-vars "PYTHONPATH=/app/src,CCS_PLATFORM_STORAGE_BACKEND=gcs,CCS_PLATFORM_GCS_BUCKET=${BUCKET},CCS_PLATFORM_GCS_PROJECT=${PROJECT_ID},CCS_PLATFORM_TIMEZONE=Asia/Dubai,CCS_PLATFORM_EMBEDDED_WORKER=false,CCS_PLATFORM_CORS_ALLOW_ORIGINS=https://${APP_DOMAIN},CCS_PLATFORM_RUNTIME_SETTINGS_SEED_SOURCE=env,CCS_DOWNLOADS_DIR=/tmp/downloads" \
+  --set-env-vars "PYTHONPATH=/app/src,CCS_PLATFORM_STORAGE_BACKEND=gcs,CCS_PLATFORM_GCS_BUCKET=${BUCKET},CCS_PLATFORM_GCS_PROJECT=${PROJECT_ID},CCS_PLATFORM_TIMEZONE=Asia/Dubai,CCS_PLATFORM_EMBEDDED_WORKER=false,CCS_PLATFORM_CORS_ALLOW_ORIGINS=https://${APP_DOMAIN},CCS_PLATFORM_RUNTIME_SETTINGS_SEED_SOURCE=none,CCS_DOWNLOADS_DIR=/tmp/downloads" \
   --set-secrets "CCS_PLATFORM_DATABASE_URL=CCS_PLATFORM_DATABASE_URL:latest,CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY=CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY:latest,FAB_USERNAME=FAB_USERNAME:latest,FAB_PASSWORD=FAB_PASSWORD:latest,ADCB_CID=ADCB_CID:latest,ADCB_LOGIN_PASSWORD=ADCB_LOGIN_PASSWORD:latest,ADCB_PDF_PASSWORD=ADCB_PDF_PASSWORD:latest,ENBD_USERNAME=ENBD_USERNAME:latest,ENBD_PASSWORD=ENBD_PASSWORD:latest,SIB_USER_ID=SIB_USER_ID:latest,SIB_PASSWORD=SIB_PASSWORD:latest,SIB_PDF_PASSWORD=SIB_PDF_PASSWORD:latest,SIB_SECURE_IMAGE_TEMPLATE_BASE64=SIB_SECURE_IMAGE_TEMPLATE_BASE64:latest" \
   --command python \
   --args "-m,ccs_platform.cli,api,--host,0.0.0.0,--port,8080"
@@ -610,7 +711,7 @@ Deploy a default queue worker (`CCS_PLATFORM_WORKER_QUEUES=default`):
 gcloud beta run worker-pools deploy ccs-worker-default \
   --image "$APP_IMAGE" \
   --region "$REGION" \
-  --set-env-vars "PYTHONPATH=/app/src,CCS_PLATFORM_STORAGE_BACKEND=gcs,CCS_PLATFORM_GCS_BUCKET=${BUCKET},CCS_PLATFORM_GCS_PROJECT=${PROJECT_ID},CCS_PLATFORM_TIMEZONE=Asia/Dubai,CCS_PLATFORM_EMBEDDED_WORKER=false,CCS_PLATFORM_RUNTIME_SETTINGS_SEED_SOURCE=env,CCS_PLATFORM_WORKER_QUEUES=default,CCS_DOWNLOADS_DIR=/tmp/downloads" \
+  --set-env-vars "PYTHONPATH=/app/src,CCS_PLATFORM_STORAGE_BACKEND=gcs,CCS_PLATFORM_GCS_BUCKET=${BUCKET},CCS_PLATFORM_GCS_PROJECT=${PROJECT_ID},CCS_PLATFORM_TIMEZONE=Asia/Dubai,CCS_PLATFORM_EMBEDDED_WORKER=false,CCS_PLATFORM_RUNTIME_SETTINGS_SEED_SOURCE=none,CCS_PLATFORM_WORKER_QUEUES=default,CCS_DOWNLOADS_DIR=/tmp/downloads" \
   --set-secrets "CCS_PLATFORM_DATABASE_URL=CCS_PLATFORM_DATABASE_URL:latest,CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY=CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY:latest,FAB_USERNAME=FAB_USERNAME:latest,FAB_PASSWORD=FAB_PASSWORD:latest,ADCB_CID=ADCB_CID:latest,ADCB_LOGIN_PASSWORD=ADCB_LOGIN_PASSWORD:latest,ADCB_PDF_PASSWORD=ADCB_PDF_PASSWORD:latest,ENBD_USERNAME=ENBD_USERNAME:latest,ENBD_PASSWORD=ENBD_PASSWORD:latest,SIB_USER_ID=SIB_USER_ID:latest,SIB_PASSWORD=SIB_PASSWORD:latest,SIB_PDF_PASSWORD=SIB_PDF_PASSWORD:latest,SIB_SECURE_IMAGE_TEMPLATE_BASE64=SIB_SECURE_IMAGE_TEMPLATE_BASE64:latest" \
   --command python \
   --args "-m,ccs_platform.cli,worker"
@@ -622,7 +723,7 @@ Deploy a scrape queue worker (`CCS_PLATFORM_WORKER_QUEUES=scrape`):
 gcloud beta run worker-pools deploy ccs-worker-scrape \
   --image "$APP_IMAGE" \
   --region "$REGION" \
-  --set-env-vars "PYTHONPATH=/app/src,CCS_PLATFORM_STORAGE_BACKEND=gcs,CCS_PLATFORM_GCS_BUCKET=${BUCKET},CCS_PLATFORM_GCS_PROJECT=${PROJECT_ID},CCS_PLATFORM_TIMEZONE=Asia/Dubai,CCS_PLATFORM_EMBEDDED_WORKER=false,CCS_PLATFORM_RUNTIME_SETTINGS_SEED_SOURCE=env,CCS_PLATFORM_WORKER_QUEUES=scrape,CCS_DOWNLOADS_DIR=/tmp/downloads" \
+  --set-env-vars "PYTHONPATH=/app/src,CCS_PLATFORM_STORAGE_BACKEND=gcs,CCS_PLATFORM_GCS_BUCKET=${BUCKET},CCS_PLATFORM_GCS_PROJECT=${PROJECT_ID},CCS_PLATFORM_TIMEZONE=Asia/Dubai,CCS_PLATFORM_EMBEDDED_WORKER=false,CCS_PLATFORM_RUNTIME_SETTINGS_SEED_SOURCE=none,CCS_PLATFORM_WORKER_QUEUES=scrape,CCS_DOWNLOADS_DIR=/tmp/downloads" \
   --set-secrets "CCS_PLATFORM_DATABASE_URL=CCS_PLATFORM_DATABASE_URL:latest,CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY=CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY:latest,FAB_USERNAME=FAB_USERNAME:latest,FAB_PASSWORD=FAB_PASSWORD:latest,ADCB_CID=ADCB_CID:latest,ADCB_LOGIN_PASSWORD=ADCB_LOGIN_PASSWORD:latest,ADCB_PDF_PASSWORD=ADCB_PDF_PASSWORD:latest,ENBD_USERNAME=ENBD_USERNAME:latest,ENBD_PASSWORD=ENBD_PASSWORD:latest,SIB_USER_ID=SIB_USER_ID:latest,SIB_PASSWORD=SIB_PASSWORD:latest,SIB_PDF_PASSWORD=SIB_PDF_PASSWORD:latest,SIB_SECURE_IMAGE_TEMPLATE_BASE64=SIB_SECURE_IMAGE_TEMPLATE_BASE64:latest" \
   --command python \
   --args "-m,ccs_platform.cli,worker"

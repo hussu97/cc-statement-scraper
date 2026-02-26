@@ -257,6 +257,58 @@ class JobRunner:
             return None
         return max(candidates, key=lambda p: p.stat().st_mtime)
 
+    def _resolve_downloaded_pdf_from_diagnostics(
+        self,
+        *,
+        bank_cfg: dict[str, Any],
+        requested_month: str,
+    ) -> tuple[Path | None, dict[str, Any] | None]:
+        diagnostics = bank_cfg.get("download_diagnostics")
+        if not isinstance(diagnostics, dict):
+            return None, None
+
+        requested_token = str(requested_month or "").strip()
+
+        def _pick_by_month(entries: Any) -> dict[str, Any] | None:
+            if not isinstance(entries, list):
+                return None
+            normalized: list[dict[str, Any]] = [row for row in entries if isinstance(row, dict)]
+            for row in normalized:
+                if str(row.get("month") or "").strip() == requested_token:
+                    return row
+            for row in normalized:
+                if str(row.get("month") or "").strip().lower() == "latest":
+                    return row
+            if len(normalized) == 1:
+                return normalized[0]
+            return None
+
+        skipped = _pick_by_month(diagnostics.get("skipped_unavailable"))
+        if skipped is not None:
+            return None, skipped
+
+        failed = _pick_by_month(diagnostics.get("failed"))
+        if failed is not None:
+            return None, failed
+
+        downloaded = _pick_by_month(diagnostics.get("downloaded"))
+        if downloaded is None:
+            return None, diagnostics
+
+        path_value = str(downloaded.get("path") or "").strip()
+        if not path_value:
+            return None, downloaded
+
+        resolved = Path(path_value)
+        if not resolved.exists():
+            return None, {
+                "month": str(downloaded.get("month") or requested_token),
+                "reason": "download_file_not_found",
+                "path": path_value,
+            }
+
+        return resolved, downloaded
+
     def _process_upload_job(self, db: Session, job: models.Job, *, profile_key: str) -> dict[str, Any]:
         payload = job.payload_json or {}
         uploads: list[dict[str, str]] = payload.get("uploads", [])
@@ -678,9 +730,18 @@ class JobRunner:
                             headless=headless,
                         )
 
-                    latest_pdf = self._find_latest_matching_pdf(scoped_cfg, bank_code)
+                    latest_pdf, diagnostic = self._resolve_downloaded_pdf_from_diagnostics(
+                        bank_cfg=bank_cfg_copy[bank_code],
+                        requested_month=month,
+                    )
                     if latest_pdf is None:
-                        raise RuntimeError("No matching PDF found after scrape run")
+                        # Backward-compatible fallback for adapters that don't yet emit diagnostics.
+                        if diagnostic is None:
+                            latest_pdf = self._find_latest_matching_pdf(scoped_cfg, bank_code)
+                        if latest_pdf is None:
+                            raise RuntimeError(
+                                f"No downloadable PDF resolved for {bank_code} month {month}; diagnostic={diagnostic}"
+                            )
 
                     summary = ingest_statement_pdf(
                         db,
@@ -699,7 +760,11 @@ class JobRunner:
                     job_item.message = (
                         f"Ingested statement {summary['statement_reference']}"
                     )
-                    job_item.metadata_json = summary
+                    job_item.metadata_json = (
+                        {"summary": summary, "diagnostic": diagnostic}
+                        if diagnostic is not None
+                        else summary
+                    )
                     db.commit()
 
                     results.append(
