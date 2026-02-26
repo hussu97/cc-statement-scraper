@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import logging
+import sys
 import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
-from ccs_platform.adapters.banks.browser.banks import adcb, enbd, fab, sib
+from ccs_platform.adapters.banks.browser.banks import adcb, eib, enbd, fab, mashreq, sib
 from ccs_platform.adapters.banks.browser.shared import (
     BrowserDownloadError,
     POST_LOGIN_KEYWORDS,
@@ -30,21 +31,27 @@ LOGIN_HANDLERS: dict[str, LoginHandler] = {
     "FAB": fab.login,
     "ADCB": adcb.login,
     "ENBD": enbd.login,
+    "EIB": eib.login,
     "SIB": sib.login,
+    "MASHREQ": mashreq.login,
 }
 
 LOGIN_SELECTOR_VISIBLE: dict[str, LoginSelectorVisible] = {
     "FAB": fab.login_selector_visible,
     "ADCB": adcb.login_selector_visible,
     "ENBD": enbd.login_selector_visible,
+    "EIB": eib.login_selector_visible,
     "SIB": sib.login_selector_visible,
+    "MASHREQ": mashreq.login_selector_visible,
 }
 
 DOWNLOAD_HANDLERS: dict[str, DownloadHandler] = {
     "FAB": fab.download_latest_statement,
     "ADCB": adcb.download_latest_statement,
     "ENBD": enbd.download_latest_statement,
+    "EIB": eib.download_latest_statement,
     "SIB": sib.download_latest_statement,
+    "MASHREQ": mashreq.download_latest_statement,
 }
 
 
@@ -159,14 +166,21 @@ def _wait_for_authenticated_session(
                     logger.info("%s: MFA/OTP challenge detected; waiting for completion.", bank_code)
                     prompted_for_mfa = True
                 had_adcb_challenge = True
-            elif not scheduled and not prompted_for_mfa:
+            elif not prompted_for_mfa:
                 logger.info("%s: MFA/app approval detected; waiting for confirmation.", bank_code)
-                try:
-                    input(
-                        f"[{bank_code}] Approve login in banking app/device, then press Enter to continue... "
-                    )
-                except EOFError:
-                    pass
+                if not scheduled:
+                    if sys.stdin is not None and sys.stdin.isatty():
+                        try:
+                            input(
+                                f"[{bank_code}] Approve login in banking app/device, then press Enter to continue... "
+                            )
+                        except EOFError:
+                            pass
+                    else:
+                        logger.info(
+                            "%s: non-interactive session detected; continuing to poll for MFA completion",
+                            bank_code,
+                        )
                 prompted_for_mfa = True
             time.sleep(2)
             continue
@@ -196,13 +210,24 @@ def _wait_for_authenticated_session(
                     continue
                 time.sleep(2)
                 continue
+        elif code == "MASHREQ":
+            if mashreq.is_authenticated_session(page, low):
+                logger.info("%s: authenticated session detected", bank_code)
+                return page
+            if mashreq.is_unauthorized_screen(low):
+                raise BrowserDownloadError(
+                    f"{bank_code}: portal returned 'not authorized' for this session/credentials"
+                )
+            if mashreq.is_login_screen(low):
+                time.sleep(2)
+                continue
 
-        if not _login_selector_visible(page, bank_code):
+        if code != "MASHREQ" and not _login_selector_visible(page, bank_code):
             if any(keyword in low for keyword in POST_LOGIN_KEYWORDS):
                 logger.info("%s: authenticated session detected", bank_code)
                 return page
 
-        if code != "ADCB" and any(keyword in low for keyword in POST_LOGIN_KEYWORDS) and "welcome" not in low:
+        if code not in {"ADCB", "MASHREQ"} and any(keyword in low for keyword in POST_LOGIN_KEYWORDS) and "welcome" not in low:
             logger.info("%s: proceeding with post-login navigation", bank_code)
             return page
 
@@ -264,12 +289,26 @@ def _launch_bank_context(
     max_attempts = 3
     for attempt in range(1, max_attempts + 1):
         try:
-            return playwright.chromium.launch_persistent_context(
-                user_data_dir=str(profile_dir),
-                headless=headless,
-                accept_downloads=True,
-                downloads_path=str(incoming_dir),
-            )
+            launch_kwargs: dict[str, Any] = {
+                "user_data_dir": str(profile_dir),
+                "headless": headless,
+                "accept_downloads": True,
+                "downloads_path": str(incoming_dir),
+            }
+            if bank_code.upper() == "MASHREQ":
+                launch_kwargs["args"] = ["--disable-blink-features=AutomationControlled"]
+
+            context = playwright.chromium.launch_persistent_context(**launch_kwargs)
+            if bank_code.upper() == "MASHREQ":
+                context.add_init_script(
+                    """
+                    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                    window.chrome = window.chrome || { runtime: {} };
+                    Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+                    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
+                    """
+                )
+            return context
         except Exception as exc:  # noqa: BLE001
             message = str(exc).lower()
             lock_error = (

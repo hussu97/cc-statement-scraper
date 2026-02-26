@@ -31,7 +31,17 @@ BANK_CAPABILITIES: dict[str, dict[str, bool]] = {
         "supports_multi_month": True,
         "supports_headless": True,
     },
+    "EIB": {
+        "supports_historical_month_selection": True,
+        "supports_multi_month": True,
+        "supports_headless": True,
+    },
     "SIB": {
+        "supports_historical_month_selection": True,
+        "supports_multi_month": True,
+        "supports_headless": True,
+    },
+    "MASHREQ": {
         "supports_historical_month_selection": True,
         "supports_multi_month": True,
         "supports_headless": True,
@@ -198,11 +208,12 @@ def build_bank_scrape_config(bank_code: str, month: str) -> dict[str, str | int]
     }
 
     code = bank_code.upper()
-    if code == "ENBD":
+    if code in {"ENBD", "EIB"}:
+        key_prefix = "enbd" if code == "ENBD" else "eib"
         payload.update(
             {
-                "enbd_statement_year": target.year,
-                "enbd_statement_month": target.month,
+                f"{key_prefix}_statement_year": target.year,
+                f"{key_prefix}_statement_month": target.month,
             }
         )
     elif code == "FAB":
@@ -223,6 +234,14 @@ def build_bank_scrape_config(bank_code: str, month: str) -> dict[str, str | int]
                 "sib_statement_period": month_token(target),
                 "sib_statement_year": target.year,
                 "sib_statement_month": target.month,
+            }
+        )
+    elif code == "MASHREQ":
+        payload.update(
+            {
+                "mashreq_statement_period": month_token(target),
+                "mashreq_statement_year": target.year,
+                "mashreq_statement_month": target.month,
             }
         )
     return payload

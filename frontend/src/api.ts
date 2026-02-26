@@ -1,4 +1,5 @@
 import { getActiveProfileKey } from './profileStore';
+import { getAdminToken } from './authStore';
 
 export type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
 
@@ -20,6 +21,12 @@ async function request<T>(
 
   if (!headers['X-Profile-Key'] && !headers['x-profile-key']) {
     headers['X-Profile-Key'] = getActiveProfileKey();
+  }
+
+  const token = getAdminToken();
+  const hasAuthorization = !!headers.Authorization || !!headers.authorization;
+  if (token && !hasAuthorization) {
+    headers.Authorization = `Bearer ${token}`;
   }
 
   let payload: BodyInit | undefined;

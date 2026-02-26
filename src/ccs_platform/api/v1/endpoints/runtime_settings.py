@@ -14,14 +14,38 @@ from ccs_platform.api.v1.schemas import (
 )
 from ccs_platform.core.runtime_settings import (
     apply_runtime_settings_to_process_env,
+    decode_runtime_setting_row_value,
     normalize_runtime_key,
     seed_runtime_settings_from_env,
     upsert_runtime_setting,
 )
+from ccs_platform.core.settings import get_settings
 from ccs_platform.db import models
 
 
 router = APIRouter(prefix="/runtime-settings", tags=["runtime-settings"])
+
+
+def _to_runtime_setting_out(row: models.RuntimeSetting) -> RuntimeSettingOut:
+    settings = get_settings()
+    raw_value = row.value or ""
+    secret_readback_allowed = settings.secret_value_readback_enabled()
+    if row.is_secret and not secret_readback_allowed:
+        safe_value = ""
+    else:
+        safe_value = decode_runtime_setting_row_value(row) if raw_value else ""
+
+    return RuntimeSettingOut(
+        id=row.id,
+        key=row.key,
+        value=safe_value,
+        has_value=bool(raw_value),
+        bank_code=row.bank_code,
+        is_secret=row.is_secret,
+        description=row.description,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
 
 
 @router.get("", response_model=PaginatedRuntimeSettings)
@@ -59,7 +83,7 @@ def list_runtime_settings(
         total=total,
         page=page,
         page_size=page_size,
-        items=[RuntimeSettingOut.model_validate(row) for row in rows],
+        items=[_to_runtime_setting_out(row) for row in rows],
     )
 
 
@@ -81,7 +105,7 @@ def create_or_update_runtime_setting(
     db.commit()
     db.refresh(row)
     apply_runtime_settings_to_process_env(db, profile_id=profile.profile_id)
-    return RuntimeSettingOut.model_validate(row)
+    return _to_runtime_setting_out(row)
 
 
 @router.patch("/{key}", response_model=RuntimeSettingOut)
@@ -101,11 +125,12 @@ def patch_runtime_setting(
     if row is None:
         raise HTTPException(status_code=404, detail=f"Runtime setting not found: {normalized_key}")
 
+    next_value = decode_runtime_setting_row_value(row) if payload.value is None else payload.value
     row = upsert_runtime_setting(
         db,
         profile_id=profile.profile_id,
         key=normalized_key,
-        value=payload.value,
+        value=next_value,
         bank_code=payload.bank_code,
         is_secret=payload.is_secret,
         description=payload.description,
@@ -113,7 +138,7 @@ def patch_runtime_setting(
     db.commit()
     db.refresh(row)
     apply_runtime_settings_to_process_env(db, profile_id=profile.profile_id)
-    return RuntimeSettingOut.model_validate(row)
+    return _to_runtime_setting_out(row)
 
 
 @router.post("/seed-from-env")
@@ -127,6 +152,7 @@ def seed_runtime_settings(
         profile_id=profile.profile_id,
         overwrite_existing=payload.overwrite_existing,
         blank_values=profile.profile_key != "alice",
+        source_mode=payload.source_mode,
     )
     db.commit()
     applied = apply_runtime_settings_to_process_env(db, profile_id=profile.profile_id)

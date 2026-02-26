@@ -25,6 +25,7 @@ LOGIN_FAILURE_PATTERNS = [
     re.compile(r"unable to carry out your instructions", re.IGNORECASE),
     re.compile(r"login failed", re.IGNORECASE),
     re.compile(r"invalid.*credentials", re.IGNORECASE),
+    re.compile(r"not authorized to login to this portal", re.IGNORECASE),
 ]
 
 POST_LOGIN_KEYWORDS = [

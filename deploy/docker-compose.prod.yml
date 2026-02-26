@@ -1,0 +1,58 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.app
+    env_file:
+      - ${CCS_ENV_FILE:-.env.production}
+    environment:
+      CCS_PLATFORM_EMBEDDED_WORKER: "false"
+    command: ["python", "-m", "ccs_platform.cli", "api", "--host", "0.0.0.0", "--port", "8040"]
+    volumes:
+      - ${CCS_DATA_DIR:-../data}:/app/data
+      - ${CCS_LOGS_DIR:-../logs}:/app/logs
+    expose:
+      - "8040"
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.app
+    env_file:
+      - ${CCS_ENV_FILE:-.env.production}
+    environment:
+      CCS_PLATFORM_EMBEDDED_WORKER: "false"
+    command: ["python", "-m", "ccs_platform.cli", "worker"]
+    volumes:
+      - ${CCS_DATA_DIR:-../data}:/app/data
+      - ${CCS_LOGS_DIR:-../logs}:/app/logs
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.frontend
+    expose:
+      - "8080"
+    restart: unless-stopped
+
+  reverse-proxy:
+    image: caddy:2
+    env_file:
+      - ${CCS_ENV_FILE:-.env.production}
+    depends_on:
+      - api
+      - frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

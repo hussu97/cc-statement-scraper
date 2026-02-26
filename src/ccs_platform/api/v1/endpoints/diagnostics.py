@@ -7,6 +7,7 @@ from ccs_platform.db import models
 from ccs_platform.api.deps import ProfileContext, get_db, get_profile_context
 from ccs_platform.api.v1.schemas import BankConnectionTestRequest, JobOut, ParserValidateRequest
 from ccs_platform.application.banks.capabilities import get_enabled_banks
+from ccs_platform.application.jobs.service import create_or_get_job
 
 
 router = APIRouter(prefix="/diagnostics", tags=["diagnostics"])
@@ -19,17 +20,17 @@ def parser_validate(
     db: Session = Depends(get_db),
     profile: ProfileContext = Depends(get_profile_context),
 ) -> JobOut:
-    job = models.Job(
+    job, created = create_or_get_job(
+        db,
         profile_id=profile.profile_id,
         job_type=models.JobType.PARSER_VALIDATE,
-        status=models.JobStatus.QUEUED,
         payload_json=payload.model_dump(),
     )
-    db.add(job)
-    db.commit()
-    db.refresh(job)
+    if created:
+        db.commit()
+        db.refresh(job)
+        request.app.state.job_dispatcher.publish(job.id)
 
-    request.app.state.job_runner.enqueue(job.id)
     return JobOut.model_validate(job)
 
 
@@ -49,15 +50,15 @@ def bank_connection_test(
             detail=f"Bank {payload.bank_code.upper()} is not enabled for profile {profile.profile_key}",
         )
 
-    job = models.Job(
+    job, created = create_or_get_job(
+        db,
         profile_id=profile.profile_id,
         job_type=models.JobType.BANK_CONNECTION_TEST,
-        status=models.JobStatus.QUEUED,
         payload_json=payload.model_dump(),
     )
-    db.add(job)
-    db.commit()
-    db.refresh(job)
+    if created:
+        db.commit()
+        db.refresh(job)
+        request.app.state.job_dispatcher.publish(job.id)
 
-    request.app.state.job_runner.enqueue(job.id)
     return JobOut.model_validate(job)

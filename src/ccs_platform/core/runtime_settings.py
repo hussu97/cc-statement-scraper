@@ -9,7 +9,8 @@ from dotenv import dotenv_values
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ccs_platform.core.bank_config import ROOT_DIR
+from ccs_platform.core.secret_codec import decode_secret, encode_secret, is_encoded
+from ccs_platform.core.settings import get_settings
 from ccs_platform.db import models
 
 
@@ -30,6 +31,8 @@ DEFAULT_RUNTIME_SETTING_SPECS: tuple[RuntimeSettingSpec, ...] = (
     RuntimeSettingSpec("ADCB_FORCE_VIRTUAL_KEYBOARD", "ADCB", False, "ADCB virtual keyboard automation toggle"),
     RuntimeSettingSpec("ENBD_USERNAME", "ENBD", True, "ENBD online banking username"),
     RuntimeSettingSpec("ENBD_PASSWORD", "ENBD", True, "ENBD online banking password"),
+    RuntimeSettingSpec("EIB_USERNAME", "EIB", True, "EIB online banking username"),
+    RuntimeSettingSpec("EIB_PASSWORD", "EIB", True, "EIB online banking password"),
     RuntimeSettingSpec("SIB_USER_ID", "SIB", True, "SIB online banking user ID"),
     RuntimeSettingSpec("SIB_PASSWORD", "SIB", True, "SIB online banking password"),
     RuntimeSettingSpec("SIB_PDF_PASSWORD", "SIB", True, "SIB PDF password (DOB in DDMMYY format)"),
@@ -39,11 +42,13 @@ DEFAULT_RUNTIME_SETTING_SPECS: tuple[RuntimeSettingSpec, ...] = (
         False,
         "Optional SIB secure image template (base64 PNG) for PAM image matching",
     ),
+    RuntimeSettingSpec("MASHREQ_USERNAME", "MASHREQ", True, "Mashreq online banking username"),
+    RuntimeSettingSpec("MASHREQ_PASSWORD", "MASHREQ", True, "Mashreq online banking password"),
     RuntimeSettingSpec("CCS_DOWNLOADS_DIR", None, False, "Download directory watched by scraper"),
 )
 
 DEFAULT_SPEC_MAP = {spec.key: spec for spec in DEFAULT_RUNTIME_SETTING_SPECS}
-SUPPORTED_KEY_PREFIXES = ("FAB_", "ADCB_", "ENBD_", "SIB_", "CCS_")
+SUPPORTED_KEY_PREFIXES = ("FAB_", "ADCB_", "ENBD_", "EIB_", "SIB_", "MASHREQ_", "CCS_")
 SECRET_TOKENS = ("PASSWORD", "SECRET", "TOKEN", "API_KEY", "KEY", "CID", "USERNAME")
 
 
@@ -53,7 +58,7 @@ def normalize_runtime_key(key: str) -> str:
 
 def infer_bank_code_from_key(key: str) -> str | None:
     upper = normalize_runtime_key(key)
-    for bank_code in ("FAB", "ADCB", "ENBD", "SIB"):
+    for bank_code in ("FAB", "ADCB", "ENBD", "EIB", "SIB", "MASHREQ"):
         if upper.startswith(f"{bank_code}_"):
             return bank_code
     return None
@@ -67,6 +72,39 @@ def infer_is_secret_from_key(key: str) -> bool:
 def is_supported_runtime_key(key: str) -> bool:
     upper = normalize_runtime_key(key)
     return any(upper.startswith(prefix) for prefix in SUPPORTED_KEY_PREFIXES)
+
+
+def decode_runtime_setting_value(*, value: str, is_secret: bool) -> str:
+    if not value:
+        return ""
+    if not is_secret:
+        return value
+    return decode_secret(value)
+
+
+def encode_runtime_setting_value(*, value: str, is_secret: bool) -> str:
+    if not value:
+        return ""
+    if not is_secret:
+        return value
+
+    settings = get_settings()
+    if not settings.runtime_settings_encryption_key:
+        if settings.runtime_settings_encryption_required():
+            raise RuntimeError(
+                "Runtime secret persistence encryption is required. "
+                "Set CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY."
+            )
+        return value
+
+    if is_encoded(value):
+        return value
+
+    return encode_secret(value)
+
+
+def decode_runtime_setting_row_value(row: models.RuntimeSetting) -> str:
+    return decode_runtime_setting_value(value=row.value or "", is_secret=row.is_secret)
 
 
 def _env_file_values(env_file: Path) -> dict[str, str]:
@@ -113,13 +151,14 @@ def upsert_runtime_setting(
         if is_secret is not None
         else (spec.is_secret if spec else infer_is_secret_from_key(normalized_key))
     )
+    stored_value = encode_runtime_setting_value(value=value, is_secret=resolved_is_secret)
     resolved_description = description if description is not None else (spec.description if spec else None)
 
     if row is None:
         row = models.RuntimeSetting(
             profile_id=profile_id,
             key=normalized_key,
-            value=value,
+            value=stored_value,
             bank_code=resolved_bank_code,
             is_secret=resolved_is_secret,
             description=resolved_description,
@@ -127,7 +166,7 @@ def upsert_runtime_setting(
         db.add(row)
         return row
 
-    row.value = value
+    row.value = stored_value
     row.bank_code = resolved_bank_code
     row.is_secret = resolved_is_secret
     row.description = resolved_description
@@ -141,9 +180,21 @@ def seed_runtime_settings_from_env(
     env_file: Path | None = None,
     overwrite_existing: bool = False,
     blank_values: bool = False,
+    source_mode: str | None = None,
 ) -> dict[str, Any]:
-    source_file = env_file or (ROOT_DIR / ".env")
-    env_values = _env_file_values(source_file)
+    settings = get_settings()
+    resolved_source_mode = (source_mode or settings.runtime_settings_seed_source_mode()).strip().lower()
+    allowed_source_modes = {"env", "env_file", "env_file_then_env", "none"}
+    if resolved_source_mode not in allowed_source_modes:
+        raise ValueError(
+            "Unsupported runtime settings seed source mode. "
+            "Expected one of: env, env_file, env_file_then_env, none."
+        )
+
+    source_file = env_file if env_file is not None else settings.runtime_settings_env_file
+    use_env_file = resolved_source_mode in {"env_file", "env_file_then_env"}
+    include_process_env = resolved_source_mode in {"env", "env_file_then_env"}
+    env_values = _env_file_values(source_file) if (use_env_file and source_file is not None) else {}
 
     seed_values: dict[str, str] = {}
 
@@ -152,7 +203,13 @@ def seed_runtime_settings_from_env(
         if blank_values:
             seed_values[spec.key] = ""
             continue
-        seed_values[spec.key] = env_values.get(spec.key, os.getenv(spec.key, ""))
+
+        value = ""
+        if include_process_env:
+            value = os.getenv(spec.key, "")
+        if not value and env_values:
+            value = env_values.get(spec.key, "")
+        seed_values[spec.key] = value
 
     # Include extra supported keys from .env as part of catalog for this profile.
     for key, value in env_values.items():
@@ -184,11 +241,12 @@ def seed_runtime_settings_from_env(
         resolved_description = spec.description if spec else None
 
         if row is None:
+            stored_value = encode_runtime_setting_value(value=value, is_secret=resolved_is_secret)
             db.add(
                 models.RuntimeSetting(
                     profile_id=profile_id,
                     key=key,
-                    value=value,
+                    value=stored_value,
                     bank_code=resolved_bank_code,
                     is_secret=resolved_is_secret,
                     description=resolved_description,
@@ -202,14 +260,17 @@ def seed_runtime_settings_from_env(
             row.bank_code = resolved_bank_code
             metadata_changed = True
         if row.is_secret != resolved_is_secret:
+            plain_current_value = decode_runtime_setting_value(value=row.value or "", is_secret=row.is_secret)
             row.is_secret = resolved_is_secret
+            row.value = encode_runtime_setting_value(value=plain_current_value, is_secret=resolved_is_secret)
             metadata_changed = True
         if resolved_description and row.description != resolved_description:
             row.description = resolved_description
             metadata_changed = True
 
-        if overwrite_existing and row.value != value:
-            row.value = value
+        current_plain_value = decode_runtime_setting_value(value=row.value or "", is_secret=row.is_secret)
+        if overwrite_existing and current_plain_value != value:
+            row.value = encode_runtime_setting_value(value=value, is_secret=row.is_secret)
             updated += 1
             continue
 
@@ -220,7 +281,8 @@ def seed_runtime_settings_from_env(
 
     return {
         "profile_id": profile_id,
-        "env_file": str(source_file),
+        "env_file": str(source_file) if source_file is not None else None,
+        "source_mode": resolved_source_mode,
         "inserted": inserted,
         "updated": updated,
         "skipped": skipped,
@@ -244,7 +306,7 @@ def apply_runtime_settings_to_process_env(db: Session, *, profile_id: int) -> in
 
     applied = 0
     for row in rows:
-        value = row.value or ""
+        value = decode_runtime_setting_value(value=row.value or "", is_secret=row.is_secret)
         if not value:
             continue
         os.environ[row.key] = value

@@ -28,6 +28,15 @@ def test_infer_bank_code_from_text_identifies_enbd() -> None:
     assert _infer_bank_code_from_text(text) == "ENBD"
 
 
+def test_infer_bank_code_from_text_identifies_eib() -> None:
+    text = """
+    Emirates Islamic Bank
+    Statement Period: 01-Jan-25 to 31-Jan-25
+    Card Type: Platinum
+    """
+    assert _infer_bank_code_from_text(text) == "EIB"
+
+
 def test_infer_bank_code_from_text_returns_none_when_unknown() -> None:
     assert _infer_bank_code_from_text("Random PDF with no known bank markers") is None
 
@@ -38,3 +47,11 @@ def test_infer_bank_code_from_text_identifies_sib() -> None:
     SIB Digital Credit Card Statement
     """
     assert _infer_bank_code_from_text(text) == "SIB"
+
+
+def test_infer_bank_code_from_text_identifies_mashreq() -> None:
+    text = """
+    Mashreq Bank PSC
+    Credit Card E-Statement
+    """
+    assert _infer_bank_code_from_text(text) == "MASHREQ"

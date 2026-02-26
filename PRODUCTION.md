@@ -21,7 +21,7 @@ Current repo architecture:
 - **Backend API:** FastAPI (`src/ccs_platform/main.py`), routes under `/api/v1`
 - **Background worker:** polling worker loop (`src/ccs_platform/worker/main.py` + `application/jobs/worker_loop.py`)
 - **Frontend:** React/Vite admin panel (`frontend/`)
-- **Storage adapters:** local filesystem or S3-compatible object storage
+- **Storage adapters:** local filesystem or native GCS object storage
 - **DB layer:** SQLAlchemy + Alembic, profile-scoped data model
 - **Runtime settings behavior:** app seeds runtime settings from process env on startup and stores them in DB (`runtime_settings` table)
 
@@ -180,13 +180,11 @@ Configure envs in:
 | Variable | Required in Plan 1 | Required in Plan 2 | Secret? | Example | Where configured |
 |---|---:|---:|---:|---|---|
 | `CCS_PLATFORM_DATABASE_URL` | Yes | Yes | Yes | `sqlite:////app/data/state/platform.db` (Plan 1) / `postgresql+psycopg://...` (Plan 2) | Plan 1 `.env.production`; Plan 2 Secret Manager -> Cloud Run |
-| `CCS_PLATFORM_STORAGE_BACKEND` | Yes | Yes | No | `local` (Plan 1), `s3` (Plan 2 with GCS-compatible/S3 strategy) | env |
+| `CCS_PLATFORM_STORAGE_BACKEND` | Yes | Yes | No | `local` (Plan 1), `gcs` (Plan 2) | env |
 | `CCS_PLATFORM_LOCAL_STORAGE_DIR` | Yes if local storage | No | No | `/app/data/archive/platform` | env |
-| `CCS_PLATFORM_S3_BUCKET` | No | Yes (if `s3`) | No | `ccs-prod-archive` | env |
-| `CCS_PLATFORM_S3_ENDPOINT_URL` | No | Optional | No | `https://storage.googleapis.com` or omitted | env |
-| `CCS_PLATFORM_S3_REGION` | No | Optional | No | `europe-west1` | env |
-| `CCS_PLATFORM_S3_ACCESS_KEY_ID` | No | Optional/depends adapter | Yes | `...` | Secret Manager |
-| `CCS_PLATFORM_S3_SECRET_ACCESS_KEY` | No | Optional/depends adapter | Yes | `...` | Secret Manager |
+| `CCS_PLATFORM_GCS_BUCKET` | No | Yes (if `gcs`) | No | `ccs-prod-archive` | env |
+| `CCS_PLATFORM_GCS_PROJECT` | No | Optional | No | `<your-gcp-project-id>` | env |
+| `CCS_PLATFORM_GCS_CREDENTIALS_FILE` | No | Optional (local/non-GCP runtimes) | No | `/var/secrets/google/storage-sa.json` | env |
 | `CCS_PLATFORM_TIMEZONE` | Yes | Yes | No | `Asia/Dubai` | env |
 | `CCS_PLATFORM_EMBEDDED_WORKER` | Yes | Yes | No | `false` | env |
 | `CCS_PLATFORM_CORS_ALLOW_ORIGINS` | Yes | Yes | No | `https://admin.example.com` | env |
@@ -533,6 +531,14 @@ gcloud sql users create "$DB_USER" --instance="$DB_INSTANCE" --password="$DB_PAS
 ```bash
 gsutil mb -l "$REGION" "gs://${BUCKET}"
 gsutil uniformbucketlevelaccess set on "gs://${BUCKET}"
+
+# Grant Cloud Run runtime service account access to the bucket.
+# If you deploy with a custom service account, use that email instead.
+PROJECT_NUMBER="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')"
+RUN_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+gcloud storage buckets add-iam-policy-binding "gs://${BUCKET}" \
+  --member="serviceAccount:${RUN_SA}" \
+  --role="roles/storage.objectAdmin"
 ```
 
 ## 6.6 Create secrets
@@ -574,7 +580,7 @@ gcloud run deploy ccs-api \
   --ingress internal-and-cloud-load-balancing \
   --no-allow-unauthenticated \
   --add-cloudsql-instances "$CLOUDSQL_CONN" \
-  --set-env-vars "PYTHONPATH=/app/src,CCS_PLATFORM_STORAGE_BACKEND=s3,CCS_PLATFORM_S3_BUCKET=${BUCKET},CCS_PLATFORM_TIMEZONE=Asia/Dubai,CCS_PLATFORM_EMBEDDED_WORKER=false,CCS_PLATFORM_CORS_ALLOW_ORIGINS=https://${APP_DOMAIN},CCS_DOWNLOADS_DIR=/tmp/downloads" \
+  --set-env-vars "PYTHONPATH=/app/src,CCS_PLATFORM_STORAGE_BACKEND=gcs,CCS_PLATFORM_GCS_BUCKET=${BUCKET},CCS_PLATFORM_GCS_PROJECT=${PROJECT_ID},CCS_PLATFORM_TIMEZONE=Asia/Dubai,CCS_PLATFORM_EMBEDDED_WORKER=false,CCS_PLATFORM_CORS_ALLOW_ORIGINS=https://${APP_DOMAIN},CCS_DOWNLOADS_DIR=/tmp/downloads" \
   --set-secrets "CCS_PLATFORM_DATABASE_URL=CCS_PLATFORM_DATABASE_URL:latest,FAB_USERNAME=FAB_USERNAME:latest,FAB_PASSWORD=FAB_PASSWORD:latest,ADCB_CID=ADCB_CID:latest,ADCB_LOGIN_PASSWORD=ADCB_LOGIN_PASSWORD:latest,ADCB_PDF_PASSWORD=ADCB_PDF_PASSWORD:latest,ENBD_USERNAME=ENBD_USERNAME:latest,ENBD_PASSWORD=ENBD_PASSWORD:latest,SIB_USER_ID=SIB_USER_ID:latest,SIB_PASSWORD=SIB_PASSWORD:latest,SIB_PDF_PASSWORD=SIB_PDF_PASSWORD:latest,SIB_SECURE_IMAGE_TEMPLATE_BASE64=SIB_SECURE_IMAGE_TEMPLATE_BASE64:latest" \
   --command python \
   --args "-m,ccs_platform.cli,api,--host,0.0.0.0,--port,8080"
@@ -587,7 +593,7 @@ gcloud run jobs create ccs-migrate \
   --image "$APP_IMAGE" \
   --region "$REGION" \
   --add-cloudsql-instances "$CLOUDSQL_CONN" \
-  --set-env-vars "PYTHONPATH=/app/src,CCS_PLATFORM_STORAGE_BACKEND=s3,CCS_PLATFORM_S3_BUCKET=${BUCKET},CCS_PLATFORM_TIMEZONE=Asia/Dubai,CCS_PLATFORM_EMBEDDED_WORKER=false" \
+  --set-env-vars "PYTHONPATH=/app/src,CCS_PLATFORM_STORAGE_BACKEND=gcs,CCS_PLATFORM_GCS_BUCKET=${BUCKET},CCS_PLATFORM_GCS_PROJECT=${PROJECT_ID},CCS_PLATFORM_TIMEZONE=Asia/Dubai,CCS_PLATFORM_EMBEDDED_WORKER=false" \
   --set-secrets "CCS_PLATFORM_DATABASE_URL=CCS_PLATFORM_DATABASE_URL:latest" \
   --command sh \
   --args "-c,PYTHONPATH=/app/src alembic upgrade head"
@@ -601,7 +607,7 @@ gcloud run jobs execute ccs-migrate --region "$REGION" --wait
 gcloud beta run worker-pools deploy ccs-worker \
   --image "$APP_IMAGE" \
   --region "$REGION" \
-  --set-env-vars "PYTHONPATH=/app/src,CCS_PLATFORM_STORAGE_BACKEND=s3,CCS_PLATFORM_S3_BUCKET=${BUCKET},CCS_PLATFORM_TIMEZONE=Asia/Dubai,CCS_PLATFORM_EMBEDDED_WORKER=false,CCS_DOWNLOADS_DIR=/tmp/downloads" \
+  --set-env-vars "PYTHONPATH=/app/src,CCS_PLATFORM_STORAGE_BACKEND=gcs,CCS_PLATFORM_GCS_BUCKET=${BUCKET},CCS_PLATFORM_GCS_PROJECT=${PROJECT_ID},CCS_PLATFORM_TIMEZONE=Asia/Dubai,CCS_PLATFORM_EMBEDDED_WORKER=false,CCS_DOWNLOADS_DIR=/tmp/downloads" \
   --set-secrets "CCS_PLATFORM_DATABASE_URL=CCS_PLATFORM_DATABASE_URL:latest,FAB_USERNAME=FAB_USERNAME:latest,FAB_PASSWORD=FAB_PASSWORD:latest,ADCB_CID=ADCB_CID:latest,ADCB_LOGIN_PASSWORD=ADCB_LOGIN_PASSWORD:latest,ADCB_PDF_PASSWORD=ADCB_PDF_PASSWORD:latest,ENBD_USERNAME=ENBD_USERNAME:latest,ENBD_PASSWORD=ENBD_PASSWORD:latest,SIB_USER_ID=SIB_USER_ID:latest,SIB_PASSWORD=SIB_PASSWORD:latest,SIB_PDF_PASSWORD=SIB_PDF_PASSWORD:latest,SIB_SECURE_IMAGE_TEMPLATE_BASE64=SIB_SECURE_IMAGE_TEMPLATE_BASE64:latest" \
   --command python \
   --args "-m,ccs_platform.cli,worker"
@@ -870,4 +876,3 @@ gcloud sql instances describe ccs-pg
   - https://cloud.google.com/artifact-registry/pricing
 - Network/LB related pricing references:
   - https://cloud.google.com/vpc/network-pricing
-

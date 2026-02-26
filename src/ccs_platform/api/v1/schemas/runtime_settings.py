@@ -11,6 +11,7 @@ class RuntimeSettingOut(BaseModel):
     id: int
     key: str
     value: str
+    has_value: bool
     bank_code: str | None
     is_secret: bool
     description: str | None
@@ -34,7 +35,7 @@ class RuntimeSettingCreate(BaseModel):
 
 
 class RuntimeSettingUpdate(BaseModel):
-    value: str
+    value: str | None = None
     bank_code: str | None = None
     is_secret: bool | None = None
     description: str | None = None
@@ -42,3 +43,4 @@ class RuntimeSettingUpdate(BaseModel):
 
 class RuntimeSettingsSeedRequest(BaseModel):
     overwrite_existing: bool = False
+    source_mode: str | None = None

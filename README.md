@@ -1,6 +1,6 @@
 # Credit Card Statement Platform
 
-DB-first credit card statement system for FAB, ADCB, ENBD, and SIB with:
+DB-first credit card statement system for FAB, ADCB, ENBD, EIB, SIB, and Mashreq with:
 - Statement header + line canonical storage
 - Deterministic statement replacement on `(bank_code, statement_reference, statement_date)`
 - Async jobs for scrape, upload, reparse, reclassify, exports, and diagnostics
@@ -78,6 +78,13 @@ Health check:
 curl http://127.0.0.1:8040/api/v1/health
 ```
 
+Readiness + metrics:
+
+```bash
+curl http://127.0.0.1:8040/api/v1/health/ready
+curl http://127.0.0.1:8040/api/v1/metrics
+```
+
 ## Run standalone worker
 
 Use this when you want schedule/job processing outside API process.
@@ -107,20 +114,24 @@ Scrape month selection in admin is range-based:
 - minimum: `2024-01`
 - maximum: current month in `Asia/Dubai`
 - unsupported historical bank/month combinations are marked `MANUAL_REQUIRED`.
-- ENBD, FAB, ADCB, and SIB multi-month scrape run in one browser session and iterate statement period dropdowns sequentially.
+- ENBD, EIB, FAB, ADCB, SIB, and Mashreq multi-month scrape run in one browser session and iterate statement period controls sequentially.
   unavailable periods are marked `SKIPPED_UNAVAILABLE` with per-month diagnostics in job items.
 
 ## Storage backends
 
 Environment variables:
-- `CCS_PLATFORM_STORAGE_BACKEND=local|s3`
+- `CCS_PLATFORM_STORAGE_BACKEND=local|gcs`
 - `CCS_PLATFORM_LOCAL_STORAGE_DIR=...`
 - `CCS_PLATFORM_DATABASE_URL=...`
 - `CCS_PLATFORM_TIMEZONE=Asia/Dubai`
+- `CCS_PLATFORM_ENVIRONMENT=development|production`
+- `CCS_PLATFORM_REQUIRE_API_AUTH=true|false`
+- `CCS_PLATFORM_API_AUTH_TOKEN=...` (required when auth is enabled)
+- `CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY=...` (recommended in production)
 
-S3 mode also needs:
-- `CCS_PLATFORM_S3_BUCKET`
-- optional: `CCS_PLATFORM_S3_ENDPOINT_URL`, `CCS_PLATFORM_S3_REGION`, `CCS_PLATFORM_S3_ACCESS_KEY_ID`, `CCS_PLATFORM_S3_SECRET_ACCESS_KEY`
+GCS mode also needs:
+- `CCS_PLATFORM_GCS_BUCKET`
+- optional: `CCS_PLATFORM_GCS_PROJECT`, `CCS_PLATFORM_GCS_CREDENTIALS_FILE`
 
 ## Migrations
 
@@ -128,6 +139,18 @@ Alembic files are included:
 
 ```bash
 alembic upgrade head
+```
+
+Or run the helper:
+
+```bash
+CCS_PLATFORM_DATABASE_URL=postgresql+psycopg://... ./scripts/migrate_db.sh
+```
+
+To re-encrypt stored secret runtime settings after setting/rotating `CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY`:
+
+```bash
+PYTHONPATH=src python scripts/reencrypt_runtime_secrets.py
 ```
 
 ## Notes

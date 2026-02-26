@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 from datetime import UTC, datetime
 
@@ -9,7 +10,10 @@ from ccs_platform.db import models
 from ccs_platform.core.settings import PlatformSettings
 from ccs_platform.db.session import SessionLocal
 from ccs_platform.application.jobs.runner import JobRunner
+from ccs_platform.application.jobs.service import create_or_get_job
 from ccs_platform.application.jobs.scheduler import compute_next_run
+
+logger = logging.getLogger(__name__)
 
 
 class WorkerLoop:
@@ -32,7 +36,12 @@ class WorkerLoop:
             done = {
                 job_id
                 for job_id, status in rows
-                if status in {models.JobStatus.SUCCEEDED, models.JobStatus.FAILED, models.JobStatus.CANCELLED}
+                if status in {
+                    models.JobStatus.QUEUED,
+                    models.JobStatus.SUCCEEDED,
+                    models.JobStatus.FAILED,
+                    models.JobStatus.CANCELLED,
+                }
             }
             self._in_flight.difference_update(done)
 
@@ -42,6 +51,7 @@ class WorkerLoop:
             return
 
         with SessionLocal() as db:
+            now = datetime.now(UTC)
             running_job_id = db.execute(
                 select(models.Job.id)
                 .where(models.Job.status == models.JobStatus.RUNNING)
@@ -54,9 +64,19 @@ class WorkerLoop:
             next_job = db.execute(
                 select(models.Job)
                 .where(models.Job.status == models.JobStatus.QUEUED)
+                .where(models.Job.next_retry_at.is_(None))
                 .order_by(models.Job.created_at.asc())
                 .limit(1)
             ).scalar_one_or_none()
+            if next_job is None:
+                next_job = db.execute(
+                    select(models.Job)
+                    .where(models.Job.status == models.JobStatus.QUEUED)
+                    .where(models.Job.next_retry_at.is_not(None))
+                    .where(models.Job.next_retry_at <= now)
+                    .order_by(models.Job.next_retry_at.asc(), models.Job.created_at.asc())
+                    .limit(1)
+                ).scalar_one_or_none()
             if next_job is None:
                 return
 
@@ -72,6 +92,7 @@ class WorkerLoop:
             return
 
         self._in_flight.add(next_job_id)
+        logger.info("Dispatching queued job | job_id=%s", next_job_id)
         self.job_runner.enqueue(next_job_id)
 
     def _trigger_due_schedules(self) -> None:
@@ -86,13 +107,13 @@ class WorkerLoop:
             ).scalars().all()
 
             for schedule in schedules:
-                job = models.Job(
+                create_or_get_job(
+                    db,
                     profile_id=schedule.profile_id,
                     job_type=schedule.job_type,
-                    status=models.JobStatus.QUEUED,
                     payload_json=schedule.payload_json or {},
+                    auto_idempotency=False,
                 )
-                db.add(job)
 
                 schedule.last_run_at = now
                 schedule.next_run_at = compute_next_run(
@@ -102,6 +123,8 @@ class WorkerLoop:
                 )
 
             db.commit()
+            if schedules:
+                logger.info("Triggered due schedules | count=%s", len(schedules))
 
     def ensure_schedule_next_runs(self) -> None:
         with SessionLocal() as db:
@@ -120,9 +143,11 @@ class WorkerLoop:
                 db.commit()
 
     def run_forever(self) -> None:
+        logger.info("Worker loop started")
         self.ensure_schedule_next_runs()
         while self._running:
             self._cleanup_in_flight()
             self._trigger_due_schedules()
             self._dispatch_queued_jobs()
             time.sleep(self.settings.job_poll_interval_seconds)
+        logger.info("Worker loop stopped")

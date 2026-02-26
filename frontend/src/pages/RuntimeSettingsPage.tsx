@@ -10,6 +10,7 @@ type RuntimeSetting = {
   id: number;
   key: string;
   value: string;
+  has_value: boolean;
   bank_code: string | null;
   is_secret: boolean;
   description: string | null;
@@ -78,12 +79,17 @@ export function RuntimeSettingsPage() {
   async function saveRow(row: RuntimeSetting) {
     try {
       setError(null);
-      const value = edits[row.key] ?? row.value;
-      const updated = await api.patch<RuntimeSetting>(`/runtime-settings/${encodeURIComponent(row.key)}`, {
-        value,
+      const hasEdit = Object.prototype.hasOwnProperty.call(edits, row.key);
+      const payload: Record<string, unknown> = {
         bank_code: row.bank_code,
         is_secret: row.is_secret,
         description: row.description,
+      };
+      if (hasEdit) {
+        payload.value = edits[row.key];
+      }
+      const updated = await api.patch<RuntimeSetting>(`/runtime-settings/${encodeURIComponent(row.key)}`, {
+        ...payload,
       });
       setRows((prev) => prev.map((item) => (item.key === updated.key ? updated : item)));
       setEdits((prev) => {
@@ -198,14 +204,25 @@ export function RuntimeSettingsPage() {
                   <td><code>{row.key}</code></td>
                   <td>{row.bank_code || '-'}</td>
                   <td style={{ minWidth: '280px' }}>
+                    {(() => {
+                      const hasEdit = Object.prototype.hasOwnProperty.call(edits, row.key);
+                      const inputValue = hasEdit ? edits[row.key] : row.value;
+                      const hiddenSecretPlaceholder =
+                        row.is_secret && row.has_value && !showSecrets && !hasEdit
+                          ? 'Stored secret (hidden)'
+                          : '';
+                      return (
                     <input
                       type={row.is_secret && !showSecrets ? 'password' : 'text'}
-                      value={edits[row.key] ?? row.value}
+                      value={inputValue}
                       onChange={(event) =>
                         setEdits((prev) => ({ ...prev, [row.key]: event.target.value }))
                       }
+                      placeholder={hiddenSecretPlaceholder}
                       style={{ width: '100%' }}
                     />
+                      );
+                    })()}
                   </td>
                   <td>{row.description || '-'}</td>
                   <td>{formatLocalDateTime(row.updated_at)}</td>

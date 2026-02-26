@@ -141,6 +141,18 @@ p {
   gap: 0.75rem;
 }
 
+.app-bar-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.token-input {
+  min-width: 210px;
+}
+
 .menu-button {
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -672,6 +684,17 @@ pre {
     padding: 0.72rem;
   }
 
+  .app-bar-right {
+    width: 100%;
+    justify-content: flex-start;
+    margin-top: 0.5rem;
+  }
+
+  .token-input {
+    min-width: 0;
+    width: 100%;
+  }
+
   .app-content {
     padding: 0.72rem;
   }
@@ -769,6 +792,10 @@ pre {
 
   .date-range-native-popover .rdrMonths {
     flex-direction: column;
+  }
+
+  .token-input {
+    min-width: 160px;
   }
 }
 
