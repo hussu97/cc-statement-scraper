@@ -1,0 +1,135 @@
+from __future__ import annotations
+
+from datetime import datetime
+
+from sqlalchemy import JSON, DateTime, Enum, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from ccs_platform.db.base import Base
+from ccs_platform.db.models.enums import ExportStatus, JobStatus, JobType, ScheduleStatus
+
+
+class Job(Base):
+    __tablename__ = "jobs"
+    __table_args__ = (
+        Index("ix_jobs_profile_id", "profile_id"),
+        Index("ix_jobs_status", "status"),
+        Index("ix_jobs_job_type", "job_type"),
+        Index("ix_jobs_created_at", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    profile_id: Mapped[int] = mapped_column(ForeignKey("profiles.id", ondelete="RESTRICT"), nullable=False)
+    job_type: Mapped[JobType] = mapped_column(Enum(JobType), nullable=False)
+    status: Mapped[JobStatus] = mapped_column(Enum(JobStatus), nullable=False, default=JobStatus.QUEUED)
+
+    payload_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    result_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    progress_percent: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    items: Mapped[list[JobItem]] = relationship("JobItem", back_populates="job", cascade="all, delete-orphan")
+
+
+class JobItem(Base):
+    __tablename__ = "job_items"
+    __table_args__ = (
+        Index("ix_job_items_status", "status"),
+        Index("ix_job_items_bank_month", "bank_code", "target_month"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False)
+
+    bank_code: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    target_month: Mapped[str | None] = mapped_column(String(16), nullable=True)
+
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="queued")
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    metadata_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    job: Mapped[Job] = relationship("Job", back_populates="items")
+
+
+class Schedule(Base):
+    __tablename__ = "schedules"
+    __table_args__ = (
+        Index("ix_schedules_profile_id", "profile_id"),
+        Index("ix_schedules_next_run", "next_run_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    profile_id: Mapped[int] = mapped_column(ForeignKey("profiles.id", ondelete="RESTRICT"), nullable=False)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    job_type: Mapped[JobType] = mapped_column(Enum(JobType), nullable=False)
+    payload_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    rrule: Mapped[str] = mapped_column(String(256), nullable=False)
+    timezone: Mapped[str] = mapped_column(String(64), nullable=False, default="Asia/Dubai")
+    status: Mapped[ScheduleStatus] = mapped_column(Enum(ScheduleStatus), nullable=False, default=ScheduleStatus.ACTIVE)
+
+    next_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class Export(Base):
+    __tablename__ = "exports"
+    __table_args__ = (Index("ix_exports_profile_id", "profile_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    profile_id: Mapped[int] = mapped_column(ForeignKey("profiles.id", ondelete="RESTRICT"), nullable=False)
+    export_type: Mapped[str] = mapped_column(String(64), nullable=False, default="workbook")
+    status: Mapped[ExportStatus] = mapped_column(Enum(ExportStatus), nullable=False, default=ExportStatus.QUEUED)
+
+    job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True)
+    storage_backend: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    storage_key: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    filename: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AuditEvent(Base):
+    __tablename__ = "audit_events"
+    __table_args__ = (
+        Index("ix_audit_events_profile_id", "profile_id"),
+        Index("ix_audit_events_created", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    profile_id: Mapped[int] = mapped_column(ForeignKey("profiles.id", ondelete="RESTRICT"), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(128), nullable=False)
+    entity_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    entity_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

@@ -1,0 +1,70 @@
+bank_card_rules:
+  - bank: FAB
+    card_last4: "9203"
+    category: Travel
+    keywords:
+      - AIRASIA
+      - EMIRATES
+
+bank_rules:
+  - bank: FAB
+    category: Utilities
+    keywords:
+      - DEWA
+      - ETISALAT
+  - bank: FAB
+    category: Transport
+    keywords:
+      - TAXI
+      - TESLA
+  - bank: ADCB
+    category: Travel
+    keywords:
+      - AIRASIA
+      - COZMO TRAVEL
+
+global_rules:
+  - category: Dining
+    keywords:
+      - NOON FOOD
+      - NAJM ALSHAMAL COFFEE
+  - category: Grocery
+    keywords:
+      - NOON MINUTES
+      - MARKET
+      - GROCERY
+      - LULU
+  - category: Subscription
+    keywords:
+      - NOON ONE
+  - category: Online Shopping
+    keywords:
+      - NOON
+      - NAMSHI
+      - DANUBE HOME
+      - SEPHORA
+      - TEMU.COM
+      - AL BASHA SMOKING
+  - category: Fines
+    keywords:
+      - SMART DUBAI GOVERNMENT DUBAI
+  - category: Medicine
+    keywords:
+      - CITY LIFE PHY
+  - category: Cashback
+    keywords:
+      - FAB REWARDS REDEMPTION - CASHBACK
+  - category: Dining
+    keywords:
+      - CAFE
+      - RESTAUR
+      - FOOD
+      - BRASSERIE
+  - category: Apple in-app purchase
+    keywords:
+      - APPLE.COM/BILL CORK
+  - category: Subscriptions
+    keywords:
+      - GOOGLE
+      - APPLE.COM/BILL
+      - WIX.COM

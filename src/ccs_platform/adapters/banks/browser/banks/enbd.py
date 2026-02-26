@@ -1,0 +1,779 @@
+from __future__ import annotations
+
+import logging
+import re
+from pathlib import Path
+from typing import Any
+
+from ccs_platform.adapters.banks.browser.shared import attempt_download_capture, require_env, save_download, text_snapshot
+
+MONTH_INDEX = {
+    "jan": 1,
+    "january": 1,
+    "feb": 2,
+    "february": 2,
+    "mar": 3,
+    "march": 3,
+    "apr": 4,
+    "april": 4,
+    "may": 5,
+    "jun": 6,
+    "june": 6,
+    "jul": 7,
+    "july": 7,
+    "aug": 8,
+    "august": 8,
+    "sep": 9,
+    "sept": 9,
+    "september": 9,
+    "oct": 10,
+    "october": 10,
+    "nov": 11,
+    "november": 11,
+    "dec": 12,
+    "december": 12,
+}
+
+
+def login(page: Any, logger: logging.Logger) -> None:
+    username = require_env("ENBD_USERNAME")
+    password = require_env("ENBD_PASSWORD")
+
+    page.fill("input#userName", username)
+    page.fill("input#password", password)
+    page.click("button[aria-label='Login']")
+    logger.info("ENBD: login submitted")
+
+
+def login_selector_visible(page: Any) -> bool:
+    return page.locator("input#userName").first.is_visible()
+
+
+def _dismiss_overlays(page: Any, logger: logging.Logger) -> None:
+    for _ in range(5):
+        dismissed_any = False
+
+        backdrop = page.locator(".cdk-overlay-backdrop.cdk-overlay-backdrop-showing")
+        try:
+            count = min(backdrop.count(), 3)
+        except Exception:  # noqa: BLE001
+            count = 0
+
+        for idx in range(count):
+            item = backdrop.nth(idx)
+            try:
+                if not item.is_visible():
+                    continue
+                try:
+                    item.click(timeout=1200)
+                except Exception:  # noqa: BLE001
+                    page.keyboard.press("Escape")
+                page.wait_for_timeout(500)
+                dismissed_any = True
+                logger.info("ENBD: dismissed overlay backdrop")
+                break
+            except Exception:  # noqa: BLE001
+                continue
+
+        for selector in [
+            "button[aria-label='Close']",
+            "button:has-text('Close')",
+            "button:has-text('Dismiss')",
+            "button:has-text('Skip')",
+            "button:has-text('Not now')",
+            "[role='button'][aria-label='Close']",
+            ".cdk-overlay-container button",
+        ]:
+            locator = page.locator(selector)
+            try:
+                count = min(locator.count(), 4)
+            except Exception:  # noqa: BLE001
+                count = 0
+
+            for idx in range(count):
+                item = locator.nth(idx)
+                try:
+                    if not item.is_visible():
+                        continue
+                    item.click(timeout=1200)
+                    page.wait_for_timeout(450)
+                    dismissed_any = True
+                    logger.info("ENBD: clicked overlay close control via %s", selector)
+                    break
+                except Exception:  # noqa: BLE001
+                    continue
+            if dismissed_any:
+                break
+
+        if not dismissed_any:
+            return
+
+
+def _wait_for_dashboard_ready(page: Any, logger: logging.Logger) -> None:
+    for _ in range(20):
+        _dismiss_overlays(page, logger)
+        low = text_snapshot(page).lower()
+        if "quick actions" in low and "recent transactions" in low:
+            return
+        page.wait_for_timeout(700)
+
+
+def _is_cards_detail(page: Any) -> bool:
+    if "/cards-detail" in page.url.lower():
+        return True
+    low = text_snapshot(page).lower()
+    return "statements" in low and "transactions" in low and "cards" in low
+
+
+def _click_cards_tile(page: Any, logger: logging.Logger) -> bool:
+    selectors = [
+        ".dashboard-card-container",
+        ".dashboard-content-wrapper",
+        ".card-header-section",
+        "div.card-heading[aria-label='Cards']",
+        "div[aria-label='Cards']",
+        "text=CARDS",
+    ]
+
+    for _ in range(6):
+        _dismiss_overlays(page, logger)
+
+        for selector in selectors:
+            locator = page.locator(selector)
+            try:
+                count = min(locator.count(), 6)
+            except Exception:  # noqa: BLE001
+                count = 0
+
+            for idx in range(count):
+                item = locator.nth(idx)
+                try:
+                    if not item.is_visible():
+                        continue
+                    try:
+                        item.click(timeout=2500)
+                    except Exception:  # noqa: BLE001
+                        item.click(timeout=2500, force=True)
+                    page.wait_for_timeout(2200)
+                    logger.info("ENBD: clicked cards entry via %s", selector)
+                    if _is_cards_detail(page):
+                        return True
+                except Exception:  # noqa: BLE001
+                    continue
+
+        page.mouse.wheel(0, 350)
+        page.wait_for_timeout(600)
+
+    return _is_cards_detail(page)
+
+
+def _open_statements_view(page: Any, logger: logging.Logger) -> bool:
+    for _ in range(10):
+        _dismiss_overlays(page, logger)
+
+        # Strictly click "View All" in the Statements section only.
+        try:
+            clicked = page.evaluate(
+                """
+                () => {
+                  const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim().toLowerCase();
+                  const isVisible = (el) => {
+                    const cs = getComputedStyle(el);
+                    const r = el.getBoundingClientRect();
+                    return cs.visibility !== 'hidden' && cs.display !== 'none' && r.width > 0 && r.height > 0;
+                  };
+                  const sections = Array.from(document.querySelectorAll('section,div,mat-card,app-card,article'));
+                  for (const section of sections) {
+                    if (!isVisible(section)) continue;
+                    const st = norm(section.innerText || section.textContent || '');
+                    if (!st.includes('statement')) continue;
+                    if (st.includes('recent transactions')) continue;
+
+                    const nodes = Array.from(section.querySelectorAll('button, a, [role="button"], div, span'));
+                    for (const node of nodes) {
+                      if (!isVisible(node)) continue;
+                      const t = norm(node.innerText || node.textContent || node.value || '');
+                      if (!(t === 'view all' || t.startsWith('view all '))) continue;
+
+                      let cur = node;
+                      while (cur && cur !== document.body) {
+                        const tag = (cur.tagName || '').toLowerCase();
+                        const role = (cur.getAttribute && cur.getAttribute('role')) || '';
+                        if ((tag === 'button' || tag === 'a' || role === 'button') && isVisible(cur)) {
+                          cur.click();
+                          return true;
+                        }
+                        cur = cur.parentElement;
+                      }
+
+                      node.click();
+                      return true;
+                    }
+                  }
+                  return false;
+                }
+                """
+            )
+            if clicked:
+                page.wait_for_timeout(1800)
+                logger.info("ENBD: clicked Statements -> View All")
+                return True
+        except Exception:  # noqa: BLE001
+            pass
+
+        page.mouse.wheel(0, 650)
+        page.wait_for_timeout(700)
+
+    return False
+
+
+def _extract_select_options(select_element: Any) -> list[dict[str, Any]]:
+    try:
+        return select_element.evaluate(
+            """
+            (el) => Array.from(el.options).map((opt) => ({
+              text: (opt.textContent || '').trim(),
+              value: opt.value || '',
+              disabled: !!opt.disabled
+            }))
+            """
+        )
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def _parse_month_value(text: str) -> int | None:
+    low = text.lower().strip()
+    if not low:
+        return None
+
+    num = re.search(r"\b(0?[1-9]|1[0-2])\b", low)
+    if num:
+        return int(num.group(1))
+
+    for key, value in MONTH_INDEX.items():
+        if key in low:
+            return value
+
+    return None
+
+
+def _score_option_text(text: str, mode: str) -> int | None:
+    low = text.lower().strip()
+    if not low:
+        return None
+
+    if mode == "year":
+        year_match = re.search(r"\b(19|20)\d{2}\b", low)
+        return int(year_match.group(0)) if year_match else None
+
+    if mode == "month":
+        return _parse_month_value(low)
+
+    year_match = re.search(r"\b(19|20)\d{2}\b", low)
+    month_val = _parse_month_value(low)
+    if year_match:
+        return int(year_match.group(0)) * 100 + (month_val or 0)
+    return month_val
+
+
+def _choose_option(
+    select_element: Any,
+    mode: str,
+    logger: logging.Logger,
+    *,
+    target_score: int | None = None,
+    strict_target: bool = False,
+) -> bool:
+    options = _extract_select_options(select_element)
+    if not options:
+        return False
+
+    candidates: list[tuple[int, dict[str, Any]]] = []
+    for opt in options:
+        text = (opt.get("text") or "").strip()
+        value = (opt.get("value") or "").strip()
+        low = text.lower()
+        if opt.get("disabled"):
+            continue
+        if not text and not value:
+            continue
+        if any(token in low for token in ["select", "choose", "please"]):
+            continue
+
+        score = _score_option_text(text, mode)
+        if score is not None:
+            candidates.append((score, opt))
+
+    if not candidates:
+        return False
+
+    chosen = None
+    if target_score is not None:
+        for score, opt in candidates:
+            if score == target_score:
+                chosen = opt
+                break
+
+    if chosen is None and strict_target and target_score is not None:
+        logger.info(
+            "ENBD: target %s option score=%s not found in native select",
+            mode,
+            target_score,
+        )
+        return False
+
+    if chosen is None:
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        chosen = candidates[0][1]
+
+    try:
+        if chosen.get("value"):
+            select_element.select_option(chosen["value"])
+        else:
+            select_element.select_option(label=chosen.get("text", ""))
+        logger.info(
+            "ENBD: selected %s option %s (target_score=%s)",
+            mode,
+            chosen.get("text", ""),
+            target_score,
+        )
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _select_from_material_dropdown(
+    page: Any,
+    label: str,
+    mode: str,
+    logger: logging.Logger,
+    *,
+    target_score: int | None = None,
+    strict_target: bool = False,
+) -> bool:
+    container = page.locator(f".form-element-container:has(label:has-text('{label}'))")
+    if container.count() == 0:
+        return False
+
+    trigger_selectors = [
+        ".mat-select-trigger",
+        ".mat-form-field-flex",
+        ".mat-form-field-infix",
+    ]
+
+    opened = False
+    for selector in trigger_selectors:
+        locator = container.locator(selector)
+        try:
+            count = min(locator.count(), 4)
+        except Exception:  # noqa: BLE001
+            count = 0
+        for idx in range(count):
+            item = locator.nth(idx)
+            try:
+                if not item.is_visible():
+                    continue
+                item.click(timeout=2500)
+                page.wait_for_timeout(600)
+                opened = True
+                break
+            except Exception:  # noqa: BLE001
+                continue
+        if opened:
+            break
+
+    if not opened:
+        return False
+
+    options_locator = page.locator(".cdk-overlay-container [role='option'], .cdk-overlay-container mat-option")
+    try:
+        option_count = min(options_locator.count(), 80)
+    except Exception:  # noqa: BLE001
+        option_count = 0
+
+    candidates: list[tuple[int, int, str]] = []
+    for idx in range(option_count):
+        item = options_locator.nth(idx)
+        try:
+            if not item.is_visible():
+                continue
+            text = (item.inner_text() or "").strip()
+            if not text:
+                continue
+            score = _score_option_text(text, mode)
+            if score is None:
+                continue
+            candidates.append((score, idx, text))
+        except Exception:  # noqa: BLE001
+            continue
+
+    if not candidates:
+        page.keyboard.press("Escape")
+        return False
+
+    chosen_idx = None
+    option_text = ""
+    if target_score is not None:
+        for score, idx, text in candidates:
+            if score == target_score:
+                chosen_idx = idx
+                option_text = text
+                break
+
+    if chosen_idx is None and strict_target and target_score is not None:
+        page.keyboard.press("Escape")
+        logger.info(
+            "ENBD: target %s option score=%s not found in material dropdown",
+            mode,
+            target_score,
+        )
+        return False
+
+    if chosen_idx is None:
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        _, chosen_idx, option_text = candidates[0]
+
+    try:
+        options_locator.nth(chosen_idx).click(timeout=2500)
+        page.wait_for_timeout(500)
+        logger.info(
+            "ENBD: selected %s option %s (target_score=%s)",
+            mode,
+            option_text,
+            target_score,
+        )
+        return True
+    except Exception:  # noqa: BLE001
+        page.keyboard.press("Escape")
+        return False
+
+
+def _parse_requested_month(value: str | None) -> tuple[int | None, int | None]:
+    raw = (value or "").strip().lower()
+    if not raw or raw == "latest":
+        return None, None
+    if not re.match(r"^\d{4}-\d{2}$", raw):
+        return None, None
+    year = int(raw[:4])
+    month = int(raw[5:7])
+    if month < 1 or month > 12:
+        return None, None
+    return year, month
+
+
+def _select_statement_period(
+    page: Any,
+    logger: logging.Logger,
+    requested_month: str | None,
+    *,
+    target_year: int | None = None,
+    target_month: int | None = None,
+) -> None:
+    if target_year is None or target_month is None:
+        parsed_year, parsed_month = _parse_requested_month(requested_month)
+        target_year = target_year if target_year is not None else parsed_year
+        target_month = target_month if target_month is not None else parsed_month
+    target_combined = None
+    if target_year is not None and target_month is not None:
+        target_combined = target_year * 100 + target_month
+    strict_target = target_combined is not None
+
+    selects = page.locator("select")
+    try:
+        count = min(selects.count(), 8)
+    except Exception:  # noqa: BLE001
+        count = 0
+
+    visible = []
+    for idx in range(count):
+        select = selects.nth(idx)
+        try:
+            if select.is_visible():
+                visible.append(select)
+        except Exception:  # noqa: BLE001
+            continue
+
+    if visible:
+        # Try year+month pair first.
+        selected_year = False
+        selected_month = False
+
+        for select in visible:
+            selected_year = _choose_option(
+                select,
+                "year",
+                logger,
+                target_score=target_year,
+                strict_target=strict_target,
+            ) or selected_year
+        for select in visible:
+            selected_month = _choose_option(
+                select,
+                "month",
+                logger,
+                target_score=target_month,
+                strict_target=strict_target,
+            ) or selected_month
+
+        if selected_year and selected_month:
+            page.wait_for_timeout(600)
+            return True
+
+        # Fallback: combined month-year field.
+        for select in visible:
+            if _choose_option(
+                select,
+                "combined",
+                logger,
+                target_score=target_combined,
+                strict_target=strict_target,
+            ):
+                page.wait_for_timeout(600)
+                return True
+
+    # Angular Material dropdown fallback (ENBD E-statement page).
+    selected_year = _select_from_material_dropdown(
+        page,
+        "Year",
+        "year",
+        logger,
+        target_score=target_year,
+        strict_target=strict_target,
+    )
+    selected_month = _select_from_material_dropdown(
+        page,
+        "Month",
+        "month",
+        logger,
+        target_score=target_month,
+        strict_target=strict_target,
+    )
+    if selected_year and selected_month:
+        page.wait_for_timeout(600)
+        return True
+
+    if strict_target:
+        logger.info(
+            "ENBD: exact statement period not available for target year=%s month=%s",
+            target_year,
+            target_month,
+        )
+        return False
+
+    return True
+
+
+def _click_download(page: Any, incoming_dir: Path, logger: logging.Logger) -> Path | None:
+    selectors = [
+        "button:has-text('Download')",
+        "a:has-text('Download')",
+        "button:has-text('Download PDF')",
+        "a:has-text('Download PDF')",
+        "[role='button']:has-text('Download')",
+        "[aria-label*='download' i]",
+        "[title*='download' i]",
+    ]
+
+    for selector in selectors:
+        locator = page.locator(selector)
+        try:
+            count = min(locator.count(), 8)
+        except Exception:  # noqa: BLE001
+            count = 0
+
+        for idx in range(count):
+            item = locator.nth(idx)
+            try:
+                if not item.is_visible():
+                    continue
+                with page.expect_download(timeout=9000) as download_info:
+                    item.click(timeout=3000)
+                return save_download(download_info.value, incoming_dir, "ENBD", logger)
+            except Exception:  # noqa: BLE001
+                continue
+
+    return None
+
+
+def _is_statements_download_page(page: Any) -> bool:
+    try:
+        if page.locator("select").count() > 0:
+            return True
+    except Exception:  # noqa: BLE001
+        pass
+
+    low = text_snapshot(page).lower()
+    return "statement" in low and "download" in low
+
+
+def _dismiss_post_download_ui(page: Any, logger: logging.Logger) -> None:
+    # ENBD occasionally leaves modal/toast overlays after a successful download.
+    _dismiss_overlays(page, logger)
+    try:
+        page.mouse.click(24, 24)
+        page.wait_for_timeout(250)
+    except Exception:  # noqa: BLE001
+        pass
+    _dismiss_overlays(page, logger)
+    page.wait_for_timeout(700)
+
+
+def _ensure_statements_download_page(page: Any, logger: logging.Logger) -> bool:
+    if _is_statements_download_page(page):
+        return True
+    if _open_statements_view(page, logger):
+        page.wait_for_timeout(900)
+        return _is_statements_download_page(page)
+    return False
+
+
+def _normalize_requested_months(value: Any) -> list[str]:
+    if isinstance(value, str):
+        token = value.strip()
+        return [token] if token else []
+    if isinstance(value, list):
+        tokens = []
+        seen = set()
+        for item in value:
+            token = str(item or "").strip()
+            if not token or token in seen:
+                continue
+            seen.add(token)
+            tokens.append(token)
+        return tokens
+    return []
+
+
+def _download_requested_months(
+    page: Any,
+    incoming_dir: Path,
+    logger: logging.Logger,
+    requested_months: list[str],
+) -> tuple[int, dict[str, Any]]:
+    diagnostics: dict[str, Any] = {
+        "requested_months": requested_months,
+        "downloaded": [],
+        "skipped_unavailable": [],
+        "failed": [],
+    }
+
+    downloaded = 0
+    for month_token in requested_months:
+        if not _ensure_statements_download_page(page, logger):
+            diagnostics["failed"].append(
+                {
+                    "month": month_token,
+                    "reason": "statements_page_not_reachable",
+                }
+            )
+            continue
+
+        target_year, target_month = _parse_requested_month(month_token)
+        if target_year is None or target_month is None:
+            diagnostics["failed"].append(
+                {
+                    "month": month_token,
+                    "reason": "invalid_month_token",
+                }
+            )
+            continue
+
+        selected = _select_statement_period(
+            page,
+            logger,
+            requested_month=month_token,
+            target_year=target_year,
+            target_month=target_month,
+        )
+        if not selected:
+            diagnostics["skipped_unavailable"].append(
+                {
+                    "month": month_token,
+                    "reason": "statement_period_not_available",
+                }
+            )
+            continue
+
+        path = _click_download(page, incoming_dir, logger)
+        if path is None:
+            diagnostics["failed"].append(
+                {
+                    "month": month_token,
+                    "reason": "download_control_not_found_or_failed",
+                }
+            )
+            continue
+
+        downloaded += 1
+        diagnostics["downloaded"].append(
+            {
+                "month": month_token,
+                "path": str(path),
+            }
+        )
+        _dismiss_post_download_ui(page, logger)
+
+    return downloaded, diagnostics
+
+
+def download_latest_statement(
+    page: Any,
+    incoming_dir: Path,
+    logger: logging.Logger,
+    bank_cfg: dict,  # noqa: ARG001
+) -> int:
+    _wait_for_dashboard_ready(page, logger)
+
+    if not _click_cards_tile(page, logger):
+        logger.info("ENBD: failed to open cards detail page")
+        return attempt_download_capture(page, incoming_dir, "ENBD", logger)
+
+    # On cards page, scroll to statements and open View.
+    if not _open_statements_view(page, logger):
+        logger.info("ENBD: Statements->View not found")
+        return attempt_download_capture(page, incoming_dir, "ENBD", logger)
+
+    requested_months = _normalize_requested_months(bank_cfg.get("requested_months"))
+    requested_month = str(bank_cfg.get("requested_month") or "").strip()
+    if not requested_months and requested_month:
+        requested_months = [requested_month]
+
+    if requested_months:
+        downloaded, diagnostics = _download_requested_months(
+            page,
+            incoming_dir,
+            logger,
+            requested_months,
+        )
+        bank_cfg["download_diagnostics"] = diagnostics
+        return downloaded
+
+    # Legacy/latest fallback path when no explicit requested month list is provided.
+    selected = _select_statement_period(page, logger, requested_month=None)
+    if not selected:
+        bank_cfg["download_diagnostics"] = {
+            "requested_months": [],
+            "downloaded": [],
+            "skipped_unavailable": [{"month": "latest", "reason": "statement_period_not_available"}],
+            "failed": [],
+        }
+        return 0
+
+    path = _click_download(page, incoming_dir, logger)
+    if path is not None:
+        bank_cfg["download_diagnostics"] = {
+            "requested_months": ["latest"],
+            "downloaded": [{"month": "latest", "path": str(path)}],
+            "skipped_unavailable": [],
+            "failed": [],
+        }
+        return 1
+
+    bank_cfg["download_diagnostics"] = {
+        "requested_months": ["latest"],
+        "downloaded": [],
+        "skipped_unavailable": [],
+        "failed": [{"month": "latest", "reason": "download_control_not_found_or_failed"}],
+    }
+    return attempt_download_capture(page, incoming_dir, "ENBD", logger)

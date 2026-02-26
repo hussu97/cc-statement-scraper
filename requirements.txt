@@ -1,0 +1,16 @@
+typer>=0.12
+python-dotenv>=1.0
+PyYAML>=6.0
+pdfplumber>=0.11
+pypdf>=5.0
+pydantic>=2.8
+pydantic-settings>=2.4
+pandas>=2.2
+openpyxl>=3.1
+playwright>=1.50
+fastapi>=0.115
+uvicorn>=0.30
+sqlalchemy>=2.0
+alembic>=1.13
+python-multipart>=0.0.9
+boto3>=1.34
