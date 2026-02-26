@@ -161,7 +161,7 @@ def dashboard_category_trend_series(
     date_from: date | None = None,
     date_to: date | None = None,
     merchant_search: str | None = None,
-    top_n: int = Query(default=6, ge=1, le=20),
+    top_n: int = Query(default=12, ge=1, le=20),
 ) -> StackedSeriesResponse:
     _validate_date_range(date_from, date_to)
     payload = dashboard_analytics.fetch_category_trend_series(
@@ -223,8 +223,13 @@ def dashboard_top_merchants(
     date_to: date | None = None,
     merchant_search: str | None = None,
     limit: int = 20,
+    direction: str = Query(default="debit"),
 ):
     _validate_date_range(date_from, date_to)
+    direction_token = (direction or "debit").strip().lower()
+    if direction_token not in {"debit", "credit"}:
+        raise HTTPException(status_code=400, detail="direction must be debit or credit")
+
     points = dashboard_analytics.fetch_top_merchants(
         db,
         filters=_filters(
@@ -236,6 +241,7 @@ def dashboard_top_merchants(
             merchant_search=merchant_search,
         ),
         limit=limit,
+        direction=direction_token,
     )
     return [BreakdownPoint(**point) for point in points]
 

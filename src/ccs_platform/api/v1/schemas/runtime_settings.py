@@ -18,6 +18,13 @@ class RuntimeSettingOut(BaseModel):
     updated_at: datetime
 
 
+class PaginatedRuntimeSettings(BaseModel):
+    total: int
+    page: int
+    page_size: int
+    items: list[RuntimeSettingOut]
+
+
 class RuntimeSettingCreate(BaseModel):
     key: str
     value: str = ""

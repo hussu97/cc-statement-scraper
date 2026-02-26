@@ -35,6 +35,13 @@ class JobOut(BaseModel):
     items: list[JobItemOut] = []
 
 
+class PaginatedJobs(BaseModel):
+    total: int
+    page: int
+    page_size: int
+    items: list[JobOut]
+
+
 class ScrapeJobRequest(BaseModel):
     banks: list[str] = Field(default_factory=list)
     months: list[str] = Field(default_factory=list)

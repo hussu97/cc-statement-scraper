@@ -49,6 +49,8 @@ def test_seed_categories_rules_refreshes_seeded_rules_but_keeps_manual(monkeypat
         db.add(models.Category(name="Legacy"))
         db.add(models.Category(name="Other"))
         db.add(models.Category(name="Groceries"))
+        db.add(models.Category(name="Subscriptions"))
+        db.add(models.Category(name="Fines"))
         db.add(
             models.CategoryRule(
                 name="seed-global-OLD",
@@ -80,18 +82,26 @@ def test_seed_categories_rules_refreshes_seeded_rules_but_keeps_manual(monkeypat
         seed_module._seed_categories_and_rules(db)
         db.commit()
 
-        rules = db.execute(select(models.CategoryRule).order_by(models.CategoryRule.priority.asc())).scalars().all()
+        rules = db.execute(select(models.CategoryRule).order_by(models.CategoryRule.id.asc())).scalars().all()
         rule_names = {rule.name for rule in rules}
+        seeded_patterns = {rule.pattern for rule in rules if rule.name.startswith("seed-")}
 
         assert "manual-rule" in rule_names
         assert "seed-global-OLD" not in rule_names
-        assert "seed-global-TEMU.COM" in rule_names
-        assert "seed-global-GROCERY" in rule_names
+        assert "TEMU.COM" in seeded_patterns
+        assert "GROCERY" in seeded_patterns
         category_names = {name for (name,) in db.execute(select(models.Category.name)).all()}
         assert "Grocery" in category_names
         assert "Groceries" not in category_names
+        assert "Subscription" in category_names
+        assert "Subscriptions" not in category_names
+        assert "Fines/Govt Services" in category_names
+        assert "Fines" not in category_names
 
         seeded_count = len([name for name in rule_names if name.startswith("seed-")])
+        assert all(rule.bank_code is None for rule in rules)
+        assert all(rule.card_last4 is None for rule in rules)
+        assert all(rule.priority == 100 for rule in rules)
 
         seed_module._seed_categories_and_rules(db)
         db.commit()

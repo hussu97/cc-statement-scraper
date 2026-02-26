@@ -36,34 +36,59 @@ def _match(rule: models.CategoryRule, merchant_normalized: str) -> bool:
     return False
 
 
+def _specificity_score(pattern: str) -> int:
+    return sum(1 for ch in pattern if ch.isalnum())
+
+
+def _match_type_tiebreaker(match_type: models.MatchType) -> int:
+    if match_type == models.MatchType.EXACT:
+        return 3
+    if match_type == models.MatchType.CONTAINS:
+        return 2
+    if match_type == models.MatchType.REGEX:
+        return 1
+    return 0
+
+
 def find_matching_rule(
     db: Session,
     *,
-    bank_code: str,
-    card_last4: str | None,
+    bank_code: str | None = None,
+    card_last4: str | None = None,
     merchant_normalized: str,
 ) -> models.CategoryRule | None:
     rules = db.execute(
         select(models.CategoryRule)
         .where(models.CategoryRule.active.is_(True))
-        .order_by(models.CategoryRule.priority.asc(), models.CategoryRule.id.asc())
+        .order_by(models.CategoryRule.id.asc())
     ).scalars()
 
+    best_rule: models.CategoryRule | None = None
+    best_specificity = -1
+    best_type_tiebreaker = -1
+
     for rule in rules:
-        if rule.bank_code and rule.bank_code.upper() != bank_code.upper():
+        if not _match(rule, merchant_normalized):
             continue
-        if rule.card_last4 and (card_last4 or "") != rule.card_last4:
+        specificity = _specificity_score((rule.pattern or "").strip())
+        type_tiebreaker = _match_type_tiebreaker(rule.match_type)
+        if specificity > best_specificity:
+            best_rule = rule
+            best_specificity = specificity
+            best_type_tiebreaker = type_tiebreaker
             continue
-        if _match(rule, merchant_normalized):
-            return rule
-    return None
+        if specificity == best_specificity and type_tiebreaker > best_type_tiebreaker:
+            best_rule = rule
+            best_type_tiebreaker = type_tiebreaker
+
+    return best_rule
 
 
 def categorize(
     db: Session,
     *,
-    bank_code: str,
-    card_last4: str | None,
+    bank_code: str | None = None,
+    card_last4: str | None = None,
     merchant_normalized: str,
 ) -> tuple[str, models.CategoryRule | None]:
     rule = find_matching_rule(

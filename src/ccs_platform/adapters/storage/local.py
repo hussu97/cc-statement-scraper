@@ -24,10 +24,14 @@ class LocalStorageAdapter(StorageAdapter):
     ) -> StoredObject:
         ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
         safe_name = filename.replace("/", "_").replace("\\", "_")
-        scoped_folder = folder
+        normalized_folder = folder.strip("/").strip()
+        scoped_folder = normalized_folder
         if profile_key:
-            scoped_folder = f"profiles/{profile_key}/{folder}"
-        key = f"{scoped_folder}/{ts}_{uuid.uuid4().hex}_{safe_name}"
+            scoped_folder = profile_key.strip()
+            if normalized_folder:
+                scoped_folder = f"{scoped_folder}/{normalized_folder}"
+        key_prefix = f"{scoped_folder}/" if scoped_folder else ""
+        key = f"{key_prefix}{ts}_{uuid.uuid4().hex}_{safe_name}"
         full_path = self.root_dir / key
         full_path.parent.mkdir(parents=True, exist_ok=True)
         full_path.write_bytes(content)
@@ -41,8 +45,13 @@ class LocalStorageAdapter(StorageAdapter):
         source: str,
         profile_key: str | None = None,
     ) -> StoredObject:
-        folder = f"pdf/{source}"
-        return self._save(content=content, folder=folder, filename=filename, profile_key=profile_key)
+        source_prefix = (source or "pdf").strip().lower()
+        return self._save(
+            content=content,
+            folder="",
+            filename=f"{source_prefix}_{filename}",
+            profile_key=profile_key,
+        )
 
     def save_binary(
         self,

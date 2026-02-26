@@ -6,13 +6,13 @@ from pathlib import Path
 
 import pdfplumber
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from ccs_platform.core.bank_config import load_app_config
 from ccs_platform.db import models
 from ccs_platform.api.deps import ProfileContext, get_db, get_profile_context
-from ccs_platform.api.v1.schemas import JobOut, ReclassifyJobRequest, ScrapeJobRequest
+from ccs_platform.api.v1.schemas import JobOut, PaginatedJobs, ReclassifyJobRequest, ScrapeJobRequest
 from ccs_platform.application.banks.capabilities import get_enabled_banks, resolve_requested_months
 
 
@@ -93,20 +93,33 @@ def _detect_bank_code_for_upload(filename: str, pdf_path: Path) -> str | None:
     return _detect_bank_code_from_filename(filename)
 
 
-@router.get("", response_model=list[JobOut])
+@router.get("", response_model=PaginatedJobs)
 def list_jobs(
     db: Session = Depends(get_db),
     profile: ProfileContext = Depends(get_profile_context),
-    limit: int = 50,
-) -> list[JobOut]:
+    page: int = 1,
+    page_size: int = 100,
+) -> PaginatedJobs:
+    page = max(page, 1)
+    page_size = min(max(page_size, 1), 1000)
+
+    count_query = select(func.count(models.Job.id)).where(models.Job.profile_id == profile.profile_id)
+    total = int(db.execute(count_query).scalar_one())
+
     rows = db.execute(
         select(models.Job)
         .options(selectinload(models.Job.items))
         .where(models.Job.profile_id == profile.profile_id)
         .order_by(models.Job.created_at.desc())
-        .limit(min(limit, 200))
+        .offset((page - 1) * page_size)
+        .limit(page_size)
     ).scalars().all()
-    return [_job_to_out(job) for job in rows]
+    return PaginatedJobs(
+        total=total,
+        page=page,
+        page_size=page_size,
+        items=[_job_to_out(job) for job in rows],
+    )
 
 
 @router.get("/{job_id}", response_model=JobOut)

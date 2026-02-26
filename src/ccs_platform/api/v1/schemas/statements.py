@@ -56,3 +56,7 @@ class PaginatedStatementLines(BaseModel):
     page: int
     page_size: int
     items: list[StatementLineOut]
+
+
+class StatementDateUpdate(BaseModel):
+    statement_date: date

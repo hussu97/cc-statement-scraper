@@ -1,70 +1,136 @@
-bank_card_rules:
-  - bank: FAB
-    card_last4: "9203"
-    category: Travel
-    keywords:
-      - AIRASIA
-      - EMIRATES
-
-bank_rules:
-  - bank: FAB
-    category: Utilities
-    keywords:
-      - DEWA
-      - ETISALAT
-  - bank: FAB
-    category: Transport
-    keywords:
-      - TAXI
-      - TESLA
-  - bank: ADCB
-    category: Travel
-    keywords:
-      - AIRASIA
-      - COZMO TRAVEL
-
 global_rules:
   - category: Dining
     keywords:
       - NOON FOOD
+      - BALCONA
+      - KEETA DB
+      - KEETA
       - NAJM ALSHAMAL COFFEE
+      - ZOMATO
+      - DUSIT THANI
+      - DELIVEROO
+      - QLUB
+      - PANDA EXPRESS
+      - TALABAT.COM
+      - KFC
+      - MCDONALDS
+      - SUBWAY
+      - ALL DAY GOURMENT
+      - ALL DAY GOURMET
+      - COFFEE
   - category: Grocery
     keywords:
       - NOON MINUTES
+      - AMAZON NOW
       - MARKET
       - GROCERY
+      - 7 11
       - LULU
+      - GRAB.COM
   - category: Subscription
     keywords:
       - NOON ONE
-  - category: Online Shopping
+      - DUOLINGO
+      - EXCELLENCY BENEFIT
+      - MEMBERSHIP FEE
+      - OPENAI *CHATGPT
+      - SHOPIFY
+      - GOOGLE
+      - APPLE.COM/BILL
+      - WIX.COM
+      - ICONSCOUT.COM
+  - category: Shopping
     keywords:
       - NOON
       - NAMSHI
+      - ALSAYYEDA
+      - AMAZON.AE
+      - HOME CENTRE
+      - DECATHLON
+      - DODO FLOWERS
+      - UNIQLO
+      - BERSHKA
+      - JASHANMAL
+      - MINISO
       - DANUBE HOME
       - SEPHORA
       - TEMU.COM
       - AL BASHA SMOKING
-  - category: Fines
+      - TRADING LLC
+      - HENNES &MA
+      - MARKS AND SPENCER
+  - category: Entretainment
+    keywords:
+      - RIVER SPA
+      - OMISE*PHUKET
+      - VOX CINEMAS
+      - LIME
+      - GENTS SALON
+      - MASSAGE
+  - category: Transport
+    keywords:
+      - BOLT
+      - CAREEM HALA
+      - TAXI
+      - TESLA
+      - GRAB RIDES
+      - GRAB-EC
+      - ADNOC
+      - ENOC
+      - EMARAT
+  - category: Travel
+    keywords:
+      - TRANS SINGAPORE
+      - BOOKING.COM
+      - AIRPORT
+      - AIRALO
+      - AIRASIA
+      - COZMO TRAVEL
+      - KOMUTER
+      - UBER
+      - IMMIGRATION
+      - AIR ARABIA
+      - EMIRATES
+  - category: Utilities
+    keywords:
+      - GAS SERVICE
+      - DEWA
+      - ETISALAT
+      - DESCO
+  - category: Insurance
+    keywords:
+      - ZURICH INTL
+      - VAT ON INSURANCE
+  - category: Investment
+    keywords:
+      - RL360
+  - category: Fines/Govt Services
     keywords:
       - SMART DUBAI GOVERNMENT DUBAI
+      - AL ETIHAD CREDIT BUREA
+      - SHARJAH FINANCE DEPART
+  - category: Forex Charge
+    keywords:
+      - VAT ON SERVICE CHARGES
   - category: Medicine
     keywords:
+      - HEALTH
+      - PHARMACY
       - CITY LIFE PHY
   - category: Cashback
     keywords:
       - FAB REWARDS REDEMPTION - CASHBACK
+      - JOINING_BONUS_CASHBACK
+  - category: Card Repayment
+    keywords:
+      - PAYMENT RECEIVED
   - category: Dining
     keywords:
       - CAFE
+      - REST
       - RESTAUR
       - FOOD
       - BRASSERIE
   - category: Apple in-app purchase
     keywords:
       - APPLE.COM/BILL CORK
-  - category: Subscriptions
-    keywords:
-      - GOOGLE
-      - APPLE.COM/BILL
-      - WIX.COM

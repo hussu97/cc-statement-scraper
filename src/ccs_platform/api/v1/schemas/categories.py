@@ -27,12 +27,16 @@ class CategoryRuleOut(BaseModel):
     category_name: str
     match_type: MatchType
     pattern: str
-    bank_code: str | None
-    card_last4: str | None
-    priority: int
     active: bool
     created_at: datetime
     updated_at: datetime
+
+
+class PaginatedCategoryRules(BaseModel):
+    total: int
+    page: int
+    page_size: int
+    items: list[CategoryRuleOut]
 
 
 class CategoryRuleCreate(BaseModel):
@@ -40,9 +44,6 @@ class CategoryRuleCreate(BaseModel):
     category_name: str
     match_type: MatchType = MatchType.CONTAINS
     pattern: str
-    bank_code: str | None = None
-    card_last4: str | None = None
-    priority: int = 100
     active: bool = True
 
 
@@ -51,15 +52,10 @@ class CategoryRuleUpdate(BaseModel):
     category_name: str | None = None
     match_type: MatchType | None = None
     pattern: str | None = None
-    bank_code: str | None = None
-    card_last4: str | None = None
-    priority: int | None = None
     active: bool | None = None
 
 
 class CategoryRuleTestRequest(BaseModel):
-    bank_code: str
-    card_last4: str | None = None
     merchant_normalized: str
 
 

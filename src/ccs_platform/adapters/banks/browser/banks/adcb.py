@@ -50,6 +50,216 @@ MONTH_INDEX = {
 }
 
 
+def _parse_month_value(text: str) -> int | None:
+    low = text.lower().strip()
+    if not low:
+        return None
+
+    num = re.search(r"\b(0?[1-9]|1[0-2])\b", low)
+    if num:
+        return int(num.group(1))
+
+    for key, value in MONTH_INDEX.items():
+        if key in low:
+            return value
+
+    return None
+
+
+def _score_option_text(text: str, mode: str) -> int | None:
+    low = text.lower().strip()
+    if not low:
+        return None
+
+    if mode == "year":
+        year_match = re.search(r"\b(19|20)\d{2}\b", low)
+        return int(year_match.group(0)) if year_match else None
+
+    if mode == "month":
+        return _parse_month_value(low)
+
+    year_match = re.search(r"\b(19|20)\d{2}\b", low)
+    month_val = _parse_month_value(low)
+    if year_match and month_val:
+        return int(year_match.group(0)) * 100 + month_val
+    return None
+
+
+def _extract_select_options(select_element: Any) -> list[dict[str, Any]]:
+    try:
+        return select_element.evaluate(
+            """
+            (el) => Array.from(el.options).map((opt) => ({
+              text: (opt.textContent || '').trim(),
+              value: opt.value || '',
+              disabled: !!opt.disabled,
+              selected: !!opt.selected
+            }))
+            """
+        )
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def _classify_native_select_mode(select_element: Any) -> str | None:
+    options = _extract_select_options(select_element)
+    if not options:
+        return None
+
+    year_only = 0
+    month_only = 0
+    combined = 0
+
+    for opt in options:
+        text = (opt.get("text") or opt.get("value") or "").strip()
+        low = text.lower()
+        if opt.get("disabled"):
+            continue
+        if not text:
+            continue
+        if any(token in low for token in ["select", "choose", "please"]):
+            continue
+
+        has_year = re.search(r"\b(19|20)\d{2}\b", low) is not None
+        has_month = _parse_month_value(low) is not None
+
+        if has_year and has_month:
+            combined += 1
+        elif has_year:
+            year_only += 1
+        elif has_month:
+            month_only += 1
+
+    if combined > 0 and combined >= max(year_only, month_only):
+        return "combined"
+    if year_only > 0 and month_only == 0:
+        return "year"
+    if month_only > 0 and year_only == 0:
+        return "month"
+    return None
+
+
+def _choose_option(
+    select_element: Any,
+    mode: str,
+    logger: logging.Logger,
+    *,
+    target_score: int | None = None,
+    strict_target: bool = False,
+) -> bool:
+    options = _extract_select_options(select_element)
+    if not options:
+        return False
+
+    candidates: list[tuple[int, dict[str, Any]]] = []
+    for opt in options:
+        text = (opt.get("text") or "").strip()
+        value = (opt.get("value") or "").strip()
+        low = text.lower()
+        if opt.get("disabled"):
+            continue
+        if not text and not value:
+            continue
+        if any(token in low for token in ["select", "choose", "please"]):
+            continue
+
+        score = _score_option_text(text, mode)
+        if score is not None:
+            candidates.append((score, opt))
+
+    if not candidates:
+        return False
+
+    chosen = None
+    if target_score is not None:
+        for score, opt in candidates:
+            if score == target_score:
+                chosen = opt
+                break
+
+    if chosen is None and strict_target and target_score is not None:
+        logger.info(
+            "ADCB: target %s option score=%s not found in native select",
+            mode,
+            target_score,
+        )
+        return False
+
+    if chosen is None:
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        chosen = candidates[0][1]
+
+    try:
+        if chosen.get("value"):
+            select_element.select_option(chosen["value"])
+        else:
+            select_element.select_option(label=chosen.get("text", ""))
+        logger.info(
+            "ADCB: selected %s option %s (target_score=%s)",
+            mode,
+            chosen.get("text", ""),
+            target_score,
+        )
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _selected_option_score(select_element: Any, mode: str) -> int | None:
+    options = _extract_select_options(select_element)
+    selected = next((opt for opt in options if opt.get("selected")), None)
+    if selected is None:
+        return None
+    return _score_option_text(str(selected.get("text") or ""), mode)
+
+
+def _dismiss_optional_ad_popup(page: Any, logger: logging.Logger) -> bool:
+    dismissed = False
+    for _ in range(4):
+        dismissed_this_round = False
+
+        for selector in [
+            "[role='dialog'] button:has-text('Close')",
+            "[role='dialog'] button:has-text('Dismiss')",
+            "[role='dialog'] button:has-text('Skip')",
+            "[role='dialog'] button:has-text('Not now')",
+            "[role='dialog'] button:has-text('Later')",
+            "[role='dialog'] [aria-label='Close']",
+            ".modal button:has-text('Close')",
+            ".popup button:has-text('Close')",
+            ".modal [aria-label='Close']",
+            ".popup [aria-label='Close']",
+            "button:has-text('Close')",
+            "[aria-label='Close']",
+        ]:
+            locator = page.locator(selector)
+            try:
+                count = min(locator.count(), 5)
+            except Exception:  # noqa: BLE001
+                count = 0
+
+            for idx in range(count):
+                item = locator.nth(idx)
+                try:
+                    if not item.is_visible():
+                        continue
+                    item.click(timeout=1800)
+                    page.wait_for_timeout(500)
+                    logger.info("ADCB: dismissed optional popup via %s", selector)
+                    dismissed = True
+                    dismissed_this_round = True
+                    break
+                except Exception:  # noqa: BLE001
+                    continue
+            if dismissed_this_round:
+                break
+
+        if not dismissed_this_round:
+            break
+
+    return dismissed
+
+
 def _extract_otp_code(payload: str) -> str | None:
     if not payload:
         return None
@@ -636,11 +846,43 @@ def _statement_download_section_visible(page: Any) -> bool:
     )
 
 
+def _find_statement_download_container(page: Any) -> Any | None:
+    selectors = "section,div,form,article,table,tbody,tr,td"
+    anchor_text = "to download previous statements choose the month and year"
+    containers = page.locator(selectors)
+    try:
+        count = min(containers.count(), 320)
+    except Exception:  # noqa: BLE001
+        count = 0
+
+    for idx in range(count):
+        item = containers.nth(idx)
+        try:
+            if not item.is_visible():
+                continue
+            text = (item.inner_text(timeout=800) or "").lower()
+            if anchor_text not in text:
+                continue
+            # Keep only containers that own at least one select and a download action.
+            if item.locator("select").count() < 1:
+                continue
+            if item.locator("button:has-text('Download')").count() == 0 and item.locator(
+                "input[type='button'][value*='Download' i], input[type='submit'][value*='Download' i], a:has-text('Download')"
+            ).count() == 0:
+                continue
+            return item
+        except Exception:  # noqa: BLE001
+            continue
+
+    return None
+
+
 def _ensure_statement_download_section(page: Any, logger: logging.Logger) -> bool:
     if _statement_download_section_visible(page):
         return True
 
     for _ in range(7):
+        _dismiss_optional_ad_popup(page, logger)
         attempt_navigation_to_statements(page, logger)
         click_keyword(page, "Statement", logger)
         click_keyword(page, "Statements", logger)
@@ -654,93 +896,116 @@ def _ensure_statement_download_section(page: Any, logger: logging.Logger) -> boo
 
 
 def _select_statement_period(page: Any, logger: logging.Logger, *, target_year: int, target_month: int) -> bool:
-    result = page.evaluate(
-        """
-        ({ targetYear, targetMonth, monthIndex }) => {
-          const norm = (value) => (value || '').toString().replace(/\\s+/g, ' ').trim().toLowerCase();
-          const isVisible = (el) => {
-            if (!el) return false;
-            const style = getComputedStyle(el);
-            if (style.display === 'none' || style.visibility === 'hidden') return false;
-            const rect = el.getBoundingClientRect();
-            return rect.width > 0 && rect.height > 0;
-          };
-          const monthFromText = (value) => {
-            const low = norm(value);
-            const num = low.match(/\\b(0?[1-9]|1[0-2])\\b/);
-            if (num) return parseInt(num[1], 10);
-            for (const [key, idx] of Object.entries(monthIndex)) {
-              if (low.includes(key)) return idx;
-            }
-            return null;
-          };
-
-          const selects = Array.from(document.querySelectorAll('select')).filter(isVisible);
-          let yearSelect = null;
-          let yearValue = '';
-          let monthSelect = null;
-          let monthValue = '';
-
-          for (const select of selects) {
-            const options = Array.from(select.options || []).filter((opt) => !opt.disabled);
-            if (!options.length) continue;
-
-            if (!yearSelect) {
-              const matchYear = options.find((opt) => {
-                const txt = `${opt.textContent || ''} ${opt.value || ''}`;
-                return txt.includes(String(targetYear));
-              });
-              if (matchYear && matchYear.value) {
-                yearSelect = select;
-                yearValue = matchYear.value;
-              }
-            }
-
-            if (!monthSelect) {
-              const matchMonth = options.find((opt) => {
-                const txt = `${opt.textContent || ''} ${opt.value || ''}`;
-                const m = monthFromText(txt);
-                return m === targetMonth;
-              });
-              if (matchMonth && matchMonth.value) {
-                monthSelect = select;
-                monthValue = matchMonth.value;
-              }
-            }
-          }
-
-          if (!yearSelect || !monthSelect || !yearValue || !monthValue) {
-            return { selected: false, reason: 'period_select_not_found' };
-          }
-
-          yearSelect.value = yearValue;
-          yearSelect.dispatchEvent(new Event('input', { bubbles: true }));
-          yearSelect.dispatchEvent(new Event('change', { bubbles: true }));
-
-          monthSelect.value = monthValue;
-          monthSelect.dispatchEvent(new Event('input', { bubbles: true }));
-          monthSelect.dispatchEvent(new Event('change', { bubbles: true }));
-
-          return { selected: true };
-        }
-        """,
-        {
-            "targetYear": target_year,
-            "targetMonth": target_month,
-            "monthIndex": MONTH_INDEX,
-        },
-    )
-    selected = bool(result and result.get("selected"))
-    if selected:
-        logger.info("ADCB: selected statement period year=%s month=%s", target_year, target_month)
+    scope = _find_statement_download_container(page)
+    if scope is None:
+        logger.info("ADCB: statement block anchor not found; falling back to page-wide selects")
+        selects = page.locator("select")
     else:
-        logger.info(
-            "ADCB: statement period not available year=%s month=%s reason=%s",
-            target_year,
-            target_month,
-            (result or {}).get("reason", "unknown"),
-        )
-    return selected
+        selects = scope.locator("select")
+
+    try:
+        count = min(selects.count(), 10)
+    except Exception:  # noqa: BLE001
+        count = 0
+
+    visible = []
+    for idx in range(count):
+        select = selects.nth(idx)
+        try:
+            if select.is_visible():
+                visible.append(select)
+        except Exception:  # noqa: BLE001
+            continue
+
+    if not visible:
+        logger.info("ADCB: statement period controls not visible")
+        return False
+
+    classified: list[tuple[Any, str]] = []
+    for select in visible:
+        mode = _classify_native_select_mode(select)
+        if mode:
+            classified.append((select, mode))
+
+    year_selects = [select for select, mode in classified if mode == "year"]
+    month_selects = [select for select, mode in classified if mode == "month"]
+    combined_selects = [select for select, mode in classified if mode == "combined"]
+
+    target_combined = target_year * 100 + target_month
+
+    if year_selects and month_selects:
+        selected_year = False
+        for select in year_selects:
+            selected_year = _choose_option(
+                select,
+                "year",
+                logger,
+                target_score=target_year,
+                strict_target=True,
+            ) or selected_year
+
+        if selected_year:
+            page.wait_for_timeout(1100)
+
+        selected_month = False
+        # Re-read visible selects because month options may refresh after year change.
+        if scope is not None:
+            selects = scope.locator("select")
+        else:
+            selects = page.locator("select")
+        try:
+            refreshed_count = min(selects.count(), 10)
+        except Exception:  # noqa: BLE001
+            refreshed_count = 0
+        refreshed_months = []
+        for idx in range(refreshed_count):
+            select = selects.nth(idx)
+            try:
+                if not select.is_visible():
+                    continue
+            except Exception:  # noqa: BLE001
+                continue
+            if _classify_native_select_mode(select) == "month":
+                refreshed_months.append(select)
+        if refreshed_months:
+            month_selects = refreshed_months
+
+        for select in month_selects:
+            selected_month = _choose_option(
+                select,
+                "month",
+                logger,
+                target_score=target_month,
+                strict_target=True,
+            ) or selected_month
+
+        if selected_year and selected_month:
+            page.wait_for_timeout(500)
+            year_ok = any(_selected_option_score(select, "year") == target_year for select in year_selects)
+            month_ok = any(_selected_option_score(select, "month") == target_month for select in month_selects)
+            if year_ok and month_ok:
+                logger.info("ADCB: selected statement period year=%s month=%s", target_year, target_month)
+                return True
+
+    for select in combined_selects:
+        if _choose_option(
+            select,
+            "combined",
+            logger,
+            target_score=target_combined,
+            strict_target=True,
+        ):
+            page.wait_for_timeout(550)
+            if _selected_option_score(select, "combined") == target_combined:
+                logger.info("ADCB: selected statement period year=%s month=%s", target_year, target_month)
+                return True
+
+    logger.info(
+        "ADCB: statement period not available year=%s month=%s reason=period_select_not_found_or_verify_failed",
+        target_year,
+        target_month,
+    )
+    return False
 
 
 def _ensure_terms_checkbox_checked(page: Any, logger: logging.Logger) -> None:
@@ -775,6 +1040,90 @@ def _ensure_terms_checkbox_checked(page: Any, logger: logging.Logger) -> None:
 
 
 def _download_statement_for_selected_period(page: Any, incoming_dir: Path, logger: logging.Logger) -> Path | None:
+    scope = _find_statement_download_container(page)
+    if scope is not None:
+        selectors = [
+            "button:has-text('Download')",
+            "input[type='button'][value*='Download' i]",
+            "input[type='submit'][value*='Download' i]",
+            "[role='button']:has-text('Download')",
+            "a:has-text('Download')",
+        ]
+        for selector in selectors:
+            locator = scope.locator(selector)
+            try:
+                count = min(locator.count(), 6)
+            except Exception:  # noqa: BLE001
+                count = 0
+            for idx in range(count):
+                item = locator.nth(idx)
+                try:
+                    if not item.is_visible() or not item.is_enabled():
+                        continue
+                    with page.expect_download(timeout=14000) as download_info:
+                        item.click(timeout=2500)
+                    path = save_download(download_info.value, incoming_dir, "ADCB", logger)
+                    logger.info("ADCB: downloaded statement via anchored statement block")
+                    return path
+                except Exception:  # noqa: BLE001
+                    continue
+
+    try:
+        with page.expect_download(timeout=14000) as download_info:
+            clicked = page.evaluate(
+                """
+                () => {
+                  const norm = (value) => (value || '').toString().replace(/\\s+/g, ' ').trim().toLowerCase();
+                  const isVisible = (el) => {
+                    if (!el) return false;
+                    const style = getComputedStyle(el);
+                    if (style.display === 'none' || style.visibility === 'hidden') return false;
+                    const rect = el.getBoundingClientRect();
+                    return rect.width > 0 && rect.height > 0;
+                  };
+
+                  const downloadLike = (txt) => {
+                    const low = norm(txt);
+                    return low.includes('download') && (low.includes('statement') || low === 'download');
+                  };
+
+                  const containers = Array.from(document.querySelectorAll('section,div,form,article,table,tbody,tr,td'));
+                  for (const container of containers) {
+                    if (!isVisible(container)) continue;
+                    const text = norm(container.innerText || container.textContent || '');
+                    if (!text) continue;
+
+                    const visibleSelects = Array.from(container.querySelectorAll('select')).filter(isVisible);
+                    if (visibleSelects.length < 1) continue;
+                    if (!(text.includes('statement') && (text.includes('month') || text.includes('year')))) continue;
+
+                    const controls = Array.from(
+                      container.querySelectorAll(
+                        'button, a, [role=\"button\"], input[type=\"button\"], input[type=\"submit\"]'
+                      )
+                    ).filter(isVisible);
+
+                    for (const control of controls) {
+                      const label = norm(
+                        (control.innerText || control.textContent || control.value || control.title || control.getAttribute?.('aria-label') || '')
+                      );
+                      if (!downloadLike(label)) continue;
+                      control.click();
+                      return true;
+                    }
+                  }
+                  return false;
+                }
+                """
+            )
+            if not clicked:
+                raise RuntimeError("Scoped statement download control not found")
+        path = save_download(download_info.value, incoming_dir, "ADCB", logger)
+        logger.info("ADCB: downloaded statement via scoped statement-period section")
+        return path
+    except Exception:  # noqa: BLE001
+        pass
+
     selectors = [
         "button:has-text('Download')",
         "input[type='button'][value*='Download' i]",
@@ -835,6 +1184,8 @@ def _download_requested_months(
         return 0, diagnostics
 
     for month_token in requested_months:
+        _dismiss_optional_ad_popup(page, logger)
+
         target_year, target_month = _parse_requested_month(month_token)
         if target_year is None or target_month is None:
             diagnostics["failed"].append({"month": month_token, "reason": "invalid_month_token"})
@@ -995,8 +1346,9 @@ def _click_card_by_limit(page: Any, logger: logging.Logger, limit_aed: int) -> b
     return True
 
 
-def _wait_for_landing_ready(page: Any) -> None:
+def _wait_for_landing_ready(page: Any, logger: logging.Logger) -> None:
     for _ in range(22):
+        _dismiss_optional_ad_popup(page, logger)
         low = text_snapshot(page).lower()
         if "welcome" in low and "last login" in low and "account summary" in low and "credit cards" in low:
             return
@@ -1139,9 +1491,10 @@ def _open_card_details(page: Any, logger: logging.Logger, bank_cfg: dict) -> boo
     except Exception:  # noqa: BLE001
         target_limit_aed = 27000
 
-    _wait_for_landing_ready(page)
+    _wait_for_landing_ready(page, logger)
 
     for _ in range(7):
+        _dismiss_optional_ad_popup(page, logger)
         _click_sidebar_credit_cards(page, logger)
         click_keyword(page, "Credit Cards", logger)
         click_keyword(page, "Cards", logger)
@@ -1163,6 +1516,7 @@ def download_latest_statement(
     logger: logging.Logger,
     bank_cfg: dict,
 ) -> int:
+    _dismiss_optional_ad_popup(page, logger)
     details_opened = _open_card_details(page, logger, bank_cfg)
     logger.info("ADCB: card details opened=%s current_url=%s", details_opened, page.url)
 

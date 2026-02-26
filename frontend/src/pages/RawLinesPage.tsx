@@ -4,6 +4,8 @@ import { api } from '../api';
 import { DateRangeField } from '../components/DateRangeField';
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown';
 import { Panel } from '../components/Panel';
+import { TablePagination } from '../components/TablePagination';
+import { useActiveProfileKey } from '../profileStore';
 import { DashboardFilterMeta } from '../types/dashboard';
 
 const EMPTY_FILTER_META: DashboardFilterMeta = {
@@ -45,6 +47,7 @@ function isAbortError(error: unknown): boolean {
 }
 
 export function RawLinesPage() {
+  const activeProfileKey = useActiveProfileKey();
   const [filters, setFilters] = useState<RawLineFilters>({
     merchantSearch: '',
     bankCodes: [],
@@ -57,6 +60,10 @@ export function RawLinesPage() {
   const [filterMeta, setFilterMeta] = useState<DashboardFilterMeta>(EMPTY_FILTER_META);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(100);
+  const [totalRows, setTotalRows] = useState(0);
+  const [filteredAmountTotal, setFilteredAmountTotal] = useState(0);
   const [categoryPatch, setCategoryPatch] = useState<Record<number, string>>({});
   const debouncedMerchantSearch = useDebouncedValue(filters.merchantSearch, 300);
 
@@ -90,27 +97,17 @@ export function RawLinesPage() {
       if (filters.direction) {
         params.set('direction', filters.direction);
       }
-
-      const allRows: any[] = [];
-      let page = 1;
-      const pageSize = 500;
-      let total = 0;
-
-      while (true) {
-        const pageParams = new URLSearchParams(params);
-        pageParams.set('page', String(page));
-        pageParams.set('page_size', String(pageSize));
-        const data = await api.get<any>(`/transactions?${pageParams.toString()}`, { signal });
-        const items = data.items || [];
-        total = data.total || 0;
-        allRows.push(...items);
-        if (!items.length || allRows.length >= total) {
-          break;
-        }
-        page += 1;
+      params.set('page', String(page));
+      params.set('page_size', String(pageSize));
+      const data = await api.get<any>(`/transactions?${params.toString()}`, { signal });
+      const total = Number(data.total || 0);
+      setTotalRows(total);
+      setFilteredAmountTotal(Number(data.filtered_amount_aed_sum || 0));
+      setRows(data.items || []);
+      const totalPages = Math.max(1, Math.ceil(total / Math.max(pageSize, 1)));
+      if (page > totalPages) {
+        setPage(totalPages);
       }
-
-      setRows(allRows);
     } catch (err) {
       if (isAbortError(err)) {
         return;
@@ -137,16 +134,26 @@ export function RawLinesPage() {
 
   useEffect(() => {
     loadFilterMeta();
-  }, []);
+    setPage(1);
+  }, [activeProfileKey]);
 
   useEffect(() => {
     const controller = new AbortController();
     search(controller.signal);
     return () => controller.abort();
-  }, [filters.bankCodes, filters.categories, filters.dateFrom, filters.dateTo, filters.direction, debouncedMerchantSearch]);
+  }, [
+    activeProfileKey,
+    filters.bankCodes,
+    filters.categories,
+    filters.dateFrom,
+    filters.dateTo,
+    filters.direction,
+    debouncedMerchantSearch,
+    page,
+    pageSize,
+  ]);
 
-  const rowCount = rows.length;
-  const amountTotal = rows.reduce((sum, row) => sum + Number(row.amount_aed || 0), 0);
+  const rowCount = totalRows;
 
   return (
     <div className="grid">
@@ -162,7 +169,10 @@ export function RawLinesPage() {
             value={{ from: filters.dateFrom, to: filters.dateTo }}
             min={filterMeta.min_date}
             max={filterMeta.max_date}
-            onChange={(range) => setFilters((prev) => ({ ...prev, dateFrom: range.from, dateTo: range.to }))}
+            onChange={(range) => {
+              setPage(1);
+              setFilters((prev) => ({ ...prev, dateFrom: range.from, dateTo: range.to }));
+            }}
           />
 
           <MultiSelectDropdown
@@ -171,7 +181,10 @@ export function RawLinesPage() {
             options={filterMeta.banks}
             value={filters.bankCodes}
             placeholder="All banks"
-            onChange={(bankCodes) => setFilters((prev) => ({ ...prev, bankCodes }))}
+            onChange={(bankCodes) => {
+              setPage(1);
+              setFilters((prev) => ({ ...prev, bankCodes }));
+            }}
           />
 
           <MultiSelectDropdown
@@ -180,7 +193,10 @@ export function RawLinesPage() {
             options={filterMeta.categories}
             value={filters.categories}
             placeholder="All categories"
-            onChange={(categories) => setFilters((prev) => ({ ...prev, categories }))}
+            onChange={(categories) => {
+              setPage(1);
+              setFilters((prev) => ({ ...prev, categories }));
+            }}
           />
 
           <div className="filter-field">
@@ -189,10 +205,13 @@ export function RawLinesPage() {
               id="raw-lines-direction"
               value={filters.direction}
               onChange={(event) =>
-                setFilters((prev) => ({
-                  ...prev,
-                  direction: event.target.value as '' | 'debit' | 'credit',
-                }))
+                {
+                  setPage(1);
+                  setFilters((prev) => ({
+                    ...prev,
+                    direction: event.target.value as '' | 'debit' | 'credit',
+                  }));
+                }
               }
             >
               <option value="">All Directions</option>
@@ -206,23 +225,26 @@ export function RawLinesPage() {
             <input
               id="raw-lines-merchant-search"
               value={filters.merchantSearch}
-              onChange={(event) => setFilters((prev) => ({ ...prev, merchantSearch: event.target.value }))}
+              onChange={(event) => {
+                setPage(1);
+                setFilters((prev) => ({ ...prev, merchantSearch: event.target.value }));
+              }}
               placeholder="Search merchant text"
             />
           </div>
         </div>
 
         <p className="muted" style={{ marginTop: '0.5rem' }}>
-          Showing {rows.length} line(s)
+          Showing {rows.length} line(s) on this page
         </p>
 
         <section className="kpi-grid" style={{ marginTop: '0.75rem', marginBottom: '0.75rem' }}>
           <article className="kpi-card">
-            <span className="kpi-label">Amount AED Sum</span>
-            <strong className="kpi-value">AED {formatAmount(amountTotal)}</strong>
+            <span className="kpi-label">Amount AED Sum (filtered)</span>
+            <strong className="kpi-value">AED {formatAmount(filteredAmountTotal)}</strong>
           </article>
           <article className="kpi-card">
-            <span className="kpi-label">ID Count</span>
+            <span className="kpi-label">ID Count (filtered)</span>
             <strong className="kpi-value">{rowCount}</strong>
           </article>
         </section>
@@ -268,6 +290,18 @@ export function RawLinesPage() {
             </tbody>
           </table>
         </div>
+        <TablePagination
+          page={page}
+          pageSize={pageSize}
+          total={totalRows}
+          itemLabel="lines"
+          disabled={loading}
+          onPageChange={setPage}
+          onPageSizeChange={(next) => {
+            setPageSize(next);
+            setPage(1);
+          }}
+        />
       </Panel>
     </div>
   );

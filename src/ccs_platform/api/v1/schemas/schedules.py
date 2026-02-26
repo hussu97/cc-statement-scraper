@@ -22,6 +22,13 @@ class ScheduleOut(BaseModel):
     last_run_at: datetime | None
 
 
+class PaginatedSchedules(BaseModel):
+    total: int
+    page: int
+    page_size: int
+    items: list[ScheduleOut]
+
+
 class ScheduleCreate(BaseModel):
     name: str
     job_type: JobType = JobType.SCRAPE

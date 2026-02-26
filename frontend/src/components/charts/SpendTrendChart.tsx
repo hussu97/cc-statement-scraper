@@ -11,9 +11,31 @@ import {
 
 import { TrendPoint } from '../../types/dashboard';
 
-export function SpendTrendChart({ points }: { points: TrendPoint[] }) {
+export type SpendTrendClick = {
+  bucket: string;
+  seriesKey: 'debit' | 'credit';
+};
+
+export function SpendTrendChart({
+  points,
+  onBarClick,
+}: {
+  points: TrendPoint[];
+  onBarClick?: (value: SpendTrendClick) => void;
+}) {
   if (!points.length) {
     return <p className="muted">No trend data available for the selected filters.</p>;
+  }
+
+  function handleBarClick(row: unknown, seriesKey: SpendTrendClick['seriesKey']) {
+    if (!onBarClick) {
+      return;
+    }
+    const bucket = String((row as { bucket?: string } | null)?.bucket || '').trim();
+    if (!bucket) {
+      return;
+    }
+    onBarClick({ bucket, seriesKey });
   }
 
   return (
@@ -25,8 +47,22 @@ export function SpendTrendChart({ points }: { points: TrendPoint[] }) {
           <YAxis />
           <Tooltip />
           <Legend />
-          <Bar dataKey="debit_aed" name="Debit" fill="#0f766e" radius={[4, 4, 0, 0]} />
-          <Bar dataKey="credit_aed" name="Credit" fill="#f97316" radius={[4, 4, 0, 0]} />
+          <Bar
+            dataKey="debit_aed"
+            name="Debit"
+            fill="#0f766e"
+            radius={[4, 4, 0, 0]}
+            cursor={onBarClick ? 'pointer' : 'default'}
+            onClick={(row) => handleBarClick(row, 'debit')}
+          />
+          <Bar
+            dataKey="credit_aed"
+            name="Credit"
+            fill="#f97316"
+            radius={[4, 4, 0, 0]}
+            cursor={onBarClick ? 'pointer' : 'default'}
+            onClick={(row) => handleBarClick(row, 'credit')}
+          />
         </BarChart>
       </ResponsiveContainer>
     </div>

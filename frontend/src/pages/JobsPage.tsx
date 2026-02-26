@@ -3,6 +3,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import { JsonView } from '../components/JsonView';
 import { Panel } from '../components/Panel';
+import { TablePagination } from '../components/TablePagination';
+import { useActiveProfileKey } from '../profileStore';
+import { formatLocalDateTime } from '../utils/datetime';
 
 type MonthOption = {
   value: string;
@@ -50,11 +53,15 @@ function buildMonthOptions(): MonthOption[] {
 }
 
 export function JobsPage() {
+  const activeProfileKey = useActiveProfileKey();
   const monthOptions = useMemo(() => buildMonthOptions(), []);
   const defaultMonth = monthOptions[monthOptions.length - 1]?.value ?? `${MIN_MONTH_YEAR}-01`;
 
   const [banks, setBanks] = useState<any[]>([]);
   const [jobs, setJobs] = useState<any[]>([]);
+  const [jobsPage, setJobsPage] = useState(1);
+  const [jobsPageSize, setJobsPageSize] = useState(100);
+  const [jobsTotal, setJobsTotal] = useState(0);
   const [selectedBanks, setSelectedBanks] = useState<string[]>([]);
   const [monthFrom, setMonthFrom] = useState(defaultMonth);
   const [monthTo, setMonthTo] = useState(defaultMonth);
@@ -76,9 +83,18 @@ export function JobsPage() {
     setBanks(rows);
   }
 
-  async function loadJobs() {
-    const rows = await api.get<any[]>('/jobs?limit=100');
-    setJobs(rows);
+  async function loadJobs(nextPage = jobsPage, nextPageSize = jobsPageSize) {
+    const params = new URLSearchParams();
+    params.set('page', String(nextPage));
+    params.set('page_size', String(nextPageSize));
+    const data = await api.get<any>(`/jobs?${params.toString()}`);
+    const total = Number(data.total || 0);
+    setJobsTotal(total);
+    setJobs(data.items || []);
+    const totalPages = Math.max(1, Math.ceil(total / Math.max(nextPageSize, 1)));
+    if (nextPage > totalPages) {
+      setJobsPage(totalPages);
+    }
   }
 
   async function createScrapeJob() {
@@ -99,7 +115,8 @@ export function JobsPage() {
       };
       const job = await api.post<any>('/jobs/scrape', payload);
       setActiveJob(job);
-      await loadJobs();
+      setJobsPage(1);
+      await loadJobs(1, jobsPageSize);
     } catch (err) {
       setError((err as Error).message);
     }
@@ -116,10 +133,14 @@ export function JobsPage() {
 
   useEffect(() => {
     loadBanks();
+    setJobsPage(1);
+  }, [activeProfileKey]);
+
+  useEffect(() => {
     loadJobs();
     const timer = setInterval(loadJobs, 5000);
     return () => clearInterval(timer);
-  }, []);
+  }, [activeProfileKey, jobsPage, jobsPageSize]);
 
   return (
     <div className="grid">
@@ -192,8 +213,8 @@ export function JobsPage() {
 
       <Panel title="Jobs">
         <div className="row" style={{ justifyContent: 'space-between' }}>
-          <span className="muted">Live status for scrape/upload/reclassify/export/diagnostics jobs</span>
-          <button className="ghost" onClick={loadJobs}>Refresh</button>
+          <span className="muted">Live status for scrape/upload/reclassify/export/diagnostics jobs across all pages.</span>
+          <button className="ghost" onClick={() => loadJobs()}>Refresh</button>
         </div>
         <div className="table-wrap">
           <table>
@@ -214,7 +235,7 @@ export function JobsPage() {
                   <td>{job.job_type}</td>
                   <td>{job.status}</td>
                   <td>{job.progress_percent}%</td>
-                  <td>{new Date(job.created_at).toLocaleString()}</td>
+                  <td>{formatLocalDateTime(job.created_at)}</td>
                   <td>
                     <button className="ghost" onClick={() => setActiveJob(job)}>View</button>{' '}
                     {job.status === 'queued' || job.status === 'running' ? (
@@ -226,6 +247,17 @@ export function JobsPage() {
             </tbody>
           </table>
         </div>
+        <TablePagination
+          page={jobsPage}
+          pageSize={jobsPageSize}
+          total={jobsTotal}
+          itemLabel="jobs"
+          onPageChange={setJobsPage}
+          onPageSizeChange={(next) => {
+            setJobsPageSize(next);
+            setJobsPage(1);
+          }}
+        />
       </Panel>
 
       <Panel title="Job Details">

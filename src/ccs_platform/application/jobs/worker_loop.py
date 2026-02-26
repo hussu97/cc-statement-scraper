@@ -37,19 +37,42 @@ class WorkerLoop:
             self._in_flight.difference_update(done)
 
     def _dispatch_queued_jobs(self) -> None:
+        # Enforce strict serialization: only one active worker job at a time.
+        if self._in_flight:
+            return
+
         with SessionLocal() as db:
-            queued_ids = db.execute(
+            running_job_id = db.execute(
                 select(models.Job.id)
+                .where(models.Job.status == models.JobStatus.RUNNING)
+                .order_by(models.Job.started_at.asc())
+                .limit(1)
+            ).scalar_one_or_none()
+            if running_job_id is not None:
+                return
+
+            next_job = db.execute(
+                select(models.Job)
                 .where(models.Job.status == models.JobStatus.QUEUED)
                 .order_by(models.Job.created_at.asc())
-                .limit(20)
-            ).scalars().all()
+                .limit(1)
+            ).scalar_one_or_none()
+            if next_job is None:
+                return
 
-        for job_id in queued_ids:
-            if job_id in self._in_flight:
-                continue
-            self._in_flight.add(job_id)
-            self.job_runner.enqueue(job_id)
+            # Claim the job before enqueueing so multiple worker processes
+            # do not dispatch in parallel.
+            next_job.status = models.JobStatus.RUNNING
+            next_job.started_at = datetime.now(UTC)
+            next_job.progress_percent = 1
+            db.commit()
+            next_job_id = next_job.id
+
+        if next_job_id in self._in_flight:
+            return
+
+        self._in_flight.add(next_job_id)
+        self.job_runner.enqueue(next_job_id)
 
     def _trigger_due_schedules(self) -> None:
         now = datetime.now(UTC)
