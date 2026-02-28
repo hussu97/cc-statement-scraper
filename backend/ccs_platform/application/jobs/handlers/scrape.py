@@ -25,7 +25,7 @@ def _find_latest_matching_pdf(app_config: Any, bank_code: str) -> Path | None:
     bank_cfg = app_config.banks[bank_code]
     patterns = bank_cfg.get("file_glob_patterns", [])
     candidates: list[Path] = []
-    for directory in [app_config.paths.incoming_dir, app_config.paths.downloads_dir]:
+    for directory in [app_config.paths.incoming_dir]:
         if not directory.exists():
             continue
         for path in directory.iterdir():
@@ -121,7 +121,6 @@ def handle_scrape_job(
     app_cfg = load_app_config()
     app_cfg.paths.incoming_dir = app_cfg.paths.data_dir / "incoming" / profile_key
     app_cfg.paths.state_dir = app_cfg.paths.data_dir / "state" / "profiles" / profile_key
-    app_cfg.paths.downloads_dir = app_cfg.paths.incoming_dir
     app_cfg.paths.incoming_dir.mkdir(parents=True, exist_ok=True)
     app_cfg.paths.state_dir.mkdir(parents=True, exist_ok=True)
 
@@ -185,7 +184,6 @@ def handle_scrape_job(
             scoped_cfg.banks = bank_cfg_copy
             scoped_cfg.paths.incoming_dir = app_cfg.paths.incoming_dir
             scoped_cfg.paths.state_dir = app_cfg.paths.state_dir
-            scoped_cfg.paths.downloads_dir = app_cfg.paths.downloads_dir
             scoped_cfg.paths.incoming_dir.mkdir(parents=True, exist_ok=True)
             scoped_cfg.paths.state_dir.mkdir(parents=True, exist_ok=True)
 
@@ -362,7 +360,6 @@ def handle_scrape_job(
             scoped_cfg.banks = bank_cfg_copy
             scoped_cfg.paths.incoming_dir = app_cfg.paths.incoming_dir
             scoped_cfg.paths.state_dir = app_cfg.paths.state_dir
-            scoped_cfg.paths.downloads_dir = app_cfg.paths.downloads_dir
             scoped_cfg.paths.incoming_dir.mkdir(parents=True, exist_ok=True)
             scoped_cfg.paths.state_dir.mkdir(parents=True, exist_ok=True)
 

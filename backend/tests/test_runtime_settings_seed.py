@@ -28,7 +28,6 @@ def test_seed_runtime_settings_from_env_file_and_apply(monkeypatch, tmp_path) ->
                 "EIB_USERNAME=user-eib",
                 "SIB_USER_ID=user-sib",
                 "MASHREQ_USERNAME=user-mashreq",
-                "CCS_DOWNLOADS_DIR=/tmp/downloads",
             ]
         ),
         encoding="utf-8",
@@ -53,7 +52,6 @@ def test_seed_runtime_settings_from_env_file_and_apply(monkeypatch, tmp_path) ->
         assert by_key["SIB_USER_ID"].value == "user-sib"
         assert by_key["EIB_USERNAME"].value == "user-eib"
         assert by_key["MASHREQ_USERNAME"].value == "user-mashreq"
-        assert by_key["CCS_DOWNLOADS_DIR"].is_secret is False
 
         # env mode uses process environment values.
         seed_runtime_settings_from_env(
@@ -107,7 +105,6 @@ def test_seed_runtime_settings_supports_profile_scoped_env_keys(tmp_path) -> Non
                 "ALICE_ENBD_USERNAME=alice-enbd-user",
                 "BOB_MASHREQ_USERNAME=bob-mashreq-user",
                 "BOB_MASHREQ_PASSWORD=bob-mashreq-pass",
-                "BOB_CCS_DOWNLOADS_DIR=/tmp/bob-downloads",
             ]
         ),
         encoding="utf-8",

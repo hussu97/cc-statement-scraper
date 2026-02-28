@@ -433,7 +433,7 @@ def run_end_to_end_downloads(
 
     with sync_playwright() as playwright:
         for bank_code, bank_cfg in app_config.banks.items():
-            tracked_dirs = [app_config.paths.incoming_dir, app_config.paths.downloads_dir]
+            tracked_dirs = [app_config.paths.incoming_dir]
             before = snapshot_pdf_state(tracked_dirs)
             portal_url = bank_cfg.get("portal_url")
             profile_dir = app_config.paths.state_dir / "browser_profiles" / bank_code

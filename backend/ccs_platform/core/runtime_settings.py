@@ -44,11 +44,10 @@ DEFAULT_RUNTIME_SETTING_SPECS: tuple[RuntimeSettingSpec, ...] = (
     ),
     RuntimeSettingSpec("MASHREQ_USERNAME", "MASHREQ", True, "Mashreq online banking username"),
     RuntimeSettingSpec("MASHREQ_PASSWORD", "MASHREQ", True, "Mashreq online banking password"),
-    RuntimeSettingSpec("CCS_DOWNLOADS_DIR", None, False, "Download directory watched by scraper"),
 )
 
 DEFAULT_SPEC_MAP = {spec.key: spec for spec in DEFAULT_RUNTIME_SETTING_SPECS}
-SUPPORTED_KEY_PREFIXES = ("FAB_", "ADCB_", "ENBD_", "EIB_", "SIB_", "MASHREQ_", "CCS_")
+SUPPORTED_KEY_PREFIXES = ("FAB_", "ADCB_", "ENBD_", "EIB_", "SIB_", "MASHREQ_")
 SECRET_TOKENS = ("PASSWORD", "SECRET", "TOKEN", "API_KEY", "KEY", "CID", "USERNAME")
 
 

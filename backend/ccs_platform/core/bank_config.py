@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import os
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +16,6 @@ class Paths:
     archive_dir: Path
     output_dir: Path
     state_dir: Path
-    downloads_dir: Path
 
 
 @dataclass
@@ -31,9 +29,6 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
 def default_paths() -> Paths:
-    downloads_default = Path(
-        os.getenv("CCS_DOWNLOADS_DIR", str(Path.home() / "Downloads"))
-    )
     return Paths(
         root=ROOT_DIR,
         config_dir=ROOT_DIR / "config",
@@ -42,7 +37,6 @@ def default_paths() -> Paths:
         archive_dir=ROOT_DIR / "data" / "archive",
         output_dir=ROOT_DIR / "data" / "output",
         state_dir=ROOT_DIR / "data" / "state",
-        downloads_dir=downloads_default,
     )
 
 
