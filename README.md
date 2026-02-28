@@ -6,15 +6,46 @@ DB-first credit card statement system for FAB, ADCB, ENBD, EIB, SIB, and Mashreq
 - Async queued jobs for scrape, upload, reparse, reclassify, exports, and diagnostics
 - FastAPI backend + React admin panel + optional standalone worker
 
+## Directory Structure
+
+```
+credit-card-scraper/
+├── backend/
+│   ├── ccs_platform/          ← Python package source
+│   │   ├── main.py            ← FastAPI app
+│   │   ├── cli.py             ← Typer CLI entry-point
+│   │   ├── api/v1/            ← REST routes + schemas
+│   │   ├── application/       ← jobs, ingestion, analytics, exports
+│   │   ├── domain/            ← parsing models, categorization engine
+│   │   ├── adapters/          ← bank browser/parser + storage adapters
+│   │   ├── db/                ← SQLAlchemy models + session
+│   │   └── worker/            ← queue + schedule worker loop
+│   ├── alembic/               ← database migrations
+│   ├── config/                ← default YAML config
+│   ├── scripts/               ← ops/maintenance scripts
+│   ├── tests/                 ← pytest test suite
+│   ├── requirements.txt
+│   ├── requirements-dev.txt
+│   ├── pyproject.toml
+│   └── alembic.ini
+├── frontend/                  ← React TypeScript admin panel
+├── deploy/                    ← Dockerfiles, Compose, Caddyfile
+├── docs/
+├── CLAUDE.md
+├── PRODUCTION.md
+├── ROADMAP.md
+└── README.md
+```
+
 ## Architecture
 
-- `src/ccs_platform/main.py`: FastAPI backend (`/api/v1`)
-- `src/ccs_platform/worker/main.py`: queue + schedule worker loop
-- `src/ccs_platform/api/v1/*`: REST endpoints + request/response schemas
-- `src/ccs_platform/application/*`: jobs, ingestion, analytics, exports, bank capability orchestration
-- `src/ccs_platform/domain/*`: parsing models/utilities, statement identity/types, categorization engine
-- `src/ccs_platform/adapters/*`: bank parser/browser adapters + storage adapters
-- `src/ccs_platform/db/models/*`: SQLAlchemy relational schema split by concern
+- `backend/ccs_platform/main.py`: FastAPI backend (`/api/v1`)
+- `backend/ccs_platform/worker/main.py`: queue + schedule worker loop
+- `backend/ccs_platform/api/v1/*`: REST endpoints + request/response schemas
+- `backend/ccs_platform/application/*`: jobs, ingestion, analytics, exports, bank capability orchestration
+- `backend/ccs_platform/domain/*`: parsing models/utilities, statement identity/types, categorization engine
+- `backend/ccs_platform/adapters/*`: bank parser/browser adapters + storage adapters
+- `backend/ccs_platform/db/models/*`: SQLAlchemy relational schema split by concern
 - `frontend/`: React TypeScript admin panel
 
 ## Key capabilities
@@ -64,14 +95,14 @@ Core tables:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements-dev.txt
+pip install -r backend/requirements-dev.txt
 playwright install chromium
 ```
 
 ## Run backend API
 
 ```bash
-PYTHONPATH=src python -m ccs_platform.cli api --host 127.0.0.1 --port 8040 --reload
+PYTHONPATH=backend python -m ccs_platform.cli api --host 127.0.0.1 --port 8040 --reload
 ```
 
 Health check:
@@ -92,7 +123,7 @@ curl http://127.0.0.1:8040/api/v1/metrics
 Use this when you want schedule/job processing outside API process.
 
 ```bash
-PYTHONPATH=src python -m ccs_platform.cli worker
+PYTHONPATH=backend python -m ccs_platform.cli worker
 ```
 
 Queue partitioning:
@@ -103,10 +134,10 @@ Example dedicated workers:
 
 ```bash
 # Default queue worker
-CCS_PLATFORM_WORKER_QUEUES=default PYTHONPATH=src python -m ccs_platform.cli worker
+CCS_PLATFORM_WORKER_QUEUES=default PYTHONPATH=backend python -m ccs_platform.cli worker
 
 # Scrape queue worker
-CCS_PLATFORM_WORKER_QUEUES=scrape PYTHONPATH=src python -m ccs_platform.cli worker
+CCS_PLATFORM_WORKER_QUEUES=scrape PYTHONPATH=backend python -m ccs_platform.cli worker
 ```
 
 If dashboard calls return 404 for new endpoints like `/api/v1/dashboard/filter-meta`, restart the API process.
@@ -164,59 +195,52 @@ Environment variables:
 - `CCS_PLATFORM_RUNTIME_SETTINGS_SEED_SOURCE=env|env_file|env_file_then_env|none`
 - `CCS_PLATFORM_RUNTIME_SETTINGS_ENV_FILE=/path/to/.env`
 
-Admin UI login accounts:
-- `h_abbasi97@hotmail.com` (defaults to profile `hussain`)
-- `tejasvie.vemuri@gmail.com` (defaults to profile `tejasvie`)
-- Password for both accounts: `Apple123!`
-
 GCS mode also needs:
 - `CCS_PLATFORM_GCS_BUCKET`
 - optional: `CCS_PLATFORM_GCS_PROJECT`, `CCS_PLATFORM_GCS_CREDENTIALS_FILE`
 
 ## Migrations
 
-Alembic files are included:
-
 ```bash
-alembic upgrade head
+cd backend && alembic upgrade head
 ```
 
 Or run the helper:
 
 ```bash
-CCS_PLATFORM_DATABASE_URL=postgresql+psycopg://... ./scripts/migrate_db.sh
+CCS_PLATFORM_DATABASE_URL=postgresql+psycopg://... ./backend/scripts/migrate_db.sh
 
 # Postgres validation (migrations + smoke + Postgres pytest)
-CCS_PLATFORM_DATABASE_URL=postgresql+psycopg://... ./scripts/validate_postgres.sh
+CCS_PLATFORM_DATABASE_URL=postgresql+psycopg://... ./backend/scripts/validate_postgres.sh
 ```
 
 To re-encrypt stored secret runtime settings after setting/rotating `CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY`:
 
 ```bash
-PYTHONPATH=src python scripts/reencrypt_runtime_secrets.py
+PYTHONPATH=backend python backend/scripts/reencrypt_runtime_secrets.py
 
 # Rotation drill from old key to new key
 CCS_PLATFORM_RUNTIME_SETTINGS_OLD_ENCRYPTION_KEY=... \
 CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY=... \
-PYTHONPATH=src python scripts/rotate_runtime_setting_secrets.py --dry-run
+PYTHONPATH=backend python backend/scripts/rotate_runtime_setting_secrets.py --dry-run
 
 # Migration governance preflight
-PYTHONPATH=src python scripts/migration_preflight.py
+PYTHONPATH=backend python backend/scripts/migration_preflight.py
 
 # Backup/restore and monthly drill
-PYTHONPATH=src python scripts/backup_platform_state.py --label nightly
-PYTHONPATH=src python scripts/backup_restore_drill.py --label monthly
+PYTHONPATH=backend python backend/scripts/backup_platform_state.py --label nightly
+PYTHONPATH=backend python backend/scripts/backup_restore_drill.py --label monthly
 
 # Retention policy dry-run/apply
-PYTHONPATH=src python scripts/enforce_retention.py
-PYTHONPATH=src python scripts/enforce_retention.py --apply
+PYTHONPATH=backend python backend/scripts/enforce_retention.py
+PYTHONPATH=backend python backend/scripts/enforce_retention.py --apply
 
 # Load/perf budgets and SLO policy evaluation
-PYTHONPATH=src python scripts/load_test_api.py --base-url http://127.0.0.1:8040 --duration 60 --concurrency 12
-PYTHONPATH=src python scripts/evaluate_slo.py --metrics-url http://127.0.0.1:8040/api/v1/metrics
+PYTHONPATH=backend python backend/scripts/load_test_api.py --base-url http://127.0.0.1:8040 --duration 60 --concurrency 12
+PYTHONPATH=backend python backend/scripts/evaluate_slo.py --metrics-url http://127.0.0.1:8040/api/v1/metrics
 ```
 
 ## Notes
 
 - Legacy pipeline modules (`ccs` CLI, workbook pipeline, legacy ledger DB flow) were removed.
-- Bank parser and browser automation internals are fully integrated under `src/ccs_platform/adapters/banks/`.
+- Bank parser and browser automation internals are fully integrated under `backend/ccs_platform/adapters/banks/`.

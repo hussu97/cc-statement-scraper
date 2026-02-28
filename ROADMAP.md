@@ -1,301 +1,235 @@
-# Credit Card Scraper Production Roadmap
+# Credit Card Scraper — Audit & Improvement Roadmap
 
-This roadmap defines the engineering work needed to move the current system to a robust, scalable production posture.
+> Last updated: 2026-02-28
+> Scope: full codebase audit covering security, architecture, code quality, frontend, DevOps, and repo layout.
 
-## Prioritization Model
+---
 
-- `P0`: Immediate blockers for safe production operation.
-- `P1`: Reliability and scale improvements after first stable production launch.
-- `P2`: Security and compliance hardening.
-- `P3`: Data/platform maturity and operational excellence.
-- `P4`: Developer velocity and release discipline.
+## Priority Legend
 
-## Status Snapshot (2026-02-26)
+| Label | Meaning |
+|-------|---------|
+| `CRITICAL` | Must fix before any production exposure |
+| `HIGH` | Fix in the next sprint; degrades reliability or security at scale |
+| `MEDIUM` | Important tech-debt; fix before adding more features on top |
+| `LOW` | Polish / nice-to-have |
 
-- [x] `P0.1` First-class Docker artifacts and deployment manifests
-- [x] `P0.2` Remove destructive SQLite auto-reset behavior in production paths
-- [x] `P0.3` Add PostgreSQL as first-class backend
-- [x] `P0.4` Admin/API authentication and private-access enforcement
-- [x] `P0.5` Secrets lifecycle hardening
-- [x] `P0.6` Baseline observability
-- [x] `P1.1` Queue-backed job execution model
-- [x] `P1.2` Idempotency and retry policy per job type
-- [x] `P1.3` Isolate long-running scraping from API plane
-- [x] `P1.4` Failure isolation and cancellation semantics
-- [x] `P2.1` RBAC for admin and operational actions
-- [x] `P2.2` Audit logging expansion
-- [x] `P2.3` Secret rotation playbooks and policy
-- [x] `P2.4` Network hardening baseline
-- [x] `P2.5` Dependency scanning and image signing
-- [x] `P3.1` Automated backups and restore drills
-- [x] `P3.2` Data retention and lifecycle policies
-- [x] `P3.3` Migration governance and release safety
-- [x] `P3.4` Load/performance testing program
-- [x] `P3.5` SLOs and alerting policy
-- [ ] `P4.1` CI/CD pipeline with gated releases
-- [ ] `P4.2` Staging environment parity
-- [ ] `P4.3` Release versioning and changelog discipline
-- [ ] `P4.4` Change management and operational docs
+---
 
-## P0 - Immediate Production Blockers
+## 1. Critical / Security
 
-### [x] P0.1 First-class Docker artifacts and deployment manifests
+### 1.1 Hardcoded fallback password `CRITICAL`
+**File:** `src/ccs_platform/auth/service.py`
+**Issue:** Password `"Apple123!"` is hardcoded as a fallback credential. If the env var is missing the application starts with a known password. The same credential appears in plaintext in `README.md`.
+**Fix:** Raise a `RuntimeError` at startup when `CCS_PLATFORM_AUTH_PASSWORD` is absent in production. Remove the hardcoded value entirely.
 
-- Problem: Production deployment currently depends on ad-hoc, operator-authored Docker artifacts.
-- Impact: High setup variance, slower incident recovery, and fragile reproducibility.
-- Proposed change: Commit and maintain production-ready `Dockerfile.app`, `Dockerfile.frontend`, `docker-compose.prod.yml`, and reverse-proxy config in-repo with version control and release tagging.
-- Owner role: Platform engineer.
-- Effort: Medium.
-- Risk: Low.
-- Dependency: Agreement on base images, ports, and runtime command contract.
-- Done criteria: Clean checkout can build API/worker/frontend images and start stack with one documented command path in CI and operator runbooks.
+### 1.2 `get_db` doesn't rollback on exception `CRITICAL`
+**File:** `src/ccs_platform/db/session.py` (FastAPI dependency)
+**Issue:** The `get_db` generator yields a session and closes it in `finally`, but does not call `session.rollback()` when an exception propagates. Partial writes can be flushed and committed if an outer context commits before the exception surfaces, risking data corruption.
+**Fix:** Add `except: session.rollback(); raise` between the `yield` and the `finally` block.
 
-### [x] P0.2 Remove destructive SQLite auto-reset behavior in production paths
+### 1.3 Weak default `session_secret_key` `CRITICAL`
+**File:** `src/ccs_platform/config/settings.py`
+**Issue:** `session_secret_key` defaults to `"change-this-in-production"`. Nothing prevents the app from running in production with this value.
+**Fix:** In `model_post_init`, detect `environment == "production"` and raise if the key equals the default or is shorter than 32 bytes.
 
-- Problem: Legacy behavior can drop/reset SQLite schema on mismatch.
-- Impact: Critical data-loss risk in production and dangerous startup side effects.
-- Proposed change: Remove/disable destructive reset path in production mode; fail fast with explicit migration error instead.
-- Owner role: Backend engineer.
-- Effort: Small.
-- Risk: Medium.
-- Dependency: Migration health checks and clear operator remediation steps.
-- Done criteria: No production code path performs `drop_all`/schema reset; startup exits non-zero with clear error when migrations are pending.
+### 1.4 Thread-unsafe `os.environ` mutation `HIGH`
+**File:** `src/ccs_platform/application/jobs/runner.py`
+**Issue:** The `JobRunner` worker thread writes scraper credentials into `os.environ` (`os.environ["..."] = ...`) before launching Playwright. Under concurrent job execution (multiple worker threads or `asyncio.to_thread` calls), two threads can interleave their writes into the shared process environment, causing one job to use another profile's credentials.
+**Fix:** Pass credentials as explicit constructor/function arguments to the browser adapters instead of via `os.environ`.
 
-### [x] P0.3 Add PostgreSQL as first-class backend (Plan 2)
+### 1.5 PDF upload endpoint bypasses runtime settings `HIGH`
+**File:** `src/ccs_platform/api/v1/upload.py`
+**Issue:** The upload endpoint reads bank-specific parser configuration directly from `os.environ` instead of the `runtime_settings` table. If credentials/configs have been updated through the admin UI they won't be reflected.
+**Fix:** Load parser config from the `RuntimeSettingsRepository` the same way the job runner does.
 
-- Problem: SQLite-first assumptions limit concurrency and managed-cloud suitability.
-- Impact: Limits scaling, durability guarantees, and operational flexibility.
-- Proposed change: Validate full PostgreSQL support (`psycopg`), harden Alembic migrations for Postgres, and add tested Postgres deployment profile.
-- Owner role: Backend engineer.
-- Effort: Medium.
-- Risk: Medium.
-- Dependency: Cloud SQL integration test environment and migration test matrix.
-- Done criteria: Integration test suite passes on Postgres; production migration path documented; rollback procedure verified.
+---
 
-### [x] P0.4 Admin/API authentication and private-access enforcement
+## 2. Architecture
 
-- Problem: Access controls are not formalized as a mandatory production gate.
-- Impact: Unauthorized access risk to financial and credential-sensitive operations.
-- Proposed change: Enforce private/admin-only ingress and authentication at gateway plus API level; define mandatory auth middleware and deployment checks.
-- Owner role: Security engineer + backend engineer.
-- Effort: Medium.
-- Risk: Medium.
-- Dependency: Identity provider decision (IAP/basic auth/OIDC) and session/token strategy.
-- Done criteria: Unauthenticated access to UI/API is blocked; authorization tests cover protected endpoints; security review sign-off complete.
+### 2.1 `JobRunner` God class `HIGH`
+**File:** `src/ccs_platform/application/jobs/runner.py` (~1,064 lines)
+**Issue:** A single class owns job dispatch, cancellation, heartbeat, retry logic, schedule polling, and the concrete implementation of every job type (scrape, upload, reclassify, export, diagnostics, bank connection test). Changes to any job type require editing the same file, and the class is untestable in isolation.
+**Fix:** Extract each job type into its own module under `application/jobs/handlers/`. `JobRunner` becomes a thin dispatcher that delegates to handlers. Each handler can be unit-tested independently.
 
-### [x] P0.5 Secrets lifecycle hardening
+### 2.2 No repository layer `HIGH`
+**Issue:** SQLAlchemy queries are scattered across route handlers, service functions, and domain utilities — no consistent abstraction over data access.
+**Fix:** Introduce a repository per aggregate root (`StatementRepository`, `JobRepository`, `CategoryRepository`, etc.). Routes interact with repositories, not with `Session` directly.
 
-- Problem: Secrets can drift across env files, runtime settings, and operator workflows.
-- Impact: Increased leakage probability and difficult emergency rotation.
-- Proposed change: Standardize secret sources (Secret Manager or equivalent), remove plaintext secret persistence patterns, and define rotation/expiry runbook.
-- Owner role: Security engineer.
-- Effort: Medium.
-- Risk: Medium.
-- Dependency: Secret manager integration and runtime settings sync policy.
-- Done criteria: No long-lived secrets stored in git or unmanaged files; rotation drill completed successfully within target time.
+### 2.3 Bank adapters lack a shared base class `MEDIUM`
+**Files:** `src/ccs_platform/adapters/banks/adcb.py` (1,563 lines), `src/ccs_platform/adapters/banks/enbd.py` (1,399 lines), and others.
+**Issue:** Each bank adapter re-implements the same lifecycle (launch browser, navigate, handle OTP, download, close). No shared contract makes it hard to add a new bank or write adapter-level tests.
+**Fix:** Define a `BaseBankAdapter` abstract class with lifecycle hooks. Move shared Playwright setup/teardown there.
 
-### [x] P0.6 Baseline observability
+### 2.4 `MONTH_INDEX` dict duplicated across 5 files `MEDIUM`
+**Files:** Multiple bank adapter files.
+**Issue:** The same month-name → month-number dictionary is copy-pasted. Any discrepancy causes silent parsing errors.
+**Fix:** Define once in `domain/parsing/month_utils.py` and import everywhere.
 
-- Problem: Limited structured telemetry across API, worker, scraping jobs, and storage operations.
-- Impact: Slow root-cause analysis and poor reliability visibility.
-- Proposed change: Add structured logs, request/job correlation IDs, basic metrics (latency/error/job throughput), and error reporting.
-- Owner role: Platform engineer.
-- Effort: Medium.
-- Risk: Low.
-- Dependency: Logging backend choice and instrumentation conventions.
-- Done criteria: Dashboards show API health, job backlog, job failures, scrape failure rates, and DB/storage errors with alert hooks.
+### 2.5 Custom RRULE parser only handles HOURLY/WEEKLY `MEDIUM`
+**File:** `src/ccs_platform/application/schedules/rrule_parser.py`
+**Issue:** A bespoke RRULE parser supports only two frequencies. Users who configure DAILY or MONTHLY schedules will get silent failures or wrong next-run times.
+**Fix:** Replace with `python-dateutil` (`dateutil.rrule`), which covers the full RFC 5545 subset.
 
-## P1 - Reliability and Scaling
+---
 
-### [x] P1.1 Queue-backed job execution model
+## 3. Code Quality
 
-- Problem: DB polling worker loop couples scheduling and execution with limited elasticity.
-- Impact: Inefficient scaling, contention under load, and weaker failure handling.
-- Proposed change: Introduce queue-backed execution (e.g., Cloud Tasks/Pub/Sub/Celery-compatible queue) with explicit enqueue/dequeue semantics.
-- Owner role: Backend engineer + platform engineer.
-- Effort: Large.
-- Risk: High.
-- Dependency: P0 observability and idempotency policy.
-- Done criteria: Production jobs are enqueued and consumed through a managed queue with measurable throughput and backlog SLOs.
-- Progress update (2026-02-26): API-side direct execution removed; jobs now enqueue through persisted queue state and dispatcher abstraction, worker dequeue uses explicit claim semantics, and backlog/throughput SLOs are surfaced in `/health/ready` + `/metrics`.
+### 3.1 223 bare `except Exception` clauses `HIGH`
+**Pattern:** `except Exception:  # noqa: BLE001` throughout the codebase.
+**Issue:** Swallowing broad exceptions hides bugs. The `# noqa` suppresses the linter warning instead of fixing the root cause.
+**Fix:** Replace with specific exception types. Where a catch-all is genuinely needed (top-level job runner loop), log the traceback and re-raise or set the job to `FAILED`.
 
-### [x] P1.2 Idempotency and retry policy per job type
+### 3.2 Hardcoded profile key `"hussain"` `HIGH`
+**Files:** 3 backend files.
+**Issue:** Profile routing logic falls back to a specific user's profile key. This is a personal assumption baked into business logic.
+**Fix:** Remove the hardcoded fallback. Require the profile key to be explicitly provided by the caller.
 
-- Problem: Repeated/replayed jobs can create duplicate side effects and inconsistent state.
-- Impact: Data quality issues and hard-to-debug reconciliation failures.
-- Proposed change: Add idempotency keys, bounded retries with jitter/backoff, poison-job handling, and deterministic dedupe rules.
-- Owner role: Backend engineer.
-- Effort: Medium.
-- Risk: Medium.
-- Dependency: Queue-backed execution design.
-- Done criteria: Duplicate enqueue of same idempotency key does not duplicate side effects; retry behavior is test-covered by job type.
-- Progress update (2026-02-26): Added persisted idempotency keys, attempt counters, retry scheduling metadata, jittered bounded retry logic, idempotency header support across enqueue endpoints, and duplicate-side-effect protections for upload/export job creation.
+### 3.3 Dead database columns `MEDIUM`
+- `CategoryRule.priority` — queried nowhere.
+- `bank_code` and `card_last4` on a secondary table — not surfaced in any API or report.
+**Fix:** Add Alembic migrations to drop these columns, reducing schema noise.
 
-### [x] P1.3 Isolate long-running scraping from API plane
+### 3.4 `EXPECTED_SAMPLE_COUNTS` in production code `MEDIUM`
+**File:** `src/ccs_platform/adapters/banks/` (one or more files)
+**Issue:** A constant named `EXPECTED_SAMPLE_COUNTS` lives in production source code. This is test/QA data that belongs in the test suite.
+**Fix:** Move to `tests/fixtures/` or a bank-specific test file.
 
-- Problem: Scraping workloads compete with API resources.
-- Impact: API latency spikes and unstable user experience during high scrape volume.
-- Proposed change: Separate compute/resource classes for scraping workers; reserve API capacity and apply concurrency limits.
-- Owner role: Platform engineer.
-- Effort: Medium.
-- Risk: Medium.
-- Dependency: Container resource profiling and autoscaling thresholds.
-- Done criteria: API p95 latency remains within target during sustained scraping load tests.
-- Progress update (2026-02-26): Added queue partition metadata (`default` vs `scrape`), worker queue filtering (`CCS_PLATFORM_WORKER_QUEUES`), and worker active-job capacity limits to isolate scrape-heavy workers from API-serving process capacity.
+### 3.5 `requirements.txt` duplicates `pyproject.toml` `MEDIUM`
+**Issue:** The project maintains both `requirements.txt` (pinned) and `pyproject.toml` (version-ranged). They can drift, creating `pip install` discrepancies between dev and CI.
+**Fix:** Generate `requirements.txt` from `pyproject.toml` via `pip-compile` (pip-tools) and check the lock file in. Remove hand-maintained duplication.
 
-### [x] P1.4 Failure isolation and cancellation semantics
+### 3.6 No `conftest.py` — fixtures recreated manually `MEDIUM`
+**File:** `tests/`
+**Issue:** Each test file manually sets up database sessions, settings, and test data. Shared setup belongs in `conftest.py` fixtures.
+**Fix:** Create `tests/conftest.py` with shared `db_session`, `settings`, and sample-data fixtures.
 
-- Problem: Long-running or stuck tasks can hold resources and block system progress.
-- Impact: Queue growth, operator intervention burden, and reduced reliability.
-- Proposed change: Add explicit cancellation tokens, heartbeat/timeout enforcement, and per-stage failure boundaries.
-- Owner role: Backend engineer.
-- Effort: Medium.
-- Risk: Medium.
-- Dependency: Job state machine cleanup and worker lease/lock design.
-- Done criteria: Operators can cancel stuck jobs safely; abandoned workers are recovered automatically without data corruption.
-- Progress update (2026-02-26): Added cooperative cancellation token behavior for running jobs, persisted cancellation timestamps, periodic job heartbeat updates, heartbeat timeout detection, and stale-running auto-recovery paths (requeue/fail/cancel).
+### 3.7 `_UTCAwareDateTime` not used `MEDIUM`
+**Issue:** `CLAUDE.md` rule 8 mandates `_UTCAwareDateTime` for all datetime columns. The TypeDecorator exists in `db/models.py` but is not applied to the model fields.
+**Fix:** Audit all `datetime` columns and apply `_TSTZ()` (or equivalent), then generate the corresponding Alembic migration with `DateTime(timezone=True)`.
 
-## P2 - Security and Compliance
+### 3.8 N+1 query in `reclassify_statement_lines` `MEDIUM`
+**File:** `src/ccs_platform/application/jobs/handlers/` (or equivalent service)
+**Issue:** The function fetches active category rules once per statement line in a loop rather than once per batch.
+**Fix:** Fetch all active rules once before the loop and apply them in memory.
 
-### [x] P2.1 RBAC for admin and operational actions
+### 3.9 Heartbeat thread dies silently `MEDIUM`
+**File:** `src/ccs_platform/application/jobs/runner.py`
+**Issue:** If the heartbeat thread raises an unhandled exception it terminates silently. Jobs then appear "stuck" until the 30-minute `JOB_HEARTBEAT_TIMEOUT_SECONDS` window expires.
+**Fix:** Wrap the heartbeat loop body in `try/except`, log the error, and restart the thread (or surface the failure to a monitoring endpoint).
 
-- Problem: Coarse access model cannot safely separate admin, operator, and read-only roles.
-- Impact: Excess privilege and audit/compliance gaps.
-- Proposed change: Introduce role-based access control for sensitive actions (reparse all, statement edits, runtime settings, credential ops).
-- Owner role: Security engineer + backend engineer.
-- Effort: Medium.
-- Risk: Medium.
-- Dependency: Identity integration and authorization policy matrix.
-- Done criteria: Role matrix enforced in API and UI; automated tests validate deny/allow behavior.
-- Progress update (2026-02-26): Added role context (`viewer`/`operator`/`admin`), RBAC enforcement dependencies on sensitive API actions, and test coverage for deny/allow flows.
+---
 
-### [x] P2.2 Audit logging expansion
+## 4. Frontend
 
-- Problem: Insufficient immutable record of who changed what and when.
-- Impact: Weak incident forensics and compliance evidence.
-- Proposed change: Expand audit trail coverage to auth events, statement mutations, rule changes, reparses, and credential updates.
-- Owner role: Backend engineer.
-- Effort: Medium.
-- Risk: Low.
-- Dependency: Centralized logging and retention policy.
-- Done criteria: Critical actions emit structured audit entries with actor, target, before/after metadata, and timestamp.
-- Progress update (2026-02-26): Expanded audit event coverage to runtime settings mutations/seeding, job enqueue and cancel flows, schedule mutations, profile bank access changes, and statement mutation/reparse events with actor metadata.
+### 4.1 Zero tests, no test framework configured `HIGH`
+**Issue:** Violates `CLAUDE.md` rule 11. The `frontend/` directory has no test runner configured (`vitest`, `jest`, or equivalent). There are no test files.
+**Fix:**
+1. Add `vitest` + `@testing-library/react` as dev dependencies.
+2. Configure `vite.config.ts` with a `test` block.
+3. Write tests for pure utilities: `formatAmount`, `useDebouncedValue`, `isAbortError`, date helpers.
 
-### [x] P2.3 Secret rotation playbooks and policy
+### 4.2 No ESLint / Prettier `MEDIUM`
+**Issue:** No linting or formatting enforced. Code style is inconsistent and type-safety gaps go undetected at save time.
+**Fix:** Add `eslint`, `@typescript-eslint/eslint-plugin`, `eslint-plugin-react-hooks`, and `prettier`. Add `lint` and `format` npm scripts. Run `eslint --max-warnings 0` in CI.
 
-- Problem: Rotation is manual and not standardized per provider.
-- Impact: Slow response to compromise and operational mistakes.
-- Proposed change: Document and automate periodic and emergency rotation workflows, including validation and rollback steps.
-- Owner role: Security engineer.
-- Effort: Small.
-- Risk: Low.
-- Dependency: Secret manager standardization from P0.
-- Done criteria: Quarterly rotation drill completed for all high-risk secrets within agreed RTO.
-- Progress update (2026-02-26): Added `docs/security/secret-rotation-playbook.md` with periodic/emergency rotation policy, validation checklist, rollback procedure, and evidence requirements.
+### 4.3 Utility duplication `MEDIUM`
+- `useDebouncedValue` — defined in 3 files.
+- `formatAmount` — defined in 2 files.
+- `isAbortError` — defined in 2 files.
+**Fix:** Consolidate each into `src/lib/` (`useDebounce.ts`, `format.ts`, `errors.ts`) and update all imports.
 
-### [x] P2.4 Network hardening baseline
+### 4.4 Pervasive `any` typing `MEDIUM`
+**Issue:** The TypeScript type system is effectively bypassed across much of the frontend. Runtime type errors surface only in the UI.
+**Fix:** Enable `"strict": true` in `tsconfig.json`. Resolve `any` usages incrementally, starting with API response types.
 
-- Problem: Ingress/egress controls are not fully codified.
-- Impact: Increased exposure surface and reduced blast-radius control.
-- Proposed change: Enforce private ingress policy, restricted egress, firewall allowlists, and service-to-service identity constraints.
-- Owner role: Platform engineer.
-- Effort: Medium.
-- Risk: Medium.
-- Dependency: Final hosting topology for both plans.
-- Done criteria: Network policy is codified and validated by automated checks; unauthorized network paths are blocked.
-- Progress update (2026-02-26): Added hardened compose network segmentation (`app_internal` + public edge), baseline network policy artifact (`deploy/network/networkpolicy-baseline.yaml`), and operator checklist in `docs/security/network-hardening-baseline.md`.
+### 4.5 Personal email hardcoded in `LoginPage.tsx` `HIGH`
+**File:** `frontend/src/pages/LoginPage.tsx`
+**Issue:** `h_abbasi97@hotmail.com` is hardcoded as a placeholder/default in a UI component. This leaks PII and breaks multi-tenant deployments.
+**Fix:** Remove the hardcoded email. Use an empty placeholder string.
 
-### [x] P2.5 Dependency scanning and image signing
+### 4.6 `TablePagination` missing `2000` option `MEDIUM`
+**Issue:** Violates `CLAUDE.md` rule 12. The pagination component is missing the 2000/page option.
+**Fix:** Add `2000` to `pageSizeOptions` in the shared `Pagination` component.
 
-- Problem: Supply-chain integrity checks are incomplete.
-- Impact: Vulnerable dependencies/images can reach production.
-- Proposed change: Add SCA/SAST, container image scanning, SBOM generation, and signing/verification in release pipeline.
-- Owner role: Platform engineer.
-- Effort: Medium.
-- Risk: Low.
-- Dependency: CI/CD foundation from P4.
-- Done criteria: Release pipeline blocks critical vulnerabilities and unsigned images from deployment.
-- Progress update (2026-02-26): Added GitHub Actions security workflow (`.github/workflows/security-supply-chain.yml`) with SCA/SAST gating, container scanning, SBOM generation, and Cosign signing/verification for release images.
+### 4.7 `LoginResponse` type defined twice `LOW`
+**Issue:** Two files define `LoginResponse` with slightly different shapes. The duplicate creates a risk of divergence.
+**Fix:** Define once in `src/types/auth.ts` and import everywhere.
 
-## P3 - Data and Platform Maturity
+### 4.8 `ExportsDiagnosticsPage` hardcodes bank list `MEDIUM`
+**File:** `frontend/src/pages/ExportsDiagnosticsPage.tsx`
+**Issue:** The bank list is hardcoded in JSX instead of fetched from `GET /api/v1/banks`. Adding a new bank requires a frontend code change.
+**Fix:** Fetch from the API on mount. Display a loading state while fetching.
 
-### [x] P3.1 Automated backups and restore drills
+### 4.9 `DashboardPage` is 427 lines `MEDIUM`
+**File:** `frontend/src/pages/DashboardPage.tsx`
+**Issue:** One component handles data fetching, charting, date-range logic, and layout. It violates single-responsibility and is hard to test or reuse.
+**Fix:** Extract: `useDashboardData` hook (data fetching), `<DashboardFilters>` component, `<DashboardCharts>` component.
 
-- Problem: Backup execution and restore confidence may depend on manual effort.
-- Impact: Higher recovery risk during incidents.
-- Proposed change: Automate scheduled backups for DB and statement archive with periodic restore validation in non-prod.
-- Owner role: SRE/platform engineer.
-- Effort: Medium.
-- Risk: Medium.
-- Dependency: Storage and DB retention decisions.
-- Done criteria: Backup jobs run on schedule with alerts; restore drill succeeds at least monthly.
-- Progress update (2026-02-26): Added backup/archive manifest tooling (`scripts/backup_platform_state.py`, `scripts/restore_platform_backup.py`) and checksum-backed monthly drill automation (`scripts/backup_restore_drill.py`) with operational runbook coverage.
+---
 
-### [x] P3.2 Data retention and lifecycle policies
+## 5. DevOps / Deployment
 
-- Problem: Statement artifacts/logs may grow without enforced retention controls.
-- Impact: Rising storage cost and compliance risk.
-- Proposed change: Define retention tiers, legal hold exceptions, and lifecycle rules for DB records, files, and logs.
-- Owner role: Product + security + platform.
-- Effort: Medium.
-- Risk: Medium.
-- Dependency: Compliance/legal requirements.
-- Done criteria: Retention policy approved and technically enforced with auditable deletion behavior.
-- Progress update (2026-02-26): Added configurable retention windows (`CCS_PLATFORM_RETENTION_*`), automated dry-run/apply cleanup (`scripts/enforce_retention.py`), and policy docs with structured deletion reporting.
+### 5.1 Playwright installed in API image `HIGH`
+**File:** `deploy/Dockerfile.app`
+**Issue:** Playwright Chromium + dependencies adds ~500 MB to the API image even though the API process never launches a browser. Only the worker needs Playwright.
+**Fix:** Split into two Dockerfiles: `Dockerfile.api` (no Playwright) and `Dockerfile.worker` (with Playwright). Reference the correct image per service in `docker-compose.prod.yml`.
 
-### [x] P3.3 Migration governance and release safety
+### 5.2 `app_internal` network may block worker outbound access `HIGH`
+**File:** `deploy/docker-compose.prod.yml`
+**Issue:** The `app_internal` network is `internal: true`, which blocks all outbound internet traffic. The scraping worker requires outbound internet (to reach bank websites).
+**Fix:** Add `edge_public` network to the `worker` service, or change the `app_internal` network to not be internal and put only the reverse proxy on `edge_public`.
 
-- Problem: Schema changes can be high-risk without strict process controls.
-- Impact: Downtime or data inconsistency during upgrades.
-- Proposed change: Add migration RFC checklist, forward/backward compatibility rules, preflight checks, and rollback playbooks.
-- Owner role: Backend lead.
-- Effort: Small.
-- Risk: Low.
-- Dependency: CI migration tests on SQLite and Postgres.
-- Done criteria: Every migration has tested upgrade/downgrade path and approved rollout plan.
-- Progress update (2026-02-26): Added migration preflight governance checks (`scripts/migration_preflight.py`) plus CI migration smoke workflow (`.github/workflows/migration-safety.yml`) validating upgrade/downgrade paths on SQLite and Postgres.
+### 5.3 No `npm test` in CI `HIGH`
+**Issue:** The CI pipeline has no step to run frontend tests (because none exist yet). After fixing 4.1, add a CI step to run `npm test -- --run` in `frontend/`.
 
-### [x] P3.4 Load/performance testing program
+### 5.4 Stale `tmp_ci_migration.db` artifact at repo root `LOW`
+**Issue:** `tmp_ci_migration.db` is a CI artifact that should be ephemeral but is committed/left at the repo root.
+**Fix:** Add `tmp_ci_migration.db` to `.gitignore`. The CI workflow already uses a separate db path (`ci_release.db`); remove any reference to the old path.
 
-- Problem: Capacity limits and bottlenecks are unknown under realistic production load.
-- Impact: Surprise failures during growth or peak periods.
-- Proposed change: Build repeatable load tests for API, worker throughput, scrape concurrency, and storage access patterns.
-- Owner role: Performance engineer/platform engineer.
-- Effort: Medium.
-- Risk: Medium.
-- Dependency: Stable staging environment and observability baseline.
-- Done criteria: Performance budgets defined and tested; bottlenecks tracked to resolution.
-- Progress update (2026-02-26): Added repeatable API load harness (`scripts/load_test_api.py`), budget definitions (`config/performance_budgets.json`), and operational load-testing guidance.
+### 5.5 Redundant Caddy + Nginx configs `LOW`
+**File:** `deploy/`
+**Issue:** Both a `Caddyfile` and an `nginx/` directory exist. Only Caddy is used in `docker-compose.prod.yml`. The Nginx config is dead.
+**Fix:** Remove `deploy/nginx/` and any associated documentation.
 
-### [x] P3.5 SLOs and alerting policy
+---
 
-- Problem: No formal reliability objectives tied to paging thresholds.
-- Impact: Reactive operations and alert fatigue.
-- Proposed change: Define service-level objectives for availability, latency, and job completion; wire alerting to SLO error budgets.
-- Owner role: SRE lead.
-- Effort: Medium.
-- Risk: Low.
-- Dependency: Metrics instrumentation and incident process maturity.
-- Done criteria: SLO dashboards and alert rules active with documented on-call response policy.
-- Progress update (2026-02-26): Added SLO/alert policy source (`config/slo_alert_rules.yaml`), evaluator tooling (`scripts/evaluate_slo.py`), and on-call response runbook (`docs/operations/slo-alert-policy.md`).
+## 6. Repo Structure
 
-## P4 - Developer Velocity and Delivery
+### 6.1 Backend at repo root — no clean separation `MEDIUM`
+**Issue:** Backend source (`src/`, `alembic/`, `config/`, `scripts/`, `tests/`) lives at the same level as `frontend/`. This makes it hard to set different CI paths, Docker build contexts, and lint configs per layer.
+**Status:** ✅ Resolved in this commit — backend moved to `backend/`. See directory tree below.
 
-### [ ] P4.1 CI/CD pipeline with gated releases
+```
+credit-card-scraper/
+├── backend/
+│   ├── ccs_platform/      ← package source (was src/ccs_platform/)
+│   ├── alembic/
+│   ├── config/
+│   ├── scripts/
+│   ├── tests/
+│   ├── requirements.txt
+│   ├── requirements-dev.txt
+│   ├── pyproject.toml
+│   └── alembic.ini
+├── frontend/
+├── deploy/
+├── docs/
+├── CLAUDE.md
+├── PRODUCTION.md
+├── ROADMAP.md
+└── README.md
+```
 
-- Problem: Build/test/deploy flow is not fully automated and standardized.
-- Impact: Slower delivery and increased manual release risk.
-- Proposed change: Implement CI/CD pipeline with lint/test/security/migration gates, image build/publish, and environment promotions.
-- Owner role: Platform engineer.
-- Effort: Medium.
-- Risk: Medium.
-- Dependency: P0 Docker artifacts and test coverage baseline.
-- Done criteria: Every merge to release branch produces traceable artifact and controlled deploy path with approvals.
+---
 
-## Suggested Delivery Sequence
+## Suggested Sprint Ordering
 
-1. Complete all `P0` items before broad production onboarding.
-2. Start `P1` queue/idempotency work immediately after first stable production milestone.
-3. Parallelize selected `P2` controls with `P1` where dependencies allow.
-4. Use `P3` SLO/load-testing outcomes to drive scaling and cost optimization.
-5. Institutionalize with `P4` so releases become routine and auditable.
+| Sprint | Items |
+|--------|-------|
+| **S1 (Security)** | 1.1, 1.2, 1.3, 1.4, 1.5, 4.5 |
+| **S2 (Reliability)** | 2.1 (extract handlers), 3.1 (bare excepts), 3.8 (N+1), 3.9 (heartbeat), 5.1, 5.2 |
+| **S3 (Testing)** | 4.1 (frontend tests), 3.6 (conftest), 5.3 (CI npm test) |
+| **S4 (Architecture)** | 2.2 (repo layer), 2.3 (base adapter), 2.4 (MONTH_INDEX), 2.5 (RRULE) |
+| **S5 (Code quality)** | 3.2, 3.3, 3.4, 3.5, 3.7, 4.2, 4.3, 4.4, 4.6, 4.7, 4.8, 4.9 |
+| **S6 (Polish)** | 5.4, 5.5 |

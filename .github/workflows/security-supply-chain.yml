@@ -21,14 +21,14 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt -r requirements-dev.txt
+          pip install -r backend/requirements.txt -r backend/requirements-dev.txt
           pip install pip-audit bandit
 
       - name: Dependency vulnerability scan (block critical)
-        run: pip-audit -r requirements.txt --strict
+        run: pip-audit -r backend/requirements.txt --strict
 
       - name: SAST scan (Bandit)
-        run: bandit -q -r src -x tests -ll -ii
+        run: bandit -q -r backend/ccs_platform -x backend/tests -ll -ii
 
   container-security:
     runs-on: ubuntu-latest
