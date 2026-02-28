@@ -230,8 +230,6 @@ export function JobsPage() {
   const [selectedBanks, setSelectedBanks] = useState<string[]>([]);
   const [monthFrom, setMonthFrom] = useState(defaultMonth);
   const [monthTo, setMonthTo] = useState(defaultMonth);
-  const [download, setDownload] = useState(true);
-  const [headless, setHeadless] = useState(true);
   const [timeout, setTimeoutMinutes] = useState(20);
   const [activeJob, setActiveJob] = useState<Job | null>(null);
   const [liveJob, setLiveJob] = useState<Job | null>(null);
@@ -277,8 +275,6 @@ export function JobsPage() {
         banks: selectedBanks,
         month_from: monthFrom,
         month_to: monthTo,
-        download,
-        headless,
         login_timeout_minutes: timeout,
       };
       const job = await api.post<Job>('/jobs/scrape', payload);
@@ -419,12 +415,6 @@ export function JobsPage() {
             </select>
           </label>
 
-          <label>
-            <input type="checkbox" checked={download} onChange={(e) => setDownload(e.target.checked)} /> Download
-          </label>
-          <label>
-            <input type="checkbox" checked={headless} onChange={(e) => setHeadless(e.target.checked)} /> Headless
-          </label>
           <input
             type="number"
             min={5}
