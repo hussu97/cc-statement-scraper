@@ -34,3 +34,6 @@ class StorageAdapter:
 
     def read_bytes(self, key: str) -> bytes:
         raise NotImplementedError
+
+    def delete(self, key: str) -> None:
+        raise NotImplementedError

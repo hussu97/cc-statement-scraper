@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 from datetime import UTC, datetime
 from typing import Any
 
@@ -22,12 +23,10 @@ def handle_export_workbook_job(
     year = int(payload.get("year", datetime.now().year))
     export_id = payload.get("export_id")
 
-    out_dir = ctx.settings.uploads_temp_dir / profile_key
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_file = out_dir / f"workbook_{year}_{job.id}.xlsx"
-    build_yearly_workbook_from_statements(db, out_file, year, profile_id=job.profile_id)
+    buf = io.BytesIO()
+    build_yearly_workbook_from_statements(db, buf, year, profile_id=job.profile_id)
+    content = buf.getvalue()
 
-    content = out_file.read_bytes()
     stored = ctx.storage.save_binary(
         content=content,
         filename=f"credit-card-tracker-{year}.xlsx",
@@ -58,8 +57,6 @@ def handle_export_workbook_job(
     export_row.filename = f"credit-card-tracker-{year}.xlsx"
     export_row.ready_at = datetime.now(UTC)
     db.commit()
-
-    out_file.unlink(missing_ok=True)
 
     return {
         "export_id": export_row.id,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import BinaryIO, Union
 
 import pandas as pd
 from sqlalchemy import select
@@ -48,8 +49,11 @@ def _line_rows_for_year(db: Session, year: int, *, profile_id: int) -> list[dict
     return rows
 
 
-def build_yearly_workbook_from_statements(db: Session, output_path: Path, year: int, *, profile_id: int) -> Path:
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+def build_yearly_workbook_from_statements(
+    db: Session, output_path: Union[Path, BinaryIO], year: int, *, profile_id: int
+) -> Union[Path, BinaryIO]:
+    if isinstance(output_path, Path):
+        output_path.parent.mkdir(parents=True, exist_ok=True)
     rows = _line_rows_for_year(db, year, profile_id=profile_id)
 
     tx_df = pd.DataFrame(rows)
