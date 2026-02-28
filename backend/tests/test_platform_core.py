@@ -88,7 +88,7 @@ def test_statement_identity_ignores_timestamp_like_reference() -> None:
 
 def test_category_matching_prefers_most_specific_pattern() -> None:
     with _session() as db:
-        db.add(models.Bank(code="FAB", name="FAB", supports_historical_month_selection=False, supports_multi_month=False, supports_headless=True))
+        db.add(models.Bank(code="FAB", name="FAB", supports_multi_month=False, supports_headless=True))
         db.add(models.Category(name="Travel"))
         db.add(models.Category(name="Dining"))
         db.add(
@@ -123,7 +123,7 @@ def test_category_matching_prefers_most_specific_pattern() -> None:
 
 def test_category_matching_ignores_legacy_scope_fields() -> None:
     with _session() as db:
-        db.add(models.Bank(code="FAB", name="FAB", supports_historical_month_selection=False, supports_multi_month=False, supports_headless=True))
+        db.add(models.Bank(code="FAB", name="FAB", supports_multi_month=False, supports_headless=True))
         db.add(models.Category(name="Transport"))
         db.add(
             models.CategoryRule(
@@ -148,7 +148,7 @@ def test_category_matching_ignores_legacy_scope_fields() -> None:
 
 def test_replace_semantics_delete_old_statement_lines() -> None:
     with _session() as db:
-        db.add(models.Bank(code="FAB", name="FAB", supports_historical_month_selection=False, supports_multi_month=False, supports_headless=True))
+        db.add(models.Bank(code="FAB", name="FAB", supports_multi_month=False, supports_headless=True))
         db.flush()
         profile = models.Profile(key="default", name="Default", is_default=True)
         db.add(profile)

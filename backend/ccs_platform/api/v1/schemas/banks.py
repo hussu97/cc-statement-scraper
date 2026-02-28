@@ -8,6 +8,5 @@ class BankOut(BaseModel):
 
     code: str
     name: str
-    supports_historical_month_selection: bool
     supports_multi_month: bool
     supports_headless: bool

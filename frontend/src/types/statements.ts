@@ -69,7 +69,6 @@ export type Job = {
 export type Bank = {
   code: string;
   name: string;
-  supports_historical_month_selection: boolean;
   supports_multi_month: boolean;
   supports_headless: boolean;
 };

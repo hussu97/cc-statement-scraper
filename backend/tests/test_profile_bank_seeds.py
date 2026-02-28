@@ -21,7 +21,6 @@ def test_profile_seed_assigns_secondary_defaults_to_tejasvie_only() -> None:
                 models.Bank(
                     code=code,
                     name=code,
-                    supports_historical_month_selection=True,
                     supports_multi_month=True,
                     supports_headless=True,
                 )
@@ -62,7 +61,6 @@ def test_profile_seed_backfills_new_secondary_bank_for_existing_profile() -> Non
                 models.Bank(
                     code=code,
                     name=code,
-                    supports_historical_month_selection=True,
                     supports_multi_month=True,
                     supports_headless=True,
                 )

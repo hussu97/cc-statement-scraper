@@ -18,32 +18,26 @@ LATEST_MONTH_ALIAS = "latest"
 
 BANK_CAPABILITIES: dict[str, dict[str, bool]] = {
     "FAB": {
-        "supports_historical_month_selection": True,
         "supports_multi_month": True,
         "supports_headless": True,
     },
     "ADCB": {
-        "supports_historical_month_selection": True,
         "supports_multi_month": True,
         "supports_headless": True,
     },
     "ENBD": {
-        "supports_historical_month_selection": True,
         "supports_multi_month": True,
         "supports_headless": True,
     },
     "EIB": {
-        "supports_historical_month_selection": True,
         "supports_multi_month": True,
         "supports_headless": True,
     },
     "SIB": {
-        "supports_historical_month_selection": True,
         "supports_multi_month": True,
         "supports_headless": True,
     },
     "MASHREQ": {
-        "supports_historical_month_selection": True,
         "supports_multi_month": True,
         "supports_headless": True,
     },
@@ -61,7 +55,6 @@ def seed_banks(db: Session) -> None:
         caps = BANK_CAPABILITIES.get(code, {})
         bank_name = bank_cfg.get("bank_name", code)
         portal_url = bank_cfg.get("portal_url")
-        supports_historical = caps.get("supports_historical_month_selection", False)
         supports_multi = caps.get("supports_multi_month", False)
         supports_headless = caps.get("supports_headless", True)
 
@@ -71,7 +64,6 @@ def seed_banks(db: Session) -> None:
                 models.Bank(
                     code=code,
                     name=bank_name,
-                    supports_historical_month_selection=supports_historical,
                     supports_multi_month=supports_multi,
                     supports_headless=supports_headless,
                     portal_url=portal_url,
@@ -82,7 +74,6 @@ def seed_banks(db: Session) -> None:
         # Keep capabilities synchronized with static adapter capability matrix.
         row.name = bank_name
         row.portal_url = portal_url
-        row.supports_historical_month_selection = supports_historical
         row.supports_multi_month = supports_multi
         row.supports_headless = supports_headless
 
@@ -172,15 +163,6 @@ def supports_multi_month(bank: models.Bank) -> bool:
     return bool(bank.supports_multi_month or static_caps.get("supports_multi_month", False))
 
 
-def supports_historical_month_selection(bank: models.Bank) -> bool:
-    code = bank.code.upper()
-    static_caps = BANK_CAPABILITIES.get(code, {})
-    return bool(
-        bank.supports_historical_month_selection
-        or static_caps.get("supports_historical_month_selection", False)
-    )
-
-
 def resolve_requested_months(
     *,
     months: list[str] | None = None,
@@ -249,14 +231,4 @@ def build_bank_scrape_config(bank_code: str, month: str) -> dict[str, str | int]
 
 
 def is_month_supported(bank: models.Bank, month: str, *, timezone: str = "Asia/Dubai") -> bool:
-    requested_month = (month or "").strip().lower()
-    if requested_month == LATEST_MONTH_ALIAS:
-        return True
-    if supports_historical_month_selection(bank):
-        return True
-    try:
-        month_value = parse_month_token(month)
-    except ValueError:
-        return False
-    current_value = parse_month_token(current_month_token(timezone=timezone))
-    return month_value == current_value
+    return True
