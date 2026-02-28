@@ -5,30 +5,35 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+# ---------------------------------------------------------------------------
+# IMPORTANT: set _SUPPRESS_ENV_FILE=True BEFORE importing ccs_platform.db.
+# ccs_platform.db.session calls get_settings() at module level; if the flag
+# is not set first, get_settings() calls load_dotenv() and puts the real
+# encryption key into os.environ — breaking tests that monkeypatch it away.
+# ---------------------------------------------------------------------------
+import ccs_platform.core.settings as _settings_mod
+_settings_mod._SUPPRESS_ENV_FILE = True
+_settings_mod.get_settings.cache_clear()
+
+# Also remove the key from os.environ in case it was already loaded by an
+# earlier import in this Python process (defensive cleanup).
+os.environ.pop("CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY", None)
+
 import pytest
 from dotenv import dotenv_values
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-import ccs_platform.core.settings as _settings_mod
 from ccs_platform.core.settings import PlatformSettings
 from ccs_platform.db import Base
 from ccs_platform.db import models
 
 # ---------------------------------------------------------------------------
-# Prevent backend/.env from being loaded by get_settings() during tests.
-# This ensures local secrets (encryption key, session key, etc.) never leak
-# into tests that use monkeypatch to control those values.  The flag is set
-# before any test module is imported so it can never be bypassed by
-# monkeypatch.setenv("CCS_PLATFORM_ENVIRONMENT", ...).
-# ---------------------------------------------------------------------------
-_settings_mod._SUPPRESS_ENV_FILE = True
-_settings_mod.get_settings.cache_clear()
-
-# ---------------------------------------------------------------------------
 # Load only the auth credential hashes from backend/.env into process env so
 # that os.getenv("CCS_PLATFORM_LOGIN_HASH_*") resolves correctly in tests
 # (auth/service.py reads these via os.getenv, not via pydantic-settings).
+# We intentionally skip CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY so that
+# tests which exercise the "no key" code path are not polluted.
 # ---------------------------------------------------------------------------
 _BACKEND_ENV = Path(__file__).resolve().parents[1] / ".env"
 if _BACKEND_ENV.exists():
