@@ -28,6 +28,7 @@ def scrape(
     ),
     upload: bool = typer.Option(True, help="Upload downloaded PDFs to backend after scraping."),
     headless: Optional[bool] = typer.Option(None, help="Override CCS_SCRAPER_HEADLESS env var."),
+    profile: Optional[str] = typer.Option(None, "--profile", help="Profile key to scrape under (e.g. hussain, tejasvie). Overrides CCS_SCRAPER_PROFILE_KEY."),
 ) -> None:
     """Download PDF statements from bank portals and optionally upload to backend."""
     from scraper.banks.bank_config import load_app_config
@@ -35,7 +36,7 @@ def scrape(
     from scraper.config import get_config
     from scraper.client import ScraperClient
 
-    cfg = get_config()
+    cfg = get_config(profile=profile)
     if headless is not None:
         cfg.headless = headless
 
@@ -102,12 +103,13 @@ def scrape(
 @app.command()
 def upload(
     files: list[Path] = typer.Argument(..., help="PDF files to upload to backend."),
+    profile: Optional[str] = typer.Option(None, "--profile", help="Profile key to upload under (e.g. hussain, tejasvie). Overrides CCS_SCRAPER_PROFILE_KEY."),
 ) -> None:
     """Upload existing local PDF files to backend API."""
     from scraper.config import get_config
     from scraper.client import ScraperClient
 
-    cfg = get_config()
+    cfg = get_config(profile=profile)
     client = ScraperClient(
         base_url=cfg.target_url,
         api_token=cfg.api_token,

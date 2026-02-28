@@ -22,7 +22,7 @@ LOGIN_MFA_PATTERNS = [
 
 LOGIN_FAILURE_PATTERNS = [
     re.compile(r"invalid username/password", re.IGNORECASE),
-    re.compile(r"incorrect.*password", re.IGNORECASE),
+    re.compile(r"incorrect.*password|password.*incorrect", re.IGNORECASE),
     re.compile(r"unable to carry out your instructions", re.IGNORECASE),
     re.compile(r"login failed", re.IGNORECASE),
     re.compile(r"invalid.*credentials", re.IGNORECASE),
