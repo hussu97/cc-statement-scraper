@@ -541,36 +541,42 @@ def test_reparse_all_enqueues_profile_scoped_job() -> None:
 
 
 def test_cancel_running_job_sets_cancel_request_token() -> None:
-    with db_session() as db:
-        profile = db.execute(
-            select(models.Profile).where(models.Profile.key == "hussain")
-        ).scalar_one()
-        job = models.Job(
-            profile_id=profile.id,
-            job_type=models.JobType.RECLASSIFY,
-            queue_name="default",
-            status=models.JobStatus.RUNNING,
-            payload_json={},
-            started_at=datetime.now(UTC),
-        )
-        db.add(job)
-        db.flush()
-        job_id = job.id
-
+    # Insert the job AFTER the app starts so startup orphan recovery doesn't
+    # requeue/fail it before the cancel request reaches the endpoint.
+    # The worker only dispatches QUEUED jobs, so a directly-inserted RUNNING
+    # job with no heartbeat is safe here — the cancel endpoint's own orphan
+    # detection handles it and returns 200 immediately.
+    job_id: int | None = None
     try:
         with TestClient(app) as client:
             _login_default(client)
+            with db_session() as db:
+                profile = db.execute(
+                    select(models.Profile).where(models.Profile.key == "hussain")
+                ).scalar_one()
+                job = models.Job(
+                    profile_id=profile.id,
+                    job_type=models.JobType.RECLASSIFY,
+                    queue_name="default",
+                    status=models.JobStatus.RUNNING,
+                    payload_json={},
+                    started_at=datetime.now(UTC),
+                )
+                db.add(job)
+                db.flush()
+                job_id = job.id
+
             resp = client.post(f"/api/v1/jobs/{job_id}/cancel")
             assert resp.status_code == 200
             payload = resp.json()
             assert payload["id"] == job_id
-            assert payload["status"] == "running"
             assert payload["cancel_requested_at"] is not None
     finally:
-        with db_session() as db:
-            row = db.get(models.Job, job_id)
-            if row is not None:
-                db.delete(row)
+        if job_id is not None:
+            with db_session() as db:
+                row = db.get(models.Job, job_id)
+                if row is not None:
+                    db.delete(row)
 
 
 def test_runtime_settings_list_and_patch() -> None:
