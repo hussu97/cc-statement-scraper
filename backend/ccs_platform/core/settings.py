@@ -8,7 +8,7 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-ROOT_DIR = Path(__file__).resolve().parents[3]
+ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
 class PlatformSettings(BaseSettings):
@@ -73,7 +73,7 @@ class PlatformSettings(BaseSettings):
     runtime_settings_require_encryption: bool | None = None
     runtime_settings_encryption_key: str | None = None
     runtime_settings_seed_source: str | None = None
-    runtime_settings_env_file: Path | None = ROOT_DIR / "backend" / ".env"
+    runtime_settings_env_file: Path | None = ROOT_DIR / ".env"
     email_ingestion_enabled: bool = False
 
     login_hash_hussain: str = ""
@@ -165,7 +165,7 @@ def _resolve_env_file() -> Path | None:
     """
     if os.environ.get("PYTEST_CURRENT_TEST"):
         return None
-    candidate = ROOT_DIR / "backend" / ".env"
+    candidate = ROOT_DIR / ".env"
     return candidate if candidate.exists() else None
 
 
