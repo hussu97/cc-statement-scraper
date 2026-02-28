@@ -6,6 +6,7 @@ from ccs_platform.core.settings import PlatformSettings
 def test_production_defaults_require_login_and_disable_legacy_reset() -> None:
     settings = PlatformSettings(
         environment="production",
+        session_secret_key="test-secret-key-long-enough-for-production-x",
         require_login=True,
         allow_legacy_sqlite_reset=None,
         runtime_settings_expose_secrets=None,
@@ -43,6 +44,7 @@ def test_development_defaults_keep_local_compatibility() -> None:
 def test_explicit_overrides_take_precedence() -> None:
     settings = PlatformSettings(
         environment="production",
+        session_secret_key="test-secret-key-long-enough-for-production-x",
         require_login=False,
         allow_legacy_sqlite_reset=True,
         runtime_settings_expose_secrets=True,

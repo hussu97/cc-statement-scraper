@@ -5,8 +5,9 @@ from datetime import UTC, date, datetime, time
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
+from ccs_platform.core import secret_codec
 from ccs_platform.core.settings import get_settings
 from ccs_platform.main import app, create_app
 from ccs_platform.db import db_session, models
@@ -83,6 +84,7 @@ def _create_app_with_env(monkeypatch: pytest.MonkeyPatch, **kwargs: str) -> obje
     for key, value in kwargs.items():
         monkeypatch.setenv(key, value)
     get_settings.cache_clear()
+    secret_codec._fernet_for_settings.cache_clear()  # type: ignore[attr-defined]
     return create_app()
 
 
@@ -627,9 +629,16 @@ def test_login_rejects_invalid_password() -> None:
 
 
 def test_runtime_settings_hide_secret_values_in_production(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Purge any runtime settings encrypted with a different key from previous
+    # runs so that apply_runtime_settings_to_process_env never tries to decrypt
+    # values it cannot decode.
+    with db_session() as db:
+        db.execute(delete(models.RuntimeSetting))
+
     prod_app = _create_app_with_env(
         monkeypatch,
         CCS_PLATFORM_ENVIRONMENT="production",
+        CCS_PLATFORM_SESSION_SECRET_KEY="test-secret-key-long-enough-for-production-x",
         CCS_PLATFORM_SESSION_COOKIE_SECURE="false",
         CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY="V33IhV4J0EAOQnq2STxwJK6I2Gv5u9W1tnM0B8f9Lh4=",
     )

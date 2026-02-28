@@ -9,6 +9,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
 
+# Set to True by the test conftest so that get_settings() never reads the
+# backend/.env file during pytest runs regardless of CCS_PLATFORM_ENVIRONMENT.
+_SUPPRESS_ENV_FILE: bool = False
+
 
 class PlatformSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="CCS_PLATFORM_", extra="ignore")
@@ -149,7 +153,12 @@ def _resolve_env_file() -> Path | None:
     Locally the file lives at backend/.env (one level below the repo root).
     In Docker the backend directory contents are copied to /app directly, so
     there is no .env file at runtime — env vars are injected by the platform.
+
+    During pytest runs conftest.py sets _SUPPRESS_ENV_FILE=True so that local
+    secrets never leak into tests that use monkeypatch to control env values.
     """
+    if _SUPPRESS_ENV_FILE:
+        return None
     candidate = ROOT_DIR / "backend" / ".env"
     return candidate if candidate.exists() else None
 
