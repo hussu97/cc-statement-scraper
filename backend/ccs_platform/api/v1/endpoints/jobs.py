@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import fnmatch
+import tempfile
 from pathlib import Path
 from datetime import UTC, datetime
 
@@ -251,9 +252,6 @@ async def create_upload_job(
     if not files:
         raise HTTPException(status_code=400, detail="No files uploaded")
 
-    settings = request.app.state.settings
-    profile_upload_dir = settings.uploads_temp_dir / profile.profile_key
-    profile_upload_dir.mkdir(parents=True, exist_ok=True)
     allowed_bank_codes = {
         bank.code
         for bank in get_enabled_banks(db, profile_id=profile.profile_id)
@@ -278,33 +276,38 @@ async def create_upload_job(
             if not content:
                 continue
 
-            temp_path = profile_upload_dir / f"upload_{Path(filename).name}_{len(uploads)}.pdf"
-            temp_path.write_bytes(content)
-            bank_code = (
-                _detect_bank_code_for_upload(filename, temp_path, extra_passwords=adcb_pdf_passwords) or ""
-            ).upper().strip()
+            with tempfile.NamedTemporaryFile(suffix=".pdf", delete=True) as tmp:
+                tmp.write(content)
+                tmp.flush()
+                bank_code = (
+                    _detect_bank_code_for_upload(filename, Path(tmp.name), extra_passwords=adcb_pdf_passwords) or ""
+                ).upper().strip()
+
             if not bank_code:
-                temp_path.unlink(missing_ok=True)
                 raise HTTPException(
                     status_code=400,
                     detail=f"Could not infer bank for file '{filename}' from PDF content.",
                 )
             if bank_code not in allowed_bank_codes:
-                temp_path.unlink(missing_ok=True)
                 raise HTTPException(
                     status_code=400,
                     detail=f"Bank {bank_code} is not enabled for profile {profile.profile_key}",
                 )
+
+            staging = request.app.state.storage.save_binary(
+                content=content,
+                filename=f"upload_{Path(filename).name}_{len(uploads)}.pdf",
+                folder="staging",
+                profile_key=profile.profile_key,
+            )
             uploads.append(
                 {
                     "filename": filename,
-                    "temp_path": str(temp_path),
+                    "storage_key": staging.key,
                     "bank_code": bank_code,
                 }
             )
     except Exception:
-        for item in uploads:
-            Path(item.get("temp_path", "")).unlink(missing_ok=True)
         raise
 
     if not uploads:
@@ -319,8 +322,7 @@ async def create_upload_job(
         auto_idempotency=False,
     )
     if not (created or requeued):
-        for item in uploads:
-            Path(item.get("temp_path", "")).unlink(missing_ok=True)
+        pass  # staging objects in storage are cleaned up by the upload handler or retention
     else:
         append_audit_event(
             db,

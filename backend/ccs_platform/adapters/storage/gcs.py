@@ -91,3 +91,6 @@ class GCSStorageAdapter(StorageAdapter):
     def read_bytes(self, key: str) -> bytes:
         blob = self.bucket_ref.blob(key)
         return blob.download_as_bytes()
+
+    def delete(self, key: str) -> None:
+        self.bucket_ref.blob(key).delete()

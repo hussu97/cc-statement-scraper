@@ -975,17 +975,19 @@ async def ingestion_upload(
     db.add(event)
     db.flush()
 
-    upload_dir = request.app.state.settings.uploads_temp_dir / token.profile_key
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    temp_path = upload_dir / f"email_ingest_{event.id}_{filename}"
-    temp_path.write_bytes(content)
+    staging = request.app.state.storage.save_binary(
+        content=content,
+        filename=f"email_ingest_{event.id}_{filename}",
+        folder="staging",
+        profile_key=token.profile_key,
+    )
 
     try:
         payload_json = {
             "uploads": [
                 {
                     "filename": filename,
-                    "temp_path": str(temp_path),
+                    "storage_key": staging.key,
                     "bank_code": route.bank_code,
                 }
             ],

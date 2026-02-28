@@ -25,18 +25,29 @@ def handle_upload_job(
     for idx, item in enumerate(uploads):
         ctx.assert_not_cancelled(db, job.id)
         bank_code = (item.get("bank_code") or "").upper().strip()
-        file_path = Path(item.get("temp_path", ""))
-        if not bank_code or not file_path.exists():
-            failures.append(
-                {
-                    "bank_code": bank_code,
-                    "file": str(file_path),
-                    "error": "Missing bank code or upload file",
-                }
-            )
+        storage_key = item.get("storage_key") or ""
+        temp_path_str = item.get("temp_path") or ""
+
+        if storage_key:
+            try:
+                content = ctx.storage.read_bytes(storage_key)
+            except Exception as exc:  # noqa: BLE001
+                failures.append({"bank_code": bank_code, "error": f"Failed to read staging file: {exc}"})
+                continue
+        elif temp_path_str:
+            file_path = Path(temp_path_str)
+            if not file_path.exists():
+                failures.append({"bank_code": bank_code, "error": "Missing staging file"})
+                continue
+            content = file_path.read_bytes()
+        else:
+            failures.append({"bank_code": bank_code, "error": "No storage_key or temp_path in payload"})
             continue
 
-        content = file_path.read_bytes()
+        if not bank_code or not content:
+            failures.append({"bank_code": bank_code, "error": "Missing bank code or empty content"})
+            continue
+
         try:
             summary = ingest_statement_pdf(
                 db,
@@ -45,7 +56,7 @@ def handle_upload_job(
                 profile_id=job.profile_id,
                 profile_key=profile_key,
                 bank_code=bank_code,
-                filename=item.get("filename") or file_path.name,
+                filename=item.get("filename") or (Path(temp_path_str).name if temp_path_str else "statement.pdf"),
                 content=content,
                 source=models.SourceType.UPLOAD,
             )
@@ -56,12 +67,17 @@ def handle_upload_job(
             failures.append(
                 {
                     "bank_code": bank_code,
-                    "file": str(file_path),
                     "error": str(exc),
                 }
             )
         finally:
-            file_path.unlink(missing_ok=True)
+            if storage_key:
+                try:
+                    ctx.storage.delete(storage_key)
+                except Exception:  # noqa: BLE001
+                    pass  # staging cleanup is best-effort
+            elif temp_path_str:
+                Path(temp_path_str).unlink(missing_ok=True)
 
         ctx.update_progress(db, job, int((idx + 1) / max(len(uploads), 1) * 90))
 

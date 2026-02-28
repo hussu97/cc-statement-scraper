@@ -65,3 +65,6 @@ class LocalStorageAdapter(StorageAdapter):
 
     def read_bytes(self, key: str) -> bytes:
         return (self.root_dir / key).read_bytes()
+
+    def delete(self, key: str) -> None:
+        (self.root_dir / key).unlink(missing_ok=True)
