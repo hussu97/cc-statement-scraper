@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from dataclasses import dataclass
+import hashlib
 from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, Request
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ccs_platform.application.auth.service import get_account_by_email, normalize_email
 from ccs_platform.application.profiles.service import get_default_profile, get_profile_by_key
+from ccs_platform.db import models
 from ccs_platform.db.session import get_db
 
 
@@ -39,6 +43,15 @@ class ActorContext:
     role: str
     subject: str | None
     request_id: str | None
+
+
+@dataclass(frozen=True)
+class ServiceTokenContext:
+    token_id: int
+    profile_id: int
+    profile_key: str
+    token_name: str
+    scopes: set[str]
 
 
 def get_authenticated_user_context(request: Request) -> AuthenticatedUserContext:
@@ -148,14 +161,81 @@ require_operator_role = _require_role("operator")
 require_admin_role = _require_role("admin")
 
 
+def _parse_bearer_token(authorization: str | None) -> str:
+    value = (authorization or "").strip()
+    if not value:
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+    prefix = "bearer "
+    if value.lower().startswith(prefix):
+        token = value[len(prefix):].strip()
+    else:
+        token = value
+    if not token:
+        raise HTTPException(status_code=401, detail="Invalid bearer token")
+    return token
+
+
+def _token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def require_service_token(*required_scopes: str):
+    required = {scope.strip() for scope in required_scopes if scope and scope.strip()}
+
+    def _dependency(
+        request: Request,
+        db: Session = Depends(get_db),
+        authorization: Annotated[str | None, Header(alias="Authorization")] = None,
+    ) -> ServiceTokenContext:
+        raw = _parse_bearer_token(authorization)
+        prefix = raw[:24]
+        digest = _token_hash(raw)
+
+        row = db.execute(
+            select(models.ServiceApiToken, models.Profile.key)
+            .join(models.Profile, models.Profile.id == models.ServiceApiToken.profile_id)
+            .where(
+                models.ServiceApiToken.token_prefix == prefix,
+                models.ServiceApiToken.token_hash == digest,
+                models.ServiceApiToken.is_active.is_(True),
+                models.ServiceApiToken.revoked_at.is_(None),
+            )
+        ).one_or_none()
+        if row is None:
+            raise HTTPException(status_code=401, detail="Invalid service token")
+
+        token_row, profile_key = row
+        scopes = {str(item).strip() for item in (token_row.scopes_json or []) if str(item).strip()}
+        if required and not required.issubset(scopes):
+            raise HTTPException(status_code=403, detail="Service token scope denied")
+
+        token_row.last_used_at = datetime.now(UTC)
+        db.commit()
+
+        request.state.actor_role = "service"
+        request.state.actor_subject = f"service_token:{token_row.id}"
+
+        return ServiceTokenContext(
+            token_id=token_row.id,
+            profile_id=token_row.profile_id,
+            profile_key=profile_key,
+            token_name=token_row.name,
+            scopes=scopes,
+        )
+
+    return _dependency
+
+
 __all__ = [
     "ActorContext",
     "AuthenticatedUserContext",
     "ProfileContext",
+    "ServiceTokenContext",
     "get_actor_context",
     "get_authenticated_user_context",
     "get_db",
     "get_profile_context",
+    "require_service_token",
     "require_admin_role",
     "require_operator_role",
     "require_viewer_role",

@@ -51,3 +51,16 @@ class ExportStatus(str, enum.Enum):
     QUEUED = "queued"
     READY = "ready"
     FAILED = "failed"
+
+
+class EmailProvider(str, enum.Enum):
+    MICROSOFT = "microsoft"
+    GMAIL = "gmail"
+
+
+class EmailIngestionStatus(str, enum.Enum):
+    QUEUED = "queued"
+    UPLOADED = "uploaded"
+    DUPLICATE = "duplicate"
+    IGNORED = "ignored"
+    FAILED = "failed"

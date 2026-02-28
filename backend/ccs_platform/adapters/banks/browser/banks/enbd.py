@@ -190,15 +190,17 @@ def _open_statements_view(page: Any, logger: logging.Logger) -> bool:
             )
             if clicked:
                 page.wait_for_timeout(1800)
-                logger.info("ENBD: clicked Statements -> View All")
-                return True
+                if _is_statements_download_page(page):
+                    logger.info("ENBD: clicked Statements -> View All")
+                    return True
+                logger.info("ENBD: clicked Statements -> View All but download controls not ready yet")
         except Exception:  # noqa: BLE001
             pass
 
         page.mouse.wheel(0, 650)
         page.wait_for_timeout(700)
 
-    return False
+    return _is_statements_download_page(page)
 
 
 def _extract_select_options(select_element: Any) -> list[dict[str, Any]]:
