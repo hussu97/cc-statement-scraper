@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ccs_platform.adapters.banks.browser.banks import adcb, eib, enbd, fab, mashreq, sib
+from ccs_platform.adapters.banks.browser.base import BankAdapter
 from ccs_platform.adapters.banks.browser.shared import (
     BrowserDownloadError,
     POST_LOGIN_KEYWORDS,
@@ -21,55 +22,72 @@ from ccs_platform.adapters.banks.browser.shared import (
 )
 from ccs_platform.core.bank_config import AppConfig
 
-LoginHandler = Callable[[Any, logging.Logger, dict[str, str]], None]
-LoginSelectorVisible = Callable[[Any], bool]
-DownloadHandler = Callable[[Any, Any, logging.Logger, dict], int]
 CHROMIUM_SINGLETON_FILES = ("SingletonLock", "SingletonCookie", "SingletonSocket")
 
-
-LOGIN_HANDLERS: dict[str, LoginHandler] = {
-    "FAB": fab.login,
-    "ADCB": adcb.login,
-    "ENBD": enbd.login,
-    "EIB": eib.login,
-    "SIB": sib.login,
-    "MASHREQ": mashreq.login,
+BANK_ADAPTERS: dict[str, BankAdapter] = {
+    "FAB": BankAdapter(
+        code="FAB",
+        login=fab.login,
+        login_selector_visible=fab.login_selector_visible,
+        download_latest_statement=fab.download_latest_statement,
+    ),
+    "ADCB": BankAdapter(
+        code="ADCB",
+        login=adcb.login,
+        login_selector_visible=adcb.login_selector_visible,
+        download_latest_statement=adcb.download_latest_statement,
+    ),
+    "ENBD": BankAdapter(
+        code="ENBD",
+        login=enbd.login,
+        login_selector_visible=enbd.login_selector_visible,
+        download_latest_statement=enbd.download_latest_statement,
+    ),
+    "EIB": BankAdapter(
+        code="EIB",
+        login=eib.login,
+        login_selector_visible=eib.login_selector_visible,
+        download_latest_statement=eib.download_latest_statement,
+    ),
+    "SIB": BankAdapter(
+        code="SIB",
+        login=sib.login,
+        login_selector_visible=sib.login_selector_visible,
+        download_latest_statement=sib.download_latest_statement,
+    ),
+    "MASHREQ": BankAdapter(
+        code="MASHREQ",
+        login=mashreq.login,
+        login_selector_visible=mashreq.login_selector_visible,
+        download_latest_statement=mashreq.download_latest_statement,
+    ),
 }
 
-LOGIN_SELECTOR_VISIBLE: dict[str, LoginSelectorVisible] = {
-    "FAB": fab.login_selector_visible,
-    "ADCB": adcb.login_selector_visible,
-    "ENBD": enbd.login_selector_visible,
-    "EIB": eib.login_selector_visible,
-    "SIB": sib.login_selector_visible,
-    "MASHREQ": mashreq.login_selector_visible,
+# Legacy aliases kept for callers that still reference the individual dicts.
+LOGIN_HANDLERS = {code: adapter.login for code, adapter in BANK_ADAPTERS.items()}
+LOGIN_SELECTOR_VISIBLE = {
+    code: adapter.login_selector_visible for code, adapter in BANK_ADAPTERS.items()
 }
-
-DOWNLOAD_HANDLERS: dict[str, DownloadHandler] = {
-    "FAB": fab.download_latest_statement,
-    "ADCB": adcb.download_latest_statement,
-    "ENBD": enbd.download_latest_statement,
-    "EIB": eib.download_latest_statement,
-    "SIB": sib.download_latest_statement,
-    "MASHREQ": mashreq.download_latest_statement,
+DOWNLOAD_HANDLERS = {
+    code: adapter.download_latest_statement for code, adapter in BANK_ADAPTERS.items()
 }
 
 
 def _login_selector_visible(page: Any, bank_code: str) -> bool:
-    handler = LOGIN_SELECTOR_VISIBLE.get(bank_code.upper())
-    if handler is None:
+    adapter = BANK_ADAPTERS.get(bank_code.upper())
+    if adapter is None:
         return False
     try:
-        return handler(page)
+        return adapter.login_selector_visible(page)
     except Exception:  # noqa: BLE001
         return False
 
 
 def _execute_bank_login(page: Any, bank_code: str, logger: logging.Logger, credentials: dict[str, str]) -> None:
-    handler = LOGIN_HANDLERS.get(bank_code.upper())
-    if handler is None:
+    adapter = BANK_ADAPTERS.get(bank_code.upper())
+    if adapter is None:
         raise BrowserDownloadError(f"Unsupported bank code for browser flow: {bank_code}")
-    handler(page, logger, credentials)
+    adapter.login(page, logger, credentials)
 
 
 def _execute_bank_download(
@@ -79,10 +97,10 @@ def _execute_bank_download(
     logger: logging.Logger,
     bank_cfg: dict,
 ) -> int:
-    handler = DOWNLOAD_HANDLERS.get(bank_code.upper())
-    if handler is None:
+    adapter = BANK_ADAPTERS.get(bank_code.upper())
+    if adapter is None:
         raise BrowserDownloadError(f"Unsupported bank code for browser flow: {bank_code}")
-    return handler(page, incoming_dir, logger, bank_cfg)
+    return adapter.download_latest_statement(page, incoming_dir, logger, bank_cfg)
 
 
 def _wait_for_authenticated_session(

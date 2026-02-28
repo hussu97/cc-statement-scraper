@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-from collections import defaultdict
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
-from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ccs_platform.api.audit import append_audit_event
 from ccs_platform.db import models
+from ccs_platform.db.repositories import StatementRepository
 from ccs_platform.api.deps import (
     ActorContext,
     ProfileContext,
@@ -78,43 +77,20 @@ def list_statements(
     page = max(page, 1)
     page_size = min(max(page_size, 1), 1000)
 
-    query = select(models.Statement).where(models.Statement.profile_id == profile.profile_id)
-    count_query = select(func.count(models.Statement.id)).where(models.Statement.profile_id == profile.profile_id)
-
-    if bank_codes:
-        bank_set = [code.upper() for code in bank_codes]
-        query = query.where(models.Statement.bank_code.in_(bank_set))
-        count_query = count_query.where(models.Statement.bank_code.in_(bank_set))
-
-    if statement_reference:
-        like = f"%{statement_reference.upper()}%"
-        query = query.where(func.upper(models.Statement.statement_reference).like(like))
-        count_query = count_query.where(func.upper(models.Statement.statement_reference).like(like))
-
-    if date_from:
-        query = query.where(models.Statement.statement_date >= date_from)
-        count_query = count_query.where(models.Statement.statement_date >= date_from)
-
-    if date_to:
-        query = query.where(models.Statement.statement_date <= date_to)
-        count_query = count_query.where(models.Statement.statement_date <= date_to)
-
-    total = int(db.execute(count_query).scalar_one())
-    rows = db.execute(
-        query.order_by(models.Statement.statement_date.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    ).scalars().all()
+    repo = StatementRepository(db)
+    bank_set = [code.upper() for code in bank_codes] if bank_codes else None
+    total, rows = repo.list_paginated(
+        profile_id=profile.profile_id,
+        page=page,
+        page_size=page_size,
+        bank_codes=bank_set,
+        statement_reference=statement_reference,
+        date_from=date_from,
+        date_to=date_to,
+    )
 
     statement_ids = [row.id for row in rows]
-    line_counts: dict[int, int] = defaultdict(int)
-    if statement_ids:
-        counts = db.execute(
-            select(models.StatementLine.statement_id, func.count(models.StatementLine.id))
-            .where(models.StatementLine.statement_id.in_(statement_ids))
-            .group_by(models.StatementLine.statement_id)
-        ).all()
-        line_counts = defaultdict(int, {sid: int(count) for sid, count in counts})
+    line_counts = repo.line_counts_for_ids(statement_ids)
 
     return PaginatedStatements(
         total=total,
@@ -145,21 +121,11 @@ def get_statement(
     db: Session = Depends(get_db),
     profile: ProfileContext = Depends(get_profile_context),
 ):
-    row = db.execute(
-        select(models.Statement).where(
-            models.Statement.id == statement_id,
-            models.Statement.profile_id == profile.profile_id,
-        )
-    ).scalar_one_or_none()
+    repo = StatementRepository(db)
+    row = repo.get_by_id(statement_id, profile_id=profile.profile_id)
     if not row:
         raise HTTPException(status_code=404, detail="Statement not found")
-
-    count = int(
-        db.execute(
-            select(func.count(models.StatementLine.id)).where(models.StatementLine.statement_id == statement_id)
-        ).scalar_one()
-    )
-    return to_statement_out(row, line_count=count)
+    return to_statement_out(row, line_count=repo.count_lines(statement_id))
 
 
 @router.patch("/{statement_id}", response_model=StatementOut)
@@ -171,18 +137,12 @@ def patch_statement_date(
     profile: ProfileContext = Depends(get_profile_context),
     actor: ActorContext = Depends(require_operator_role),
 ) -> StatementOut:
-    statement = db.execute(
-        select(models.Statement).where(
-            models.Statement.id == statement_id,
-            models.Statement.profile_id == profile.profile_id,
-        )
-    ).scalar_one_or_none()
+    repo = StatementRepository(db)
+    statement = repo.get_by_id(statement_id, profile_id=profile.profile_id)
     if not statement:
         raise HTTPException(status_code=404, detail="Statement not found")
 
-    line_rows = db.execute(
-        select(models.StatementLine).where(models.StatementLine.statement_id == statement.id)
-    ).scalars().all()
+    line_rows = repo.get_lines_for_statement(statement.id)
     line_count = len(line_rows)
 
     old_date = statement.statement_date
@@ -191,16 +151,13 @@ def patch_statement_date(
     if new_date == old_date:
         return to_statement_out(statement, line_count=line_count)
 
-    conflict = db.execute(
-        select(models.Statement.id).where(
-            models.Statement.profile_id == profile.profile_id,
-            models.Statement.id != statement.id,
-            models.Statement.bank_code == statement.bank_code,
-            models.Statement.statement_reference == statement.statement_reference,
-            models.Statement.statement_date == new_date,
-        )
-    ).scalar_one_or_none()
-    if conflict is not None:
+    if repo.date_conflict_exists(
+        profile_id=profile.profile_id,
+        exclude_id=statement.id,
+        bank_code=statement.bank_code,
+        statement_reference=statement.statement_reference,
+        new_date=new_date,
+    ):
         raise HTTPException(
             status_code=409,
             detail=(
@@ -265,32 +222,13 @@ def list_statement_lines(
     page = max(page, 1)
     page_size = min(max(page_size, 1), 1000)
 
-    statement = db.execute(
-        select(models.Statement).where(
-            models.Statement.id == statement_id,
-            models.Statement.profile_id == profile.profile_id,
-        )
-    ).scalar_one_or_none()
-    if not statement:
+    repo = StatementRepository(db)
+    if not repo.get_by_id(statement_id, profile_id=profile.profile_id):
         raise HTTPException(status_code=404, detail="Statement not found")
 
-    query = select(models.StatementLine).where(models.StatementLine.statement_id == statement_id)
-    count_query = select(func.count(models.StatementLine.id)).where(
-        models.StatementLine.statement_id == statement_id
+    total, rows = repo.list_lines_paginated(
+        statement_id, page=page, page_size=page_size, search=search
     )
-
-    if search:
-        like = f"%{search.upper()}%"
-        query = query.where(func.upper(models.StatementLine.merchant_normalized).like(like))
-        count_query = count_query.where(func.upper(models.StatementLine.merchant_normalized).like(like))
-
-    total = int(db.execute(count_query).scalar_one())
-    rows = db.execute(
-        query.order_by(models.StatementLine.line_no.asc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    ).scalars().all()
-
     return PaginatedStatementLines(
         total=total,
         page=page,
@@ -307,23 +245,14 @@ def get_statement_pdf(
     profile: ProfileContext = Depends(get_profile_context),
     download: bool = Query(default=True),
 ):
-    statement = db.execute(
-        select(models.Statement).where(
-            models.Statement.id == statement_id,
-            models.Statement.profile_id == profile.profile_id,
-        )
-    ).scalar_one_or_none()
+    repo = StatementRepository(db)
+    statement = repo.get_by_id(statement_id, profile_id=profile.profile_id)
     if not statement:
         raise HTTPException(status_code=404, detail="Statement not found")
     if not statement.pdf_file_id:
         raise HTTPException(status_code=404, detail="Statement has no linked PDF")
 
-    pdf_file = db.execute(
-        select(models.PdfFile).where(
-            models.PdfFile.id == statement.pdf_file_id,
-            models.PdfFile.profile_id == profile.profile_id,
-        )
-    ).scalar_one_or_none()
+    pdf_file = repo.get_pdf_file(statement.pdf_file_id, profile_id=profile.profile_id)
     if not pdf_file:
         raise HTTPException(status_code=404, detail="PDF file metadata not found")
 
@@ -347,13 +276,7 @@ def reparse_statement(
     profile: ProfileContext = Depends(get_profile_context),
     actor: ActorContext = Depends(require_operator_role),
 ) -> JobOut:
-    statement = db.execute(
-        select(models.Statement).where(
-            models.Statement.id == statement_id,
-            models.Statement.profile_id == profile.profile_id,
-        )
-    ).scalar_one_or_none()
-    if not statement:
+    if not StatementRepository(db).get_by_id(statement_id, profile_id=profile.profile_id):
         raise HTTPException(status_code=404, detail="Statement not found")
 
     return _enqueue_reparse_job(
@@ -372,12 +295,7 @@ def delete_statement(
     profile: ProfileContext = Depends(get_profile_context),
     actor: ActorContext = Depends(require_admin_role),
 ):
-    statement = db.execute(
-        select(models.Statement).where(
-            models.Statement.id == statement_id,
-            models.Statement.profile_id == profile.profile_id,
-        )
-    ).scalar_one_or_none()
+    statement = StatementRepository(db).get_by_id(statement_id, profile_id=profile.profile_id)
     if not statement:
         raise HTTPException(status_code=404, detail="Statement not found")
 

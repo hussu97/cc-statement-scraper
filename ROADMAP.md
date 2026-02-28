@@ -48,23 +48,16 @@
 **Fix:** Extract each job type into its own module under `application/jobs/handlers/`. `JobRunner` becomes a thin dispatcher that delegates to handlers. Each handler can be unit-tested independently.
 
 ### 2.2 No repository layer `HIGH`
-**Issue:** SQLAlchemy queries are scattered across route handlers, service functions, and domain utilities — no consistent abstraction over data access.
-**Fix:** Introduce a repository per aggregate root (`StatementRepository`, `JobRepository`, `CategoryRepository`, etc.). Routes interact with repositories, not with `Session` directly.
+**Status:** ✅ Resolved — `StatementRepository`, `JobRepository`, and `CategoryRepository` introduced in `backend/ccs_platform/db/repositories/`. All SELECT/COUNT query logic moved into repository methods; `statements.py`, `jobs.py`, and `categories.py` endpoint files updated to use them instead of calling `db.execute(select(...))` directly.
 
 ### 2.3 Bank adapters lack a shared base class `MEDIUM`
-**Files:** `src/ccs_platform/adapters/banks/adcb.py` (1,563 lines), `src/ccs_platform/adapters/banks/enbd.py` (1,399 lines), and others.
-**Issue:** Each bank adapter re-implements the same lifecycle (launch browser, navigate, handle OTP, download, close). No shared contract makes it hard to add a new bank or write adapter-level tests.
-**Fix:** Define a `BaseBankAdapter` abstract class with lifecycle hooks. Move shared Playwright setup/teardown there.
+**Status:** ✅ Resolved — `BankAdapter` dataclass and `LoginFn` / `LoginSelectorVisibleFn` / `DownloadLatestStatementFn` `Protocol` types defined in `backend/ccs_platform/adapters/banks/browser/base.py`. `downloader.py` replaced its three separate `dict[str, Callable]` maps with a single `BANK_ADAPTERS: dict[str, BankAdapter]` registry; internal dispatch functions now delegate through the adapter struct.
 
 ### 2.4 `MONTH_INDEX` dict duplicated across 5 files `MEDIUM`
-**Files:** Multiple bank adapter files.
-**Issue:** The same month-name → month-number dictionary is copy-pasted. Any discrepancy causes silent parsing errors.
-**Fix:** Define once in `domain/parsing/month_utils.py` and import everywhere.
+**Status:** ✅ Resolved — `MONTH_INDEX` defined once in `backend/ccs_platform/domain/parsing/month_utils.py`; all five bank adapters (ADCB, EIB, ENBD, FAB, SIB) import from there.
 
 ### 2.5 Custom RRULE parser only handles HOURLY/WEEKLY `MEDIUM`
-**File:** `src/ccs_platform/application/schedules/rrule_parser.py`
-**Issue:** A bespoke RRULE parser supports only two frequencies. Users who configure DAILY or MONTHLY schedules will get silent failures or wrong next-run times.
-**Fix:** Replace with `python-dateutil` (`dateutil.rrule`), which covers the full RFC 5545 subset.
+**Status:** ✅ Resolved — bespoke parser replaced with `dateutil.rrule.rrulestr` in `backend/ccs_platform/application/jobs/scheduler.py`; `python-dateutil>=2.9` added to both `pyproject.toml` and `requirements.txt`. All RFC 5545 frequencies (HOURLY, DAILY, WEEKLY, MONTHLY, YEARLY) now work correctly.
 
 ---
 
