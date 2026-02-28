@@ -271,8 +271,8 @@ def _click_shadow_best_match(page: Any, terms: list[str], logger: logging.Logger
     return bool(clicked)
 
 
-def _resolve_pam_template_base64(page: Any) -> str:
-    configured = (os.getenv("SIB_SECURE_IMAGE_TEMPLATE_BASE64") or "").strip()
+def _resolve_pam_template_base64(page: Any, credentials: dict[str, str] | None = None) -> str:
+    configured = ((credentials or os.environ).get("SIB_SECURE_IMAGE_TEMPLATE_BASE64") or "").strip()
     if configured:
         return configured
 
@@ -302,8 +302,8 @@ def _resolve_pam_template_base64(page: Any) -> str:
     return str(resolved or "").strip()
 
 
-def _maybe_select_secure_image(page: Any, logger: logging.Logger) -> None:
-    template = _resolve_pam_template_base64(page)
+def _maybe_select_secure_image(page: Any, logger: logging.Logger, credentials: dict[str, str] | None = None) -> None:
+    template = _resolve_pam_template_base64(page, credentials)
     selection = page.evaluate(
         """
         async (payload) => {
@@ -529,9 +529,9 @@ def _maybe_select_secure_image(page: Any, logger: logging.Logger) -> None:
         )
 
 
-def login(page: Any, logger: logging.Logger) -> None:
-    user_id = require_env("SIB_USER_ID")
-    password = require_env("SIB_PASSWORD")
+def login(page: Any, logger: logging.Logger, credentials: dict[str, str] | None = None) -> None:
+    user_id = require_env("SIB_USER_ID", credentials)
+    password = require_env("SIB_PASSWORD", credentials)
 
     page.wait_for_timeout(1200)
 
@@ -574,7 +574,7 @@ def login(page: Any, logger: logging.Logger) -> None:
     if not _has_visible_password_input(page):
         raise BrowserDownloadError("SIB: password input not found after Secure Login")
 
-    _maybe_select_secure_image(page, logger)
+    _maybe_select_secure_image(page, logger, credentials)
 
     filled_password = _fill_first_visible_input(
         page,

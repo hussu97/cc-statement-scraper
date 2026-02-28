@@ -112,9 +112,9 @@ def _option_score(option: dict[str, Any]) -> int | None:
     return None
 
 
-def login(page: Any, logger: logging.Logger) -> None:
-    username = require_env("FAB_USERNAME")
-    password = require_env("FAB_PASSWORD")
+def login(page: Any, logger: logging.Logger, credentials: dict[str, str] | None = None) -> None:
+    username = require_env("FAB_USERNAME", credentials)
+    password = require_env("FAB_PASSWORD", credentials)
 
     page.fill("#login-userName", username)
     page.fill("#login-password", password)

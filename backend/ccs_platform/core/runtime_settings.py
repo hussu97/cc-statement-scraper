@@ -385,23 +385,29 @@ def seed_runtime_settings_from_env(
     }
 
 
-def apply_runtime_settings_to_process_env(db: Session, *, profile_id: int) -> int:
-    # Reset managed keyspace so profile switches never leave stale values.
-    for key in list(os.environ.keys()):
-        if any(key.startswith(prefix) for prefix in SUPPORTED_KEY_PREFIXES):
-            os.environ.pop(key, None)
-
+def get_runtime_settings_as_dict(db: Session, *, profile_id: int) -> dict[str, str]:
+    """Return runtime settings for a profile as a plain dict without mutating os.environ."""
     rows = db.execute(
         select(models.RuntimeSetting)
         .where(models.RuntimeSetting.profile_id == profile_id)
         .order_by(models.RuntimeSetting.key.asc())
     ).scalars().all()
 
-    applied = 0
+    result: dict[str, str] = {}
     for row in rows:
         value = decode_runtime_setting_value(value=row.value or "", is_secret=row.is_secret)
-        if not value:
-            continue
-        os.environ[row.key] = value
-        applied += 1
-    return applied
+        if value:
+            result[row.key] = value
+    return result
+
+
+def apply_runtime_settings_to_process_env(db: Session, *, profile_id: int) -> int:
+    # Reset managed keyspace so profile switches never leave stale values.
+    for key in list(os.environ.keys()):
+        if any(key.startswith(prefix) for prefix in SUPPORTED_KEY_PREFIXES):
+            os.environ.pop(key, None)
+
+    credentials = get_runtime_settings_as_dict(db, profile_id=profile_id)
+    for key, value in credentials.items():
+        os.environ[key] = value
+    return len(credentials)

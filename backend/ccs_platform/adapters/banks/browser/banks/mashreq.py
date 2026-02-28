@@ -180,9 +180,9 @@ def is_authenticated_session(page: Any, low_text: str) -> bool:
     return False
 
 
-def login(page: Any, logger: logging.Logger) -> None:
-    username = require_env("MASHREQ_USERNAME")
-    password = require_env("MASHREQ_PASSWORD")
+def login(page: Any, logger: logging.Logger, credentials: dict[str, str] | None = None) -> None:
+    username = require_env("MASHREQ_USERNAME", credentials)
+    password = require_env("MASHREQ_PASSWORD", credentials)
 
     page.wait_for_timeout(650)
     _dismiss_cookie_banner(page, logger)
