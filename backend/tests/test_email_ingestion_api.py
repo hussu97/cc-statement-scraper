@@ -15,6 +15,10 @@ from ccs_platform.api.v1.endpoints import email_ingestion as email_ingestion_end
 
 
 def _create_app_with_env(monkeypatch: pytest.MonkeyPatch, **kwargs: str) -> object:
+    # Use a unique temp file so tests never write to platform.db and each test
+    # gets a clean isolated schema (in-memory SQLite doesn't share across connections).
+    tmp_db = f"/tmp/ccs_test_{uuid.uuid4().hex}.db"
+    monkeypatch.setenv("CCS_PLATFORM_DATABASE_URL", f"sqlite:///{tmp_db}")
     for key, value in kwargs.items():
         monkeypatch.setenv(key, value)
     clear_settings_caches()
