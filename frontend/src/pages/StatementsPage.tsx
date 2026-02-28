@@ -180,6 +180,77 @@ export function StatementsPage() {
 
   return (
     <div className="grid">
+      <div ref={detailPanelRef}>
+        <Panel title="Statement Detail">
+          {selected ? (
+            <>
+            <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.65rem' }}>
+              <span className="muted">Statement metadata and parsed line items</span>
+              <div className="row" style={{ alignItems: 'center' }}>
+                <span className="muted">Statement date</span>
+                <input
+                  type="date"
+                  value={editingStatementDate}
+                  onChange={(event) => setEditingStatementDate(event.target.value)}
+                />
+                <button
+                  className="primary"
+                  onClick={saveStatementDate}
+                  disabled={
+                    savingStatementDate
+                    || !editingStatementDate
+                    || editingStatementDate === selected.statement_date
+                  }
+                >
+                  {savingStatementDate ? 'Saving...' : 'Save Date'}
+                </button>
+              </div>
+            </div>
+            <JsonView value={selected} />
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Date</th>
+                    <th>Merchant</th>
+                    <th>Amount AED</th>
+                    <th>Direction</th>
+                    <th>Category</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lines.map((line) => (
+                    <tr key={line.id}>
+                      <td>{line.line_no}</td>
+                      <td>{line.transaction_date} {line.transaction_time}</td>
+                      <td>{line.merchant_normalized}</td>
+                      <td>{line.amount_aed}</td>
+                      <td>{line.direction}</td>
+                      <td>{line.category}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <TablePagination
+              page={linesPage}
+              pageSize={linesPageSize}
+              total={linesTotal}
+              itemLabel="lines"
+              onPageChange={setLinesPage}
+              onPageSizeChange={(next) => {
+                setLinesPageSize(next);
+                setLinesPage(1);
+              }}
+            />
+            </>
+          ) : (
+            <p className="muted">Select a statement to inspect lines.</p>
+          )}
+        </Panel>
+      </div>
+
       <Panel title="Statements">
         {error && <p className="error">{error}</p>}
         <div className="row" style={{ justifyContent: 'space-between' }}>
@@ -251,77 +322,6 @@ export function StatementsPage() {
           }}
         />
       </Panel>
-
-      <div ref={detailPanelRef}>
-        <Panel title="Statement Detail">
-          {selected ? (
-            <>
-            <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.65rem' }}>
-              <span className="muted">Statement metadata and parsed line items</span>
-              <div className="row" style={{ alignItems: 'center' }}>
-                <span className="muted">Statement date</span>
-                <input
-                  type="date"
-                  value={editingStatementDate}
-                  onChange={(event) => setEditingStatementDate(event.target.value)}
-                />
-                <button
-                  className="primary"
-                  onClick={saveStatementDate}
-                  disabled={
-                    savingStatementDate
-                    || !editingStatementDate
-                    || editingStatementDate === selected.statement_date
-                  }
-                >
-                  {savingStatementDate ? 'Saving...' : 'Save Date'}
-                </button>
-              </div>
-            </div>
-            <JsonView value={selected} />
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Date</th>
-                    <th>Merchant</th>
-                    <th>Amount AED</th>
-                    <th>Direction</th>
-                    <th>Category</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.map((line) => (
-                    <tr key={line.id}>
-                      <td>{line.line_no}</td>
-                      <td>{line.transaction_date} {line.transaction_time}</td>
-                      <td>{line.merchant_normalized}</td>
-                      <td>{line.amount_aed}</td>
-                      <td>{line.direction}</td>
-                      <td>{line.category}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <TablePagination
-              page={linesPage}
-              pageSize={linesPageSize}
-              total={linesTotal}
-              itemLabel="lines"
-              onPageChange={setLinesPage}
-              onPageSizeChange={(next) => {
-                setLinesPageSize(next);
-                setLinesPage(1);
-              }}
-            />
-            </>
-          ) : (
-            <p className="muted">Select a statement to inspect lines.</p>
-          )}
-        </Panel>
-      </div>
     </div>
   );
 }
