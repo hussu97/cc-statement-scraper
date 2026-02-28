@@ -403,12 +403,26 @@ def cancel_job(
     previous_status = job.status.value
     if job.status in {models.JobStatus.SUCCEEDED, models.JobStatus.FAILED}:
         raise HTTPException(status_code=409, detail="Completed jobs cannot be cancelled")
+
+    now = datetime.now(UTC)
+
     if job.status == models.JobStatus.QUEUED:
         job.status = models.JobStatus.CANCELLED
-        job.finished_at = datetime.now(UTC)
+        job.finished_at = now
     elif job.status == models.JobStatus.RUNNING:
-        # Signal cooperative cancellation; runner observes this token.
-        job.cancel_requested_at = datetime.now(UTC)
+        # If the heartbeat is stale the job is orphaned (server was restarted while it was
+        # running). Cancel it immediately — there is no live thread to signal.
+        heartbeat = job.last_heartbeat_at
+        if heartbeat is not None and heartbeat.tzinfo is None:
+            heartbeat = heartbeat.replace(tzinfo=UTC)
+        orphaned = heartbeat is None or (now - heartbeat).total_seconds() > 60
+        if orphaned:
+            job.status = models.JobStatus.CANCELLED
+            job.finished_at = now
+            job.error_message = "Cancelled: job was orphaned (worker process restarted)"
+        else:
+            # Live job — signal cooperative cancellation; runner observes this token.
+            job.cancel_requested_at = now
     elif job.status == models.JobStatus.CANCELLED:
         if job.finished_at is None:
             job.finished_at = datetime.now(UTC)
