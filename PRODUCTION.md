@@ -282,7 +282,13 @@ Open `https://ccs-xyz.vercel.app` in a browser — you should see the login page
 
 ---
 
-### 1.8 Ongoing operations
+### 1.8 Email ingestion (optional)
+
+See the **Email Ingestion Automation** section below. For Plan 1:
+- Use the **Microsoft / Hotmail path** (GitHub Actions) — no extra infrastructure required.
+- The **Gmail path** requires a GCP project regardless of which plan you use for the backend.
+
+### 1.9 Ongoing operations
 
 **Redeploy after code changes:**
 The service auto-deploys when you push to `main`. Migrations run automatically at startup — nothing extra to do.
@@ -491,6 +497,12 @@ gcloud run jobs execute ccs-migrate --region=europe-west1 --wait
 
 Deploy the `frontend/` directory to Vercel with `VITE_API_BASE_URL` pointing to the Cloud Run API URL.
 
+### 2.11 Email ingestion (optional)
+
+See the **Email Ingestion Automation** section below. For Plan 2, both paths work:
+- **Microsoft path** — GitHub Actions (no extra GCP resources).
+- **Gmail path** — Cloud Run relay + Pub/Sub + Cloud Scheduler (all already available in your GCP project).
+
 ---
 
 ## Operations Runbook
@@ -558,6 +570,340 @@ PYTHONPATH=backend python backend/scripts/migration_preflight.py
 
 ---
 
+## Email Ingestion Automation
+
+> This section applies to both Plan 1 and Plan 2. The feature is provider-agnostic at the API level — the only difference between plans is _where_ the automation scripts run (GitHub Actions vs GCP Cloud Run / Cloud Scheduler).
+
+Email ingestion lets the app automatically pick up statement PDFs delivered to your email inbox and ingest them without any manual upload. Two providers are supported:
+
+| Provider | Trigger | Automation mechanism |
+|----------|---------|---------------------|
+| **Microsoft / Hotmail** | Polling (every 4 h) | GitHub Actions workflow |
+| **Gmail** | Push (real-time) | GCP Cloud Run + Pub/Sub |
+
+You can enable one, both, or neither. The core app API is the same for both.
+
+---
+
+### EI-1. Enable the feature
+
+Add to your API service environment variables:
+
+```
+CCS_PLATFORM_EMAIL_INGESTION_ENABLED=true
+```
+
+Without this flag all `/api/v1/email-ingestion/*` endpoints return `404`. Redeploy the API service after adding it.
+
+---
+
+### EI-2. Create a service token
+
+The automation scripts authenticate to the API using a long-lived service token (not a user session). Generate one via the admin UI:
+
+1. Open the app → **Email Ingestion** page → **Service Tokens** panel.
+2. Click **Create Token** — give it a descriptive name like `github-actions-ms` or `gmail-relay`.
+3. Copy the token value immediately — it is shown only once.
+
+The token requires the scopes `email_ingestion:read`, `email_ingestion:write`, and `email_ingestion:upload` — these are granted automatically when created via the UI.
+
+> Keep the token value as a secret: paste it into GitHub Actions secrets (`CCS_SERVICE_TOKEN`) or GCP Secret Manager, never into source code or env var files.
+
+---
+
+### EI-3. Configure mailboxes and routing
+
+#### 3a. Add a mailbox
+
+In the admin UI → **Email Ingestion** → **Mailboxes** panel:
+
+1. Click **Add Mailbox**.
+2. Fill in:
+   - **Provider** — `microsoft` or `gmail`
+   - **Mailbox email** — the inbox address (e.g. `h_abbasi97@hotmail.com`)
+3. Save. Note the mailbox **ID** shown in the table — you need it for the refresh token key below.
+
+#### 3b. Set the OAuth refresh token
+
+The app exchanges a refresh token for short-lived access tokens on each poll cycle. Store the refresh token as a Runtime Setting (encrypted in the DB):
+
+1. Go to **Settings → Runtime Variables**.
+2. Add:
+
+   | Key | Value |
+   |-----|-------|
+   | `EMAIL_MS_CLIENT_ID` | Azure app client ID *(Microsoft only)* |
+   | `EMAIL_MS_CLIENT_SECRET` | Azure app client secret *(Microsoft only)* |
+   | `EMAIL_MS_REFRESH_TOKEN_MAILBOX_<ID>` | Refresh token for mailbox `<ID>` *(Microsoft)* |
+   | `EMAIL_GMAIL_CLIENT_ID` | GCP OAuth client ID *(Gmail only)* |
+   | `EMAIL_GMAIL_CLIENT_SECRET` | GCP OAuth client secret *(Gmail only)* |
+   | `EMAIL_GMAIL_REFRESH_TOKEN_MAILBOX_<ID>` | Refresh token for mailbox `<ID>` *(Gmail)* |
+
+   Replace `<ID>` with the integer mailbox ID from step 3a. Mark all values as **Secret** so they are Fernet-encrypted in the database.
+
+> See **EI-5** below for how to obtain a refresh token for each provider.
+
+#### 3c. Configure bank routing
+
+Each mailbox route tells the app which bank to associate with emails from a given sender. In the **Email Ingestion** → **Bank Routing** panel:
+
+1. For each enabled bank, set:
+   - **Mailbox** — which inbox to watch
+   - **Sender allowlist** — comma-separated sender email addresses that carry statements for this bank (e.g. `statements@emiratesnbd.com`). Leave blank to accept any sender.
+2. Save. The routing matrix is loaded fresh on every poll cycle — no restart needed.
+
+---
+
+### EI-4a. Microsoft / Hotmail path (GitHub Actions)
+
+The ingestion script (`backend/scripts/email_ingest_microsoft.py`) runs as a GitHub Actions scheduled workflow every 4 hours.
+
+**Step 1 — Add GitHub Actions secrets**
+
+In your repository: **Settings → Secrets and variables → Actions → New repository secret**:
+
+| Secret | Value |
+|--------|-------|
+| `CCS_API_BASE_URL` | Your API base URL, e.g. `https://ccs-api.onrender.com` |
+| `CCS_SERVICE_TOKEN` | The service token from EI-2 |
+
+**Step 2 — The workflow is already wired**
+
+`.github/workflows/email-ingest-microsoft.yml` runs on `schedule: cron: "17 */4 * * *"` (every 4 hours). It checks out the repo, installs Python dependencies, and runs the script. No further configuration is needed beyond the two secrets above.
+
+**Step 3 — Trigger a dry run manually**
+
+In GitHub: **Actions → Email Ingest Microsoft → Run workflow → check "dry run"**. The summary JSON printed in the logs shows what would be uploaded without actually calling the API.
+
+**Step 4 — Verify**
+
+Check the action logs. A successful run prints a JSON report:
+
+```json
+{
+  "provider": "microsoft",
+  "mailboxes_processed": 1,
+  "messages_scanned": 12,
+  "attachments_seen": 3,
+  "uploads_uploaded": 2,
+  "uploads_duplicate": 1,
+  "uploads_ignored": 0,
+  "uploads_failed": 0,
+  "mailbox_errors": []
+}
+```
+
+`mailbox_errors` must be empty. `uploads_duplicate` is normal — statements already ingested are skipped.
+
+**Delta state** — the script stores a Microsoft Graph delta-link per mailbox in the app's `sync_state_json` column so each run only fetches new emails since the last successful sync. The first run after setup will scan the full inbox.
+
+---
+
+### EI-4b. Gmail path (GCP Cloud Run + Pub/Sub)
+
+Gmail push ingestion delivers new-message notifications in near real-time via Google Cloud Pub/Sub. You need a GCP project for this path (it also works alongside Plan 1 on Render — the relay just needs to be publicly reachable).
+
+#### Step 1 — GCP prerequisites
+
+```bash
+# Enable required APIs
+gcloud services enable \
+  gmail.googleapis.com \
+  pubsub.googleapis.com \
+  run.googleapis.com \
+  cloudscheduler.googleapis.com
+
+# Create the Pub/Sub topic
+gcloud pubsub topics create gmail-statements
+
+# Create the push subscription (points to the relay Cloud Run URL — set after deploy)
+# You'll update this URL after step 3.
+gcloud pubsub subscriptions create gmail-statements-push \
+  --topic=gmail-statements \
+  --push-endpoint=https://YOUR_RELAY_URL/pubsub/push \
+  --ack-deadline=60
+```
+
+#### Step 2 — Grant Gmail permission to publish to your topic
+
+```bash
+# Allow the Gmail API service account to publish to the topic
+gcloud pubsub topics add-iam-policy-binding gmail-statements \
+  --member="serviceAccount:gmail-api-push@system.gserviceaccount.com" \
+  --role="roles/pubsub.publisher"
+```
+
+#### Step 3 — Deploy the relay as a Cloud Run service
+
+The relay (`backend/scripts/gmail_ingest_relay.py`) is a small FastAPI app that receives Pub/Sub push messages and calls `POST /api/v1/email-ingestion/upload`.
+
+```bash
+# Build and push relay image (uses the same Dockerfile.api — no Playwright needed)
+SHA=$(git rev-parse --short HEAD)
+IMAGE_RELAY="europe-west1-docker.pkg.dev/PROJECT_ID/ccs-platform/gmail-relay:$SHA"
+docker build -f deploy/Dockerfile.api -t "$IMAGE_RELAY" .
+docker push "$IMAGE_RELAY"
+
+# Deploy
+gcloud run deploy ccs-gmail-relay \
+  --image="$IMAGE_RELAY" \
+  --region=europe-west1 \
+  --platform=managed \
+  --allow-unauthenticated \
+  --set-env-vars="CCS_API_BASE_URL=https://YOUR_API_HOST" \
+  --set-env-vars="CCS_SERVICE_TOKEN=YOUR_SERVICE_TOKEN" \
+  --port=8080 \
+  --command="python,backend/scripts/gmail_ingest_relay.py" \
+  --min-instances=0 \
+  --memory=256Mi \
+  --cpu=1
+```
+
+Then update the Pub/Sub subscription with the relay URL:
+
+```bash
+RELAY_URL=$(gcloud run services describe ccs-gmail-relay \
+  --region=europe-west1 --format='value(status.url)')
+
+gcloud pubsub subscriptions modify-push-config gmail-statements-push \
+  --push-endpoint="${RELAY_URL}/pubsub/push"
+```
+
+#### Step 4 — Register a Gmail watch (and renew it daily)
+
+Gmail push notifications expire after 7 days. The watch-renew script (`backend/scripts/gmail_watch_renew.py`) refreshes it.
+
+```bash
+# Deploy the watch-renew script as a Cloud Run job
+gcloud run jobs create ccs-gmail-watch-renew \
+  --image="$IMAGE_RELAY" \
+  --region=europe-west1 \
+  --set-env-vars="CCS_API_BASE_URL=https://YOUR_API_HOST" \
+  --set-env-vars="CCS_SERVICE_TOKEN=YOUR_SERVICE_TOKEN" \
+  --set-env-vars="GMAIL_PUBSUB_TOPIC=projects/PROJECT_ID/topics/gmail-statements" \
+  --command="python,backend/scripts/gmail_watch_renew.py" \
+  --task-timeout=120
+
+# Schedule it to run daily at 02:00
+gcloud scheduler jobs create http ccs-gmail-watch-renew-daily \
+  --schedule="0 2 * * *" \
+  --uri="https://CLOUD_RUN_JOBS_EXECUTE_URL" \
+  --http-method=POST \
+  --time-zone="Asia/Dubai"
+```
+
+Alternatively, run it once manually first:
+
+```bash
+gcloud run jobs execute ccs-gmail-watch-renew --region=europe-west1 --wait
+```
+
+#### Step 5 — Verify
+
+Send yourself a test email with a PDF attachment from a sender in your allowlist. Within seconds, the relay should receive the Pub/Sub push, fetch the message from the Gmail API, match the route, and call the upload endpoint. Check the **Email Ingestion → Events** page in the admin UI to confirm a new ingestion event appears.
+
+---
+
+### EI-5. Obtaining OAuth refresh tokens
+
+Both providers require a one-time OAuth authorisation to get a long-lived refresh token. The app does not have a built-in OAuth authorisation flow — you perform this once locally and paste the resulting refresh token into Runtime Settings.
+
+#### Microsoft refresh token
+
+1. **Register an Azure app:**
+   - Go to [portal.azure.com](https://portal.azure.com) → **App registrations → New registration**.
+   - Name: `ccs-email-ingest` — **Supported account types: Personal Microsoft accounts only**.
+   - Redirect URI: `http://localhost` (type: Web).
+   - Click **Register**.
+   - Copy **Application (client) ID** → this is `EMAIL_MS_CLIENT_ID`.
+
+2. **Add client secret:**
+   - In your app → **Certificates & secrets → New client secret**.
+   - Copy the **Value** immediately → this is `EMAIL_MS_CLIENT_SECRET`.
+
+3. **Add API permissions:**
+   - **API permissions → Add a permission → Microsoft Graph → Delegated permissions**.
+   - Add: `Mail.Read`, `offline_access`.
+   - Click **Grant admin consent** (or the account owner must consent during the OAuth flow).
+
+4. **Authorise and capture the refresh token** (one-time, run locally):
+
+   ```bash
+   # Step 1 — open this URL in a browser, sign in with the mailbox account
+   # Replace CLIENT_ID with your app's Application ID
+   echo "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?\
+   client_id=CLIENT_ID\
+   &response_type=code\
+   &redirect_uri=http%3A%2F%2Flocalhost\
+   &scope=Mail.Read+offline_access\
+   &response_mode=query"
+
+   # Step 2 — after redirect, copy the `code` param from the browser address bar
+   # Step 3 — exchange it for tokens
+   curl -X POST https://login.microsoftonline.com/consumers/oauth2/v2.0/token \
+     -d "client_id=CLIENT_ID" \
+     -d "client_secret=CLIENT_SECRET" \
+     -d "code=PASTE_CODE_HERE" \
+     -d "redirect_uri=http://localhost" \
+     -d "grant_type=authorization_code" \
+     -d "scope=Mail.Read offline_access"
+   ```
+
+   The response contains `"refresh_token"`. Copy it.
+
+5. Paste into Runtime Settings as `EMAIL_MS_REFRESH_TOKEN_MAILBOX_<ID>`.
+
+#### Gmail refresh token
+
+1. **Create a GCP OAuth 2.0 client:**
+   - In GCP Console → **APIs & Services → Credentials → Create Credentials → OAuth client ID**.
+   - Application type: **Web application**.
+   - Authorised redirect URIs: `http://localhost`.
+   - Click **Create**. Copy **Client ID** and **Client Secret**.
+
+2. **Add to Runtime Settings** now: `EMAIL_GMAIL_CLIENT_ID`, `EMAIL_GMAIL_CLIENT_SECRET`.
+
+3. **Authorise and capture the refresh token** (one-time, run locally):
+
+   ```bash
+   # Step 1 — open this URL in a browser, sign in with the Gmail account
+   echo "https://accounts.google.com/o/oauth2/v2/auth?\
+   client_id=CLIENT_ID\
+   &redirect_uri=http%3A%2F%2Flocalhost\
+   &response_type=code\
+   &scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fgmail.readonly\
+   &access_type=offline\
+   &prompt=consent"
+
+   # Step 2 — after redirect, copy the `code` param from the browser address bar
+   # Step 3 — exchange for tokens
+   curl -X POST https://oauth2.googleapis.com/token \
+     -d "client_id=CLIENT_ID" \
+     -d "client_secret=CLIENT_SECRET" \
+     -d "code=PASTE_CODE_HERE" \
+     -d "redirect_uri=http://localhost" \
+     -d "grant_type=authorization_code"
+   ```
+
+   The response contains `"refresh_token"`. Copy it. **`prompt=consent` is required** — without it Google will not return a refresh token if the account has previously authorised this client.
+
+4. Paste into Runtime Settings as `EMAIL_GMAIL_REFRESH_TOKEN_MAILBOX_<ID>`.
+
+---
+
+### EI-6. Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---------|-------------|-----|
+| `mailbox_errors` contains entries | OAuth token expired or invalid | Re-run the authorisation flow in EI-5 to get a fresh refresh token |
+| `uploads_failed > 0` | Service token revoked or wrong `CCS_API_BASE_URL` | Verify secrets; check API logs for the specific HTTP error |
+| Route not matching — `uploads_ignored` is high | Sender not in allowlist | Check sender email in Events table; update allowlist in routing matrix |
+| GitHub Actions run shows `404` on API calls | `EMAIL_INGESTION_ENABLED` not set | Set `CCS_PLATFORM_EMAIL_INGESTION_ENABLED=true` and redeploy API |
+| Gmail push not arriving | Pub/Sub watch expired | Run `ccs-gmail-watch-renew` job manually; ensure daily scheduler is configured |
+| `HTTP 410` from Microsoft Graph delta | Delta link is stale (> 30 days) | The script automatically retries from scratch when it receives a 410 — no action needed |
+
+---
+
 ## Go-Live Checklist
 
 - [ ] `CCS_PLATFORM_SESSION_SECRET_KEY` is a random 32+ byte value (not the default)
@@ -573,3 +919,13 @@ PYTHONPATH=backend python backend/scripts/migration_preflight.py
 - [ ] Scraper credentials seeded into `runtime_settings` via admin UI
 - [ ] At least one scrape job completed end-to-end in staging
 - [ ] Backup schedule confirmed and first backup verified
+
+**Email ingestion (if enabled):**
+- [ ] `CCS_PLATFORM_EMAIL_INGESTION_ENABLED=true` set on API service
+- [ ] Service token created and stored as `CCS_SERVICE_TOKEN` secret
+- [ ] Mailbox(es) added in the Email Ingestion UI
+- [ ] OAuth refresh token(s) stored as Runtime Settings (`EMAIL_MS_REFRESH_TOKEN_MAILBOX_<ID>` / `EMAIL_GMAIL_REFRESH_TOKEN_MAILBOX_<ID>`)
+- [ ] Bank routing matrix configured with correct sender allowlist per bank
+- [ ] Microsoft: `CCS_API_BASE_URL` and `CCS_SERVICE_TOKEN` GitHub Actions secrets set; dry-run passes
+- [ ] Gmail: Pub/Sub topic and subscription created; relay deployed; watch registered; daily renew scheduler active
+- [ ] At least one test email ingested end-to-end (visible in Events table)
