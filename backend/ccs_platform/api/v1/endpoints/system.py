@@ -69,7 +69,6 @@ def _queue_backlog_snapshot(settings: PlatformSettings) -> dict[str, Any]:
     total_running = sum(bucket.get("running", 0) for bucket in by_queue.values())
     queue_slo_map = {
         "default": max(0, int(settings.queue_backlog_slo_default)),
-        "scrape": max(0, int(settings.queue_backlog_slo_scrape)),
     }
     max_oldest_age = max(1, int(settings.queue_oldest_age_slo_seconds))
     violations: list[dict[str, Any]] = []

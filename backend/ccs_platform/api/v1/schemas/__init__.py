@@ -49,7 +49,6 @@ from ccs_platform.api.v1.schemas.jobs import (
     JobOut,
     PaginatedJobs,
     ReclassifyJobRequest,
-    ScrapeJobRequest,
     UploadJobRequest,
 )
 from ccs_platform.api.v1.schemas.profiles import ProfileBanksPatchRequest, ProfileOut
@@ -113,7 +112,6 @@ __all__ = [
     "ParserValidateRequest",
     "ProfileBanksPatchRequest",
     "ProfileOut",
-    "ReclassifyJobRequest",
     "PaginatedRuntimeSettings",
     "RuntimeSettingCreate",
     "RuntimeSettingOut",
@@ -123,7 +121,7 @@ __all__ = [
     "ScheduleOut",
     "ScheduleUpdate",
     "PaginatedSchedules",
-    "ScrapeJobRequest",
+    "ReclassifyJobRequest",
     "SeriesPoint",
     "StackedSeries",
     "StackedSeriesPoint",

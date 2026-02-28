@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ccs_platform.core.metrics import METRICS
-from ccs_platform.core.runtime_settings import apply_runtime_settings_to_process_env, get_runtime_settings_as_dict
+from ccs_platform.core.runtime_settings import apply_runtime_settings_to_process_env
 from ccs_platform.db import models
 from ccs_platform.core.settings import PlatformSettings
 from ccs_platform.db.session import get_session_local
@@ -22,11 +22,9 @@ from ccs_platform.adapters.storage import StorageAdapter
 from ccs_platform.application.jobs.handlers.context import JobContext
 from ccs_platform.application.jobs.job_log_handler import install_handler, set_current_job_id
 from ccs_platform.application.jobs.handlers.upload import handle_upload_job
-from ccs_platform.application.jobs.handlers.scrape import handle_scrape_job
 from ccs_platform.application.jobs.handlers.reclassify import handle_reclassify_job
 from ccs_platform.application.jobs.handlers.export_workbook import handle_export_workbook_job
 from ccs_platform.application.jobs.handlers.parser_validate import handle_parser_validate_job
-from ccs_platform.application.jobs.handlers.bank_connection_test import handle_bank_connection_test_job
 from ccs_platform.application.jobs.handlers.reparse import handle_reparse_statement_job
 
 
@@ -251,20 +249,15 @@ class JobRunner:
 
         if job.job_type == models.JobType.UPLOAD:
             return handle_upload_job(db, job, ctx, profile_key=profile.key)
-        if job.job_type == models.JobType.SCRAPE:
-            credentials = get_runtime_settings_as_dict(db, profile_id=job.profile_id)
-            return handle_scrape_job(db, job, ctx, profile_key=profile.key, credentials=credentials)
         if job.job_type == models.JobType.RECLASSIFY:
             return handle_reclassify_job(db, job)
         if job.job_type == models.JobType.EXPORT_WORKBOOK:
             return handle_export_workbook_job(db, job, ctx, profile_key=profile.key)
         if job.job_type == models.JobType.PARSER_VALIDATE:
             return handle_parser_validate_job(db, job)
-        if job.job_type == models.JobType.BANK_CONNECTION_TEST:
-            return handle_bank_connection_test_job(db, job)
         if job.job_type == models.JobType.REPARSE_STATEMENT:
             return handle_reparse_statement_job(db, job, ctx, profile_key=profile.key)
-        raise ValueError(f"Unsupported job_type: {job.job_type}")
+        raise ValueError(f"Unsupported job type: {job.job_type}")
 
     def _assert_not_cancelled(self, db: Session, job_id: int) -> None:
         row = db.execute(

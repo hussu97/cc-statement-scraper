@@ -20,7 +20,7 @@ def test_production_defaults_require_login_and_disable_legacy_reset() -> None:
     assert settings.secret_value_readback_enabled() is False
     assert settings.runtime_settings_encryption_required() is True
     assert settings.runtime_settings_seed_source_mode() == "env"
-    assert settings.worker_queue_set() == {"default", "scrape"}
+    assert settings.worker_queue_set() == {"default"}
 
 
 def test_development_defaults_keep_local_compatibility() -> None:

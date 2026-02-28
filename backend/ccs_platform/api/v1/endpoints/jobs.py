@@ -20,11 +20,13 @@ from ccs_platform.api.deps import (
     ProfileContext,
     get_db,
     get_profile_context,
+    get_profile_context_or_service_token,
+    require_operator_or_service_token,
     require_operator_role,
 )
-from ccs_platform.api.v1.schemas import JobLogOut, JobOut, PaginatedJobs, ReclassifyJobRequest, ScrapeJobRequest
+from ccs_platform.api.v1.schemas import JobLogOut, JobOut, PaginatedJobs, ReclassifyJobRequest
 from ccs_platform.api.v1.endpoints.job_utils import request_idempotency_key
-from ccs_platform.application.banks.capabilities import get_enabled_banks, resolve_requested_months
+from ccs_platform.application.banks.capabilities import get_enabled_banks
 from ccs_platform.application.jobs.service import create_or_get_job
 
 
@@ -158,88 +160,9 @@ def get_job(
     return _job_to_out(row)
 
 
-@router.post("/scrape", response_model=JobOut)
-def create_scrape_job(
-    payload: ScrapeJobRequest,
-    request: Request,
-    db: Session = Depends(get_db),
-    profile: ProfileContext = Depends(get_profile_context),
-    actor: ActorContext = Depends(require_operator_role),
-) -> JobOut:
-    requested_banks = sorted({token.upper().strip() for token in (payload.banks or []) if token and token.strip()})
-    banks = get_enabled_banks(db, requested_banks or None, profile_id=profile.profile_id)
-    if requested_banks:
-        found_codes = {bank.code for bank in banks}
-        denied = [code for code in requested_banks if code not in found_codes]
-        if denied:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Banks not enabled for profile {profile.profile_key}: {', '.join(denied)}",
-            )
-    if not banks:
-        raise HTTPException(status_code=400, detail="No matching banks")
 
-    try:
-        settings = request.app.state.settings
-        months = resolve_requested_months(
-            months=payload.months,
-            month_from=payload.month_from,
-            month_to=payload.month_to,
-            timezone=settings.timezone,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    payload_json = {
-        "banks": [bank.code for bank in banks],
-        "months": months,
-        "download": True,
-        "headless": True,
-        "login_timeout_minutes": payload.login_timeout_minutes,
-    }
-    job, created, requeued = create_or_get_job(
-        db,
-        profile_id=profile.profile_id,
-        job_type=models.JobType.SCRAPE,
-        payload_json=payload_json,
-        idempotency_key=request_idempotency_key(request),
-    )
-    if not created and job.status in {models.JobStatus.QUEUED, models.JobStatus.RUNNING}:
-        raise HTTPException(
-            status_code=409,
-            detail=f"An identical scrape job is already {job.status.value}.",
-        )
-
-    if created:
-        for bank in banks:
-            for month in months:
-                db.add(
-                    models.JobItem(
-                        job_id=job.id,
-                        bank_code=bank.code,
-                        target_month=month,
-                        status="queued",
-                    )
-                )
-    if created or requeued:
-        append_audit_event(
-            db,
-            profile_id=profile.profile_id,
-            event_type="job_enqueued",
-            entity_type="job",
-            entity_id=str(job.id),
-            payload_json={
-                "job_type": job.job_type.value,
-                "queue_name": job.queue_name,
-                "payload_json": payload_json,
-                "requeued": requeued,
-            },
-            request=request,
-        )
-        db.commit()
-        db.refresh(job)
-        request.app.state.job_dispatcher.publish(job.id)
-
-    return _job_to_out(job)
+_upload_profile_dep = get_profile_context_or_service_token("upload")
+_upload_actor_dep = require_operator_or_service_token("upload")
 
 
 @router.post("/upload", response_model=JobOut)
@@ -247,8 +170,8 @@ async def create_upload_job(
     request: Request,
     files: list[UploadFile] = File(...),
     db: Session = Depends(get_db),
-    profile: ProfileContext = Depends(get_profile_context),
-    actor: ActorContext = Depends(require_operator_role),
+    profile: ProfileContext = Depends(_upload_profile_dep),
+    actor: ActorContext = Depends(_upload_actor_dep),
 ) -> JobOut:
     if not files:
         raise HTTPException(status_code=400, detail="No files uploaded")
