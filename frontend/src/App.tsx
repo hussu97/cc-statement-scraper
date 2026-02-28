@@ -75,7 +75,7 @@ export default function App() {
           <Route path="/statements" element={<StatementsPage />} />
           <Route path="/runtime-settings" element={<RuntimeSettingsPage />} />
           <Route path="/email-ingestion" element={<EmailIngestionPage />} />
-          <Route path="/email-ingestion/activity" element={<EmailIngestionActivityPage />} />
+          <Route path="/ingestion-activity" element={<EmailIngestionActivityPage />} />
           <Route path="/rules" element={<RulesPage />} />
           <Route path="/schedules" element={<SchedulesPage />} />
           <Route path="/ops" element={<ExportsDiagnosticsPage />} />

@@ -144,12 +144,6 @@ export function EmailIngestionPage() {
     is_active: true,
   });
 
-  const [oauthForm, setOauthForm] = useState({
-    microsoft_client_id: '',
-    microsoft_client_secret: '',
-    gmail_client_id: '',
-    gmail_client_secret: '',
-  });
   const [refreshTokensByMailbox, setRefreshTokensByMailbox] = useState<Record<number, string>>({});
 
   const [createTokenForm, setCreateTokenForm] = useState({
@@ -213,13 +207,6 @@ export function EmailIngestionPage() {
         runtimeMap[item.key] = item;
       });
       setRuntimeByKey(runtimeMap);
-
-      setOauthForm((prev) => ({
-        microsoft_client_id: prev.microsoft_client_id || runtimeMap.EMAIL_MS_CLIENT_ID?.value || '',
-        microsoft_client_secret: '',
-        gmail_client_id: prev.gmail_client_id || runtimeMap.EMAIL_GMAIL_CLIENT_ID?.value || '',
-        gmail_client_secret: '',
-      }));
     } catch (loadError) {
       const message = (loadError as Error).message;
       if (message.includes('HTTP 404') && message.toLowerCase().includes('email ingestion')) {
@@ -334,34 +321,6 @@ export function EmailIngestionPage() {
     }
   }
 
-  async function saveProviderSecrets(provider: EmailProvider) {
-    try {
-      setError(null);
-      if (provider === 'microsoft') {
-        await saveRuntimeSetting('EMAIL_MS_CLIENT_ID', oauthForm.microsoft_client_id, false, 'Microsoft OAuth client id');
-        await saveRuntimeSetting(
-          'EMAIL_MS_CLIENT_SECRET',
-          oauthForm.microsoft_client_secret,
-          true,
-          'Microsoft OAuth client secret',
-        );
-        setOauthForm((prev) => ({ ...prev, microsoft_client_secret: '' }));
-      } else {
-        await saveRuntimeSetting('EMAIL_GMAIL_CLIENT_ID', oauthForm.gmail_client_id, false, 'Gmail OAuth client id');
-        await saveRuntimeSetting(
-          'EMAIL_GMAIL_CLIENT_SECRET',
-          oauthForm.gmail_client_secret,
-          true,
-          'Gmail OAuth client secret',
-        );
-        setOauthForm((prev) => ({ ...prev, gmail_client_secret: '' }));
-      }
-      await loadConfigData();
-    } catch (saveError) {
-      setError((saveError as Error).message);
-    }
-  }
-
   async function saveMailboxRefreshToken(mailbox: EmailMailboxOut) {
     const value = refreshTokensByMailbox[mailbox.id] || '';
     const key =
@@ -420,16 +379,6 @@ export function EmailIngestionPage() {
   useEffect(() => {
     loadConfigData();
   }, [activeProfileKey]);
-
-  const runtimeStatus = useMemo(() => {
-    const lookup = (key: string) => (runtimeByKey[key]?.has_value ? 'Stored' : 'Missing');
-    return {
-      microsoft_client_id: lookup('EMAIL_MS_CLIENT_ID'),
-      microsoft_client_secret: lookup('EMAIL_MS_CLIENT_SECRET'),
-      gmail_client_id: lookup('EMAIL_GMAIL_CLIENT_ID'),
-      gmail_client_secret: lookup('EMAIL_GMAIL_CLIENT_SECRET'),
-    };
-  }, [runtimeByKey]);
 
   if (featureDisabled) {
     return (
@@ -584,51 +533,6 @@ export function EmailIngestionPage() {
           </table>
         </div>
 
-        <div className="grid" style={{ marginTop: '0.9rem' }}>
-          <div className="panel" style={{ padding: '0.75rem' }}>
-            <h4>Microsoft OAuth</h4>
-            <p className="muted" style={{ marginTop: '0.35rem' }}>
-              Client ID: {runtimeStatus.microsoft_client_id} | Client Secret: {runtimeStatus.microsoft_client_secret}
-            </p>
-            <div className="row" style={{ marginTop: '0.5rem' }}>
-              <input
-                value={oauthForm.microsoft_client_id}
-                onChange={(event) => setOauthForm((prev) => ({ ...prev, microsoft_client_id: event.target.value }))}
-                placeholder="EMAIL_MS_CLIENT_ID"
-              />
-              <input
-                type="password"
-                value={oauthForm.microsoft_client_secret}
-                onChange={(event) =>
-                  setOauthForm((prev) => ({ ...prev, microsoft_client_secret: event.target.value }))
-                }
-                placeholder="EMAIL_MS_CLIENT_SECRET"
-              />
-              <button className="primary" onClick={() => saveProviderSecrets('microsoft')}>Save Microsoft Keys</button>
-            </div>
-          </div>
-
-          <div className="panel" style={{ padding: '0.75rem' }}>
-            <h4>Gmail OAuth</h4>
-            <p className="muted" style={{ marginTop: '0.35rem' }}>
-              Client ID: {runtimeStatus.gmail_client_id} | Client Secret: {runtimeStatus.gmail_client_secret}
-            </p>
-            <div className="row" style={{ marginTop: '0.5rem' }}>
-              <input
-                value={oauthForm.gmail_client_id}
-                onChange={(event) => setOauthForm((prev) => ({ ...prev, gmail_client_id: event.target.value }))}
-                placeholder="EMAIL_GMAIL_CLIENT_ID"
-              />
-              <input
-                type="password"
-                value={oauthForm.gmail_client_secret}
-                onChange={(event) => setOauthForm((prev) => ({ ...prev, gmail_client_secret: event.target.value }))}
-                placeholder="EMAIL_GMAIL_CLIENT_SECRET"
-              />
-              <button className="primary" onClick={() => saveProviderSecrets('gmail')}>Save Gmail Keys</button>
-            </div>
-          </div>
-        </div>
       </Panel>
 
       <Panel title="Bank Routing Matrix">
