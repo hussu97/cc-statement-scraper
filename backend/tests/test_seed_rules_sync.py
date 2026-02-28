@@ -28,7 +28,6 @@ def _fake_app_config() -> AppConfig:
         archive_dir=root,
         output_dir=root,
         state_dir=root,
-        downloads_dir=root,
     )
     return AppConfig(
         banks={},
