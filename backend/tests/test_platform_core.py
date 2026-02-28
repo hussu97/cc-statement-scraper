@@ -227,3 +227,45 @@ def test_rrule_hourly_respects_interval() -> None:
         timezone="Asia/Dubai",
     )
     assert next_run.tzinfo is not None
+
+
+def test_rrule_daily_next_run_is_future() -> None:
+    from datetime import UTC, datetime
+
+    now = datetime(2026, 2, 28, 10, 0, 0, tzinfo=UTC)
+    next_run = compute_next_run(
+        "FREQ=DAILY;BYHOUR=9;BYMINUTE=0",
+        timezone="Asia/Dubai",
+        now_utc=now,
+    )
+    assert next_run > now
+    assert next_run.tzinfo is not None
+
+
+def test_rrule_monthly_next_run_is_future() -> None:
+    from datetime import UTC, datetime
+
+    now = datetime(2026, 2, 28, 10, 0, 0, tzinfo=UTC)
+    next_run = compute_next_run(
+        "FREQ=MONTHLY;BYMONTHDAY=1;BYHOUR=8;BYMINUTE=0",
+        timezone="Asia/Dubai",
+        now_utc=now,
+    )
+    assert next_run > now
+    assert next_run.tzinfo is not None
+
+
+def test_rrule_daily_deterministic() -> None:
+    from datetime import UTC, datetime, timedelta
+
+    # At 2026-02-28 06:00 UTC = 10:00 Dubai time, DAILY at 09:00 Dubai → next is 2026-03-01 09:00 Dubai
+    now = datetime(2026, 2, 28, 6, 0, 0, tzinfo=UTC)
+    next_run = compute_next_run(
+        "FREQ=DAILY;BYHOUR=9;BYMINUTE=0",
+        timezone="Asia/Dubai",
+        now_utc=now,
+    )
+    # 09:00 Dubai = 05:00 UTC; since 06:00 UTC is already past 05:00 UTC on the 28th,
+    # next occurrence is 2026-03-01 05:00 UTC
+    expected = datetime(2026, 3, 1, 5, 0, 0, tzinfo=UTC)
+    assert next_run == expected
