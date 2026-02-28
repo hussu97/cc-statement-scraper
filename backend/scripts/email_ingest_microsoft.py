@@ -56,7 +56,7 @@ class GraphClient:
                 "$top": "50",
             }
         )
-        return f"{GRAPH_BASE}/me/messages/delta?{query}"
+        return f"{GRAPH_BASE}/me/mailFolders/Inbox/messages/delta?{query}"
 
     def list_messages_delta(self, *, delta_link: str | None) -> tuple[list[dict[str, Any]], str | None]:
         next_url = (delta_link or "").strip() or self._delta_initial_url()
