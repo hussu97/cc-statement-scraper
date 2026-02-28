@@ -63,7 +63,7 @@ class PlatformSettings(BaseSettings):
     require_login: bool = True
     session_cookie_name: str = "ccs_session"
     session_max_age_seconds: int = 1209600
-    session_secret_key: str = "change-this-in-production"
+    session_secret_key: str = "this-is-a-long-secret-key"
     session_cookie_secure: bool | None = None
     rbac_enabled: bool | None = None
 
