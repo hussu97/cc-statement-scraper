@@ -204,6 +204,7 @@ def handle_scrape_job(
                     geo_longitude=ctx.settings.browser_geo_longitude,
                     timezone_id=ctx.settings.browser_timezone_id,
                     locale=ctx.settings.browser_locale,
+                    cancel_check=lambda: ctx.assert_not_cancelled(db, job.id),
                 )
 
                 diagnostics = bank_cfg_copy[bank_code].get("download_diagnostics") or {}
@@ -390,6 +391,7 @@ def handle_scrape_job(
                         geo_longitude=ctx.settings.browser_geo_longitude,
                         timezone_id=ctx.settings.browser_timezone_id,
                         locale=ctx.settings.browser_locale,
+                        cancel_check=lambda: ctx.assert_not_cancelled(db, job.id),
                     )
                     _log.info("%s month=%s: browser download finished", bank_code, month)
                 else:
