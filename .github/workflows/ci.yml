@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ccs
+          POSTGRES_PASSWORD: ccs
+          POSTGRES_DB: ccs
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ccs -d ccs"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt -r backend/requirements-dev.txt pip-audit bandit
+
+      - name: Syntax check
+        run: python -m compileall backend/ccs_platform backend/scripts
+
+      - name: Run tests
+        run: cd backend && python -m pytest -q
+
+      - name: Migration smoke (SQLite)
+        env:
+          CCS_PLATFORM_DATABASE_URL: sqlite:///./ci.db
+        run: |
+          cd backend
+          python scripts/migration_preflight.py --skip-database-state
+          alembic upgrade head
+          alembic downgrade base
+          alembic upgrade head
+          python scripts/migration_preflight.py
+
+      - name: Migration smoke (Postgres)
+        env:
+          CCS_PLATFORM_DATABASE_URL: postgresql+psycopg://ccs:ccs@127.0.0.1:5432/ccs
+        run: |
+          cd backend
+          alembic upgrade head
+          alembic downgrade base
+          alembic upgrade head
+          python scripts/migration_preflight.py
+
+      - name: Dependency vulnerability scan
+        run: pip-audit -r backend/requirements.txt --strict
+
+      - name: SAST scan
+        run: bandit -q -r backend/ccs_platform -x backend/tests -ll -ii
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+        working-directory: frontend
+
+      - run: npm test -- --run
+        working-directory: frontend
+
+      - run: npm run build
+        working-directory: frontend
