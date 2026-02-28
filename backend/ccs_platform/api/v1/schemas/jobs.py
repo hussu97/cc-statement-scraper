@@ -63,6 +63,16 @@ class UploadJobRequest(BaseModel):
     pass
 
 
+class JobLogOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    level: str
+    logger: str
+    message: str
+    created_at: datetime
+
+
 class ReclassifyJobRequest(BaseModel):
     statement_ids: list[int] | None = None
     bank_codes: list[str] | None = None

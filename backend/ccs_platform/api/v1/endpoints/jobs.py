@@ -6,7 +6,8 @@ from pathlib import Path
 from datetime import UTC, datetime
 
 import pdfplumber
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ccs_platform.api.audit import append_audit_event
@@ -21,7 +22,7 @@ from ccs_platform.api.deps import (
     get_profile_context,
     require_operator_role,
 )
-from ccs_platform.api.v1.schemas import JobOut, PaginatedJobs, ReclassifyJobRequest, ScrapeJobRequest
+from ccs_platform.api.v1.schemas import JobLogOut, JobOut, PaginatedJobs, ReclassifyJobRequest, ScrapeJobRequest
 from ccs_platform.api.v1.endpoints.job_utils import request_idempotency_key
 from ccs_platform.application.banks.capabilities import get_enabled_banks, resolve_requested_months
 from ccs_platform.application.jobs.service import create_or_get_job
@@ -386,6 +387,31 @@ def cancel_job(
     db.commit()
     db.refresh(job)
     return _job_to_out(job)
+
+
+@router.get("/{job_id}/logs", response_model=list[JobLogOut])
+def get_job_logs(
+    job_id: int,
+    db: Session = Depends(get_db),
+    profile: ProfileContext = Depends(get_profile_context),
+    limit: int = Query(default=500, le=2000),
+) -> list[JobLogOut]:
+    job = db.execute(
+        select(models.Job).where(
+            models.Job.id == job_id,
+            models.Job.profile_id == profile.profile_id,
+        )
+    ).scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    rows = db.execute(
+        select(models.JobLog)
+        .where(models.JobLog.job_id == job_id)
+        .order_by(models.JobLog.created_at)
+        .limit(limit)
+    ).scalars().all()
+    return [JobLogOut.model_validate(row) for row in rows]
 
 
 @router.post("/reclassify", response_model=JobOut)

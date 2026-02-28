@@ -45,6 +45,7 @@ from ccs_platform.api.v1.schemas.email_ingestion import (
 from ccs_platform.api.v1.schemas.exports import ExportOut, WorkbookExportRequest
 from ccs_platform.api.v1.schemas.jobs import (
     JobItemOut,
+    JobLogOut,
     JobOut,
     PaginatedJobs,
     ReclassifyJobRequest,
@@ -94,6 +95,7 @@ __all__ = [
     "EmailMailboxSyncStatePatch",
     "ExportOut",
     "JobItemOut",
+    "JobLogOut",
     "JobOut",
     "LoginRequest",
     "LoginResponse",

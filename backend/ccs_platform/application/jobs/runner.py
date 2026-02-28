@@ -20,6 +20,7 @@ from ccs_platform.db.session import get_session_local
 from ccs_platform.adapters.storage import StorageAdapter
 
 from ccs_platform.application.jobs.handlers.context import JobContext
+from ccs_platform.application.jobs.job_log_handler import install_handler, set_current_job_id
 from ccs_platform.application.jobs.handlers.upload import handle_upload_job
 from ccs_platform.application.jobs.handlers.scrape import handle_scrape_job
 from ccs_platform.application.jobs.handlers.reclassify import handle_reclassify_job
@@ -34,6 +35,7 @@ class JobRunner:
         self.settings = settings
         self.storage = storage
         self.executor = ThreadPoolExecutor(max_workers=settings.max_worker_threads)
+        install_handler()
 
     def shutdown(self) -> None:
         self.executor.shutdown(wait=False, cancel_futures=True)
@@ -149,6 +151,7 @@ class JobRunner:
             heartbeat_thread.start()
 
             try:
+                set_current_job_id(job_id)
                 result = self._dispatch_job(db, job)
                 db.refresh(job)
                 outcome = "succeeded"
@@ -193,6 +196,7 @@ class JobRunner:
                 db.commit()
                 METRICS.record_job_event("failed")
             finally:
+                set_current_job_id(None)
                 heartbeat_stop.set()
                 heartbeat_thread.join(timeout=2)
 

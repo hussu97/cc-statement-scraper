@@ -17,7 +17,7 @@ from ccs_platform.db.models.email_ingestion import (
     ServiceApiToken,
 )
 from ccs_platform.db.models.profiles import Profile, ProfileBank
-from ccs_platform.db.models.operations import AuditEvent, Export, Job, JobItem, Schedule
+from ccs_platform.db.models.operations import AuditEvent, Export, Job, JobItem, JobLog, Schedule
 from ccs_platform.db.models.runtime_settings import RuntimeSetting
 from ccs_platform.db.models.statements import Bank, PdfFile, Statement, StatementLine
 from ccs_platform.db.models.taxonomy import Category, CategoryRule
@@ -37,6 +37,7 @@ __all__ = [
     "ExportStatus",
     "Job",
     "JobItem",
+    "JobLog",
     "JobStatus",
     "JobType",
     "MatchType",

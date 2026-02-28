@@ -3,8 +3,17 @@ export type Statement = {
   bank_code: string;
   statement_reference: string;
   statement_date: string;
+  ingested_at: string | null;
   line_count: number;
   pdf_file_id: number | null;
+};
+
+export type JobLogEntry = {
+  id: number;
+  level: string;
+  logger: string;
+  message: string;
+  created_at: string;
 };
 
 export type StatementLine = {

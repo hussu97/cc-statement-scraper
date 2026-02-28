@@ -54,6 +54,7 @@ class PlatformSettings(BaseSettings):
     retention_logs_days: int = 30
     retention_uploads_days: int = 14
     retention_backups_days: int = 30
+    retention_job_logs_days: int = 7
 
     cors_allow_origins: str = "*"
     log_level: str = "INFO"

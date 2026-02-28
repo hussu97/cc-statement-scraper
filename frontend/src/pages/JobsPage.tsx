@@ -5,7 +5,7 @@ import { Panel } from '../components/Panel';
 import { TablePagination } from '../components/TablePagination';
 import { useActiveProfileKey } from '../profileStore';
 import { formatLocalDateTime } from '../utils/datetime';
-import type { Bank, Job, JobItem, PagedResponse } from '../types/statements';
+import type { Bank, Job, JobItem, JobLogEntry, PagedResponse } from '../types/statements';
 
 type MonthOption = {
   value: string;
@@ -61,6 +61,14 @@ const ITEM_STATUS_ICON: Record<string, string> = {
   skipped: '–',
 };
 
+const LOG_LEVEL_COLOR: Record<string, string> = {
+  info: 'inherit',
+  warning: '#f59e0b',
+  warn: '#f59e0b',
+  error: '#ef4444',
+  critical: '#ef4444',
+};
+
 const ITEM_STATUS_COLOR: Record<string, string> = {
   queued: 'var(--color-muted, #888)',
   running: 'var(--color-primary, #0070f3)',
@@ -74,7 +82,7 @@ function isActiveStatus(status: string) {
   return status === 'queued' || status === 'running';
 }
 
-function JobLogPanel({ job }: { job: Job | null }) {
+function JobLogPanel({ job, logs }: { job: Job | null; logs: JobLogEntry[] }) {
   if (!job) {
     return <p className="muted">Select a job to view its progress log.</p>;
   }
@@ -170,6 +178,41 @@ function JobLogPanel({ job }: { job: Job | null }) {
           {job.error_message}
         </p>
       )}
+
+      <div style={{ marginTop: '1.25rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+          <strong style={{ fontSize: '0.85rem' }}>Terminal output</strong>
+          {active && <span className="muted" style={{ fontSize: '0.75rem' }}>● live</span>}
+        </div>
+        <div
+          style={{
+            fontFamily: 'monospace',
+            fontSize: '0.78rem',
+            background: 'var(--color-surface-2, #1a1a1a)',
+            color: '#d4d4d4',
+            borderRadius: '6px',
+            padding: '0.6rem 0.8rem',
+            maxHeight: '340px',
+            overflowY: 'auto',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+          }}
+        >
+          {logs.length === 0 ? (
+            <span style={{ color: '#666' }}>{active ? 'Waiting for output…' : 'No logs recorded for this job.'}</span>
+          ) : (
+            logs.map((entry) => (
+              <div key={entry.id} style={{ color: LOG_LEVEL_COLOR[entry.level] ?? 'inherit', marginBottom: '0.1rem' }}>
+                <span style={{ color: '#666', userSelect: 'none' }}>{entry.created_at.slice(11, 19)} </span>
+                {entry.level !== 'info' && (
+                  <span style={{ color: LOG_LEVEL_COLOR[entry.level], fontWeight: 600 }}>[{entry.level.toUpperCase()}] </span>
+                )}
+                {entry.message}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -192,6 +235,7 @@ export function JobsPage() {
   const [timeout, setTimeoutMinutes] = useState(20);
   const [activeJob, setActiveJob] = useState<Job | null>(null);
   const [liveJob, setLiveJob] = useState<Job | null>(null);
+  const [jobLogs, setJobLogs] = useState<JobLogEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
   const liveJobPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -271,7 +315,7 @@ export function JobsPage() {
     return () => clearInterval(timer);
   }, [activeProfileKey, jobsPage, jobsPageSize]);
 
-  // Live-poll the selected job while it is queued or running.
+  // Live-poll the selected job (and its logs) while it is queued or running.
   useEffect(() => {
     if (liveJobPollRef.current) {
       clearTimeout(liveJobPollRef.current);
@@ -280,10 +324,15 @@ export function JobsPage() {
 
     if (!activeJob) {
       setLiveJob(null);
+      setJobLogs([]);
       return;
     }
 
     setLiveJob(activeJob);
+    setJobLogs([]);
+
+    // Fetch logs once immediately (even for finished jobs).
+    api.get<JobLogEntry[]>(`/jobs/${activeJob.id}/logs`).then(setJobLogs).catch(() => {});
 
     if (!isActiveStatus(activeJob.status)) return;
 
@@ -292,9 +341,13 @@ export function JobsPage() {
     const poll = async () => {
       if (cancelled) return;
       try {
-        const updated = await api.get<Job>(`/jobs/${activeJob.id}`);
+        const [updated, logs] = await Promise.all([
+          api.get<Job>(`/jobs/${activeJob.id}`),
+          api.get<JobLogEntry[]>(`/jobs/${activeJob.id}/logs`),
+        ]);
         if (!cancelled) {
           setLiveJob(updated);
+          setJobLogs(logs);
           if (isActiveStatus(updated.status)) {
             liveJobPollRef.current = setTimeout(poll, 3000);
           }
@@ -436,7 +489,7 @@ export function JobsPage() {
       </Panel>
 
       <Panel title={liveJob ? `Job Log — #${liveJob.id}` : 'Job Log'}>
-        <JobLogPanel job={liveJob} />
+        <JobLogPanel job={liveJob} logs={jobLogs} />
       </Panel>
     </div>
   );
