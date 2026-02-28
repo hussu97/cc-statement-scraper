@@ -75,9 +75,11 @@ python -c "import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).dec
 | Background worker | Render Background Worker | Always-on, 512 MB RAM |
 | Database | Neon | 0.5 GB storage, 1 project, shared compute |
 | Frontend | Vercel | Hobby plan, unlimited deployments |
-| File storage | Render Persistent Disk | 1 GB (attached to API service) |
+| File storage | Google Cloud Storage (GCS) | 5 GB storage + 1 GB/month egress free |
 
-> **Limitation to know upfront:** Render's free Web Service spins down after 15 minutes of inactivity. The first request after a cold-start takes ~30 seconds. The background worker stays always-on, so scheduled scrape jobs run on time — only the API has this latency on first hit.
+> **Limitations to know upfront:**
+> - Render's free Web Service spins down after 15 minutes of inactivity. The first request after a cold-start takes ~30 seconds. The background worker stays always-on, so scheduled scrape jobs run on time — only the API has this latency on first hit.
+> - **Render persistent disks are a paid add-on (~$0.25/GB/month) — not available on the free tier.** File storage must be external. This guide uses GCS, which has a generous free tier (5 GB) and requires only a Google account (credit card required by Google but not charged within free limits).
 
 ---
 
@@ -147,27 +149,49 @@ Save both values — you will paste them into Render and need them later for key
    | `CCS_PLATFORM_DATABASE_URL` | *(Neon DSN from 1.2)* |
    | `CCS_PLATFORM_SESSION_SECRET_KEY` | *(generated in 1.1)* |
    | `CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY` | *(generated in 1.1)* |
-   | `CCS_PLATFORM_STORAGE_BACKEND` | `local` |
-   | `CCS_PLATFORM_LOCAL_STORAGE_DIR` | `/app/data/archive/platform` |
-   | `CCS_PLATFORM_BACKUPS_DIR` | `/app/data/backups` |
+   | `CCS_PLATFORM_STORAGE_BACKEND` | `gcs` |
+   | `CCS_PLATFORM_GCS_BUCKET` | *(GCS bucket name from 1.3 below)* |
+   | `CCS_PLATFORM_GCS_PROJECT` | *(GCP project ID)* |
+   | `CCS_PLATFORM_GCS_CREDENTIALS_FILE` | `/etc/gcs/credentials.json` |
    | `CCS_PLATFORM_EMBEDDED_WORKER` | `false` |
    | `CCS_PLATFORM_WORKER_QUEUES` | `default` |
    | `CCS_PLATFORM_JOB_DISPATCH_BACKEND` | `database` |
    | `CCS_PLATFORM_RUNTIME_SETTINGS_SEED_SOURCE` | `env` |
-   | `CCS_PLATFORM_CORS_ALLOW_ORIGINS` | *(your Vercel URL, e.g. `https://ccs.vercel.app`)* — set this after deploying frontend |
+   | `CCS_PLATFORM_CORS_ALLOW_ORIGINS` | *(your Vercel URL — set after deploying frontend)* |
    | `CCS_PLATFORM_TIMEZONE` | `Asia/Dubai` |
 
-6. Under **Disks**, add a **Persistent Disk**:
+   > **Note:** `CCS_PLATFORM_GCS_CREDENTIALS_FILE` assumes you upload the service account JSON as a Render **Secret File** (see step 1.3). Set the mount path to `/etc/gcs/credentials.json`.
 
-   | Setting | Value |
-   |---------|-------|
-   | **Name** | `ccs-data` |
-   | **Mount path** | `/app/data` |
-   | **Size** | 1 GB |
+6. Click **Create Web Service**. Render will build the Docker image (5–10 min on first build).
 
-   > This stores uploaded PDFs, exports, and backups. Without this disk, all files are lost on every deploy.
+---
 
-7. Click **Create Web Service**. Render will build the Docker image (5–10 min on first build).
+### 1.3 File storage — Google Cloud Storage (free tier)
+
+Render's persistent disks are a paid feature. GCS provides 5 GB free and works out of the box with this app.
+
+**a) Create a GCP project and bucket**
+
+1. Go to <https://console.cloud.google.com> → create a new project (e.g. `ccs-platform`).
+2. Navigate to **Cloud Storage → Buckets → Create**.
+3. Set a globally unique name (e.g. `ccs-platform-yourname`), choose a region matching your Render region, leave all other defaults.
+4. Click **Create**.
+
+**b) Create a service account**
+
+1. In GCP Console → **IAM & Admin → Service Accounts → Create Service Account**.
+2. Name it `ccs-storage` → click **Create and Continue**.
+3. Grant the role **Storage Object Admin** → **Done**.
+4. Click the service account → **Keys → Add Key → Create new key → JSON** → download the `.json` file.
+
+**c) Upload credentials to Render as a Secret File**
+
+1. In the Render `ccs-api` service → **Environment → Secret Files → Add Secret File**.
+2. **Filename:** `/etc/gcs/credentials.json`
+3. **Contents:** paste the full contents of the downloaded JSON key file.
+4. Repeat for the `ccs-worker` service.
+
+> Secret Files are injected into the container at runtime and never appear in build logs or env var lists.
 
 ---
 
@@ -200,13 +224,9 @@ The scraping worker runs Playwright (Chromium) and must be a separate always-on 
 
    > The API handles `default` queue jobs (uploads, reclassify, export). The worker handles `scrape` queue jobs (browser automation). This split keeps browser processes off the API service.
 
-5. Under **Disks**, add the **same persistent disk** as the API by mounting the same volume:
+5. Add the GCS **Secret File** as you did for the API (same file, same mount path `/etc/gcs/credentials.json`).
 
-   | Setting | Value |
-   |---------|-------|
-   | **Mount path** | `/app/data` |
-
-   > Both services must share the same disk so the worker can write downloaded PDFs and the API can serve them.
+   > With GCS as the storage backend, the API and worker don't need to share a disk — both read/write the same GCS bucket directly.
 
 6. Click **Create Background Worker**.
 
@@ -325,8 +345,8 @@ Both Render services auto-deploy when you push to `main`. Migrations run via the
 **Check worker logs:**
 Render dashboard → `ccs-worker` → **Logs** tab. Scrape job output (Playwright, bank login steps) appears here.
 
-**Upgrade storage:**
-The free 1 GB persistent disk fills up over time with PDFs and exports. Render charges ~$0.25/GB/month for additional disk. Alternatively, switch `CCS_PLATFORM_STORAGE_BACKEND=gcs` and set up a GCS bucket (free tier: 5 GB/month) — no code changes needed, just env var updates.
+**Monitor GCS usage:**
+The GCS free tier covers 5 GB. To check current usage, go to GCP Console → Cloud Storage → your bucket → **Monitoring** tab. If you exceed 5 GB, GCS charges ~$0.02/GB/month for additional storage.
 
 **Rotate encryption key:**
 If you need to rotate `CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY`, use the re-encryption script before changing the env var:
