@@ -342,6 +342,52 @@ async def create_upload_job(
     return _job_to_out(job)
 
 
+@router.post("/cancel-all")
+def cancel_all_jobs(
+    request: Request,
+    db: Session = Depends(get_db),
+    profile: ProfileContext = Depends(get_profile_context),
+    actor: ActorContext = Depends(require_operator_role),
+) -> dict:
+    now = datetime.now(UTC)
+    active_jobs = (
+        db.execute(
+            select(models.Job).where(
+                models.Job.profile_id == profile.profile_id,
+                models.Job.status.in_([models.JobStatus.QUEUED, models.JobStatus.RUNNING]),
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    cancelled_count = 0
+    for job in active_jobs:
+        if job.status == models.JobStatus.QUEUED:
+            job.status = models.JobStatus.CANCELLED
+            job.finished_at = now
+            job.cancel_requested_at = now
+        elif job.status == models.JobStatus.RUNNING:
+            job.cancel_requested_at = now
+        append_audit_event(
+            db,
+            profile_id=profile.profile_id,
+            event_type="job_cancel_requested",
+            entity_type="job",
+            entity_id=str(job.id),
+            payload_json={
+                "before_status": job.status.value,
+                "cancel_requested_at": now.isoformat(),
+                "bulk": True,
+            },
+            request=request,
+        )
+        cancelled_count += 1
+
+    db.commit()
+    return {"cancelled": cancelled_count}
+
+
 @router.post("/{job_id}/cancel", response_model=JobOut)
 def cancel_job(
     job_id: int,

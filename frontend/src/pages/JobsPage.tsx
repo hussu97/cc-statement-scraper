@@ -301,6 +301,16 @@ export function JobsPage() {
     }
   }
 
+  async function cancelAllJobs() {
+    try {
+      setError(null);
+      await api.post('/jobs/cancel-all');
+      await loadJobs();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
   useEffect(() => {
     loadBanks();
     setJobsPage(1);
@@ -439,7 +449,10 @@ export function JobsPage() {
       <Panel title="Jobs">
         <div className="row" style={{ justifyContent: 'space-between' }}>
           <span className="muted">Live status for scrape/upload/reclassify/export/diagnostics jobs across all pages.</span>
-          <button className="ghost" onClick={() => loadJobs()}>Refresh</button>
+          <div className="row">
+            <button className="ghost" onClick={() => loadJobs()}>Refresh</button>
+            <button className="ghost" onClick={cancelAllJobs}>Cancel All Jobs</button>
+          </div>
         </div>
         <div className="table-wrap">
           <table>
