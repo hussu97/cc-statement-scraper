@@ -11,7 +11,7 @@ from ccs_platform.core.settings import clear_settings_caches
 from ccs_platform.main import app, create_app
 from ccs_platform.db import db_session, models
 
-# Precomputed bcrypt hash (rounds=4) of "Apple123!" — kept here so tests can
+# Precomputed bcrypt hash — kept here so tests can
 # run without the real .env credentials and without slow per-test hashing.
 _TEST_PASSWORD_HASH = "$2b$04$ZbobdUJwQZLVRQcOjUz4ouJ3L2mWPKaGO8jWtPWBbnG.F0z7N0Bl."
 
