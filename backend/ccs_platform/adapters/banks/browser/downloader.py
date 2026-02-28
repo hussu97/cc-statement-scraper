@@ -21,7 +21,7 @@ from ccs_platform.adapters.banks.browser.shared import (
 )
 from ccs_platform.core.bank_config import AppConfig
 
-LoginHandler = Callable[[Any, logging.Logger], None]
+LoginHandler = Callable[[Any, logging.Logger, dict[str, str]], None]
 LoginSelectorVisible = Callable[[Any], bool]
 DownloadHandler = Callable[[Any, Any, logging.Logger, dict], int]
 CHROMIUM_SINGLETON_FILES = ("SingletonLock", "SingletonCookie", "SingletonSocket")
@@ -65,11 +65,11 @@ def _login_selector_visible(page: Any, bank_code: str) -> bool:
         return False
 
 
-def _execute_bank_login(page: Any, bank_code: str, logger: logging.Logger) -> None:
+def _execute_bank_login(page: Any, bank_code: str, logger: logging.Logger, credentials: dict[str, str]) -> None:
     handler = LOGIN_HANDLERS.get(bank_code.upper())
     if handler is None:
         raise BrowserDownloadError(f"Unsupported bank code for browser flow: {bank_code}")
-    handler(page, logger)
+    handler(page, logger, credentials)
 
 
 def _execute_bank_download(
@@ -398,6 +398,7 @@ def run_end_to_end_downloads(
     scheduled: bool,
     login_timeout_minutes: int = 20,
     headless: bool = False,
+    credentials: dict[str, str] | None = None,
 ) -> dict[str, str]:
     try:
         from playwright.sync_api import sync_playwright
@@ -444,7 +445,7 @@ def run_end_to_end_downloads(
                     logger,
                 )
 
-                _execute_bank_login(page, bank_code, logger)
+                _execute_bank_login(page, bank_code, logger, credentials or {})
                 page = _wait_for_authenticated_session(
                     page=page,
                     bank_code=bank_code,

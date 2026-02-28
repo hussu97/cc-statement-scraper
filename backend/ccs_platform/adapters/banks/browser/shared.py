@@ -107,8 +107,8 @@ def count_new_or_updated_pdfs(before: dict[str, int], after: dict[str, int]) -> 
     return count
 
 
-def require_env(var_name: str) -> str:
-    value = os.getenv(var_name)
+def require_env(var_name: str, env: dict[str, str] | None = None) -> str:
+    value = (env or os.environ).get(var_name)
     if not value:
         raise BrowserDownloadError(f"Missing required environment variable: {var_name}")
     return value

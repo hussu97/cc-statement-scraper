@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from ccs_platform.adapters.banks.browser.downloader import BrowserDownloadError, run_end_to_end_downloads
 from ccs_platform.core.bank_config import load_app_config
 from ccs_platform.core.metrics import METRICS
-from ccs_platform.core.runtime_settings import apply_runtime_settings_to_process_env
+from ccs_platform.core.runtime_settings import apply_runtime_settings_to_process_env, get_runtime_settings_as_dict
 from ccs_platform.adapters.banks.parsers import parse_adcb_statement, parse_enbd_statement, parse_fab_statement
 from ccs_platform.db import models
 from ccs_platform.core.settings import PlatformSettings
@@ -210,11 +210,13 @@ class JobRunner:
         if profile is None:
             raise RuntimeError(f"Profile not found for job {job.id}: {job.profile_id}")
 
+        # TODO: apply_runtime_settings_to_process_env is still needed for parsers that read env vars directly.
         apply_runtime_settings_to_process_env(db, profile_id=job.profile_id)
         if job.job_type == models.JobType.UPLOAD:
             return self._process_upload_job(db, job, profile_key=profile.key)
         if job.job_type == models.JobType.SCRAPE:
-            return self._process_scrape_job(db, job, profile_key=profile.key)
+            credentials = get_runtime_settings_as_dict(db, profile_id=job.profile_id)
+            return self._process_scrape_job(db, job, profile_key=profile.key, credentials=credentials)
         if job.job_type == models.JobType.RECLASSIFY:
             return self._process_reclassify_job(db, job)
         if job.job_type == models.JobType.EXPORT_WORKBOOK:
@@ -360,7 +362,7 @@ class JobRunner:
 
         return {"ingested": ingested, "failures": failures}
 
-    def _process_scrape_job(self, db: Session, job: models.Job, *, profile_key: str) -> dict[str, Any]:
+    def _process_scrape_job(self, db: Session, job: models.Job, *, profile_key: str, credentials: dict[str, str] | None = None) -> dict[str, Any]:
         payload = job.payload_json or {}
         banks = sorted({token.upper().strip() for token in payload.get("banks", []) if token and token.strip()})
         months = resolve_requested_months(
@@ -464,6 +466,7 @@ class JobRunner:
                         scheduled=False,
                         login_timeout_minutes=login_timeout_minutes,
                         headless=headless,
+                        credentials=credentials,
                     )
 
                     diagnostics = bank_cfg_copy[bank_code].get("download_diagnostics") or {}
@@ -728,6 +731,7 @@ class JobRunner:
                             scheduled=False,
                             login_timeout_minutes=login_timeout_minutes,
                             headless=headless,
+                            credentials=credentials,
                         )
 
                     latest_pdf, diagnostic = self._resolve_downloaded_pdf_from_diagnostics(

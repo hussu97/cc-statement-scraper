@@ -297,9 +297,9 @@ def _decode_attributed_body(raw: Any) -> str:
     return ""
 
 
-def login(page: Any, logger: logging.Logger) -> None:
-    cid = require_env("ADCB_CID")
-    password = require_env("ADCB_LOGIN_PASSWORD")
+def login(page: Any, logger: logging.Logger, credentials: dict[str, str] | None = None) -> None:
+    cid = require_env("ADCB_CID", credentials)
+    password = require_env("ADCB_LOGIN_PASSWORD", credentials)
 
     cid_radio = page.locator("input[aria-label='ADCB CID']")
     if cid_radio.count() > 0:

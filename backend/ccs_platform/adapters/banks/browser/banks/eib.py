@@ -35,9 +35,9 @@ MONTH_INDEX = {
 }
 
 
-def login(page: Any, logger: logging.Logger) -> None:
-    username = require_env("EIB_USERNAME")
-    password = require_env("EIB_PASSWORD")
+def login(page: Any, logger: logging.Logger, credentials: dict[str, str] | None = None) -> None:
+    username = require_env("EIB_USERNAME", credentials)
+    password = require_env("EIB_PASSWORD", credentials)
 
     page.fill("input#userName", username)
     page.fill("input#password", password)
