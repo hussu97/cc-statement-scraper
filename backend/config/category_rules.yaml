@@ -13,11 +13,12 @@ global_rules:
       - PANDA EXPRESS
       - TALABAT.COM
       - KFC
-      - MCDONALDS
+      - MCDONALD
       - SUBWAY
       - ALL DAY GOURMENT
       - ALL DAY GOURMET
       - COFFEE
+      - ABSOLUTE BARBECUE
   - category: Grocery
     keywords:
       - NOON MINUTES
@@ -27,6 +28,7 @@ global_rules:
       - 7 11
       - LULU
       - GRAB.COM
+      - CARREFOUR
   - category: Subscription
     keywords:
       - NOON ONE
