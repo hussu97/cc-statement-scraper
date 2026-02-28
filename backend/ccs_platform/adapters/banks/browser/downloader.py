@@ -355,8 +355,8 @@ def _launch_bank_context(
             if proxy_url:
                 launch_kwargs["proxy"] = {"server": proxy_url}
                 logger.info("%s: routing browser traffic via proxy %s", bank_code, proxy_url)
-            if bank_code.upper() == "MASHREQ":
-                launch_kwargs["args"] = ["--disable-blink-features=AutomationControlled"]
+            # Strip the automation flag globally — it's the single most obvious bot signal.
+            launch_kwargs["args"] = ["--disable-blink-features=AutomationControlled"]
             launch_channel_candidates: list[str | None] = [None]
             if bank_code.upper() == "MASHREQ":
                 # Mashreq is less likely to trigger "not authorized" anti-bot responses on real Chrome.
@@ -385,14 +385,20 @@ def _launch_bank_context(
                 if launch_error is not None:
                     raise launch_error
                 raise BrowserDownloadError(f"{bank_code}: failed to launch browser context")
+
+            # Global: patch navigator.webdriver and window.chrome.runtime for all banks.
+            # navigator.languages is intentionally left to the locale setting (en-AE) —
+            # overriding it here would contradict the locale we set at context level.
+            context.add_init_script(
+                """
+                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                window.chrome = window.chrome || { runtime: {} };
+                """
+            )
             if bank_code.upper() == "MASHREQ":
+                # Mashreq additionally benefits from plugins spoofing.
                 context.add_init_script(
-                    """
-                    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-                    window.chrome = window.chrome || { runtime: {} };
-                    Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-                    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
-                    """
+                    "Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });"
                 )
             return context
         except Exception as exc:  # noqa: BLE001
