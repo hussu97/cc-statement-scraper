@@ -16,7 +16,7 @@ branch_labels = None
 depends_on = None
 
 
-email_provider_enum = sa.Enum("microsoft", "gmail", name="emailprovider")
+email_provider_enum = sa.Enum("microsoft", "gmail", name="emailprovider", create_type=False)
 email_ingestion_status_enum = sa.Enum(
     "queued",
     "uploaded",
@@ -24,6 +24,7 @@ email_ingestion_status_enum = sa.Enum(
     "ignored",
     "failed",
     name="emailingestionstatus",
+    create_type=False,
 )
 
 
