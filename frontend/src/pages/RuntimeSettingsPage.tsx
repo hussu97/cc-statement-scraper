@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { api } from '../api';
+import { useDebouncedValue } from '../lib/useDebounce';
 import { Panel } from '../components/Panel';
 import { TablePagination } from '../components/TablePagination';
 import { useActiveProfileKey } from '../profileStore';
@@ -17,17 +18,6 @@ type RuntimeSetting = {
   created_at: string;
   updated_at: string;
 };
-
-function useDebouncedValue<T>(value: T, delayMs: number): T {
-  const [debounced, setDebounced] = useState(value);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => setDebounced(value), delayMs);
-    return () => window.clearTimeout(timer);
-  }, [delayMs, value]);
-
-  return debounced;
-}
 
 export function RuntimeSettingsPage() {
   const activeProfileKey = useActiveProfileKey();

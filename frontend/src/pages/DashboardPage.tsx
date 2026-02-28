@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { api } from '../api';
+import { isAbortError } from '../lib/errors';
+import { formatAmount } from '../lib/format';
+import { useDebouncedValue } from '../lib/useDebounce';
 import { DashboardFilters } from '../components/DashboardFilters';
 import { DonutBreakdownChart } from '../components/charts/DonutBreakdownChart';
 import { SpendTrendChart } from '../components/charts/SpendTrendChart';
@@ -78,17 +81,6 @@ function defaultLastTwelveMonthsWindow(): Pick<DashboardFiltersValue, 'dateFrom'
   };
 }
 
-function useDebouncedValue<T>(value: T, delayMs: number): T {
-  const [debounced, setDebounced] = useState(value);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => setDebounced(value), delayMs);
-    return () => window.clearTimeout(timer);
-  }, [value, delayMs]);
-
-  return debounced;
-}
-
 function dashboardQueryParams(filters: DashboardFiltersValue, debouncedMerchant: string): URLSearchParams {
   const params = new URLSearchParams();
 
@@ -112,17 +104,6 @@ function dashboardQueryParams(filters: DashboardFiltersValue, debouncedMerchant:
 function toQuerySuffix(params: URLSearchParams): string {
   const encoded = params.toString();
   return encoded ? `?${encoded}` : '';
-}
-
-function formatAmount(value: number): string {
-  return new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
-}
-
-function isAbortError(error: unknown): boolean {
-  return error instanceof Error && error.name === 'AbortError';
 }
 
 export function DashboardPage() {

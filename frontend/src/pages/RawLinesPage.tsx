@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 
 import { api } from '../api';
+import { isAbortError } from '../lib/errors';
+import { formatAmount } from '../lib/format';
+import { useDebouncedValue } from '../lib/useDebounce';
 import { DateRangeField } from '../components/DateRangeField';
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown';
 import { Panel } from '../components/Panel';
@@ -23,28 +26,6 @@ type RawLineFilters = {
   dateTo: string;
   direction: '' | 'debit' | 'credit';
 };
-
-function useDebouncedValue<T>(value: T, delayMs: number): T {
-  const [debounced, setDebounced] = useState(value);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => setDebounced(value), delayMs);
-    return () => window.clearTimeout(timer);
-  }, [delayMs, value]);
-
-  return debounced;
-}
-
-function formatAmount(value: number): string {
-  return new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
-}
-
-function isAbortError(error: unknown): boolean {
-  return error instanceof Error && error.name === 'AbortError';
-}
 
 export function RawLinesPage() {
   const activeProfileKey = useActiveProfileKey();

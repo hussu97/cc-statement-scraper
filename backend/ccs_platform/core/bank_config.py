@@ -27,7 +27,7 @@ class AppConfig:
     paths: Paths
 
 
-ROOT_DIR = Path(__file__).resolve().parents[3]
+ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
 def default_paths() -> Paths:
