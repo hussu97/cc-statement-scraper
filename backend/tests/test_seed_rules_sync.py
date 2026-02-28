@@ -57,9 +57,6 @@ def test_seed_categories_rules_refreshes_seeded_rules_but_keeps_manual(monkeypat
                 category_name="Legacy",
                 match_type=models.MatchType.CONTAINS,
                 pattern="OLD",
-                bank_code=None,
-                card_last4=None,
-                priority=5,
                 active=True,
             )
         )
@@ -69,9 +66,6 @@ def test_seed_categories_rules_refreshes_seeded_rules_but_keeps_manual(monkeypat
                 category_name="Other",
                 match_type=models.MatchType.CONTAINS,
                 pattern="MANUAL",
-                bank_code=None,
-                card_last4=None,
-                priority=500,
                 active=True,
             )
         )
@@ -99,9 +93,6 @@ def test_seed_categories_rules_refreshes_seeded_rules_but_keeps_manual(monkeypat
         assert "Fines" not in category_names
 
         seeded_count = len([name for name in rule_names if name.startswith("seed-")])
-        assert all(rule.bank_code is None for rule in rules)
-        assert all(rule.card_last4 is None for rule in rules)
-        assert all(rule.priority == 100 for rule in rules)
 
         seed_module._seed_categories_and_rules(db)
         db.commit()

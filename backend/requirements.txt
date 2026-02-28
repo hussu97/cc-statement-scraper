@@ -1,3 +1,6 @@
+# This file mirrors pyproject.toml [project.dependencies].
+# To generate a fully-pinned lock file run:
+#   pip-compile requirements.in --output-file requirements.txt
 typer>=0.12
 python-dateutil>=2.9
 python-dotenv>=1.0

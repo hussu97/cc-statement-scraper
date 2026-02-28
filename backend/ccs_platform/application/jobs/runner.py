@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from typing import Any
+
+_log = logging.getLogger(__name__)
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -76,6 +79,7 @@ class JobRunner:
                     hb_db.commit()
             except Exception:  # noqa: BLE001
                 METRICS.record_job_event("heartbeat_error")
+                _log.exception("Heartbeat thread error for job %d; heartbeat stopped", job_id)
                 return
 
     def _schedule_retry(self, db: Session, job: models.Job, *, error_message: str) -> bool:
@@ -162,6 +166,7 @@ class JobRunner:
                 db.commit()
                 METRICS.record_job_event(outcome)
             except Exception as exc:  # noqa: BLE001
+                _log.exception("Job %d failed with unhandled exception", job_id)
                 db.rollback()
                 job = db.get(models.Job, job_id)
                 if not job:

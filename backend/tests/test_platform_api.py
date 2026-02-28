@@ -951,9 +951,6 @@ def test_category_rule_test_uses_most_specific_match_without_scope() -> None:
                 category_name="Dining",
                 match_type=models.MatchType.CONTAINS,
                 pattern="CAFE",
-                bank_code="FAB",
-                card_last4="1234",
-                priority=5,
                 active=True,
             )
         )
@@ -963,9 +960,6 @@ def test_category_rule_test_uses_most_specific_match_without_scope() -> None:
                 category_name="Travel",
                 match_type=models.MatchType.CONTAINS,
                 pattern=f"{token} CAFE",
-                bank_code=None,
-                card_last4=None,
-                priority=999,
                 active=True,
             )
         )

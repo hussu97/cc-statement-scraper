@@ -50,19 +50,21 @@ def _match_type_tiebreaker(match_type: models.MatchType) -> int:
     return 0
 
 
-def find_matching_rule(
-    db: Session,
-    *,
-    bank_code: str | None = None,
-    card_last4: str | None = None,
+def _fetch_active_rules(db: Session) -> list[models.CategoryRule]:
+    return list(
+        db.execute(
+            select(models.CategoryRule)
+            .where(models.CategoryRule.active.is_(True))
+            .order_by(models.CategoryRule.id.asc())
+        ).scalars()
+    )
+
+
+def find_best_rule(
+    rules: list[models.CategoryRule],
     merchant_normalized: str,
 ) -> models.CategoryRule | None:
-    rules = db.execute(
-        select(models.CategoryRule)
-        .where(models.CategoryRule.active.is_(True))
-        .order_by(models.CategoryRule.id.asc())
-    ).scalars()
-
+    """Select the best matching rule from a pre-fetched list — no DB query."""
     best_rule: models.CategoryRule | None = None
     best_specificity = -1
     best_type_tiebreaker = -1
@@ -84,19 +86,20 @@ def find_matching_rule(
     return best_rule
 
 
+def find_matching_rule(
+    db: Session,
+    *,
+    merchant_normalized: str,
+) -> models.CategoryRule | None:
+    return find_best_rule(_fetch_active_rules(db), merchant_normalized)
+
+
 def categorize(
     db: Session,
     *,
-    bank_code: str | None = None,
-    card_last4: str | None = None,
     merchant_normalized: str,
 ) -> tuple[str, models.CategoryRule | None]:
-    rule = find_matching_rule(
-        db,
-        bank_code=bank_code,
-        card_last4=card_last4,
-        merchant_normalized=merchant_normalized,
-    )
+    rule = find_matching_rule(db, merchant_normalized=merchant_normalized)
     if rule:
         ensure_category(db, rule.category_name)
         return rule.category_name, rule
@@ -111,6 +114,9 @@ def reclassify_statement_lines(
     *,
     profile_id: int | None = None,
 ) -> int:
+    # Fetch all active rules once — avoids an N+1 query per statement line.
+    active_rules = _fetch_active_rules(db)
+
     query = select(models.StatementLine, models.Statement).join(models.Statement)
     if profile_id is not None:
         query = query.where(models.Statement.profile_id == profile_id)
@@ -118,13 +124,11 @@ def reclassify_statement_lines(
         query = query.where(models.StatementLine.statement_id.in_(statement_ids))
 
     updated = 0
-    for line, statement in db.execute(query).all():
-        category, _ = categorize(
-            db,
-            bank_code=statement.bank_code,
-            card_last4=line.card_last4,
-            merchant_normalized=line.merchant_normalized,
-        )
+    for line, _statement in db.execute(query).all():
+        rule = find_best_rule(active_rules, line.merchant_normalized)
+        category = rule.category_name if rule else "Uncategorized"
+        if rule:
+            ensure_category(db, rule.category_name)
         if line.category != category:
             line.category = category
             updated += 1
