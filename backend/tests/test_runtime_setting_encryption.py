@@ -41,6 +41,7 @@ def test_secret_value_roundtrip_with_encryption_key(monkeypatch: pytest.MonkeyPa
 
 def test_secret_value_requires_encryption_key_in_production(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CCS_PLATFORM_ENVIRONMENT", "production")
+    monkeypatch.setenv("CCS_PLATFORM_SESSION_SECRET_KEY", "test-secret-key-long-enough-for-production-x")
     monkeypatch.delenv("CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY", raising=False)
     get_settings.cache_clear()
     secret_codec._fernet_for_settings.cache_clear()  # type: ignore[attr-defined]

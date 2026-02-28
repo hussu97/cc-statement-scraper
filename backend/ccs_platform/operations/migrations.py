@@ -51,8 +51,8 @@ def run_migration_preflight(
     database_url: str | None = None,
     check_database_state: bool = True,
 ) -> dict[str, Any]:
-    alembic_ini = ROOT_DIR / "alembic.ini"
-    versions_dir = ROOT_DIR / "alembic" / "versions"
+    alembic_ini = ROOT_DIR / "backend" / "alembic.ini"
+    versions_dir = ROOT_DIR / "backend" / "alembic" / "versions"
 
     config = Config(str(alembic_ini))
     target_database_url = (database_url or settings.resolved_database_url()).strip()
