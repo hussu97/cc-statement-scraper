@@ -200,28 +200,21 @@ Render's persistent disks are a paid feature. GCS provides 5 GB free and works o
 
 ### 1.5 Run database migrations
 
-Migrations must run before the app serves traffic. Do this from the Render **Shell** tab on the API service:
+Render's Shell tab is a paid feature. Instead, use the **Pre-Deploy Command** — available on all tiers including free — which runs the migration automatically before every deploy.
 
 1. In the Render dashboard, open the `ccs-api` service.
-2. Click the **Shell** tab (available once the service has deployed at least once).
-3. Run:
+2. Go to **Settings → Build & Deploy → Pre-Deploy Command**.
+3. Enter:
 
    ```bash
-   cd /app
-   alembic upgrade head
+   cd /app && alembic upgrade head
    ```
 
-   Expected output ends with something like:
-   ```
-   INFO  Running upgrade 20260226_000006 -> 20260228_000007, Drop dead CategoryRule columns
-   ```
+4. Click **Save Changes**, then trigger a deploy (**Manual Deploy → Deploy latest commit**).
 
-4. Restart both services after the migration completes (Render dashboard → **Manual Deploy → Deploy latest commit**, or the **Restart** button).
+Render runs the pre-deploy command in a temporary instance before switching traffic to the new version. If the migration fails, the deploy is aborted and the old version keeps serving — so it's safe to leave this in place permanently.
 
-> **Tip:** You can also set `alembic upgrade head` as a **pre-deploy command** in Render so migrations always run before traffic switches to the new version. Under the service settings → **Build & Deploy → Pre-Deploy Command**, enter:
-> ```bash
-> cd /app && alembic upgrade head
-> ```
+> **First deploy:** The pre-deploy command runs on every deploy including the first one, so no manual migration step is needed.
 
 ---
 
