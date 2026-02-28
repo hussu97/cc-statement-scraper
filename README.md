@@ -218,20 +218,9 @@ In **development** (SQLite), run manually:
 cd backend && alembic upgrade head
 ```
 
-Or run the helper:
+For Postgres, set `CCS_PLATFORM_DATABASE_URL` and run the same command.
 
 ```bash
-CCS_PLATFORM_DATABASE_URL=postgresql+psycopg://... ./backend/scripts/migrate_db.sh
-
-# Postgres validation (migrations + smoke + Postgres pytest)
-CCS_PLATFORM_DATABASE_URL=postgresql+psycopg://... ./backend/scripts/validate_postgres.sh
-```
-
-To re-encrypt stored secret runtime settings after setting/rotating `CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY`:
-
-```bash
-PYTHONPATH=backend python backend/scripts/reencrypt_runtime_secrets.py
-
 # Rotation drill from old key to new key
 CCS_PLATFORM_RUNTIME_SETTINGS_OLD_ENCRYPTION_KEY=... \
 CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY=... \
@@ -247,10 +236,6 @@ PYTHONPATH=backend python backend/scripts/backup_restore_drill.py --label monthl
 # Retention policy dry-run/apply
 PYTHONPATH=backend python backend/scripts/enforce_retention.py
 PYTHONPATH=backend python backend/scripts/enforce_retention.py --apply
-
-# Load/perf budgets and SLO policy evaluation
-PYTHONPATH=backend python backend/scripts/load_test_api.py --base-url http://127.0.0.1:8040 --duration 60 --concurrency 12
-PYTHONPATH=backend python backend/scripts/evaluate_slo.py --metrics-url http://127.0.0.1:8040/api/v1/metrics
 ```
 
 ## Notes
