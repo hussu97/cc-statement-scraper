@@ -88,9 +88,8 @@
 **Fix:** Generate `requirements.txt` from `pyproject.toml` via `pip-compile` (pip-tools) and check the lock file in. Remove hand-maintained duplication.
 
 ### 3.6 No `conftest.py` — fixtures recreated manually `MEDIUM`
-**File:** `tests/`
-**Issue:** Each test file manually sets up database sessions, settings, and test data. Shared setup belongs in `conftest.py` fixtures.
-**Fix:** Create `tests/conftest.py` with shared `db_session`, `settings`, and sample-data fixtures.
+**Status:** ✅ Resolved — `backend/tests/conftest.py` created with shared `sqlite_engine`, `db_session`, `sample_profile`, `sample_banks`, and `dev_settings` fixtures.
+**File:** `backend/tests/conftest.py`
 
 ### 3.7 `_UTCAwareDateTime` not used `MEDIUM`
 **Issue:** `CLAUDE.md` rule 8 mandates `_UTCAwareDateTime` for all datetime columns. The TypeDecorator exists in `db/models.py` but is not applied to the model fields.
@@ -111,21 +110,16 @@
 ## 4. Frontend
 
 ### 4.1 Zero tests, no test framework configured `HIGH`
-**Issue:** Violates `CLAUDE.md` rule 11. The `frontend/` directory has no test runner configured (`vitest`, `jest`, or equivalent). There are no test files.
-**Fix:**
-1. Add `vitest` + `@testing-library/react` as dev dependencies.
-2. Configure `vite.config.ts` with a `test` block.
-3. Write tests for pure utilities: `formatAmount`, `useDebouncedValue`, `isAbortError`, date helpers.
+**Status:** ✅ Resolved — Vitest 3 + `@testing-library/react` + `jsdom` configured; `vite.config.ts` updated with `test` block; `npm test` script added; 25 unit tests passing across `format.test.ts`, `errors.test.ts`, `useDebounce.test.ts`, `datetime.test.ts`.
+**Files:** `frontend/vite.config.ts`, `frontend/src/lib/__tests__/`, `frontend/src/utils/__tests__/`
 
 ### 4.2 No ESLint / Prettier `MEDIUM`
 **Issue:** No linting or formatting enforced. Code style is inconsistent and type-safety gaps go undetected at save time.
 **Fix:** Add `eslint`, `@typescript-eslint/eslint-plugin`, `eslint-plugin-react-hooks`, and `prettier`. Add `lint` and `format` npm scripts. Run `eslint --max-warnings 0` in CI.
 
 ### 4.3 Utility duplication `MEDIUM`
-- `useDebouncedValue` — defined in 3 files.
-- `formatAmount` — defined in 2 files.
-- `isAbortError` — defined in 2 files.
-**Fix:** Consolidate each into `src/lib/` (`useDebounce.ts`, `format.ts`, `errors.ts`) and update all imports.
+**Status:** ✅ Resolved (partial — completed as part of S3/4.1) — `useDebouncedValue`, `formatAmount`, and `isAbortError` consolidated into `src/lib/useDebounce.ts`, `src/lib/format.ts`, and `src/lib/errors.ts`; `DashboardPage`, `RawLinesPage`, and `RuntimeSettingsPage` updated to import from lib.
+**Files:** `frontend/src/lib/`
 
 ### 4.4 Pervasive `any` typing `MEDIUM`
 **Issue:** The TypeScript type system is effectively bypassed across much of the frontend. Runtime type errors surface only in the UI.
@@ -169,7 +163,8 @@
 **Fix:** Add `edge_public` network to the `worker` service, or change the `app_internal` network to not be internal and put only the reverse proxy on `edge_public`.
 
 ### 5.3 No `npm test` in CI `HIGH`
-**Issue:** The CI pipeline has no step to run frontend tests (because none exist yet). After fixing 4.1, add a CI step to run `npm test -- --run` in `frontend/`.
+**Status:** ✅ Resolved — `Run frontend tests` step added to `frontend-gates` job; runs `npm test -- --run` before the build on every PR and push.
+**File:** `.github/workflows/release-cicd.yml`
 
 ### 5.4 Stale `tmp_ci_migration.db` artifact at repo root `LOW`
 **Issue:** `tmp_ci_migration.db` is a CI artifact that should be ephemeral but is committed/left at the repo root.
