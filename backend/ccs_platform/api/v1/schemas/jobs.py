@@ -54,7 +54,7 @@ class ScrapeJobRequest(BaseModel):
     months: list[str] = Field(default_factory=list)
     month_from: str | None = None
     month_to: str | None = None
-    download: bool = False
+    download: bool = True
     headless: bool = True
     login_timeout_minutes: int = Field(default=20, ge=5, le=60)
 

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import fnmatch
+import logging
 from pathlib import Path
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+
+_log = logging.getLogger(__name__)
 
 from ccs_platform.adapters.banks.browser.downloader import BrowserDownloadError, run_end_to_end_downloads
 from ccs_platform.core.bank_config import load_app_config
@@ -109,6 +112,8 @@ def handle_scrape_job(
     download = bool(payload.get("download", True))
     headless = bool(payload.get("headless", False))
     login_timeout_minutes = int(payload.get("login_timeout_minutes", 20))
+
+    _log.info("Scrape job %d starting | banks=%s months=%s download=%s headless=%s", job.id, banks, months, download, headless)
 
     available_banks = get_enabled_banks(db, banks if banks else None, profile_id=job.profile_id)
     if banks:
@@ -368,6 +373,7 @@ def handle_scrape_job(
                 db.commit()
 
                 if download:
+                    _log.info("%s month=%s: launching browser download (headless=%s timeout=%dm)", bank_code, month, headless, login_timeout_minutes)
                     run_end_to_end_downloads(
                         app_config=scoped_cfg,
                         scheduled=False,
@@ -375,6 +381,9 @@ def handle_scrape_job(
                         headless=headless,
                         credentials=credentials,
                     )
+                    _log.info("%s month=%s: browser download finished", bank_code, month)
+                else:
+                    _log.info("%s month=%s: download=False, skipping browser (looking for existing PDF)", bank_code, month)
 
                 latest_pdf, diagnostic = _resolve_downloaded_pdf_from_diagnostics(
                     bank_cfg=bank_cfg_copy[bank_code],
