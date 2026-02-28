@@ -68,14 +68,12 @@ def _seed(db) -> int:
             models.Bank(
                 code="FAB",
                 name="FAB",
-                supports_historical_month_selection=False,
                 supports_multi_month=False,
                 supports_headless=True,
             ),
             models.Bank(
                 code="ENBD",
                 name="ENBD",
-                supports_historical_month_selection=True,
                 supports_multi_month=True,
                 supports_headless=True,
             ),

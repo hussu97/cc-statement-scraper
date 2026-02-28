@@ -398,7 +398,6 @@ export function JobsPage() {
                 }}
               />
               <span>{bank.code}</span>
-              <span className="badge">hist: {bank.supports_historical_month_selection ? 'yes' : 'no'}</span>
             </label>
           ))}
         </div>
