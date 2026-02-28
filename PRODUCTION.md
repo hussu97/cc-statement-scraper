@@ -284,7 +284,7 @@ Open `https://ccs-xyz.vercel.app` in a browser — you should see the login page
 The service auto-deploys when you push to `main`. Migrations run automatically at startup — nothing extra to do.
 
 **Check worker logs:**
-Render dashboard → `ccs-worker` → **Logs** tab. Scrape job output (Playwright, bank login steps) appears here.
+Render dashboard → `ccs-api` → **Logs** tab. Scrape job output (Playwright, bank login steps) appears here alongside API logs since the worker runs embedded in the same process.
 
 **Monitor GCS usage:**
 The GCS free tier covers 5 GB. To check current usage, go to GCP Console → Cloud Storage → your bucket → **Monitoring** tab. If you exceed 5 GB, GCS charges ~$0.02/GB/month for additional storage.
