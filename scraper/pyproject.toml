@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=70"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "ccs-scraper"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "playwright>=1.50",
+    "httpx>=0.27",
+    "typer>=0.12",
+    "PyYAML>=6.0",
+    "python-dotenv>=1.0",
+]
+
+[project.scripts]
+ccs-scraper = "scraper.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["scraper*"]
