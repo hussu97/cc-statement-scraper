@@ -45,6 +45,7 @@ class PlatformSettings(BaseSettings):
     job_retry_max_delay_seconds: int = 900
     job_heartbeat_interval_seconds: int = 15
     job_heartbeat_timeout_seconds: int = 1800
+    job_max_duration_seconds: int = 1800
     queue_backlog_slo_default: int = 100
     queue_backlog_slo_scrape: int = 20
     queue_oldest_age_slo_seconds: int = 900
