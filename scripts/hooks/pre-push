@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+# Pre-push hook — full CI mirror (runs on git push)
+# Catches failures before wasting GitHub Actions minutes.
+# Skip with: git push --no-verify
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33d'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+pass() { echo -e "${GREEN}✓${NC} $1"; }
+fail() { echo -e "${RED}✗${NC} $1"; }
+info() { echo -e "${YELLOW}→${NC} $1"; }
+section() { echo -e "\n${BLUE}══ $1 ══${NC}"; }
+
+ERRORS=0
+
+# Activate virtualenv if present
+if [ -f "backend/.venv/bin/activate" ]; then
+  # shellcheck disable=SC1091
+  source backend/.venv/bin/activate
+fi
+
+# Resolve python binary
+PYTHON="$(command -v python3 || command -v python || true)"
+if [ -z "$PYTHON" ]; then
+  echo "  python not found in PATH — skipping Python checks"
+fi
+
+# ---------------------------------------------------------------------------
+section "BACKEND"
+# ---------------------------------------------------------------------------
+
+# 1. Syntax check
+if [ -n "$PYTHON" ]; then
+  info "Python syntax check..."
+  if "$PYTHON" -m compileall -q backend/ccs_platform backend/scripts 2>&1; then
+    pass "Syntax OK"
+  else
+    fail "Syntax errors"
+    ERRORS=$((ERRORS + 1))
+  fi
+fi
+
+# 2. Backend tests
+if [ -n "$PYTHON" ]; then
+  info "Backend tests (pytest)..."
+  if cd backend && "$PYTHON" -m pytest -q 2>&1; then
+    pass "Backend tests passed"
+  else
+    fail "Backend tests failed"
+    ERRORS=$((ERRORS + 1))
+  fi
+  cd "$REPO_ROOT"
+fi
+
+# 3. Bandit SAST
+info "Bandit SAST..."
+BANDIT="$(command -v bandit || true)"
+if [ -n "$BANDIT" ]; then
+  if "$BANDIT" -q -r backend/ccs_platform -x backend/tests -ll -ii 2>&1; then
+    pass "Bandit OK"
+  else
+    fail "Bandit found security issues"
+    ERRORS=$((ERRORS + 1))
+  fi
+else
+  echo "  bandit not found — skipping (pip install bandit)"
+fi
+
+# ---------------------------------------------------------------------------
+section "FRONTEND"
+# ---------------------------------------------------------------------------
+
+# 4. Frontend lint
+info "ESLint..."
+if cd frontend && npm run lint --silent 2>&1; then
+  pass "ESLint OK"
+else
+  fail "ESLint errors"
+  ERRORS=$((ERRORS + 1))
+fi
+cd "$REPO_ROOT"
+
+# 5. Frontend tests
+info "Frontend tests (Vitest)..."
+if cd frontend && npm test -- --run 2>&1; then
+  pass "Frontend tests passed"
+else
+  fail "Frontend tests failed"
+  ERRORS=$((ERRORS + 1))
+fi
+cd "$REPO_ROOT"
+
+# 6. Frontend build (catches TypeScript errors)
+info "Frontend build (tsc + vite)..."
+if cd frontend && npm run build 2>&1; then
+  pass "Frontend build OK"
+else
+  fail "Frontend build failed"
+  ERRORS=$((ERRORS + 1))
+fi
+cd "$REPO_ROOT"
+
+# ---------------------------------------------------------------------------
+echo ""
+if [ "$ERRORS" -gt 0 ]; then
+  echo -e "${RED}Pre-push failed ($ERRORS check(s)). Fix the issues above before pushing.${NC}"
+  echo -e "${RED}To bypass: git push --no-verify (only when you know what you're doing)${NC}"
+  exit 1
+else
+  echo -e "${GREEN}All checks passed — safe to push.${NC}"
+fi
