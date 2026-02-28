@@ -49,6 +49,11 @@ Optional but recommended:
 | `CCS_PLATFORM_RUNTIME_SETTINGS_REQUIRE_ENCRYPTION` | `true` | Disable only in dev |
 | `CCS_PLATFORM_RUNTIME_SETTINGS_SEED_SOURCE` | `env_file_then_env` | Seeds DB from `.env` on first boot |
 | `CCS_PLATFORM_JOB_MAX_DURATION_SECONDS` | `1800` | Wall-clock timeout per job; job is auto-cancelled after this many seconds. Set to `0` to disable. |
+| `CCS_PLATFORM_BROWSER_PROXY_URL` | — | HTTP or SOCKS5 proxy for all browser traffic — route through a UAE IP to avoid fraud flags. Format: `socks5://host:port` or `http://user:pass@host:port`. Leave blank in dev. |
+| `CCS_PLATFORM_BROWSER_GEO_LATITUDE` | `25.2048` | Latitude reported by the browser's Geolocation API (central Dubai). |
+| `CCS_PLATFORM_BROWSER_GEO_LONGITUDE` | `55.2708` | Longitude reported by the browser's Geolocation API (central Dubai). |
+| `CCS_PLATFORM_BROWSER_TIMEZONE_ID` | `Asia/Dubai` | IANA timezone the browser advertises (affects `Intl` API and `Date` behaviour). |
+| `CCS_PLATFORM_BROWSER_LOCALE` | `en-AE` | Browser locale — sets `navigator.language` and the `Accept-Language` request header. |
 | `CCS_PLATFORM_RETENTION_JOBS_DAYS` | `90` | — |
 | `CCS_PLATFORM_RETENTION_EXPORTS_DAYS` | `90` | — |
 | `CCS_PLATFORM_RETENTION_AUDIT_EVENTS_DAYS` | `365` | — |

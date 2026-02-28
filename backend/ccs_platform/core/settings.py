@@ -46,6 +46,20 @@ class PlatformSettings(BaseSettings):
     job_heartbeat_interval_seconds: int = 15
     job_heartbeat_timeout_seconds: int = 1800
     job_max_duration_seconds: int = 1800
+
+    # Browser / scraper geo-spoofing
+    # Proxy for browser traffic — format: http://user:pass@host:port or socks5://host:port
+    # Leave blank to use the server's direct connection (no proxy).
+    browser_proxy_url: str | None = None
+    # Geolocation injected into every browser context (decimal degrees).
+    # Defaults to central Dubai so the browser reports a UAE location if the
+    # bank checks the Geolocation API.
+    browser_geo_latitude: float = 25.2048
+    browser_geo_longitude: float = 55.2708
+    # IANA timezone reported to the browser. Defaults to Asia/Dubai.
+    browser_timezone_id: str = "Asia/Dubai"
+    # Browser locale (affects Accept-Language header and navigator.language).
+    browser_locale: str = "en-AE"
     queue_backlog_slo_default: int = 100
     queue_backlog_slo_scrape: int = 20
     queue_oldest_age_slo_seconds: int = 900

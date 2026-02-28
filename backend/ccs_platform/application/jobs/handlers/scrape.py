@@ -199,6 +199,11 @@ def handle_scrape_job(
                     login_timeout_minutes=login_timeout_minutes,
                     headless=headless,
                     credentials=credentials,
+                    proxy_url=ctx.settings.browser_proxy_url,
+                    geo_latitude=ctx.settings.browser_geo_latitude,
+                    geo_longitude=ctx.settings.browser_geo_longitude,
+                    timezone_id=ctx.settings.browser_timezone_id,
+                    locale=ctx.settings.browser_locale,
                 )
 
                 diagnostics = bank_cfg_copy[bank_code].get("download_diagnostics") or {}
@@ -380,6 +385,11 @@ def handle_scrape_job(
                         login_timeout_minutes=login_timeout_minutes,
                         headless=headless,
                         credentials=credentials,
+                        proxy_url=ctx.settings.browser_proxy_url,
+                        geo_latitude=ctx.settings.browser_geo_latitude,
+                        geo_longitude=ctx.settings.browser_geo_longitude,
+                        timezone_id=ctx.settings.browser_timezone_id,
+                        locale=ctx.settings.browser_locale,
                     )
                     _log.info("%s month=%s: browser download finished", bank_code, month)
                 else:
