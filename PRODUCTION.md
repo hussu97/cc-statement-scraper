@@ -353,13 +353,23 @@ gcloud artifacts repositories create ccs-platform \
 gcloud auth configure-docker europe-west1-docker.pkg.dev
 ```
 
-### 2.3 Build and push image
+### 2.3 Build and push images
+
+Two images are built — a slim API image (no Playwright) and a full worker image (with Playwright).
 
 ```bash
-IMAGE=europe-west1-docker.pkg.dev/PROJECT_ID/ccs-platform/app:$(git rev-parse --short HEAD)
+SHA=$(git rev-parse --short HEAD)
+REPO=europe-west1-docker.pkg.dev/PROJECT_ID/ccs-platform
 
-docker build -f deploy/Dockerfile.app -t "$IMAGE" .
-docker push "$IMAGE"
+# Slim image for the API service (~500 MB smaller — no browser runtime)
+IMAGE_API="$REPO/api:$SHA"
+docker build -f deploy/Dockerfile.api -t "$IMAGE_API" .
+docker push "$IMAGE_API"
+
+# Full image for the scraping worker (includes Playwright + Chromium)
+IMAGE_WORKER="$REPO/worker:$SHA"
+docker build -f deploy/Dockerfile.app -t "$IMAGE_WORKER" .
+docker push "$IMAGE_WORKER"
 ```
 
 ### 2.4 Cloud SQL (PostgreSQL 16)
@@ -421,7 +431,7 @@ gcloud secrets add-iam-policy-binding ccs-encryption-key \
 
 ```bash
 gcloud run deploy ccs-api \
-  --image="$IMAGE" \
+  --image="$IMAGE_API" \
   --region=europe-west1 \
   --platform=managed \
   --allow-unauthenticated \
@@ -444,7 +454,7 @@ gcloud run deploy ccs-api \
 
 ```bash
 gcloud run deploy ccs-worker \
-  --image="$IMAGE" \
+  --image="$IMAGE_WORKER" \
   --region=europe-west1 \
   --platform=managed \
   --no-allow-unauthenticated \
@@ -466,7 +476,7 @@ gcloud run deploy ccs-worker \
 
 ```bash
 gcloud run jobs create ccs-migrate \
-  --image="$IMAGE" \
+  --image="$IMAGE_API" \
   --region=europe-west1 \
   --add-cloudsql-instances=PROJECT_ID:europe-west1:ccs-postgres \
   --set-env-vars="CCS_PLATFORM_DATABASE_URL=postgresql+psycopg://ccs:STRONG_PASSWORD@/ccs?host=/cloudsql/PROJECT_ID:europe-west1:ccs-postgres" \

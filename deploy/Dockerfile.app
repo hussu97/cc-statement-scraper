@@ -1,3 +1,11 @@
+# Dockerfile.app — combined image with Playwright for the scraping worker.
+# Also used for Render free-tier where the worker runs embedded in the API process
+# (CCS_PLATFORM_EMBEDDED_WORKER=true), since the API process must be able to
+# launch a browser in that deployment model.
+#
+# For a docker-compose deployment where the API and worker are separate containers,
+# use Dockerfile.api for the api service (no Playwright, ~500 MB smaller).
+
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
