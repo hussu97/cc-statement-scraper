@@ -28,11 +28,15 @@ class JobStatus(str, enum.Enum):
 
 
 class JobType(str, enum.Enum):
+    # DEPRECATED: no handler exists; runner raises ValueError if submitted.
+    # Cannot be dropped from PostgreSQL enum — kept for DB compatibility only.
     SCRAPE = "scrape"
     UPLOAD = "upload"
     RECLASSIFY = "reclassify"
     EXPORT_WORKBOOK = "export_workbook"
     PARSER_VALIDATE = "parser_validate"
+    # DEPRECATED: no handler exists; runner raises ValueError if submitted.
+    # Cannot be dropped from PostgreSQL enum — kept for DB compatibility only.
     BANK_CONNECTION_TEST = "bank_connection_test"
     REPARSE_STATEMENT = "reparse_statement"
 
