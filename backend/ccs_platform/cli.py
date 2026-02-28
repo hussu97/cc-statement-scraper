@@ -20,5 +20,20 @@ def run_worker_cmd() -> None:
     run_worker()
 
 
+@cli.command("hash-password")
+def hash_password(
+    password: str = typer.Option(..., prompt=True, hide_input=True, confirmation_prompt=True),
+) -> None:
+    """Generate a bcrypt hash for a login password.
+
+    Paste the output into CCS_PLATFORM_LOGIN_HASH_<NAME> in your .env file.
+    The plaintext password is never stored or logged.
+    """
+    import bcrypt
+
+    hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=12)).decode()
+    typer.echo(hashed)
+
+
 if __name__ == "__main__":
     cli()
