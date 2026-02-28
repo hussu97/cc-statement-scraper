@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from functools import lru_cache
 import logging
 from pathlib import Path
 from typing import Generator
@@ -17,6 +18,8 @@ from ccs_platform.db.base import Base
 # alembic.ini sits two levels above this file: backend/alembic.ini (dev)
 # or /app/alembic.ini (Docker container).
 _ALEMBIC_INI = Path(__file__).resolve().parents[2] / "alembic.ini"
+
+logger = logging.getLogger(__name__)
 
 
 def _engine_kwargs(database_url: str) -> dict:
@@ -48,19 +51,24 @@ def _ensure_sqlite_parent_dir(database_url: str) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
 
-settings = get_settings()
-database_url = settings.resolved_database_url()
-_ensure_sqlite_parent_dir(database_url)
-engine = create_engine(database_url, **_engine_kwargs(database_url))
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
-logger = logging.getLogger(__name__)
+@lru_cache(maxsize=1)
+def get_engine():
+    settings = get_settings()
+    url = settings.resolved_database_url()
+    _ensure_sqlite_parent_dir(url)
+    _engine = create_engine(url, **_engine_kwargs(url))
+    if settings.database_url != url:
+        logger.info("Normalized database URL driver to psycopg for Postgres backend.")
+    return _engine
 
-if settings.database_url != database_url:
-    logger.info("Normalized database URL driver to psycopg for Postgres backend.")
+
+@lru_cache(maxsize=1)
+def get_session_local():
+    return sessionmaker(bind=get_engine(), autoflush=False, autocommit=False, future=True)
 
 
 def get_db() -> Generator[Session, None, None]:
-    db = SessionLocal()
+    db = get_session_local()()
     try:
         yield db
     except Exception:
@@ -72,7 +80,7 @@ def get_db() -> Generator[Session, None, None]:
 
 @contextmanager
 def db_session() -> Generator[Session, None, None]:
-    db = SessionLocal()
+    db = get_session_local()()
     try:
         yield db
         db.commit()
@@ -86,21 +94,24 @@ def db_session() -> Generator[Session, None, None]:
 def init_db() -> None:
     from ccs_platform.db import models  # noqa: F401
 
+    _engine = get_engine()
+    settings = get_settings()
+
     # For PostgreSQL (production) run Alembic migrations automatically on startup.
     # This means no manual migration step or paid Render feature is needed —
     # the app always migrates itself to head before serving traffic.
     #
     # SQLite (development) keeps the existing create_all + legacy-reset path below
     # because dev DBs are often not Alembic-stamped.
-    if engine.dialect.name != "sqlite":
+    if _engine.dialect.name != "sqlite":
         cfg = AlembicConfig(str(_ALEMBIC_INI))
         alembic_command.upgrade(cfg, "head")
         return
 
     # Legacy local SQLite files from pre-profile builds are optionally reset in-place.
     # In production this is disabled by default to avoid destructive startup behavior.
-    if engine.dialect.name == "sqlite":
-        inspector = inspect(engine)
+    if _engine.dialect.name == "sqlite":
+        inspector = inspect(_engine)
         required_columns = {
             "profiles": {"id", "key", "name", "is_default"},
             "runtime_settings": {"profile_id"},
@@ -137,7 +148,7 @@ def init_db() -> None:
                     "SQLite schema mismatch detected; applying destructive legacy reset because "
                     "CCS_PLATFORM_ALLOW_LEGACY_SQLITE_RESET is enabled."
                 )
-                Base.metadata.drop_all(bind=engine)
+                Base.metadata.drop_all(bind=_engine)
             else:
                 raise RuntimeError(
                     "SQLite schema mismatch detected. Refusing destructive reset. "
@@ -145,4 +156,4 @@ def init_db() -> None:
                     "CCS_PLATFORM_ALLOW_LEGACY_SQLITE_RESET=true for an explicit one-time reset."
                 )
 
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=_engine)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+import os
 from pathlib import Path
 
 from pydantic import Field
@@ -8,10 +9,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
-
-# Set to True by the test conftest so that get_settings() never reads the
-# backend/.env file during pytest runs regardless of CCS_PLATFORM_ENVIRONMENT.
-_SUPPRESS_ENV_FILE: bool = False
 
 
 class PlatformSettings(BaseSettings):
@@ -77,6 +74,9 @@ class PlatformSettings(BaseSettings):
     runtime_settings_seed_source: str | None = None
     runtime_settings_env_file: Path | None = ROOT_DIR / "backend" / ".env"
     email_ingestion_enabled: bool = False
+
+    login_hash_hussain: str = ""
+    login_hash_tejasvie: str = ""
 
     def model_post_init(self, __context: object) -> None:
         if self.is_production():
@@ -148,16 +148,16 @@ class PlatformSettings(BaseSettings):
 
 
 def _resolve_env_file() -> Path | None:
-    """Return the .env file path to load, or None if none exists.
+    """Return the .env file path to load, or None if none should be loaded.
 
     Locally the file lives at backend/.env (one level below the repo root).
     In Docker the backend directory contents are copied to /app directly, so
     there is no .env file at runtime — env vars are injected by the platform.
 
-    During pytest runs conftest.py sets _SUPPRESS_ENV_FILE=True so that local
-    secrets never leak into tests that use monkeypatch to control env values.
+    During pytest runs PYTEST_CURRENT_TEST is set automatically by pytest, so
+    the .env file is suppressed without any manual conftest hackery.
     """
-    if _SUPPRESS_ENV_FILE:
+    if os.environ.get("PYTEST_CURRENT_TEST"):
         return None
     candidate = ROOT_DIR / "backend" / ".env"
     return candidate if candidate.exists() else None
@@ -166,18 +166,21 @@ def _resolve_env_file() -> Path | None:
 @lru_cache(maxsize=1)
 def get_settings() -> PlatformSettings:
     env_file = _resolve_env_file()
-
-    # Also load the .env file into process env so that code that reads
-    # values via os.getenv() (e.g. auth/service.py login-hash resolution)
-    # sees the same values as pydantic-settings.  override=False means
-    # existing shell exports always win over the file.
-    if env_file is not None:
-        from dotenv import load_dotenv
-        load_dotenv(env_file, override=False)
-
     settings = PlatformSettings(_env_file=env_file, _env_file_encoding="utf-8")
     settings.local_storage_dir.mkdir(parents=True, exist_ok=True)
     settings.uploads_temp_dir.mkdir(parents=True, exist_ok=True)
     settings.logs_dir.mkdir(parents=True, exist_ok=True)
     settings.backups_dir.mkdir(parents=True, exist_ok=True)
     return settings
+
+
+def clear_settings_caches() -> None:
+    """Clear all LRU caches related to settings. Used by tests."""
+    get_settings.cache_clear()
+    from ccs_platform.db.session import get_engine, get_session_local
+    get_engine.cache_clear()
+    get_session_local.cache_clear()
+    from ccs_platform.core.secret_codec import _fernet_for_settings
+    _fernet_for_settings.cache_clear()
+    from ccs_platform.application.auth.service import _build_accounts
+    _build_accounts.cache_clear()

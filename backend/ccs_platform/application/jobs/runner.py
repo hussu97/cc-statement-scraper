@@ -16,7 +16,7 @@ from ccs_platform.core.metrics import METRICS
 from ccs_platform.core.runtime_settings import apply_runtime_settings_to_process_env, get_runtime_settings_as_dict
 from ccs_platform.db import models
 from ccs_platform.core.settings import PlatformSettings
-from ccs_platform.db.session import SessionLocal
+from ccs_platform.db.session import get_session_local
 from ccs_platform.adapters.storage import StorageAdapter
 
 from ccs_platform.application.jobs.handlers.context import JobContext
@@ -69,7 +69,7 @@ class JobRunner:
 
         while not stop_event.wait(interval_seconds):
             try:
-                with SessionLocal() as hb_db:
+                with get_session_local()() as hb_db:
                     row = hb_db.get(models.Job, job_id)
                     if row is None:
                         return
@@ -104,7 +104,7 @@ class JobRunner:
         return True
 
     def _run_job(self, job_id: int) -> None:
-        with SessionLocal() as db:
+        with get_session_local()() as db:
             job = db.get(models.Job, job_id)
             if not job:
                 METRICS.record_job_event("missing")

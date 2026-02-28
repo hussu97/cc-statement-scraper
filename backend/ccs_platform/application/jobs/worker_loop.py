@@ -9,7 +9,7 @@ from sqlalchemy import or_, select
 from ccs_platform.db import models
 from ccs_platform.core.metrics import METRICS
 from ccs_platform.core.settings import PlatformSettings
-from ccs_platform.db.session import SessionLocal
+from ccs_platform.db.session import get_session_local
 from ccs_platform.application.jobs.runner import JobRunner
 from ccs_platform.application.jobs.service import create_or_get_job
 from ccs_platform.application.jobs.scheduler import compute_next_run
@@ -32,7 +32,7 @@ class WorkerLoop:
     def _cleanup_in_flight(self) -> None:
         if not self._in_flight:
             return
-        with SessionLocal() as db:
+        with get_session_local()() as db:
             rows = db.execute(
                 select(models.Job.id, models.Job.status).where(models.Job.id.in_(self._in_flight))
             ).all()
@@ -129,7 +129,7 @@ class WorkerLoop:
         now = datetime.now(UTC)
         stale_before = now - timedelta(seconds=timeout_seconds)
 
-        with SessionLocal() as db:
+        with get_session_local()() as db:
             query = select(models.Job).where(models.Job.status == models.JobStatus.RUNNING)
             query = self._scope_job_query_to_worker_queues(query)
             query = query.where(
@@ -186,7 +186,7 @@ class WorkerLoop:
         if available_slots <= 0:
             return
 
-        with SessionLocal() as db:
+        with get_session_local()() as db:
             claimed_ids = self._claim_next_queued_jobs(db, limit=available_slots)
 
         for job_id in claimed_ids:
@@ -198,7 +198,7 @@ class WorkerLoop:
 
     def _trigger_due_schedules(self) -> None:
         now = datetime.now(UTC)
-        with SessionLocal() as db:
+        with get_session_local()() as db:
             schedules = db.execute(
                 select(models.Schedule)
                 .where(models.Schedule.status == models.ScheduleStatus.ACTIVE)
@@ -228,7 +228,7 @@ class WorkerLoop:
                 logger.info("Triggered due schedules | count=%s", len(schedules))
 
     def ensure_schedule_next_runs(self) -> None:
-        with SessionLocal() as db:
+        with get_session_local()() as db:
             schedules = db.execute(select(models.Schedule)).scalars().all()
             changed = False
             now = datetime.now(UTC)

@@ -10,7 +10,7 @@ from ccs_platform.api.deps import AuthenticatedUserContext, get_authenticated_us
 from ccs_platform.core.metrics import METRICS
 from ccs_platform.core.settings import PlatformSettings
 from ccs_platform.db import models
-from ccs_platform.db.session import SessionLocal, engine
+from ccs_platform.db.session import get_engine, get_session_local
 
 
 router = APIRouter(tags=["system"])
@@ -33,7 +33,7 @@ def _queue_backlog_snapshot(settings: PlatformSettings) -> dict[str, Any]:
     completed_last_hour: dict[str, dict[str, int]] = {}
     now = datetime.now(UTC)
 
-    with SessionLocal() as db:
+    with get_session_local()() as db:
         rows = db.execute(
             select(models.Job.queue_name, models.Job.status, func.count(models.Job.id))
             .group_by(models.Job.queue_name, models.Job.status)
@@ -135,9 +135,9 @@ def _build_readiness_payload(request: Request) -> dict[str, Any]:
     settings = request.app.state.settings
 
     try:
-        with SessionLocal() as db:
+        with get_session_local()() as db:
             db.execute(text("SELECT 1"))
-        checks["database"] = {"status": "ok", "dialect": engine.dialect.name}
+        checks["database"] = {"status": "ok", "dialect": get_engine().dialect.name}
     except Exception as exc:  # noqa: BLE001
         checks["database"] = {"status": "error", "detail": str(exc)}
 
