@@ -49,17 +49,17 @@ class GraphClient:
             raise RuntimeError("Graph response must be a JSON object")
         return payload
 
-    def _delta_initial_url(self) -> str:
+    def _delta_initial_url(self, *, folder: str) -> str:
         query = urllib_parse.urlencode(
             {
                 "$select": "id,internetMessageId,receivedDateTime,subject,from,hasAttachments",
                 "$top": "50",
             }
         )
-        return f"{GRAPH_BASE}/me/mailFolders/Inbox/messages/delta?{query}"
+        return f"{GRAPH_BASE}/me/mailFolders/{urllib_parse.quote(folder)}/messages/delta?{query}"
 
-    def list_messages_delta(self, *, delta_link: str | None) -> tuple[list[dict[str, Any]], str | None]:
-        next_url = (delta_link or "").strip() or self._delta_initial_url()
+    def list_messages_delta(self, *, delta_link: str | None, folder: str = "Inbox") -> tuple[list[dict[str, Any]], str | None]:
+        next_url = (delta_link or "").strip() or self._delta_initial_url(folder=folder)
         messages: list[dict[str, Any]] = []
         newest_delta_link: str | None = None
 
@@ -150,11 +150,13 @@ def run_ingestion(
     mailbox_by_id = {int(item["id"]): item for item in mailboxes if isinstance(item, dict) and item.get("id") is not None}
     routes_by_mailbox: dict[int, list[dict[str, Any]]] = defaultdict(list)
     for route in routes:
+        raw_mbid = route.get("mailbox_id")
+        if raw_mbid is None:
+            continue
         try:
-            mailbox_id = int(route.get("mailbox_id"))
+            routes_by_mailbox[int(raw_mbid)].append(route)
         except Exception:  # noqa: BLE001
             continue
-        routes_by_mailbox[mailbox_id].append(route)
 
     summary: dict[str, Any] = {
         "provider": "microsoft",
@@ -171,6 +173,9 @@ def run_ingestion(
         "mailbox_errors": [],
     }
 
+    # Folders to scan per mailbox. Well-known Graph folder names.
+    SCAN_FOLDERS = ["Inbox", "DeletedItems", "Archive"]
+
     for mailbox_id, mailbox in mailbox_by_id.items():
         mailbox_routes = sorted(routes_by_mailbox.get(mailbox_id, []), key=lambda row: str(row.get("bank_code") or ""))
         if not mailbox_routes:
@@ -179,7 +184,6 @@ def run_ingestion(
         mailbox_sync_state = mailbox.get("sync_state_json")
         if not isinstance(mailbox_sync_state, dict):
             mailbox_sync_state = {}
-        delta_link = str(mailbox_sync_state.get("microsoft_delta_link") or mailbox_sync_state.get("delta_link") or "").strip()
 
         try:
             oauth = api.oauth_access_token(provider="microsoft", mailbox_id=mailbox_id)
@@ -188,104 +192,120 @@ def run_ingestion(
                 raise RuntimeError("Missing provider access token")
             graph = GraphClient(access_token=access_token)
 
-            try:
-                messages, new_delta_link = graph.list_messages_delta(delta_link=delta_link or None)
-            except RuntimeError as exc:
-                if delta_link and "HTTP 410" in str(exc):
-                    messages, new_delta_link = graph.list_messages_delta(delta_link=None)
+            upload_results = {"uploaded": 0, "duplicate": 0, "ignored": 0, "failed": 0}
+            next_sync_state = dict(mailbox_sync_state)
+
+            for folder in SCAN_FOLDERS:
+                folder_key = f"microsoft_delta_link_{folder.lower()}"
+                # Back-compat: seed Inbox from the old single-key delta link.
+                if folder == "Inbox":
+                    delta_link = str(
+                        mailbox_sync_state.get(folder_key)
+                        or mailbox_sync_state.get("microsoft_delta_link")
+                        or mailbox_sync_state.get("delta_link")
+                        or ""
+                    ).strip()
                 else:
-                    raise
+                    delta_link = str(mailbox_sync_state.get(folder_key) or "").strip()
 
-            summary["messages_scanned"] += len(messages)
-            upload_results = {
-                "uploaded": 0,
-                "duplicate": 0,
-                "ignored": 0,
-                "failed": 0,
-            }
-
-            for message in messages:
-                message_id = str(message.get("id") or "").strip()
-                if not message_id:
-                    continue
-                sender = _sender_from_message(message)
-                subject = str(message.get("subject") or "")
-                internet_message_id = str(message.get("internetMessageId") or "").strip() or None
-                received_at = str(message.get("receivedDateTime") or "").strip() or None
-
-                attachments = graph.list_pdf_attachments(message_id=message_id)
-                summary["attachments_seen"] += len(attachments)
-
-                for attachment in attachments:
-                    attachment_id = str(attachment.get("id") or "").strip()
-                    filename = str(attachment.get("name") or "statement.pdf").strip() or "statement.pdf"
-                    if not attachment_id:
-                        continue
-                    content = graph.get_attachment_bytes(
-                        message_id=message_id,
-                        attachment_id=attachment_id,
-                        attachment_stub=attachment,
+                try:
+                    messages, new_delta_link = graph.list_messages_delta(
+                        delta_link=delta_link or None,
+                        folder=folder,
                     )
-                    if not content:
+                except RuntimeError as exc:
+                    if delta_link and "HTTP 410" in str(exc):
+                        messages, new_delta_link = graph.list_messages_delta(delta_link=None, folder=folder)
+                    elif "HTTP 404" in str(exc):
+                        # Folder doesn't exist for this account (e.g. no Archive) — skip silently.
                         continue
-
-                    matched_route = next(
-                        (
-                            route
-                            for route in mailbox_routes
-                            if route_matches_message(
-                                route=route,
-                                sender=sender,
-                                subject=subject,
-                                filename=filename,
-                                labels=None,
-                            )
-                        ),
-                        None,
-                    )
-                    if not matched_route:
-                        continue
-                    route_id = int(matched_route["id"])
-                    bank_code = str(matched_route.get("bank_code") or "").upper()
-
-                    if dry_run:
-                        upload_results["uploaded"] += 1
-                        continue
-
-                    upload = api.upload_pdf(
-                        route_id=route_id,
-                        provider_message_id=message_id,
-                        provider_attachment_id=attachment_id,
-                        internet_message_id=internet_message_id,
-                        provider_received_at=received_at,
-                        filename=filename,
-                        content=content,
-                        metadata={
-                            "bank_code": bank_code,
-                            "provider": "microsoft",
-                            "sender": sender,
-                            "subject": subject,
-                        },
-                    )
-                    status = str(upload.get("status") or "").strip().lower()
-                    if status == "uploaded":
-                        upload_results["uploaded"] += 1
-                    elif status == "duplicate":
-                        upload_results["duplicate"] += 1
-                    elif status == "ignored":
-                        upload_results["ignored"] += 1
                     else:
-                        upload_results["failed"] += 1
+                        raise
+
+                summary["messages_scanned"] += len(messages)
+
+                for message in messages:
+                    message_id = str(message.get("id") or "").strip()
+                    if not message_id:
+                        continue
+                    sender = _sender_from_message(message)
+                    subject = str(message.get("subject") or "")
+                    internet_message_id = str(message.get("internetMessageId") or "").strip() or None
+                    received_at = str(message.get("receivedDateTime") or "").strip() or None
+
+                    attachments = graph.list_pdf_attachments(message_id=message_id)
+                    summary["attachments_seen"] += len(attachments)
+
+                    for attachment in attachments:
+                        attachment_id = str(attachment.get("id") or "").strip()
+                        filename = str(attachment.get("name") or "statement.pdf").strip() or "statement.pdf"
+                        if not attachment_id:
+                            continue
+                        content = graph.get_attachment_bytes(
+                            message_id=message_id,
+                            attachment_id=attachment_id,
+                            attachment_stub=attachment,
+                        )
+                        if not content:
+                            continue
+
+                        matched_route = next(
+                            (
+                                route
+                                for route in mailbox_routes
+                                if route_matches_message(
+                                    route=route,
+                                    sender=sender,
+                                    subject=subject,
+                                    filename=filename,
+                                    labels=None,
+                                )
+                            ),
+                            None,
+                        )
+                        if not matched_route:
+                            continue
+                        route_id = int(matched_route["id"])
+                        bank_code = str(matched_route.get("bank_code") or "").upper()
+
+                        if dry_run:
+                            upload_results["uploaded"] += 1
+                            continue
+
+                        upload = api.upload_pdf(
+                            route_id=route_id,
+                            provider_message_id=message_id,
+                            provider_attachment_id=attachment_id,
+                            internet_message_id=internet_message_id,
+                            provider_received_at=received_at,
+                            filename=filename,
+                            content=content,
+                            metadata={
+                                "bank_code": bank_code,
+                                "provider": "microsoft",
+                                "folder": folder,
+                                "sender": sender,
+                                "subject": subject,
+                            },
+                        )
+                        status = str(upload.get("status") or "").strip().lower()
+                        if status == "uploaded":
+                            upload_results["uploaded"] += 1
+                        elif status == "duplicate":
+                            upload_results["duplicate"] += 1
+                        elif status == "ignored":
+                            upload_results["ignored"] += 1
+                        else:
+                            upload_results["failed"] += 1
+
+                if new_delta_link:
+                    next_sync_state[folder_key] = new_delta_link
 
             summary["uploads_uploaded"] += upload_results["uploaded"]
             summary["uploads_duplicate"] += upload_results["duplicate"]
             summary["uploads_ignored"] += upload_results["ignored"]
             summary["uploads_failed"] += upload_results["failed"]
 
-            next_sync_state = dict(mailbox_sync_state)
-            if new_delta_link:
-                next_sync_state["microsoft_delta_link"] = new_delta_link
-                next_sync_state["delta_link"] = new_delta_link
             next_sync_state["provider"] = "microsoft"
             next_sync_state["updated_at"] = utc_now_iso()
             if not dry_run:

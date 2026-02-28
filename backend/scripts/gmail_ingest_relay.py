@@ -257,7 +257,13 @@ def process_gmail_notification(
     failed = 0
 
     for message_id in message_ids:
-        message = gmail.get_message(message_id=message_id)
+        try:
+            message = gmail.get_message(message_id=message_id)
+        except RuntimeError as exc:
+            if "HTTP 404" in str(exc):
+                # Permanently deleted before relay processed the notification — skip.
+                continue
+            raise
         headers = _header_map(message)
         sender = _sender_from_from_header(headers.get("from", ""))
         subject = headers.get("subject", "")
