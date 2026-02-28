@@ -48,6 +48,7 @@ Optional but recommended:
 | `CCS_PLATFORM_GCS_CREDENTIALS_FILE` | — | Path to service account JSON (or use Workload Identity) |
 | `CCS_PLATFORM_RUNTIME_SETTINGS_REQUIRE_ENCRYPTION` | `true` | Disable only in dev |
 | `CCS_PLATFORM_RUNTIME_SETTINGS_SEED_SOURCE` | `env_file_then_env` | Seeds DB from `.env` on first boot |
+| `CCS_PLATFORM_JOB_MAX_DURATION_SECONDS` | `1800` | Wall-clock timeout per job; job is auto-cancelled after this many seconds. Set to `0` to disable. |
 | `CCS_PLATFORM_RETENTION_JOBS_DAYS` | `90` | — |
 | `CCS_PLATFORM_RETENTION_EXPORTS_DAYS` | `90` | — |
 | `CCS_PLATFORM_RETENTION_AUDIT_EVENTS_DAYS` | `365` | — |
