@@ -51,7 +51,9 @@ fi
 # 2. Backend tests
 if [ -n "$PYTHON" ]; then
   info "Backend tests (pytest)..."
-  if cd backend && "$PYTHON" -m pytest -q 2>&1; then
+  # Force a non-production environment so the session-key validation never fires.
+  # The hook runs with a stripped shell env; the backend .env isn't auto-loaded here.
+  if cd backend && CCS_PLATFORM_ENVIRONMENT=test "$PYTHON" -m pytest -q 2>&1; then
     pass "Backend tests passed"
   else
     fail "Backend tests failed"
