@@ -766,7 +766,7 @@ In the admin UI → **Email Ingestion** → **Service Tokens** panel:
 
 Store the token value:
 - **Microsoft (GitHub Actions):** Paste into your repo's **Settings → Secrets and variables → Actions** as `CCS_SERVICE_TOKEN`.
-- **Gmail (Cloud Run):** Paste into GCP Secret Manager or as a Cloud Run env var `CCS_SERVICE_TOKEN`.
+- **Gmail relay (GitHub Actions → Cloud Run):** Create a **separate** token named `gmail-relay-gcp` and paste it as `CCS_GMAIL_RELAY_SERVICE_TOKEN` in GitHub Actions secrets. Using a distinct token means you can revoke the relay's access independently.
 
 The token table shows all created tokens. Click **Revoke** to immediately invalidate a token if it is compromised.
 
@@ -855,6 +855,8 @@ gcloud pubsub topics add-iam-policy-binding gmail-statements \
 
 The relay (`backend/scripts/gmail_ingest_relay.py`) is a small FastAPI service that receives Pub/Sub push notifications and uploads matching PDFs via the API.
 
+**First-time manual deploy** (run from the repo root):
+
 ```bash
 SHA=$(git rev-parse --short HEAD)
 IMAGE_RELAY="europe-west1-docker.pkg.dev/PROJECT_ID/ccs-platform/gmail-relay:$SHA"
@@ -873,6 +875,49 @@ gcloud run deploy ccs-gmail-relay \
   --min-instances=0 \
   --memory=256Mi \
   --cpu=1
+```
+
+**Subsequent deploys — GitHub Actions** (`.github/workflows/deploy-gmail-relay.yml`):
+
+The relay is automatically rebuilt and redeployed whenever any of these files change on `main`:
+- `backend/scripts/gmail_ingest_relay.py`
+- `backend/scripts/email_ingestion_common.py`
+- `backend/requirements.txt`
+- `deploy/Dockerfile.api`
+
+Add these secrets to your repo (**Settings → Secrets and variables → Actions**):
+
+| Secret | Value |
+|--------|-------|
+| `GCP_PROJECT_ID` | Your GCP project ID (e.g. `<legacy-gcp-project>`) |
+| `GCP_SA_KEY` | JSON key for a service account with **Artifact Registry Writer** and **Cloud Run Admin** roles |
+| `CCS_API_BASE_URL` | Your API base URL — same value used in EI-7 |
+| `CCS_GMAIL_RELAY_SERVICE_TOKEN` | The service token created for the Gmail relay in EI-6 (keep separate from the Microsoft token) |
+
+To create the service account and grant the required roles:
+
+```bash
+gcloud iam service-accounts create ccs-github-deploy \
+  --display-name="CCS GitHub Actions deployer"
+
+SA=ccs-github-deploy@PROJECT_ID.iam.gserviceaccount.com
+
+gcloud projects add-iam-policy-binding PROJECT_ID \
+  --member="serviceAccount:$SA" \
+  --role="roles/run.admin"
+
+gcloud projects add-iam-policy-binding PROJECT_ID \
+  --member="serviceAccount:$SA" \
+  --role="roles/artifactregistry.writer"
+
+gcloud iam service-accounts add-iam-policy-binding \
+  PROJECT_ID-compute@developer.gserviceaccount.com \
+  --member="serviceAccount:$SA" \
+  --role="roles/iam.serviceAccountUser"
+
+gcloud iam service-accounts keys create gcp-sa-key.json --iam-account="$SA"
+# Paste the contents of gcp-sa-key.json into the GCP_SA_KEY secret, then delete the file.
+rm gcp-sa-key.json
 ```
 
 Then point the Pub/Sub subscription at the relay:
@@ -957,4 +1002,5 @@ Send yourself a test email with a PDF attachment from a sender in your allowlist
 - [ ] Service token created; value stored as `CCS_SERVICE_TOKEN` in GitHub Actions secrets or GCP Secret Manager
 - [ ] Microsoft: `CCS_API_BASE_URL` and `CCS_SERVICE_TOKEN` GitHub Actions secrets set; dry-run passes with `mailbox_errors: []`
 - [ ] Gmail: Pub/Sub topic and subscription created; relay deployed and subscription push URL updated; watch registered via `ccs-gmail-watch-renew`; daily Cloud Scheduler job active
+- [ ] Gmail: `GCP_PROJECT_ID`, `GCP_SA_KEY`, `CCS_API_BASE_URL`, `CCS_GMAIL_RELAY_SERVICE_TOKEN` secrets set in GitHub Actions so future relay code changes auto-redeploy
 - [ ] At least one real email ingested end-to-end — event visible in Operations → Ingestion Activity with status `uploaded`
