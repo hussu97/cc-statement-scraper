@@ -24,6 +24,7 @@ credit-card-scraper/
 │   ├── config/                ← default YAML config
 │   ├── scripts/               ← ops/maintenance scripts
 │   ├── tests/                 ← pytest test suite
+│   ├── requirements.in          ← pip-tools source (run pip-compile to regenerate requirements.txt)
 │   ├── requirements.txt
 │   ├── requirements-dev.txt
 │   ├── pyproject.toml
@@ -151,6 +152,13 @@ npm install
 npm run dev
 ```
 
+## Run frontend tests
+
+```bash
+cd frontend
+npm test
+```
+
 Vite dev server proxies `/api` to `http://127.0.0.1:8040`.
 
 Runtime variables are now DB-backed and editable in admin UI (`Runtime Variables` page in sidebar).
@@ -197,9 +205,14 @@ Environment variables:
 
 GCS mode also needs:
 - `CCS_PLATFORM_GCS_BUCKET`
-- optional: `CCS_PLATFORM_GCS_PROJECT`, `CCS_PLATFORM_GCS_CREDENTIALS_FILE`
+- `CCS_PLATFORM_GCS_CREDENTIALS_FILE` — path to service account JSON key file (required unless running on GCP with Workload Identity)
+- optional: `CCS_PLATFORM_GCS_PROJECT`
 
 ## Migrations
+
+In **production** (PostgreSQL), migrations run automatically at startup — no manual step needed.
+
+In **development** (SQLite), run manually:
 
 ```bash
 cd backend && alembic upgrade head

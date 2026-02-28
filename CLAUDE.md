@@ -16,11 +16,15 @@ Update the relevant plan(s) when adding new env vars, services, DB migrations, o
 ## 4. Git Commit After Feature Changes
 After any feature change (or coherent set of changes), commit the work with a clear, descriptive message. One logical change per commit where practical. Do not leave implemented work uncommitted.
 
-Every commit **must** be authored by Hussain Abbasi. Always pass `--author` explicitly:
+Every commit **must** be authored by exactly:
+```
+Hussain Abbasi <h_abbasi97@hotmail.com>
+```
+Always pass `--author` explicitly:
 ```
 git commit --author="Hussain Abbasi <h_abbasi97@hotmail.com>" -m "..."
 ```
-The `Co-Authored-By` trailer for Claude should still be included in the commit body.
+No variations (`h-abbasi`, `hussain`, other emails). No `Co-Authored-By` trailer of any kind.
 
 ## 5. README Maintenance
 Keep the following READMEs accurate and up to date. After any change that affects setup, structure, endpoints, env vars, or screens, update the relevant README(s) **before committing**.
