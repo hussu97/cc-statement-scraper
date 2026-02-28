@@ -243,8 +243,49 @@ class WorkerLoop:
             if changed:
                 db.commit()
 
+    def recover_orphaned_jobs_on_startup(self) -> None:
+        """Immediately resolve any RUNNING jobs left over from a previous process.
+
+        On a clean restart there are no live worker threads, so any job still
+        marked RUNNING is orphaned.  We cancel jobs that already have
+        cancel_requested_at set and requeue (or fail) the rest, rather than
+        waiting up to job_heartbeat_timeout_seconds for the normal stale-job
+        recovery path to trigger.
+        """
+        now = datetime.now(UTC)
+        with get_session_local()() as db:
+            query = select(models.Job).where(models.Job.status == models.JobStatus.RUNNING)
+            query = self._scope_job_query_to_worker_queues(query)
+            orphans = db.execute(query).scalars().all()
+            if not orphans:
+                return
+
+            recovered = 0
+            for job in orphans:
+                if job.cancel_requested_at is not None:
+                    job.status = models.JobStatus.CANCELLED
+                    job.finished_at = now
+                    job.last_heartbeat_at = now
+                    job.error_message = job.error_message or "Cancelled: orphaned at startup"
+                elif int(job.attempt_count or 0) < max(1, int(job.max_attempts or 1)):
+                    job.status = models.JobStatus.QUEUED
+                    job.next_retry_at = now
+                    job.progress_percent = 0
+                    job.last_heartbeat_at = now
+                    job.error_message = "Requeued: orphaned at startup (worker restarted)"
+                else:
+                    job.status = models.JobStatus.FAILED
+                    job.finished_at = now
+                    job.last_heartbeat_at = now
+                    job.error_message = "Failed: orphaned at startup, max attempts exhausted"
+                recovered += 1
+
+            db.commit()
+            logger.warning("Startup orphan recovery: resolved %d orphaned RUNNING job(s)", recovered)
+
     def run_forever(self) -> None:
         logger.info("Worker loop started")
+        self.recover_orphaned_jobs_on_startup()
         self.ensure_schedule_next_runs()
         while self._running:
             self._recover_stale_running_jobs()
