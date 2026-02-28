@@ -2,11 +2,23 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from sqlalchemy import select
 
 from ccs_platform.application.jobs.worker_loop import WorkerLoop
 from ccs_platform.core.settings import PlatformSettings
 from ccs_platform.db import db_session, init_db, models
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _cleanup_worker_loop_test_profile():
+    yield
+    with db_session() as db:
+        row = db.execute(
+            select(models.Profile).where(models.Profile.key == "worker-loop-test")
+        ).scalar_one_or_none()
+        if row is not None:
+            db.delete(row)
 
 
 class _FakeRunner:
