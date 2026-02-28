@@ -19,29 +19,24 @@
 ## 1. Critical / Security
 
 ### 1.1 Hardcoded fallback password `CRITICAL`
-**File:** `src/ccs_platform/auth/service.py`
-**Issue:** Password `"Apple123!"` is hardcoded as a fallback credential. If the env var is missing the application starts with a known password. The same credential appears in plaintext in `README.md`.
-**Fix:** Raise a `RuntimeError` at startup when `CCS_PLATFORM_AUTH_PASSWORD` is absent in production. Remove the hardcoded value entirely.
+**Status:** ✅ Resolved — hardcoded fallback removed; `RuntimeError` raised at startup when credential env var is absent in production.
+**File:** `backend/ccs_platform/application/auth/service.py`
 
 ### 1.2 `get_db` doesn't rollback on exception `CRITICAL`
-**File:** `src/ccs_platform/db/session.py` (FastAPI dependency)
-**Issue:** The `get_db` generator yields a session and closes it in `finally`, but does not call `session.rollback()` when an exception propagates. Partial writes can be flushed and committed if an outer context commits before the exception surfaces, risking data corruption.
-**Fix:** Add `except: session.rollback(); raise` between the `yield` and the `finally` block.
+**Status:** ✅ Resolved — `session.rollback()` added in `except` block before `finally`.
+**File:** `backend/ccs_platform/db/session.py`
 
 ### 1.3 Weak default `session_secret_key` `CRITICAL`
-**File:** `src/ccs_platform/config/settings.py`
-**Issue:** `session_secret_key` defaults to `"change-this-in-production"`. Nothing prevents the app from running in production with this value.
-**Fix:** In `model_post_init`, detect `environment == "production"` and raise if the key equals the default or is shorter than 32 bytes.
+**Status:** ✅ Resolved — `model_post_init` raises `RuntimeError` in production if the key is the default or shorter than 32 bytes.
+**File:** `backend/ccs_platform/core/settings.py`
 
 ### 1.4 Thread-unsafe `os.environ` mutation `HIGH`
-**File:** `src/ccs_platform/application/jobs/runner.py`
-**Issue:** The `JobRunner` worker thread writes scraper credentials into `os.environ` (`os.environ["..."] = ...`) before launching Playwright. Under concurrent job execution (multiple worker threads or `asyncio.to_thread` calls), two threads can interleave their writes into the shared process environment, causing one job to use another profile's credentials.
-**Fix:** Pass credentials as explicit constructor/function arguments to the browser adapters instead of via `os.environ`.
+**Status:** ✅ Resolved — `get_runtime_settings_as_dict` added; credentials fetched as a per-job dict and passed explicitly through `run_end_to_end_downloads` → all six bank adapter `login()` functions; `require_env` accepts an `env` dict so `os.environ` is never mutated per-job.
+**Files:** `backend/ccs_platform/core/runtime_settings.py`, `backend/ccs_platform/adapters/banks/browser/shared.py`, all six bank adapters, `downloader.py`, `runner.py`
 
 ### 1.5 PDF upload endpoint bypasses runtime settings `HIGH`
-**File:** `src/ccs_platform/api/v1/upload.py`
-**Issue:** The upload endpoint reads bank-specific parser configuration directly from `os.environ` instead of the `runtime_settings` table. If credentials/configs have been updated through the admin UI they won't be reflected.
-**Fix:** Load parser config from the `RuntimeSettingsRepository` the same way the job runner does.
+**Status:** ✅ Resolved — ADCB PDF passwords now queried from `runtime_settings` table per profile; `os.getenv` calls removed from the upload handler.
+**File:** `backend/ccs_platform/api/v1/endpoints/jobs.py`
 
 ---
 
