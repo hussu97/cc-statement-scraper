@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import sys
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -432,6 +433,29 @@ def _launch_bank_context(
     raise BrowserDownloadError(f"{bank_code}: failed to launch browser context")
 
 
+def _run_cancel_monitor(
+    *,
+    cancel_check: Callable[[], None],
+    context_holder: list,
+    stop_event: threading.Event,
+    logger: logging.Logger,
+    bank_code: str,
+) -> None:
+    """Background thread: polls cancel_check every 2 s and closes the browser context if cancelled."""
+    while not stop_event.wait(2.0):
+        try:
+            cancel_check()
+        except Exception:  # noqa: BLE001
+            ctx = context_holder[0]
+            if ctx is not None:
+                try:
+                    logger.warning("%s: cancellation detected; closing browser context", bank_code)
+                    ctx.close()
+                except Exception:  # noqa: BLE001
+                    pass
+            return
+
+
 def run_end_to_end_downloads(
     *,
     app_config: AppConfig,
@@ -469,6 +493,23 @@ def run_end_to_end_downloads(
             run_stamp = datetime.now().strftime("%Y%m%d%H%M%S")
             context = None
             page = None
+            context_holder: list = [None]
+            cancel_monitor_stop = threading.Event()
+            cancel_monitor_thread: threading.Thread | None = None
+
+            if cancel_check is not None:
+                cancel_monitor_thread = threading.Thread(
+                    target=_run_cancel_monitor,
+                    kwargs={
+                        "cancel_check": cancel_check,
+                        "context_holder": context_holder,
+                        "stop_event": cancel_monitor_stop,
+                        "logger": logger,
+                        "bank_code": bank_code,
+                    },
+                    daemon=True,
+                )
+                cancel_monitor_thread.start()
 
             logger.info("%s: opening portal %s", bank_code, portal_url)
 
@@ -486,6 +527,7 @@ def run_end_to_end_downloads(
                     timezone_id=timezone_id,
                     locale=locale,
                 )
+                context_holder[0] = context
                 page = context.pages[0] if context.pages else context.new_page()
 
                 page.goto(portal_url, wait_until="domcontentloaded", timeout=60000)
@@ -572,6 +614,10 @@ def run_end_to_end_downloads(
                         logger,
                     )
             finally:
+                cancel_monitor_stop.set()
+                context_holder[0] = None
+                if cancel_monitor_thread is not None:
+                    cancel_monitor_thread.join(timeout=3)
                 if context is not None:
                     try:
                         context.close()
