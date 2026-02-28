@@ -230,7 +230,7 @@ export function JobsPage() {
   const [selectedBanks, setSelectedBanks] = useState<string[]>([]);
   const [monthFrom, setMonthFrom] = useState(defaultMonth);
   const [monthTo, setMonthTo] = useState(defaultMonth);
-  const [download, setDownload] = useState(false);
+  const [download, setDownload] = useState(true);
   const [headless, setHeadless] = useState(true);
   const [timeout, setTimeoutMinutes] = useState(20);
   const [activeJob, setActiveJob] = useState<Job | null>(null);

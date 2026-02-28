@@ -66,9 +66,9 @@ def build_logger(root: Path) -> logging.Logger:
     ts = datetime.now().strftime("%Y%m%d-%H%M%S")
     log_path = logs_dir / f"download-run-{ts}.log"
 
-    logger = logging.getLogger(f"ccs.downloader.{ts}")
+    logger = logging.getLogger(f"ccs_platform.downloader.{ts}")
     logger.setLevel(logging.INFO)
-    logger.propagate = False
+    logger.propagate = True
 
     stream_handler = logging.StreamHandler()
     stream_handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
