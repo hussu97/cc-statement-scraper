@@ -39,6 +39,8 @@ global_rules:
       - APPLE.COM/BILL
       - WIX.COM
       - ICONSCOUT.COM
+      - NAME-CHEAP.COM
+      - NOVORESUME
   - category: Shopping
     keywords:
       - NOON
@@ -109,6 +111,10 @@ global_rules:
       - SMART DUBAI GOVERNMENT DUBAI
       - AL ETIHAD CREDIT BUREA
       - SHARJAH FINANCE DEPART
+      - PARKONIC
+  - category: Fraud
+    keywords:
+      - UPFRONTCR DISP
   - category: Forex Charge
     keywords:
       - VAT ON SERVICE CHARGES
@@ -131,6 +137,7 @@ global_rules:
       - RESTAUR
       - FOOD
       - BRASSERIE
+      - RAMEN
   - category: Apple in-app purchase
     keywords:
       - APPLE.COM/BILL CORK
