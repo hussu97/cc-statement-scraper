@@ -135,6 +135,21 @@ class Export(Base):
     ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class JobLog(Base):
+    __tablename__ = "job_logs"
+    __table_args__ = (
+        Index("ix_job_logs_job_id", "job_id"),
+        Index("ix_job_logs_created_at", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False)
+    level: Mapped[str] = mapped_column(String(16), nullable=False, default="info")
+    logger: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class AuditEvent(Base):
     __tablename__ = "audit_events"
     __table_args__ = (

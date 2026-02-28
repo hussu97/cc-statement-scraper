@@ -69,6 +69,7 @@ def enforce_retention(
     logs_cutoff = now - timedelta(days=max(1, int(settings.retention_logs_days)))
     uploads_cutoff = now - timedelta(days=max(1, int(settings.retention_uploads_days)))
     backups_cutoff = now - timedelta(days=max(1, int(settings.retention_backups_days)))
+    job_logs_cutoff = now - timedelta(days=max(1, int(settings.retention_job_logs_days)))
 
     terminal_job_statuses = {
         models.JobStatus.SUCCEEDED,
@@ -100,6 +101,12 @@ def enforce_retention(
         )
         deleted_audit_events = _delete_by_ids(db, model=models.AuditEvent, ids=old_audit_ids, dry_run=dry_run)
 
+        old_job_log_ids = _collect_old_ids(
+            db,
+            select(models.JobLog.id).where(models.JobLog.created_at < job_logs_cutoff),
+        )
+        deleted_job_logs = _delete_by_ids(db, model=models.JobLog, ids=old_job_log_ids, dry_run=dry_run)
+
         if not dry_run:
             db.commit()
 
@@ -114,6 +121,7 @@ def enforce_retention(
             "deleted_jobs": deleted_jobs,
             "deleted_exports": deleted_exports,
             "deleted_audit_events": deleted_audit_events,
+            "deleted_job_logs": deleted_job_logs,
         },
         "filesystem": {
             "deleted_log_files": deleted_log_files,

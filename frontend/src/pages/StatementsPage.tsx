@@ -6,6 +6,7 @@ import { MultiSelectDropdown } from '../components/MultiSelectDropdown';
 import { Panel } from '../components/Panel';
 import { TablePagination } from '../components/TablePagination';
 import { useActiveProfileKey } from '../profileStore';
+import { formatLocalDateTime } from '../utils/datetime';
 import type { Job, PagedResponse, Statement, StatementLine } from '../types/statements';
 
 export function StatementsPage() {
@@ -210,7 +211,8 @@ export function StatementsPage() {
                 <th>ID</th>
                 <th>Bank</th>
                 <th>Reference</th>
-                <th>Date</th>
+                <th>Statement Date</th>
+                <th>Upload Date</th>
                 <th>Lines</th>
                 <th>Actions</th>
               </tr>
@@ -222,6 +224,7 @@ export function StatementsPage() {
                   <td>{statement.bank_code}</td>
                   <td>{statement.statement_reference}</td>
                   <td>{statement.statement_date}</td>
+                  <td>{statement.ingested_at ? formatLocalDateTime(statement.ingested_at) : '—'}</td>
                   <td>{statement.line_count}</td>
                   <td>
                     <button className="ghost" onClick={() => openStatement(statement)}>View</button>{' '}
