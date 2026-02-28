@@ -72,14 +72,15 @@ python -c "import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).dec
 | Layer | Provider | Free tier limits |
 |-------|----------|-----------------|
 | Backend API | Render Web Service | 512 MB RAM, spins down after 15 min inactivity |
-| Background worker | Render Background Worker | Always-on, 512 MB RAM |
+| Background worker | Embedded in API process | Shares the API's 512 MB RAM |
 | Database | Neon | 0.5 GB storage, 1 project, shared compute |
 | Frontend | Vercel | Hobby plan, unlimited deployments |
 | File storage | Google Cloud Storage (GCS) | 5 GB storage + 1 GB/month egress free |
 
 > **Limitations to know upfront:**
-> - Render's free Web Service spins down after 15 minutes of inactivity. The first request after a cold-start takes ~30 seconds. The background worker stays always-on, so scheduled scrape jobs run on time — only the API has this latency on first hit.
-> - **Render persistent disks are a paid add-on (~$0.25/GB/month) — not available on the free tier.** File storage must be external. This guide uses GCS, which has a generous free tier (5 GB) and requires only a Google account (credit card required by Google but not charged within free limits).
+> - Render's free Web Service spins down after 15 minutes of inactivity. The first request after a cold-start takes ~30 seconds. **Scheduled scrape jobs will not fire while the service is spun down** — a scheduled job will only run if something woke the service up first, or if you're on a paid plan. For manual on-demand scraping this is fine.
+> - **Render Background Worker is a paid tier (~$7/month) — not free.** This guide runs the worker embedded inside the single API process using `CCS_PLATFORM_EMBEDDED_WORKER=true`, which is free but means Playwright shares the API's 512 MB RAM.
+> - **Render persistent disks are a paid add-on — not available on the free tier.** File storage must be external. This guide uses GCS, which has a generous free tier (5 GB) and requires only a Google account (credit card required by Google but not charged within free limits).
 
 ---
 
@@ -114,7 +115,7 @@ Save both values — you will paste them into Render and need them later for key
 
 ---
 
-### 1.3 Backend API — Render Web Service
+### 1.3 Backend API — Render Web Service (single service)
 
 1. Sign up / log in at <https://render.com>.
 
@@ -150,23 +151,26 @@ Save both values — you will paste them into Render and need them later for key
    | `CCS_PLATFORM_SESSION_SECRET_KEY` | *(generated in 1.1)* |
    | `CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY` | *(generated in 1.1)* |
    | `CCS_PLATFORM_STORAGE_BACKEND` | `gcs` |
-   | `CCS_PLATFORM_GCS_BUCKET` | *(GCS bucket name from 1.3 below)* |
+   | `CCS_PLATFORM_GCS_BUCKET` | *(GCS bucket name from step 1.4 below)* |
    | `CCS_PLATFORM_GCS_PROJECT` | *(GCP project ID)* |
    | `CCS_PLATFORM_GCS_CREDENTIALS_FILE` | `/etc/gcs/credentials.json` |
-   | `CCS_PLATFORM_EMBEDDED_WORKER` | `false` |
-   | `CCS_PLATFORM_WORKER_QUEUES` | `default` |
+   | `CCS_PLATFORM_EMBEDDED_WORKER` | `true` |
+   | `CCS_PLATFORM_WORKER_QUEUES` | `default,scrape` |
+   | `CCS_PLATFORM_MAX_WORKER_THREADS` | `1` |
    | `CCS_PLATFORM_JOB_DISPATCH_BACKEND` | `database` |
    | `CCS_PLATFORM_RUNTIME_SETTINGS_SEED_SOURCE` | `env` |
    | `CCS_PLATFORM_CORS_ALLOW_ORIGINS` | *(your Vercel URL — set after deploying frontend)* |
    | `CCS_PLATFORM_TIMEZONE` | `Asia/Dubai` |
 
    > **Note:** `CCS_PLATFORM_GCS_CREDENTIALS_FILE` assumes you upload the service account JSON as a Render **Secret File** (see step 1.3). Set the mount path to `/etc/gcs/credentials.json`.
+   >
+   > `EMBEDDED_WORKER=true` runs the background job worker as a thread inside the same process. `MAX_WORKER_THREADS=1` limits it to one concurrent job at a time, which keeps memory usage manageable on the free 512 MB instance.
 
 6. Click **Create Web Service**. Render will build the Docker image (5–10 min on first build).
 
 ---
 
-### 1.3 File storage — Google Cloud Storage (free tier)
+### 1.4 File storage — Google Cloud Storage (free tier)
 
 Render's persistent disks are a paid feature. GCS provides 5 GB free and works out of the box with this app.
 
@@ -189,46 +193,8 @@ Render's persistent disks are a paid feature. GCS provides 5 GB free and works o
 1. In the Render `ccs-api` service → **Environment → Secret Files → Add Secret File**.
 2. **Filename:** `/etc/gcs/credentials.json`
 3. **Contents:** paste the full contents of the downloaded JSON key file.
-4. Repeat for the `ccs-worker` service.
 
-> Secret Files are injected into the container at runtime and never appear in build logs or env var lists.
-
----
-
-### 1.4 Background Worker — Render Background Worker
-
-The scraping worker runs Playwright (Chromium) and must be a separate always-on process.
-
-1. Click **New → Background Worker**.
-
-2. Connect the same repo.
-
-3. Configure:
-
-   | Setting | Value |
-   |---------|-------|
-   | **Name** | `ccs-worker` |
-   | **Region** | Same as API |
-   | **Branch** | `main` |
-   | **Runtime** | **Docker** |
-   | **Dockerfile path** | `deploy/Dockerfile.app` |
-   | **Instance type** | Free |
-   | **Start command** | `python -m ccs_platform.cli worker` |
-
-4. Under **Environment Variables**, add the **same set** as the API service above, **except** change:
-
-   | Key | Value |
-   |-----|-------|
-   | `CCS_PLATFORM_EMBEDDED_WORKER` | `false` |
-   | `CCS_PLATFORM_WORKER_QUEUES` | `scrape` |
-
-   > The API handles `default` queue jobs (uploads, reclassify, export). The worker handles `scrape` queue jobs (browser automation). This split keeps browser processes off the API service.
-
-5. Add the GCS **Secret File** as you did for the API (same file, same mount path `/etc/gcs/credentials.json`).
-
-   > With GCS as the storage backend, the API and worker don't need to share a disk — both read/write the same GCS bucket directly.
-
-6. Click **Create Background Worker**.
+> Secret Files are injected into the container at runtime and never appear in build logs or env var lists. Since the worker runs embedded in the API process, only one service needs this file.
 
 ---
 
@@ -260,6 +226,8 @@ Migrations must run before the app serves traffic. Do this from the Render **She
 ---
 
 ### 1.6 Seed scraper credentials
+
+
 
 On first boot the app looks for runtime settings (scraper usernames/passwords) in the database. Seed them via the admin UI:
 
