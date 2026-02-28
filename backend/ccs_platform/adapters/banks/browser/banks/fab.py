@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from ccs_platform.adapters.banks.browser.shared import click_keyword, require_env, save_download
+from ccs_platform.domain.parsing.month_utils import MONTH_INDEX
 
 
 LOGIN_SCREEN_PATTERNS = [
@@ -16,32 +17,6 @@ LOGIN_SCREEN_PATTERNS = [
 ]
 
 TEXT_DIRECTION_MARKS = re.compile(r"[\u200e\u200f\u202a-\u202e]")
-MONTH_INDEX = {
-    "jan": 1,
-    "january": 1,
-    "feb": 2,
-    "february": 2,
-    "mar": 3,
-    "march": 3,
-    "apr": 4,
-    "april": 4,
-    "may": 5,
-    "jun": 6,
-    "june": 6,
-    "jul": 7,
-    "july": 7,
-    "aug": 8,
-    "august": 8,
-    "sep": 9,
-    "sept": 9,
-    "september": 9,
-    "oct": 10,
-    "october": 10,
-    "nov": 11,
-    "november": 11,
-    "dec": 12,
-    "december": 12,
-}
 
 DOWNLOAD_EVENT_TIMEOUT_MS = 12000
 LATE_DOWNLOAD_WAIT_MS = 5000
