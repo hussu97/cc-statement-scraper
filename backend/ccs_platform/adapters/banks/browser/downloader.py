@@ -325,6 +325,11 @@ def _launch_bank_context(
     incoming_dir: Path,
     bank_code: str,
     logger: logging.Logger,
+    proxy_url: str | None = None,
+    geo_latitude: float = 25.2048,
+    geo_longitude: float = 55.2708,
+    timezone_id: str = "Asia/Dubai",
+    locale: str = "en-AE",
 ) -> Any:
     def _missing_chrome_channel_error(exc: Exception) -> bool:
         low = str(exc).lower()
@@ -342,7 +347,14 @@ def _launch_bank_context(
                 "headless": headless,
                 "accept_downloads": True,
                 "downloads_path": str(incoming_dir),
+                "geolocation": {"latitude": geo_latitude, "longitude": geo_longitude},
+                "permissions": ["geolocation"],
+                "timezone_id": timezone_id,
+                "locale": locale,
             }
+            if proxy_url:
+                launch_kwargs["proxy"] = {"server": proxy_url}
+                logger.info("%s: routing browser traffic via proxy %s", bank_code, proxy_url)
             if bank_code.upper() == "MASHREQ":
                 launch_kwargs["args"] = ["--disable-blink-features=AutomationControlled"]
             launch_channel_candidates: list[str | None] = [None]
@@ -417,6 +429,11 @@ def run_end_to_end_downloads(
     login_timeout_minutes: int = 20,
     headless: bool = False,
     credentials: dict[str, str] | None = None,
+    proxy_url: str | None = None,
+    geo_latitude: float = 25.2048,
+    geo_longitude: float = 55.2708,
+    timezone_id: str = "Asia/Dubai",
+    locale: str = "en-AE",
 ) -> dict[str, str]:
     try:
         from playwright.sync_api import sync_playwright
@@ -452,6 +469,11 @@ def run_end_to_end_downloads(
                     incoming_dir=app_config.paths.incoming_dir,
                     bank_code=bank_code,
                     logger=logger,
+                    proxy_url=proxy_url,
+                    geo_latitude=geo_latitude,
+                    geo_longitude=geo_longitude,
+                    timezone_id=timezone_id,
+                    locale=locale,
                 )
                 page = context.pages[0] if context.pages else context.new_page()
 
