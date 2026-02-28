@@ -11,6 +11,36 @@ from ccs_platform.core.settings import clear_settings_caches
 from ccs_platform.main import app, create_app
 from ccs_platform.db import db_session, models
 
+# Precomputed bcrypt hash (rounds=4) of "Apple123!" — kept here so tests can
+# run without the real .env credentials and without slow per-test hashing.
+_TEST_PASSWORD_HASH = "$2b$04$ZbobdUJwQZLVRQcOjUz4ouJ3L2mWPKaGO8jWtPWBbnG.F0z7N0Bl."
+
+
+@pytest.fixture(autouse=True)
+def _test_platform_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Isolate each test to a fresh temp SQLite DB and provide login credentials.
+
+    This prevents tests from reading/writing the real platform.db and makes
+    the suite runnable in CI without any secrets configured.
+
+    The DB is initialised and seeded here so that tests which call db_session()
+    before starting a TestClient (i.e. before the app lifespan runs) can still
+    find tables and seed data.
+    """
+    from ccs_platform.db.session import init_db
+    from ccs_platform.application.bootstrap.seed import seed_defaults
+
+    tmp_db = f"/tmp/ccs_platform_test_{uuid.uuid4().hex}.db"
+    monkeypatch.setenv("CCS_PLATFORM_DATABASE_URL", f"sqlite:///{tmp_db}")
+    monkeypatch.setenv("CCS_PLATFORM_LOGIN_HASH_HUSSAIN", _TEST_PASSWORD_HASH)
+    monkeypatch.setenv("CCS_PLATFORM_LOGIN_HASH_TEJASVIE", _TEST_PASSWORD_HASH)
+    clear_settings_caches()
+    init_db()
+    with db_session() as db:
+        seed_defaults(db)
+    yield
+    clear_settings_caches()
+
 
 def _create_statement_for_profile(
     *,
