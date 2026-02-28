@@ -71,7 +71,7 @@ playwright install chromium
 ## Run backend API
 
 ```bash
-PYTHONPATH=src python -m ccs_platform.cli api --host 127.0.0.1 --port 8040
+PYTHONPATH=src python -m ccs_platform.cli api --host 127.0.0.1 --port 8040 --reload
 ```
 
 Health check:
