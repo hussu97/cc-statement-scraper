@@ -7,8 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
 
-from ccs_platform.core import secret_codec
-from ccs_platform.core.settings import get_settings
+from ccs_platform.core.settings import clear_settings_caches
 from ccs_platform.main import app, create_app
 from ccs_platform.db import db_session, models
 
@@ -83,8 +82,7 @@ def _delete_statement(statement_id: int) -> None:
 def _create_app_with_env(monkeypatch: pytest.MonkeyPatch, **kwargs: str) -> object:
     for key, value in kwargs.items():
         monkeypatch.setenv(key, value)
-    get_settings.cache_clear()
-    secret_codec._fernet_for_settings.cache_clear()  # type: ignore[attr-defined]
+    clear_settings_caches()
     return create_app()
 
 
@@ -174,7 +172,7 @@ def test_health_ready_degrades_when_queue_slo_breached(monkeypatch: pytest.Monke
                 row = db.get(models.Job, created_job_id)
                 if row is not None:
                     db.delete(row)
-        get_settings.cache_clear()
+        clear_settings_caches()
 
 
 def test_banks_seeded() -> None:
@@ -261,7 +259,7 @@ def test_scrape_job_rejects_duplicate_payload_while_active(monkeypatch: pytest.M
             assert second.status_code == 409
             assert "already" in second.json()["detail"].lower()
     finally:
-        get_settings.cache_clear()
+        clear_settings_caches()
 
 
 def test_scrape_job_creates_new_after_cancelled_duplicate_payload(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -310,7 +308,7 @@ def test_scrape_job_creates_new_after_cancelled_duplicate_payload(monkeypatch: p
             ).scalars().all()
             assert len(second_items) == 1
     finally:
-        get_settings.cache_clear()
+        clear_settings_caches()
 
 
 def test_scrape_job_creates_new_after_previous_succeeded(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -359,7 +357,7 @@ def test_scrape_job_creates_new_after_previous_succeeded(monkeypatch: pytest.Mon
             assert first_row.idempotency_key is None
             assert second_row.idempotency_key is not None
     finally:
-        get_settings.cache_clear()
+        clear_settings_caches()
 
 
 def test_scrape_job_creates_new_after_previous_failed(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -409,7 +407,7 @@ def test_scrape_job_creates_new_after_previous_failed(monkeypatch: pytest.Monkey
             assert first_row.idempotency_key is None
             assert second_row.idempotency_key is not None
     finally:
-        get_settings.cache_clear()
+        clear_settings_caches()
 
 
 def test_reclassify_job_honors_idempotency_key_header(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -449,7 +447,7 @@ def test_reclassify_job_honors_idempotency_key_header(monkeypatch: pytest.Monkey
                 row = db.get(models.Job, created_job_id)
                 if row is not None:
                     db.delete(row)
-        get_settings.cache_clear()
+        clear_settings_caches()
 
 
 def test_workbook_export_idempotency_header_avoids_duplicate_exports(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -492,7 +490,7 @@ def test_workbook_export_idempotency_header_avoids_duplicate_exports(monkeypatch
                 job_row = db.get(models.Job, created_job_id)
                 if job_row is not None:
                     db.delete(job_row)
-        get_settings.cache_clear()
+        clear_settings_caches()
 
 
 def test_reparse_all_enqueues_profile_scoped_job() -> None:
@@ -656,7 +654,7 @@ def test_runtime_settings_hide_secret_values_in_production(monkeypatch: pytest.M
             assert patched["value"] == ""
             assert patched["has_value"] is True
     finally:
-        get_settings.cache_clear()
+        clear_settings_caches()
 
 
 def test_runtime_setting_patch_emits_actor_audit_event(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -693,7 +691,7 @@ def test_runtime_setting_patch_emits_actor_audit_event(monkeypatch: pytest.Monke
             assert actor.get("role") == "admin"
             assert str(actor.get("subject", "")).startswith("user:")
     finally:
-        get_settings.cache_clear()
+        clear_settings_caches()
 
 
 def test_jobs_and_schedules_list_are_paginated() -> None:

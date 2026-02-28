@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import os
+from functools import lru_cache
 
 import bcrypt
 
@@ -21,43 +21,44 @@ def normalize_email(email: str) -> str:
     return (email or "").strip().lower()
 
 
-def _resolve_login_hash(env_var: str, display_name: str) -> str:
-    value = os.getenv(env_var, "").strip()
-    if not value:
-        settings = get_settings()
-        if settings.is_production():
+@lru_cache(maxsize=1)
+def _build_accounts() -> tuple[AuthAccount, ...]:
+    settings = get_settings()
+    if settings.is_production():
+        if not settings.login_hash_hussain:
             raise RuntimeError(
-                f"Auth credential hash for {display_name} is not configured. "
-                f"Set the {env_var} environment variable before starting in production. "
-                f"Generate a hash with: python -m ccs_platform.cli hash-password"
+                "Auth credential hash for Alice is not configured. "
+                "Set CCS_PLATFORM_LOGIN_HASH_HUSSAIN before starting in production. "
+                "Generate a hash with: python -m ccs_platform.cli hash-password"
             )
-    return value
-
-
-_ACCOUNTS: tuple[AuthAccount, ...] = (
-    AuthAccount(
-        email="h_abbasi97@hotmail.com",
-        password_hash=_resolve_login_hash("CCS_PLATFORM_LOGIN_HASH_HUSSAIN", "Alice"),
-        display_name="Alice",
-        default_profile_key="alice",
-    ),
-    AuthAccount(
-        email="bob@example.com",
-        password_hash=_resolve_login_hash("CCS_PLATFORM_LOGIN_HASH_BOB", "Bob"),
-        display_name="Bob",
-        default_profile_key="bob",
-    ),
-)
-
-_ACCOUNT_BY_EMAIL = {normalize_email(account.email): account for account in _ACCOUNTS}
+        if not settings.login_hash_bob:
+            raise RuntimeError(
+                "Auth credential hash for Bob is not configured. "
+                "Set CCS_PLATFORM_LOGIN_HASH_BOB before starting in production. "
+                "Generate a hash with: python -m ccs_platform.cli hash-password"
+            )
+    return (
+        AuthAccount(
+            email="h_abbasi97@hotmail.com",
+            password_hash=settings.login_hash_hussain,
+            display_name="Alice",
+            default_profile_key="alice",
+        ),
+        AuthAccount(
+            email="bob@example.com",
+            password_hash=settings.login_hash_bob,
+            display_name="Bob",
+            default_profile_key="bob",
+        ),
+    )
 
 
 def list_accounts() -> tuple[AuthAccount, ...]:
-    return _ACCOUNTS
+    return _build_accounts()
 
 
 def get_account_by_email(email: str) -> AuthAccount | None:
-    return _ACCOUNT_BY_EMAIL.get(normalize_email(email))
+    return {normalize_email(a.email): a for a in _build_accounts()}.get(normalize_email(email))
 
 
 def authenticate_credentials(*, email: str, password: str) -> AuthAccount | None:

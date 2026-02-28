@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ccs_platform.core.settings import PlatformSettings
 from ccs_platform.db import models
-from ccs_platform.db.session import SessionLocal
+from ccs_platform.db.session import get_session_local
 
 
 SessionFactory = Callable[[], Session]
@@ -57,8 +57,10 @@ def enforce_retention(
     *,
     dry_run: bool = True,
     now_utc: datetime | None = None,
-    session_factory: SessionFactory = SessionLocal,
+    session_factory: SessionFactory | None = None,
 ) -> dict[str, Any]:
+    if session_factory is None:
+        session_factory = get_session_local()
     now = now_utc or _utc_now()
 
     jobs_cutoff = now - timedelta(days=max(1, int(settings.retention_jobs_days)))

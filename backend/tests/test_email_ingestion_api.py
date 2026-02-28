@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from ccs_platform.core.settings import get_settings
+from ccs_platform.core.settings import clear_settings_caches
 from ccs_platform.main import create_app
 from ccs_platform.db import db_session, models
 from ccs_platform.api.v1.endpoints import email_ingestion as email_ingestion_endpoint
@@ -17,7 +17,7 @@ from ccs_platform.api.v1.endpoints import email_ingestion as email_ingestion_end
 def _create_app_with_env(monkeypatch: pytest.MonkeyPatch, **kwargs: str) -> object:
     for key, value in kwargs.items():
         monkeypatch.setenv(key, value)
-    get_settings.cache_clear()
+    clear_settings_caches()
     return create_app()
 
 
@@ -95,7 +95,7 @@ def test_mailbox_crud_and_route_upsert(monkeypatch: pytest.MonkeyPatch) -> None:
             items = list_resp.json()["items"]
             assert any(item["bank_code"] == bank_code and int(item["mailbox_id"]) == mailbox_id for item in items)
     finally:
-        get_settings.cache_clear()
+        clear_settings_caches()
 
 
 def test_service_token_scopes_and_automation_reads(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -150,7 +150,7 @@ def test_service_token_scopes_and_automation_reads(monkeypatch: pytest.MonkeyPat
             assert payload["total"] >= 1
             assert any(item["bank_code"] == bank_code for item in payload["items"])
     finally:
-        get_settings.cache_clear()
+        clear_settings_caches()
 
 
 def test_upload_dedupe_hash_and_bank_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -258,7 +258,7 @@ def test_upload_dedupe_hash_and_bank_mismatch(monkeypatch: pytest.MonkeyPatch) -
             assert "uploaded" in statuses
             assert "ignored" in statuses
     finally:
-        get_settings.cache_clear()
+        clear_settings_caches()
 
 
 def test_oauth_refresh_and_sync_state(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -340,4 +340,4 @@ def test_oauth_refresh_and_sync_state(monkeypatch: pytest.MonkeyPatch) -> None:
             assert isinstance(row.sync_state_json, dict)
             assert row.sync_state_json.get("delta_link") == "https://example.com/delta"
     finally:
-        get_settings.cache_clear()
+        clear_settings_caches()
