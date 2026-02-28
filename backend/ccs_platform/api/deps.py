@@ -161,6 +161,76 @@ require_operator_role = _require_role("operator")
 require_admin_role = _require_role("admin")
 
 
+def require_operator_or_service_token(*required_scopes: str):
+    """Auth dependency that accepts either a session (operator+) or a Bearer service token.
+
+    If an Authorization header with a Bearer token is present it validates the token and
+    required scopes.  Otherwise it falls back to session-based operator authentication.
+    Returns an ActorContext so callers can treat both paths uniformly.
+    """
+    _service_dep = require_service_token(*required_scopes)
+
+    def _dependency(
+        request: Request,
+        db: Session = Depends(get_db),
+        authorization: Annotated[str | None, Header(alias="Authorization")] = None,
+    ) -> ActorContext:
+        if authorization and authorization.strip().lower().startswith("bearer "):
+            svc: ServiceTokenContext = _service_dep(request=request, db=db, authorization=authorization)
+            return ActorContext(
+                role="service",
+                subject=f"service_token:{svc.token_id}",
+                request_id=str(getattr(request.state, "request_id", "") or "").strip() or None,
+            )
+        actor_dep = _require_role("operator")
+        return actor_dep(request=request)
+
+    return _dependency
+
+
+def get_profile_context_or_service_token(
+    *required_scopes: str,
+):
+    """Returns a ProfileContext from either session or service token auth.
+
+    Service token requests: profile is taken from the token's profile_id.
+    Session requests: standard get_profile_context logic (X-Profile-Key header or default).
+    """
+    _service_dep = require_service_token(*required_scopes)
+
+    def _dependency(
+        request: Request,
+        db: Session = Depends(get_db),
+        authorization: Annotated[str | None, Header(alias="Authorization")] = None,
+        profile_key_header: Annotated[str | None, Header(alias="X-Profile-Key")] = None,
+    ) -> ProfileContext:
+        if authorization and authorization.strip().lower().startswith("bearer "):
+            svc: ServiceTokenContext = _service_dep(request=request, db=db, authorization=authorization)
+            # Use X-Profile-Key override if provided, else use token's profile
+            if profile_key_header and profile_key_header.strip():
+                from ccs_platform.application.profiles.service import get_profile_by_key
+                profile = get_profile_by_key(db, profile_key_header)
+                if profile is None:
+                    raise HTTPException(status_code=400, detail=f"Unknown profile key: {profile_key_header}")
+                return ProfileContext(
+                    profile_id=profile.id,
+                    profile_key=profile.key,
+                    profile_name=profile.name,
+                    is_default=bool(profile.is_default),
+                )
+            return ProfileContext(
+                profile_id=svc.profile_id,
+                profile_key=svc.profile_key,
+                profile_name=svc.token_name,
+                is_default=False,
+            )
+        # Fall back to session-based profile resolution
+        user = get_authenticated_user_context(request)
+        return get_profile_context(db=db, user=user, profile_key_header=profile_key_header)
+
+    return _dependency
+
+
 def _parse_bearer_token(authorization: str | None) -> str:
     value = (authorization or "").strip()
     if not value:
@@ -235,6 +305,8 @@ __all__ = [
     "get_authenticated_user_context",
     "get_db",
     "get_profile_context",
+    "get_profile_context_or_service_token",
+    "require_operator_or_service_token",
     "require_service_token",
     "require_admin_role",
     "require_operator_role",
