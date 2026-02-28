@@ -29,6 +29,7 @@ dependencies = [
   "google-cloud-storage>=2.16",
   "cryptography>=43.0",
   "itsdangerous>=2.2",
+  "bcrypt>=4.0",
 ]
 
 [project.optional-dependencies]
