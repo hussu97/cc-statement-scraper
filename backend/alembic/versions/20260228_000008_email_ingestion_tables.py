@@ -34,11 +34,16 @@ def upgrade() -> None:
 
     if bind.dialect.name == "postgresql":
         bind.execute(sa.text(
-            "CREATE TYPE IF NOT EXISTS emailprovider AS ENUM ('microsoft', 'gmail')"
+            "DO $$ BEGIN"
+            " IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'emailprovider') THEN"
+            " CREATE TYPE emailprovider AS ENUM ('microsoft', 'gmail');"
+            " END IF; END $$"
         ))
         bind.execute(sa.text(
-            "CREATE TYPE IF NOT EXISTS emailingestionstatus"
-            " AS ENUM ('queued', 'uploaded', 'duplicate', 'ignored', 'failed')"
+            "DO $$ BEGIN"
+            " IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'emailingestionstatus') THEN"
+            " CREATE TYPE emailingestionstatus AS ENUM ('queued', 'uploaded', 'duplicate', 'ignored', 'failed');"
+            " END IF; END $$"
         ))
 
     op.create_table(
