@@ -67,58 +67,277 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 
 ### Services
 
-| Layer | Provider | Free tier |
-|-------|----------|-----------|
+| Layer | Provider | Free tier limits |
+|-------|----------|-----------------|
 | Backend API | Render Web Service | 512 MB RAM, spins down after 15 min inactivity |
-| Background worker | Render Background Worker | Always-on |
-| Database | Neon (or Supabase) | Free Postgres, 0.5 GB storage |
-| Frontend | Vercel | Free hobby plan |
-| File storage | Render Persistent Disk | 1 GB free (or use GCS free tier) |
+| Background worker | Render Background Worker | Always-on, 512 MB RAM |
+| Database | Neon | 0.5 GB storage, 1 project, shared compute |
+| Frontend | Vercel | Hobby plan, unlimited deployments |
+| File storage | Render Persistent Disk | 1 GB (attached to API service) |
 
-### 1.1 Database — Neon
+> **Limitation to know upfront:** Render's free Web Service spins down after 15 minutes of inactivity. The first request after a cold-start takes ~30 seconds. The background worker stays always-on, so scheduled scrape jobs run on time — only the API has this latency on first hit.
 
-1. Create account at <https://neon.tech>
-2. Create project → copy the PostgreSQL connection string
-3. Set `CCS_PLATFORM_DATABASE_URL` to the Neon DSN
+---
 
-### 1.2 Backend — Render
+### 1.1 Generate secrets (do this first)
 
-**Dockerfile:** `deploy/Dockerfile.app` (build context: repo root)
-
-1. Connect your GitHub repo in the Render dashboard.
-2. Create a **Web Service** (API):
-   - **Build command:** *(Docker, automatic from Dockerfile)*
-   - **Dockerfile path:** `deploy/Dockerfile.app`
-   - **Start command:** `python -m ccs_platform.cli api --host 0.0.0.0 --port 8040`
-   - **Port:** `8040`
-3. Create a **Background Worker** (worker):
-   - Same Dockerfile
-   - **Start command:** `python -m ccs_platform.cli worker`
-4. Add all env vars from the table above to both services.
-5. Mount a **Persistent Disk** at `/app/data` (1 GB) for the API service if using local storage.
-
-### 1.3 Run migrations on first deploy
-
-In the Render dashboard → Shell (or via a one-off job):
+Run locally before touching any provider dashboard:
 
 ```bash
-cd /app && alembic upgrade head
+# Session secret key (required in production)
+python -c "import secrets; print(secrets.token_hex(32))"
+# → copy output, e.g. a3f9e2c1...
+
+# Fernet encryption key for runtime settings (credentials stored in DB)
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# → copy output, e.g. 3j4k5l...=
 ```
 
-### 1.4 Frontend — Vercel
+Save both values — you will paste them into Render and need them later for key rotation.
+
+---
+
+### 1.2 Database — Neon
+
+1. Sign up at <https://neon.tech> (GitHub login works).
+2. Click **New project** → choose a region close to your Render region (e.g. `us-east-1` for Render US East).
+3. Note the **connection string** shown on the project page. It looks like:
+   ```
+   postgresql+psycopg://user:password@ep-xxx.us-east-2.aws.neon.tech/neondb?sslmode=require
+   ```
+   > The default Neon connection string uses the `postgresql://` scheme. Add `+psycopg` after `postgresql` to make it work with the `psycopg` (v3) driver used by this app: `postgresql+psycopg://...`
+4. Keep this string — you will paste it as `CCS_PLATFORM_DATABASE_URL` when configuring Render services.
+
+---
+
+### 1.3 Backend API — Render Web Service
+
+1. Sign up / log in at <https://render.com>.
+
+2. Click **New → Web Service**.
+
+3. Connect your GitHub account and select this repo.
+
+4. Configure the service:
+
+   | Setting | Value |
+   |---------|-------|
+   | **Name** | `ccs-api` (or anything) |
+   | **Region** | Match your Neon region (e.g. `US East (Ohio)`) |
+   | **Branch** | `main` |
+   | **Runtime** | **Docker** |
+   | **Dockerfile path** | `deploy/Dockerfile.app` |
+   | **Docker context** | *(leave blank — defaults to repo root)* |
+   | **Instance type** | Free |
+   | **Port** | `8040` |
+
+   Leave the start command blank — the Dockerfile `CMD` handles it:
+   ```
+   python -m ccs_platform.cli api --host 0.0.0.0 --port 8040
+   ```
+
+5. Under **Environment Variables**, add:
+
+   | Key | Value |
+   |-----|-------|
+   | `CCS_PLATFORM_ENVIRONMENT` | `production` |
+   | `CCS_PLATFORM_REQUIRE_LOGIN` | `true` |
+   | `CCS_PLATFORM_DATABASE_URL` | *(Neon DSN from 1.2)* |
+   | `CCS_PLATFORM_SESSION_SECRET_KEY` | *(generated in 1.1)* |
+   | `CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY` | *(generated in 1.1)* |
+   | `CCS_PLATFORM_STORAGE_BACKEND` | `local` |
+   | `CCS_PLATFORM_LOCAL_STORAGE_DIR` | `/app/data/archive/platform` |
+   | `CCS_PLATFORM_BACKUPS_DIR` | `/app/data/backups` |
+   | `CCS_PLATFORM_EMBEDDED_WORKER` | `false` |
+   | `CCS_PLATFORM_WORKER_QUEUES` | `default` |
+   | `CCS_PLATFORM_JOB_DISPATCH_BACKEND` | `database` |
+   | `CCS_PLATFORM_RUNTIME_SETTINGS_SEED_SOURCE` | `env` |
+   | `CCS_PLATFORM_CORS_ALLOW_ORIGINS` | *(your Vercel URL, e.g. `https://ccs.vercel.app`)* — set this after deploying frontend |
+   | `CCS_PLATFORM_TIMEZONE` | `Asia/Dubai` |
+
+6. Under **Disks**, add a **Persistent Disk**:
+
+   | Setting | Value |
+   |---------|-------|
+   | **Name** | `ccs-data` |
+   | **Mount path** | `/app/data` |
+   | **Size** | 1 GB |
+
+   > This stores uploaded PDFs, exports, and backups. Without this disk, all files are lost on every deploy.
+
+7. Click **Create Web Service**. Render will build the Docker image (5–10 min on first build).
+
+---
+
+### 1.4 Background Worker — Render Background Worker
+
+The scraping worker runs Playwright (Chromium) and must be a separate always-on process.
+
+1. Click **New → Background Worker**.
+
+2. Connect the same repo.
+
+3. Configure:
+
+   | Setting | Value |
+   |---------|-------|
+   | **Name** | `ccs-worker` |
+   | **Region** | Same as API |
+   | **Branch** | `main` |
+   | **Runtime** | **Docker** |
+   | **Dockerfile path** | `deploy/Dockerfile.app` |
+   | **Instance type** | Free |
+   | **Start command** | `python -m ccs_platform.cli worker` |
+
+4. Under **Environment Variables**, add the **same set** as the API service above, **except** change:
+
+   | Key | Value |
+   |-----|-------|
+   | `CCS_PLATFORM_EMBEDDED_WORKER` | `false` |
+   | `CCS_PLATFORM_WORKER_QUEUES` | `scrape` |
+
+   > The API handles `default` queue jobs (uploads, reclassify, export). The worker handles `scrape` queue jobs (browser automation). This split keeps browser processes off the API service.
+
+5. Under **Disks**, add the **same persistent disk** as the API by mounting the same volume:
+
+   | Setting | Value |
+   |---------|-------|
+   | **Mount path** | `/app/data` |
+
+   > Both services must share the same disk so the worker can write downloaded PDFs and the API can serve them.
+
+6. Click **Create Background Worker**.
+
+---
+
+### 1.5 Run database migrations
+
+Migrations must run before the app serves traffic. Do this from the Render **Shell** tab on the API service:
+
+1. In the Render dashboard, open the `ccs-api` service.
+2. Click the **Shell** tab (available once the service has deployed at least once).
+3. Run:
+
+   ```bash
+   cd /app
+   alembic upgrade head
+   ```
+
+   Expected output ends with something like:
+   ```
+   INFO  Running upgrade 20260226_000006 -> 20260228_000007, Drop dead CategoryRule columns
+   ```
+
+4. Restart both services after the migration completes (Render dashboard → **Manual Deploy → Deploy latest commit**, or the **Restart** button).
+
+> **Tip:** You can also set `alembic upgrade head` as a **pre-deploy command** in Render so migrations always run before traffic switches to the new version. Under the service settings → **Build & Deploy → Pre-Deploy Command**, enter:
+> ```bash
+> cd /app && alembic upgrade head
+> ```
+
+---
+
+### 1.6 Seed scraper credentials
+
+On first boot the app looks for runtime settings (scraper usernames/passwords) in the database. Seed them via the admin UI:
+
+1. Navigate to `https://ccs-api.onrender.com` (replace with your Render URL).
+2. Log in with the default account (credentials are set via `CCS_PLATFORM_LOGIN_*` env vars — see `.env.example`).
+3. Go to **Settings → Runtime Variables**.
+4. Add each credential for your banks using the format `<PROFILE_KEY>_<BANK>_<SETTING>`:
+
+   ```
+   ALICE_FAB_USERNAME        → your FAB online banking username
+   ALICE_FAB_PASSWORD        → your FAB online banking password
+   ALICE_ENBD_USERNAME       → ...
+   ALICE_ENBD_PASSWORD       → ...
+   ALICE_ADCB_CID            → ...
+   ALICE_ADCB_LOGIN_PASSWORD → ...
+   ALICE_ADCB_PDF_PASSWORD   → ...
+   # etc. — see .env.example for full list
+   ```
+
+   Mark each as **Secret** (encrypted in DB via Fernet key set in step 1.3).
+
+> Alternatively, set `CCS_PLATFORM_RUNTIME_SETTINGS_SEED_SOURCE=env_file_then_env` and add the credential env vars directly to the Render service. They will be seeded into the DB on startup and can then be managed via the UI.
+
+---
+
+### 1.7 Frontend — Vercel
+
+1. Sign up / log in at <https://vercel.com> (GitHub login works).
+
+2. Click **Add New → Project** → import this GitHub repo.
+
+3. Configure the project:
+
+   | Setting | Value |
+   |---------|-------|
+   | **Framework preset** | Vite |
+   | **Root directory** | `frontend` |
+   | **Build command** | `npm run build` |
+   | **Output directory** | `dist` |
+   | **Install command** | `npm ci` |
+
+4. Under **Environment Variables**, add:
+
+   | Key | Value |
+   |-----|-------|
+   | `VITE_API_BASE_URL` | `https://ccs-api.onrender.com` *(your Render API URL)* |
+
+5. Click **Deploy**. Vercel builds and hosts the static files.
+
+6. Once deployed, copy the Vercel URL (e.g. `https://ccs-xyz.vercel.app`).
+
+7. Go back to the Render `ccs-api` service → **Environment** → update `CCS_PLATFORM_CORS_ALLOW_ORIGINS` to your Vercel URL:
+   ```
+   https://ccs-xyz.vercel.app
+   ```
+   Then redeploy the API service so the CORS header takes effect.
+
+> **Custom domain:** In Vercel → **Settings → Domains**, add your own domain. Update `CCS_PLATFORM_CORS_ALLOW_ORIGINS` on Render to match.
+
+---
+
+### 1.8 Verify the deployment
 
 ```bash
-cd frontend
-npm install
-npm run build
+# Health check (liveness)
+curl https://ccs-api.onrender.com/api/v1/health
+
+# Readiness (checks DB connection and worker queue)
+curl https://ccs-api.onrender.com/api/v1/health/ready
+
+# Should return {"status": "ok", ...} for both
 ```
 
-1. Import the repo in Vercel.
-2. Set **Root Directory** to `frontend`.
-3. Set the `VITE_API_BASE_URL` env var to your Render API URL (e.g. `https://ccs-api.onrender.com`).
-4. Deploy.
+Open `https://ccs-xyz.vercel.app` in a browser — you should see the login page.
 
-> **Note:** The Vite dev proxy only works locally. In production the frontend calls the API directly; set `VITE_API_BASE_URL` and ensure CORS is configured on the backend.
+---
+
+### 1.9 Ongoing operations
+
+**Redeploy after code changes:**
+Both Render services auto-deploy when you push to `main`. Migrations run via the pre-deploy command (step 1.5 tip) or manually via the Shell.
+
+**Check worker logs:**
+Render dashboard → `ccs-worker` → **Logs** tab. Scrape job output (Playwright, bank login steps) appears here.
+
+**Upgrade storage:**
+The free 1 GB persistent disk fills up over time with PDFs and exports. Render charges ~$0.25/GB/month for additional disk. Alternatively, switch `CCS_PLATFORM_STORAGE_BACKEND=gcs` and set up a GCS bucket (free tier: 5 GB/month) — no code changes needed, just env var updates.
+
+**Rotate encryption key:**
+If you need to rotate `CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY`, use the re-encryption script before changing the env var:
+```bash
+# From the Render Shell on the API service
+PYTHONPATH=/app python /app/scripts/rotate_runtime_setting_secrets.py \
+  --old-key OLD_KEY --new-key NEW_KEY --dry-run
+
+# Then apply:
+PYTHONPATH=/app python /app/scripts/rotate_runtime_setting_secrets.py \
+  --old-key OLD_KEY --new-key NEW_KEY
+```
+Then update the env var on both Render services and redeploy.
 
 ---
 
