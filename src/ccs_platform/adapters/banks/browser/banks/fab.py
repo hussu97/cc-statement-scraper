@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from pathlib import Path
 from typing import Any
 
@@ -210,13 +211,55 @@ def _click_exact_control_text(
 
 
 def _navigate_to_cards_activity(page: Any, logger: logging.Logger, bank_cfg: dict) -> bool:
+    def _current_url() -> str:
+        try:
+            return str(page.url or "").lower()
+        except Exception:  # noqa: BLE001
+            return ""
+
+    def _on_cards_activity() -> bool:
+        return "cards/cardsactivity" in _current_url()
+
+    def _safe_wait(timeout_ms: int) -> bool:
+        try:
+            page.wait_for_timeout(timeout_ms)
+            return True
+        except Exception:  # noqa: BLE001
+            return False
+
+    def _wait_for_dashboard_idle(*, timeout_ms: int = 5000) -> None:
+        spinner_selectors = [
+            "[role='progressbar']",
+            ".mat-progress-spinner",
+            ".mat-spinner",
+            ".loading",
+            ".spinner",
+            ".overlay-loader",
+        ]
+        deadline = time.time() + (timeout_ms / 1000.0)
+        while time.time() < deadline:
+            busy = False
+            for selector in spinner_selectors:
+                locator = page.locator(selector)
+                try:
+                    if locator.count() > 0 and locator.first.is_visible():
+                        busy = True
+                        break
+                except Exception:  # noqa: BLE001
+                    continue
+            if not busy:
+                return
+            if not _safe_wait(350):
+                return
+
     handle_continue_gate(page, logger)
-    if "cards/cardsactivity" in page.url.lower():
+    if _on_cards_activity():
         return True
 
-    if "/dashboard" not in page.url.lower():
+    if "/dashboard" not in _current_url() and "/cards/" not in _current_url():
         click_keyword(page, "Dashboard", logger)
-        page.wait_for_timeout(1200)
+        if not _safe_wait(1200):
+            return False
         handle_continue_gate(page, logger)
 
     last4_values = [
@@ -225,29 +268,50 @@ def _navigate_to_cards_activity(page: Any, logger: logging.Logger, bank_cfg: dic
         if str(card.get("last4", "")).strip()
     ]
 
-    for last4 in last4_values:
-        locator = page.locator(f"text={last4}")
-        try:
-            count = min(locator.count(), 6)
-        except Exception:  # noqa: BLE001
-            count = 0
-        for idx in range(count):
-            item = locator.nth(idx)
-            try:
-                if not item.is_visible():
-                    continue
-                item.click(timeout=2500)
-                page.wait_for_timeout(1800)
-                logger.info("FAB: clicked dashboard card candidate with last4=%s", last4)
-                if "cards/cardsactivity" in page.url.lower():
-                    return True
-            except Exception:  # noqa: BLE001
-                continue
-
-    if click_keyword(page, "CASHBACK CARD", logger):
-        page.wait_for_timeout(1800)
-        if "cards/cardsactivity" in page.url.lower():
+    # FAB dashboard tiles can render late; poll and retry before URL fallback.
+    for attempt in range(6):
+        _wait_for_dashboard_idle(timeout_ms=5000)
+        handle_continue_gate(page, logger)
+        if _on_cards_activity():
             return True
+
+        for keyword in ["Credit Cards", "Cards", "My FAB Products"]:
+            if click_keyword(page, keyword, logger):
+                if not _safe_wait(1600):
+                    return False
+                handle_continue_gate(page, logger)
+                if _on_cards_activity():
+                    logger.info("FAB: reached cardsActivity via '%s' navigation", keyword)
+                    return True
+
+        for last4 in last4_values:
+            locator = page.locator(f"text={last4}")
+            try:
+                count = min(locator.count(), 6)
+            except Exception:  # noqa: BLE001
+                count = 0
+            for idx in range(count):
+                item = locator.nth(idx)
+                try:
+                    if not item.is_visible():
+                        continue
+                    item.click(timeout=2500)
+                    if not _safe_wait(1800):
+                        return False
+                    logger.info("FAB: clicked dashboard card candidate with last4=%s", last4)
+                    if _on_cards_activity():
+                        return True
+                except Exception:  # noqa: BLE001
+                    continue
+
+        if click_keyword(page, "CASHBACK CARD", logger):
+            if not _safe_wait(1800):
+                return False
+            if _on_cards_activity():
+                return True
+
+        if attempt < 5 and not _safe_wait(900):
+            return False
 
     portal_url = str(bank_cfg.get("portal_url", "")).strip()
     if portal_url:
@@ -255,9 +319,10 @@ def _navigate_to_cards_activity(page: Any, logger: logging.Logger, bank_cfg: dic
         target = f"{base_url}/PersonalBankingWeb/cards/cardsActivity"
         try:
             page.goto(target, wait_until="domcontentloaded", timeout=30000)
-            page.wait_for_timeout(1800)
+            if not _safe_wait(1800):
+                return False
             handle_continue_gate(page, logger)
-            if "cards/cardsactivity" in page.url.lower():
+            if _on_cards_activity():
                 logger.info("FAB: reached cardsActivity via direct URL fallback")
                 return True
         except Exception:  # noqa: BLE001
@@ -439,6 +504,9 @@ def _try_popup_download(popup_scope: Any, page: Any, incoming_dir: Path, logger:
         return None
 
     primary_controls = [
+        # FAB uses a plain <div validatedownloadestatement class="download-option"> with Angular (click) binding.
+        (popup_scope.locator("[validatedownloadestatement]"), "validatedownloadestatement div"),
+        (popup_scope.locator("div.download-option:has-text('Download as .pdf')"), "div.download-option"),
         (
             popup_scope.get_by_role("button", name=re.compile(r"download\s+as\s*\.pdf", re.IGNORECASE)),
             "role=button Download as .pdf",
@@ -452,7 +520,9 @@ def _try_popup_download(popup_scope: Any, page: Any, incoming_dir: Path, logger:
         if path is not None:
             return path
 
-    # FAB sometimes binds the click handler to an ancestor element.
+    # FAB sometimes binds the click handler to an ancestor element or via Angular directives
+    # that do not use onclick/ng-click attributes. Try clicking any visible element containing
+    # the download text — including elements with cursor:pointer or a known download class.
     try:
         with page.expect_download(timeout=DOWNLOAD_EVENT_TIMEOUT_MS) as download_info:
             clicked = popup_scope.evaluate(
@@ -474,9 +544,13 @@ def _try_popup_download(popup_scope: Any, page: Any, incoming_dir: Path, logger:
                       const hasHandler = !!(
                         (cur.getAttribute && cur.getAttribute('onclick')) ||
                         (cur.getAttribute && cur.getAttribute('ng-click')) ||
-                        (cur.getAttribute && cur.getAttribute('data-ng-click'))
+                        (cur.getAttribute && cur.getAttribute('data-ng-click')) ||
+                        (cur.getAttribute && cur.getAttribute('validatedownloadestatement') !== null) ||
+                        (cur.className && /download-option/i.test(cur.className))
                       );
-                      if ((tag === 'button' || tag === 'a' || role === 'button' || hasHandler) && isVisible(cur)) {
+                      const cs = window.getComputedStyle(cur);
+                      const hasCursorPointer = cs.cursor === 'pointer';
+                      if ((tag === 'button' || tag === 'a' || role === 'button' || hasHandler || hasCursorPointer) && isVisible(cur)) {
                         cur.click();
                         return true;
                       }
@@ -526,6 +600,8 @@ def _open_download_statements_modal(page: Any, logger: logging.Logger) -> bool:
 
 def _wait_for_popup_download_control(popup_scope: Any, page: Any, logger: logging.Logger) -> None:
     checks = [
+        (popup_scope.locator("[validatedownloadestatement]"), "validatedownloadestatement div"),
+        (popup_scope.locator("div.download-option:has-text('Download as .pdf')"), "div.download-option"),
         (
             popup_scope.get_by_role("button", name=re.compile(r"download\s+as\s*\.pdf", re.IGNORECASE)),
             "role=button Download as .pdf",
@@ -587,6 +663,8 @@ def _wait_for_popup_idle(page: Any, popup_scope: Any, logger: logging.Logger) ->
 
 def _download_control_enabled(popup_scope: Any, page: Any) -> bool:
     checks = [
+        popup_scope.locator("[validatedownloadestatement]"),
+        popup_scope.locator("div.download-option:has-text('Download as .pdf')"),
         popup_scope.get_by_role("button", name=re.compile(r"download\s+as\s*\.pdf", re.IGNORECASE)),
         popup_scope.locator("button:has-text('Download as .pdf')"),
         popup_scope.locator("a:has-text('Download as .pdf')"),
@@ -596,6 +674,7 @@ def _download_control_enabled(popup_scope: Any, page: Any) -> bool:
         page.get_by_role("button", name=re.compile(r"download\s+as\s*\.pdf", re.IGNORECASE)),
         page.locator("button:has-text('Download as .pdf')"),
         page.locator("a:has-text('Download as .pdf')"),
+        page.locator("[validatedownloadestatement]"),
     ]
     for locator in checks:
         try:
