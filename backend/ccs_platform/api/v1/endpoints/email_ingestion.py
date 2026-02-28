@@ -59,7 +59,7 @@ SERVICE_SCOPE_UPLOAD = "email_ingestion:upload"
 DEFAULT_SERVICE_SCOPES = [SERVICE_SCOPE_READ, SERVICE_SCOPE_WRITE, SERVICE_SCOPE_UPLOAD]
 
 TOKEN_ENDPOINT_BY_PROVIDER = {
-    EmailProvider.MICROSOFT: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+    EmailProvider.MICROSOFT: "https://login.microsoftonline.com/consumers/oauth2/v2.0/token",
     EmailProvider.GMAIL: "https://oauth2.googleapis.com/token",
 }
 CLIENT_ID_KEY_BY_PROVIDER = {
