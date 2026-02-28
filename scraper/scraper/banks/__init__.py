@@ -1,0 +1,1 @@
+"""Browser bank download adapters."""

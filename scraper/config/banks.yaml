@@ -1,0 +1,44 @@
+banks:
+  FAB:
+    bank_name: First Abu Dhabi Bank
+    portal_url: https://online.bankfab.com/PersonalBankingWeb/login
+    file_glob_patterns:
+      - "*FAB*Statement*.pdf"
+      - "*Credit Card E-Statement*.PDF"
+      - "*CreditCardEStatement*.PDF"
+
+  ADCB:
+    bank_name: Abu Dhabi Central Bank
+    portal_url: https://online.adcb.com/apps/ADCBIB/#_frmLogin
+    file_glob_patterns:
+      - "*ADCB*Statement*.pdf"
+
+  ENBD:
+    bank_name: Emirates National Bank of Dubai
+    portal_url: https://online.emiratesnbd.com/
+    file_glob_patterns:
+      - "*Emirates NBD*Statement*.pdf"
+      - "*ENBD*Statement*.pdf"
+
+  EIB:
+    bank_name: Emirates Islamic Bank
+    portal_url: https://login.emiratesislamic.ae/
+    file_glob_patterns:
+      - "*Emirates Islamic*Statement*.pdf"
+      - "*EIB*Statement*.pdf"
+
+  SIB:
+    bank_name: Sharjah Islamic Bank
+    portal_url: https://online.sib.ae/index.html?lang=en-US
+    file_glob_patterns:
+      - "*SIB*Statement*.pdf"
+      - "*Sharjah*Islamic*Statement*.pdf"
+      - "*SIB*E-Statement*.pdf"
+
+  MASHREQ:
+    bank_name: Mashreq Bank
+    portal_url: https://digital.mashreqbank.com/onlinebanking/
+    file_glob_patterns:
+      - "*MASHREQ*Statement*.pdf"
+      - "*Mashreq*Statement*.pdf"
+      - "*E-Statement*.pdf"
