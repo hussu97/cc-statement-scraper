@@ -33,7 +33,7 @@ jobs:
           cache-dependency-path: backend/requirements*.txt
 
       - name: Install dependencies
-        run: pip install -r backend/requirements.txt -r backend/requirements-dev.txt pip-audit bandit
+        run: pip install -e backend/ -r backend/requirements.txt -r backend/requirements-dev.txt pip-audit bandit
 
       - name: Syntax check
         run: python -m compileall backend/ccs_platform backend/scripts
