@@ -30,25 +30,34 @@ class ScraperConfig:
     # Download directory
     download_dir: Path = field(default_factory=lambda: Path(os.environ.get("CCS_SCRAPER_DOWNLOAD_DIR", "./downloads")))
 
-    # Bank credentials sourced from env
+    # Bank credentials sourced from env (keyed without profile prefix)
     credentials: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.download_dir = Path(self.download_dir)
+        self._reload_credentials()
+
+    def _reload_credentials(self) -> None:
+        """Re-read credentials for the current profile_key from the environment."""
+        prefix = self.profile_key.upper() + "_"
+        credential_keys = {
+            "FAB_USERNAME", "FAB_PASSWORD",
+            "ADCB_CID", "ADCB_LOGIN_PASSWORD", "ADCB_PDF_PASSWORD",
+            "ENBD_USERNAME", "ENBD_PASSWORD",
+            "EIB_USERNAME", "EIB_PASSWORD",
+            "SIB_USER_ID", "SIB_PASSWORD", "SIB_PDF_PASSWORD",
+            "MASHREQ_USERNAME", "MASHREQ_PASSWORD",
+        }
         self.credentials = {
-            k: v
+            k[len(prefix):]: v
             for k, v in os.environ.items()
-            if k in {
-                "FAB_USERNAME", "FAB_PASSWORD",
-                "ADCB_CID", "ADCB_LOGIN_PASSWORD", "ADCB_PDF_PASSWORD",
-                "ENBD_USERNAME", "ENBD_PASSWORD",
-                "EIB_USERNAME", "EIB_PASSWORD",
-                "SIB_USER_ID", "SIB_PASSWORD", "SIB_PDF_PASSWORD",
-                "MASHREQ_USERNAME", "MASHREQ_PASSWORD",
-            }
-            and v
+            if k.startswith(prefix) and k[len(prefix):] in credential_keys and v
         }
 
 
-def get_config() -> ScraperConfig:
-    return ScraperConfig()
+def get_config(profile: str | None = None) -> ScraperConfig:
+    cfg = ScraperConfig()
+    if profile:
+        cfg.profile_key = profile
+        cfg._reload_credentials()
+    return cfg
