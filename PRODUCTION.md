@@ -877,6 +877,8 @@ gcloud run deploy ccs-gmail-relay \
   --set-env-vars="CCS_API_BASE_URL=https://YOUR_API_HOST" \
   --set-env-vars="CCS_SERVICE_TOKEN=YOUR_SERVICE_TOKEN" \
   --port=8080 \
+  --command=uvicorn \
+  --args="gmail_ingest_relay:app,--host,0.0.0.0,--port,8080" \
   --min-instances=0 \
   --memory=256Mi \
   --cpu=1
