@@ -236,6 +236,7 @@ export function JobsPage() {
   const [jobLogs, setJobLogs] = useState<JobLogEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
   const liveJobPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const jobLogPanelRef = useRef<HTMLDivElement | null>(null);
 
   const fromIndex = monthOptions.findIndex((item) => item.value === monthFrom);
   const toIndex = monthOptions.findIndex((item) => item.value === monthTo);
@@ -429,6 +430,12 @@ export function JobsPage() {
         </p>
       </Panel>
 
+      <div ref={jobLogPanelRef}>
+        <Panel title={liveJob ? `Job Log — #${liveJob.id}` : 'Job Log'}>
+          <JobLogPanel job={liveJob} logs={jobLogs} />
+        </Panel>
+      </div>
+
       <Panel title="Jobs">
         <div className="row" style={{ justifyContent: 'space-between' }}>
           <span className="muted">Live status for scrape/upload/reclassify/export/diagnostics jobs across all pages.</span>
@@ -455,7 +462,12 @@ export function JobsPage() {
                   <td>{job.progress_percent}%</td>
                   <td>{formatLocalDateTime(job.created_at)}</td>
                   <td>
-                    <button className="ghost" onClick={() => setActiveJob(job)}>View</button>{' '}
+                    <button className="ghost" onClick={() => {
+                      setActiveJob(job);
+                      window.requestAnimationFrame(() => {
+                        jobLogPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      });
+                    }}>View</button>{' '}
                     {job.status === 'queued' || job.status === 'running' ? (
                       <button className="ghost" onClick={() => cancelJob(job.id)}>Cancel</button>
                     ) : null}
@@ -476,10 +488,6 @@ export function JobsPage() {
             setJobsPage(1);
           }}
         />
-      </Panel>
-
-      <Panel title={liveJob ? `Job Log — #${liveJob.id}` : 'Job Log'}>
-        <JobLogPanel job={liveJob} logs={jobLogs} />
       </Panel>
     </div>
   );
