@@ -5,6 +5,10 @@ Two complete production paths:
 - **Plan 1 (Free):** Render (API + worker) + Vercel (frontend) + Neon/Supabase (free Postgres)
 - **Plan 2 (GCP):** Cloud Run + Cloud SQL + Cloud Storage + Artifact Registry + Secret Manager
 
+Email-driven statement ingestion (no browser scraping for future months) is documented in:
+
+- `docs/operations/email-ingestion-automation.md`
+
 ---
 
 ## Prerequisites (both plans)

@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -185,7 +186,18 @@ def save_download(download: Any, incoming_dir: Path, bank_code: str, logger: log
 
 
 def attempt_download_capture(page: Any, incoming_dir: Path, bank_code: str, logger: logging.Logger) -> int:
+    started_at = time.monotonic()
+    scan_timeout_seconds = 45.0
     downloaded_count = 0
+
+    def _timed_out() -> bool:
+        return (time.monotonic() - started_at) >= scan_timeout_seconds
+
+    def _visible(item: Any) -> bool:
+        try:
+            return bool(item.is_visible(timeout=700))
+        except Exception:  # noqa: BLE001
+            return False
 
     candidate_selectors = [
         "a[href$='.pdf']",
@@ -196,6 +208,10 @@ def attempt_download_capture(page: Any, incoming_dir: Path, bank_code: str, logg
     ]
 
     for selector in candidate_selectors:
+        if _timed_out():
+            logger.info("%s: download control scan timed out during candidate selectors", bank_code)
+            return downloaded_count
+
         locator = page.locator(selector)
         try:
             count = min(locator.count(), 12)
@@ -203,9 +219,13 @@ def attempt_download_capture(page: Any, incoming_dir: Path, bank_code: str, logg
             count = 0
 
         for idx in range(count):
+            if _timed_out():
+                logger.info("%s: download control scan timed out during candidate selectors", bank_code)
+                return downloaded_count
+
             item = locator.nth(idx)
             try:
-                if not item.is_visible():
+                if not _visible(item):
                     continue
                 with page.expect_download(timeout=5000) as download_info:
                     item.click(timeout=2500)
@@ -218,14 +238,18 @@ def attempt_download_capture(page: Any, incoming_dir: Path, bank_code: str, logg
 
     controls = page.locator("button, a, [role='button'], input[type='button']")
     try:
-        count = min(controls.count(), 150)
+        count = min(controls.count(), 90)
     except Exception:  # noqa: BLE001
         count = 0
 
     for idx in range(count):
+        if _timed_out():
+            logger.info("%s: download control scan timed out during control sweep", bank_code)
+            return downloaded_count
+
         item = controls.nth(idx)
         try:
-            text = (item.inner_text() or "").strip().lower()
+            text = (item.inner_text(timeout=900) or "").strip().lower()
         except Exception:  # noqa: BLE001
             continue
 
@@ -235,7 +259,7 @@ def attempt_download_capture(page: Any, incoming_dir: Path, bank_code: str, logg
             continue
 
         try:
-            if not item.is_visible():
+            if not _visible(item):
                 continue
             with page.expect_download(timeout=5000) as download_info:
                 item.click(timeout=2500)

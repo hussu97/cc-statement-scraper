@@ -1220,6 +1220,18 @@ def _is_card_details_screen(page: Any) -> bool:
     return False
 
 
+def _wait_for_card_details_screen(page: Any, *, timeout_ms: int = 4200) -> bool:
+    end = time.monotonic() + (max(timeout_ms, 200) / 1000.0)
+    while time.monotonic() < end:
+        if _is_card_details_screen(page):
+            return True
+        try:
+            page.wait_for_timeout(350)
+        except Exception:  # noqa: BLE001
+            break
+    return _is_card_details_screen(page)
+
+
 def _click_card_by_limit(page: Any, logger: logging.Logger, limit_aed: int) -> bool:
     try:
         result = page.evaluate(
@@ -1317,8 +1329,7 @@ def _click_card_by_limit(page: Any, logger: logging.Logger, limit_aed: int) -> b
     if matched_text:
         logger.info("ADCB: matched card block text=%s", matched_text[:220])
 
-    page.wait_for_timeout(1700)
-    return True
+    return _wait_for_card_details_screen(page, timeout_ms=5000)
 
 
 def _wait_for_landing_ready(page: Any, logger: logging.Logger) -> None:
@@ -1393,9 +1404,8 @@ def _click_card_with_last4(page: Any, logger: logging.Logger, bank_cfg: dict) ->
                         item.click(timeout=2500)
                     except Exception:  # noqa: BLE001
                         item.click(timeout=2500, force=True)
-                    page.wait_for_timeout(1700)
                     logger.info("ADCB: clicked card candidate with last4=%s via %s", last4, selector)
-                    if _is_card_details_screen(page):
+                    if _wait_for_card_details_screen(page, timeout_ms=5200):
                         return True
                 except Exception:  # noqa: BLE001
                     continue
@@ -1447,9 +1457,8 @@ def _click_card_tile_fallback(page: Any, logger: logging.Logger) -> bool:
             """
         )
         if clicked:
-            page.wait_for_timeout(1700)
             logger.info("ADCB: clicked card candidate via fallback scan")
-            return True
+            return _wait_for_card_details_screen(page, timeout_ms=5200)
     except Exception:  # noqa: BLE001
         pass
 
@@ -1473,11 +1482,11 @@ def _open_card_details(page: Any, logger: logging.Logger, bank_cfg: dict) -> boo
         _click_sidebar_credit_cards(page, logger)
         click_keyword(page, "Credit Cards", logger)
         click_keyword(page, "Cards", logger)
-        if _click_card_by_limit(page, logger, target_limit_aed) and _is_card_details_screen(page):
+        if _click_card_by_limit(page, logger, target_limit_aed):
             return True
         if _click_card_with_last4(page, logger, bank_cfg):
             return True
-        if _click_card_tile_fallback(page, logger) and _is_card_details_screen(page):
+        if _click_card_tile_fallback(page, logger):
             return True
         page.mouse.wheel(0, 420)
         page.wait_for_timeout(500)
@@ -1509,6 +1518,21 @@ def download_latest_statement(
         )
         bank_cfg["download_diagnostics"] = diagnostics
         return downloaded
+
+    # Latest/monthless scrape: first try the structured statement-period section,
+    # which is more reliable than generic button scanning on ADCB.
+    if _ensure_statement_download_section(page, logger):
+        _ensure_terms_checkbox_checked(page, logger)
+        latest_path = _download_statement_for_selected_period(page, incoming_dir, logger)
+        if latest_path is not None:
+            bank_cfg["download_diagnostics"] = {
+                "requested_months": ["latest"],
+                "downloaded": [{"month": "latest", "path": str(latest_path)}],
+                "skipped_unavailable": [],
+                "failed": [],
+            }
+            return 1
+        logger.info("ADCB: structured latest statement download path failed; using fallback navigation")
 
     for _ in range(8):
         attempt_navigation_to_statements(page, logger)

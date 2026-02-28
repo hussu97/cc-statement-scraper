@@ -72,6 +72,7 @@ class PlatformSettings(BaseSettings):
     runtime_settings_encryption_key: str | None = None
     runtime_settings_seed_source: str | None = None
     runtime_settings_env_file: Path | None = ROOT_DIR / ".env"
+    email_ingestion_enabled: bool = False
 
     def model_post_init(self, __context: object) -> None:
         if self.is_production():

@@ -1,5 +1,7 @@
 from ccs_platform.db.models.enums import (
     Direction,
+    EmailIngestionStatus,
+    EmailProvider,
     ExportStatus,
     JobStatus,
     JobType,
@@ -7,6 +9,12 @@ from ccs_platform.db.models.enums import (
     ReferenceSource,
     ScheduleStatus,
     SourceType,
+)
+from ccs_platform.db.models.email_ingestion import (
+    EmailBankRoute,
+    EmailIngestionEvent,
+    EmailMailbox,
+    ServiceApiToken,
 )
 from ccs_platform.db.models.profiles import Profile, ProfileBank
 from ccs_platform.db.models.operations import AuditEvent, Export, Job, JobItem, Schedule
@@ -20,6 +28,11 @@ __all__ = [
     "Category",
     "CategoryRule",
     "Direction",
+    "EmailBankRoute",
+    "EmailIngestionEvent",
+    "EmailIngestionStatus",
+    "EmailMailbox",
+    "EmailProvider",
     "Export",
     "ExportStatus",
     "Job",
@@ -34,6 +47,7 @@ __all__ = [
     "RuntimeSetting",
     "Schedule",
     "ScheduleStatus",
+    "ServiceApiToken",
     "SourceType",
     "Statement",
     "StatementLine",

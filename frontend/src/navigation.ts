@@ -25,6 +25,7 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     title: 'Configuration',
     items: [
+      { path: '/email-ingestion', label: 'Email Ingestion' },
       { path: '/runtime-settings', label: 'Runtime Variables' },
       { path: '/rules', label: 'Categories & Rules' },
       { path: '/schedules', label: 'Schedules' },

@@ -6,6 +6,7 @@ from ccs_platform.api.v1.endpoints import (
     categories,
     dashboard,
     diagnostics,
+    email_ingestion,
     exports,
     jobs,
     profiles,
@@ -31,5 +32,6 @@ router.include_router(runtime_settings.router)
 router.include_router(schedules.router)
 router.include_router(exports.router)
 router.include_router(diagnostics.router)
+router.include_router(email_ingestion.router)
 
 __all__ = ["router"]
