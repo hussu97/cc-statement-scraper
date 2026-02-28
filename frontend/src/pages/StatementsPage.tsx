@@ -6,18 +6,19 @@ import { MultiSelectDropdown } from '../components/MultiSelectDropdown';
 import { Panel } from '../components/Panel';
 import { TablePagination } from '../components/TablePagination';
 import { useActiveProfileKey } from '../profileStore';
+import type { Job, PagedResponse, Statement, StatementLine } from '../types/statements';
 
 export function StatementsPage() {
   const activeProfileKey = useActiveProfileKey();
   const detailPanelRef = useRef<HTMLDivElement | null>(null);
-  const [statements, setStatements] = useState<any[]>([]);
+  const [statements, setStatements] = useState<Statement[]>([]);
   const [statementsPage, setStatementsPage] = useState(1);
   const [statementsPageSize, setStatementsPageSize] = useState(100);
   const [statementsTotal, setStatementsTotal] = useState(0);
   const [bankOptions, setBankOptions] = useState<string[]>([]);
   const [bankCodes, setBankCodes] = useState<string[]>([]);
-  const [selected, setSelected] = useState<any | null>(null);
-  const [lines, setLines] = useState<any[]>([]);
+  const [selected, setSelected] = useState<(Statement & { reparseJob?: Job; reparseAllJob?: Job }) | null>(null);
+  const [lines, setLines] = useState<StatementLine[]>([]);
   const [linesPage, setLinesPage] = useState(1);
   const [linesPageSize, setLinesPageSize] = useState(100);
   const [linesTotal, setLinesTotal] = useState(0);
@@ -28,7 +29,7 @@ export function StatementsPage() {
 
   async function loadBanks() {
     try {
-      const rows = await api.get<any[]>('/banks');
+      const rows = await api.get<{ code: string }[]>('/banks');
       const options = rows
         .map((row) => String(row.code || '').toUpperCase().trim())
         .filter((value, index, array) => value && array.indexOf(value) === index)
@@ -47,7 +48,7 @@ export function StatementsPage() {
       params.set('page', String(statementsPage));
       params.set('page_size', String(statementsPageSize));
       bankCodes.forEach((code) => params.append('bank_codes', code.toUpperCase()));
-      const data = await api.get<any>(`/statements?${params.toString()}`);
+      const data = await api.get<PagedResponse<Statement>>(`/statements?${params.toString()}`);
       const total = Number(data.total || 0);
       setStatementsTotal(total);
       setStatements(data.items || []);
@@ -62,7 +63,7 @@ export function StatementsPage() {
 
   async function loadStatementLines(statementId: number) {
     try {
-      const lineResp = await api.get<any>(
+      const lineResp = await api.get<PagedResponse<StatementLine>>(
         `/statements/${statementId}/lines?page=${linesPage}&page_size=${linesPageSize}`,
       );
       const total = Number(lineResp.total || 0);
@@ -77,7 +78,7 @@ export function StatementsPage() {
     }
   }
 
-  function openStatement(statement: any) {
+  function openStatement(statement: Statement) {
     setSelected(statement);
     setEditingStatementDate(String(statement.statement_date || ''));
     setLinesPage(1);
@@ -89,8 +90,8 @@ export function StatementsPage() {
 
   async function reparse(statementId: number) {
     try {
-      const job = await api.post<any>(`/statements/${statementId}/reparse`);
-      setSelected((prev: any) => (prev ? { ...prev, reparseJob: job } : prev));
+      const job = await api.post<Job>(`/statements/${statementId}/reparse`);
+      setSelected((prev) => (prev ? { ...prev, reparseJob: job } : prev));
     } catch (err) {
       setError((err as Error).message);
     }
@@ -100,8 +101,8 @@ export function StatementsPage() {
     try {
       setError(null);
       setReparseAllRunning(true);
-      const job = await api.post<any>('/statements/reparse-all');
-      setSelected((prev: any) => (prev ? { ...prev, reparseAllJob: job } : prev));
+      const job = await api.post<Job>('/statements/reparse-all');
+      setSelected((prev) => (prev ? { ...prev, reparseAllJob: job } : prev));
       await load();
     } catch (err) {
       setError((err as Error).message);
@@ -141,7 +142,7 @@ export function StatementsPage() {
     try {
       setError(null);
       setSavingStatementDate(true);
-      const updated = await api.patch<any>(`/statements/${selected.id}`, {
+      const updated = await api.patch<Statement>(`/statements/${selected.id}`, {
         statement_date: editingStatementDate,
       });
       setSelected(updated);

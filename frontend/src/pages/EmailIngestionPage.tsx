@@ -144,19 +144,6 @@ function toJsonInput(value: Record<string, unknown> | null | undefined): string 
   return JSON.stringify(value);
 }
 
-function toDateTimeLocalInput(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return '';
-  }
-  const pad = (num: number) => String(num).padStart(2, '0');
-  const year = parsed.getFullYear();
-  const month = pad(parsed.getMonth() + 1);
-  const day = pad(parsed.getDate());
-  const hours = pad(parsed.getHours());
-  const minutes = pad(parsed.getMinutes());
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
-}
 
 function fromDateTimeLocalInput(value: string): string | null {
   if (!value.trim()) {
@@ -179,7 +166,6 @@ export function EmailIngestionPage() {
 
   const [banks, setBanks] = useState<BankOut[]>([]);
   const [mailboxes, setMailboxes] = useState<EmailMailboxOut[]>([]);
-  const [routes, setRoutes] = useState<EmailBankRouteOut[]>([]);
   const [mailboxEdits, setMailboxEdits] = useState<Record<number, MailboxEditState>>({});
   const [routeForms, setRouteForms] = useState<Record<string, RouteFormState>>({});
   const [runtimeByKey, setRuntimeByKey] = useState<Record<string, RuntimeSetting>>({});
@@ -241,7 +227,6 @@ export function EmailIngestionPage() {
 
       setBanks(banksResp);
       setMailboxes(mailboxesResp.items);
-      setRoutes(routesResp.items);
       setServiceTokens(serviceTokenRows);
 
       const mailboxEditMap: Record<number, MailboxEditState> = {};

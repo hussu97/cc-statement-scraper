@@ -3,10 +3,11 @@ import { useState } from 'react';
 import { api } from '../api';
 import { JsonView } from '../components/JsonView';
 import { Panel } from '../components/Panel';
+import type { Job } from '../types/statements';
 
 export function UploadPage() {
   const [files, setFiles] = useState<FileList | null>(null);
-  const [response, setResponse] = useState<any>(null);
+  const [response, setResponse] = useState<Job | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function upload() {
@@ -20,7 +21,7 @@ export function UploadPage() {
 
     try {
       setError(null);
-      const job = await api.upload<any>('/jobs/upload', form);
+      const job = await api.upload<Job>('/jobs/upload', form);
       setResponse(job);
     } catch (err) {
       setError((err as Error).message);

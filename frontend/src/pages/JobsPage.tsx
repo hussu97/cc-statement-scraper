@@ -6,6 +6,7 @@ import { Panel } from '../components/Panel';
 import { TablePagination } from '../components/TablePagination';
 import { useActiveProfileKey } from '../profileStore';
 import { formatLocalDateTime } from '../utils/datetime';
+import type { Bank, Job, PagedResponse } from '../types/statements';
 
 type MonthOption = {
   value: string;
@@ -57,8 +58,8 @@ export function JobsPage() {
   const monthOptions = useMemo(() => buildMonthOptions(), []);
   const defaultMonth = monthOptions[monthOptions.length - 1]?.value ?? `${MIN_MONTH_YEAR}-01`;
 
-  const [banks, setBanks] = useState<any[]>([]);
-  const [jobs, setJobs] = useState<any[]>([]);
+  const [banks, setBanks] = useState<Bank[]>([]);
+  const [jobs, setJobs] = useState<Job[]>([]);
   const [jobsPage, setJobsPage] = useState(1);
   const [jobsPageSize, setJobsPageSize] = useState(100);
   const [jobsTotal, setJobsTotal] = useState(0);
@@ -68,7 +69,7 @@ export function JobsPage() {
   const [download, setDownload] = useState(true);
   const [headless, setHeadless] = useState(false);
   const [timeout, setTimeoutMinutes] = useState(20);
-  const [activeJob, setActiveJob] = useState<any>(null);
+  const [activeJob, setActiveJob] = useState<Job | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const fromIndex = monthOptions.findIndex((item) => item.value === monthFrom);
@@ -79,7 +80,7 @@ export function JobsPage() {
       : 0;
 
   async function loadBanks() {
-    const rows = await api.get<any[]>('/banks');
+    const rows = await api.get<Bank[]>('/banks');
     setBanks(rows);
   }
 
@@ -87,7 +88,7 @@ export function JobsPage() {
     const params = new URLSearchParams();
     params.set('page', String(nextPage));
     params.set('page_size', String(nextPageSize));
-    const data = await api.get<any>(`/jobs?${params.toString()}`);
+    const data = await api.get<PagedResponse<Job>>(`/jobs?${params.toString()}`);
     const total = Number(data.total || 0);
     setJobsTotal(total);
     setJobs(data.items || []);
@@ -113,7 +114,7 @@ export function JobsPage() {
         headless,
         login_timeout_minutes: timeout,
       };
-      const job = await api.post<any>('/jobs/scrape', payload);
+      const job = await api.post<Job>('/jobs/scrape', payload);
       setActiveJob(job);
       setJobsPage(1);
       await loadJobs(1, jobsPageSize);

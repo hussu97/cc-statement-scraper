@@ -4,10 +4,11 @@ import { api } from '../api';
 import { JsonView } from '../components/JsonView';
 import { Panel } from '../components/Panel';
 import { TablePagination } from '../components/TablePagination';
+import type { Category, CategoryRule, PagedResponse, RuleTestResult } from '../types/statements';
 
 export function RulesPage() {
-  const [categories, setCategories] = useState<any[]>([]);
-  const [rules, setRules] = useState<any[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [rules, setRules] = useState<CategoryRule[]>([]);
   const [rulesPage, setRulesPage] = useState(1);
   const [rulesPageSize, setRulesPageSize] = useState(100);
   const [rulesTotal, setRulesTotal] = useState(0);
@@ -21,7 +22,7 @@ export function RulesPage() {
     active: true,
   });
   const [ruleTest, setRuleTest] = useState({ merchant_normalized: '' });
-  const [ruleTestResult, setRuleTestResult] = useState<any>(null);
+  const [ruleTestResult, setRuleTestResult] = useState<RuleTestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function load(nextPage = rulesPage, nextPageSize = rulesPageSize, nextSearch = rulesSearch) {
@@ -34,8 +35,8 @@ export function RulesPage() {
         ruleParams.set('search', nextSearch.trim());
       }
       const [catRows, ruleRows] = await Promise.all([
-        api.get<any[]>('/categories'),
-        api.get<any>(`/category-rules?${ruleParams.toString()}`),
+        api.get<Category[]>('/categories'),
+        api.get<PagedResponse<CategoryRule>>(`/category-rules?${ruleParams.toString()}`),
       ]);
       setCategories(catRows);
       const nextTotal = Number(ruleRows.total || 0);
@@ -80,7 +81,7 @@ export function RulesPage() {
 
   async function testRule() {
     try {
-      const result = await api.post('/category-rules/test', ruleTest);
+      const result = await api.post<RuleTestResult>('/category-rules/test', ruleTest);
       setRuleTestResult(result);
     } catch (err) {
       setError((err as Error).message);

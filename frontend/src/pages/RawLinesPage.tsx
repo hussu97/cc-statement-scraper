@@ -10,6 +10,7 @@ import { Panel } from '../components/Panel';
 import { TablePagination } from '../components/TablePagination';
 import { useActiveProfileKey } from '../profileStore';
 import { DashboardFilterMeta } from '../types/dashboard';
+import type { PagedResponse, RawLine } from '../types/statements';
 
 const EMPTY_FILTER_META: DashboardFilterMeta = {
   banks: [],
@@ -37,7 +38,7 @@ export function RawLinesPage() {
     dateTo: '',
     direction: '',
   });
-  const [rows, setRows] = useState<any[]>([]);
+  const [rows, setRows] = useState<RawLine[]>([]);
   const [filterMeta, setFilterMeta] = useState<DashboardFilterMeta>(EMPTY_FILTER_META);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -80,7 +81,7 @@ export function RawLinesPage() {
       }
       params.set('page', String(page));
       params.set('page_size', String(pageSize));
-      const data = await api.get<any>(`/transactions?${params.toString()}`, { signal });
+      const data = await api.get<PagedResponse<RawLine> & { filtered_amount_aed_sum?: number }>(`/transactions?${params.toString()}`, { signal });
       const total = Number(data.total || 0);
       setTotalRows(total);
       setFilteredAmountTotal(Number(data.filtered_amount_aed_sum || 0));

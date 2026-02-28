@@ -50,7 +50,7 @@ export function RuntimeSettingsPage() {
       if (nextSearch.trim()) {
         params.set('search', nextSearch.trim());
       }
-      const data = await api.get<any>(`/runtime-settings?${params.toString()}`);
+      const data = await api.get<{ items: RuntimeSetting[]; total: number }>(`/runtime-settings?${params.toString()}`);
       const nextTotal = Number(data.total || 0);
       setTotalRows(nextTotal);
       setRows(data.items || []);
@@ -125,7 +125,7 @@ export function RuntimeSettingsPage() {
   async function seedFromEnv() {
     try {
       setError(null);
-      const result = await api.post<any>('/runtime-settings/seed-from-env', { overwrite_existing: true });
+      const result = await api.post<{ env_file: string; inserted: number; updated: number; skipped: number }>('/runtime-settings/seed-from-env', { overwrite_existing: true });
       setStatusMessage(
         `Seeded from ${result.env_file}: inserted ${result.inserted}, updated ${result.updated}, skipped ${result.skipped}`,
       );
