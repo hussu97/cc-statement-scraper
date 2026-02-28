@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from ccs_platform.api.deps import ActorContext, get_db, require_operator_role
 from ccs_platform.db import models
+from ccs_platform.db.repositories import CategoryRepository
 from ccs_platform.api.v1.schemas import (
     CategoryCreate,
     CategoryOut,
@@ -24,7 +24,7 @@ router = APIRouter(tags=["categories"])
 
 @router.get("/categories", response_model=list[CategoryOut])
 def list_categories(db: Session = Depends(get_db)) -> list[CategoryOut]:
-    rows = db.execute(select(models.Category).order_by(models.Category.name.asc())).scalars().all()
+    rows = CategoryRepository(db).list_all_categories()
     return [CategoryOut.model_validate(row) for row in rows]
 
 
@@ -50,26 +50,9 @@ def list_category_rules(
     page = max(page, 1)
     page_size = min(max(page_size, 1), 1000)
 
-    query = select(models.CategoryRule)
-    count_query = select(func.count(models.CategoryRule.id))
-
-    if search:
-        token = f"%{search.strip().upper()}%"
-        predicate = or_(
-            func.upper(models.CategoryRule.name).like(token),
-            func.upper(models.CategoryRule.category_name).like(token),
-            func.upper(models.CategoryRule.pattern).like(token),
-        )
-        query = query.where(predicate)
-        count_query = count_query.where(predicate)
-
-    total = int(db.execute(count_query).scalar_one())
-    rows = db.execute(
-        query
-        .order_by(func.length(models.CategoryRule.pattern).desc(), models.CategoryRule.id.asc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    ).scalars().all()
+    total, rows = CategoryRepository(db).list_rules_paginated(
+        page=page, page_size=page_size, search=search
+    )
     return PaginatedCategoryRules(
         total=total,
         page=page,

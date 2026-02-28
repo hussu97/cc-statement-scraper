@@ -6,13 +6,13 @@ from datetime import UTC, datetime
 
 import pdfplumber
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
-from sqlalchemy import func, select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 
 from ccs_platform.api.audit import append_audit_event
 from ccs_platform.core.bank_config import load_app_config
 from ccs_platform.core.runtime_settings import decode_runtime_setting_row_value
 from ccs_platform.db import models
+from ccs_platform.db.repositories import JobRepository
 from ccs_platform.api.deps import (
     ActorContext,
     ProfileContext,
@@ -133,17 +133,9 @@ def list_jobs(
     page = max(page, 1)
     page_size = min(max(page_size, 1), 1000)
 
-    count_query = select(func.count(models.Job.id)).where(models.Job.profile_id == profile.profile_id)
-    total = int(db.execute(count_query).scalar_one())
-
-    rows = db.execute(
-        select(models.Job)
-        .options(selectinload(models.Job.items))
-        .where(models.Job.profile_id == profile.profile_id)
-        .order_by(models.Job.created_at.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    ).scalars().all()
+    total, rows = JobRepository(db).list_paginated(
+        profile_id=profile.profile_id, page=page, page_size=page_size
+    )
     return PaginatedJobs(
         total=total,
         page=page,
@@ -158,11 +150,7 @@ def get_job(
     db: Session = Depends(get_db),
     profile: ProfileContext = Depends(get_profile_context),
 ) -> JobOut:
-    row = db.execute(
-        select(models.Job)
-        .options(selectinload(models.Job.items))
-        .where(models.Job.id == job_id, models.Job.profile_id == profile.profile_id)
-    ).scalar_one_or_none()
+    row = JobRepository(db).get_by_id(job_id, profile_id=profile.profile_id)
     if not row:
         raise HTTPException(status_code=404, detail="Job not found")
     return _job_to_out(row)
@@ -273,12 +261,10 @@ async def create_upload_job(
 
     # Load ADCB PDF passwords from runtime settings instead of os.environ so that
     # credentials updated via the admin UI are reflected without a process restart.
-    adcb_password_rows = db.execute(
-        select(models.RuntimeSetting).where(
-            models.RuntimeSetting.profile_id == profile.profile_id,
-            models.RuntimeSetting.key.in_(["ADCB_PDF_PASSWORD", "ADCB_CID"]),
-        )
-    ).scalars().all()
+    adcb_password_rows = JobRepository(db).get_runtime_settings(
+        profile_id=profile.profile_id,
+        keys=["ADCB_PDF_PASSWORD", "ADCB_CID"],
+    )
     adcb_pdf_passwords: list[str | None] = [
         decode_runtime_setting_row_value(row) or None for row in adcb_password_rows
     ]
@@ -361,9 +347,7 @@ def cancel_job(
     profile: ProfileContext = Depends(get_profile_context),
     actor: ActorContext = Depends(require_operator_role),
 ) -> JobOut:
-    job = db.execute(
-        select(models.Job).where(models.Job.id == job_id, models.Job.profile_id == profile.profile_id)
-    ).scalar_one_or_none()
+    job = JobRepository(db).get_by_id(job_id, profile_id=profile.profile_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
