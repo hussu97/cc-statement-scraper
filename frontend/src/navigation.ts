@@ -20,6 +20,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { path: '/upload', label: 'PDF Upload' },
       { path: '/lines', label: 'Raw Lines' },
       { path: '/statements', label: 'Statements' },
+      { path: '/email-ingestion/activity', label: 'Ingestion Activity' },
     ],
   },
   {
