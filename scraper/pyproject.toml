@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=70"]
-build-backend = "setuptools.backends.legacy:build"
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "ccs-scraper"
@@ -14,9 +14,19 @@ dependencies = [
     "python-dotenv>=1.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
 [project.scripts]
 ccs-scraper = "scraper.cli:app"
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["scraper*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"

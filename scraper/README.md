@@ -8,7 +8,7 @@ Standalone CLI tool for downloading bank PDF statements via browser automation a
 cd scraper
 python3 -m venv .venv
 source .venv/bin/activate           # Windows: .venv\Scripts\activate
-pip install -e .                     # installs ccs-scraper CLI + dependencies
+pip install -e ".[dev]"              # installs ccs-scraper CLI + dependencies + pytest
 ccs-scraper install-browser          # downloads Chromium (~200 MB, one-time)
 ```
 
