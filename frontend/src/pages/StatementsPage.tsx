@@ -180,7 +180,7 @@ export function StatementsPage() {
 
   return (
     <div className="grid">
-      <div ref={detailPanelRef}>
+      <div ref={detailPanelRef} style={{ scrollMarginTop: '5rem' }}>
         <Panel title="Statement Detail">
           {selected ? (
             <>

@@ -430,7 +430,7 @@ export function JobsPage() {
         </p>
       </Panel>
 
-      <div ref={jobLogPanelRef}>
+      <div ref={jobLogPanelRef} style={{ scrollMarginTop: '5rem' }}>
         <Panel title={liveJob ? `Job Log — #${liveJob.id}` : 'Job Log'}>
           <JobLogPanel job={liveJob} logs={jobLogs} />
         </Panel>
