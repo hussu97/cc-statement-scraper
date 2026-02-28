@@ -79,6 +79,27 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# 4. Scraper tests (only if scraper files changed)
+# ---------------------------------------------------------------------------
+STAGED_SCRAPER=$(git diff --cached --name-only | grep -E '^scraper/' || true)
+
+if [ -n "$STAGED_SCRAPER" ]; then
+  info "Scraper tests..."
+  if [ -f "scraper/.venv/bin/pytest" ]; then
+    if (cd scraper && .venv/bin/pytest 2>&1); then
+      pass "Scraper tests OK"
+    else
+      fail "Scraper tests failed"
+      ERRORS=$((ERRORS + 1))
+    fi
+  else
+    echo "  scraper/.venv not found — skipping (cd scraper && pip install -e '.[dev]')"
+  fi
+else
+  info "Scraper tests — no scraper files staged, skipping"
+fi
+
+# ---------------------------------------------------------------------------
 echo ""
 if [ "$ERRORS" -gt 0 ]; then
   echo -e "${RED}Pre-commit failed ($ERRORS check(s)). Fix the issues above or use --no-verify to skip.${NC}"

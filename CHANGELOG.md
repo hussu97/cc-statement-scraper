@@ -13,6 +13,9 @@
 ### Scraper
 
 - **chore** Add `scraper/.env.example` — documents all `CCS_SCRAPER_*` settings and bank credential keys with inline comments
+- **test** Add scraper test suite (`tests/`): `test_config.py` (env var parsing, profile isolation, credential filtering), `test_month_utils.py` (month name/abbreviation mapping), `test_bank_config.py` (YAML loading, path structure), `test_shared.py` (MFA/failure pattern detection, PDF snapshot utilities, `require_env`), `test_client.py` (HTTP upload request structure, headers, multipart); no browser automation required — 86 tests, all pure logic
+- **chore** Add `[project.optional-dependencies] dev = ["pytest>=8.0"]` and pytest config (`testpaths`, `pythonpath`) to `scraper/pyproject.toml`; fix build backend to `setuptools.build_meta`
+- **chore** Add scraper test step to `scripts/hooks/pre-commit` — runs `pytest -q` via `scraper/.venv/bin/pytest` when scraper files are staged; skips gracefully if scraper venv not found; update `scraper/README.md` to show `pip install -e ".[dev]"`
 
 ### Docs
 
