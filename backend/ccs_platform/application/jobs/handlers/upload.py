@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -25,27 +24,16 @@ def handle_upload_job(
     for idx, item in enumerate(uploads):
         ctx.assert_not_cancelled(db, job.id)
         bank_code = (item.get("bank_code") or "").upper().strip()
-        storage_key = item.get("storage_key") or ""
-        temp_path_str = item.get("temp_path") or ""
+        storage_key = (item.get("storage_key") or "").strip()
 
-        if storage_key:
-            try:
-                content = ctx.storage.read_bytes(storage_key)
-            except Exception as exc:  # noqa: BLE001
-                failures.append({"bank_code": bank_code, "error": f"Failed to read staging file: {exc}"})
-                continue
-        elif temp_path_str:
-            file_path = Path(temp_path_str)
-            if not file_path.exists():
-                failures.append({"bank_code": bank_code, "error": "Missing staging file"})
-                continue
-            content = file_path.read_bytes()
-        else:
-            failures.append({"bank_code": bank_code, "error": "No storage_key or temp_path in payload"})
+        if not bank_code or not storage_key:
+            failures.append({"bank_code": bank_code, "error": "Missing bank_code or storage_key in payload"})
             continue
 
-        if not bank_code or not content:
-            failures.append({"bank_code": bank_code, "error": "Missing bank code or empty content"})
+        try:
+            content = ctx.storage.read_bytes(storage_key)
+        except Exception as exc:  # noqa: BLE001
+            failures.append({"bank_code": bank_code, "error": f"Failed to read staging file: {exc}"})
             continue
 
         try:
@@ -56,7 +44,7 @@ def handle_upload_job(
                 profile_id=job.profile_id,
                 profile_key=profile_key,
                 bank_code=bank_code,
-                filename=item.get("filename") or (Path(temp_path_str).name if temp_path_str else "statement.pdf"),
+                filename=item.get("filename") or "statement.pdf",
                 content=content,
                 source=models.SourceType.UPLOAD,
             )
@@ -64,20 +52,12 @@ def handle_upload_job(
             db.commit()
         except Exception as exc:  # noqa: BLE001
             db.rollback()
-            failures.append(
-                {
-                    "bank_code": bank_code,
-                    "error": str(exc),
-                }
-            )
+            failures.append({"bank_code": bank_code, "error": str(exc)})
         finally:
-            if storage_key:
-                try:
-                    ctx.storage.delete(storage_key)
-                except Exception:  # noqa: BLE001
-                    pass  # staging cleanup is best-effort
-            elif temp_path_str:
-                Path(temp_path_str).unlink(missing_ok=True)
+            try:
+                ctx.storage.delete(storage_key)
+            except Exception:  # noqa: BLE001
+                pass  # staging cleanup is best-effort
 
         ctx.update_progress(db, job, int((idx + 1) / max(len(uploads), 1) * 90))
 
