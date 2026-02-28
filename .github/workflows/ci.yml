@@ -24,12 +24,12 @@ jobs:
             backend:
               - 'backend/**'
               - 'deploy/Dockerfile.api'
-              - 'deploy/Dockerfile.app'
               - 'deploy/docker-compose.prod.yml'
             frontend:
               - 'frontend/**'
               - 'deploy/Dockerfile.frontend'
-              - 'deploy/Dockerfile.app'
+            scraper:
+              - 'scraper/**'
 
   # ------------------------------------------------------------------
   # Backend: tests + migrations (runs in parallel with backend-security)

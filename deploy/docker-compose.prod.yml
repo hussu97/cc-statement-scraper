@@ -2,41 +2,22 @@ services:
   api:
     build:
       context: ..
-      # Slim image — no Playwright. API process never launches a browser.
+      # Slim image — no Playwright. API handles all job types except browser scraping.
       dockerfile: deploy/Dockerfile.api
     env_file:
       - ${CCS_ENV_FILE:-.env.production}
     environment:
-      CCS_PLATFORM_EMBEDDED_WORKER: "false"
+      CCS_PLATFORM_EMBEDDED_WORKER: "true"
     command: ["python", "-m", "ccs_platform.cli", "api", "--host", "0.0.0.0", "--port", "8040"]
     volumes:
       - ${CCS_DATA_DIR:-../data}:/app/data
       - ${CCS_LOGS_DIR:-../logs}:/app/logs
     networks:
       - app_internal
+      # API needs outbound connectivity for GCS uploads and email relay calls.
+      - edge_public
     expose:
       - "8040"
-    restart: unless-stopped
-
-  worker:
-    build:
-      context: ..
-      # Full image with Playwright — browser scraping requires outbound internet.
-      dockerfile: deploy/Dockerfile.app
-    env_file:
-      - ${CCS_ENV_FILE:-.env.production}
-    environment:
-      CCS_PLATFORM_EMBEDDED_WORKER: "false"
-    command: ["python", "-m", "ccs_platform.cli", "worker"]
-    volumes:
-      - ${CCS_DATA_DIR:-../data}:/app/data
-      - ${CCS_LOGS_DIR:-../logs}:/app/logs
-    networks:
-      - app_internal
-      # edge_public gives the worker outbound internet access for browser scraping.
-      # The API and frontend containers do NOT get edge_public — only Caddy exposes
-      # inbound traffic from the internet.
-      - edge_public
     restart: unless-stopped
 
   frontend:
@@ -74,9 +55,7 @@ volumes:
 
 networks:
   # Internal-only network for inter-service communication.
-  # No outbound internet access — containers here cannot be reached from outside.
   app_internal:
     internal: true
-  # Public-facing network. Only reverse-proxy (inbound) and worker (outbound scraping)
-  # are attached here.
+  # Public-facing network. Only reverse-proxy (inbound) and api (outbound GCS/email) use this.
   edge_public:
