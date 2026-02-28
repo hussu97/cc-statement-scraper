@@ -142,27 +142,23 @@
 ## 5. DevOps / Deployment
 
 ### 5.1 Playwright installed in API image `HIGH`
-**File:** `deploy/Dockerfile.app`
-**Issue:** Playwright Chromium + dependencies adds ~500 MB to the API image even though the API process never launches a browser. Only the worker needs Playwright.
-**Fix:** Split into two Dockerfiles: `Dockerfile.api` (no Playwright) and `Dockerfile.worker` (with Playwright). Reference the correct image per service in `docker-compose.prod.yml`.
+**Status:** ✅ Resolved — `deploy/Dockerfile.api` created (slim, no Playwright); `deploy/Dockerfile.app` retained with Playwright for the worker. `docker-compose.prod.yml` updated: `api` service uses `Dockerfile.api`, `worker` service uses `Dockerfile.app`. Note: Render free-tier uses `Dockerfile.app` for both processes since the worker runs embedded in the API process (`EMBEDDED_WORKER=true`) — that case intentionally keeps a single image.
+**Files:** `deploy/Dockerfile.api`, `deploy/Dockerfile.app`, `deploy/docker-compose.prod.yml`
 
 ### 5.2 `app_internal` network may block worker outbound access `HIGH`
+**Status:** ✅ Resolved — `edge_public` network added to the `worker` service in `docker-compose.prod.yml`. Worker now has outbound internet access for browser scraping while all other internal services remain isolated behind `app_internal`.
 **File:** `deploy/docker-compose.prod.yml`
-**Issue:** The `app_internal` network is `internal: true`, which blocks all outbound internet traffic. The scraping worker requires outbound internet (to reach bank websites).
-**Fix:** Add `edge_public` network to the `worker` service, or change the `app_internal` network to not be internal and put only the reverse proxy on `edge_public`.
 
 ### 5.3 No `npm test` in CI `HIGH`
 **Status:** ✅ Resolved — `Run frontend tests` step added to `frontend-gates` job; runs `npm test -- --run` before the build on every PR and push.
 **File:** `.github/workflows/release-cicd.yml`
 
 ### 5.4 Stale `tmp_ci_migration.db` artifact at repo root `LOW`
-**Issue:** `tmp_ci_migration.db` is a CI artifact that should be ephemeral but is committed/left at the repo root.
-**Fix:** Add `tmp_ci_migration.db` to `.gitignore`. The CI workflow already uses a separate db path (`ci_release.db`); remove any reference to the old path.
+**Status:** ✅ Resolved (already handled) — file is not tracked by git; `.gitignore` already has `tmp_*.db` which covers it. No action required.
 
 ### 5.5 Redundant Caddy + Nginx configs `LOW`
-**File:** `deploy/`
-**Issue:** Both a `Caddyfile` and an `nginx/` directory exist. Only Caddy is used in `docker-compose.prod.yml`. The Nginx config is dead.
-**Fix:** Remove `deploy/nginx/` and any associated documentation.
+**Status:** ✅ Resolved — `deploy/nginx/` removed; no documentation referenced it.
+**File:** `deploy/nginx/` (deleted)
 
 ---
 

@@ -2,7 +2,8 @@ services:
   api:
     build:
       context: ..
-      dockerfile: deploy/Dockerfile.app
+      # Slim image — no Playwright. API process never launches a browser.
+      dockerfile: deploy/Dockerfile.api
     env_file:
       - ${CCS_ENV_FILE:-.env.production}
     environment:
@@ -20,6 +21,7 @@ services:
   worker:
     build:
       context: ..
+      # Full image with Playwright — browser scraping requires outbound internet.
       dockerfile: deploy/Dockerfile.app
     env_file:
       - ${CCS_ENV_FILE:-.env.production}
@@ -31,6 +33,10 @@ services:
       - ${CCS_LOGS_DIR:-../logs}:/app/logs
     networks:
       - app_internal
+      # edge_public gives the worker outbound internet access for browser scraping.
+      # The API and frontend containers do NOT get edge_public — only Caddy exposes
+      # inbound traffic from the internet.
+      - edge_public
     restart: unless-stopped
 
   frontend:
@@ -67,6 +73,10 @@ volumes:
   caddy_config:
 
 networks:
+  # Internal-only network for inter-service communication.
+  # No outbound internet access — containers here cannot be reached from outside.
   app_internal:
     internal: true
+  # Public-facing network. Only reverse-proxy (inbound) and worker (outbound scraping)
+  # are attached here.
   edge_public:
