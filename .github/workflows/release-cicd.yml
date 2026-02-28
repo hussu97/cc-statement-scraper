@@ -180,18 +180,7 @@ jobs:
           path: artifacts
 
       - name: Deploy backend to Render
-        run: |
-          echo "Triggering Render deploy..."
-          curl -fsSL -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
-          echo "Render deploy triggered."
+        run: curl -fsSL -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
 
       - name: Deploy frontend to Vercel
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        run: |
-          npm install -g vercel@latest
-          vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
-          vercel build --prod --token="$VERCEL_TOKEN"
-          vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+        run: curl -fsSL -X POST "${{ secrets.VERCEL_DEPLOY_HOOK }}"
