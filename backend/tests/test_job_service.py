@@ -26,18 +26,18 @@ def _seed_profile(db) -> models.Profile:
 def test_create_or_get_job_dedupes_same_payload() -> None:
     with _session() as db:
         profile = _seed_profile(db)
-        payload = {"banks": ["ENBD"], "months": ["2025-11"], "download": False}
+        payload = {"uploads": [{"filename": "test.pdf", "storage_key": "staging/test.pdf", "bank_code": "ENBD"}]}
 
         first, first_created, first_requeued = create_or_get_job(
             db,
             profile_id=profile.id,
-            job_type=models.JobType.SCRAPE,
+            job_type=models.JobType.UPLOAD,
             payload_json=payload,
         )
         second, second_created, second_requeued = create_or_get_job(
             db,
             profile_id=profile.id,
-            job_type=models.JobType.SCRAPE,
+            job_type=models.JobType.UPLOAD,
             payload_json=payload,
         )
 
@@ -47,7 +47,7 @@ def test_create_or_get_job_dedupes_same_payload() -> None:
         assert second_requeued is False
         assert first.id == second.id
         assert first.idempotency_key == second.idempotency_key
-        assert first.queue_name == "scrape"
+        assert first.queue_name == "default"
 
 
 def test_create_or_get_job_without_auto_idempotency_creates_new_rows() -> None:
@@ -97,7 +97,7 @@ def test_create_or_get_job_creates_fresh_after_cancelled_auto_idempotent_job() -
         first, first_created, first_requeued = create_or_get_job(
             db,
             profile_id=profile.id,
-            job_type=models.JobType.SCRAPE,
+            job_type=models.JobType.RECLASSIFY,
             payload_json=payload,
         )
         assert first_created is True
@@ -119,7 +119,7 @@ def test_create_or_get_job_creates_fresh_after_cancelled_auto_idempotent_job() -
         second, second_created, second_requeued = create_or_get_job(
             db,
             profile_id=profile.id,
-            job_type=models.JobType.SCRAPE,
+            job_type=models.JobType.RECLASSIFY,
             payload_json=payload,
         )
 
@@ -151,7 +151,7 @@ def test_create_or_get_job_creates_fresh_after_succeeded_auto_idempotent_job() -
         first, first_created, first_requeued = create_or_get_job(
             db,
             profile_id=profile.id,
-            job_type=models.JobType.SCRAPE,
+            job_type=models.JobType.RECLASSIFY,
             payload_json=payload,
         )
         assert first_created is True
@@ -166,7 +166,7 @@ def test_create_or_get_job_creates_fresh_after_succeeded_auto_idempotent_job() -
         second, second_created, second_requeued = create_or_get_job(
             db,
             profile_id=profile.id,
-            job_type=models.JobType.SCRAPE,
+            job_type=models.JobType.RECLASSIFY,
             payload_json=payload,
         )
 
@@ -188,7 +188,7 @@ def test_create_or_get_job_creates_fresh_after_failed_auto_idempotent_job() -> N
         first, first_created, first_requeued = create_or_get_job(
             db,
             profile_id=profile.id,
-            job_type=models.JobType.SCRAPE,
+            job_type=models.JobType.RECLASSIFY,
             payload_json=payload,
         )
         assert first_created is True
@@ -204,7 +204,7 @@ def test_create_or_get_job_creates_fresh_after_failed_auto_idempotent_job() -> N
         second, second_created, second_requeued = create_or_get_job(
             db,
             profile_id=profile.id,
-            job_type=models.JobType.SCRAPE,
+            job_type=models.JobType.RECLASSIFY,
             payload_json=payload,
         )
 

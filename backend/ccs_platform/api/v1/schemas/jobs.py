@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from ccs_platform.db.models import JobStatus, JobType
 
@@ -47,14 +47,6 @@ class PaginatedJobs(BaseModel):
     page: int
     page_size: int
     items: list[JobOut]
-
-
-class ScrapeJobRequest(BaseModel):
-    banks: list[str] = Field(default_factory=list)
-    months: list[str] = Field(default_factory=list)
-    month_from: str | None = None
-    month_to: str | None = None
-    login_timeout_minutes: int = Field(default=20, ge=5, le=60)
 
 
 class UploadJobRequest(BaseModel):

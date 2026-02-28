@@ -11,19 +11,14 @@ from ccs_platform.db import models
 
 
 DEFAULT_MAX_ATTEMPTS: dict[models.JobType, int] = {
-    models.JobType.SCRAPE: 3,
     models.JobType.UPLOAD: 3,
     models.JobType.RECLASSIFY: 2,
     models.JobType.EXPORT_WORKBOOK: 2,
     models.JobType.PARSER_VALIDATE: 2,
-    models.JobType.BANK_CONNECTION_TEST: 2,
     models.JobType.REPARSE_STATEMENT: 2,
 }
 
-DEFAULT_QUEUE_BY_JOB_TYPE: dict[models.JobType, str] = {
-    models.JobType.SCRAPE: "scrape",
-    models.JobType.BANK_CONNECTION_TEST: "scrape",
-}
+DEFAULT_QUEUE_BY_JOB_TYPE: dict[models.JobType, str] = {}
 
 AUTO_IDEMPOTENCY_PREFIX = "auto:"
 ACTIVE_AUTO_IDEMPOTENT_STATUSES = {
