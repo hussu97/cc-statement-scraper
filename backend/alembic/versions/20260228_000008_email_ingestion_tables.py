@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects.postgresql import ENUM as PgEnum
 
 
 revision = "20260228_000008"
@@ -15,14 +16,14 @@ down_revision = "20260228_000007"
 branch_labels = None
 depends_on = None
 
-
-email_provider_enum = sa.Enum("microsoft", "gmail", name="emailprovider", create_type=False)
-email_ingestion_status_enum = sa.Enum(
-    "queued",
-    "uploaded",
-    "duplicate",
-    "ignored",
-    "failed",
+# PgEnum with create_type=False: SQLAlchemy will NOT emit CREATE TYPE inside
+# op.create_table — the _on_table_create hook is a no-op when create_type=False
+# on the PostgreSQL-native ENUM type.  On SQLite (CI smoke test) PgEnum renders
+# as VARCHAR and the hook skips automatically because the dialect isn't postgres.
+# Type creation/deletion is handled explicitly via raw SQL below.
+_provider = PgEnum("microsoft", "gmail", name="emailprovider", create_type=False)
+_status = PgEnum(
+    "queued", "uploaded", "duplicate", "ignored", "failed",
     name="emailingestionstatus",
     create_type=False,
 )
@@ -30,14 +31,21 @@ email_ingestion_status_enum = sa.Enum(
 
 def upgrade() -> None:
     bind = op.get_bind()
-    email_provider_enum.create(bind, checkfirst=True)
-    email_ingestion_status_enum.create(bind, checkfirst=True)
+
+    if bind.dialect.name == "postgresql":
+        bind.execute(sa.text(
+            "CREATE TYPE IF NOT EXISTS emailprovider AS ENUM ('microsoft', 'gmail')"
+        ))
+        bind.execute(sa.text(
+            "CREATE TYPE IF NOT EXISTS emailingestionstatus"
+            " AS ENUM ('queued', 'uploaded', 'duplicate', 'ignored', 'failed')"
+        ))
 
     op.create_table(
         "email_mailboxes",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("profile_id", sa.Integer(), nullable=False),
-        sa.Column("provider", email_provider_enum, nullable=False),
+        sa.Column("provider", _provider, nullable=False),
         sa.Column("mailbox_email", sa.String(length=320), nullable=False),
         sa.Column("display_name", sa.String(length=256), nullable=True),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
@@ -107,13 +115,13 @@ def upgrade() -> None:
         sa.Column("route_id", sa.Integer(), nullable=False),
         sa.Column("profile_id", sa.Integer(), nullable=False),
         sa.Column("bank_code", sa.String(length=16), nullable=False),
-        sa.Column("provider", email_provider_enum, nullable=False),
+        sa.Column("provider", _provider, nullable=False),
         sa.Column("provider_message_id", sa.String(length=512), nullable=False),
         sa.Column("provider_attachment_id", sa.String(length=512), nullable=False),
         sa.Column("internet_message_id", sa.String(length=512), nullable=True),
         sa.Column("attachment_filename", sa.String(length=512), nullable=False),
         sa.Column("attachment_sha256", sa.String(length=64), nullable=False),
-        sa.Column("status", email_ingestion_status_enum, nullable=False, server_default=sa.text("'queued'")),
+        sa.Column("status", _status, nullable=False, server_default=sa.text("'queued'")),
         sa.Column("upload_job_id", sa.Integer(), nullable=True),
         sa.Column("error_message", sa.Text(), nullable=True),
         sa.Column("provider_received_at", sa.DateTime(timezone=True), nullable=True),
@@ -164,5 +172,6 @@ def downgrade() -> None:
     op.drop_table("email_mailboxes")
 
     bind = op.get_bind()
-    email_ingestion_status_enum.drop(bind, checkfirst=True)
-    email_provider_enum.drop(bind, checkfirst=True)
+    if bind.dialect.name == "postgresql":
+        bind.execute(sa.text("DROP TYPE IF EXISTS emailingestionstatus"))
+        bind.execute(sa.text("DROP TYPE IF EXISTS emailprovider"))
