@@ -65,4 +65,9 @@ def test_runner_retries_before_marking_failed(monkeypatch) -> None:
             job = db.get(models.Job, job_id)
             if job is not None:
                 db.delete(job)
+            profile_row = db.execute(
+                select(models.Profile).where(models.Profile.key == profile_key)
+            ).scalar_one_or_none()
+            if profile_row is not None:
+                db.delete(profile_row)
     runner.shutdown()
