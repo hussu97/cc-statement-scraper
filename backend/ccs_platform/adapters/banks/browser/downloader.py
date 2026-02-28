@@ -5,7 +5,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 from ccs_platform.adapters.banks.browser.banks import adcb, eib, enbd, fab, mashreq, sib
 from ccs_platform.adapters.banks.browser.base import BankAdapter
@@ -111,6 +111,7 @@ def _wait_for_authenticated_session(
     scheduled: bool,
     logger: logging.Logger,
     portal_url: str | None = None,
+    cancel_check: Optional[Callable[[], None]] = None,
 ) -> Any:
     def _active_page(current_page: Any) -> Any:
         try:
@@ -142,6 +143,9 @@ def _wait_for_authenticated_session(
     mashreq_relogin_attempts = 0
 
     while time.time() - start < timeout_seconds:
+        if cancel_check is not None:
+            cancel_check()
+
         page = _active_page(page)
 
         if code == "FAB":
@@ -440,6 +444,7 @@ def run_end_to_end_downloads(
     geo_longitude: float = 55.2708,
     timezone_id: str = "Asia/Dubai",
     locale: str = "en-AE",
+    cancel_check: Optional[Callable[[], None]] = None,
 ) -> dict[str, str]:
     try:
         from playwright.sync_api import sync_playwright
@@ -499,6 +504,7 @@ def run_end_to_end_downloads(
                     scheduled=scheduled,
                     logger=logger,
                     portal_url=portal_url,
+                    cancel_check=cancel_check,
                 )
 
                 safe_screenshot(
