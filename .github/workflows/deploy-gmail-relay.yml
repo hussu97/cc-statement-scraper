@@ -7,7 +7,7 @@ on:
       - "backend/scripts/gmail_ingest_relay.py"
       - "backend/scripts/email_ingestion_common.py"
       - "backend/requirements.txt"
-      - "deploy/Dockerfile.api"
+      - "deploy/Dockerfile.gmail-relay"
 
 permissions:
   contents: read
@@ -35,7 +35,7 @@ jobs:
         run: |
           SHA=$(git rev-parse --short HEAD)
           IMAGE="europe-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/ccs-platform/gmail-relay:$SHA"
-          docker build --platform linux/amd64 -f deploy/Dockerfile.api -t "$IMAGE" .
+          docker build --platform linux/amd64 -f deploy/Dockerfile.gmail-relay -t "$IMAGE" .
           docker push "$IMAGE"
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
 
@@ -49,7 +49,6 @@ jobs:
             --set-env-vars="CCS_API_BASE_URL=${{ secrets.CCS_API_BASE_URL }}" \
             --set-env-vars="CCS_SERVICE_TOKEN=${{ secrets.CCS_GMAIL_RELAY_SERVICE_TOKEN }}" \
             --port=8080 \
-            --command="python,backend/scripts/gmail_ingest_relay.py" \
             --min-instances=0 \
             --memory=256Mi \
             --cpu=1 \
