@@ -16,38 +16,13 @@ from ccs_platform.adapters.banks.browser.shared import (
     save_download,
     text_snapshot,
 )
+from ccs_platform.domain.parsing.month_utils import MONTH_INDEX
 
 OTP_CODE_PATTERN = re.compile(r"\b(\d{4,8})\b")
 MASKED_CARD_PATTERN = re.compile(
     r"((?:x{2,}\s*)?\d{0,4}\s*(?:\*{2,}\s*){1,4}\d{2,4}|x{2,}\d{2,4}|\*{2,}\s*\d{2,4})",
     re.IGNORECASE,
 )
-MONTH_INDEX = {
-    "jan": 1,
-    "january": 1,
-    "feb": 2,
-    "february": 2,
-    "mar": 3,
-    "march": 3,
-    "apr": 4,
-    "april": 4,
-    "may": 5,
-    "jun": 6,
-    "june": 6,
-    "jul": 7,
-    "july": 7,
-    "aug": 8,
-    "august": 8,
-    "sep": 9,
-    "sept": 9,
-    "september": 9,
-    "oct": 10,
-    "october": 10,
-    "nov": 11,
-    "november": 11,
-    "dec": 12,
-    "december": 12,
-}
 
 
 def _parse_month_value(text: str) -> int | None:
