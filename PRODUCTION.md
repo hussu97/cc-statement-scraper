@@ -723,7 +723,7 @@ The mailbox account must sign in and grant the app access.
    curl -X POST https://login.microsoftonline.com/consumers/oauth2/v2.0/token \
      -d "client_id=CLIENT_ID" \
      -d "client_secret=CLIENT_SECRET" \
-     -d "code=PASTE_CODE_HERE" \
+     -d 'code=PASTE_CODE_HERE' \
      -d "redirect_uri=http://localhost" \
      -d "grant_type=authorization_code" \
      -d "scope=Mail.Read offline_access"
