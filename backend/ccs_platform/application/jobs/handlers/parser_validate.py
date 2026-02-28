@@ -10,13 +10,7 @@ from sqlalchemy.orm import Session
 from ccs_platform.db import models
 from ccs_platform.core.bank_config import load_app_config
 from ccs_platform.adapters.banks.parsers import parse_adcb_statement, parse_enbd_statement, parse_fab_statement
-
-
-EXPECTED_SAMPLE_COUNTS = {
-    "FAB": 49,
-    "ADCB": 9,
-    "ENBD": 8,
-}
+from ccs_platform.domain.parsing.bank_samples import PARSER_SAMPLE_EXPECTED_COUNTS
 
 
 def handle_parser_validate_job(db: Session, job: models.Job) -> dict[str, Any]:
@@ -64,9 +58,9 @@ def handle_parser_validate_job(db: Session, job: models.Job) -> dict[str, Any]:
     }
 
     mismatches = {
-        bank_code: {"expected": EXPECTED_SAMPLE_COUNTS[bank_code], "actual": actual}
+        bank_code: {"expected": PARSER_SAMPLE_EXPECTED_COUNTS[bank_code], "actual": actual}
         for bank_code, actual in counts.items()
-        if actual != EXPECTED_SAMPLE_COUNTS[bank_code]
+        if actual != PARSER_SAMPLE_EXPECTED_COUNTS[bank_code]
     }
 
     if strict and mismatches:
@@ -74,6 +68,6 @@ def handle_parser_validate_job(db: Session, job: models.Job) -> dict[str, Any]:
 
     return {
         "counts": counts,
-        "expected": EXPECTED_SAMPLE_COUNTS,
+        "expected": PARSER_SAMPLE_EXPECTED_COUNTS,
         "mismatches": mismatches,
     }

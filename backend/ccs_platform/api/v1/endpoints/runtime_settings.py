@@ -203,7 +203,7 @@ def seed_runtime_settings(
             profile_id=profile.profile_id,
             profile_key=profile.profile_key,
             overwrite_existing=payload.overwrite_existing,
-            blank_values=profile.profile_key != "alice",
+            blank_values=not profile.is_default,
             source_mode=payload.source_mode,
         )
     except ValueError as exc:

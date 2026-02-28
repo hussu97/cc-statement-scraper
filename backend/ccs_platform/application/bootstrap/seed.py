@@ -66,26 +66,10 @@ def _seed_categories_and_rules(db: Session) -> None:
                         category_name=category,
                         match_type=models.MatchType.CONTAINS,
                         pattern=pattern,
-                        bank_code=None,
-                        card_last4=None,
-                        priority=100,
                         active=True,
                     )
                 )
                 seed_index += 1
-
-    # Scope and numeric priority are deprecated; normalize all persisted rules.
-    db.execute(
-        update(models.CategoryRule)
-        .where(models.CategoryRule.bank_code.is_not(None))
-        .values(bank_code=None)
-    )
-    db.execute(
-        update(models.CategoryRule)
-        .where(models.CategoryRule.card_last4.is_not(None))
-        .values(card_last4=None)
-    )
-    db.execute(update(models.CategoryRule).values(priority=100))
 
     ensure_category(db, "Uncategorized")
     _merge_category_alias_if_unused(db, source="Groceries", target="Grocery")

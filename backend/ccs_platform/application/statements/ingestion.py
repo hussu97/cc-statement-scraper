@@ -140,12 +140,7 @@ def ingest_parsed_statement(
 
     inserted_lines = 0
     for parsed_line in parsed.lines:
-        category, _ = categorize(
-            db,
-            bank_code=parsed.bank_code,
-            card_last4=parsed_line.card_last4,
-            merchant_normalized=parsed_line.merchant_normalized,
-        )
+        category, _ = categorize(db, merchant_normalized=parsed_line.merchant_normalized)
 
         tx_time = parsed_line.transaction_time or time(0, 0, 0)
         line = models.StatementLine(

@@ -23,6 +23,7 @@ class ProfileContext:
     profile_id: int
     profile_key: str
     profile_name: str
+    is_default: bool = False
 
 
 @dataclass(frozen=True)
@@ -44,13 +45,13 @@ def get_authenticated_user_context(request: Request) -> AuthenticatedUserContext
     settings = request.app.state.settings
     if not settings.login_required():
         request.state.authenticated_email = "local-admin@ccs"
-        request.state.default_profile_key = "alice"
+        request.state.default_profile_key = ""
         request.state.actor_role = "admin"
         request.state.actor_subject = "system:local"
         return AuthenticatedUserContext(
             email="local-admin@ccs",
             display_name="Local Admin",
-            default_profile_key="alice",
+            default_profile_key="",
             role="admin",
         )
 
@@ -106,6 +107,7 @@ def get_profile_context(
         profile_id=profile.id,
         profile_key=profile.key,
         profile_name=profile.name,
+        is_default=bool(profile.is_default),
     )
 
 

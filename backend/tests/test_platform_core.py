@@ -113,8 +113,6 @@ def test_category_matching_prefers_most_specific_pattern() -> None:
 
         category, matched_rule = categorize(
             db,
-            bank_code="FAB",
-            card_last4="9206",
             merchant_normalized="NORTH CAFE DUBAI",
         )
 
@@ -133,9 +131,6 @@ def test_category_matching_ignores_legacy_scope_fields() -> None:
                 category_name="Transport",
                 match_type=models.MatchType.CONTAINS,
                 pattern="CAREEM HALA",
-                bank_code="ADCB",
-                card_last4="9999",
-                priority=1,
                 active=True,
             )
         )
@@ -143,8 +138,6 @@ def test_category_matching_ignores_legacy_scope_fields() -> None:
 
         category, matched_rule = categorize(
             db,
-            bank_code="FAB",
-            card_last4="9206",
             merchant_normalized="CAREEM HALA DUBAI",
         )
 

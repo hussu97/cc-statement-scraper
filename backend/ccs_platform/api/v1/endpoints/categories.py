@@ -74,9 +74,6 @@ def create_category_rule(
         category_name=payload.category_name,
         match_type=payload.match_type,
         pattern=payload.pattern,
-        bank_code=None,
-        card_last4=None,
-        priority=100,
         active=payload.active,
     )
     db.add(row)
@@ -102,9 +99,6 @@ def patch_category_rule(
 
     for key, value in updates.items():
         setattr(row, key, value)
-    row.bank_code = None
-    row.card_last4 = None
-    row.priority = 100
 
     db.commit()
     db.refresh(row)
@@ -116,10 +110,7 @@ def test_category_rule(
     payload: CategoryRuleTestRequest,
     db: Session = Depends(get_db),
 ) -> CategoryRuleTestResponse:
-    category, rule = categorize(
-        db,
-        merchant_normalized=payload.merchant_normalized,
-    )
+    category, rule = categorize(db, merchant_normalized=payload.merchant_normalized)
     return CategoryRuleTestResponse(
         category=category,
         matched_rule_id=rule.id if rule else None,

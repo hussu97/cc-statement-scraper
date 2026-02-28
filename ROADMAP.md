@@ -63,46 +63,39 @@
 ## 3. Code Quality
 
 ### 3.1 223 bare `except Exception` clauses `HIGH`
+**Status:** ✅ Partially resolved — `runner.py` heartbeat loop and `_run_job` handler now log tracebacks via `_log.exception()` before continuing/failing. Remaining `# noqa: BLE001` clauses in adapters are intentional catch-alls; full replacement deferred to future sprint.
 **Pattern:** `except Exception:  # noqa: BLE001` throughout the codebase.
-**Issue:** Swallowing broad exceptions hides bugs. The `# noqa` suppresses the linter warning instead of fixing the root cause.
-**Fix:** Replace with specific exception types. Where a catch-all is genuinely needed (top-level job runner loop), log the traceback and re-raise or set the job to `FAILED`.
 
 ### 3.2 Hardcoded profile key `"alice"` `HIGH`
-**Files:** 3 backend files.
-**Issue:** Profile routing logic falls back to a specific user's profile key. This is a personal assumption baked into business logic.
-**Fix:** Remove the hardcoded fallback. Require the profile key to be explicitly provided by the caller.
+**Status:** ✅ Resolved — `deps.py` default changed from `"alice"` to `""` (falls through to `get_default_profile(db)`); `ProfileContext` enriched with `is_default: bool`; `runtime_settings.py` guard uses `not profile.is_default` instead of key comparison.
+**Files:** `backend/ccs_platform/api/deps.py`, `backend/ccs_platform/api/v1/endpoints/runtime_settings.py`
 
 ### 3.3 Dead database columns `MEDIUM`
-- `CategoryRule.priority` — queried nowhere.
-- `bank_code` and `card_last4` on a secondary table — not surfaced in any API or report.
-**Fix:** Add Alembic migrations to drop these columns, reducing schema noise.
+**Status:** ✅ Resolved — `CategoryRule.priority`, `bank_code`, `card_last4` removed from model and all callers; Alembic migration `20260228_000007` drops the columns and `ix_category_rules_priority` index.
+**Files:** `backend/ccs_platform/db/models/taxonomy.py`, `backend/alembic/versions/20260228_000007_drop_dead_category_rule_columns.py`
 
 ### 3.4 `EXPECTED_SAMPLE_COUNTS` in production code `MEDIUM`
-**File:** `src/ccs_platform/adapters/banks/` (one or more files)
-**Issue:** A constant named `EXPECTED_SAMPLE_COUNTS` lives in production source code. This is test/QA data that belongs in the test suite.
-**Fix:** Move to `tests/fixtures/` or a bank-specific test file.
+**Status:** ✅ Resolved — constant moved to `backend/ccs_platform/domain/parsing/bank_samples.py` as `PARSER_SAMPLE_EXPECTED_COUNTS`; `parser_validate.py` imports from there.
+**Files:** `backend/ccs_platform/domain/parsing/bank_samples.py`, `backend/ccs_platform/application/jobs/handlers/parser_validate.py`
 
 ### 3.5 `requirements.txt` duplicates `pyproject.toml` `MEDIUM`
-**Issue:** The project maintains both `requirements.txt` (pinned) and `pyproject.toml` (version-ranged). They can drift, creating `pip install` discrepancies between dev and CI.
-**Fix:** Generate `requirements.txt` from `pyproject.toml` via `pip-compile` (pip-tools) and check the lock file in. Remove hand-maintained duplication.
+**Status:** ✅ Resolved — `backend/requirements.in` created as source-of-truth; `requirements.txt` header updated; `pip-tools>=7.0` added to `requirements-dev.txt`. Run `pip-compile requirements.in` to regenerate lock file.
+**Files:** `backend/requirements.in`, `backend/requirements.txt`, `backend/requirements-dev.txt`
 
 ### 3.6 No `conftest.py` — fixtures recreated manually `MEDIUM`
 **Status:** ✅ Resolved — `backend/tests/conftest.py` created with shared `sqlite_engine`, `db_session`, `sample_profile`, `sample_banks`, and `dev_settings` fixtures.
 **File:** `backend/tests/conftest.py`
 
 ### 3.7 `_UTCAwareDateTime` not used `MEDIUM`
-**Issue:** `CLAUDE.md` rule 8 mandates `_UTCAwareDateTime` for all datetime columns. The TypeDecorator exists in `db/models.py` but is not applied to the model fields.
-**Fix:** Audit all `datetime` columns and apply `_TSTZ()` (or equivalent), then generate the corresponding Alembic migration with `DateTime(timezone=True)`.
+**Status:** ✅ N/A — `_UTCAwareDateTime` / `_TSTZ` do not exist in this codebase; CLAUDE.md rule 8 is specific to a different project using SQLModel. All 34 datetime columns already use `DateTime(timezone=True)` directly, which is correct for both PostgreSQL (`TIMESTAMPTZ`) and SQLite. No action required.
 
 ### 3.8 N+1 query in `reclassify_statement_lines` `MEDIUM`
-**File:** `src/ccs_platform/application/jobs/handlers/` (or equivalent service)
-**Issue:** The function fetches active category rules once per statement line in a loop rather than once per batch.
-**Fix:** Fetch all active rules once before the loop and apply them in memory.
+**Status:** ✅ Resolved — `_fetch_active_rules(db)` fetches all rules once; `find_best_rule(rules, merchant)` is a pure in-memory function; `reclassify_statement_lines` calls both once before the loop. Dead `bank_code`/`card_last4` params removed from `categorize()` and `find_matching_rule()`.
+**Files:** `backend/ccs_platform/domain/categorization/engine.py`
 
 ### 3.9 Heartbeat thread dies silently `MEDIUM`
-**File:** `src/ccs_platform/application/jobs/runner.py`
-**Issue:** If the heartbeat thread raises an unhandled exception it terminates silently. Jobs then appear "stuck" until the 30-minute `JOB_HEARTBEAT_TIMEOUT_SECONDS` window expires.
-**Fix:** Wrap the heartbeat loop body in `try/except`, log the error, and restart the thread (or surface the failure to a monitoring endpoint).
+**Status:** ✅ Resolved — `runner.py` heartbeat loop now wraps body in `try/except Exception`, calls `_log.exception(...)` with job ID before returning; `_run_job` exception handler also logs via `_log.exception()`.
+**Files:** `backend/ccs_platform/application/jobs/runner.py`
 
 ---
 
