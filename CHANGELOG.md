@@ -4,6 +4,26 @@
 
 ### Backend
 
+- **refactor** Remove browser scraping from backend: delete `handlers/scrape.py`, `handlers/bank_connection_test.py`, `adapters/banks/browser/` (browser code moved to `scraper/`); remove `POST /jobs/scrape` and `POST /diagnostics/bank-connection-test` endpoints; remove `ScrapeJobRequest` schema; remove `SCRAPE` and `BANK_CONNECTION_TEST` from job dispatcher and service defaults; remove `browser_proxy_url`, `browser_geo_*`, `browser_timezone_id`, `browser_locale`, `queue_backlog_slo_scrape` from settings; change `worker_queues` default to `default`; remove `playwright>=1.50` from `requirements.txt`
+- **feat** Add `require_operator_or_service_token` and `get_profile_context_or_service_token` dependencies in `api/deps.py`; `POST /jobs/upload` now accepts either a session (operator+) or a Bearer service token with `upload` scope — enables the scraper CLI to upload directly
+
+### Scraper
+
+- **feat** Add `scraper/` — standalone Python CLI package for browser-based bank statement downloads; Playwright + Chromium bank adapters (FAB, ADCB, ENBD, EIB, SIB, Mashreq) moved verbatim from backend with updated import paths; `ccs-scraper scrape` downloads PDFs and uploads to backend; `ccs-scraper upload` sends local PDFs; `ccs-scraper install-browser` installs Chromium; all config via `CCS_SCRAPER_*` env vars
+
+### DevOps
+
+- **chore** Delete `deploy/Dockerfile.app` (Playwright image no longer needed); update `Dockerfile.api` comment; simplify `docker-compose.prod.yml` — remove `worker` service and `edge_public` on `app_internal` containers; API service gets `CCS_PLATFORM_EMBEDDED_WORKER=true` and `edge_public` for outbound GCS/email connectivity
+- **ci** Remove `deploy/Dockerfile.app` from backend path filter in `ci.yml`; add `scraper/**` filter; update `deploy-backend.yml` to remove `Dockerfile.app` from change detection pattern
+
+### Docs
+
+- **docs** Create `ARCHITECTURE.md` — system overview, component boundaries, data flows, auth model, technology stack, design decisions
+- **docs** Rewrite `PRODUCTION.md` — single deployment plan covering Render (API), Vercel (frontend), Neon (PostgreSQL), GCS (storage), Cloud Run (Gmail relay), and local Scraper CLI; remove Plan 2 (GCP full), standalone worker, and all browser-related env vars
+- **docs** Update `README.md` — add `scraper/` to directory structure, describe decoupled architecture, add Scraper CLI quick-start, remove Dockerfile.app and worker service references
+
+### Backend
+
 - **feat** Add `job_logs` table and `JobDBLogHandler` — captures all `ccs_platform.*` and `playwright.*` INFO+ log records emitted during a job run into `job_logs` via thread-local job ID; retention cleans up entries older than 7 days (`retention_job_logs_days=7`); `GET /jobs/{id}/logs` endpoint returns the log stream; alembic migration `20260301_000009`
 - **feat** Add `JobLogOut` response schema; `GET /jobs/{job_id}/logs` endpoint (limit up to 2000)
 - **feat** Statements list: rename "Date" column to "Statement Date"; add "Upload Date" column showing `ingested_at` (already in DB/API, no migration needed)

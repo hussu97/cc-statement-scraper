@@ -3,36 +3,45 @@
 DB-first credit card statement system for FAB, ADCB, ENBD, EIB, SIB, and Mashreq with:
 - Statement header + line canonical storage
 - Deterministic statement replacement on `(bank_code, statement_reference, statement_date)`
-- Async queued jobs for scrape, upload, reparse, reclassify, exports, and diagnostics
-- FastAPI backend + React admin panel + optional standalone worker
+- Async queued jobs for upload, reparse, reclassify, exports, and diagnostics
+- FastAPI backend + React admin panel
+- Decoupled scraper CLI for one-time historical downloads
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system design and [PRODUCTION.md](PRODUCTION.md) for deployment.
 
 ## Directory Structure
 
 ```
 credit-card-scraper/
-├── backend/
-│   ├── ccs_platform/          ← Python package source
+├── backend/                   ← Python API package (no Playwright)
+│   ├── ccs_platform/          ← FastAPI app + embedded worker
 │   │   ├── main.py            ← FastAPI app
 │   │   ├── cli.py             ← Typer CLI entry-point
 │   │   ├── api/v1/            ← REST routes + schemas
 │   │   ├── application/       ← jobs, ingestion, analytics, exports
 │   │   ├── domain/            ← parsing models, categorization engine
-│   │   ├── adapters/          ← bank browser/parser + storage adapters
-│   │   ├── db/                ← SQLAlchemy models + session
-│   │   └── worker/            ← queue + schedule worker loop
+│   │   ├── adapters/          ← bank parsers + storage adapters
+│   │   └── db/                ← SQLAlchemy models + session
 │   ├── alembic/               ← database migrations
-│   ├── config/                ← default YAML config
+│   ├── config/                ← YAML config
 │   ├── scripts/               ← ops/maintenance scripts
 │   ├── tests/                 ← pytest test suite
-│   ├── requirements.in          ← pip-tools source (run pip-compile to regenerate requirements.txt)
 │   ├── requirements.txt
 │   ├── requirements-dev.txt
-│   ├── pyproject.toml
-│   └── alembic.ini
+│   └── pyproject.toml
+├── scraper/                   ← Standalone browser scraper CLI
+│   ├── scraper/
+│   │   ├── cli.py             ← Typer CLI: scrape, upload, install-browser
+│   │   ├── client.py          ← httpx client for backend /api/v1/jobs/upload
+│   │   ├── config.py          ← CCS_SCRAPER_* env settings
+│   │   └── banks/             ← browser adapters (Playwright)
+│   ├── config/banks.yaml      ← Bank portal URLs + file patterns
+│   ├── requirements.txt
+│   └── pyproject.toml
 ├── frontend/                  ← React TypeScript admin panel
 ├── deploy/                    ← Dockerfiles, Compose, Caddyfile
 ├── docs/
-├── CLAUDE.md
+├── ARCHITECTURE.md
 ├── PRODUCTION.md
 ├── ROADMAP.md
 └── README.md
@@ -40,111 +49,66 @@ credit-card-scraper/
 
 ## Architecture
 
-- `backend/ccs_platform/main.py`: FastAPI backend (`/api/v1`)
-- `backend/ccs_platform/worker/main.py`: queue + schedule worker loop
-- `backend/ccs_platform/api/v1/*`: REST endpoints + request/response schemas
-- `backend/ccs_platform/application/*`: jobs, ingestion, analytics, exports, bank capability orchestration
-- `backend/ccs_platform/domain/*`: parsing models/utilities, statement identity/types, categorization engine
-- `backend/ccs_platform/adapters/*`: bank parser/browser adapters + storage adapters
-- `backend/ccs_platform/db/models/*`: SQLAlchemy relational schema split by concern
-- `frontend/`: React TypeScript admin panel
+The platform uses a **decoupled architecture**:
 
-## Key capabilities
+- **Backend API** (Render): slim FastAPI service with embedded worker. Handles PDF parsing, statement storage, analytics, exports, email ingestion. No browser code.
+- **Scraper CLI** (local): standalone tool that uses Playwright to download PDFs from bank portals and upload them to the backend via service token.
+- **Frontend** (Vercel): React admin panel calling the backend API.
+- **Gmail Relay** (GCP Cloud Run): forwards email statement attachments to the backend.
 
-- Hard replace semantics for duplicate statement identity:
-  - parse PDF
-  - resolve identity (`explicit` or deterministic `AUTO-*` fallback)
-  - delete old statement + lines if identity already exists
-  - insert new statement + lines
-- Job APIs:
-  - `POST /jobs/scrape` with `month_from` + `month_to` (`YYYY-MM`) range
-  - `POST /jobs/upload`
-  - `POST /jobs/reclassify`
-  - `GET /jobs`, `GET /jobs/{id}`, `POST /jobs/{id}/cancel`
-  - idempotency key dedupe and bounded retry metadata per job
-  - queue partitioning (`default` vs `scrape`) and cooperative cancellation tokens
-- Statement APIs:
-  - `GET /statements`, `GET /statements/{id}`, `GET /statements/{id}/lines`, `GET /statements/{id}/pdf`
-  - `POST /statements/{id}/reparse`, `DELETE /statements/{id}`
-- Analytics APIs:
-  - `/dashboard/overview`, `/dashboard/timeseries`, `/dashboard/category-breakdown`, `/dashboard/top-merchants`, `/dashboard/bank-breakdown`
-- Rules/schedules/exports/diagnostics APIs
-- Runtime settings APIs for scraper credentials and bank-specific env-style values:
-  - `GET /runtime-settings`
-  - `POST /runtime-settings`
-  - `PATCH /runtime-settings/{key}`
-  - `POST /runtime-settings/seed-from-env`
+## Key APIs
 
-## Data model
+- `POST /jobs/upload` — upload PDFs (session auth or Bearer service token with `upload` scope)
+- `POST /jobs/reclassify`, `POST /jobs/reparse` — reprocess statements
+- `GET /statements`, `GET /statements/{id}/lines`, `GET /statements/{id}/pdf`
+- `/dashboard/overview`, `/dashboard/timeseries`, `/dashboard/category-breakdown`
+- `/runtime-settings` — manage bank credentials and config via admin UI
 
-Core tables:
-- `banks`
-- `pdf_files`
-- `statements`
-- `statement_lines`
-- `categories`
-- `category_rules`
-- `jobs`
-- `job_items`
-- `schedules`
-- `exports`
-- `audit_events`
-- `runtime_settings`
-
-## Setup
+## Setup — Backend
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r backend/requirements-dev.txt
-playwright install chromium
+cd backend
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements-dev.txt
+alembic upgrade head
 ```
 
-## Run backend API
-
+Run API:
 ```bash
 PYTHONPATH=backend python -m ccs_platform.cli api --host 127.0.0.1 --port 8040 --reload
 ```
 
 Health check:
-
 ```bash
 curl http://127.0.0.1:8040/api/v1/health
 ```
 
-Readiness + metrics:
+## Setup — Scraper CLI
 
 ```bash
-curl http://127.0.0.1:8040/api/v1/health/ready
-curl http://127.0.0.1:8040/api/v1/metrics
+cd scraper
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e .
+ccs-scraper install-browser
 ```
 
-## Run standalone worker
+Configure `scraper/.env`:
+```env
+CCS_SCRAPER_TARGET_URL=http://127.0.0.1:8040
+CCS_SCRAPER_API_TOKEN=<service token with upload scope>
+FAB_USERNAME=...
+FAB_PASSWORD=...
+```
 
-Use this when you want schedule/job processing outside API process.
-
+Run:
 ```bash
-PYTHONPATH=backend python -m ccs_platform.cli worker
+ccs-scraper scrape --months 2024-01:2025-12
+ccs-scraper upload ./downloads/statement.pdf
 ```
 
-Queue partitioning:
-- default queue: lightweight jobs (`upload`, `reclassify`, `export_workbook`, `reparse_statement`)
-- scrape queue: browser-heavy jobs (`scrape`, `bank_connection_test`)
+See [`scraper/README.md`](scraper/README.md) for full CLI reference.
 
-Example dedicated workers:
-
-```bash
-# Default queue worker
-CCS_PLATFORM_WORKER_QUEUES=default PYTHONPATH=backend python -m ccs_platform.cli worker
-
-# Scrape queue worker
-CCS_PLATFORM_WORKER_QUEUES=scrape PYTHONPATH=backend python -m ccs_platform.cli worker
-```
-
-If dashboard calls return 404 for new endpoints like `/api/v1/dashboard/filter-meta`, restart the API process.
-This usually means an older server process is still running without the latest router code.
-
-## Run frontend admin panel
+## Setup — Frontend
 
 ```bash
 cd frontend
@@ -152,93 +116,29 @@ npm install
 npm run dev
 ```
 
-## Run frontend tests
-
-```bash
-cd frontend
-npm test
-```
-
 Vite dev server proxies `/api` to `http://127.0.0.1:8040`.
 
-Runtime variables are now DB-backed and editable in admin UI (`Runtime Variables` page in sidebar).
-On startup, a seed routine imports missing values from the local `.env` file into `runtime_settings`.
-After seeding, scraper/parser credentials are loaded from DB into process env for job execution.
+## Run Tests
 
-Scrape month selection in admin is range-based:
-- minimum: `2024-01`
-- maximum: current month in `Asia/Dubai`
-- unsupported historical bank/month combinations are marked `MANUAL_REQUIRED`.
-- ENBD, EIB, FAB, ADCB, SIB, and Mashreq multi-month scrape run in one browser session and iterate statement period controls sequentially.
-  unavailable periods are marked `SKIPPED_UNAVAILABLE` with per-month diagnostics in job items.
+```bash
+# Backend
+cd backend && python -m pytest -q
+
+# Frontend
+cd frontend && npm test
+```
 
 ## Storage backends
 
-Environment variables:
 - `CCS_PLATFORM_STORAGE_BACKEND=local|gcs`
 - `CCS_PLATFORM_LOCAL_STORAGE_DIR=...`
-- `CCS_PLATFORM_BACKUPS_DIR=...`
-- `CCS_PLATFORM_DATABASE_URL=...`
-- `CCS_PLATFORM_TIMEZONE=Asia/Dubai`
-- `CCS_PLATFORM_EMBEDDED_WORKER=true|false`
-- `CCS_PLATFORM_JOB_DISPATCH_BACKEND=database|inprocess`
-- `CCS_PLATFORM_WORKER_QUEUES=default,scrape`
-- `CCS_PLATFORM_JOB_RETRY_BASE_SECONDS=30`
-- `CCS_PLATFORM_JOB_RETRY_JITTER_SECONDS=15`
-- `CCS_PLATFORM_JOB_RETRY_MAX_DELAY_SECONDS=900`
-- `CCS_PLATFORM_JOB_HEARTBEAT_TIMEOUT_SECONDS=1800`
-- `CCS_PLATFORM_RETENTION_JOBS_DAYS=90`
-- `CCS_PLATFORM_RETENTION_EXPORTS_DAYS=90`
-- `CCS_PLATFORM_RETENTION_AUDIT_EVENTS_DAYS=365`
-- `CCS_PLATFORM_RETENTION_LOGS_DAYS=30`
-- `CCS_PLATFORM_RETENTION_UPLOADS_DAYS=14`
-- `CCS_PLATFORM_RETENTION_BACKUPS_DAYS=30`
-- `CCS_PLATFORM_ENVIRONMENT=development|production`
-- `CCS_PLATFORM_REQUIRE_LOGIN=true|false`
-- `CCS_PLATFORM_SESSION_COOKIE_NAME=ccs_session`
-- `CCS_PLATFORM_SESSION_MAX_AGE_SECONDS=1209600`
-- `CCS_PLATFORM_SESSION_SECRET_KEY=...`
-- `CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY=...` (required in production by default)
-- `CCS_PLATFORM_RUNTIME_SETTINGS_REQUIRE_ENCRYPTION=true|false`
-- `CCS_PLATFORM_RUNTIME_SETTINGS_SEED_SOURCE=env|env_file|env_file_then_env|none`
-- `CCS_PLATFORM_RUNTIME_SETTINGS_ENV_FILE=/path/to/.env`
-
-GCS mode also needs:
-- `CCS_PLATFORM_GCS_BUCKET`
-- `CCS_PLATFORM_GCS_CREDENTIALS_FILE` — path to service account JSON key file (required unless running on GCP with Workload Identity)
-- optional: `CCS_PLATFORM_GCS_PROJECT`
+- `CCS_PLATFORM_DATABASE_URL=...` (SQLite for dev, PostgreSQL for prod)
+- `CCS_PLATFORM_GCS_BUCKET=...`
 
 ## Migrations
-
-In **production** (PostgreSQL), migrations run automatically at startup — no manual step needed.
-
-In **development** (SQLite), run manually:
 
 ```bash
 cd backend && alembic upgrade head
 ```
 
-For Postgres, set `CCS_PLATFORM_DATABASE_URL` and run the same command.
-
-```bash
-# Rotation drill from old key to new key
-CCS_PLATFORM_RUNTIME_SETTINGS_OLD_ENCRYPTION_KEY=... \
-CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY=... \
-PYTHONPATH=backend python backend/scripts/rotate_runtime_setting_secrets.py --dry-run
-
-# Migration governance preflight
-PYTHONPATH=backend python backend/scripts/migration_preflight.py
-
-# Backup/restore and monthly drill
-PYTHONPATH=backend python backend/scripts/backup_platform_state.py --label nightly
-PYTHONPATH=backend python backend/scripts/backup_restore_drill.py --label monthly
-
-# Retention policy dry-run/apply
-PYTHONPATH=backend python backend/scripts/enforce_retention.py
-PYTHONPATH=backend python backend/scripts/enforce_retention.py --apply
-```
-
-## Notes
-
-- Legacy pipeline modules (`ccs` CLI, workbook pipeline, legacy ledger DB flow) were removed.
-- Bank parser and browser automation internals are fully integrated under `backend/ccs_platform/adapters/banks/`.
+Postgres: set `CCS_PLATFORM_DATABASE_URL` first. Migrations run automatically at startup in production.
