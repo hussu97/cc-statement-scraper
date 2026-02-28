@@ -2,12 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { api } from '../api';
 import { Panel } from '../components/Panel';
-import { TablePagination } from '../components/TablePagination';
 import { useActiveProfileKey } from '../profileStore';
 import { formatLocalDateTime } from '../utils/datetime';
 
 type EmailProvider = 'microsoft' | 'gmail';
-type EmailIngestionStatus = 'queued' | 'uploaded' | 'duplicate' | 'ignored' | 'failed';
 
 type PaginatedResponse<T> = {
   items: T[];
@@ -53,26 +51,6 @@ type EmailBankRouteOut = {
   is_active: boolean;
   created_at: string;
   updated_at: string;
-};
-
-type EmailIngestionEventOut = {
-  id: number;
-  route_id: number;
-  profile_id: number;
-  bank_code: string;
-  provider: EmailProvider;
-  provider_message_id: string;
-  provider_attachment_id: string;
-  internet_message_id: string | null;
-  attachment_filename: string;
-  attachment_sha256: string;
-  status: EmailIngestionStatus;
-  upload_job_id: number | null;
-  error_message: string | null;
-  provider_received_at: string | null;
-  processed_at: string | null;
-  metadata_json: Record<string, unknown> | null;
-  created_at: string;
 };
 
 type ServiceApiTokenOut = {
@@ -144,25 +122,12 @@ function toJsonInput(value: Record<string, unknown> | null | undefined): string 
   return JSON.stringify(value);
 }
 
-
-function fromDateTimeLocalInput(value: string): string | null {
-  if (!value.trim()) {
-    return null;
-  }
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-  return parsed.toISOString();
-}
-
 export function EmailIngestionPage() {
   const activeProfileKey = useActiveProfileKey();
   const [featureDisabled, setFeatureDisabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [loadingConfig, setLoadingConfig] = useState(false);
-  const [loadingEvents, setLoadingEvents] = useState(false);
 
   const [banks, setBanks] = useState<BankOut[]>([]);
   const [mailboxes, setMailboxes] = useState<EmailMailboxOut[]>([]);
@@ -171,11 +136,6 @@ export function EmailIngestionPage() {
   const [runtimeByKey, setRuntimeByKey] = useState<Record<string, RuntimeSetting>>({});
   const [serviceTokens, setServiceTokens] = useState<ServiceApiTokenOut[]>([]);
   const [createdServiceToken, setCreatedServiceToken] = useState<string | null>(null);
-
-  const [events, setEvents] = useState<EmailIngestionEventOut[]>([]);
-  const [eventsTotal, setEventsTotal] = useState(0);
-  const [eventsPage, setEventsPage] = useState(1);
-  const [eventsPageSize, setEventsPageSize] = useState(100);
 
   const [createMailboxForm, setCreateMailboxForm] = useState({
     provider: 'microsoft' as EmailProvider,
@@ -195,15 +155,6 @@ export function EmailIngestionPage() {
   const [createTokenForm, setCreateTokenForm] = useState({
     name: '',
     scopes: [...SERVICE_SCOPE_OPTIONS] as string[],
-  });
-
-  const [eventFilters, setEventFilters] = useState({
-    bank_code: '',
-    provider: '',
-    status: '',
-    search: '',
-    created_from: '',
-    created_to: '',
   });
 
   const mailboxById = useMemo(() => {
@@ -279,52 +230,6 @@ export function EmailIngestionPage() {
       }
     } finally {
       setLoadingConfig(false);
-    }
-  }
-
-  async function loadEvents(nextPage = eventsPage, nextPageSize = eventsPageSize) {
-    try {
-      setLoadingEvents(true);
-      setError(null);
-      const params = new URLSearchParams();
-      params.set('page', String(nextPage));
-      params.set('page_size', String(nextPageSize));
-      if (eventFilters.bank_code.trim()) {
-        params.set('bank_code', eventFilters.bank_code.trim().toUpperCase());
-      }
-      if (eventFilters.provider.trim()) {
-        params.set('provider', eventFilters.provider.trim());
-      }
-      if (eventFilters.status.trim()) {
-        params.set('status', eventFilters.status.trim());
-      }
-      if (eventFilters.search.trim()) {
-        params.set('search', eventFilters.search.trim());
-      }
-      const createdFromIso = fromDateTimeLocalInput(eventFilters.created_from);
-      if (createdFromIso) {
-        params.set('created_from', createdFromIso);
-      }
-      const createdToIso = fromDateTimeLocalInput(eventFilters.created_to);
-      if (createdToIso) {
-        params.set('created_to', createdToIso);
-      }
-
-      const resp = await api.get<PaginatedResponse<EmailIngestionEventOut>>(`/email-ingestion/events?${params.toString()}`);
-      setEvents(resp.items);
-      setEventsTotal(resp.total);
-      setEventsPage(resp.page);
-      setEventsPageSize(resp.page_size);
-    } catch (loadError) {
-      const message = (loadError as Error).message;
-      if (message.includes('HTTP 404') && message.toLowerCase().includes('email ingestion')) {
-        setFeatureDisabled(true);
-        setError(null);
-      } else {
-        setError(message);
-      }
-    } finally {
-      setLoadingEvents(false);
     }
   }
 
@@ -513,16 +418,8 @@ export function EmailIngestionPage() {
   }
 
   useEffect(() => {
-    setEventsPage(1);
-  }, [activeProfileKey]);
-
-  useEffect(() => {
     loadConfigData();
   }, [activeProfileKey]);
-
-  useEffect(() => {
-    loadEvents(eventsPage, eventsPageSize);
-  }, [activeProfileKey, eventsPage, eventsPageSize]);
 
   const runtimeStatus = useMemo(() => {
     const lookup = (key: string) => (runtimeByKey[key]?.has_value ? 'Stored' : 'Missing');
@@ -866,134 +763,6 @@ export function EmailIngestionPage() {
             </tbody>
           </table>
         </div>
-      </Panel>
-
-      <Panel title="Ingestion Activity">
-        <div className="row">
-          <select
-            value={eventFilters.bank_code}
-            onChange={(event) => {
-              setEventFilters((prev) => ({ ...prev, bank_code: event.target.value }));
-              setEventsPage(1);
-            }}
-          >
-            <option value="">All banks</option>
-            {banks.map((bank) => (
-              <option key={bank.code} value={bank.code}>
-                {bank.code}
-              </option>
-            ))}
-          </select>
-          <select
-            value={eventFilters.provider}
-            onChange={(event) => {
-              setEventFilters((prev) => ({ ...prev, provider: event.target.value }));
-              setEventsPage(1);
-            }}
-          >
-            <option value="">All providers</option>
-            <option value="microsoft">Microsoft</option>
-            <option value="gmail">Gmail</option>
-          </select>
-          <select
-            value={eventFilters.status}
-            onChange={(event) => {
-              setEventFilters((prev) => ({ ...prev, status: event.target.value }));
-              setEventsPage(1);
-            }}
-          >
-            <option value="">All statuses</option>
-            <option value="queued">queued</option>
-            <option value="uploaded">uploaded</option>
-            <option value="duplicate">duplicate</option>
-            <option value="ignored">ignored</option>
-            <option value="failed">failed</option>
-          </select>
-          <input
-            value={eventFilters.search}
-            onChange={(event) => {
-              setEventFilters((prev) => ({ ...prev, search: event.target.value }));
-              setEventsPage(1);
-            }}
-            placeholder="Search attachment/message id"
-          />
-          <label style={{ display: 'inline-grid', gap: '0.2rem' }}>
-            <span className="muted">From</span>
-            <input
-              type="datetime-local"
-              value={eventFilters.created_from}
-              onChange={(event) => {
-                setEventFilters((prev) => ({ ...prev, created_from: event.target.value }));
-                setEventsPage(1);
-              }}
-            />
-          </label>
-          <label style={{ display: 'inline-grid', gap: '0.2rem' }}>
-            <span className="muted">To</span>
-            <input
-              type="datetime-local"
-              value={eventFilters.created_to}
-              onChange={(event) => {
-                setEventFilters((prev) => ({ ...prev, created_to: event.target.value }));
-                setEventsPage(1);
-              }}
-            />
-          </label>
-          <button className="ghost" onClick={() => loadEvents(1, eventsPageSize)}>Apply Filters</button>
-          <button className="ghost" onClick={() => loadEvents(eventsPage, eventsPageSize)}>Refresh</button>
-        </div>
-
-        {loadingEvents ? <p className="muted" style={{ marginTop: '0.55rem' }}>Loading ingestion events...</p> : null}
-
-        <div className="table-wrap" style={{ marginTop: '0.75rem' }}>
-          <table>
-            <thead>
-              <tr>
-                <th>Created</th>
-                <th>Bank</th>
-                <th>Provider</th>
-                <th>Status</th>
-                <th>Attachment</th>
-                <th>Message</th>
-                <th>Upload Job</th>
-                <th>Error</th>
-              </tr>
-            </thead>
-            <tbody>
-              {events.map((item) => (
-                <tr key={item.id}>
-                  <td>{formatLocalDateTime(item.created_at)}</td>
-                  <td>{item.bank_code}</td>
-                  <td>{providerLabel(item.provider)}</td>
-                  <td>{item.status}</td>
-                  <td>
-                    <div>{item.attachment_filename}</div>
-                    <div className="muted">{item.attachment_sha256.slice(0, 14)}...</div>
-                  </td>
-                  <td>
-                    <div title={item.provider_message_id}>{item.provider_message_id.slice(0, 18)}...</div>
-                    <div className="muted" title={item.provider_attachment_id}>{item.provider_attachment_id.slice(0, 18)}...</div>
-                  </td>
-                  <td>{item.upload_job_id || '-'}</td>
-                  <td title={item.error_message || ''}>{item.error_message || '-'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <TablePagination
-          page={eventsPage}
-          pageSize={eventsPageSize}
-          total={eventsTotal}
-          itemLabel="events"
-          disabled={loadingEvents}
-          onPageChange={setEventsPage}
-          onPageSizeChange={(nextPageSize) => {
-            setEventsPageSize(nextPageSize);
-            setEventsPage(1);
-          }}
-        />
       </Panel>
 
       <Panel title="Service Tokens">
