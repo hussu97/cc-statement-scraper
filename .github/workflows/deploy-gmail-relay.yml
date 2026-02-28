@@ -35,7 +35,7 @@ jobs:
         run: |
           SHA=$(git rev-parse --short HEAD)
           IMAGE="europe-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/ccs-platform/gmail-relay:$SHA"
-          docker build -f deploy/Dockerfile.api -t "$IMAGE" .
+          docker build --platform linux/amd64 -f deploy/Dockerfile.api -t "$IMAGE" .
           docker push "$IMAGE"
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
 
