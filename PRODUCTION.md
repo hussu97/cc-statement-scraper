@@ -701,70 +701,30 @@ In the admin UI → **Email Ingestion** → **Mailboxes** panel:
 
 ### EI-4. Obtain and store a refresh token
 
-The app uses a long-lived refresh token to request short-lived access tokens on each poll cycle. You obtain this token once by completing an OAuth flow in your browser, then paste it into the mailbox row in the UI.
+The app uses a long-lived refresh token to request short-lived access tokens on each poll cycle. The token is obtained entirely in the admin UI — no terminal commands required.
 
-#### Microsoft refresh token
+**Prerequisites:** Set the four OAuth app credential env vars and restart the API server (see [EI-2](#ei-2) for where to register the OAuth apps):
 
-The mailbox account must sign in and grant the app access.
+```
+CCS_PLATFORM_EMAIL_MS_CLIENT_ID=<your Azure app client ID>
+CCS_PLATFORM_EMAIL_MS_CLIENT_SECRET=<your Azure app client secret>
+CCS_PLATFORM_EMAIL_GMAIL_CLIENT_ID=<your GCP OAuth client ID>
+CCS_PLATFORM_EMAIL_GMAIL_CLIENT_SECRET=<your GCP OAuth client secret>
+```
 
-1. Build the authorisation URL, replacing `CLIENT_ID` with your Azure Application (client) ID:
+**Steps (same flow for Microsoft and Gmail):**
 
-   ```
-   https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?client_id=CLIENT_ID&response_type=code&redirect_uri=http%3A%2F%2Flocalhost&scope=Mail.Read+offline_access&response_mode=query
-   ```
+1. Open the admin UI → **Email Ingestion** → **OAuth Token Setup** panel.
+2. Click **Authorize Microsoft** (or **Authorize Google**). A new tab opens with the provider's sign-in page.
+3. Sign in with the **mailbox account** whose inbox you want to watch. Accept the permission prompt.
+4. The browser redirects to `http://localhost/?code=XXXXX...`. The page will fail to load — that is expected. **Copy the full redirect URL** (or just the `code=...` value) from the address bar.
+5. Paste it into the **Auth code** field in the panel (the UI accepts either the raw code or the full URL).
+6. Click **Get Refresh Token**. The server exchanges the code and displays the token.
+7. Select the target mailbox from the dropdown and click **Save to Mailbox**. The status in the Mailboxes table changes from `Missing` to `Stored`.
 
-2. Open the URL in a browser. Sign in with the **mailbox account** (e.g. the Hotmail/Outlook account whose inbox you want to watch). Accept the permission prompt.
-
-3. The browser redirects to `http://localhost/?code=XXXXX...`. The page will fail to load — that is expected. Copy the `code` value from the address bar.
-
-4. Exchange the code for tokens. Run this `curl` command, replacing the placeholders:
-
-   ```bash
-   curl -X POST https://login.microsoftonline.com/consumers/oauth2/v2.0/token \
-     -d "client_id=CLIENT_ID" \
-     -d "client_secret=CLIENT_SECRET" \
-     -d 'code=PASTE_CODE_HERE' \
-     -d "redirect_uri=http://localhost" \
-     -d "grant_type=authorization_code" \
-     -d "scope=Mail.Read offline_access"
-   ```
-
-   The JSON response contains a `"refresh_token"` field. Copy the full value (it is several hundred characters long).
-
-5. In the admin UI → **Email Ingestion** → mailbox row → **Refresh Token** column: paste the refresh token into the password field and click **Save Token**. The status changes from `Missing` to `Stored`.
-
-> Refresh tokens for personal Microsoft accounts do not expire as long as they are used at least once every 90 days. If the token expires, repeat steps 1–5.
-
-#### Gmail refresh token
-
-1. Build the authorisation URL, replacing `CLIENT_ID`:
-
-   ```
-   https://accounts.google.com/o/oauth2/v2/auth?client_id=CLIENT_ID&redirect_uri=http%3A%2F%2Flocalhost&response_type=code&scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fgmail.readonly&access_type=offline&prompt=consent
-   ```
-
-   > `prompt=consent` is required — without it Google will not return a refresh token on subsequent authorisations.
-
-2. Open the URL in a browser, sign in with the Gmail mailbox account, and accept the permission prompt. You may see a warning saying the app is unverified — click **Advanced → Go to [app name]** to proceed.
-
-3. The browser redirects to `http://localhost/?code=XXXXX...`. Copy the `code` value.
-
-4. Exchange the code:
-
-   ```bash
-   curl -X POST https://oauth2.googleapis.com/token \
-     -d "client_id=CLIENT_ID" \
-     -d "client_secret=CLIENT_SECRET" \
-     -d "code=PASTE_CODE_HERE" \
-     -d "redirect_uri=http://localhost" \
-     -d "grant_type=authorization_code"
-   ```
-
-   The JSON response contains a `"refresh_token"`. Copy it.
-
-5. Paste into the mailbox row in the UI and click **Save Token** (same as Microsoft step 5 above).
-
-> Gmail refresh tokens do not expire unless the app is in testing mode with a 7-day limit. Publish the OAuth consent screen to remove this restriction for personal use.
+> **Microsoft:** Refresh tokens for personal accounts do not expire as long as they are used at least once every 90 days. Repeat steps 2–7 if the token expires.
+>
+> **Gmail:** Refresh tokens do not expire unless the OAuth consent screen is in testing mode (7-day limit). Publish the consent screen to remove this restriction for personal use.
 
 ---
 

@@ -78,6 +78,11 @@ class PlatformSettings(BaseSettings):
     login_hash_hussain: str = ""
     login_hash_bob: str = ""
 
+    email_ms_client_id: str | None = None
+    email_ms_client_secret: str | None = None
+    email_gmail_client_id: str | None = None
+    email_gmail_client_secret: str | None = None
+
     def model_post_init(self, __context: object) -> None:
         if self.is_production():
             default_key = "change-this-in-production"

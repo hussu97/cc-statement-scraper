@@ -156,3 +156,19 @@ class ServiceApiTokenOut(BaseModel):
 class ServiceApiTokenCreated(BaseModel):
     token: str
     item: ServiceApiTokenOut
+
+
+class OAuthConfigOut(BaseModel):
+    provider: EmailProvider
+    auth_url: str | None
+    configured: bool
+
+
+class OAuthCodeExchangeRequest(BaseModel):
+    provider: EmailProvider
+    code: str = Field(min_length=1)
+
+
+class OAuthCodeExchangeOut(BaseModel):
+    provider: EmailProvider
+    refresh_token: str

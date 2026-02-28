@@ -34,6 +34,9 @@ from ccs_platform.api.v1.schemas import (
     EmailMailboxSyncStatePatch,
     OAuthAccessTokenOut,
     OAuthAccessTokenRequest,
+    OAuthCodeExchangeOut,
+    OAuthCodeExchangeRequest,
+    OAuthConfigOut,
     PaginatedEmailIngestionEvents,
     PaginatedEmailMailboxes,
     PaginatedEmailRoutes,
@@ -43,6 +46,7 @@ from ccs_platform.api.v1.schemas import (
 )
 from ccs_platform.application.jobs.service import create_or_get_job
 from ccs_platform.core.runtime_settings import decode_runtime_setting_row_value, normalize_runtime_key
+from ccs_platform.core.settings import get_settings
 from ccs_platform.db import models
 from ccs_platform.db.models.enums import EmailIngestionStatus, EmailProvider, JobType
 
@@ -69,6 +73,29 @@ CLIENT_SECRET_KEY_BY_PROVIDER = {
 REFRESH_TOKEN_KEY_TEMPLATE_BY_PROVIDER = {
     EmailProvider.MICROSOFT: "EMAIL_MS_REFRESH_TOKEN_MAILBOX_{mailbox_id}",
     EmailProvider.GMAIL: "EMAIL_GMAIL_REFRESH_TOKEN_MAILBOX_{mailbox_id}",
+}
+
+# Auth URL templates for the in-UI OAuth flow (code exchange uses /consumers/ endpoint)
+_MS_AUTH_URL_TEMPLATE = (
+    "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize"
+    "?client_id={client_id}"
+    "&response_type=code"
+    "&redirect_uri=http%3A%2F%2Flocalhost"
+    "&scope=Mail.Read%20offline_access"
+    "&response_mode=query"
+)
+_GMAIL_AUTH_URL_TEMPLATE = (
+    "https://accounts.google.com/o/oauth2/v2/auth"
+    "?client_id={client_id}"
+    "&redirect_uri=http%3A%2F%2Flocalhost"
+    "&response_type=code"
+    "&scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fgmail.readonly"
+    "&access_type=offline"
+    "&prompt=consent"
+)
+_EXCHANGE_TOKEN_ENDPOINT_BY_PROVIDER = {
+    EmailProvider.MICROSOFT: "https://login.microsoftonline.com/consumers/oauth2/v2.0/token",
+    EmailProvider.GMAIL: "https://oauth2.googleapis.com/token",
 }
 
 
@@ -669,6 +696,103 @@ def provider_access_token(
         token_type=token_type,
         expires_at=expires_at,
     )
+
+
+@router.get(
+    "/oauth/config",
+    response_model=list[OAuthConfigOut],
+    dependencies=[Depends(_ensure_enabled)],
+)
+def oauth_config(
+    _actor: ActorContext = Depends(require_admin_role),
+) -> list[OAuthConfigOut]:
+    """Return auth URLs and configuration status for each OAuth provider."""
+    settings = get_settings()
+    ms_client_id = (settings.email_ms_client_id or "").strip()
+    ms_client_secret = (settings.email_ms_client_secret or "").strip()
+    gmail_client_id = (settings.email_gmail_client_id or "").strip()
+    gmail_client_secret = (settings.email_gmail_client_secret or "").strip()
+
+    ms_configured = bool(ms_client_id and ms_client_secret)
+    gmail_configured = bool(gmail_client_id and gmail_client_secret)
+
+    return [
+        OAuthConfigOut(
+            provider=EmailProvider.MICROSOFT,
+            auth_url=_MS_AUTH_URL_TEMPLATE.format(client_id=ms_client_id) if ms_client_id else None,
+            configured=ms_configured,
+        ),
+        OAuthConfigOut(
+            provider=EmailProvider.GMAIL,
+            auth_url=_GMAIL_AUTH_URL_TEMPLATE.format(client_id=gmail_client_id) if gmail_client_id else None,
+            configured=gmail_configured,
+        ),
+    ]
+
+
+@router.post(
+    "/oauth/exchange-code",
+    response_model=OAuthCodeExchangeOut,
+    dependencies=[Depends(_ensure_enabled)],
+)
+def oauth_exchange_code(
+    payload: OAuthCodeExchangeRequest,
+    _actor: ActorContext = Depends(require_admin_role),
+) -> OAuthCodeExchangeOut:
+    """Exchange an OAuth authorisation code for a refresh token (server-side)."""
+    settings = get_settings()
+    provider = payload.provider
+
+    if provider == EmailProvider.MICROSOFT:
+        client_id = (settings.email_ms_client_id or "").strip()
+        client_secret = (settings.email_ms_client_secret or "").strip()
+    else:
+        client_id = (settings.email_gmail_client_id or "").strip()
+        client_secret = (settings.email_gmail_client_secret or "").strip()
+
+    if not client_id or not client_secret:
+        raise HTTPException(
+            status_code=400,
+            detail=f"OAuth credentials for {provider.value} are not configured. Set the env vars and restart.",
+        )
+
+    post_data: dict[str, str] = {
+        "grant_type": "authorization_code",
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "code": payload.code.strip(),
+        "redirect_uri": "http://localhost",
+    }
+    encoded = urllib_parse.urlencode(post_data).encode("utf-8")
+    req = urllib_request.Request(
+        _EXCHANGE_TOKEN_ENDPOINT_BY_PROVIDER[provider],
+        data=encoded,
+        method="POST",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    try:
+        with urllib_request.urlopen(req, timeout=20) as resp:  # nosec B310
+            raw = resp.read().decode("utf-8")
+    except urllib_error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="ignore")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Token exchange failed ({provider.value}): HTTP {exc.code} {body[:300]}",
+        ) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"Token exchange failed ({provider.value})") from exc
+
+    try:
+        doc = json.loads(raw)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"Invalid token response from {provider.value}") from exc
+
+    refresh_token = str(doc.get("refresh_token") or "").strip()
+    if not refresh_token:
+        detail = str(doc.get("error_description") or doc.get("error") or "missing refresh_token")
+        raise HTTPException(status_code=502, detail=f"Token exchange failed ({provider.value}): {detail}")
+
+    return OAuthCodeExchangeOut(provider=provider, refresh_token=refresh_token)
 
 
 @router.post(
