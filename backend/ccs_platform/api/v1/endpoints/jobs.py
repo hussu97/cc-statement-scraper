@@ -192,8 +192,8 @@ def create_scrape_job(
     payload_json = {
         "banks": [bank.code for bank in banks],
         "months": months,
-        "download": payload.download,
-        "headless": payload.headless,
+        "download": True,
+        "headless": True,
         "login_timeout_minutes": payload.login_timeout_minutes,
     }
     job, created, requeued = create_or_get_job(
