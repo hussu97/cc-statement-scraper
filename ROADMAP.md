@@ -43,9 +43,8 @@
 ## 2. Architecture
 
 ### 2.1 `JobRunner` God class `HIGH`
-**File:** `src/ccs_platform/application/jobs/runner.py` (~1,064 lines)
-**Issue:** A single class owns job dispatch, cancellation, heartbeat, retry logic, schedule polling, and the concrete implementation of every job type (scrape, upload, reclassify, export, diagnostics, bank connection test). Changes to any job type require editing the same file, and the class is untestable in isolation.
-**Fix:** Extract each job type into its own module under `application/jobs/handlers/`. `JobRunner` becomes a thin dispatcher that delegates to handlers. Each handler can be unit-tested independently.
+**Status:** ✅ Resolved — `runner.py` reduced from 1,068 lines to 237 lines. All seven job-type implementations extracted into `application/jobs/handlers/`: `upload.py`, `scrape.py`, `reclassify.py`, `export_workbook.py`, `parser_validate.py`, `bank_connection_test.py`, `reparse.py`. A `JobContext` dataclass in `handlers/context.py` groups `settings`, `storage`, and the two runner callbacks (`assert_not_cancelled`, `update_progress`) so handlers have no dependency on `JobRunner` itself.
+**Files:** `backend/ccs_platform/application/jobs/runner.py`, `backend/ccs_platform/application/jobs/handlers/`
 
 ### 2.2 No repository layer `HIGH`
 **Status:** ✅ Resolved — `StatementRepository`, `JobRepository`, and `CategoryRepository` introduced in `backend/ccs_platform/db/repositories/`. All SELECT/COUNT query logic moved into repository methods; `statements.py`, `jobs.py`, and `categories.py` endpoint files updated to use them instead of calling `db.execute(select(...))` directly.
