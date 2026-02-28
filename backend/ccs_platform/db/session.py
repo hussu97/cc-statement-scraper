@@ -5,12 +5,18 @@ import logging
 from pathlib import Path
 from typing import Generator
 
+from alembic.config import Config as AlembicConfig
+from alembic import command as alembic_command
 from sqlalchemy import create_engine
 from sqlalchemy import inspect
 from sqlalchemy.orm import Session, sessionmaker
 
 from ccs_platform.core.settings import get_settings
 from ccs_platform.db.base import Base
+
+# alembic.ini sits two levels above this file: backend/alembic.ini (dev)
+# or /app/alembic.ini (Docker container).
+_ALEMBIC_INI = Path(__file__).resolve().parents[2] / "alembic.ini"
 
 
 def _engine_kwargs(database_url: str) -> dict:
@@ -79,6 +85,17 @@ def db_session() -> Generator[Session, None, None]:
 
 def init_db() -> None:
     from ccs_platform.db import models  # noqa: F401
+
+    # For PostgreSQL (production) run Alembic migrations automatically on startup.
+    # This means no manual migration step or paid Render feature is needed —
+    # the app always migrates itself to head before serving traffic.
+    #
+    # SQLite (development) keeps the existing create_all + legacy-reset path below
+    # because dev DBs are often not Alembic-stamped.
+    if engine.dialect.name != "sqlite":
+        cfg = AlembicConfig(str(_ALEMBIC_INI))
+        alembic_command.upgrade(cfg, "head")
+        return
 
     # Legacy local SQLite files from pre-profile builds are optionally reset in-place.
     # In production this is disabled by default to avoid destructive startup behavior.

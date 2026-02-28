@@ -198,27 +198,7 @@ Render's persistent disks are a paid feature. GCS provides 5 GB free and works o
 
 ---
 
-### 1.5 Run database migrations
-
-Render's Shell tab is a paid feature. Instead, use the **Pre-Deploy Command** — available on all tiers including free — which runs the migration automatically before every deploy.
-
-1. In the Render dashboard, open the `ccs-api` service.
-2. Go to **Settings → Build & Deploy → Pre-Deploy Command**.
-3. Enter:
-
-   ```bash
-   cd /app && alembic upgrade head
-   ```
-
-4. Click **Save Changes**, then trigger a deploy (**Manual Deploy → Deploy latest commit**).
-
-Render runs the pre-deploy command in a temporary instance before switching traffic to the new version. If the migration fails, the deploy is aborted and the old version keeps serving — so it's safe to leave this in place permanently.
-
-> **First deploy:** The pre-deploy command runs on every deploy including the first one, so no manual migration step is needed.
-
----
-
-### 1.6 Seed scraper credentials
+### 1.5 Seed scraper credentials
 
 
 
@@ -246,7 +226,7 @@ On first boot the app looks for runtime settings (scraper usernames/passwords) i
 
 ---
 
-### 1.7 Frontend — Vercel
+### 1.6 Frontend — Vercel
 
 1. Sign up / log in at <https://vercel.com> (GitHub login works).
 
@@ -282,7 +262,7 @@ On first boot the app looks for runtime settings (scraper usernames/passwords) i
 
 ---
 
-### 1.8 Verify the deployment
+### 1.7 Verify the deployment
 
 ```bash
 # Health check (liveness)
@@ -298,10 +278,10 @@ Open `https://ccs-xyz.vercel.app` in a browser — you should see the login page
 
 ---
 
-### 1.9 Ongoing operations
+### 1.8 Ongoing operations
 
 **Redeploy after code changes:**
-Both Render services auto-deploy when you push to `main`. Migrations run via the pre-deploy command (step 1.5 tip) or manually via the Shell.
+The service auto-deploys when you push to `main`. Migrations run automatically at startup — nothing extra to do.
 
 **Check worker logs:**
 Render dashboard → `ccs-worker` → **Logs** tab. Scrape job output (Playwright, bank login steps) appears here.
