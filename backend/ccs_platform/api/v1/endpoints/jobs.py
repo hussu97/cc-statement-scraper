@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import fnmatch
-import os
 from pathlib import Path
 from datetime import UTC, datetime
 
@@ -12,6 +11,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from ccs_platform.api.audit import append_audit_event
 from ccs_platform.core.bank_config import load_app_config
+from ccs_platform.core.runtime_settings import decode_runtime_setting_row_value
 from ccs_platform.db import models
 from ccs_platform.api.deps import (
     ActorContext,
@@ -43,8 +43,8 @@ def _detect_bank_code_from_filename(filename: str) -> str | None:
     return None
 
 
-def _extract_pdf_text(pdf_path: Path, max_pages: int = 2) -> str:
-    password_candidates = [None, os.getenv("ADCB_PDF_PASSWORD"), os.getenv("ADCB_CID")]
+def _extract_pdf_text(pdf_path: Path, max_pages: int = 2, extra_passwords: list[str | None] | None = None) -> str:
+    password_candidates: list[str | None] = [None] + (extra_passwords or [])
 
     def _extract_with_password(password: str | None) -> str | None:
         try:
@@ -114,8 +114,10 @@ def _infer_bank_code_from_text(pdf_text: str) -> str | None:
     return None
 
 
-def _detect_bank_code_for_upload(filename: str, pdf_path: Path) -> str | None:
-    detected = _infer_bank_code_from_text(_extract_pdf_text(pdf_path))
+def _detect_bank_code_for_upload(
+    filename: str, pdf_path: Path, extra_passwords: list[str | None] | None = None
+) -> str | None:
+    detected = _infer_bank_code_from_text(_extract_pdf_text(pdf_path, extra_passwords=extra_passwords))
     if detected:
         return detected
     return _detect_bank_code_from_filename(filename)
@@ -268,6 +270,19 @@ async def create_upload_job(
         bank.code
         for bank in get_enabled_banks(db, profile_id=profile.profile_id)
     }
+
+    # Load ADCB PDF passwords from runtime settings instead of os.environ so that
+    # credentials updated via the admin UI are reflected without a process restart.
+    adcb_password_rows = db.execute(
+        select(models.RuntimeSetting).where(
+            models.RuntimeSetting.profile_id == profile.profile_id,
+            models.RuntimeSetting.key.in_(["ADCB_PDF_PASSWORD", "ADCB_CID"]),
+        )
+    ).scalars().all()
+    adcb_pdf_passwords: list[str | None] = [
+        decode_runtime_setting_row_value(row) or None for row in adcb_password_rows
+    ]
+
     uploads: list[dict] = []
 
     try:
@@ -279,7 +294,9 @@ async def create_upload_job(
 
             temp_path = profile_upload_dir / f"upload_{Path(filename).name}_{len(uploads)}.pdf"
             temp_path.write_bytes(content)
-            bank_code = (_detect_bank_code_for_upload(filename, temp_path) or "").upper().strip()
+            bank_code = (
+                _detect_bank_code_for_upload(filename, temp_path, extra_passwords=adcb_pdf_passwords) or ""
+            ).upper().strip()
             if not bank_code:
                 temp_path.unlink(missing_ok=True)
                 raise HTTPException(

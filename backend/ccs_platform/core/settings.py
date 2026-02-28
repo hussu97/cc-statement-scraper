@@ -73,6 +73,15 @@ class PlatformSettings(BaseSettings):
     runtime_settings_seed_source: str | None = None
     runtime_settings_env_file: Path | None = ROOT_DIR / ".env"
 
+    def model_post_init(self, __context: object) -> None:
+        if self.is_production():
+            default_key = "change-this-in-production"
+            if self.session_secret_key == default_key or len(self.session_secret_key.encode()) < 32:
+                raise RuntimeError(
+                    "CCS_PLATFORM_SESSION_SECRET_KEY is not configured for production. "
+                    "Set it to a random string of at least 32 bytes before starting."
+                )
+
     def is_production(self) -> bool:
         normalized = self.environment.strip().lower()
         return normalized in {"prod", "production"}
