@@ -174,7 +174,7 @@ Render's persistent disks are a paid feature. GCS provides 5 GB free and works o
 
 1. Go to <https://console.cloud.google.com> → create a new project (e.g. `ccs-platform`).
 2. Navigate to **Cloud Storage → Buckets → Create**.
-3. Set a globally unique name (e.g. `ccs-platform-yourname`), choose a region matching your Render region, leave all other defaults.
+3. Set a globally unique name (e.g. `ccs-platform-yourname`), pick any region geographically close to your Render region for lower latency (GCS and Render are on different cloud providers so they'll never share infrastructure — the choice only affects network distance), leave all other defaults.
 4. Click **Create**.
 
 **b) Create a service account**
