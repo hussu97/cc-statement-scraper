@@ -860,7 +860,7 @@ The relay (`backend/scripts/gmail_ingest_relay.py`) is a small FastAPI service t
 ```bash
 SHA=$(git rev-parse --short HEAD)
 IMAGE_RELAY="europe-west1-docker.pkg.dev/PROJECT_ID/ccs-platform/gmail-relay:$SHA"
-docker build -f deploy/Dockerfile.api -t "$IMAGE_RELAY" .
+docker build --platform linux/amd64 -f deploy/Dockerfile.api -t "$IMAGE_RELAY" .
 docker push "$IMAGE_RELAY"
 
 gcloud run deploy ccs-gmail-relay \
