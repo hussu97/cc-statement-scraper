@@ -165,7 +165,17 @@ def _resolve_env_file() -> Path | None:
 
 @lru_cache(maxsize=1)
 def get_settings() -> PlatformSettings:
-    settings = PlatformSettings(_env_file=_resolve_env_file(), _env_file_encoding="utf-8")
+    env_file = _resolve_env_file()
+
+    # Also load the .env file into process env so that code that reads
+    # values via os.getenv() (e.g. auth/service.py login-hash resolution)
+    # sees the same values as pydantic-settings.  override=False means
+    # existing shell exports always win over the file.
+    if env_file is not None:
+        from dotenv import load_dotenv
+        load_dotenv(env_file, override=False)
+
+    settings = PlatformSettings(_env_file=env_file, _env_file_encoding="utf-8")
     settings.local_storage_dir.mkdir(parents=True, exist_ok=True)
     settings.uploads_temp_dir.mkdir(parents=True, exist_ok=True)
     settings.logs_dir.mkdir(parents=True, exist_ok=True)
