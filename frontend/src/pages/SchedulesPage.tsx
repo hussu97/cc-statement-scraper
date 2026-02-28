@@ -5,6 +5,7 @@ import { Panel } from '../components/Panel';
 import { TablePagination } from '../components/TablePagination';
 import { useActiveProfileKey } from '../profileStore';
 import { formatLocalDateTime } from '../utils/datetime';
+import type { PagedResponse, Schedule } from '../types/statements';
 
 function currentDubaiMonthToken(): string {
   const parts = new Intl.DateTimeFormat('en-GB', {
@@ -21,7 +22,7 @@ function currentDubaiMonthToken(): string {
 export function SchedulesPage() {
   const activeProfileKey = useActiveProfileKey();
   const defaultMonth = currentDubaiMonthToken();
-  const [schedules, setSchedules] = useState<any[]>([]);
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
   const [total, setTotal] = useState(0);
@@ -41,7 +42,7 @@ export function SchedulesPage() {
       const params = new URLSearchParams();
       params.set('page', String(page));
       params.set('page_size', String(pageSize));
-      const data = await api.get<any>(`/schedules?${params.toString()}`);
+      const data = await api.get<PagedResponse<Schedule>>(`/schedules?${params.toString()}`);
       const nextTotal = Number(data.total || 0);
       setTotal(nextTotal);
       setSchedules(data.items || []);
@@ -67,7 +68,7 @@ export function SchedulesPage() {
     }
   }
 
-  async function toggle(schedule: any) {
+  async function toggle(schedule: Schedule) {
     const status = schedule.status === 'active' ? 'paused' : 'active';
     try {
       await api.patch(`/schedules/${schedule.id}`, { status });

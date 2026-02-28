@@ -106,39 +106,36 @@
 **Files:** `frontend/vite.config.ts`, `frontend/src/lib/__tests__/`, `frontend/src/utils/__tests__/`
 
 ### 4.2 No ESLint / Prettier `MEDIUM`
-**Issue:** No linting or formatting enforced. Code style is inconsistent and type-safety gaps go undetected at save time.
-**Fix:** Add `eslint`, `@typescript-eslint/eslint-plugin`, `eslint-plugin-react-hooks`, and `prettier`. Add `lint` and `format` npm scripts. Run `eslint --max-warnings 0` in CI.
+**Status:** ✅ Resolved — ESLint 9 (flat config), `@typescript-eslint/eslint-plugin`, `eslint-plugin-react-hooks`, `prettier`, and `eslint-config-prettier` installed. `eslint.config.js` and `.prettierrc` added. `npm run lint` and `npm run format` scripts added. `@typescript-eslint/no-explicit-any` enforced as error; `rules-of-hooks` enforced. Passes with `--max-warnings 0`.
+**Files:** `frontend/eslint.config.js`, `frontend/.prettierrc`, `frontend/package.json`
 
 ### 4.3 Utility duplication `MEDIUM`
 **Status:** ✅ Resolved (partial — completed as part of S3/4.1) — `useDebouncedValue`, `formatAmount`, and `isAbortError` consolidated into `src/lib/useDebounce.ts`, `src/lib/format.ts`, and `src/lib/errors.ts`; `DashboardPage`, `RawLinesPage`, and `RuntimeSettingsPage` updated to import from lib.
 **Files:** `frontend/src/lib/`
 
 ### 4.4 Pervasive `any` typing `MEDIUM`
-**Issue:** The TypeScript type system is effectively bypassed across much of the frontend. Runtime type errors surface only in the UI.
-**Fix:** Enable `"strict": true` in `tsconfig.json`. Resolve `any` usages incrementally, starting with API response types.
+**Status:** ✅ Resolved — `"strict": true` was already enabled. All `any` usages eliminated across all pages: proper types defined in `src/types/statements.ts` (`Statement`, `StatementLine`, `PagedResponse`, `Schedule`, `Job`, `Bank`, `Category`, `CategoryRule`, `RuleTestResult`, `RawLine`, `RuntimeSetting`) and `src/types/auth.ts` (`LoginResponse`). ESLint `no-explicit-any: error` now enforces this going forward.
+**Files:** `frontend/src/types/statements.ts`, `frontend/src/pages/`
 
 ### 4.5 Personal email hardcoded in `LoginPage.tsx` `HIGH`
+**Status:** ✅ Resolved — `DEFAULT_LOGIN_EMAIL` constant and its use removed; email field now starts as empty string.
 **File:** `frontend/src/pages/LoginPage.tsx`
-**Issue:** `h_abbasi97@hotmail.com` is hardcoded as a placeholder/default in a UI component. This leaks PII and breaks multi-tenant deployments.
-**Fix:** Remove the hardcoded email. Use an empty placeholder string.
 
 ### 4.6 `TablePagination` missing `2000` option `MEDIUM`
-**Issue:** Violates `CLAUDE.md` rule 12. The pagination component is missing the 2000/page option.
-**Fix:** Add `2000` to `pageSizeOptions` in the shared `Pagination` component.
+**Status:** ✅ Resolved — `2000` added to `PAGE_SIZE_OPTIONS` in `TablePagination.tsx`; options are now `[100, 200, 500, 1000, 2000]`.
+**File:** `frontend/src/components/TablePagination.tsx`
 
 ### 4.7 `LoginResponse` type defined twice `LOW`
-**Issue:** Two files define `LoginResponse` with slightly different shapes. The duplicate creates a risk of divergence.
-**Fix:** Define once in `src/types/auth.ts` and import everywhere.
+**Status:** ✅ Resolved — `LoginResponse` defined once in `src/types/auth.ts`; both `App.tsx` and `LoginPage.tsx` import it from there.
+**Files:** `frontend/src/types/auth.ts`, `frontend/src/App.tsx`, `frontend/src/pages/LoginPage.tsx`
 
 ### 4.8 `ExportsDiagnosticsPage` hardcodes bank list `MEDIUM`
+**Status:** ✅ Resolved — bank list now fetched from `GET /api/v1/banks` on mount; loading state shown while fetching; first bank selected as default; connection-test button disabled until banks load.
 **File:** `frontend/src/pages/ExportsDiagnosticsPage.tsx`
-**Issue:** The bank list is hardcoded in JSX instead of fetched from `GET /api/v1/banks`. Adding a new bank requires a frontend code change.
-**Fix:** Fetch from the API on mount. Display a loading state while fetching.
 
 ### 4.9 `DashboardPage` is 427 lines `MEDIUM`
-**File:** `frontend/src/pages/DashboardPage.tsx`
-**Issue:** One component handles data fetching, charting, date-range logic, and layout. It violates single-responsibility and is hard to test or reuse.
-**Fix:** Extract: `useDashboardData` hook (data fetching), `<DashboardFilters>` component, `<DashboardCharts>` component.
+**Status:** ✅ Resolved — all data-fetching state and effects extracted into `src/lib/useDashboardData.ts` hook; `DashboardPage` reduced to ~195 lines of pure layout/interaction logic. (`DashboardFilters` component was already extracted previously.)
+**Files:** `frontend/src/lib/useDashboardData.ts`, `frontend/src/pages/DashboardPage.tsx`
 
 ---
 

@@ -1,6 +1,6 @@
 import { ChangeEvent } from 'react';
 
-const PAGE_SIZE_OPTIONS = [100, 200, 500, 1000];
+const PAGE_SIZE_OPTIONS = [100, 200, 500, 1000, 2000];
 
 type TablePaginationProps = {
   page: number;

@@ -5,23 +5,13 @@ import { api } from '../api';
 import { setAuthUser, useAuthUser } from '../authStore';
 import { DEFAULT_ROUTE } from '../navigation';
 import { setActiveProfileKey } from '../profileStore';
-
-type LoginResponse = {
-  user: {
-    email: string;
-    display_name: string;
-    default_profile_key: string;
-    role: string;
-  };
-};
-
-const DEFAULT_LOGIN_EMAIL = 'h_abbasi97@hotmail.com';
+import type { LoginResponse } from '../types/auth';
 
 export function LoginPage() {
   const authUser = useAuthUser();
   const navigate = useNavigate();
   const location = useLocation();
-  const [email, setEmail] = useState(DEFAULT_LOGIN_EMAIL);
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

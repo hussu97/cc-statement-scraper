@@ -18,15 +18,7 @@ import { SchedulesPage } from './pages/SchedulesPage';
 import { StatementsPage } from './pages/StatementsPage';
 import { UploadPage } from './pages/UploadPage';
 import { setActiveProfileKey } from './profileStore';
-
-type LoginResponse = {
-  user: {
-    email: string;
-    display_name: string;
-    default_profile_key: string;
-    role: string;
-  };
-};
+import type { LoginResponse } from './types/auth';
 
 export default function App() {
   const [bootstrapped, setBootstrapped] = useState(false);
