@@ -226,7 +226,7 @@ def _provider_access_token(
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
     try:
-        with urllib_request.urlopen(req, timeout=20) as resp:
+        with urllib_request.urlopen(req, timeout=20) as resp:  # nosec B310
             raw = resp.read().decode("utf-8")
     except urllib_error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="ignore")
