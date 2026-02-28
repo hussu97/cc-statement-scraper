@@ -58,8 +58,10 @@ python -c "import secrets; print(secrets.token_hex(32))"
 Generate Fernet key:
 
 ```bash
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+python -c "import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
 ```
+
+> This uses only stdlib — no packages needed. The output is a valid Fernet key (32 random bytes, base64url-encoded).
 
 ---
 
@@ -89,7 +91,7 @@ python -c "import secrets; print(secrets.token_hex(32))"
 # → copy output, e.g. a3f9e2c1...
 
 # Fernet encryption key for runtime settings (credentials stored in DB)
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+python -c "import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
 # → copy output, e.g. 3j4k5l...=
 ```
 
