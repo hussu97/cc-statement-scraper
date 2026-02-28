@@ -63,7 +63,7 @@ class PlatformSettings(BaseSettings):
     require_login: bool = True
     session_cookie_name: str = "ccs_session"
     session_max_age_seconds: int = 1209600
-    session_secret_key: str = "this-is-a-long-secret-key"
+    session_secret_key: str = "change-this-in-production"
     session_cookie_secure: bool | None = None
     rbac_enabled: bool | None = None
 
@@ -71,7 +71,7 @@ class PlatformSettings(BaseSettings):
     runtime_settings_require_encryption: bool | None = None
     runtime_settings_encryption_key: str | None = None
     runtime_settings_seed_source: str | None = None
-    runtime_settings_env_file: Path | None = ROOT_DIR / ".env"
+    runtime_settings_env_file: Path | None = ROOT_DIR / "backend" / ".env"
     email_ingestion_enabled: bool = False
 
     def model_post_init(self, __context: object) -> None:
@@ -143,9 +143,20 @@ class PlatformSettings(BaseSettings):
         return max(1, int(self.max_worker_threads))
 
 
+def _resolve_env_file() -> Path | None:
+    """Return the .env file path to load, or None if none exists.
+
+    Locally the file lives at backend/.env (one level below the repo root).
+    In Docker the backend directory contents are copied to /app directly, so
+    there is no .env file at runtime — env vars are injected by the platform.
+    """
+    candidate = ROOT_DIR / "backend" / ".env"
+    return candidate if candidate.exists() else None
+
+
 @lru_cache(maxsize=1)
 def get_settings() -> PlatformSettings:
-    settings = PlatformSettings(_env_file=ROOT_DIR / ".env", _env_file_encoding="utf-8")
+    settings = PlatformSettings(_env_file=_resolve_env_file(), _env_file_encoding="utf-8")
     settings.local_storage_dir.mkdir(parents=True, exist_ok=True)
     settings.uploads_temp_dir.mkdir(parents=True, exist_ok=True)
     settings.logs_dir.mkdir(parents=True, exist_ok=True)
