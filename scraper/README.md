@@ -7,12 +7,24 @@ Standalone CLI tool for downloading bank PDF statements via browser automation a
 ```bash
 cd scraper
 python3 -m venv .venv
-source .venv/bin/activate
-pip install -e .
-ccs-scraper install-browser
+source .venv/bin/activate           # Windows: .venv\Scripts\activate
+pip install -e .                     # installs ccs-scraper CLI + dependencies
+ccs-scraper install-browser          # downloads Chromium (~200 MB, one-time)
 ```
 
+> **What does `pip install -e .` do?**
+> `-e` (editable) installs the package linked to the source files in this directory.
+> `.` means "use `pyproject.toml` in the current directory." This registers the
+> `ccs-scraper` terminal command and installs all dependencies listed in
+> `pyproject.toml`. Changes to source files take effect immediately without reinstalling.
+
 ## Configuration
+
+Copy `.env.example` to `.env` and fill in your values:
+
+```bash
+cp .env.example .env
+```
 
 All settings come from environment variables (or a `.env` file in the `scraper/` directory):
 

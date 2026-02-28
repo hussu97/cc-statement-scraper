@@ -31,7 +31,7 @@ class PaginatedSchedules(BaseModel):
 
 class ScheduleCreate(BaseModel):
     name: str
-    job_type: JobType = JobType.SCRAPE
+    job_type: JobType = JobType.UPLOAD
     payload_json: dict[str, Any] | None = None
     rrule: str
     timezone: str = "Asia/Dubai"

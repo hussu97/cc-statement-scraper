@@ -66,16 +66,15 @@ The platform uses a **decoupled architecture**:
 
 ## Setup — Backend
 
+See [`backend/README.md`](backend/README.md) for full setup instructions.
+
 ```bash
 cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
+cp .env.example .env  # fill in values
 alembic upgrade head
-```
-
-Run API:
-```bash
-PYTHONPATH=backend python -m ccs_platform.cli api --host 127.0.0.1 --port 8040 --reload
+ccs-platform api --host 127.0.0.1 --port 8040 --reload
 ```
 
 Health check:
@@ -92,12 +91,10 @@ pip install -e .
 ccs-scraper install-browser
 ```
 
-Configure `scraper/.env`:
-```env
-CCS_SCRAPER_TARGET_URL=http://127.0.0.1:8040
-CCS_SCRAPER_API_TOKEN=<service token with upload scope>
-FAB_USERNAME=...
-FAB_PASSWORD=...
+Configure `scraper/.env` (copy from `.env.example`):
+```bash
+cp scraper/.env.example scraper/.env
+# fill in CCS_SCRAPER_API_TOKEN and bank credentials
 ```
 
 Run:

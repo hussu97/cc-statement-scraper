@@ -4,6 +4,24 @@
 
 ### Backend
 
+- **refactor** Delete `adapters/banks/browser/` — dead browser adapter code (base, downloader, shared, and 6 bank adapters) removed from backend; confirmed zero imports outside that directory after decoupling
+- **refactor** Rename package `creditcardstatementscraper` → `ccs-platform` in `pyproject.toml`; remove `playwright>=1.50` dependency
+- **fix** Change `ScheduleCreate.job_type` default from `JobType.SCRAPE` to `JobType.UPLOAD` — SCRAPE has no handler and raises `ValueError` at runtime
+- **chore** Add deprecation comments to `JobType.SCRAPE` and `JobType.BANK_CONNECTION_TEST` in `enums.py` — no handlers exist; kept in enum for PostgreSQL compatibility only
+- **chore** Rewrite `backend/.env.example` — remove browser geo-spoofing section (`BROWSER_PROXY_URL`, `BROWSER_GEO_*`, `BROWSER_TIMEZONE_ID`, `BROWSER_LOCALE`); remove `QUEUE_BACKLOG_SLO_SCRAPE`; update `WORKER_QUEUES` default to `default`; rename "Scraper credentials" section to "Bank credentials (seeded into runtime settings)"; fix timezone comment ("scrape-month" → "billing month")
+
+### Scraper
+
+- **chore** Add `scraper/.env.example` — documents all `CCS_SCRAPER_*` settings and bank credential keys with inline comments
+
+### Docs
+
+- **docs** Create `backend/README.md` — setup, database, run commands, test instructions, key env vars, password hash generation
+- **docs** Update `scraper/README.md` — expand setup section with explanation of `pip install -e .`, add `cp .env.example .env` step
+- **docs** Update root `README.md` — reference `backend/README.md` in backend setup section; reference scraper `.env.example`
+
+### Backend
+
 - **refactor** Remove browser scraping from backend: delete `handlers/scrape.py`, `handlers/bank_connection_test.py`, `adapters/banks/browser/` (browser code moved to `scraper/`); remove `POST /jobs/scrape` and `POST /diagnostics/bank-connection-test` endpoints; remove `ScrapeJobRequest` schema; remove `SCRAPE` and `BANK_CONNECTION_TEST` from job dispatcher and service defaults; remove `browser_proxy_url`, `browser_geo_*`, `browser_timezone_id`, `browser_locale`, `queue_backlog_slo_scrape` from settings; change `worker_queues` default to `default`; remove `playwright>=1.50` from `requirements.txt`
 - **feat** Add `require_operator_or_service_token` and `get_profile_context_or_service_token` dependencies in `api/deps.py`; `POST /jobs/upload` now accepts either a session (operator+) or a Bearer service token with `upload` scope — enables the scraper CLI to upload directly
 
