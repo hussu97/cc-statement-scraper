@@ -21,25 +21,27 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt -r requirements-dev.txt
+          pip install -r backend/requirements.txt -r backend/requirements-dev.txt
 
       - name: Migration preflight (structure checks)
         env:
           CCS_PLATFORM_DATABASE_URL: sqlite:///./tmp_ci_migration.db
-        run: PYTHONPATH=src python scripts/migration_preflight.py --skip-database-state
+        run: |
+          cd backend && python scripts/migration_preflight.py --skip-database-state
 
       - name: Upgrade/downgrade smoke on SQLite
         env:
           CCS_PLATFORM_DATABASE_URL: sqlite:///./tmp_ci_migration.db
         run: |
-          alembic upgrade head
-          alembic downgrade base
-          alembic upgrade head
+          cd backend && alembic upgrade head
+          cd backend && alembic downgrade base
+          cd backend && alembic upgrade head
 
       - name: Migration preflight (db state checks)
         env:
           CCS_PLATFORM_DATABASE_URL: sqlite:///./tmp_ci_migration.db
-        run: PYTHONPATH=src python scripts/migration_preflight.py
+        run: |
+          cd backend && python scripts/migration_preflight.py
 
   postgres-migration-smoke:
     runs-on: ubuntu-latest
@@ -69,17 +71,18 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt -r requirements-dev.txt
+          pip install -r backend/requirements.txt -r backend/requirements-dev.txt
 
       - name: Upgrade/downgrade smoke on Postgres
         env:
           CCS_PLATFORM_DATABASE_URL: postgresql+psycopg://ccs:ccs@127.0.0.1:5432/ccs
         run: |
-          alembic upgrade head
-          alembic downgrade base
-          alembic upgrade head
+          cd backend && alembic upgrade head
+          cd backend && alembic downgrade base
+          cd backend && alembic upgrade head
 
       - name: Migration preflight (db state checks)
         env:
           CCS_PLATFORM_DATABASE_URL: postgresql+psycopg://ccs:ccs@127.0.0.1:5432/ccs
-        run: PYTHONPATH=src python scripts/migration_preflight.py
+        run: |
+          cd backend && python scripts/migration_preflight.py

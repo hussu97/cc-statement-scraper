@@ -3,7 +3,7 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    PYTHONPATH=/app/src
+    PYTHONPATH=/app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
@@ -14,11 +14,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-COPY requirements.txt requirements-dev.txt pyproject.toml README.md ./
-COPY alembic.ini ./
-COPY alembic ./alembic
-COPY config ./config
-COPY src ./src
+COPY backend/requirements.txt backend/requirements-dev.txt backend/pyproject.toml README.md ./
+COPY backend/alembic.ini ./
+COPY backend/alembic ./alembic
+COPY backend/config ./config
+COPY backend/ccs_platform ./ccs_platform
 
 RUN pip install --upgrade pip \
     && pip install -r requirements.txt
