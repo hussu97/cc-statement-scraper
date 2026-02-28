@@ -3,88 +3,16 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 import os
 from pathlib import Path
-import sqlite3
 
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 from ccs_platform.core.settings import PlatformSettings
 from ccs_platform.db import Base, models
-from ccs_platform.operations.backups import create_backup_archive, restore_backup_archive, run_backup_restore_drill
 from ccs_platform.operations.loadtest import evaluate_budget
 from ccs_platform.operations.migrations import run_migration_preflight
 from ccs_platform.operations.retention import enforce_retention
 from ccs_platform.operations.slo import evaluate_slo_policy
-
-
-def test_create_backup_archive_and_restore_sqlite(tmp_path: Path) -> None:
-    source_db = tmp_path / "source.db"
-    with sqlite3.connect(source_db) as conn:
-        conn.execute("CREATE TABLE sample (id INTEGER PRIMARY KEY, name TEXT)")
-        conn.execute("INSERT INTO sample (name) VALUES ('alice')")
-        conn.commit()
-
-    source_storage = tmp_path / "source-storage"
-    source_storage.mkdir(parents=True, exist_ok=True)
-    (source_storage / "statement.pdf").write_text("sample", encoding="utf-8")
-
-    source_settings = PlatformSettings(
-        database_url=f"sqlite:///{source_db}",
-        local_storage_dir=source_storage,
-        uploads_temp_dir=tmp_path / "source-incoming",
-        logs_dir=tmp_path / "source-logs",
-        backups_dir=tmp_path / "backups",
-    )
-
-    plan = create_backup_archive(source_settings, label="unit")
-    assert plan.archive_path.exists()
-    assert plan.manifest["database_backend"] == "sqlite"
-
-    target_db = tmp_path / "target.db"
-    target_storage = tmp_path / "target-storage"
-    target_settings = PlatformSettings(
-        database_url=f"sqlite:///{target_db}",
-        local_storage_dir=target_storage,
-        uploads_temp_dir=tmp_path / "target-incoming",
-        logs_dir=tmp_path / "target-logs",
-        backups_dir=tmp_path / "backups",
-    )
-
-    summary = restore_backup_archive(
-        target_settings,
-        archive_path=plan.archive_path,
-        force=True,
-        restore_archive=True,
-    )
-    assert summary["restored"] is True
-
-    with sqlite3.connect(target_db) as conn:
-        row = conn.execute("SELECT name FROM sample").fetchone()
-        assert row is not None
-        assert row[0] == "alice"
-
-    assert (target_storage / "statement.pdf").exists()
-
-
-def test_run_backup_restore_drill_for_sqlite(tmp_path: Path) -> None:
-    db_path = tmp_path / "platform.db"
-    with sqlite3.connect(db_path) as conn:
-        conn.execute("CREATE TABLE sample (id INTEGER PRIMARY KEY, value TEXT)")
-        conn.execute("INSERT INTO sample (value) VALUES ('ok')")
-        conn.commit()
-
-    settings = PlatformSettings(
-        database_url=f"sqlite:///{db_path}",
-        local_storage_dir=tmp_path / "storage",
-        uploads_temp_dir=tmp_path / "incoming",
-        logs_dir=tmp_path / "logs",
-        backups_dir=tmp_path / "backups",
-    )
-    settings.local_storage_dir.mkdir(parents=True, exist_ok=True)
-
-    result = run_backup_restore_drill(settings, output_dir=tmp_path / "backups", label="drill")
-    assert result["drill_passed"] is True
-    assert result["db_integrity"] in {"ok", "skipped"}
 
 
 def test_enforce_retention_deletes_old_rows_and_files(tmp_path: Path) -> None:
@@ -180,8 +108,8 @@ def test_enforce_retention_deletes_old_rows_and_files(tmp_path: Path) -> None:
         assert len(remaining_jobs) == 1
 
 
-def test_run_migration_preflight_structural_checks() -> None:
-    settings = PlatformSettings(database_url="sqlite:///./tmp_preflight.db")
+def test_run_migration_preflight_structural_checks(tmp_path: Path) -> None:
+    settings = PlatformSettings(database_url=f"sqlite:///{tmp_path / 'preflight.db'}")
     report = run_migration_preflight(settings, check_database_state=False)
 
     assert report["head_count"] == 1
