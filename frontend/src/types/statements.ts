@@ -35,12 +35,25 @@ export type Schedule = {
   last_run_at: string | null;
 };
 
+export type JobItem = {
+  id: number;
+  bank_code: string | null;
+  target_month: string | null;
+  status: string;
+  message: string | null;
+  metadata_json: unknown;
+};
+
 export type Job = {
   id: number;
   job_type: string;
   status: string;
   progress_percent: number | null;
   created_at: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  error_message: string | null;
+  items: JobItem[];
   [key: string]: unknown;
 };
 

@@ -1,12 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { api } from '../api';
-import { JsonView } from '../components/JsonView';
 import { Panel } from '../components/Panel';
 import { TablePagination } from '../components/TablePagination';
 import { useActiveProfileKey } from '../profileStore';
 import { formatLocalDateTime } from '../utils/datetime';
-import type { Bank, Job, PagedResponse } from '../types/statements';
+import type { Bank, Job, JobItem, PagedResponse } from '../types/statements';
 
 type MonthOption = {
   value: string;
@@ -53,6 +52,128 @@ function buildMonthOptions(): MonthOption[] {
   return options;
 }
 
+const ITEM_STATUS_ICON: Record<string, string> = {
+  queued: '·',
+  running: '▶',
+  done: '✓',
+  failed: '✗',
+  manual_required: '!',
+  skipped: '–',
+};
+
+const ITEM_STATUS_COLOR: Record<string, string> = {
+  queued: 'var(--color-muted, #888)',
+  running: 'var(--color-primary, #0070f3)',
+  done: '#22c55e',
+  failed: '#ef4444',
+  manual_required: '#f59e0b',
+  skipped: 'var(--color-muted, #888)',
+};
+
+function isActiveStatus(status: string) {
+  return status === 'queued' || status === 'running';
+}
+
+function JobLogPanel({ job }: { job: Job | null }) {
+  if (!job) {
+    return <p className="muted">Select a job to view its progress log.</p>;
+  }
+
+  const active = isActiveStatus(job.status);
+  const items: JobItem[] = Array.isArray(job.items) ? job.items : [];
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+        <strong>#{job.id}</strong>
+        <span className="badge">{job.status.toUpperCase()}</span>
+        <span className="muted">{job.job_type}</span>
+        {job.progress_percent != null && <span>{job.progress_percent}%</span>}
+        {active && <span className="muted" style={{ fontSize: '0.8rem' }}>● live</span>}
+        {job.started_at && (
+          <span className="muted" style={{ fontSize: '0.8rem' }}>
+            started {formatLocalDateTime(job.started_at)}
+          </span>
+        )}
+        {job.finished_at && (
+          <span className="muted" style={{ fontSize: '0.8rem' }}>
+            finished {formatLocalDateTime(job.finished_at)}
+          </span>
+        )}
+      </div>
+
+      {job.progress_percent != null && (
+        <div style={{ background: 'var(--color-border, #e5e7eb)', borderRadius: '4px', height: '6px', marginBottom: '1rem' }}>
+          <div
+            style={{
+              background: job.status === 'failed' ? '#ef4444' : 'var(--color-primary, #0070f3)',
+              width: `${job.progress_percent}%`,
+              height: '100%',
+              borderRadius: '4px',
+              transition: 'width 0.4s ease',
+            }}
+          />
+        </div>
+      )}
+
+      {items.length > 0 && (
+        <div style={{ fontFamily: 'monospace', fontSize: '0.82rem', overflowX: 'auto' }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1.2rem 5rem 7rem 10rem 1fr',
+              gap: '0 0.75rem',
+              color: 'var(--color-muted, #888)',
+              paddingBottom: '0.25rem',
+              borderBottom: '1px solid var(--color-border, #e5e7eb)',
+              marginBottom: '0.25rem',
+              fontWeight: 600,
+            }}
+          >
+            <span />
+            <span>Bank</span>
+            <span>Month</span>
+            <span>Status</span>
+            <span>Message</span>
+          </div>
+          {items.map((item) => (
+            <div
+              key={item.id}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1.2rem 5rem 7rem 10rem 1fr',
+                gap: '0 0.75rem',
+                padding: '0.2rem 0',
+                borderBottom: '1px solid var(--color-border, #e5e7eb)',
+              }}
+            >
+              <span style={{ color: ITEM_STATUS_COLOR[item.status] ?? 'inherit' }}>
+                {ITEM_STATUS_ICON[item.status] ?? '?'}
+              </span>
+              <span>{item.bank_code ?? '—'}</span>
+              <span>{item.target_month ?? '—'}</span>
+              <span style={{ color: ITEM_STATUS_COLOR[item.status] ?? 'inherit' }}>{item.status}</span>
+              <span style={{ color: 'var(--color-muted, #888)', whiteSpace: 'pre-wrap' }}>{item.message ?? ''}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {items.length === 0 && (
+        <p className="muted" style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
+          No items yet — job is {job.status}.
+        </p>
+      )}
+
+      {job.error_message && (
+        <p className="error" style={{ marginTop: '0.75rem', fontFamily: 'monospace', fontSize: '0.85rem' }}>
+          {job.error_message}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function JobsPage() {
   const activeProfileKey = useActiveProfileKey();
   const monthOptions = useMemo(() => buildMonthOptions(), []);
@@ -66,11 +187,13 @@ export function JobsPage() {
   const [selectedBanks, setSelectedBanks] = useState<string[]>([]);
   const [monthFrom, setMonthFrom] = useState(defaultMonth);
   const [monthTo, setMonthTo] = useState(defaultMonth);
-  const [download, setDownload] = useState(true);
-  const [headless, setHeadless] = useState(false);
+  const [download, setDownload] = useState(false);
+  const [headless, setHeadless] = useState(true);
   const [timeout, setTimeoutMinutes] = useState(20);
   const [activeJob, setActiveJob] = useState<Job | null>(null);
+  const [liveJob, setLiveJob] = useState<Job | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const liveJobPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fromIndex = monthOptions.findIndex((item) => item.value === monthFrom);
   const toIndex = monthOptions.findIndex((item) => item.value === monthTo);
@@ -147,6 +270,52 @@ export function JobsPage() {
     const timer = setInterval(loadJobs, 5000);
     return () => clearInterval(timer);
   }, [activeProfileKey, jobsPage, jobsPageSize]);
+
+  // Live-poll the selected job while it is queued or running.
+  useEffect(() => {
+    if (liveJobPollRef.current) {
+      clearTimeout(liveJobPollRef.current);
+      liveJobPollRef.current = null;
+    }
+
+    if (!activeJob) {
+      setLiveJob(null);
+      return;
+    }
+
+    setLiveJob(activeJob);
+
+    if (!isActiveStatus(activeJob.status)) return;
+
+    let cancelled = false;
+
+    const poll = async () => {
+      if (cancelled) return;
+      try {
+        const updated = await api.get<Job>(`/jobs/${activeJob.id}`);
+        if (!cancelled) {
+          setLiveJob(updated);
+          if (isActiveStatus(updated.status)) {
+            liveJobPollRef.current = setTimeout(poll, 3000);
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          liveJobPollRef.current = setTimeout(poll, 3000);
+        }
+      }
+    };
+
+    liveJobPollRef.current = setTimeout(poll, 3000);
+
+    return () => {
+      cancelled = true;
+      if (liveJobPollRef.current) {
+        clearTimeout(liveJobPollRef.current);
+        liveJobPollRef.current = null;
+      }
+    };
+  }, [activeJob]);
 
   return (
     <div className="grid">
@@ -236,7 +405,7 @@ export function JobsPage() {
             </thead>
             <tbody>
               {jobs.map((job) => (
-                <tr key={job.id}>
+                <tr key={job.id} style={activeJob?.id === job.id ? { background: 'var(--color-row-active, #f0f7ff)' } : undefined}>
                   <td>{job.id}</td>
                   <td>{job.job_type}</td>
                   <td>{job.status}</td>
@@ -266,8 +435,8 @@ export function JobsPage() {
         />
       </Panel>
 
-      <Panel title="Job Details">
-        {activeJob ? <JsonView value={activeJob} /> : <p className="muted">Select a job to inspect payload, items, and result.</p>}
+      <Panel title={liveJob ? `Job Log — #${liveJob.id}` : 'Job Log'}>
+        <JobLogPanel job={liveJob} />
       </Panel>
     </div>
   );
