@@ -61,6 +61,30 @@ class JobRunner:
         jitter = int.from_bytes(digest[:4], "big") % (jitter_seconds + 1)
         return min(max_seconds, delay + jitter)
 
+    def _timeout_watchdog_loop(self, *, job_id: int, started_at: datetime, stop_event: threading.Event) -> None:
+        max_seconds = max(0, int(self.settings.job_max_duration_seconds))
+        if max_seconds <= 0:
+            return
+
+        elapsed = (datetime.now(UTC) - started_at).total_seconds()
+        remaining = max(0.0, max_seconds - elapsed)
+
+        if stop_event.wait(remaining):
+            return  # job finished before timeout
+
+        try:
+            with get_session_local()() as db:
+                row = db.get(models.Job, job_id)
+                if row is None or row.status != models.JobStatus.RUNNING:
+                    return
+                row.cancel_requested_at = datetime.now(UTC)
+                row.error_message = f"Job cancelled: exceeded wall-clock timeout of {max_seconds}s"
+                db.commit()
+            _log.warning("Job %d exceeded wall-clock timeout (%ds); cancellation requested", job_id, max_seconds)
+            METRICS.record_job_event("timeout")
+        except Exception:  # noqa: BLE001
+            _log.exception("Timeout watchdog error for job %d", job_id)
+
     def _heartbeat_loop(self, *, job_id: int, stop_event: threading.Event) -> None:
         interval_seconds = max(1, int(self.settings.job_heartbeat_interval_seconds))
         terminal_states = {
@@ -150,6 +174,14 @@ class JobRunner:
             )
             heartbeat_thread.start()
 
+            timeout_stop = threading.Event()
+            timeout_thread = threading.Thread(
+                target=self._timeout_watchdog_loop,
+                kwargs={"job_id": job_id, "started_at": now, "stop_event": timeout_stop},
+                daemon=True,
+            )
+            timeout_thread.start()
+
             try:
                 set_current_job_id(job_id)
                 result = self._dispatch_job(db, job)
@@ -198,7 +230,9 @@ class JobRunner:
             finally:
                 set_current_job_id(None)
                 heartbeat_stop.set()
+                timeout_stop.set()
                 heartbeat_thread.join(timeout=2)
+                timeout_thread.join(timeout=2)
 
     def _dispatch_job(self, db: Session, job: models.Job) -> dict[str, Any]:
         profile = db.get(models.Profile, job.profile_id)
