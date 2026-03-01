@@ -24,56 +24,18 @@ from ccs_platform.application.jobs.worker_loop import WorkerLoop
 logger = logging.getLogger(__name__)
 
 
-_SENSITIVE = {"key", "secret", "password", "token", "hash", "credential", "dsn", "url"}
-
-
-def _redact(name: str, value: str) -> str:
-    low = name.lower()
-    if any(s in low for s in _SENSITIVE):
-        return f"{value[:4]}****" if len(value) > 4 else "****"
-    return value
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
     configure_logging(level_name=settings.log_level)
 
-    import os
-    prefixes = ("CCS_PLATFORM_", "ALICE_", "BOB_")
-    env_lines = []
-    for k, v in sorted(os.environ.items()):
-        if any(k.startswith(p) for p in prefixes):
-            env_lines.append(f"  {k}={_redact(k, v)}")
-    logger.info("Startup env vars:\n%s", "\n".join(env_lines) if env_lines else "  (none found)")
+    init_db()
+    with db_session() as db:
+        seed_defaults(db)
 
-    logger.info("Startup: running migrations (init_db)...")
-    try:
-        init_db()
-    except Exception:
-        logger.exception("Startup FAILED at init_db()")
-        raise
-    logger.info("Startup: migrations done, seeding defaults...")
-    try:
-        with db_session() as db:
-            seed_defaults(db)
-    except Exception:
-        logger.exception("Startup FAILED at seed_defaults()")
-        raise
-    logger.info("Startup: seed done, building storage adapter...")
-    try:
-        storage = build_storage_adapter(settings)
-    except Exception:
-        logger.exception("Startup FAILED at build_storage_adapter()")
-        raise
-    logger.info("Startup: storage adapter ready, building job runner...")
-    try:
-        runner = JobRunner(settings=settings, storage=storage)
-        dispatcher = build_job_dispatcher(settings=settings, runner=runner)
-    except Exception:
-        logger.exception("Startup FAILED at JobRunner/dispatcher init")
-        raise
-    logger.info("Startup: all components initialised.")
+    storage = build_storage_adapter(settings)
+    runner = JobRunner(settings=settings, storage=storage)
+    dispatcher = build_job_dispatcher(settings=settings, runner=runner)
 
     app.state.settings = settings
     app.state.storage = storage
