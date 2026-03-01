@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Enum, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ccs_platform.db.base import Base
-from ccs_platform.db.models.enums import ExportStatus, JobStatus, JobType, ScheduleStatus
+from ccs_platform.db.models.enums import ExportStatus, JobStatus, JobType, ScheduleStatus, pg_enum
 
 
 class Job(Base):
@@ -29,9 +29,9 @@ class Job(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     profile_id: Mapped[int] = mapped_column(ForeignKey("profiles.id", ondelete="RESTRICT"), nullable=False)
-    job_type: Mapped[JobType] = mapped_column(Enum(JobType), nullable=False)
+    job_type: Mapped[JobType] = mapped_column(pg_enum(JobType), nullable=False)
     queue_name: Mapped[str] = mapped_column(String(32), nullable=False, default="default")
-    status: Mapped[JobStatus] = mapped_column(Enum(JobStatus), nullable=False, default=JobStatus.QUEUED)
+    status: Mapped[JobStatus] = mapped_column(pg_enum(JobStatus), nullable=False, default=JobStatus.QUEUED)
 
     payload_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     result_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
@@ -96,12 +96,12 @@ class Schedule(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     profile_id: Mapped[int] = mapped_column(ForeignKey("profiles.id", ondelete="RESTRICT"), nullable=False)
     name: Mapped[str] = mapped_column(String(128), nullable=False)
-    job_type: Mapped[JobType] = mapped_column(Enum(JobType), nullable=False)
+    job_type: Mapped[JobType] = mapped_column(pg_enum(JobType), nullable=False)
     payload_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     rrule: Mapped[str] = mapped_column(String(256), nullable=False)
     timezone: Mapped[str] = mapped_column(String(64), nullable=False, default="Asia/Dubai")
-    status: Mapped[ScheduleStatus] = mapped_column(Enum(ScheduleStatus), nullable=False, default=ScheduleStatus.ACTIVE)
+    status: Mapped[ScheduleStatus] = mapped_column(pg_enum(ScheduleStatus), nullable=False, default=ScheduleStatus.ACTIVE)
 
     next_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -122,7 +122,7 @@ class Export(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     profile_id: Mapped[int] = mapped_column(ForeignKey("profiles.id", ondelete="RESTRICT"), nullable=False)
     export_type: Mapped[str] = mapped_column(String(64), nullable=False, default="workbook")
-    status: Mapped[ExportStatus] = mapped_column(Enum(ExportStatus), nullable=False, default=ExportStatus.QUEUED)
+    status: Mapped[ExportStatus] = mapped_column(pg_enum(ExportStatus), nullable=False, default=ExportStatus.QUEUED)
 
     job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True)
     storage_backend: Mapped[str | None] = mapped_column(String(32), nullable=True)

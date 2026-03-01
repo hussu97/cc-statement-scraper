@@ -6,7 +6,6 @@ from sqlalchemy import (
     JSON,
     Boolean,
     DateTime,
-    Enum,
     ForeignKey,
     Index,
     Integer,
@@ -18,7 +17,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ccs_platform.db.base import Base
-from ccs_platform.db.models.enums import EmailIngestionStatus, EmailProvider
+from ccs_platform.db.models.enums import EmailIngestionStatus, EmailProvider, pg_enum
 
 
 class EmailMailbox(Base):
@@ -36,7 +35,7 @@ class EmailMailbox(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     profile_id: Mapped[int] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False)
-    provider: Mapped[EmailProvider] = mapped_column(Enum(EmailProvider), nullable=False)
+    provider: Mapped[EmailProvider] = mapped_column(pg_enum(EmailProvider), nullable=False)
     mailbox_email: Mapped[str] = mapped_column(String(320), nullable=False)
     display_name: Mapped[str | None] = mapped_column(String(256), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -109,14 +108,14 @@ class EmailIngestionEvent(Base):
     route_id: Mapped[int] = mapped_column(ForeignKey("email_bank_routes.id", ondelete="RESTRICT"), nullable=False)
     profile_id: Mapped[int] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False)
     bank_code: Mapped[str] = mapped_column(ForeignKey("banks.code", ondelete="CASCADE"), nullable=False)
-    provider: Mapped[EmailProvider] = mapped_column(Enum(EmailProvider), nullable=False)
+    provider: Mapped[EmailProvider] = mapped_column(pg_enum(EmailProvider), nullable=False)
     provider_message_id: Mapped[str] = mapped_column(String(512), nullable=False)
     provider_attachment_id: Mapped[str] = mapped_column(String(512), nullable=False)
     internet_message_id: Mapped[str | None] = mapped_column(String(512), nullable=True)
     attachment_filename: Mapped[str] = mapped_column(String(512), nullable=False)
     attachment_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[EmailIngestionStatus] = mapped_column(
-        Enum(EmailIngestionStatus),
+        pg_enum(EmailIngestionStatus),
         nullable=False,
         default=EmailIngestionStatus.QUEUED,
     )
