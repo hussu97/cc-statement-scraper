@@ -32,7 +32,6 @@ cp .env.example .env
 |---|---|---|
 | `CCS_SCRAPER_TARGET_URL` | `http://127.0.0.1:8000` | Backend API URL |
 | `CCS_SCRAPER_API_TOKEN` | — | Service API token (`upload` scope — create in admin UI) |
-| `CCS_SCRAPER_PROFILE_KEY` | `hussain` | Default profile when `--profile` is not passed |
 | `CCS_SCRAPER_HEADLESS` | `true` | Run browser headless (`false` to watch the session) |
 | `CCS_SCRAPER_BROWSER_PROXY_URL` | — | Optional SOCKS5/HTTP proxy for all browser traffic |
 | `CCS_SCRAPER_BROWSER_GEO_LATITUDE` | `25.2048` | Geolocation spoof latitude (Dubai) |
@@ -72,10 +71,7 @@ Banks with missing credentials for the selected profile are automatically skippe
 ## Usage
 
 ```bash
-# Scrape all banks (current month) for the default profile
-ccs-scraper scrape
-
-# Scrape for a specific profile
+# Scrape all banks (current month)
 ccs-scraper scrape --profile hussain
 ccs-scraper scrape --profile tejasvie
 
@@ -95,7 +91,7 @@ ccs-scraper upload --profile tejasvie statement1.pdf statement2.pdf
 ccs-scraper install-browser
 ```
 
-The `--profile` flag overrides `CCS_SCRAPER_PROFILE_KEY`. If neither is set the scraper defaults to `hussain`.
+`--profile` is required on every `scrape` and `upload` invocation.
 
 ## Auth
 
