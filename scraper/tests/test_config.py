@@ -9,7 +9,6 @@ from scraper.config import ScraperConfig, get_config
 _SCRAPER_KEYS = [
     "CCS_SCRAPER_TARGET_URL",
     "CCS_SCRAPER_API_TOKEN",
-    "CCS_SCRAPER_PROFILE_KEY",
     "CCS_SCRAPER_HEADLESS",
     "CCS_SCRAPER_BROWSER_PROXY_URL",
     "CCS_SCRAPER_BROWSER_GEO_LATITUDE",
@@ -43,7 +42,7 @@ def test_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     cfg = ScraperConfig()
     assert cfg.target_url == "http://127.0.0.1:8000"
     assert cfg.api_token == ""
-    assert cfg.profile_key == "alice"
+    assert cfg.profile_key == ""
     assert cfg.headless is True
     assert cfg.browser_proxy_url is None
     assert cfg.browser_geo_latitude == 25.2048
@@ -56,7 +55,6 @@ def test_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_env_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CCS_SCRAPER_TARGET_URL", "https://api.example.com")
     monkeypatch.setenv("CCS_SCRAPER_API_TOKEN", "tok_abc")
-    monkeypatch.setenv("CCS_SCRAPER_PROFILE_KEY", "testuser")
     monkeypatch.setenv("CCS_SCRAPER_HEADLESS", "false")
     monkeypatch.setenv("CCS_SCRAPER_BROWSER_PROXY_URL", "socks5://127.0.0.1:1080")
     monkeypatch.setenv("CCS_SCRAPER_BROWSER_GEO_LATITUDE", "24.0")
@@ -67,7 +65,6 @@ def test_env_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
     cfg = ScraperConfig()
     assert cfg.target_url == "https://api.example.com"
     assert cfg.api_token == "tok_abc"
-    assert cfg.profile_key == "testuser"
     assert cfg.headless is False
     assert cfg.browser_proxy_url == "socks5://127.0.0.1:1080"
     assert cfg.browser_geo_latitude == 24.0
@@ -105,7 +102,7 @@ def test_credentials_populated_from_env(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setenv("ALICE_FAB_USERNAME", "myuser")
     monkeypatch.setenv("ALICE_FAB_PASSWORD", "mypass")
 
-    cfg = ScraperConfig()  # default profile_key = "alice"
+    cfg = get_config(profile="alice")
     assert cfg.credentials["FAB_USERNAME"] == "myuser"
     assert cfg.credentials["FAB_PASSWORD"] == "mypass"
 
@@ -115,7 +112,7 @@ def test_credentials_all_known_keys(monkeypatch: pytest.MonkeyPatch) -> None:
     for key in _CREDENTIAL_KEYS:
         monkeypatch.setenv(f"ALICE_{key}", f"value_{key}")
 
-    cfg = ScraperConfig()  # default profile_key = "alice"
+    cfg = get_config(profile="alice")
     for key in _CREDENTIAL_KEYS:
         assert key in cfg.credentials, f"{key} should be in credentials"
 
@@ -124,7 +121,7 @@ def test_credentials_blank_values_excluded(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setenv("ALICE_FAB_USERNAME", "")
     monkeypatch.setenv("ALICE_FAB_PASSWORD", "secret")
 
-    cfg = ScraperConfig()  # default profile_key = "alice"
+    cfg = get_config(profile="alice")
     assert "FAB_USERNAME" not in cfg.credentials
     assert cfg.credentials.get("FAB_PASSWORD") == "secret"
 

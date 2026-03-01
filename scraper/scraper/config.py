@@ -17,7 +17,7 @@ class ScraperConfig:
     # Backend API
     target_url: str = field(default_factory=lambda: os.environ.get("CCS_SCRAPER_TARGET_URL", "http://127.0.0.1:8000"))
     api_token: str = field(default_factory=lambda: os.environ.get("CCS_SCRAPER_API_TOKEN", ""))
-    profile_key: str = field(default_factory=lambda: os.environ.get("CCS_SCRAPER_PROFILE_KEY", "alice"))
+    profile_key: str = field(default="")
 
     # Browser settings
     headless: bool = field(default_factory=lambda: os.environ.get("CCS_SCRAPER_HEADLESS", "true").lower() != "false")
@@ -55,9 +55,8 @@ class ScraperConfig:
         }
 
 
-def get_config(profile: str | None = None) -> ScraperConfig:
+def get_config(profile: str) -> ScraperConfig:
     cfg = ScraperConfig()
-    if profile:
-        cfg.profile_key = profile
-        cfg._reload_credentials()
+    cfg.profile_key = profile
+    cfg._reload_credentials()
     return cfg

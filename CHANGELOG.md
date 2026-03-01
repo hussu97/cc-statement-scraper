@@ -12,6 +12,10 @@
 
 ### Scraper
 
+- **refactor** Make `--profile` a required option on `scrape` and `upload` CLI commands — remove `CCS_SCRAPER_PROFILE_KEY` env var support; `get_config(profile: str)` now requires a profile; `ScraperConfig.profile_key` defaults to `""` instead of reading from env
+
+### Scraper
+
 - **chore** Add `scraper/.env.example` — documents all `CCS_SCRAPER_*` settings and bank credential keys with inline comments
 - **test** Add scraper test suite (`tests/`): `test_config.py` (env var parsing, profile isolation, credential filtering), `test_month_utils.py` (month name/abbreviation mapping), `test_bank_config.py` (YAML loading, path structure), `test_shared.py` (MFA/failure pattern detection, PDF snapshot utilities, `require_env`), `test_client.py` (HTTP upload request structure, headers, multipart); no browser automation required — 86 tests, all pure logic
 - **chore** Add `[project.optional-dependencies] dev = ["pytest>=8.0"]` and pytest config (`testpaths`, `pythonpath`) to `scraper/pyproject.toml`; fix build backend to `setuptools.build_meta`
