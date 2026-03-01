@@ -68,6 +68,7 @@ class PlatformSettings(BaseSettings):
     session_max_age_seconds: int = 1209600
     session_secret_key: str = "change-this-in-production"
     session_cookie_secure: bool | None = None
+    session_cookie_same_site: str | None = None  # "lax" | "none" | "strict"
     rbac_enabled: bool | None = None
 
     runtime_settings_expose_secrets: bool | None = None
@@ -119,6 +120,13 @@ class PlatformSettings(BaseSettings):
         if self.session_cookie_secure is None:
             return self.is_production()
         return self.session_cookie_secure
+
+    def session_cookie_same_site_value(self) -> str:
+        if self.session_cookie_same_site is not None:
+            return self.session_cookie_same_site
+        # Cross-origin deployments (Vercel → Render) require SameSite=None; Secure.
+        # Local dev keeps Lax since Secure is not available over HTTP.
+        return "none" if self.is_production() else "lax"
 
     def rbac_enforced(self) -> bool:
         if self.rbac_enabled is None:
