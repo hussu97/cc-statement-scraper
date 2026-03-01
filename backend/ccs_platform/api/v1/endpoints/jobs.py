@@ -5,7 +5,7 @@ import tempfile
 from pathlib import Path
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -167,6 +167,7 @@ _upload_actor_dep = require_operator_or_service_token("email_ingestion:upload")
 async def create_upload_job(
     request: Request,
     files: list[UploadFile] = File(...),
+    bank_code_hint: str | None = Form(None),
     db: Session = Depends(get_db),
     profile: ProfileContext = Depends(_upload_profile_dep),
     actor: ActorContext = Depends(_upload_actor_dep),
@@ -178,6 +179,14 @@ async def create_upload_job(
         bank.code
         for bank in get_enabled_banks(db, profile_id=profile.profile_id)
     }
+
+    # Validate the caller-supplied hint up front so we fail fast before reading PDFs.
+    hint = (bank_code_hint or "").strip().upper() or None
+    if hint is not None and hint not in allowed_bank_codes:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Bank {hint} is not enabled for profile {profile.profile_key}",
+        )
 
     # Load ADCB PDF passwords from runtime settings instead of os.environ so that
     # credentials updated via the admin UI are reflected without a process restart.
@@ -198,12 +207,15 @@ async def create_upload_job(
             if not content:
                 continue
 
-            with tempfile.NamedTemporaryFile(suffix=".pdf", delete=True) as tmp:
-                tmp.write(content)
-                tmp.flush()
-                bank_code = (
-                    _detect_bank_code_for_upload(filename, Path(tmp.name), extra_passwords=adcb_pdf_passwords) or ""
-                ).upper().strip()
+            if hint is not None:
+                bank_code = hint
+            else:
+                with tempfile.NamedTemporaryFile(suffix=".pdf", delete=True) as tmp:
+                    tmp.write(content)
+                    tmp.flush()
+                    bank_code = (
+                        _detect_bank_code_for_upload(filename, Path(tmp.name), extra_passwords=adcb_pdf_passwords) or ""
+                    ).upper().strip()
 
             if not bank_code:
                 raise HTTPException(
