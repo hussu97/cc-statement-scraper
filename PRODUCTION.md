@@ -345,7 +345,7 @@ gcloud run deploy ccs-gmail-relay \
   --platform managed \
   --no-allow-unauthenticated \
   --service-account ccs-gmail-relay@$PROJECT.iam.gserviceaccount.com \
-  --set-env-vars "CCS_API_BASE_URL=https://your-service.onrender.com,CCS_SERVICE_TOKEN=<relay-service-token>" \
+  --set-env-vars "CCS_API_BASE_URL=https://your-service.onrender.com,CCS_SERVICE_TOKEN=<relay-service-token>,CCS_GMAIL_WATCH_TOPIC=projects/$PROJECT/topics/$TOPIC" \
   --project $PROJECT
 ```
 
