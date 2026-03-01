@@ -8,14 +8,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from scraper.banks.adapters import adcb, eib, enbd, fab, mashreq, sib
-from scraper.banks.base import BankAdapter
+from scraper.banks.adapters import discover_adapters
+from scraper.banks.base import AuthPollAction, AuthPollState
 from scraper.banks.shared import (
     BrowserDownloadError,
     POST_LOGIN_KEYWORDS,
     build_logger,
     count_new_or_updated_pdfs,
-    is_login_failure,
     is_mfa_pending,
     safe_screenshot,
     snapshot_pdf_state,
@@ -25,44 +24,7 @@ from scraper.banks.bank_config import AppConfig
 
 CHROMIUM_SINGLETON_FILES = ("SingletonLock", "SingletonCookie", "SingletonSocket")
 
-BANK_ADAPTERS: dict[str, BankAdapter] = {
-    "FAB": BankAdapter(
-        code="FAB",
-        login=fab.login,
-        login_selector_visible=fab.login_selector_visible,
-        download_latest_statement=fab.download_latest_statement,
-    ),
-    "ADCB": BankAdapter(
-        code="ADCB",
-        login=adcb.login,
-        login_selector_visible=adcb.login_selector_visible,
-        download_latest_statement=adcb.download_latest_statement,
-    ),
-    "ENBD": BankAdapter(
-        code="ENBD",
-        login=enbd.login,
-        login_selector_visible=enbd.login_selector_visible,
-        download_latest_statement=enbd.download_latest_statement,
-    ),
-    "EIB": BankAdapter(
-        code="EIB",
-        login=eib.login,
-        login_selector_visible=eib.login_selector_visible,
-        download_latest_statement=eib.download_latest_statement,
-    ),
-    "SIB": BankAdapter(
-        code="SIB",
-        login=sib.login,
-        login_selector_visible=sib.login_selector_visible,
-        download_latest_statement=sib.download_latest_statement,
-    ),
-    "MASHREQ": BankAdapter(
-        code="MASHREQ",
-        login=mashreq.login,
-        login_selector_visible=mashreq.login_selector_visible,
-        download_latest_statement=mashreq.download_latest_statement,
-    ),
-}
+BANK_ADAPTERS = discover_adapters()
 
 # Legacy aliases kept for callers that still reference the individual dicts.
 LOGIN_HANDLERS = {code: adapter.login for code, adapter in BANK_ADAPTERS.items()}
@@ -133,67 +95,62 @@ def _wait_for_authenticated_session(
 
         raise BrowserDownloadError(f"{bank_code}: browser page was closed during authentication flow")
 
+    adapter = BANK_ADAPTERS.get(bank_code.upper())
+    if adapter is None:
+        raise BrowserDownloadError(f"Unsupported bank code for browser flow: {bank_code}")
+
     start = time.time()
-    prompted_for_mfa = False
-    code = bank_code.upper()
-    otp_challenge_started_unix: float | None = None
-    attempted_otp_codes: set[str] = set()
-    adcb_relogin_attempts = 0
-    had_adcb_challenge = False
-    adcb_last_login_attempt_unix = start
-    mashreq_relogin_attempts = 0
+    state = AuthPollState(
+        last_login_attempt_unix=start,
+        portal_url=portal_url,
+    )
 
     while time.time() - start < timeout_seconds:
         if cancel_check is not None:
             cancel_check()
 
         page = _active_page(page)
-
-        if code == "FAB":
-            fab.handle_continue_gate(page, logger)
+        state.elapsed_seconds = time.time() - start
 
         text = text_snapshot(page)
         low = text.lower()
 
-        if code == "ADCB":
-            if adcb.is_otp_screen(low):
-                if otp_challenge_started_unix is None:
-                    otp_challenge_started_unix = time.time()
-                    attempted_otp_codes.clear()
-                had_adcb_challenge = True
-            else:
-                otp_challenge_started_unix = None
-                attempted_otp_codes.clear()
+        # --- Adapter tick hook ---
+        action = adapter.on_auth_poll_tick(page, low, logger, state)
 
-        if code != "MASHREQ" and is_login_failure(low):
-            raise BrowserDownloadError(f"{bank_code}: login failed ({text[:200]})")
-        if code == "MASHREQ" and is_login_failure(low) and not mashreq.is_unauthorized_screen(low):
-            raise BrowserDownloadError(f"{bank_code}: login failed ({text[:200]})")
+        if action is AuthPollAction.AUTHENTICATED:
+            logger.info("%s: authenticated session confirmed by adapter tick hook", bank_code)
+            return page
 
-        if code == "ADCB" and adcb.handle_concurrent_session_gate(page, logger, low):
-            had_adcb_challenge = True
-            page = _active_page(page)
-            page.wait_for_timeout(1000)
+        if action is AuthPollAction.RETRY_LOGIN:
+            adapter.login(page, logger)
+            state.relogin_attempts += 1
+            state.last_login_attempt_unix = time.time()
+            time.sleep(2)
             continue
 
-        if code == "ADCB" and adcb.try_auto_otp(
-            page,
-            logger,
-            low,
-            not_before_unix=otp_challenge_started_unix,
-            attempted_codes=attempted_otp_codes,
-        ):
+        if action is AuthPollAction.WAIT:
             page = _active_page(page)
             page.wait_for_timeout(1200)
             continue
 
+        # action is CONTINUE — proceed with generic checks
+
+        # Refresh text after tick hook (hook may have navigated)
+        text = text_snapshot(page)
+        low = text.lower()
+
+        # --- Login failure check ---
+        if adapter.is_login_failure(low):
+            raise BrowserDownloadError(f"{bank_code}: login failed ({text[:200]})")
+
+        # --- MFA pending check ---
         if is_mfa_pending(low):
-            if code == "ADCB":
-                if not prompted_for_mfa:
+            if adapter.skip_mfa_user_prompt:
+                if not state.prompted_for_mfa:
                     logger.info("%s: MFA/OTP challenge detected; waiting for completion.", bank_code)
-                    prompted_for_mfa = True
-                had_adcb_challenge = True
-            elif not prompted_for_mfa:
+                    state.prompted_for_mfa = True
+            elif not state.prompted_for_mfa:
                 logger.info("%s: MFA/app approval detected; waiting for confirmation.", bank_code)
                 if not scheduled:
                     if sys.stdin is not None and sys.stdin.isatty():
@@ -208,73 +165,31 @@ def _wait_for_authenticated_session(
                             "%s: non-interactive session detected; continuing to poll for MFA completion",
                             bank_code,
                         )
-                prompted_for_mfa = True
+                state.prompted_for_mfa = True
             time.sleep(2)
             continue
 
-        if code == "FAB":
-            if fab.is_authenticated_session(page, low):
-                logger.info("%s: authenticated session detected", bank_code)
-                return page
-            if fab.is_login_screen(low):
-                time.sleep(2)
-                continue
-        elif code == "ADCB":
-            if adcb.is_authenticated_session(page, low):
-                logger.info("%s: authenticated session detected", bank_code)
-                return page
-            if adcb.is_login_screen(low):
-                if (
-                    had_adcb_challenge
-                    and adcb_relogin_attempts < 2
-                    and time.time() - adcb_last_login_attempt_unix >= 8
-                ):
-                    logger.info("%s: returned to login after challenge; retrying login", bank_code)
-                    adcb.login(page, logger)
-                    adcb_relogin_attempts += 1
-                    adcb_last_login_attempt_unix = time.time()
-                    time.sleep(2)
-                    continue
-                time.sleep(2)
-                continue
-        elif code == "MASHREQ":
-            if mashreq.is_authenticated_session(page, low):
-                logger.info("%s: authenticated session detected", bank_code)
-                return page
-            if mashreq.is_unauthorized_screen(low):
-                if mashreq_relogin_attempts < 2 and portal_url:
-                    mashreq_relogin_attempts += 1
-                    pause_seconds = 3 + mashreq_relogin_attempts
-                    logger.warning(
-                        "%s: portal returned 'not authorized'; retrying login (%d/2) after %ds",
-                        bank_code,
-                        mashreq_relogin_attempts,
-                        pause_seconds,
-                    )
-                    time.sleep(float(pause_seconds))
-                    try:
-                        page.goto(portal_url, wait_until="domcontentloaded", timeout=60000)
-                        page.wait_for_timeout(1200)
-                    except Exception:  # noqa: BLE001
-                        pass
-                    mashreq.login(page, logger)
-                    time.sleep(2)
-                    continue
-                raise BrowserDownloadError(
-                    f"{bank_code}: portal returned 'not authorized' for this session/credentials"
-                )
-            if mashreq.is_login_screen(low):
-                time.sleep(2)
-                continue
+        # --- Adapter auth detection ---
+        if adapter.is_authenticated_session(page, low):
+            logger.info("%s: authenticated session detected", bank_code)
+            return page
 
-        if code != "MASHREQ" and not _login_selector_visible(page, bank_code):
+        # --- Adapter login screen detection ---
+        if adapter.is_login_screen(low):
+            time.sleep(2)
+            continue
+
+        # --- Generic keyword fallback: login-selector + keywords ---
+        if not adapter.skip_login_selector_fallback and not _login_selector_visible(page, bank_code):
             if any(keyword in low for keyword in POST_LOGIN_KEYWORDS):
                 logger.info("%s: authenticated session detected", bank_code)
                 return page
 
-        if code not in {"ADCB", "MASHREQ"} and any(keyword in low for keyword in POST_LOGIN_KEYWORDS) and "welcome" not in low:
-            logger.info("%s: proceeding with post-login navigation", bank_code)
-            return page
+        # --- Generic keyword fallback: aggressive POST_LOGIN_KEYWORDS check ---
+        if not adapter.skip_keyword_fallback:
+            if any(keyword in low for keyword in POST_LOGIN_KEYWORDS) and "welcome" not in low:
+                logger.info("%s: proceeding with post-login navigation", bank_code)
+                return page
 
         time.sleep(2)
 
@@ -344,6 +259,11 @@ def _launch_bank_context(
             or ("executable doesn't exist" in low and "chrome" in low)
         )
 
+    adapter = BANK_ADAPTERS.get(bank_code.upper())
+    overrides = adapter.browser_launch_overrides() if adapter is not None else {}
+    launch_channel_candidates: list[str | None] = overrides.get("channel_candidates", [None])
+    extra_init_scripts: list[str] = overrides.get("init_scripts", [])
+
     max_attempts = 3
     for attempt in range(1, max_attempts + 1):
         try:
@@ -362,10 +282,6 @@ def _launch_bank_context(
                 logger.info("%s: routing browser traffic via proxy %s", bank_code, proxy_url)
             # Strip the automation flag globally — it's the single most obvious bot signal.
             launch_kwargs["args"] = ["--disable-blink-features=AutomationControlled"]
-            launch_channel_candidates: list[str | None] = [None]
-            if bank_code.upper() == "MASHREQ":
-                # Mashreq is less likely to trigger "not authorized" anti-bot responses on real Chrome.
-                launch_channel_candidates = ["chrome", None]
 
             context = None
             launch_error: Exception | None = None
@@ -400,11 +316,9 @@ def _launch_bank_context(
                 window.chrome = window.chrome || { runtime: {} };
                 """
             )
-            if bank_code.upper() == "MASHREQ":
-                # Mashreq additionally benefits from plugins spoofing.
-                context.add_init_script(
-                    "Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });"
-                )
+            for script in extra_init_scripts:
+                context.add_init_script(script)
+
             return context
         except Exception as exc:  # noqa: BLE001
             message = str(exc).lower()

@@ -1560,3 +1560,60 @@ def download_latest_statement(
         "failed": [{"month": "latest", "reason": "download_control_not_found_or_failed"}],
     }
     return 0
+
+
+from scraper.banks.base import AuthPollAction, AuthPollState, BankAdapter
+
+
+def _on_auth_poll_tick(page: Any, low_text: str, logger: logging.Logger, state: AuthPollState) -> AuthPollAction:
+    extra = state.extra
+
+    # OTP screen tracking
+    if is_otp_screen(low_text):
+        if extra.get("otp_challenge_started_unix") is None:
+            extra["otp_challenge_started_unix"] = time.time()
+            extra.setdefault("attempted_otp_codes", set()).clear()
+        extra["had_challenge"] = True
+    else:
+        extra["otp_challenge_started_unix"] = None
+        extra.setdefault("attempted_otp_codes", set()).clear()
+
+    # Concurrent session gate
+    if handle_concurrent_session_gate(page, logger, low_text):
+        extra["had_challenge"] = True
+        return AuthPollAction.WAIT
+
+    # Auto OTP
+    if try_auto_otp(
+        page,
+        logger,
+        low_text,
+        not_before_unix=extra.get("otp_challenge_started_unix"),
+        attempted_codes=extra.setdefault("attempted_otp_codes", set()),
+    ):
+        return AuthPollAction.WAIT
+
+    # Re-login after challenge
+    if (
+        is_login_screen(low_text)
+        and extra.get("had_challenge")
+        and state.relogin_attempts < 2
+        and time.time() - state.last_login_attempt_unix >= 8
+    ):
+        logger.info("ADCB: returned to login after challenge; retrying login")
+        return AuthPollAction.RETRY_LOGIN
+
+    return AuthPollAction.CONTINUE
+
+
+ADAPTER = BankAdapter(
+    code="ADCB",
+    login=login,
+    login_selector_visible=login_selector_visible,
+    download_latest_statement=download_latest_statement,
+    is_authenticated_session=is_authenticated_session,
+    is_login_screen=is_login_screen,
+    on_auth_poll_tick=_on_auth_poll_tick,
+    skip_mfa_user_prompt=True,
+    skip_keyword_fallback=True,
+)

@@ -993,3 +993,13 @@ def download_latest_statement(
     }
     _close_estatement_popup(page, logger)
     return 0
+
+
+from scraper.banks.base import BankAdapter
+
+ADAPTER = BankAdapter(
+    code="SIB",
+    login=login,
+    login_selector_visible=login_selector_visible,
+    download_latest_statement=download_latest_statement,
+)
