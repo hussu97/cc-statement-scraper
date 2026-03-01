@@ -1108,3 +1108,13 @@ def download_latest_statement(
         "failed": [{"month": "latest", "reason": "download_control_not_found_or_failed"}],
     }
     return attempt_download_capture(page, incoming_dir, "EIB", logger)
+
+
+from scraper.banks.base import BankAdapter
+
+ADAPTER = BankAdapter(
+    code="EIB",
+    login=login,
+    login_selector_visible=login_selector_visible,
+    download_latest_statement=download_latest_statement,
+)

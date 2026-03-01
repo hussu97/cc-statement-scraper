@@ -838,3 +838,22 @@ def download_latest_statement(
         "failed": [{"month": "latest", "reason": "download_control_not_found_or_failed"}],
     }
     return 0
+
+
+from scraper.banks.base import AuthPollAction, AuthPollState, BankAdapter
+
+
+def _on_auth_poll_tick(page: Any, low_text: str, logger: logging.Logger, state: AuthPollState) -> AuthPollAction:
+    handle_continue_gate(page, logger)
+    return AuthPollAction.CONTINUE
+
+
+ADAPTER = BankAdapter(
+    code="FAB",
+    login=login,
+    login_selector_visible=login_selector_visible,
+    download_latest_statement=download_latest_statement,
+    is_authenticated_session=is_authenticated_session,
+    is_login_screen=is_login_screen,
+    on_auth_poll_tick=_on_auth_poll_tick,
+)

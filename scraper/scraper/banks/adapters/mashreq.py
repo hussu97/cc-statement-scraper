@@ -1094,3 +1094,58 @@ def download_latest_statement(
         "failed": [{"month": "latest", "reason": "download_control_not_found_or_failed"}],
     }
     return 0
+
+
+import time
+
+from scraper.banks.base import AuthPollAction, AuthPollState, BankAdapter
+from scraper.banks.shared import is_login_failure as _shared_is_login_failure
+
+
+def _mashreq_is_login_failure(low_text: str) -> bool:
+    return _shared_is_login_failure(low_text) and not is_unauthorized_screen(low_text)
+
+
+def _on_auth_poll_tick(page: Any, low_text: str, logger: logging.Logger, state: AuthPollState) -> AuthPollAction:
+    if is_unauthorized_screen(low_text):
+        if state.relogin_attempts < 2 and state.portal_url:
+            pause = 3 + state.relogin_attempts + 1
+            logger.warning(
+                "MASHREQ: 'not authorized'; retrying (%d/2) after %ds",
+                state.relogin_attempts + 1,
+                pause,
+            )
+            time.sleep(float(pause))
+            try:
+                page.goto(state.portal_url, wait_until="domcontentloaded", timeout=60000)
+                page.wait_for_timeout(1200)
+            except Exception:  # noqa: BLE001
+                pass
+            return AuthPollAction.RETRY_LOGIN
+        from scraper.banks.shared import BrowserDownloadError
+        raise BrowserDownloadError("MASHREQ: 'not authorized' for this session/credentials")
+    return AuthPollAction.CONTINUE
+
+
+def _browser_launch_overrides() -> dict:
+    return {
+        "channel_candidates": ["chrome", None],
+        "init_scripts": [
+            "Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });",
+        ],
+    }
+
+
+ADAPTER = BankAdapter(
+    code="MASHREQ",
+    login=login,
+    login_selector_visible=login_selector_visible,
+    download_latest_statement=download_latest_statement,
+    is_authenticated_session=is_authenticated_session,
+    is_login_screen=is_login_screen,
+    is_login_failure=_mashreq_is_login_failure,
+    on_auth_poll_tick=_on_auth_poll_tick,
+    skip_keyword_fallback=True,
+    skip_login_selector_fallback=True,
+    browser_launch_overrides=_browser_launch_overrides,
+)
