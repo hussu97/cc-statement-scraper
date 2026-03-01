@@ -85,12 +85,16 @@ def _infer_bank_code_from_text(pdf_text: str) -> str | None:
     if "STATEMENT PERIOD:" in text and "CARD TYPE:" in text:
         return "ENBD"
 
+    # Mashreq statements include these bank markers.
+    if "MASHREQ BANK" in text or "MASHREQBANK" in text:
+        return "MASHREQ"
+    if "MASHREQ" in text and "E-STATEMENT" in text:
+        return "MASHREQ"
+
     # ADCB statements commonly include these section markers.
     if "ABU DHABI COMMERCIAL BANK" in text:
         return "ADCB"
     if "PREVIOUS BALANCE OUTSTANDING" in text or "NEW BALANCE OUTSTANDING" in text:
-        return "ADCB"
-    if "CARD NO" in text and "CR" in text:
         return "ADCB"
 
     # FAB statements include these title/body phrases.
@@ -108,12 +112,6 @@ def _infer_bank_code_from_text(pdf_text: str) -> str | None:
         return "SIB"
     if "SIB DIGITAL" in text and "STATEMENT" in text:
         return "SIB"
-
-    # Mashreq statements include these bank markers.
-    if "MASHREQ BANK" in text or "MASHREQBANK" in text:
-        return "MASHREQ"
-    if "MASHREQ" in text and "E-STATEMENT" in text:
-        return "MASHREQ"
 
     return None
 
