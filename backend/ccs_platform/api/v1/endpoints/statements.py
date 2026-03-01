@@ -91,12 +91,21 @@ def list_statements(
 
     statement_ids = [row.id for row in rows]
     line_counts = repo.line_counts_for_ids(statement_ids)
+    amount_totals = repo.amount_totals_for_ids(statement_ids)
 
     return PaginatedStatements(
         total=total,
         page=page,
         page_size=page_size,
-        items=[to_statement_out(row, line_count=line_counts[row.id]) for row in rows],
+        items=[
+            to_statement_out(
+                row,
+                line_count=line_counts[row.id],
+                total_debit_aed=amount_totals[row.id]["debit"],
+                total_credit_aed=amount_totals[row.id]["credit"],
+            )
+            for row in rows
+        ],
     )
 
 

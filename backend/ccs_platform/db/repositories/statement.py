@@ -87,6 +87,26 @@ class StatementRepository:
         ).all()
         return defaultdict(int, {sid: int(count) for sid, count in counts})
 
+    def amount_totals_for_ids(
+        self, statement_ids: list[int]
+    ) -> dict[int, dict[str, float]]:
+        """Return {statement_id: {"debit": float, "credit": float}} for the given ids."""
+        if not statement_ids:
+            return defaultdict(lambda: {"debit": 0.0, "credit": 0.0})
+        rows = self._db.execute(
+            select(
+                models.StatementLine.statement_id,
+                models.StatementLine.direction,
+                func.coalesce(func.sum(models.StatementLine.amount_aed), 0),
+            )
+            .where(models.StatementLine.statement_id.in_(statement_ids))
+            .group_by(models.StatementLine.statement_id, models.StatementLine.direction)
+        ).all()
+        result: dict[int, dict[str, float]] = defaultdict(lambda: {"debit": 0.0, "credit": 0.0})
+        for sid, direction, total in rows:
+            result[sid][direction.value] = float(total)
+        return result
+
     def get_lines_for_statement(self, statement_id: int) -> list[models.StatementLine]:
         return (
             self._db.execute(

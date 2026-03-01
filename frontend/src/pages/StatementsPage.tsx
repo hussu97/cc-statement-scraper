@@ -285,6 +285,8 @@ export function StatementsPage() {
                 <th>Statement Date</th>
                 <th>Upload Date</th>
                 <th>Lines</th>
+                <th>Debit AED</th>
+                <th>Credit AED</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -297,6 +299,8 @@ export function StatementsPage() {
                   <td>{statement.statement_date}</td>
                   <td>{statement.ingested_at ? formatLocalDateTime(statement.ingested_at) : '—'}</td>
                   <td>{statement.line_count}</td>
+                  <td>{statement.total_debit_aed.toFixed(2)}</td>
+                  <td>{statement.total_credit_aed.toFixed(2)}</td>
                   <td>
                     <button className="ghost" onClick={() => openStatement(statement)}>View</button>{' '}
                     {statement.pdf_file_id ? (

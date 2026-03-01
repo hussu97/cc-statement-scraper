@@ -5,6 +5,8 @@ export type Statement = {
   statement_date: string;
   ingested_at: string | null;
   line_count: number;
+  total_debit_aed: number;
+  total_credit_aed: number;
   pdf_file_id: number | null;
 };
 
