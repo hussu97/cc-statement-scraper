@@ -24,10 +24,28 @@ from ccs_platform.application.jobs.worker_loop import WorkerLoop
 logger = logging.getLogger(__name__)
 
 
+_SENSITIVE = {"key", "secret", "password", "token", "hash", "credential", "dsn", "url"}
+
+
+def _redact(name: str, value: str) -> str:
+    low = name.lower()
+    if any(s in low for s in _SENSITIVE):
+        return f"{value[:4]}****" if len(value) > 4 else "****"
+    return value
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
     configure_logging(level_name=settings.log_level)
+
+    import os
+    prefixes = ("CCS_PLATFORM_", "ALICE_", "BOB_")
+    env_lines = []
+    for k, v in sorted(os.environ.items()):
+        if any(k.startswith(p) for p in prefixes):
+            env_lines.append(f"  {k}={_redact(k, v)}")
+    logger.info("Startup env vars:\n%s", "\n".join(env_lines) if env_lines else "  (none found)")
 
     logger.info("Startup: running migrations (init_db)...")
     try:
