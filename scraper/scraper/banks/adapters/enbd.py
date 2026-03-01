@@ -112,6 +112,65 @@ def _click_cards_tile(page: Any, logger: logging.Logger) -> bool:
     for _ in range(6):
         _dismiss_overlays(page, logger)
 
+        # If we navigated away from the dashboard (e.g. accidentally clicked Accounts
+        # or Loan tile), go back before retrying.
+        if not _is_cards_detail(page):
+            has_tiles = False
+            try:
+                has_tiles = page.locator(".dashboard-card-container").count() > 0
+            except Exception:  # noqa: BLE001
+                pass
+            if not has_tiles:
+                try:
+                    page.go_back(timeout=4000)
+                    page.wait_for_timeout(1500)
+                    _dismiss_overlays(page, logger)
+                    logger.info("ENBD: navigated back after landing on wrong tile page")
+                except Exception:  # noqa: BLE001
+                    pass
+
+        # Try JS evaluator first: specifically target a tile whose heading says "Cards"
+        # (avoids clicking Accounts or Loan tiles when multiple tiles exist on the dashboard).
+        try:
+            clicked = page.evaluate(
+                """
+                () => {
+                  const isVisible = (el) => {
+                    const cs = getComputedStyle(el);
+                    const r = el.getBoundingClientRect();
+                    return cs.visibility !== 'hidden' && cs.display !== 'none' && r.width > 0 && r.height > 0;
+                  };
+                  const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim().toLowerCase();
+                  const tiles = Array.from(document.querySelectorAll(
+                    '.dashboard-card-container, [class*="card-container"]'
+                  ));
+                  for (const tile of tiles) {
+                    if (!isVisible(tile)) continue;
+                    // Check aria-label on the tile itself
+                    const tileLabel = norm(tile.getAttribute('aria-label') || '');
+                    if (tileLabel === 'cards') { tile.click(); return true; }
+                    // Check heading/label children
+                    const headings = Array.from(tile.querySelectorAll(
+                      'h1, h2, h3, h4, [class*="heading"], [class*="title"], [class*="label"]'
+                    ));
+                    for (const h of headings) {
+                      if (!isVisible(h)) continue;
+                      const txt = norm(h.innerText || h.textContent || '');
+                      if (txt === 'cards') { tile.click(); return true; }
+                    }
+                  }
+                  return false;
+                }
+                """
+            )
+            if clicked:
+                page.wait_for_timeout(2200)
+                logger.info("ENBD: clicked Cards tile via JS heading evaluator")
+                if _is_cards_detail(page):
+                    return True
+        except Exception:  # noqa: BLE001
+            pass
+
         for selector in selectors:
             locator = page.locator(selector)
             try:
@@ -813,6 +872,102 @@ def _log_period_selection_snapshot(page: Any, logger: logging.Logger) -> None:
     )
 
 
+def _select_from_aria_listbox(
+    page: Any,
+    mode: str,
+    logger: logging.Logger,
+    *,
+    target_score: int | None = None,
+    strict_target: bool = False,
+) -> bool:
+    """Select a year or month from ENBD's ARIA-listbox-based E-statement controls.
+
+    ENBD's /actions/e-statement page uses ``[role='listbox']`` elements
+    (``aria-label='Select year'`` / ``aria-label='Select month'``) whose options
+    expand inline rather than in a CDK overlay container.
+    """
+    label_map = {"year": "Select year", "month": "Select month"}
+    aria_label = label_map.get(mode)
+    if not aria_label:
+        return False
+
+    listbox = page.locator(f"[role='listbox'][aria-label='{aria_label}']")
+    try:
+        if listbox.count() == 0 or not listbox.first.is_visible():
+            return False
+    except Exception:  # noqa: BLE001
+        return False
+
+    # Options live inline inside the listbox; click the listbox to expand if needed.
+    options_locator = listbox.first.locator("[role='option']")
+    try:
+        option_count = options_locator.count()
+    except Exception:  # noqa: BLE001
+        option_count = 0
+
+    if option_count == 0:
+        try:
+            listbox.first.click(timeout=2000)
+            page.wait_for_timeout(400)
+            option_count = options_locator.count()
+        except Exception:  # noqa: BLE001
+            return False
+
+    candidates: list[tuple[int, int, str]] = []
+    for idx in range(min(option_count, 60)):
+        item = options_locator.nth(idx)
+        try:
+            if not item.is_visible():
+                continue
+            text = (item.inner_text() or "").strip()
+            if not text:
+                continue
+            score = _score_option_text(text, mode)
+            if score is None:
+                continue
+            candidates.append((score, idx, text))
+        except Exception:  # noqa: BLE001
+            continue
+
+    if not candidates:
+        return False
+
+    chosen_idx = None
+    chosen_text = ""
+
+    if target_score is not None:
+        for score, idx, text in candidates:
+            if score == target_score:
+                chosen_idx = idx
+                chosen_text = text
+                break
+
+    if chosen_idx is None and strict_target and target_score is not None:
+        logger.info(
+            "ENBD: target %s option score=%s not found in ARIA listbox",
+            mode,
+            target_score,
+        )
+        return False
+
+    if chosen_idx is None:
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        _, chosen_idx, chosen_text = candidates[0]
+
+    try:
+        options_locator.nth(chosen_idx).click(timeout=2500)
+        page.wait_for_timeout(500)
+        logger.info(
+            "ENBD: selected %s option %s via ARIA listbox (target_score=%s)",
+            mode,
+            chosen_text,
+            target_score,
+        )
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def _parse_requested_month(value: str | None) -> tuple[int | None, int | None]:
     raw = (value or "").strip().lower()
     if not raw or raw == "latest":
@@ -1005,6 +1160,29 @@ def _select_statement_period(
         page.wait_for_timeout(600)
         return True
 
+    # ARIA listbox fallback (ENBD /actions/e-statement page uses [role='listbox'] controls
+    # rather than native <select> or Material Angular dropdowns).
+    aria_year = _select_from_aria_listbox(
+        page,
+        "year",
+        logger,
+        target_score=target_year,
+        strict_target=strict_target,
+    )
+    if aria_year:
+        # ENBD enables the month listbox asynchronously after a year is chosen.
+        page.wait_for_timeout(700)
+    aria_month = _select_from_aria_listbox(
+        page,
+        "month",
+        logger,
+        target_score=target_month,
+        strict_target=strict_target,
+    )
+    if aria_year and aria_month:
+        page.wait_for_timeout(600)
+        return True
+
     if strict_target:
         _log_period_selection_snapshot(page, logger)
         logger.info(
@@ -1120,6 +1298,8 @@ def _is_statements_download_page(page: Any) -> bool:
             _has_visible("select"),
             _has_visible(".mat-select-trigger"),
             _has_visible("[role='combobox']"),
+            # ENBD /actions/e-statement page uses ARIA listbox controls
+            _has_visible("[role='listbox']"),
         ]
     )
     has_download_controls = any(
