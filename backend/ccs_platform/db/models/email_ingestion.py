@@ -130,13 +130,11 @@ class EmailIngestionEvent(Base):
 class ServiceApiToken(Base):
     __tablename__ = "service_api_tokens"
     __table_args__ = (
-        UniqueConstraint("profile_id", "name", name="uq_service_api_tokens_profile_name"),
-        Index("ix_service_api_tokens_profile_id", "profile_id"),
+        UniqueConstraint("name", name="uq_service_api_tokens_name"),
         Index("ix_service_api_tokens_token_prefix", "token_prefix"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    profile_id: Mapped[int] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     token_prefix: Mapped[str] = mapped_column(String(24), nullable=False)
     token_hash: Mapped[str] = mapped_column(String(128), nullable=False)
