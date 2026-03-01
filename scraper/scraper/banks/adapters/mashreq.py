@@ -1136,12 +1136,19 @@ def _browser_launch_overrides() -> dict:
         "user_agent": (
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
             "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/131.0.0.0 Safari/537.36"
+            "Chrome/145.0.0.0 Safari/537.36"
         ),
         # Headless Chrome has no window size by default — another fingerprint
         # signal.  Force a realistic viewport size.
-        "args": ["--window-size=1920,1080"],
+        "args": [
+            "--window-size=1920,1080",
+            # Suppresses the navigator.webdriver flag that headless Chrome
+            # exposes by default and is a primary bot-detection signal.
+            "--disable-blink-features=AutomationControlled",
+        ],
         "init_scripts": [
+            # navigator.webdriver = true is the most reliable headless signal.
+            "Object.defineProperty(navigator, 'webdriver', { get: () => undefined });",
             "Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });",
         ],
     }
