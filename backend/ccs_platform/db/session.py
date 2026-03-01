@@ -26,6 +26,15 @@ def _engine_kwargs(database_url: str) -> dict:
     kwargs: dict = {"future": True, "pool_pre_ping": True}
     if database_url.startswith("sqlite"):
         kwargs["connect_args"] = {"check_same_thread": False}
+    else:
+        # On managed Postgres (e.g. Render free tier) idle connections are
+        # dropped server-side after ~5 min.  pool_pre_ping catches stale
+        # connections but adds a round-trip; pool_recycle proactively retires
+        # them before they go stale.  Keep the pool small to stay within the
+        # free tier's 25-connection limit.
+        kwargs["pool_size"] = 2
+        kwargs["max_overflow"] = 2
+        kwargs["pool_recycle"] = 300  # seconds — retire connections after 5 min
     return kwargs
 
 

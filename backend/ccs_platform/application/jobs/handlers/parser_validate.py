@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 
 from ccs_platform.db import models
 from ccs_platform.core.bank_config import load_app_config
-from ccs_platform.adapters.banks.parsers import parse_adcb_statement, parse_enbd_statement, parse_fab_statement
 from ccs_platform.domain.parsing.bank_samples import PARSER_SAMPLE_EXPECTED_COUNTS
 
 
@@ -50,6 +49,11 @@ def handle_parser_validate_job(db: Session, job: models.Job) -> dict[str, Any]:
     adcb_password = os.getenv("ADCB_PDF_PASSWORD") or os.getenv("ADCB_CID")
     if not adcb_password:
         raise RuntimeError("ADCB_PDF_PASSWORD or ADCB_CID must be set for parser validation")
+
+    # Lazy imports — parsers load pdfplumber; defer until job actually runs.
+    from ccs_platform.adapters.banks.parsers.fab import parse_fab_statement  # noqa: PLC0415
+    from ccs_platform.adapters.banks.parsers.adcb import parse_adcb_statement  # noqa: PLC0415
+    from ccs_platform.adapters.banks.parsers.enbd import parse_enbd_statement  # noqa: PLC0415
 
     counts = {
         "FAB": len(parse_fab_statement(fab_file).transactions),

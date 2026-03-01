@@ -170,6 +170,7 @@ In the Render service → **Environment → Environment Variables**, add all of 
 | `CCS_PLATFORM_EMBEDDED_WORKER` | `true` |
 | `CCS_PLATFORM_CORS_ALLOW_ORIGINS` | `https://your-vercel-app.vercel.app` |
 | `CCS_PLATFORM_TIMEZONE` | `Asia/Dubai` |
+| `CCS_PLATFORM_REQUEST_LOGGING_ENABLED` | `false` |
 
 ### 3.5 Deploy
 

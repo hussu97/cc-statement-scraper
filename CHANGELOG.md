@@ -11,6 +11,9 @@
 
 - **fix** Lazy-import `pandas` inside `build_yearly_workbook_from_statements()` — removes ~104 MB (pandas + numpy) from startup memory footprint, fixing OOM crash (exit code 3) on Render 512 MB free tier
 - **fix** Lazy-import `pdfplumber` inside `_extract_pdf_text()` in `jobs.py` — consistent with lazy-import pattern; was already loaded transitively via bank parsers but removes the module-level import
+- **fix** Lazy-import all bank parsers in `dispatcher.py` and `parser_validate.py` — removes pdfplumber (~15 MB) from startup; parsers are now imported only when a parse job actually runs; cleaned up `parsers/__init__.py` to stop eagerly re-exporting all 6 parsers
+- **fix** Add `pool_size=2`, `max_overflow=2`, `pool_recycle=300` for PostgreSQL engine — prevents "SSL connection closed" errors caused by Render managed Postgres dropping idle connections after 5 min; keeps total connections within free tier's 25-connection limit
+- **chore** Add `CCS_PLATFORM_REQUEST_LOGGING_ENABLED=false` to Render env vars in `PRODUCTION.md` and document the setting in `backend/.env.example`
 - **refactor** Delete `adapters/banks/browser/` — dead browser adapter code (base, downloader, shared, and 6 bank adapters) removed from backend; confirmed zero imports outside that directory after decoupling
 - **refactor** Rename package `creditcardstatementscraper` → `ccs-platform` in `pyproject.toml`; remove `playwright>=1.50` dependency
 - **fix** Change `ScheduleCreate.job_type` default from `JobType.SCRAPE` to `JobType.UPLOAD` — SCRAPE has no handler and raises `ValueError` at runtime
