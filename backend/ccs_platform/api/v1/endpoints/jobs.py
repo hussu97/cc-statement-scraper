@@ -5,7 +5,6 @@ import tempfile
 from pathlib import Path
 from datetime import UTC, datetime
 
-import pdfplumber
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -51,6 +50,7 @@ def _extract_pdf_text(pdf_path: Path, max_pages: int = 2, extra_passwords: list[
     password_candidates: list[str | None] = [None] + (extra_passwords or [])
 
     def _extract_with_password(password: str | None) -> str | None:
+        import pdfplumber  # noqa: PLC0415 — lazy import; already loaded via bank parsers but explicit here
         try:
             kwargs = {"password": password} if password else {}
             with pdfplumber.open(str(pdf_path), **kwargs) as pdf:
