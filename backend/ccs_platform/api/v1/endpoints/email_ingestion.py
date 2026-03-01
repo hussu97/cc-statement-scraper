@@ -600,7 +600,9 @@ def list_service_tokens(
 @router.post("/service-tokens", response_model=ServiceApiTokenCreated, dependencies=[Depends(_ensure_enabled)])
 def create_service_token(
     payload: ServiceApiTokenCreate,
+    request: Request,
     db: Session = Depends(get_db),
+    profile: ProfileContext = Depends(get_profile_context),
     _actor: ActorContext = Depends(require_admin_role),
 ) -> ServiceApiTokenCreated:
     scopes = [scope.strip() for scope in payload.scopes if scope.strip()]
@@ -619,6 +621,21 @@ def create_service_token(
         expires_at=payload.expires_at,
     )
     db.add(row)
+    db.flush()
+    append_audit_event(
+        db,
+        profile_id=profile.profile_id,
+        event_type="service_token_created",
+        entity_type="service_api_token",
+        entity_id=str(row.id),
+        payload_json={
+            "name": row.name,
+            "token_prefix": row.token_prefix,
+            "scopes": scopes,
+            "expires_at": row.expires_at.isoformat() if row.expires_at else None,
+        },
+        request=request,
+    )
     db.commit()
     db.refresh(row)
     return ServiceApiTokenCreated(token=token_plain, item=_service_token_to_out(row))
@@ -631,7 +648,9 @@ def create_service_token(
 )
 def revoke_service_token(
     token_id: int,
+    request: Request,
     db: Session = Depends(get_db),
+    profile: ProfileContext = Depends(get_profile_context),
     _actor: ActorContext = Depends(require_admin_role),
 ) -> ServiceApiTokenOut:
     row = db.execute(
@@ -643,6 +662,15 @@ def revoke_service_token(
         raise HTTPException(status_code=404, detail="Service token not found")
     row.is_active = False
     row.revoked_at = datetime.now(UTC)
+    append_audit_event(
+        db,
+        profile_id=profile.profile_id,
+        event_type="service_token_revoked",
+        entity_type="service_api_token",
+        entity_id=str(row.id),
+        payload_json={"name": row.name, "token_prefix": row.token_prefix},
+        request=request,
+    )
     db.commit()
     db.refresh(row)
     return _service_token_to_out(row)

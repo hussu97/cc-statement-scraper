@@ -249,6 +249,13 @@ async def create_upload_job(
                 }
             )
     except Exception:
+        # Clean up any staging objects already saved before the failure so we
+        # don't leave orphaned objects in storage.
+        for saved in uploads:
+            try:
+                request.app.state.storage.delete(saved["storage_key"])
+            except Exception:  # noqa: BLE001
+                pass
         raise
 
     if not uploads:
