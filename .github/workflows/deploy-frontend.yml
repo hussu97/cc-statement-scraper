@@ -18,13 +18,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
           ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Detect frontend changes
         id: changes
+        env:
+          BEFORE_SHA: ${{ github.event.workflow_run.event.before }}
         run: |
-          if git diff --name-only HEAD~1 HEAD | grep -qE \
+          # Compare every commit in the push (before..head) against the last
+          # remote commit so that multi-commit pushes are handled correctly.
+          # Falls back to HEAD~1 only when before is the null SHA (first push).
+          NULL_SHA="0000000000000000000000000000000000000000"
+          if [ "$BEFORE_SHA" = "$NULL_SHA" ] || [ -z "$BEFORE_SHA" ]; then
+            BASE="HEAD~1"
+          else
+            BASE="$BEFORE_SHA"
+          fi
+          if git diff --name-only "$BASE" HEAD | grep -qE \
             '^(frontend/|deploy/Dockerfile\.(frontend|app))'; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
