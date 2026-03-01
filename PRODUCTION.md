@@ -395,11 +395,92 @@ gcloud run services logs read ccs-gmail-relay \
 
 ---
 
-## 6 — Scraper CLI (local)
+## 6 — Microsoft Outlook / Hotmail Ingestion
+
+This section is only needed if you want automatic email PDF ingestion from Outlook/Hotmail mailboxes. The backend polls Microsoft Graph API directly — no relay worker or Pub/Sub is required.
+
+### 6.1 Register an Azure app
+
+1. Go to [Azure Portal](https://portal.azure.com) → **Microsoft Entra ID → App registrations → New registration**.
+2. **Name**: `ccs-platform` (or any name you prefer).
+3. **Supported account types**: select **Personal Microsoft accounts only** (covers outlook.com, hotmail.com, live.com).
+4. **Redirect URI**: Web → `https://your-service.onrender.com` (replace with your actual Render URL — this is where Microsoft sends the auth code after the user logs in).
+5. Click **Register**.
+
+### 6.2 Add API permissions
+
+In the app → **API permissions → Add a permission → Microsoft Graph → Delegated permissions**, add:
+
+| Permission | Purpose |
+|---|---|
+| `Mail.Read` | Read inbox messages |
+| `offline_access` | Issue refresh tokens (required for long-lived access) |
+
+Click **Grant admin consent** if prompted (may not be needed for personal accounts).
+
+### 6.3 Create a client secret
+
+In the app → **Certificates & secrets → Client secrets → New client secret**:
+
+- Set an expiry (24 months recommended).
+- Copy the **Value** immediately — it is not shown again.
+
+### 6.4 Copy credentials
+
+From the app **Overview** page:
+
+| What | Where |
+|---|---|
+| **Client ID** | Application (client) ID field |
+| **Client secret** | The value you copied in 6.3 |
+
+### 6.5 Set environment variables on Render
+
+In Render → **Environment → Environment Variables**, add:
+
+| Key | Value |
+|---|---|
+| `CCS_PLATFORM_EMAIL_INGESTION_ENABLED` | `true` |
+| `CCS_PLATFORM_EMAIL_MS_CLIENT_ID` | Client ID from 6.4 |
+| `CCS_PLATFORM_EMAIL_MS_CLIENT_SECRET` | Client secret value from 6.4 |
+
+Redeploy the service after adding these.
+
+### 6.6 Generate the OAuth refresh token
+
+In the admin UI:
+
+1. Go to **Email Ingestion → OAuth Token Setup → Microsoft**.
+2. Click **Authorize** — a Microsoft login URL opens in a new tab.
+3. Log in with the Outlook/Hotmail account whose inbox you want to ingest.
+4. After login, Microsoft redirects to your Render URL. Copy the **full browser URL** (it contains `?code=...`).
+5. Paste the full URL (or just the `code=` value) into the code input field in the admin UI.
+6. Click **Exchange** — the backend exchanges the code for a refresh token server-side.
+7. Copy the refresh token shown and click **Save to Mailbox**, selecting the mailbox to attach it to.
+
+The refresh token is stored encrypted in runtime settings and used for all future polling.
+
+### 6.7 Add the mailbox
+
+In the admin UI → **Email Ingestion → Mailboxes → Add mailbox**:
+
+- **Provider**: Microsoft
+- **Email**: the Outlook/Hotmail address from step 6.6
+- **Active**: enabled
+
+The backend will start polling on the next worker cycle.
+
+### 6.8 Verify
+
+In the admin UI → **Email Ingestion → Mailboxes**, confirm the mailbox shows a recent `Last Sync` timestamp and no errors.
+
+---
+
+## 7 — Scraper CLI (local)
 
 The scraper runs on your local machine to download bank statements and upload them to the deployed backend.
 
-### 6.1 Install
+### 7.1 Install
 
 ```bash
 cd scraper
@@ -408,7 +489,7 @@ pip install -e .
 ccs-scraper install-browser
 ```
 
-### 6.2 Configure
+### 7.2 Configure
 
 ```bash
 cp .env.example .env
@@ -418,7 +499,7 @@ Minimum `.env` for production use:
 
 ```env
 CCS_SCRAPER_TARGET_URL=https://your-service.onrender.com
-CCS_SCRAPER_API_TOKEN=<service token from step 3.9>
+CCS_SCRAPER_API_TOKEN=<service token from step 3.8>
 CCS_SCRAPER_HEADLESS=true
 
 HUSSAIN_FAB_USERNAME=...
@@ -432,7 +513,7 @@ TEJASVIE_FAB_USERNAME=...
 # ... tejasvie credentials
 ```
 
-### 6.3 Run
+### 7.3 Run
 
 ```bash
 # Scrape all configured banks for hussain (current month)
