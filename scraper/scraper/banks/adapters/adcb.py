@@ -753,6 +753,16 @@ def handle_concurrent_session_gate(page: Any, logger: logging.Logger, low_text: 
                 item.click(timeout=2500)
                 page.wait_for_timeout(1200)
                 logger.info("ADCB: cleared concurrent-session gate via %s", selector)
+                # Wipe all session cookies and storage so the session token
+                # created during this login cycle's OTP validation doesn't
+                # carry over and trigger another concurrent-session gate on
+                # the subsequent re-login attempt.
+                try:
+                    page.context.clear_cookies()
+                    page.evaluate("() => { try { localStorage.clear(); } catch(_) {} try { sessionStorage.clear(); } catch(_) {} }")
+                    logger.info("ADCB: cleared browser session cookies and storage after concurrent-gate dismissal")
+                except Exception:  # noqa: BLE001
+                    pass
                 return True
             except Exception:  # noqa: BLE001
                 continue
@@ -1630,8 +1640,8 @@ def _on_auth_poll_tick(page: Any, low_text: str, logger: logging.Logger, state: 
     if (
         is_login_screen(low_text)
         and extra.get("had_challenge")
-        and state.relogin_attempts < 2
-        and time.time() - state.last_login_attempt_unix >= 8
+        and state.relogin_attempts < 3
+        and time.time() - state.last_login_attempt_unix >= 15
     ):
         logger.info("ADCB: returned to login after challenge; retrying login")
         return AuthPollAction.RETRY_LOGIN
