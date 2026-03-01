@@ -112,6 +112,14 @@ def _normalize_list(values: list[str] | None) -> list[str] | None:
     return normalized or None
 
 
+_SETTINGS_FALLBACK_MAP: dict[str, str] = {
+    "EMAIL_MS_CLIENT_ID": "email_ms_client_id",
+    "EMAIL_MS_CLIENT_SECRET": "email_ms_client_secret",
+    "EMAIL_GMAIL_CLIENT_ID": "email_gmail_client_id",
+    "EMAIL_GMAIL_CLIENT_SECRET": "email_gmail_client_secret",
+}
+
+
 def _runtime_setting_value(db: Session, *, profile_id: int, key: str) -> str:
     normalized_key = normalize_runtime_key(key)
     row = db.execute(
@@ -120,12 +128,21 @@ def _runtime_setting_value(db: Session, *, profile_id: int, key: str) -> str:
             models.RuntimeSetting.key == normalized_key,
         )
     ).scalar_one_or_none()
+    if row is not None:
+        value = decode_runtime_setting_row_value(row).strip()
+        if value:
+            return value
+
+    # Fall back to Pydantic settings (populated from CCS_PLATFORM_* env vars).
+    settings_attr = _SETTINGS_FALLBACK_MAP.get(normalized_key)
+    if settings_attr:
+        fallback = (getattr(get_settings(), settings_attr, None) or "").strip()
+        if fallback:
+            return fallback
+
     if row is None:
         raise HTTPException(status_code=400, detail=f"Missing runtime setting: {normalized_key}")
-    value = decode_runtime_setting_row_value(row).strip()
-    if not value:
-        raise HTTPException(status_code=400, detail=f"Runtime setting is empty: {normalized_key}")
-    return value
+    raise HTTPException(status_code=400, detail=f"Runtime setting is empty: {normalized_key}")
 
 
 def _mailbox_to_out(row: models.EmailMailbox) -> EmailMailboxOut:
