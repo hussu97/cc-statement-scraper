@@ -26,7 +26,7 @@ _ROW_RE_SHORT = re.compile(
     r"(?P<description>.+?)\s+"
     r"(?P<reference>[A-Z0-9]{8,})\s+"
     r"(?:(?P<currency>[A-Z]{3})\s+)?"
-    r"(?P<amount>[+-]?\d[\d,]*\.\d{2})(?P<suffix>\s*(?:CR|DR))?$",
+    r"(?P<amount>[+-]?\d[\d,]*\.\d{2})(?P<suffix>\s*(?:CR|DR|-))?$",
     re.IGNORECASE,
 )
 _ROW_RE = re.compile(
@@ -35,7 +35,7 @@ _ROW_RE = re.compile(
     r"(?P<description>.+?)\s+"
     r"(?:(?P<reference>[A-Z0-9]{8,})\s+)?"
     r"(?:(?P<currency>[A-Z]{3})\s+)?"
-    r"(?P<amount>[+-]?\d[\d,]*\.\d{2})(?P<suffix>\s*(?:CR|DR))?$",
+    r"(?P<amount>[+-]?\d[\d,]*\.\d{2})(?P<suffix>\s*(?:CR|DR|-))?$",
     re.IGNORECASE,
 )
 
@@ -218,7 +218,8 @@ def parse_mashreq_statement(pdf_path: str | Path) -> StatementParseResult:
         currency = (row_match.group("currency") or "AED").upper().strip()
         amount_signed = parse_amount(row_match.group("amount"))
         suffix = (row_match.group("suffix") or "").strip().upper()
-        if suffix == "CR" and amount_signed > 0:
+        # MASHREQ marks credits with a trailing " -" as well as with "CR".
+        if suffix in {"CR", "-"} and amount_signed > 0:
             amount_signed = -amount_signed
         elif suffix == "DR" and amount_signed < 0:
             amount_signed = abs(amount_signed)
