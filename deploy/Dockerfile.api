@@ -26,7 +26,7 @@ COPY backend/config ./config
 COPY backend/ccs_platform ./ccs_platform
 
 RUN pip install --upgrade pip \
-    && pip install -r requirements.txt
+    && pip install -e ".[export]"
 
 EXPOSE 8040
 
