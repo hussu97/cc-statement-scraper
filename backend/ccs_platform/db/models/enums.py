@@ -2,6 +2,14 @@ from __future__ import annotations
 
 import enum
 
+from sqlalchemy import Enum as SAEnum
+
+
+def pg_enum(enum_cls: type[enum.Enum]) -> SAEnum:
+    """Create a SQLAlchemy Enum that stores the Python enum's .value (lowercase)
+    rather than its .name (uppercase), matching the Alembic migration definitions."""
+    return SAEnum(enum_cls, values_callable=lambda obj: [e.value for e in obj])
+
 
 class SourceType(str, enum.Enum):
     SCRAPE = "scrape"

@@ -7,7 +7,6 @@ from sqlalchemy import (
     Boolean,
     Date,
     DateTime,
-    Enum,
     ForeignKey,
     Index,
     Integer,
@@ -20,7 +19,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ccs_platform.db.base import Base
-from ccs_platform.db.models.enums import Direction, ReferenceSource, SourceType
+from ccs_platform.db.models.enums import Direction, ReferenceSource, SourceType, pg_enum
 
 
 class Bank(Base):
@@ -52,7 +51,7 @@ class PdfFile(Base):
     checksum_sha256: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     storage_backend: Mapped[str] = mapped_column(String(32), nullable=False)
     storage_key: Mapped[str] = mapped_column(String(1024), nullable=False)
-    source: Mapped[SourceType] = mapped_column(Enum(SourceType), nullable=False)
+    source: Mapped[SourceType] = mapped_column(pg_enum(SourceType), nullable=False)
     uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     profile = relationship("Profile")
@@ -81,7 +80,7 @@ class Statement(Base):
 
     statement_reference: Mapped[str] = mapped_column(String(256), nullable=False)
     statement_reference_raw: Mapped[str | None] = mapped_column(String(256), nullable=True)
-    reference_source: Mapped[ReferenceSource] = mapped_column(Enum(ReferenceSource), nullable=False)
+    reference_source: Mapped[ReferenceSource] = mapped_column(pg_enum(ReferenceSource), nullable=False)
 
     statement_date: Mapped[date] = mapped_column(Date, nullable=False)
     statement_period_start: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -133,7 +132,7 @@ class StatementLine(Base):
     currency_original: Mapped[str] = mapped_column(String(8), nullable=False)
     amount_aed: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
 
-    direction: Mapped[Direction] = mapped_column(Enum(Direction), nullable=False)
+    direction: Mapped[Direction] = mapped_column(pg_enum(Direction), nullable=False)
     transaction_kind: Mapped[str] = mapped_column(String(64), nullable=False)
 
     country_code: Mapped[str | None] = mapped_column(String(3), nullable=True)
