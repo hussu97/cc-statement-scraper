@@ -4,7 +4,12 @@ from ccs_platform.db import models
 from ccs_platform.api.v1.schemas import StatementLineOut, StatementOut
 
 
-def to_statement_out(statement: models.Statement, line_count: int = 0) -> StatementOut:
+def to_statement_out(
+    statement: models.Statement,
+    line_count: int = 0,
+    total_debit_aed: float = 0.0,
+    total_credit_aed: float = 0.0,
+) -> StatementOut:
     return StatementOut(
         id=statement.id,
         bank_code=statement.bank_code,
@@ -20,6 +25,8 @@ def to_statement_out(statement: models.Statement, line_count: int = 0) -> Statem
         pdf_file_id=statement.pdf_file_id,
         ingested_at=statement.ingested_at,
         line_count=line_count,
+        total_debit_aed=total_debit_aed,
+        total_credit_aed=total_credit_aed,
     )
 
 

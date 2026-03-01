@@ -22,6 +22,8 @@ class StatementOut(BaseModel):
     pdf_file_id: int | None
     ingested_at: datetime
     line_count: int = 0
+    total_debit_aed: float = 0.0
+    total_credit_aed: float = 0.0
 
 
 class StatementLineOut(BaseModel):
