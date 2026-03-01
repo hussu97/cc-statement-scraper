@@ -34,7 +34,14 @@ class ScraperClient:
             with httpx.Client(timeout=120) as client:
                 response = client.post(url, headers=headers, files=multipart)
 
-            response.raise_for_status()
+            if not response.is_success:
+                try:
+                    body = response.json()
+                except Exception:
+                    body = response.text
+                raise RuntimeError(
+                    f"Upload failed {response.status_code}: {body}"
+                )
             return response.json()
         finally:
             for fh in handles:
