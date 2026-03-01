@@ -4,10 +4,17 @@
 
 ### Backend
 
+- **fix** Rate limit login endpoint — sliding window (5 attempts / 60 s per IP) in `POST /auth/login`; returns 429 on excess; no new dependency
+- **fix** Add missing FK indexes via migration `20260302_000012` — `job_items.job_id`, `statements.bank_code`, `statement_lines.statement_id`; also declare them in model `__table_args__`
 - **fix** Enforce CORS origin list in production — `model_post_init` raises `RuntimeError` if `CCS_PLATFORM_CORS_ALLOW_ORIGINS` is `"*"` or empty when `ENVIRONMENT=production`; `create_app` disables `allow_credentials` when origins is wildcard (browser spec violation)
 - **fix** Log bcrypt failures — `authenticate_credentials` now calls `logger.exception()` before returning `None` on bcrypt error; distinguishes corrupted-hash system errors from wrong-password denials
 - **fix** Enforce upload size limit — new setting `CCS_PLATFORM_MAX_UPLOAD_SIZE_MB` (default 50); upload endpoint returns 413 for files exceeding the limit
 - **feat** Service token expiry — add optional `expires_at` column to `service_api_tokens` (migration `20260302_000011`); `require_service_token` returns 401 if token is past its expiry; `ServiceApiTokenCreate` accepts `expires_at`; `ServiceApiTokenOut` exposes it
+
+### Scraper
+
+- **fix** Fail fast on missing API token — `get_config()` raises `RuntimeError` if `CCS_SCRAPER_API_TOKEN` is unset; previously the error only surfaced at upload time after a full scrape run
+- **fix** Retry uploads with exponential backoff — `ScraperClient.upload_pdfs` retries up to 3 times (delays: 5 s, 15 s, 45 s) on transient server errors (5xx / network); 4xx errors are not retried
 
 ### Frontend (web)
 

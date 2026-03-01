@@ -99,6 +99,7 @@ def test_download_dir_is_path(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_credentials_populated_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     _clear_scraper_env(monkeypatch)
+    monkeypatch.setenv("CCS_SCRAPER_API_TOKEN", "test-token")
     monkeypatch.setenv("HUSSAIN_FAB_USERNAME", "myuser")
     monkeypatch.setenv("HUSSAIN_FAB_PASSWORD", "mypass")
 
@@ -109,6 +110,7 @@ def test_credentials_populated_from_env(monkeypatch: pytest.MonkeyPatch) -> None
 
 def test_credentials_all_known_keys(monkeypatch: pytest.MonkeyPatch) -> None:
     _clear_scraper_env(monkeypatch)
+    monkeypatch.setenv("CCS_SCRAPER_API_TOKEN", "test-token")
     for key in _CREDENTIAL_KEYS:
         monkeypatch.setenv(f"HUSSAIN_{key}", f"value_{key}")
 
@@ -137,6 +139,7 @@ def test_credentials_unrecognised_keys_excluded(monkeypatch: pytest.MonkeyPatch)
 
 def test_get_config_profile_override(monkeypatch: pytest.MonkeyPatch) -> None:
     _clear_scraper_env(monkeypatch)
+    monkeypatch.setenv("CCS_SCRAPER_API_TOKEN", "test-token")
     monkeypatch.setenv("TEJASVIE_FAB_USERNAME", "tej_user")
     monkeypatch.setenv("HUSSAIN_FAB_USERNAME", "hussain_user")
 
@@ -147,6 +150,7 @@ def test_get_config_profile_override(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_credentials_profile_isolation(monkeypatch: pytest.MonkeyPatch) -> None:
     _clear_scraper_env(monkeypatch)
+    monkeypatch.setenv("CCS_SCRAPER_API_TOKEN", "test-token")
     monkeypatch.setenv("HUSSAIN_FAB_USERNAME", "hussain_user")
     monkeypatch.setenv("TEJASVIE_FAB_USERNAME", "tej_user")
 

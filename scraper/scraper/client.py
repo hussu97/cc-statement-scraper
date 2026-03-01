@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import httpx
+
+_RETRY_DELAYS = (5, 15, 45)  # seconds between attempts 1→2, 2→3, 3→fail
 
 
 def _bank_code_from_filename(name: str) -> str | None:
@@ -50,28 +53,44 @@ class ScraperClient:
 
         # Use caller-supplied code; fall back to filename prefix as last resort.
         hint = bank_code or _bank_code_from_filename(files[0].name) if files else None
+        data = {"bank_code_hint": hint} if hint else {}
 
-        multipart: list[tuple] = []
-        handles = []
-        try:
-            for path in files:
-                fh = open(path, "rb")  # noqa: WPS515
-                handles.append(fh)
-                multipart.append(("files", (path.name, fh, "application/pdf")))
+        last_exc: Exception = RuntimeError("Upload failed")
+        for attempt, delay in enumerate((*_RETRY_DELAYS, None), start=1):
+            multipart: list[tuple] = []
+            handles = []
+            try:
+                for path in files:
+                    fh = open(path, "rb")  # noqa: WPS515
+                    handles.append(fh)
+                    multipart.append(("files", (path.name, fh, "application/pdf")))
 
-            data = {"bank_code_hint": hint} if hint else {}
-            with httpx.Client(timeout=120) as client:
-                response = client.post(url, headers=headers, files=multipart, data=data)
+                with httpx.Client(timeout=120) as client:
+                    response = client.post(url, headers=headers, files=multipart, data=data)
 
-            if not response.is_success:
+                if response.is_success:
+                    return response.json()
+
                 try:
                     body = response.json()
                 except Exception:
                     body = response.text
-                raise RuntimeError(
-                    f"Upload failed {response.status_code}: {body}"
-                )
-            return response.json()
-        finally:
-            for fh in handles:
-                fh.close()
+
+                # 4xx errors are not transient — don't retry
+                if 400 <= response.status_code < 500:
+                    raise RuntimeError(f"Upload failed {response.status_code}: {body}")
+
+                last_exc = RuntimeError(f"Upload failed {response.status_code}: {body}")
+            except RuntimeError:
+                raise
+            except Exception as exc:
+                last_exc = exc
+            finally:
+                for fh in handles:
+                    fh.close()
+
+            if delay is not None:
+                print(f"Upload attempt {attempt} failed, retrying in {delay}s …")
+                time.sleep(delay)
+
+        raise last_exc

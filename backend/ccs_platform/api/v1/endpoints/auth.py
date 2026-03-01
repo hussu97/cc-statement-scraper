@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from collections import deque
+from threading import Lock
+import time
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
@@ -11,6 +15,32 @@ from ccs_platform.db.session import get_db
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+# ---------------------------------------------------------------------------
+# Simple in-process sliding window rate limiter for the login endpoint.
+# 5 attempts per IP per 60-second window.  Resets naturally as old timestamps
+# fall outside the window.  In-memory only — resets on process restart, which
+# is acceptable for this small admin app.
+# ---------------------------------------------------------------------------
+_LOGIN_WINDOW_SECONDS = 60
+_LOGIN_MAX_ATTEMPTS = 5
+_login_attempts: dict[str, deque[float]] = {}
+_login_lock = Lock()
+
+
+def _check_login_rate_limit(ip: str) -> None:
+    now = time.monotonic()
+    with _login_lock:
+        dq = _login_attempts.setdefault(ip, deque())
+        # Drop timestamps outside the window
+        while dq and dq[0] < now - _LOGIN_WINDOW_SECONDS:
+            dq.popleft()
+        if len(dq) >= _LOGIN_MAX_ATTEMPTS:
+            raise HTTPException(
+                status_code=429,
+                detail="Too many login attempts. Please wait a minute and try again.",
+            )
+        dq.append(now)
 
 
 def _resolve_default_profile_key(db: Session, preferred_profile_key: str) -> str:
@@ -41,6 +71,7 @@ def login(
     request: Request,
     db: Session = Depends(get_db),
 ) -> LoginResponse:
+    _check_login_rate_limit(request.client.host if request.client else "unknown")
     account = authenticate_credentials(email=payload.email, password=payload.password)
     if account is None:
         raise HTTPException(status_code=401, detail="Invalid email or password")
