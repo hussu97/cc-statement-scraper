@@ -114,6 +114,7 @@ def init_db() -> None:
     # because dev DBs are often not Alembic-stamped.
     if _engine.dialect.name != "sqlite":
         cfg = AlembicConfig(str(_ALEMBIC_INI))
+        cfg.set_main_option("sqlalchemy.url", settings.resolved_database_url())
         alembic_command.upgrade(cfg, "head")
         return
 
