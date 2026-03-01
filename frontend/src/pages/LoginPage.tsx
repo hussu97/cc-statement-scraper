@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 
 import { api } from '../api';
@@ -15,13 +15,6 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!authUser) {
-      return;
-    }
-    setActiveProfileKey(authUser.default_profile_key);
-  }, [authUser]);
 
   if (authUser) {
     return <Navigate to={DEFAULT_ROUTE} replace />;
