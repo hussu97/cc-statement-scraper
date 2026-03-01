@@ -134,6 +134,7 @@ export function StackedTrendChart({
             <YAxis />
             <Tooltip
               content={<ChartTooltip />}
+              wrapperStyle={{ zIndex: 3000 }}
               cursor={{ stroke: '#9fb0a8', strokeWidth: 1, fill: 'transparent' }}
             />
             <Legend />
