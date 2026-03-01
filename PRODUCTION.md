@@ -217,11 +217,24 @@ BOB_ADCB_PDF_PASSWORD=...
 BOB_SIB_PDF_PASSWORD=...
 ```
 
-### 3.8 Create a scraper service token
+### 3.8 Create service tokens
+
+**Scraper token** (used by the local CLI):
 
 1. In the admin UI go to **Service API Tokens → New token**.
 2. Set scope: `email_ingestion:upload`.
 3. Copy the token — this becomes `CCS_SCRAPER_API_TOKEN` in the scraper's `.env`.
+
+**Email ingestion token** (used by the GitHub Actions workflows `email-ingest-microsoft.yml` and any Gmail relay):
+
+1. In the admin UI go to **Service API Tokens → New token**.
+2. Set **all three** scopes:
+   - `email_ingestion:read` — list mailboxes, routes, and fetch OAuth access tokens
+   - `email_ingestion:write` — update per-mailbox sync state after each run
+   - `email_ingestion:upload` — upload matched PDF attachments
+3. Copy the token — this becomes `CCS_SERVICE_TOKEN` in the GitHub Actions secrets (and `CCS_SERVICE_TOKEN` env var for the Gmail relay Cloud Run deployment).
+
+> **Common mistake:** a token with only `email_ingestion:upload` will be rejected with `HTTP 401 Invalid service token` when the ingestion script calls `/automation/routes` or `/automation/mailboxes`, which require `email_ingestion:read`.
 
 ---
 
