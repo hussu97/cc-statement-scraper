@@ -75,6 +75,7 @@ def _wait_for_authenticated_session(
     logger: logging.Logger,
     portal_url: str | None = None,
     cancel_check: Optional[Callable[[], None]] = None,
+    credentials: dict[str, str] | None = None,
 ) -> Any:
     def _active_page(current_page: Any) -> Any:
         try:
@@ -123,7 +124,7 @@ def _wait_for_authenticated_session(
             return page
 
         if action is AuthPollAction.RETRY_LOGIN:
-            adapter.login(page, logger)
+            adapter.login(page, logger, credentials)
             state.relogin_attempts += 1
             state.last_login_attempt_unix = time.time()
             time.sleep(2)
@@ -461,6 +462,7 @@ def run_end_to_end_downloads(
                     logger=logger,
                     portal_url=portal_url,
                     cancel_check=cancel_check,
+                    credentials=credentials,
                 )
 
                 safe_screenshot(
