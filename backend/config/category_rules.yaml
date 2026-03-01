@@ -60,6 +60,7 @@ global_rules:
       - DANUBE HOME
       - SEPHORA
       - TABBY FZ
+      - AL SHAMSI HOLDINGS
       - TEMU.COM
       - AL BASHA SMOKING
       - TRADING LLC
@@ -105,6 +106,7 @@ global_rules:
   - category: Utilities
     keywords:
       - DUBAI ELECTRICITY
+      - NOOR ALJIDAF
       - GAS SERVICE
       - DEWA
       - ETISALAT
