@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pdfplumber
 
-from ccs_platform.domain.parsing.models import StatementParseResult, TransactionRecord
+from ccs_platform.domain.parsing.models import ParserError, StatementParseResult, TransactionRecord
 from ccs_platform.domain.parsing.utils import (
     classify_transaction_kind,
     extract_last4_masked,
@@ -55,14 +55,46 @@ def _extract_statement_reference(lines: list[str]) -> str | None:
     return None
 
 
-def parse_enbd_statement(pdf_path: str | Path) -> StatementParseResult:
-    path = Path(pdf_path)
+def _extract_lines(path: Path, pdf_password: str | None) -> list[str]:
+    """Extract all text lines from the PDF.
 
-    with pdfplumber.open(str(path)) as pdf:
-        lines: list[str] = []
-        for page in pdf.pages:
-            page_lines = [ln.strip() for ln in (page.extract_text() or "").splitlines() if ln.strip()]
-            lines.extend(page_lines)
+    Tries without a password first (scraper / manual uploads are unencrypted).
+    If that raises — indicating an email-sourced encrypted PDF — retries with
+    the supplied pdf_password.
+    """
+
+    def _read(password: str | None = None) -> list[str]:
+        kwargs: dict = {"password": password} if password else {}
+        with pdfplumber.open(str(path), **kwargs) as pdf:
+            result: list[str] = []
+            for page in pdf.pages:
+                result.extend(
+                    ln.strip()
+                    for ln in (page.extract_text() or "").splitlines()
+                    if ln.strip()
+                )
+            return result
+
+    try:
+        return _read()
+    except Exception:  # noqa: BLE001
+        if not pdf_password:
+            raise ParserError(
+                "PDF_DECRYPT_FAILED",
+                "ENBD statement PDF is encrypted. Set ENBD_PDF_PASSWORD in runtime settings.",
+            )
+        try:
+            return _read(pdf_password)
+        except Exception as exc:
+            raise ParserError(
+                "PDF_DECRYPT_FAILED",
+                "Unable to decrypt ENBD statement PDF. Verify ENBD_PDF_PASSWORD.",
+            ) from exc
+
+
+def parse_enbd_statement(pdf_path: str | Path, pdf_password: str | None = None) -> StatementParseResult:
+    path = Path(pdf_path)
+    lines = _extract_lines(path, pdf_password)
 
     card_last4 = "0000"
     card_holder: str | None = None

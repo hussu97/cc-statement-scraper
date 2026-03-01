@@ -31,6 +31,7 @@ DEFAULT_RUNTIME_SETTING_SPECS: tuple[RuntimeSettingSpec, ...] = (
     RuntimeSettingSpec("ADCB_FORCE_VIRTUAL_KEYBOARD", "ADCB", False, "ADCB virtual keyboard automation toggle"),
     RuntimeSettingSpec("ENBD_USERNAME", "ENBD", True, "ENBD online banking username"),
     RuntimeSettingSpec("ENBD_PASSWORD", "ENBD", True, "ENBD online banking password"),
+    RuntimeSettingSpec("ENBD_PDF_PASSWORD", "ENBD", True, "ENBD PDF password (required for email-sourced encrypted statements)"),
     RuntimeSettingSpec("EIB_USERNAME", "EIB", True, "EIB online banking username"),
     RuntimeSettingSpec("EIB_PASSWORD", "EIB", True, "EIB online banking password"),
     RuntimeSettingSpec("SIB_USER_ID", "SIB", True, "SIB online banking user ID"),

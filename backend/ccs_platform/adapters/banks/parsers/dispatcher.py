@@ -27,7 +27,10 @@ def parse_statement_for_bank(bank_code: str, pdf_path: str | Path) -> StatementP
 
     if code == "ENBD":
         from ccs_platform.adapters.banks.parsers.enbd import parse_enbd_statement  # noqa: PLC0415
-        return parse_enbd_statement(pdf_path)
+        # Password is optional — scraper/manual PDFs are unencrypted; email-sourced
+        # PDFs are encrypted with a profile-specific password.
+        pdf_password = os.getenv("ENBD_PDF_PASSWORD") or None
+        return parse_enbd_statement(pdf_path, pdf_password)
 
     if code == "EIB":
         from ccs_platform.adapters.banks.parsers.eib import parse_eib_statement  # noqa: PLC0415
