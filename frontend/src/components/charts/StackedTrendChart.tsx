@@ -23,6 +23,31 @@ export type StackedTrendClick = {
   seriesKey: string;
 };
 
+type TooltipEntry = { name: string; value: number; color: string };
+
+function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: TooltipEntry[]; label?: string }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div
+      style={{
+        backgroundColor: '#fffef9',
+        border: '1px solid #d6ddd1',
+        borderRadius: '10px',
+        padding: '10px 14px',
+        boxShadow: '0 10px 22px rgba(17,24,24,0.1)',
+        pointerEvents: 'none',
+      }}
+    >
+      <p style={{ margin: '0 0 6px 0', fontWeight: 600, color: '#111' }}>{label}</p>
+      {payload.map((entry) => (
+        <p key={entry.name} style={{ margin: '2px 0', color: entry.color }}>
+          {entry.name} : {typeof entry.value === 'number' ? Number(entry.value.toFixed(2)).toLocaleString() : entry.value}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 export function StackedTrendChart({
   data,
   mode,
@@ -61,12 +86,11 @@ export function StackedTrendChart({
     return <p className="muted">No trend data available for the selected filters.</p>;
   }
 
-  const tooltipStyle = {
+  const sharedTooltipStyle = {
     backgroundColor: '#fffef9',
     border: '1px solid #d6ddd1',
     borderRadius: '10px',
     boxShadow: '0 10px 22px rgba(17, 24, 24, 0.1)',
-    opacity: 1,
   };
 
   function handlePointClick(row: unknown, seriesKey: string) {
@@ -89,7 +113,7 @@ export function StackedTrendChart({
             <CartesianGrid strokeDasharray="3 3" stroke="#d5ddd3" />
             <XAxis dataKey="bucket" />
             <YAxis />
-            <Tooltip contentStyle={tooltipStyle} />
+            <Tooltip contentStyle={sharedTooltipStyle} />
             <Legend />
             {prepared.seriesDefs.map((seriesDef) => (
               <Bar
@@ -109,8 +133,7 @@ export function StackedTrendChart({
             <XAxis dataKey="bucket" />
             <YAxis />
             <Tooltip
-              contentStyle={tooltipStyle}
-              wrapperStyle={{ opacity: 1 }}
+              content={<ChartTooltip />}
               cursor={{ stroke: '#9fb0a8', strokeWidth: 1, fill: 'transparent' }}
             />
             <Legend />
@@ -134,7 +157,7 @@ export function StackedTrendChart({
             <CartesianGrid strokeDasharray="3 3" stroke="#d5ddd3" />
             <XAxis dataKey="bucket" />
             <YAxis />
-            <Tooltip contentStyle={tooltipStyle} />
+            <Tooltip contentStyle={sharedTooltipStyle} />
             <Legend />
             {prepared.seriesDefs.map((seriesDef) => (
               <Area
