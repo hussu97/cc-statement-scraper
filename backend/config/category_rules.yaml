@@ -31,6 +31,7 @@ global_rules:
       - CARREFOUR
   - category: Subscription
     keywords:
+      - WHOOPDUBLIN
       - NOON ONE
       - DUOLINGO
       - EXCELLENCY BENEFIT
@@ -58,6 +59,7 @@ global_rules:
       - MINISO
       - DANUBE HOME
       - SEPHORA
+      - TABBY FZ
       - TEMU.COM
       - AL BASHA SMOKING
       - TRADING LLC
@@ -65,6 +67,8 @@ global_rules:
       - MARKS AND SPENCER
   - category: Entretainment
     keywords:
+      - SKYDIVE
+      - PRISON ISLAND
       - RIVER SPA
       - OMISE*PHUKET
       - VOX CINEMAS
@@ -73,6 +77,9 @@ global_rules:
       - MASSAGE
   - category: Transport
     keywords:
+      - ZED MOBILITY
+      - CAREEM RIDE
+      - CAREEM PAY
       - BOLT
       - CAREEM HALA
       - TAXI
@@ -97,6 +104,7 @@ global_rules:
       - EMIRATES
   - category: Utilities
     keywords:
+      - DUBAI ELECTRICITY
       - GAS SERVICE
       - DEWA
       - ETISALAT
@@ -131,6 +139,7 @@ global_rules:
       - JOINING_BONUS_CASHBACK
   - category: Card Repayment
     keywords:
+      - INWARD IPP CC
       - PAYMENT RECEIVED
   - category: Dining
     keywords:
