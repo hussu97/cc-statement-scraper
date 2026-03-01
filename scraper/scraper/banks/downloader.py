@@ -265,6 +265,8 @@ def _launch_bank_context(
     overrides = adapter.browser_launch_overrides() if adapter is not None else {}
     launch_channel_candidates: list[str | None] = overrides.get("channel_candidates", [None])
     extra_init_scripts: list[str] = overrides.get("init_scripts", [])
+    override_user_agent: str | None = overrides.get("user_agent")
+    extra_args: list[str] = overrides.get("args", [])
 
     max_attempts = 3
     for attempt in range(1, max_attempts + 1):
@@ -283,7 +285,9 @@ def _launch_bank_context(
                 launch_kwargs["proxy"] = {"server": proxy_url}
                 logger.info("%s: routing browser traffic via proxy %s", bank_code, proxy_url)
             # Strip the automation flag globally — it's the single most obvious bot signal.
-            launch_kwargs["args"] = ["--disable-blink-features=AutomationControlled"]
+            launch_kwargs["args"] = ["--disable-blink-features=AutomationControlled"] + extra_args
+            if override_user_agent:
+                launch_kwargs["user_agent"] = override_user_agent
 
             context = None
             launch_error: Exception | None = None

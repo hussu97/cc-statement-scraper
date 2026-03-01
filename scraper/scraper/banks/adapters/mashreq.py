@@ -1130,6 +1130,17 @@ def _on_auth_poll_tick(page: Any, low_text: str, logger: logging.Logger, state: 
 def _browser_launch_overrides() -> dict:
     return {
         "channel_candidates": ["chrome", None],
+        # Override the user agent so headless Chromium does not expose
+        # "HeadlessChrome" in the UA string, which MASHREQ bot-detection
+        # uses to block logins with "not authorized to login to this portal".
+        "user_agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/131.0.0.0 Safari/537.36"
+        ),
+        # Headless Chrome has no window size by default — another fingerprint
+        # signal.  Force a realistic viewport size.
+        "args": ["--window-size=1920,1080"],
         "init_scripts": [
             "Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });",
         ],
