@@ -98,6 +98,36 @@ class GmailClient:
             url=f"{GMAIL_API_BASE}/users/me/messages/{urllib_parse.quote(message_id)}?{query}",
         )
 
+    def watch(self, *, topic_name: str, label_ids: list[str] | None = None) -> dict[str, Any]:
+        body = json.dumps(
+            {"topicName": topic_name, "labelIds": label_ids or ["INBOX"]}
+        ).encode("utf-8")
+        req = urllib_request.Request(
+            url=f"{GMAIL_API_BASE}/users/me/watch",
+            data=body,
+            method="POST",
+            headers={
+                "Authorization": f"Bearer {self.access_token}",
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+            },
+        )
+        try:
+            with urllib_request.urlopen(req, timeout=self.timeout_seconds) as resp:
+                raw = resp.read().decode("utf-8")
+        except urllib_error.HTTPError as exc:
+            body_text = exc.read().decode("utf-8", errors="ignore")
+            raise RuntimeError(f"Gmail watch error HTTP {exc.code}: {body_text[:400]}") from exc
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError(f"Gmail watch request failed: {exc}") from exc
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("Gmail watch response is invalid JSON") from exc
+        if not isinstance(payload, dict):
+            raise RuntimeError("Gmail watch payload must be a JSON object")
+        return payload
+
     def get_attachment_bytes(self, *, message_id: str, attachment_id: str) -> bytes:
         payload = self._request_json(
             method="GET",
@@ -365,6 +395,10 @@ def _read_env_service_token() -> str:
     return os.getenv("CCS_SERVICE_TOKEN", "").strip()
 
 
+def _read_env_watch_topic() -> str:
+    return os.getenv("CCS_GMAIL_WATCH_TOPIC", "").strip()
+
+
 def _decode_pubsub_payload(envelope: dict[str, Any]) -> tuple[str, str | None]:
     message = envelope.get("message")
     if not isinstance(message, dict):
@@ -426,6 +460,48 @@ async def pubsub_push(request: Request) -> dict[str, Any]:
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     return {"received_at": utc_now_iso(), **result}
+
+
+@app.post("/watch/renew")
+async def watch_renew() -> dict[str, Any]:
+    api_base_url = _read_env_base_url()
+    service_token = _read_env_service_token()
+    watch_topic = _read_env_watch_topic()
+    if not api_base_url or not service_token:
+        raise HTTPException(status_code=500, detail="CCS_API_BASE_URL and CCS_SERVICE_TOKEN are required")
+    if not watch_topic:
+        raise HTTPException(status_code=500, detail="CCS_GMAIL_WATCH_TOPIC is required")
+
+    api = ApiClient(base_url=api_base_url, service_token=service_token)
+    mailboxes = api.list_mailboxes(provider="gmail")
+
+    renewed: list[dict[str, Any]] = []
+    failed: list[dict[str, Any]] = []
+
+    for mailbox in mailboxes:
+        mailbox_id = int(mailbox["id"])
+        mailbox_email = str(mailbox.get("mailbox_email") or "")
+        try:
+            oauth = api.oauth_access_token(provider="gmail", mailbox_id=mailbox_id)
+            access_token = str(oauth.get("access_token") or "").strip()
+            if not access_token:
+                raise RuntimeError("Missing gmail access token")
+            gmail = GmailClient(access_token=access_token)
+            result = gmail.watch(topic_name=watch_topic)
+            expiration_ms = str(result.get("expiration") or "").strip()
+            watch_expiration_at: str | None = None
+            if expiration_ms.isdigit():
+                watch_expiration_at = datetime.fromtimestamp(
+                    int(expiration_ms) / 1000.0, tz=UTC
+                ).isoformat()
+            api.update_sync_state(mailbox_id=mailbox_id, watch_expiration_at=watch_expiration_at)
+            renewed.append(
+                {"mailbox_id": mailbox_id, "email": mailbox_email, "expiration": watch_expiration_at}
+            )
+        except Exception as exc:  # noqa: BLE001
+            failed.append({"mailbox_id": mailbox_id, "email": mailbox_email, "error": str(exc)})
+
+    return {"renewed_at": utc_now_iso(), "renewed": renewed, "failed": failed}
 
 
 def main() -> int:
