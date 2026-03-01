@@ -32,6 +32,17 @@ export function getActiveProfileKey(): string {
   return activeProfileKey;
 }
 
+/** Returns true when the user has an explicit stored preference (vs. the hardcoded default). */
+export function hasStoredProfileKey(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    return !!(stored && stored.trim());
+  } catch {
+    return false;
+  }
+}
+
 export function setActiveProfileKey(nextKey: string): void {
   const normalized = (nextKey || '').trim().toLowerCase() || DEFAULT_PROFILE_KEY;
   if (normalized === activeProfileKey) {
