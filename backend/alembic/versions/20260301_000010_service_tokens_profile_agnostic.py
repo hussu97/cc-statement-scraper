@@ -20,36 +20,29 @@ def upgrade() -> None:
     # Drop all existing tokens — cannot recover, fresh start
     op.execute(sa.text("DELETE FROM service_api_tokens"))
 
-    # Drop old constraints and index tied to profile_id
-    op.drop_index("ix_service_api_tokens_profile_id", table_name="service_api_tokens")
-    op.drop_constraint("uq_service_api_tokens_profile_name", "service_api_tokens", type_="unique")
-    op.drop_constraint("service_api_tokens_profile_id_fkey", "service_api_tokens", type_="foreignkey")
-    op.drop_column("service_api_tokens", "profile_id")
-
-    # New global unique constraint on name
-    op.create_unique_constraint("uq_service_api_tokens_name", "service_api_tokens", ["name"])
+    # recreate="always" forces copy-and-move on every dialect (required for
+    # SQLite, which has no ALTER TABLE … DROP CONSTRAINT / DROP COLUMN).
+    # Dropping profile_id automatically removes the FK, the profile_id index,
+    # and the (profile_id, name) unique constraint in the recreated table.
+    with op.batch_alter_table("service_api_tokens", recreate="always") as batch_op:
+        batch_op.drop_index("ix_service_api_tokens_profile_id")
+        batch_op.drop_column("profile_id")
+        batch_op.create_unique_constraint("uq_service_api_tokens_name", ["name"])
 
 
 def downgrade() -> None:
-    # Remove new global constraint
-    op.drop_constraint("uq_service_api_tokens_name", "service_api_tokens", type_="unique")
-
-    # Re-add profile_id column (nullable — data is not recoverable)
-    op.add_column(
-        "service_api_tokens",
-        sa.Column("profile_id", sa.Integer(), nullable=True),
-    )
-    op.create_foreign_key(
-        "service_api_tokens_profile_id_fkey",
-        "service_api_tokens",
-        "profiles",
-        ["profile_id"],
-        ["id"],
-        ondelete="CASCADE",
-    )
-    op.create_index("ix_service_api_tokens_profile_id", "service_api_tokens", ["profile_id"], unique=False)
-    op.create_unique_constraint(
-        "uq_service_api_tokens_profile_name",
-        "service_api_tokens",
-        ["profile_id", "name"],
-    )
+    with op.batch_alter_table("service_api_tokens", recreate="always") as batch_op:
+        batch_op.drop_constraint("uq_service_api_tokens_name", type_="unique")
+        batch_op.add_column(sa.Column("profile_id", sa.Integer(), nullable=True))
+        batch_op.create_foreign_key(
+            "service_api_tokens_profile_id_fkey",
+            "profiles",
+            ["profile_id"],
+            ["id"],
+            ondelete="CASCADE",
+        )
+        batch_op.create_index("ix_service_api_tokens_profile_id", ["profile_id"], unique=False)
+        batch_op.create_unique_constraint(
+            "uq_service_api_tokens_profile_name",
+            ["profile_id", "name"],
+        )
