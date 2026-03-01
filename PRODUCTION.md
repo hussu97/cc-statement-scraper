@@ -220,7 +220,7 @@ TEJASVIE_SIB_PDF_PASSWORD=...
 ### 3.8 Create a scraper service token
 
 1. In the admin UI go to **Service API Tokens → New token**.
-2. Set scope: `upload`.
+2. Set scope: `email_ingestion:upload`.
 3. Copy the token — this becomes `CCS_SCRAPER_API_TOKEN` in the scraper's `.env`.
 
 ---

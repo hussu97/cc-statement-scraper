@@ -161,8 +161,8 @@ def get_job(
 
 
 
-_upload_profile_dep = get_profile_context_or_service_token("upload")
-_upload_actor_dep = require_operator_or_service_token("upload")
+_upload_profile_dep = get_profile_context_or_service_token("email_ingestion:upload")
+_upload_actor_dep = require_operator_or_service_token("email_ingestion:upload")
 
 
 @router.post("/upload", response_model=JobOut)
