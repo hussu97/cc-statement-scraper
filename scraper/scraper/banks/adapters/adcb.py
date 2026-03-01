@@ -194,11 +194,20 @@ def _dismiss_optional_ad_popup(page: Any, logger: logging.Logger) -> bool:
         dismissed_this_round = False
 
         for selector in [
+            # "Refer & earn" popup — "Do Later" link (anchor, not button)
+            "a:has-text('Do Later')",
+            "a:has-text('do later')",
+            # Bootstrap-style close button (data-dismiss="modal")
+            "[data-dismiss='modal']",
+            "button.close",
+            ".modal-header button.close",
+            # Generic dialog close patterns
             "[role='dialog'] button:has-text('Close')",
             "[role='dialog'] button:has-text('Dismiss')",
             "[role='dialog'] button:has-text('Skip')",
             "[role='dialog'] button:has-text('Not now')",
             "[role='dialog'] button:has-text('Later')",
+            "[role='dialog'] a:has-text('Later')",
             "[role='dialog'] [aria-label='Close']",
             ".modal button:has-text('Close')",
             ".popup button:has-text('Close')",
@@ -1332,16 +1341,40 @@ def _click_card_by_limit(page: Any, logger: logging.Logger, limit_aed: int) -> b
     return _wait_for_card_details_screen(page, timeout_ms=5000)
 
 
+def _is_popup_blocking(page: Any) -> bool:
+    """Return True if a known modal/popup overlay is currently visible."""
+    for selector in [
+        "a:has-text('Do Later')",
+        "[data-dismiss='modal']:visible",
+        "button.close:visible",
+        "[role='dialog']:visible",
+    ]:
+        try:
+            if page.locator(selector).first.is_visible():
+                return True
+        except Exception:  # noqa: BLE001
+            pass
+    return False
+
+
 def _wait_for_landing_ready(page: Any, logger: logging.Logger) -> None:
     for _ in range(22):
         _dismiss_optional_ad_popup(page, logger)
         low = text_snapshot(page).lower()
-        if "welcome" in low and "last login" in low and "account summary" in low and "credit cards" in low:
+        landing_ready = (
+            "welcome" in low
+            and "last login" in low
+            and "account summary" in low
+            and "credit cards" in low
+        )
+        if landing_ready and not _is_popup_blocking(page):
             return
         page.wait_for_timeout(650)
 
 
 def _click_sidebar_credit_cards(page: Any, logger: logging.Logger) -> bool:
+    # Dismiss any popup that might be blocking the sidebar before attempting clicks.
+    _dismiss_optional_ad_popup(page, logger)
     selectors = [
         "text=Credit Cards",
         "a:has-text('Credit Cards')",
