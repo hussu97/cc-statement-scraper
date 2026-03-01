@@ -1,154 +1,415 @@
 # Production Deployment Guide
 
-Single deployment plan covering all services.
+Step-by-step instructions for deploying the full stack. Follow the sections in order — each service depends on values from the previous one.
 
 For the system architecture overview see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ---
 
-## Services
+## Services overview
 
 | Service | Platform | Notes |
 |---------|----------|-------|
-| Backend API | Render (free tier) | `Dockerfile.api`, embedded worker, no Playwright |
-| Frontend | Vercel | Static React build |
 | Database | Neon | Free managed PostgreSQL |
+| Backend API | Render | `Dockerfile.api`, embedded worker |
 | PDF Storage | GCS | Cloud Storage bucket |
-| Gmail Relay | GCP Cloud Run | `Dockerfile.gmail-relay` |
+| Frontend | Vercel | Static React build |
+| Gmail Relay | GCP Cloud Run | `Dockerfile.gmail-relay` — only needed for Gmail ingestion |
 | Scraper | Local machine | `scraper/` CLI, run manually when needed |
 
 ---
 
 ## Prerequisites
 
-| Tool | Min version |
-|------|-------------|
-| Docker | 24+ |
-| Git | any |
-| Python | 3.12 |
-| Node | 20 LTS |
-| gcloud CLI | any (for GCS / Cloud Run) |
+| Tool | Purpose |
+|------|---------|
+| Git | Clone and push |
+| Python 3.12+ | Generate secret keys locally |
+| Node 20 LTS | Frontend build (Vercel handles this, but useful locally) |
+| `gcloud` CLI | GCS bucket + Cloud Run (Gmail relay only) |
+| `gsutil` | GCS bucket setup (bundled with `gcloud`) |
+
+Install the `gcloud` CLI: https://cloud.google.com/sdk/docs/install
+
+```bash
+gcloud auth login
+gcloud config set project YOUR_GCP_PROJECT_ID
+```
 
 ---
 
-## Environment Variables
+## 1 — Neon (PostgreSQL)
 
-### Backend API (Render)
+### 1.1 Create a project
 
-Required:
+1. Sign up at [neon.tech](https://neon.tech) and create a new project.
+2. Name the database `ccs_platform`.
+3. Choose a region close to your Render region (e.g. `us-east-1`).
 
-| Variable | Description |
-|----------|-------------|
-| `CCS_PLATFORM_DATABASE_URL` | Neon PostgreSQL DSN (`postgresql+psycopg://user:pass@host/db`) |
-| `CCS_PLATFORM_SESSION_SECRET_KEY` | Random 32+ byte hex string |
-| `CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY` | Fernet key for DB-stored secrets |
-| `CCS_PLATFORM_ENVIRONMENT` | `production` |
-| `CCS_PLATFORM_STORAGE_BACKEND` | `gcs` |
-| `CCS_PLATFORM_GCS_BUCKET` | GCS bucket name |
-| `CCS_PLATFORM_GCS_CREDENTIALS_FILE` | Path to service account JSON (or use Workload Identity) |
+### 1.2 Get the connection string
 
-Optional:
+In the Neon dashboard go to **Connection Details**, select the **psycopg** (not asyncpg) driver, and copy the full DSN. It looks like:
 
-| Variable | Default | Notes |
-|----------|---------|-------|
-| `CCS_PLATFORM_EMBEDDED_WORKER` | `true` | Keep `true` — runs job worker in same process |
-| `CCS_PLATFORM_WORKER_QUEUES` | `default` | Only lightweight jobs; no browser scraping |
-| `CCS_PLATFORM_GCS_PROJECT` | — | Optional GCP project ID |
-| `CCS_PLATFORM_EMAIL_INGESTION_ENABLED` | `false` | Set `true` to enable email ingestion |
-| `CCS_PLATFORM_EMAIL_MS_CLIENT_ID` | — | Azure OAuth client ID |
-| `CCS_PLATFORM_EMAIL_MS_CLIENT_SECRET` | — | Azure OAuth client secret |
-| `CCS_PLATFORM_EMAIL_GMAIL_CLIENT_ID` | — | GCP OAuth client ID |
-| `CCS_PLATFORM_EMAIL_GMAIL_CLIENT_SECRET` | — | GCP OAuth client secret |
-| `CCS_PLATFORM_REQUIRE_LOGIN` | `true` | |
-| `CCS_PLATFORM_TIMEZONE` | `Asia/Dubai` | |
+```
+postgresql+psycopg://user:password@ep-xxx.us-east-1.aws.neon.tech/ccs_platform?sslmode=require
+```
+
+Save this — it becomes `CCS_PLATFORM_DATABASE_URL` on Render.
+
+### 1.3 Note on migrations
+
+Alembic runs automatically on every Render deploy via the pre-deploy command. You do **not** need to run migrations manually against Neon.
 
 ---
 
-## Render — Backend API
+## 2 — GCS Storage Bucket
 
-1. Create a **Web Service** in Render:
-   - **Runtime**: Docker
+### 2.1 Create the bucket
+
+```bash
+export PROJECT=your-gcp-project-id
+export BUCKET=ccs-platform-pdfs        # must be globally unique
+export REGION=us-east1                 # match Render/Neon region
+
+gsutil mb -p $PROJECT -l $REGION -b on gs://$BUCKET
+```
+
+`-b on` enables uniform bucket-level access (no per-object ACLs).
+
+### 2.2 Create a service account
+
+```bash
+gcloud iam service-accounts create ccs-backend \
+  --project $PROJECT \
+  --display-name "CCS Backend"
+```
+
+### 2.3 Grant bucket access
+
+```bash
+gsutil iam ch \
+  serviceAccount:ccs-backend@$PROJECT.iam.gserviceaccount.com:roles/storage.objectAdmin \
+  gs://$BUCKET
+```
+
+### 2.4 Download a JSON key
+
+```bash
+gcloud iam service-accounts keys create gcs-key.json \
+  --iam-account ccs-backend@$PROJECT.iam.gserviceaccount.com \
+  --project $PROJECT
+```
+
+Keep `gcs-key.json` — you'll paste its contents into a Render secret file in the next section.
+
+---
+
+## 3 — Render (Backend API)
+
+### 3.1 Generate secrets locally
+
+Run these commands on your local machine and copy the outputs:
+
+```bash
+# Session signing key
+python -c "import secrets; print(secrets.token_hex(32))"
+
+# Fernet encryption key for runtime settings
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+Also generate bcrypt password hashes for each admin account:
+
+```bash
+cd backend && source .venv/bin/activate
+ccs-platform hash-password    # enter alice's password → copy $2b$... output
+ccs-platform hash-password    # enter bob's password → copy $2b$... output
+```
+
+### 3.2 Create the web service
+
+1. In the Render dashboard click **New → Web Service**.
+2. Connect your GitHub repo.
+3. Set:
+   - **Name**: `ccs-platform`
+   - **Runtime**: `Docker`
    - **Dockerfile path**: `deploy/Dockerfile.api`
-   - **Docker context**: repo root
-   - **Instance type**: Free (512 MB)
+   - **Docker context**: `.` (repo root)
+   - **Instance type**: Free (512 MB RAM)
+   - **Region**: Choose one closest to your Neon region
 
-2. Set environment variables from the table above.
+### 3.3 Add the GCS key as a secret file
 
-3. Add a **Persistent Disk** (required for SQLite in dev, optional with Neon):
-   - Mount path: `/app/data`
+In the Render service → **Environment → Secret Files**:
 
-4. **Pre-deploy command** (runs Alembic before each deploy):
-   ```
-   cd /app && alembic upgrade head
-   ```
+- **Filename**: `/etc/secrets/gcs-key.json`
+- **Contents**: paste the full contents of `gcs-key.json`
 
-5. **Start command** (already in Dockerfile CMD):
-   ```
-   python -m ccs_platform.cli api --host 0.0.0.0 --port 8040
-   ```
+### 3.4 Set environment variables
 
-6. After first deploy, seed runtime settings via admin UI:
-   - Navigate to **Runtime Variables** → click **Seed from env**
+In the Render service → **Environment → Environment Variables**, add all of the following:
 
-7. Health check:
-   ```bash
-   curl https://your-render-url.onrender.com/api/v1/health
-   ```
+**Required:**
+
+| Key | Value |
+|-----|-------|
+| `CCS_PLATFORM_ENVIRONMENT` | `production` |
+| `CCS_PLATFORM_DATABASE_URL` | The Neon DSN from step 1.2 |
+| `CCS_PLATFORM_SESSION_SECRET_KEY` | Output from `secrets.token_hex(32)` |
+| `CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY` | Output from `Fernet.generate_key()` |
+| `CCS_PLATFORM_LOGIN_HASH_HUSSAIN` | `$2b$...` hash from `hash-password` |
+| `CCS_PLATFORM_LOGIN_HASH_BOB` | `$2b$...` hash from `hash-password` |
+| `CCS_PLATFORM_STORAGE_BACKEND` | `gcs` |
+| `CCS_PLATFORM_GCS_BUCKET` | `ccs-platform-pdfs` (your bucket name) |
+| `CCS_PLATFORM_GCS_CREDENTIALS_FILE` | `/etc/secrets/gcs-key.json` |
+
+**Recommended:**
+
+| Key | Value |
+|-----|-------|
+| `CCS_PLATFORM_EMBEDDED_WORKER` | `true` |
+| `CCS_PLATFORM_CORS_ALLOW_ORIGINS` | `https://your-vercel-app.vercel.app` |
+| `CCS_PLATFORM_TIMEZONE` | `Asia/Dubai` |
+
+### 3.5 Set the pre-deploy command
+
+In **Settings → Build & Deploy → Pre-Deploy Command**:
+
+```
+cd /app && alembic upgrade head
+```
+
+This runs Alembic migrations before each new version goes live.
+
+### 3.6 Deploy
+
+Click **Deploy** (or push to your connected branch). Watch the build logs — a successful deploy ends with:
+
+```
+Uvicorn running on http://0.0.0.0:8040
+```
+
+### 3.7 Verify
+
+```bash
+curl https://your-service.onrender.com/api/v1/health
+# → {"status": "ok", ...}
+```
+
+### 3.8 Seed runtime settings (first boot only)
+
+After the first deploy, navigate to the admin UI:
+
+1. Log in with alice or bob credentials.
+2. Go to **Runtime Variables**.
+3. For each profile (alice, bob), set the PDF decryption passwords:
+   - `ADCB_PDF_PASSWORD`
+   - `ADCB_CID` (fallback)
+   - `SIB_PDF_PASSWORD`
+
+Alternatively, add these to the Render environment before the first deploy (they are seeded automatically on startup):
+
+```
+ALICE_ADCB_PDF_PASSWORD=...
+ALICE_SIB_PDF_PASSWORD=...
+BOB_ADCB_PDF_PASSWORD=...
+BOB_SIB_PDF_PASSWORD=...
+```
+
+### 3.9 Create a scraper service token
+
+1. In the admin UI go to **Service API Tokens → New token**.
+2. Set scope: `upload`.
+3. Copy the token — this becomes `CCS_SCRAPER_API_TOKEN` in the scraper's `.env`.
 
 ---
 
-## Vercel — Frontend
+## 4 — Vercel (Frontend)
 
-1. Import the GitHub repo in Vercel.
-2. Set **Root Directory**: `frontend`
-3. Set **Build Command**: `npm run build`
-4. Set **Output Directory**: `dist`
-5. Set environment variable:
-   - `VITE_API_BASE_URL` = `https://your-render-url.onrender.com`
-6. Add a `vercel.json` rewrite rule (already in `frontend/vercel.json` if present) to proxy `/api` to the backend.
+### 4.1 Import the project
+
+1. Go to [vercel.com](https://vercel.com) and click **Add New → Project**.
+2. Import your GitHub repository.
+
+### 4.2 Configure the project
+
+| Setting | Value |
+|---------|-------|
+| **Root Directory** | `frontend` |
+| **Framework Preset** | Vite |
+| **Build Command** | `npm run build` |
+| **Output Directory** | `dist` |
+
+### 4.3 Set environment variables
+
+| Key | Value |
+|-----|-------|
+| `VITE_API_BASE_URL` | `https://your-service.onrender.com` |
+
+### 4.4 Deploy
+
+Click **Deploy**. On success, Vercel shows the production URL (e.g. `https://ccs.vercel.app`).
+
+Go back to Render and update `CCS_PLATFORM_CORS_ALLOW_ORIGINS` to the exact Vercel URL.
+
+### 4.5 Verify
+
+Open the Vercel URL in a browser — you should see the login page.
 
 ---
 
-## Neon — PostgreSQL
+## 5 — Gmail Pub/Sub & Relay Worker
 
-1. Create a free project at [neon.tech](https://neon.tech).
-2. Copy the connection string (use the **psycopg** format).
-3. Set `CCS_PLATFORM_DATABASE_URL` on Render.
-4. Alembic runs automatically at startup (`alembic upgrade head`).
+This section is only needed if you want automatic Gmail PDF ingestion. Skip it if you use manual scraping only.
 
----
+### 5.1 Enable required APIs
 
-## GCS — PDF Storage
+```bash
+gcloud services enable \
+  run.googleapis.com \
+  pubsub.googleapis.com \
+  gmail.googleapis.com \
+  cloudscheduler.googleapis.com \
+  --project $PROJECT
+```
 
-1. Create a GCS bucket (single-region, standard storage).
-2. Create a service account with **Storage Object Admin** on the bucket.
-3. Download the JSON key file and mount it into the Render service (or use Workload Identity).
-4. Set `CCS_PLATFORM_GCS_BUCKET` and `CCS_PLATFORM_GCS_CREDENTIALS_FILE`.
+### 5.2 Create the Pub/Sub topic and subscription
 
----
+```bash
+export TOPIC=ccs-gmail-push
+export RUN_SERVICE_URL=https://ccs-gmail-relay-xxxx-uc.a.run.app  # placeholder, update after step 5.5
 
-## GCP Cloud Run — Gmail Relay
+# Create topic
+gcloud pubsub topics create $TOPIC --project $PROJECT
 
-See `docs/operations/email-ingestion-automation.md` for the full OAuth + relay setup.
+# Grant Gmail permission to publish to the topic
+gcloud pubsub topics add-iam-policy-binding $TOPIC \
+  --member=serviceAccount:gmail-api-push@system.gserviceaccount.com \
+  --role=roles/pubsub.publisher \
+  --project $PROJECT
+```
 
-Quick start:
+The subscription is created after the Cloud Run URL is known (step 5.6).
+
+### 5.3 Create an OAuth 2.0 client for Gmail
+
+1. In GCP Console go to **APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client ID**.
+2. Application type: **Web application**.
+3. Add `https://your-service.onrender.com` as an **Authorized redirect URI**.
+4. Copy the **Client ID** and **Client Secret**.
+
+Set these on Render:
+
+```
+CCS_PLATFORM_EMAIL_INGESTION_ENABLED=true
+CCS_PLATFORM_EMAIL_GMAIL_CLIENT_ID=<client-id>
+CCS_PLATFORM_EMAIL_GMAIL_CLIENT_SECRET=<client-secret>
+```
+
+### 5.4 Generate the Gmail OAuth refresh token
+
+In the admin UI:
+
+1. Go to **Email Ingestion → Mailboxes → Add mailbox** (provider: Gmail).
+2. Click **OAuth Token Setup** and follow the browser flow to authorize.
+3. The refresh token is stored automatically in runtime settings.
+
+### 5.5 Create a service account for the relay
+
+```bash
+gcloud iam service-accounts create ccs-gmail-relay \
+  --display-name "CCS Gmail Relay" \
+  --project $PROJECT
+```
+
+### 5.6 Create a service API token for the relay
+
+In the admin UI go to **Service API Tokens → New token**. Set scope: `email_ingestion:upload`. Copy the token.
+
+### 5.7 Build and deploy the Cloud Run relay
+
 ```bash
 # Build and push
-gcloud builds submit --tag gcr.io/$PROJECT/ccs-gmail-relay \
-  --dockerfile deploy/Dockerfile.gmail-relay .
+gcloud builds submit \
+  --tag gcr.io/$PROJECT/ccs-gmail-relay \
+  --dockerfile deploy/Dockerfile.gmail-relay \
+  . \
+  --project $PROJECT
 
 # Deploy
 gcloud run deploy ccs-gmail-relay \
   --image gcr.io/$PROJECT/ccs-gmail-relay \
   --region us-central1 \
-  --set-env-vars CCS_API_BASE_URL=https://your-render-url.onrender.com,CCS_GMAIL_RELAY_SERVICE_TOKEN=...
+  --platform managed \
+  --no-allow-unauthenticated \
+  --service-account ccs-gmail-relay@$PROJECT.iam.gserviceaccount.com \
+  --set-env-vars "CCS_API_BASE_URL=https://your-service.onrender.com,CCS_SERVICE_TOKEN=<relay-service-token>" \
+  --project $PROJECT
+```
+
+Copy the Cloud Run service URL from the output.
+
+### 5.8 Create the push subscription
+
+```bash
+export RUN_SERVICE_URL=https://ccs-gmail-relay-xxxx-uc.a.run.app  # from step 5.7 output
+
+# Allow Pub/Sub to invoke the Cloud Run service
+gcloud run services add-iam-policy-binding ccs-gmail-relay \
+  --region us-central1 \
+  --member=serviceAccount:service-$(gcloud projects describe $PROJECT --format='value(projectNumber)')@gcp-sa-pubsub.iam.gserviceaccount.com \
+  --role=roles/run.invoker \
+  --project $PROJECT
+
+# Create push subscription pointing at the relay
+gcloud pubsub subscriptions create ccs-gmail-push-sub \
+  --topic $TOPIC \
+  --push-endpoint="$RUN_SERVICE_URL/pubsub/push" \
+  --push-auth-service-account=ccs-gmail-relay@$PROJECT.iam.gserviceaccount.com \
+  --ack-deadline=60 \
+  --project $PROJECT
+```
+
+### 5.9 Schedule daily Gmail watch renewal
+
+Gmail push watches expire after 7 days. A Cloud Scheduler job renews them daily.
+
+```bash
+# Create the scheduler job
+gcloud scheduler jobs create http ccs-gmail-watch-renew \
+  --schedule="0 6 * * *" \
+  --uri="$RUN_SERVICE_URL/watch/renew" \
+  --http-method=POST \
+  --oidc-service-account-email=ccs-gmail-relay@$PROJECT.iam.gserviceaccount.com \
+  --location=us-central1 \
+  --project $PROJECT
+```
+
+### 5.10 Verify
+
+```bash
+# Trigger a manual watch renewal to confirm end-to-end connectivity
+gcloud scheduler jobs run ccs-gmail-watch-renew \
+  --location=us-central1 \
+  --project $PROJECT
+```
+
+Check Cloud Run logs:
+
+```bash
+gcloud run services logs read ccs-gmail-relay \
+  --region us-central1 \
+  --project $PROJECT \
+  --limit 50
 ```
 
 ---
 
-## Scraper CLI — Local
+## 6 — Scraper CLI (local)
 
-The scraper runs on your local machine to download historical bank statements and upload them to the backend.
+The scraper runs on your local machine to download bank statements and upload them to the deployed backend.
+
+### 6.1 Install
 
 ```bash
 cd scraper
@@ -157,24 +418,85 @@ pip install -e .
 ccs-scraper install-browser
 ```
 
-Create a `.env` file in `scraper/`:
+### 6.2 Configure
+
+```bash
+cp .env.example .env
+```
+
+Minimum `.env` for production use:
+
 ```env
-CCS_SCRAPER_TARGET_URL=https://your-render-url.onrender.com
-CCS_SCRAPER_API_TOKEN=<service token with upload scope>
-CCS_SCRAPER_PROFILE_KEY=alice
+CCS_SCRAPER_TARGET_URL=https://your-service.onrender.com
+CCS_SCRAPER_API_TOKEN=<service token from step 3.9>
 CCS_SCRAPER_HEADLESS=true
 
-FAB_USERNAME=...
-FAB_PASSWORD=...
-# ... other bank credentials
+ALICE_FAB_USERNAME=...
+ALICE_FAB_PASSWORD=...
+ALICE_ADCB_CID=...
+ALICE_ADCB_LOGIN_PASSWORD=...
+ALICE_ADCB_PDF_PASSWORD=...
+# ... add other banks as needed
+
+BOB_FAB_USERNAME=...
+# ... bob credentials
 ```
 
-Run:
+### 6.3 Run
+
 ```bash
-ccs-scraper scrape --months 2024-01:2025-12
+# Scrape all configured banks for alice (current month)
+ccs-scraper scrape --profile alice
+
+# Backfill a date range
+ccs-scraper scrape --profile alice --months 2024-01:2025-12
+
+# Scrape bob
+ccs-scraper scrape --profile bob --months 2025-01:2025-12
+
+# Upload existing PDFs manually
+ccs-scraper upload --profile alice ~/Downloads/statement.pdf
 ```
 
-Create the service token in the admin UI under **Service API Tokens** with `upload` scope before running.
+---
+
+## Operations
+
+### Key rotation
+
+```bash
+# Rotate runtime settings encryption key
+CCS_PLATFORM_RUNTIME_SETTINGS_OLD_ENCRYPTION_KEY=<old-key> \
+CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY=<new-key> \
+PYTHONPATH=backend python backend/scripts/rotate_runtime_setting_secrets.py --dry-run
+
+# Remove --dry-run once output looks correct
+```
+
+### Migration preflight
+
+Run before deploying a version that includes DB migrations:
+
+```bash
+cd backend && python scripts/migration_preflight.py
+```
+
+### Retention enforcement
+
+```bash
+# Dry-run (shows what would be deleted)
+PYTHONPATH=backend python backend/scripts/enforce_retention.py
+
+# Apply
+PYTHONPATH=backend python backend/scripts/enforce_retention.py --apply
+```
+
+### Backup / restore drill
+
+```bash
+PYTHONPATH=backend python backend/scripts/backup_platform_state.py --label nightly
+PYTHONPATH=backend python backend/scripts/backup_restore_drill.py --label monthly
+```
 
 ---
 
@@ -186,39 +508,4 @@ For self-hosted deployments (not Render/Vercel):
 cp .env.example .env.production
 # Edit .env.production with your secrets
 docker-compose -f deploy/docker-compose.prod.yml up -d
-```
-
----
-
-## Operations
-
-### Key rotation
-
-```bash
-# Rotate runtime settings encryption key
-CCS_PLATFORM_RUNTIME_SETTINGS_OLD_ENCRYPTION_KEY=... \
-CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY=... \
-PYTHONPATH=backend python backend/scripts/rotate_runtime_setting_secrets.py --dry-run
-```
-
-### Migration preflight
-
-```bash
-cd backend && python scripts/migration_preflight.py
-```
-
-### Retention
-
-```bash
-# Dry-run
-PYTHONPATH=backend python backend/scripts/enforce_retention.py
-# Apply
-PYTHONPATH=backend python backend/scripts/enforce_retention.py --apply
-```
-
-### Backup/restore
-
-```bash
-PYTHONPATH=backend python backend/scripts/backup_platform_state.py --label nightly
-PYTHONPATH=backend python backend/scripts/backup_restore_drill.py --label monthly
 ```
