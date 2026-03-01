@@ -44,3 +44,5 @@ frontend/.vite/
 frontend/*.tsbuildinfo
 
 .playwright-mcp/
+
+downloads/
