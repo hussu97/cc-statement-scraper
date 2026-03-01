@@ -106,6 +106,7 @@ type RouteFormState = {
 };
 
 const SERVICE_SCOPE_OPTIONS = [
+  'upload',
   'email_ingestion:read',
   'email_ingestion:write',
   'email_ingestion:upload',
