@@ -140,10 +140,20 @@ ccs-platform hash-password    # enter tejasvie's password → copy $2b$... outpu
 
 ### 3.3 Add the GCS key as a secret file
 
-In the Render service → **Environment → Secret Files**:
+In the Render service → **Environment → Secret Files**, click **Add Secret File**:
 
-- **Filename**: `/etc/secrets/gcs-key.json`
-- **Contents**: paste the full contents of `gcs-key.json`
+- **Filename** (the mount path inside the container): `/etc/secrets/gcs-key.json`
+  - This is a file path, **not** an environment variable name — type it exactly as shown
+- **Contents**: paste the full JSON contents of `gcs-key.json`
+
+Then in **Environment → Environment Variables** add:
+
+| Key | Value |
+|-----|-------|
+| `CCS_PLATFORM_GCS_CREDENTIALS_FILE` | `/etc/secrets/gcs-key.json` |
+
+> The secret file and the env var work together: Render writes the JSON to the path,
+> and the app reads it via the env var. Both must be set.
 
 ### 3.4 Set environment variables
 
