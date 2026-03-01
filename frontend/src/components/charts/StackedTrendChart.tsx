@@ -110,6 +110,7 @@ export function StackedTrendChart({
             <YAxis />
             <Tooltip
               contentStyle={tooltipStyle}
+              wrapperStyle={{ opacity: 1 }}
               cursor={{ stroke: '#9fb0a8', strokeWidth: 1, fill: 'transparent' }}
             />
             <Legend />
