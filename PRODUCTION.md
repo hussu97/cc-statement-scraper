@@ -58,7 +58,7 @@ Save this — it becomes `CCS_PLATFORM_DATABASE_URL` on Render.
 
 ### 1.3 Note on migrations
 
-Alembic runs automatically on every Render deploy via the pre-deploy command. You do **not** need to run migrations manually against Neon.
+Alembic runs automatically on every app startup — `init_db()` calls `alembic upgrade head` before the server begins serving traffic. No pre-deploy command or manual migration step is needed.
 
 ---
 
@@ -171,17 +171,7 @@ In the Render service → **Environment → Environment Variables**, add all of 
 | `CCS_PLATFORM_CORS_ALLOW_ORIGINS` | `https://your-vercel-app.vercel.app` |
 | `CCS_PLATFORM_TIMEZONE` | `Asia/Dubai` |
 
-### 3.5 Set the pre-deploy command
-
-In **Settings → Build & Deploy → Pre-Deploy Command**:
-
-```
-cd /app && alembic upgrade head
-```
-
-This runs Alembic migrations before each new version goes live.
-
-### 3.6 Deploy
+### 3.5 Deploy
 
 Click **Deploy** (or push to your connected branch). Watch the build logs — a successful deploy ends with:
 
@@ -189,14 +179,14 @@ Click **Deploy** (or push to your connected branch). Watch the build logs — a 
 Uvicorn running on http://0.0.0.0:8040
 ```
 
-### 3.7 Verify
+### 3.6 Verify
 
 ```bash
 curl https://your-service.onrender.com/api/v1/health
 # → {"status": "ok", ...}
 ```
 
-### 3.8 Seed runtime settings (first boot only)
+### 3.7 Seed runtime settings (first boot only)
 
 After the first deploy, navigate to the admin UI:
 
@@ -216,7 +206,7 @@ TEJASVIE_ADCB_PDF_PASSWORD=...
 TEJASVIE_SIB_PDF_PASSWORD=...
 ```
 
-### 3.9 Create a scraper service token
+### 3.8 Create a scraper service token
 
 1. In the admin UI go to **Service API Tokens → New token**.
 2. Set scope: `upload`.
