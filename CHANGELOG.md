@@ -9,6 +9,8 @@
 
 ### Backend
 
+- **fix** Lazy-import `pandas` inside `build_yearly_workbook_from_statements()` — removes ~104 MB (pandas + numpy) from startup memory footprint, fixing OOM crash (exit code 3) on Render 512 MB free tier
+- **fix** Lazy-import `pdfplumber` inside `_extract_pdf_text()` in `jobs.py` — consistent with lazy-import pattern; was already loaded transitively via bank parsers but removes the module-level import
 - **refactor** Delete `adapters/banks/browser/` — dead browser adapter code (base, downloader, shared, and 6 bank adapters) removed from backend; confirmed zero imports outside that directory after decoupling
 - **refactor** Rename package `creditcardstatementscraper` → `ccs-platform` in `pyproject.toml`; remove `playwright>=1.50` dependency
 - **fix** Change `ScheduleCreate.job_type` default from `JobType.SCRAPE` to `JobType.UPLOAD` — SCRAPE has no handler and raises `ValueError` at runtime
