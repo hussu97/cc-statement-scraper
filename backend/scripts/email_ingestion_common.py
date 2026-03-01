@@ -8,13 +8,16 @@ import mimetypes
 import os
 from pathlib import Path
 import re
+import time
 from typing import Any
 from urllib import error as urllib_error
 from urllib import parse as urllib_parse
 from urllib import request as urllib_request
 
 
-DEFAULT_TIMEOUT_SECONDS = 45
+DEFAULT_TIMEOUT_SECONDS = 120
+_RETRY_ATTEMPTS = 3
+_RETRY_BACKOFF_SECONDS = [5, 15]  # waits before attempt 2 and 3
 
 
 def utc_now_iso() -> str:
@@ -159,15 +162,26 @@ class ApiClient:
             method=method.upper(),
             headers=req_headers,
         )
-        try:
-            with urllib_request.urlopen(req, timeout=self.timeout_seconds) as resp:
-                status = int(resp.status)
-                raw = resp.read().decode("utf-8") if resp.length != 0 else ""
-        except urllib_error.HTTPError as exc:
-            body_text = exc.read().decode("utf-8", errors="ignore")
-            raise RuntimeError(f"API {method} {path} failed: HTTP {exc.code} {body_text[:400]}") from exc
-        except Exception as exc:  # noqa: BLE001
-            raise RuntimeError(f"API {method} {path} failed: {exc}") from exc
+        last_exc: Exception | None = None
+        for attempt in range(_RETRY_ATTEMPTS):
+            if attempt > 0:
+                wait = _RETRY_BACKOFF_SECONDS[attempt - 1]
+                time.sleep(wait)
+            try:
+                with urllib_request.urlopen(req, timeout=self.timeout_seconds) as resp:
+                    status = int(resp.status)
+                    raw = resp.read().decode("utf-8") if resp.length != 0 else ""
+                last_exc = None
+                break
+            except urllib_error.HTTPError as exc:
+                body_text = exc.read().decode("utf-8", errors="ignore")
+                raise RuntimeError(f"API {method} {path} failed: HTTP {exc.code} {body_text[:400]}") from exc
+            except (TimeoutError, OSError) as exc:  # transient — retry
+                last_exc = exc
+            except Exception as exc:  # noqa: BLE001
+                raise RuntimeError(f"API {method} {path} failed: {exc}") from exc
+        if last_exc is not None:
+            raise RuntimeError(f"API {method} {path} failed: {last_exc}") from last_exc
 
         if not raw.strip():
             return status, None
