@@ -59,7 +59,7 @@ def scrape(
         typer.echo("No banks configured.", err=True)
         raise typer.Exit(1)
 
-    # Build month list
+    # Build month list and inject into each bank's config so adapters respect it
     month_list: list[str] = []
     if months:
         if ":" in months:
@@ -67,6 +67,14 @@ def scrape(
             month_list = _months_between(from_tok.strip(), to_tok.strip())
         else:
             month_list = [months.strip()]
+    if month_list:
+        typer.echo(f"Months requested: {month_list}")
+        for bank_cfg in app_cfg.banks.values():
+            bank_cfg["requested_months"] = month_list
+
+    # Snapshot incoming dir before scraping so we only upload new files
+    incoming = cfg.download_dir / "incoming"
+    files_before: set[Path] = set(incoming.glob("*.pdf")) | set(incoming.glob("*.PDF"))
 
     typer.echo(f"Scraping {list(app_cfg.banks)} ...")
     results = run_end_to_end_downloads(
@@ -85,12 +93,12 @@ def scrape(
         typer.echo(f"  {bank_code}: {status}")
 
     if upload:
-        incoming = cfg.download_dir / "incoming"
-        pdf_files = sorted(incoming.glob("*.pdf")) + sorted(incoming.glob("*.PDF"))
+        files_after: set[Path] = set(incoming.glob("*.pdf")) | set(incoming.glob("*.PDF"))
+        pdf_files = sorted(files_after - files_before)
         if not pdf_files:
-            typer.echo("No PDFs found to upload.")
+            typer.echo("No new PDFs downloaded this session to upload.")
             return
-        typer.echo(f"Uploading {len(pdf_files)} PDF(s) ...")
+        typer.echo(f"Uploading {len(pdf_files)} new PDF(s) ...")
         client = ScraperClient(
             base_url=cfg.target_url,
             api_token=cfg.api_token,
