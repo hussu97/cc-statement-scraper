@@ -175,6 +175,8 @@ async def create_upload_job(
     if not files:
         raise HTTPException(status_code=400, detail="No files uploaded")
 
+    max_bytes = request.app.state.settings.max_upload_size_mb * 1024 * 1024
+
     allowed_bank_codes = {
         bank.code
         for bank in get_enabled_banks(db, profile_id=profile.profile_id)
@@ -206,6 +208,11 @@ async def create_upload_job(
             content = await uploaded.read()
             if not content:
                 continue
+            if len(content) > max_bytes:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"File '{filename}' exceeds the {request.app.state.settings.max_upload_size_mb} MB upload limit",
+                )
 
             if hint is not None:
                 bank_code = hint

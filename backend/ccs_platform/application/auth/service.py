@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
+import logging
 
 import bcrypt
 
 from ccs_platform.core.settings import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -72,5 +75,6 @@ def authenticate_credentials(*, email: str, password: str) -> AuthAccount | None
         if not bcrypt.checkpw(password.encode(), account.password_hash.encode()):
             return None
     except Exception:
+        logger.exception("bcrypt.checkpw failed for %s — possible corrupted hash", account.email)
         return None
     return account

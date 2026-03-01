@@ -616,6 +616,7 @@ def create_service_token(
         token_hash=token_hash,
         scopes_json=scopes,
         is_active=True,
+        expires_at=payload.expires_at,
     )
     db.add(row)
     db.commit()

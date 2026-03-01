@@ -57,6 +57,7 @@ class PlatformSettings(BaseSettings):
     retention_backups_days: int = 30
     retention_job_logs_days: int = 7
 
+    max_upload_size_mb: int = 50
     cors_allow_origins: str = "*"
     log_level: str = "INFO"
     request_logging_enabled: bool = True
@@ -94,6 +95,12 @@ class PlatformSettings(BaseSettings):
                 raise RuntimeError(
                     "CCS_PLATFORM_SESSION_SECRET_KEY is not configured for production. "
                     "Set it to a random string of at least 32 bytes before starting."
+                )
+            origins = [t.strip() for t in self.cors_allow_origins.split(",") if t.strip()]
+            if not origins or origins == ["*"]:
+                raise RuntimeError(
+                    "CCS_PLATFORM_CORS_ALLOW_ORIGINS is not configured for production. "
+                    "Set it to your frontend origin(s), e.g. https://app.example.com"
                 )
 
     def is_production(self) -> bool:

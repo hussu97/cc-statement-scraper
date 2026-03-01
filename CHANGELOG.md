@@ -2,7 +2,22 @@
 
 ## [Unreleased]
 
+### Backend
+
+- **fix** Enforce CORS origin list in production — `model_post_init` raises `RuntimeError` if `CCS_PLATFORM_CORS_ALLOW_ORIGINS` is `"*"` or empty when `ENVIRONMENT=production`; `create_app` disables `allow_credentials` when origins is wildcard (browser spec violation)
+- **fix** Log bcrypt failures — `authenticate_credentials` now calls `logger.exception()` before returning `None` on bcrypt error; distinguishes corrupted-hash system errors from wrong-password denials
+- **fix** Enforce upload size limit — new setting `CCS_PLATFORM_MAX_UPLOAD_SIZE_MB` (default 50); upload endpoint returns 413 for files exceeding the limit
+- **feat** Service token expiry — add optional `expires_at` column to `service_api_tokens` (migration `20260302_000011`); `require_service_token` returns 401 if token is past its expiry; `ServiceApiTokenCreate` accepts `expires_at`; `ServiceApiTokenOut` exposes it
+
+### Frontend (web)
+
+- **fix** Add `ErrorBoundary` component wrapping the entire app — catches React render errors and shows a "Something went wrong" fallback with a reload button instead of a blank screen
+
 ### Docs
+
+- **fix** Restore `deploy/nginx/frontend.conf` — standard SPA nginx config (try_files, aggressive cache headers for hashed assets, no-cache for index.html); `Dockerfile.frontend` was broken without it
+- **fix** Fix `security.yml` Trivy scan job — update Dockerfile reference from deleted `Dockerfile.app` to `Dockerfile.api`; CI security job was always failing
+- **chore** Add non-root `appuser` (uid 1000) to `Dockerfile.api` and `Dockerfile.gmail-relay`; switch `Dockerfile.frontend` to built-in `nginx` user with corrected directory ownership
 
 - **docs** Add Microsoft Outlook / Hotmail ingestion section to `PRODUCTION.md` (section 6) — Azure app registration, API permissions (`Mail.Read`, `offline_access`), client secret, Render env vars (`CCS_PLATFORM_EMAIL_INGESTION_ENABLED`, `CCS_PLATFORM_EMAIL_MS_CLIENT_ID`, `CCS_PLATFORM_EMAIL_MS_CLIENT_SECRET`), OAuth refresh token generation via admin UI, mailbox setup, and verification steps; renumber Scraper CLI section from 6 to 7
 - **docs** Remove pre-deploy command from `PRODUCTION.md` — `init_db()` already runs `alembic upgrade head` automatically on startup for PostgreSQL; pre-deploy command is a paid Render feature and is not needed

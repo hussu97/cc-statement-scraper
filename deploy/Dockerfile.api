@@ -15,7 +15,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     build-essential \
     libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd -m -u 1000 appuser
 
 WORKDIR /app
 
@@ -29,6 +30,9 @@ COPY backend/alembic.ini ./
 COPY backend/alembic ./alembic
 COPY backend/config ./config
 COPY backend/ccs_platform ./ccs_platform
+
+RUN chown -R appuser:appuser /app
+USER appuser
 
 EXPOSE 8040
 
