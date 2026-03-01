@@ -157,14 +157,17 @@ def _service_token_to_out(row: models.ServiceApiToken) -> ServiceApiTokenOut:
 def _list_mailboxes_for_profile(
     *,
     db: Session,
-    profile_id: int,
+    profile_id: int | None,
     page: int,
     page_size: int,
     provider: EmailProvider | None,
     active: bool | None,
 ) -> PaginatedEmailMailboxes:
-    query = select(models.EmailMailbox).where(models.EmailMailbox.profile_id == profile_id)
-    count_query = select(func.count(models.EmailMailbox.id)).where(models.EmailMailbox.profile_id == profile_id)
+    query = select(models.EmailMailbox)
+    count_query = select(func.count(models.EmailMailbox.id))
+    if profile_id is not None:
+        query = query.where(models.EmailMailbox.profile_id == profile_id)
+        count_query = count_query.where(models.EmailMailbox.profile_id == profile_id)
 
     if provider is not None:
         query = query.where(models.EmailMailbox.provider == provider)
@@ -188,7 +191,7 @@ def _list_mailboxes_for_profile(
 def _list_routes_for_profile(
     *,
     db: Session,
-    profile_id: int,
+    profile_id: int | None,
     page: int,
     page_size: int,
     provider: EmailProvider | None,
@@ -197,13 +200,14 @@ def _list_routes_for_profile(
     query = (
         select(models.EmailBankRoute, models.EmailMailbox)
         .join(models.EmailMailbox, models.EmailMailbox.id == models.EmailBankRoute.mailbox_id)
-        .where(models.EmailBankRoute.profile_id == profile_id)
     )
     count_query = (
         select(func.count(models.EmailBankRoute.id))
         .join(models.EmailMailbox, models.EmailMailbox.id == models.EmailBankRoute.mailbox_id)
-        .where(models.EmailBankRoute.profile_id == profile_id)
     )
+    if profile_id is not None:
+        query = query.where(models.EmailBankRoute.profile_id == profile_id)
+        count_query = count_query.where(models.EmailBankRoute.profile_id == profile_id)
     if provider is not None:
         query = query.where(models.EmailMailbox.provider == provider)
         count_query = count_query.where(models.EmailMailbox.provider == provider)
@@ -306,7 +310,7 @@ def list_mailboxes(
 )
 def list_mailboxes_for_automation(
     db: Session = Depends(get_db),
-    token: ServiceTokenContext = Depends(require_service_token(SERVICE_SCOPE_READ)),
+    _token: ServiceTokenContext = Depends(require_service_token(SERVICE_SCOPE_READ)),
     page: int = Query(1, ge=1),
     page_size: int = Query(100, ge=1, le=1000),
     provider: EmailProvider | None = None,
@@ -314,7 +318,7 @@ def list_mailboxes_for_automation(
 ) -> PaginatedEmailMailboxes:
     return _list_mailboxes_for_profile(
         db=db,
-        profile_id=token.profile_id,
+        profile_id=None,
         page=page,
         page_size=page_size,
         provider=provider,
@@ -419,7 +423,7 @@ def list_routes(
 )
 def list_routes_for_automation(
     db: Session = Depends(get_db),
-    token: ServiceTokenContext = Depends(require_service_token(SERVICE_SCOPE_READ)),
+    _token: ServiceTokenContext = Depends(require_service_token(SERVICE_SCOPE_READ)),
     page: int = Query(1, ge=1),
     page_size: int = Query(100, ge=1, le=1000),
     provider: EmailProvider | None = None,
@@ -427,7 +431,7 @@ def list_routes_for_automation(
 ) -> PaginatedEmailRoutes:
     return _list_routes_for_profile(
         db=db,
-        profile_id=token.profile_id,
+        profile_id=None,
         page=page,
         page_size=page_size,
         provider=provider,
@@ -567,12 +571,10 @@ def list_events(
 @router.get("/service-tokens", response_model=list[ServiceApiTokenOut], dependencies=[Depends(_ensure_enabled)])
 def list_service_tokens(
     db: Session = Depends(get_db),
-    profile: ProfileContext = Depends(get_profile_context),
     _actor: ActorContext = Depends(require_admin_role),
 ) -> list[ServiceApiTokenOut]:
     rows = db.execute(
         select(models.ServiceApiToken)
-        .where(models.ServiceApiToken.profile_id == profile.profile_id)
         .order_by(models.ServiceApiToken.created_at.desc())
     ).scalars().all()
     return [_service_token_to_out(row) for row in rows]
@@ -581,9 +583,7 @@ def list_service_tokens(
 @router.post("/service-tokens", response_model=ServiceApiTokenCreated, dependencies=[Depends(_ensure_enabled)])
 def create_service_token(
     payload: ServiceApiTokenCreate,
-    request: Request,
     db: Session = Depends(get_db),
-    profile: ProfileContext = Depends(get_profile_context),
     _actor: ActorContext = Depends(require_admin_role),
 ) -> ServiceApiTokenCreated:
     scopes = [scope.strip() for scope in payload.scopes if scope.strip()]
@@ -594,7 +594,6 @@ def create_service_token(
     token_prefix = token_plain[:24]
     token_hash = hashlib.sha256(token_plain.encode("utf-8")).hexdigest()
     row = models.ServiceApiToken(
-        profile_id=profile.profile_id,
         name=payload.name.strip(),
         token_prefix=token_prefix,
         token_hash=token_hash,
@@ -602,16 +601,6 @@ def create_service_token(
         is_active=True,
     )
     db.add(row)
-    db.flush()
-    append_audit_event(
-        db,
-        profile_id=profile.profile_id,
-        event_type="service_api_token_created",
-        entity_type="service_api_token",
-        entity_id=str(row.id),
-        payload_json={"name": row.name, "scopes": scopes},
-        request=request,
-    )
     db.commit()
     db.refresh(row)
     return ServiceApiTokenCreated(token=token_plain, item=_service_token_to_out(row))
@@ -624,30 +613,18 @@ def create_service_token(
 )
 def revoke_service_token(
     token_id: int,
-    request: Request,
     db: Session = Depends(get_db),
-    profile: ProfileContext = Depends(get_profile_context),
     _actor: ActorContext = Depends(require_admin_role),
 ) -> ServiceApiTokenOut:
     row = db.execute(
         select(models.ServiceApiToken).where(
             models.ServiceApiToken.id == token_id,
-            models.ServiceApiToken.profile_id == profile.profile_id,
         )
     ).scalar_one_or_none()
     if row is None:
         raise HTTPException(status_code=404, detail="Service token not found")
     row.is_active = False
     row.revoked_at = datetime.now(UTC)
-    append_audit_event(
-        db,
-        profile_id=profile.profile_id,
-        event_type="service_api_token_revoked",
-        entity_type="service_api_token",
-        entity_id=str(row.id),
-        payload_json={"name": row.name},
-        request=request,
-    )
     db.commit()
     db.refresh(row)
     return _service_token_to_out(row)
@@ -662,12 +639,11 @@ def provider_access_token(
     provider: EmailProvider,
     payload: OAuthAccessTokenRequest,
     db: Session = Depends(get_db),
-    token: ServiceTokenContext = Depends(require_service_token(SERVICE_SCOPE_READ)),
+    _token: ServiceTokenContext = Depends(require_service_token(SERVICE_SCOPE_READ)),
 ) -> OAuthAccessTokenOut:
     mailbox = db.execute(
         select(models.EmailMailbox).where(
             models.EmailMailbox.id == payload.mailbox_id,
-            models.EmailMailbox.profile_id == token.profile_id,
             models.EmailMailbox.provider == provider,
             models.EmailMailbox.is_active.is_(True),
         )
@@ -675,14 +651,15 @@ def provider_access_token(
     if mailbox is None:
         raise HTTPException(status_code=404, detail="Mailbox not found")
 
-    client_id = _runtime_setting_value(db, profile_id=token.profile_id, key=CLIENT_ID_KEY_BY_PROVIDER[provider])
+    profile_id = mailbox.profile_id
+    client_id = _runtime_setting_value(db, profile_id=profile_id, key=CLIENT_ID_KEY_BY_PROVIDER[provider])
     client_secret = _runtime_setting_value(
         db,
-        profile_id=token.profile_id,
+        profile_id=profile_id,
         key=CLIENT_SECRET_KEY_BY_PROVIDER[provider],
     )
     refresh_key = REFRESH_TOKEN_KEY_TEMPLATE_BY_PROVIDER[provider].format(mailbox_id=mailbox.id)
-    refresh_token = _runtime_setting_value(db, profile_id=token.profile_id, key=refresh_key)
+    refresh_token = _runtime_setting_value(db, profile_id=profile_id, key=refresh_key)
 
     access_token, token_type, expires_in = _provider_access_token(
         provider=provider,
@@ -806,12 +783,11 @@ def patch_mailbox_sync_state(
     mailbox_id: int,
     payload: EmailMailboxSyncStatePatch,
     db: Session = Depends(get_db),
-    token: ServiceTokenContext = Depends(require_service_token(SERVICE_SCOPE_WRITE)),
+    _token: ServiceTokenContext = Depends(require_service_token(SERVICE_SCOPE_WRITE)),
 ) -> EmailMailboxOut:
     mailbox = db.execute(
         select(models.EmailMailbox).where(
             models.EmailMailbox.id == mailbox_id,
-            models.EmailMailbox.profile_id == token.profile_id,
         )
     ).scalar_one_or_none()
     if mailbox is None:
@@ -844,17 +820,20 @@ async def ingestion_upload(
     provider_received_at: datetime | None = Form(None),
     metadata_json: str | None = Form(None),
     db: Session = Depends(get_db),
-    token: ServiceTokenContext = Depends(require_service_token(SERVICE_SCOPE_UPLOAD)),
+    _token: ServiceTokenContext = Depends(require_service_token(SERVICE_SCOPE_UPLOAD)),
 ) -> EmailIngestionUploadResponse:
     route = db.execute(
         select(models.EmailBankRoute).where(
             models.EmailBankRoute.id == route_id,
-            models.EmailBankRoute.profile_id == token.profile_id,
             models.EmailBankRoute.is_active.is_(True),
         )
     ).scalar_one_or_none()
     if route is None:
         raise HTTPException(status_code=404, detail="Route not found")
+
+    profile_id = route.profile_id
+    profile = db.get(models.Profile, profile_id)
+    profile_key = profile.key if profile is not None else ""
 
     mailbox = db.get(models.EmailMailbox, route.mailbox_id)
     if mailbox is None or not mailbox.is_active:
@@ -894,7 +873,7 @@ async def ingestion_upload(
     sha256 = hashlib.sha256(content).hexdigest()
     hash_existing = db.execute(
         select(models.EmailIngestionEvent).where(
-            models.EmailIngestionEvent.profile_id == token.profile_id,
+            models.EmailIngestionEvent.profile_id == profile_id,
             models.EmailIngestionEvent.bank_code == route.bank_code,
             models.EmailIngestionEvent.attachment_sha256 == sha256,
         )
@@ -910,7 +889,7 @@ async def ingestion_upload(
     if not filename.lower().endswith(".pdf"):
         event = models.EmailIngestionEvent(
             route_id=route.id,
-            profile_id=token.profile_id,
+            profile_id=profile_id,
             bank_code=route.bank_code,
             provider=mailbox.provider,
             provider_message_id=normalized_provider_message_id,
@@ -937,7 +916,7 @@ async def ingestion_upload(
     if meta_bank_code and meta_bank_code != route.bank_code:
         event = models.EmailIngestionEvent(
             route_id=route.id,
-            profile_id=token.profile_id,
+            profile_id=profile_id,
             bank_code=route.bank_code,
             provider=mailbox.provider,
             provider_message_id=normalized_provider_message_id,
@@ -962,7 +941,7 @@ async def ingestion_upload(
 
     event = models.EmailIngestionEvent(
         route_id=route.id,
-        profile_id=token.profile_id,
+        profile_id=profile_id,
         bank_code=route.bank_code,
         provider=mailbox.provider,
         provider_message_id=normalized_provider_message_id,
@@ -981,7 +960,7 @@ async def ingestion_upload(
         content=content,
         filename=f"email_ingest_{event.id}_{filename}",
         folder="staging",
-        profile_key=token.profile_key,
+        profile_key=profile_key,
     )
 
     try:
@@ -1000,7 +979,7 @@ async def ingestion_upload(
         dedupe_key = f"email-ingest:{route.id}:{normalized_provider_message_id}:{normalized_provider_attachment_id}"[:128]
         job, created, requeued = create_or_get_job(
             db,
-            profile_id=token.profile_id,
+            profile_id=profile_id,
             job_type=JobType.UPLOAD,
             payload_json=payload_json,
             idempotency_key=dedupe_key,

@@ -48,8 +48,6 @@ class ActorContext:
 @dataclass(frozen=True)
 class ServiceTokenContext:
     token_id: int
-    profile_id: int
-    profile_key: str
     token_name: str
     scopes: set[str]
 
@@ -206,23 +204,16 @@ def get_profile_context_or_service_token(
     ) -> ProfileContext:
         if authorization and authorization.strip().lower().startswith("bearer "):
             svc: ServiceTokenContext = _service_dep(request=request, db=db, authorization=authorization)
-            # Use X-Profile-Key override if provided, else use token's profile
-            if profile_key_header and profile_key_header.strip():
-                from ccs_platform.application.profiles.service import get_profile_by_key
-                profile = get_profile_by_key(db, profile_key_header)
-                if profile is None:
-                    raise HTTPException(status_code=400, detail=f"Unknown profile key: {profile_key_header}")
-                return ProfileContext(
-                    profile_id=profile.id,
-                    profile_key=profile.key,
-                    profile_name=profile.name,
-                    is_default=bool(profile.is_default),
-                )
+            if not (profile_key_header and profile_key_header.strip()):
+                raise HTTPException(status_code=400, detail="X-Profile-Key header is required when using a service token")
+            profile = get_profile_by_key(db, profile_key_header.strip())
+            if profile is None:
+                raise HTTPException(status_code=400, detail=f"Unknown profile key: {profile_key_header}")
             return ProfileContext(
-                profile_id=svc.profile_id,
-                profile_key=svc.profile_key,
-                profile_name=svc.token_name,
-                is_default=False,
+                profile_id=profile.id,
+                profile_key=profile.key,
+                profile_name=profile.name,
+                is_default=bool(profile.is_default),
             )
         # Fall back to session-based profile resolution
         user = get_authenticated_user_context(request)
@@ -261,20 +252,18 @@ def require_service_token(*required_scopes: str):
         prefix = raw[:24]
         digest = _token_hash(raw)
 
-        row = db.execute(
-            select(models.ServiceApiToken, models.Profile.key)
-            .join(models.Profile, models.Profile.id == models.ServiceApiToken.profile_id)
+        token_row = db.execute(
+            select(models.ServiceApiToken)
             .where(
                 models.ServiceApiToken.token_prefix == prefix,
                 models.ServiceApiToken.token_hash == digest,
                 models.ServiceApiToken.is_active.is_(True),
                 models.ServiceApiToken.revoked_at.is_(None),
             )
-        ).one_or_none()
-        if row is None:
+        ).scalar_one_or_none()
+        if token_row is None:
             raise HTTPException(status_code=401, detail="Invalid service token")
 
-        token_row, profile_key = row
         scopes = {str(item).strip() for item in (token_row.scopes_json or []) if str(item).strip()}
         if required and not required.issubset(scopes):
             raise HTTPException(status_code=403, detail="Service token scope denied")
@@ -287,8 +276,6 @@ def require_service_token(*required_scopes: str):
 
         return ServiceTokenContext(
             token_id=token_row.id,
-            profile_id=token_row.profile_id,
-            profile_key=profile_key,
             token_name=token_row.name,
             scopes=scopes,
         )

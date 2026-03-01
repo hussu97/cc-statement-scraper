@@ -143,7 +143,6 @@ class ServiceApiTokenOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    profile_id: int
     name: str
     token_prefix: str
     scopes_json: list[str] | None

@@ -55,7 +55,6 @@ type EmailBankRouteOut = {
 
 type ServiceApiTokenOut = {
   id: number;
-  profile_id: number;
   name: string;
   token_prefix: string;
   scopes_json: string[] | null;
