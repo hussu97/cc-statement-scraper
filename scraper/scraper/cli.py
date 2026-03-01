@@ -31,6 +31,7 @@ def scrape(
     profile: str = typer.Option(..., "--profile", help="Profile to scrape under (e.g. hussain, tejasvie)."),
 ) -> None:
     """Download PDF statements from bank portals and optionally upload to backend."""
+    from scraper.bank_map import BankMap
     from scraper.banks.bank_config import load_app_config
     from scraper.banks.downloader import run_end_to_end_downloads
     from scraper.config import get_config
@@ -76,6 +77,8 @@ def scrape(
     incoming = cfg.download_dir / "incoming"
     files_before: set[Path] = set(incoming.glob("*.pdf")) | set(incoming.glob("*.PDF"))
 
+    bank_map = BankMap(cfg.download_dir / "state")
+
     typer.echo(f"Scraping {list(app_cfg.banks)} ...")
     results = run_end_to_end_downloads(
         app_config=app_cfg,
@@ -87,6 +90,7 @@ def scrape(
         geo_longitude=cfg.browser_geo_longitude,
         timezone_id=cfg.browser_timezone_id,
         locale=cfg.browser_locale,
+        bank_map=bank_map,
     )
 
     for bank_code, status in results.items():
@@ -98,14 +102,26 @@ def scrape(
         if not pdf_files:
             typer.echo("No new PDFs downloaded this session to upload.")
             return
-        typer.echo(f"Uploading {len(pdf_files)} new PDF(s) ...")
+
         client = ScraperClient(
             base_url=cfg.target_url,
             api_token=cfg.api_token,
             profile_key=cfg.profile_key,
         )
-        result = client.upload_pdfs(pdf_files)
-        typer.echo(f"Upload result: {result}")
+
+        # Group PDFs by the bank that produced them (recorded at download time).
+        # Any PDF not in the map falls back to a None key and the backend will
+        # detect the bank from PDF content / filename.
+        groups: dict[str | None, list[Path]] = {}
+        for pdf in pdf_files:
+            code = bank_map.get(pdf)
+            groups.setdefault(code, []).append(pdf)
+
+        for code, group in groups.items():
+            typer.echo(f"Uploading {len(group)} PDF(s) for bank {code or '(unknown)'} ...")
+            result = client.upload_pdfs(group, bank_code=code)
+            typer.echo(f"Upload result: {result}")
+            bank_map.remove(group)
 
 
 @app.command()

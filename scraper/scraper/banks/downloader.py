@@ -21,6 +21,7 @@ from scraper.banks.shared import (
     text_snapshot,
 )
 from scraper.banks.bank_config import AppConfig
+from scraper.bank_map import BankMap
 
 CHROMIUM_SINGLETON_FILES = ("SingletonLock", "SingletonCookie", "SingletonSocket")
 
@@ -384,6 +385,7 @@ def run_end_to_end_downloads(
     timezone_id: str = "Asia/Dubai",
     locale: str = "en-AE",
     cancel_check: Optional[Callable[[], None]] = None,
+    bank_map: BankMap | None = None,
 ) -> dict[str, str]:
     try:
         from playwright.sync_api import sync_playwright
@@ -497,6 +499,11 @@ def run_end_to_end_downloads(
 
                 after = snapshot_pdf_state(tracked_dirs)
                 downloaded = count_new_or_updated_pdfs(before, after)
+
+                if bank_map is not None:
+                    new_paths = [Path(p) for p in after if p not in before]
+                    for p in new_paths:
+                        bank_map.record(p, bank_code)
 
                 if downloaded > 0:
                     results[bank_code] = f"SUCCESS downloaded={downloaded}"
