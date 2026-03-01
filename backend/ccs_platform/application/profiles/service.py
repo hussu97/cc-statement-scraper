@@ -26,7 +26,6 @@ def _normalize_profile_key(value: str) -> str:
 
 def ensure_profile_seeds(db: Session) -> None:
     existing = {row.key: row for row in db.execute(select(models.Profile)).scalars().all()}
-    created_keys: set[str] = set()
 
     for key, name, is_default in DEFAULT_PROFILES:
         row = existing.get(key)
@@ -35,7 +34,6 @@ def ensure_profile_seeds(db: Session) -> None:
             db.add(row)
             db.flush()
             existing[key] = row
-            created_keys.add(key)
             continue
         row.name = name
         row.is_default = is_default
@@ -73,16 +71,11 @@ def ensure_profile_seeds(db: Session) -> None:
             continue
 
         current = mapped_by_profile.get(profile.id, set())
-        codes_to_add: set[str] = set()
-        if profile_key in created_keys:
-            codes_to_add = desired - current
-        elif profile_key == SECONDARY_PROFILE_KEY:
-            # One-time onboarding for newly introduced secondary-profile defaults.
-            # Shared banks across profiles are allowed (e.g. ENBD in both Alice and Bob).
-            if not current:
-                codes_to_add = desired - current
-            else:
-                codes_to_add = desired - current
+        # Always add any default banks not yet mapped — safe because we only
+        # add, never remove. This ensures newly introduced defaults (e.g. SIB
+        # added to the alice defaults after the profile already existed on
+        # prod) are picked up on the next startup without manual intervention.
+        codes_to_add = desired - current
 
         if not codes_to_add:
             continue
