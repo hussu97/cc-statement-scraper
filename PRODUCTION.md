@@ -295,6 +295,7 @@ Set these on Render:
 CCS_PLATFORM_EMAIL_INGESTION_ENABLED=true
 CCS_PLATFORM_EMAIL_GMAIL_CLIENT_ID=<client-id>
 CCS_PLATFORM_EMAIL_GMAIL_CLIENT_SECRET=<client-secret>
+CCS_PLATFORM_EMAIL_OAUTH_REDIRECT_URI=https://your-service.onrender.com
 ```
 
 ### 5.4 Generate the Gmail OAuth refresh token
@@ -444,6 +445,7 @@ In Render → **Environment → Environment Variables**, add:
 | `CCS_PLATFORM_EMAIL_INGESTION_ENABLED` | `true` |
 | `CCS_PLATFORM_EMAIL_MS_CLIENT_ID` | Client ID from 6.4 |
 | `CCS_PLATFORM_EMAIL_MS_CLIENT_SECRET` | Client secret value from 6.4 |
+| `CCS_PLATFORM_EMAIL_OAUTH_REDIRECT_URI` | `https://your-service.onrender.com` (must match the redirect URI registered in 6.2) |
 
 Redeploy the service after adding these.
 

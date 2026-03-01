@@ -75,19 +75,20 @@ REFRESH_TOKEN_KEY_TEMPLATE_BY_PROVIDER = {
     EmailProvider.GMAIL: "EMAIL_GMAIL_REFRESH_TOKEN_MAILBOX_{mailbox_id}",
 }
 
-# Auth URL templates for the in-UI OAuth flow (code exchange uses /consumers/ endpoint)
+# Auth URL templates for the in-UI OAuth flow (code exchange uses /consumers/ endpoint).
+# redirect_uri is injected at request time from CCS_PLATFORM_EMAIL_OAUTH_REDIRECT_URI.
 _MS_AUTH_URL_TEMPLATE = (
     "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize"
     "?client_id={client_id}"
     "&response_type=code"
-    "&redirect_uri=http%3A%2F%2Flocalhost"
+    "&redirect_uri={redirect_uri}"
     "&scope=Mail.Read%20offline_access"
     "&response_mode=query"
 )
 _GMAIL_AUTH_URL_TEMPLATE = (
     "https://accounts.google.com/o/oauth2/v2/auth"
     "?client_id={client_id}"
-    "&redirect_uri=http%3A%2F%2Flocalhost"
+    "&redirect_uri={redirect_uri}"
     "&response_type=code"
     "&scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fgmail.readonly"
     "&access_type=offline"
@@ -716,15 +717,16 @@ def oauth_config(
     ms_configured = bool(ms_client_id and ms_client_secret)
     gmail_configured = bool(gmail_client_id and gmail_client_secret)
 
+    redirect_uri = urllib_parse.quote(settings.email_oauth_redirect_uri, safe="")
     return [
         OAuthConfigOut(
             provider=EmailProvider.MICROSOFT,
-            auth_url=_MS_AUTH_URL_TEMPLATE.format(client_id=ms_client_id) if ms_client_id else None,
+            auth_url=_MS_AUTH_URL_TEMPLATE.format(client_id=ms_client_id, redirect_uri=redirect_uri) if ms_client_id else None,
             configured=ms_configured,
         ),
         OAuthConfigOut(
             provider=EmailProvider.GMAIL,
-            auth_url=_GMAIL_AUTH_URL_TEMPLATE.format(client_id=gmail_client_id) if gmail_client_id else None,
+            auth_url=_GMAIL_AUTH_URL_TEMPLATE.format(client_id=gmail_client_id, redirect_uri=redirect_uri) if gmail_client_id else None,
             configured=gmail_configured,
         ),
     ]
@@ -761,7 +763,7 @@ def oauth_exchange_code(
         "client_id": client_id,
         "client_secret": client_secret,
         "code": payload.code.strip(),
-        "redirect_uri": "http://localhost",
+        "redirect_uri": settings.email_oauth_redirect_uri,
     }
     encoded = urllib_parse.urlencode(post_data).encode("utf-8")
     req = urllib_request.Request(

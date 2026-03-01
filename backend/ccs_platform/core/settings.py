@@ -84,6 +84,7 @@ class PlatformSettings(BaseSettings):
     email_ms_client_secret: str | None = None
     email_gmail_client_id: str | None = None
     email_gmail_client_secret: str | None = None
+    email_oauth_redirect_uri: str = "http://localhost"
 
     def model_post_init(self, __context: object) -> None:
         if self.is_production():
