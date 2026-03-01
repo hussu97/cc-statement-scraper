@@ -6,7 +6,11 @@ import httpx
 
 
 def _bank_code_from_filename(name: str) -> str | None:
-    """Extract bank code from scraper-generated filename prefix (e.g. 'MASHREQ_...' → 'MASHREQ')."""
+    """Last-resort fallback: infer bank code from the scraper filename prefix.
+
+    Only used when no authoritative bank_map entry exists (e.g. the standalone
+    ``upload`` CLI command pointing at arbitrary files).
+    """
     candidate = name.split("_")[0].upper()
     if 2 <= len(candidate) <= 16 and candidate.isalpha():
         return candidate
@@ -19,7 +23,20 @@ class ScraperClient:
         self._api_token = api_token
         self._profile_key = profile_key
 
-    def upload_pdfs(self, files: list[Path]) -> dict:
+    def upload_pdfs(self, files: list[Path], bank_code: str | None = None) -> dict:
+        """Upload *files* to the backend.
+
+        Parameters
+        ----------
+        files:
+            PDF files to upload.
+        bank_code:
+            Authoritative bank code known at download time (from BankMap).
+            When provided all files in the batch are tagged with it and the
+            backend skips PDF content detection entirely.  When *None* the
+            backend falls back to content detection (used by the standalone
+            ``upload`` command where the bank is unknown).
+        """
         if not files:
             raise ValueError("No files to upload")
         if not self._api_token:
@@ -31,10 +48,8 @@ class ScraperClient:
             "X-Profile-Key": self._profile_key,
         }
 
-        # If all files share the same bank code prefix, pass it as a hint so the
-        # backend skips expensive PDF content detection entirely.
-        bank_codes = {_bank_code_from_filename(p.name) for p in files}
-        common_bank_code = bank_codes.pop() if len(bank_codes) == 1 and None not in bank_codes else None
+        # Use caller-supplied code; fall back to filename prefix as last resort.
+        hint = bank_code or _bank_code_from_filename(files[0].name) if files else None
 
         multipart: list[tuple] = []
         handles = []
@@ -44,7 +59,7 @@ class ScraperClient:
                 handles.append(fh)
                 multipart.append(("files", (path.name, fh, "application/pdf")))
 
-            data = {"bank_code_hint": common_bank_code} if common_bank_code else {}
+            data = {"bank_code_hint": hint} if hint else {}
             with httpx.Client(timeout=120) as client:
                 response = client.post(url, headers=headers, files=multipart, data=data)
 
