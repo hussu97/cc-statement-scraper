@@ -1,17 +1,7 @@
-from .adcb import parse_adcb_statement
+# Individual parser imports have been removed from this __init__ to avoid
+# loading pdfplumber (~15 MB) at startup.  Import parsers directly from
+# their submodules (e.g. `from .fab import parse_fab_statement`) or use
+# the dispatcher: `from .dispatcher import parse_statement_for_bank`.
 from .dispatcher import parse_statement_for_bank
-from .eib import parse_eib_statement
-from .enbd import parse_enbd_statement
-from .fab import parse_fab_statement
-from .mashreq import parse_mashreq_statement
-from .sib import parse_sib_statement
 
-__all__ = [
-    "parse_fab_statement",
-    "parse_adcb_statement",
-    "parse_eib_statement",
-    "parse_enbd_statement",
-    "parse_sib_statement",
-    "parse_mashreq_statement",
-    "parse_statement_for_bank",
-]
+__all__ = ["parse_statement_for_bank"]
