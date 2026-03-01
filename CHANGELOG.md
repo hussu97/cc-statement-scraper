@@ -22,6 +22,9 @@
 
 ### Scraper
 
+- **refactor** Make bank adapter system generic and auto-discovering — add `AuthPollAction` enum and `AuthPollState` dataclass to `base.py`; expand `BankAdapter` with optional hook params (`is_authenticated_session`, `is_login_screen`, `is_login_failure`, `on_auth_poll_tick`, `skip_mfa_user_prompt`, `skip_keyword_fallback`, `skip_login_selector_fallback`, `browser_launch_overrides`); add `discover_adapters()` via `pkgutil` auto-discovery; move all bank-specific auth logic (FAB continue gate, ADCB OTP/concurrent session/re-login, MASHREQ anti-bot retry) into per-adapter `on_auth_poll_tick` hooks; replace ~135 lines of `if code ==` branching in `downloader.py` with a generic hook-based polling loop; `_launch_bank_context` now reads `channel_candidates` and `init_scripts` from `adapter.browser_launch_overrides()`; adding a new bank now requires only a new adapter module with an `ADAPTER` constant — no changes to `downloader.py`
+- **docs** Add `scraper/ADDING_A_NEW_BANK.md` — step-by-step guide covering the 3 required functions, all optional hook functions with examples, `AuthPollAction`/`AuthPollState` field references, and verification commands
+
 - **refactor** Make `--profile` a required option on `scrape` and `upload` CLI commands — remove `CCS_SCRAPER_PROFILE_KEY` env var support; `get_config(profile: str)` now requires a profile; `ScraperConfig.profile_key` defaults to `""` instead of reading from env
 
 ### Scraper
