@@ -58,5 +58,8 @@ class ScraperConfig:
 def get_config(profile: str) -> ScraperConfig:
     cfg = ScraperConfig()
     cfg.profile_key = profile
+    # Scope the download directory to the profile so that different profiles
+    # never share incoming/, state/, or browser_profiles/ folders.
+    cfg.download_dir = cfg.download_dir / profile.lower()
     cfg._reload_credentials()
     return cfg
