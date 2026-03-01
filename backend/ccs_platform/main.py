@@ -64,6 +64,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title=settings.app_name, lifespan=lifespan)
 
     origins = [token.strip() for token in settings.cors_allow_origins.split(",") if token.strip()]
+    wildcard = not origins or origins == ["*"]
     app.add_middleware(
         SessionMiddleware,
         secret_key=settings.session_secret_key,
@@ -74,8 +75,11 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=origins if origins else ["*"],
-        allow_credentials=True,
+        allow_origins=["*"] if wildcard else origins,
+        # credentials=True is incompatible with allow_origins=["*"] (browser spec).
+        # In dev with wildcard origins, rely on cookies being same-origin or use
+        # CCS_PLATFORM_CORS_ALLOW_ORIGINS to specify exact origins.
+        allow_credentials=not wildcard,
         allow_methods=["*"],
         allow_headers=["*"],
     )

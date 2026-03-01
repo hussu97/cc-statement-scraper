@@ -264,6 +264,13 @@ def require_service_token(*required_scopes: str):
         if token_row is None:
             raise HTTPException(status_code=401, detail="Invalid service token")
 
+        if token_row.expires_at is not None:
+            exp = token_row.expires_at
+            if exp.tzinfo is None:
+                exp = exp.replace(tzinfo=UTC)
+            if datetime.now(UTC) >= exp:
+                raise HTTPException(status_code=401, detail="Service token has expired")
+
         scopes = {str(item).strip() for item in (token_row.scopes_json or []) if str(item).strip()}
         if required and not required.issubset(scopes):
             raise HTTPException(status_code=403, detail="Service token scope denied")
