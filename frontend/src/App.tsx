@@ -6,7 +6,7 @@ import { AppShell } from './components/AppShell';
 import { RequireAuth } from './components/RequireAuth';
 import { clearAuthUser, setAuthUser } from './authStore';
 import { DEFAULT_ROUTE } from './navigation';
-import { setActiveProfileKey } from './profileStore';
+import { hasStoredProfileKey, setActiveProfileKey } from './profileStore';
 import type { LoginResponse } from './types/auth';
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then(m => ({ default: m.DashboardPage })));
@@ -35,7 +35,11 @@ export default function App() {
           return;
         }
         setAuthUser(payload.user);
-        setActiveProfileKey(payload.user.default_profile_key);
+        // Only apply the account default on first-ever load; preserve the
+        // user's stored choice on every subsequent refresh.
+        if (!hasStoredProfileKey()) {
+          setActiveProfileKey(payload.user.default_profile_key);
+        }
       } catch {
         if (!cancelled) {
           clearAuthUser();
