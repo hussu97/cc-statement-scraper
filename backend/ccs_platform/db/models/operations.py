@@ -61,6 +61,7 @@ class Job(Base):
 class JobItem(Base):
     __tablename__ = "job_items"
     __table_args__ = (
+        Index("ix_job_items_job_id", "job_id"),
         Index("ix_job_items_status", "status"),
         Index("ix_job_items_bank_month", "bank_code", "target_month"),
     )

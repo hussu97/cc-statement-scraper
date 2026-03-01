@@ -62,4 +62,9 @@ def get_config(profile: str) -> ScraperConfig:
     # never share incoming/, state/, or browser_profiles/ folders.
     cfg.download_dir = cfg.download_dir / profile.lower()
     cfg._reload_credentials()
+    if not cfg.api_token:
+        raise RuntimeError(
+            "CCS_SCRAPER_API_TOKEN is not set. "
+            "Add it to scraper/.env or export it before running."
+        )
     return cfg

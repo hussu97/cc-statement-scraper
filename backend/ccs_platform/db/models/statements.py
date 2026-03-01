@@ -69,6 +69,7 @@ class Statement(Base):
             name="uq_statement_identity",
         ),
         Index("ix_statements_profile_id", "profile_id"),
+        Index("ix_statements_bank_code", "bank_code"),
         Index("ix_statements_statement_date", "statement_date"),
         Index("ix_statements_reference", "statement_reference"),
     )
@@ -107,6 +108,7 @@ class Statement(Base):
 class StatementLine(Base):
     __tablename__ = "statement_lines"
     __table_args__ = (
+        Index("ix_statement_lines_statement_id", "statement_id"),
         Index("ix_statement_lines_transaction_date", "transaction_date"),
         Index("ix_statement_lines_posting_date", "posting_date"),
         Index("ix_statement_lines_merchant_normalized", "merchant_normalized"),
