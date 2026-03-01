@@ -3,7 +3,8 @@ import { clearAuthUser } from './authStore';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
-const API_PREFIX = '/api/v1';
+const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
+const API_PREFIX = `${API_BASE}/api/v1`;
 
 async function request<T>(
   method: HttpMethod,
