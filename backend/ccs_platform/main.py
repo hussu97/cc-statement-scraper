@@ -29,13 +29,33 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     configure_logging(level_name=settings.log_level)
 
-    init_db()
-    with db_session() as db:
-        seed_defaults(db)
-
-    storage = build_storage_adapter(settings)
-    runner = JobRunner(settings=settings, storage=storage)
-    dispatcher = build_job_dispatcher(settings=settings, runner=runner)
+    logger.info("Startup: running migrations (init_db)...")
+    try:
+        init_db()
+    except Exception:
+        logger.exception("Startup FAILED at init_db()")
+        raise
+    logger.info("Startup: migrations done, seeding defaults...")
+    try:
+        with db_session() as db:
+            seed_defaults(db)
+    except Exception:
+        logger.exception("Startup FAILED at seed_defaults()")
+        raise
+    logger.info("Startup: seed done, building storage adapter...")
+    try:
+        storage = build_storage_adapter(settings)
+    except Exception:
+        logger.exception("Startup FAILED at build_storage_adapter()")
+        raise
+    logger.info("Startup: storage adapter ready, building job runner...")
+    try:
+        runner = JobRunner(settings=settings, storage=storage)
+        dispatcher = build_job_dispatcher(settings=settings, runner=runner)
+    except Exception:
+        logger.exception("Startup FAILED at JobRunner/dispatcher init")
+        raise
+    logger.info("Startup: all components initialised.")
 
     app.state.settings = settings
     app.state.storage = storage
