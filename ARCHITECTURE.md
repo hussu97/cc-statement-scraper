@@ -22,6 +22,8 @@ The Credit Card Statement Platform is composed of four independent components:
 - **No browser code** — Playwright is not a dependency; the API never launches a browser
 - Stores PDFs in GCS (production) or local filesystem (development)
 - PostgreSQL (Neon) database for all state
+- In-process sliding-window rate limiter on `/auth/login` (5 req/min per IP)
+- Service API tokens support optional `expires_at` and are logged as audit events on creation and revocation
 
 ### Scraper CLI
 
@@ -37,6 +39,8 @@ The Credit Card Statement Platform is composed of four independent components:
 - React + TypeScript admin panel
 - Calls backend REST API via `/api`
 - Deployed to Vercel as a static build
+- Top-level `<ErrorBoundary>` catches render errors and shows a recovery fallback
+- Confirmation dialog guards destructive actions (e.g. service token revocation)
 
 ### Gmail Relay
 

@@ -1,17 +1,21 @@
 from __future__ import annotations
 
 from collections import deque
+import logging
 from threading import Lock
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
+from ccs_platform.api.audit import append_audit_event
 from ccs_platform.api.deps import AuthenticatedUserContext, get_authenticated_user_context
 from ccs_platform.api.v1.schemas import AuthUserOut, LoginRequest, LoginResponse
 from ccs_platform.application.auth.service import authenticate_credentials
 from ccs_platform.application.profiles.service import get_default_profile, get_profile_by_key
 from ccs_platform.db.session import get_db
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -71,9 +75,11 @@ def login(
     request: Request,
     db: Session = Depends(get_db),
 ) -> LoginResponse:
-    _check_login_rate_limit(request.client.host if request.client else "unknown")
+    client_ip = request.client.host if request.client else "unknown"
+    _check_login_rate_limit(client_ip)
     account = authenticate_credentials(email=payload.email, password=payload.password)
     if account is None:
+        logger.warning("login_failed email=%s ip=%s", payload.email, client_ip)
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     default_profile_key = _resolve_default_profile_key(db, account.default_profile_key)
@@ -85,6 +91,21 @@ def login(
     request.state.authenticated_email = account.email
     request.state.actor_role = account.role
     request.state.actor_subject = f"user:{account.email}"
+
+    logger.info("login_success email=%s ip=%s role=%s", account.email, client_ip, account.role)
+
+    profile = get_profile_by_key(db, default_profile_key)
+    if profile is not None:
+        append_audit_event(
+            db,
+            profile_id=profile.id,
+            event_type="login_success",
+            entity_type="user",
+            entity_id=account.email,
+            payload_json={"role": account.role, "ip": client_ip},
+            request=request,
+        )
+        db.commit()
 
     return LoginResponse(
         user=_to_auth_user(

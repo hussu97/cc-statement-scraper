@@ -4,6 +4,8 @@
 
 ### Backend
 
+- **feat** Log security events — login success/failure logged via Python logger and audit table; service token creation/revocation emit `service_token_created` / `service_token_revoked` audit events with actor metadata
+- **fix** Clean up orphaned staging objects on upload failure — `POST /jobs/upload` now deletes any storage objects already saved before the exception so storage stays consistent with DB state
 - **fix** Rate limit login endpoint — sliding window (5 attempts / 60 s per IP) in `POST /auth/login`; returns 429 on excess; no new dependency
 - **fix** Add missing FK indexes via migration `20260302_000012` — `job_items.job_id`, `statements.bank_code`, `statement_lines.statement_id`; also declare them in model `__table_args__`
 - **fix** Enforce CORS origin list in production — `model_post_init` raises `RuntimeError` if `CCS_PLATFORM_CORS_ALLOW_ORIGINS` is `"*"` or empty when `ENVIRONMENT=production`; `create_app` disables `allow_credentials` when origins is wildcard (browser spec violation)
@@ -18,10 +20,20 @@
 
 ### Frontend (web)
 
+- **refactor** Split `EmailIngestionPage.tsx` (948 lines) into focused sub-components — `MailboxesPanel`, `OAuthTokenPanel`, `BankRoutingMatrix`, `ServiceTokensPanel`, and a shared `types.ts`; main page is now ~230 lines
+- **feat** Add `extractErrorMessage` utility — consistent error message extraction from `Error` objects, FastAPI JSON bodies (`{"detail":"…"}`), and strings; available in `lib/errors.ts`
+- **feat** Add `ConfirmDialog` component — modal confirmation before destructive actions; used on service token revocation
 - **fix** Add `ErrorBoundary` component wrapping the entire app — catches React render errors and shows a "Something went wrong" fallback with a reload button instead of a blank screen
+
+### CI / Infra
+
+- **feat** Add scraper test job to CI pipeline — runs `pytest` on `scraper/**` changes; no browser required (tests mock httpx)
+- **fix** Expose `scraper` change-detection output in CI `changes` job — was declared in path filters but not wired to outputs
+- **chore** Pin backend dependencies via `pip-compile` — `requirements.txt` now contains fully-pinned transitive versions generated from `requirements.in` / `pyproject.toml`
 
 ### Docs
 
+- **docs** Update `ARCHITECTURE.md` — document in-process rate limiter, token expiry/audit, error boundary, and confirm dialog
 - **fix** Restore `deploy/nginx/frontend.conf` — standard SPA nginx config (try_files, aggressive cache headers for hashed assets, no-cache for index.html); `Dockerfile.frontend` was broken without it
 - **fix** Fix `security.yml` Trivy scan job — update Dockerfile reference from deleted `Dockerfile.app` to `Dockerfile.api`; CI security job was always failing
 - **chore** Add non-root `appuser` (uid 1000) to `Dockerfile.api` and `Dockerfile.gmail-relay`; switch `Dockerfile.frontend` to built-in `nginx` user with corrected directory ownership
