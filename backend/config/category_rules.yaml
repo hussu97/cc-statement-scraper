@@ -80,7 +80,6 @@ global_rules:
     keywords:
       - ZED MOBILITY
       - CAREEM RIDE
-      - CAREEM PAY
       - BOLT
       - CAREEM HALA
       - TAXI
@@ -107,6 +106,7 @@ global_rules:
     keywords:
       - DUBAI ELECTRICITY
       - NOOR ALJIDAF
+      - CAREEM PAY
       - GAS SERVICE
       - DEWA
       - ETISALAT
