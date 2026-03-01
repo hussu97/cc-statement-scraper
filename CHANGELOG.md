@@ -9,6 +9,8 @@
 
 ### Backend
 
+- **fix** Email ingestion `_runtime_setting_value` now falls back to Pydantic settings (`CCS_PLATFORM_EMAIL_MS_CLIENT_ID`, `CCS_PLATFORM_EMAIL_MS_CLIENT_SECRET`, etc.) when the DB row is missing — eliminates the need to duplicate OAuth client credentials as runtime settings when they are already set as env vars on the server
+
 - **fix** MASHREQ parser: parse credit transactions whose amount ends with a trailing ` -` suffix — extend both `_ROW_RE_SHORT` and `_ROW_RE` suffix group to `(?:CR|DR|-)` and treat `-` suffix same as `CR` (negate the amount); credits appearing after the debits sub-total (e.g. inward IPP payments) were previously silently skipped
 
 - **feat** Make service tokens profile-agnostic — drop `profile_id` FK from `service_api_tokens` (migration `20260301_000010`); add global `UNIQUE(name)` constraint; `ServiceTokenContext` no longer carries `profile_id`/`profile_key`; `get_profile_context_or_service_token` now requires `X-Profile-Key` header when using a bearer token; automation entity endpoints (`/oauth/{provider}/access-token`, `PATCH /mailboxes/{mailbox_id}/sync-state`, `POST /upload`) auto-derive profile from the mailbox/route in the request; automation list endpoints (`GET /automation/mailboxes`, `GET /automation/routes`) return data across all profiles; token management endpoints (list, create, revoke) are global and no longer scoped to the active profile
