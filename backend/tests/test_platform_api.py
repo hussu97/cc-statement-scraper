@@ -29,6 +29,8 @@ def _test_platform_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     from ccs_platform.db.session import init_db
     from ccs_platform.application.bootstrap.seed import seed_defaults
+    from ccs_platform.api.v1.endpoints.auth import reset_login_rate_limiter
+    reset_login_rate_limiter()
 
     tmp_db = f"/tmp/ccs_platform_test_{uuid.uuid4().hex}.db"
     monkeypatch.setenv("CCS_PLATFORM_DATABASE_URL", f"sqlite:///{tmp_db}")
@@ -481,6 +483,7 @@ def test_runtime_settings_hide_secret_values_in_production(monkeypatch: pytest.M
         CCS_PLATFORM_SESSION_SECRET_KEY="test-secret-key-long-enough-for-production-x",
         CCS_PLATFORM_SESSION_COOKIE_SECURE="false",
         CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY="V33IhV4J0EAOQnq2STxwJK6I2Gv5u9W1tnM0B8f9Lh4=",
+        CCS_PLATFORM_CORS_ALLOW_ORIGINS="https://app.example.com",
     )
 
     try:
