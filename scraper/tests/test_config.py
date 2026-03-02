@@ -120,6 +120,8 @@ def test_credentials_all_known_keys(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_credentials_blank_values_excluded(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_scraper_env(monkeypatch)
+    monkeypatch.setenv("CCS_SCRAPER_API_TOKEN", "test-token")
     monkeypatch.setenv("HUSSAIN_FAB_USERNAME", "")
     monkeypatch.setenv("HUSSAIN_FAB_PASSWORD", "secret")
 
