@@ -32,6 +32,12 @@ _login_attempts: dict[str, deque[float]] = {}
 _login_lock = Lock()
 
 
+def reset_login_rate_limiter() -> None:
+    """Clear all rate-limiter state.  Only intended for use in tests."""
+    with _login_lock:
+        _login_attempts.clear()
+
+
 def _check_login_rate_limit(ip: str) -> None:
     now = time.monotonic()
     with _login_lock:
