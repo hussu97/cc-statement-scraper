@@ -116,7 +116,6 @@ class OAuthAccessTokenOut(BaseModel):
     provider: EmailProvider
     access_token: str
     token_type: str
-    expires_at: datetime
 
 
 class EmailIngestionUploadResponse(BaseModel):
@@ -137,7 +136,6 @@ class EmailMailboxSyncStatePatch(BaseModel):
 class ServiceApiTokenCreate(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     scopes: list[str]
-    expires_at: datetime | None = None
 
 
 class ServiceApiTokenOut(BaseModel):
@@ -149,7 +147,6 @@ class ServiceApiTokenOut(BaseModel):
     scopes_json: list[str] | None
     is_active: bool
     last_used_at: datetime | None
-    expires_at: datetime | None
     created_at: datetime
     revoked_at: datetime | None
 
