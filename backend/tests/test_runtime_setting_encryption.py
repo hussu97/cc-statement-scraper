@@ -37,6 +37,7 @@ def test_secret_value_roundtrip_with_encryption_key(monkeypatch: pytest.MonkeyPa
 def test_secret_value_requires_encryption_key_in_production(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CCS_PLATFORM_ENVIRONMENT", "production")
     monkeypatch.setenv("CCS_PLATFORM_SESSION_SECRET_KEY", "test-secret-key-long-enough-for-production-x")
+    monkeypatch.setenv("CCS_PLATFORM_CORS_ALLOW_ORIGINS", "https://app.example.com")
     monkeypatch.delenv("CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY", raising=False)
     clear_settings_caches()
 
