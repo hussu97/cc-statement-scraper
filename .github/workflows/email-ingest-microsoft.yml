@@ -3,7 +3,7 @@ name: Email Ingest Microsoft
 on:
   workflow_dispatch:
   schedule:
-    - cron: "17 */4 * * *"
+    - cron: "0 10 * * *"  # Daily at 14:00 DXB (UTC+4)
 
 permissions:
   contents: read
