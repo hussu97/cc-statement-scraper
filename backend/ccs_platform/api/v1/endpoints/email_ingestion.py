@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 import hashlib
 import json
 from pathlib import Path
@@ -618,7 +618,6 @@ def create_service_token(
         token_hash=token_hash,
         scopes_json=scopes,
         is_active=True,
-        expires_at=payload.expires_at,
     )
     db.add(row)
     db.flush()
@@ -632,7 +631,6 @@ def create_service_token(
             "name": row.name,
             "token_prefix": row.token_prefix,
             "scopes": scopes,
-            "expires_at": row.expires_at.isoformat() if row.expires_at else None,
         },
         request=request,
     )
@@ -713,12 +711,10 @@ def provider_access_token(
         client_secret=client_secret,
         refresh_token=refresh_token,
     )
-    expires_at = datetime.now(UTC) + timedelta(seconds=max(60, expires_in))
     return OAuthAccessTokenOut(
         provider=provider,
         access_token=access_token,
         token_type=token_type,
-        expires_at=expires_at,
     )
 
 
