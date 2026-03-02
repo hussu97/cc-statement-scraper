@@ -1508,6 +1508,81 @@ def _click_card_tile_fallback(page: Any, logger: logging.Logger) -> bool:
     return False
 
 
+def _click_card_link_in_landing_table(page: Any, logger: logging.Logger, bank_cfg: dict) -> bool:
+    """Click the credit card link directly from the Credit Cards table on the landing/dashboard page.
+
+    Prefers a card whose last-4 digits match bank_cfg['cards'][*]['last4']; falls back to the
+    first masked-card link found inside the Credit Cards section.
+    """
+    last4_values = [
+        str(card.get("last4", "")).strip()
+        for card in bank_cfg.get("cards", [])
+        if str(card.get("last4", "")).strip()
+    ]
+
+    try:
+        result = page.evaluate(
+            """
+            ({ preferredLast4List }) => {
+              const maskRe = /(\\d{4}[xX*]{4,}\\d{2,4}|[xX*]{2,}\\s*\\d{2,4})/i;
+              const visible = (el) => {
+                const cs = getComputedStyle(el);
+                const r = el.getBoundingClientRect();
+                return cs.visibility !== 'hidden' && cs.display !== 'none' && r.width > 0 && r.height > 0;
+              };
+
+              // Find the Credit Cards section heading
+              let creditCardsSection = null;
+              for (const el of Array.from(document.querySelectorAll('h1,h2,h3,h4,h5,h6,td,th,div,span,p'))) {
+                if (!visible(el)) continue;
+                const t = (el.innerText || el.textContent || '').trim();
+                if (/^credit\\s+cards?$/i.test(t)) {
+                  creditCardsSection = el;
+                  break;
+                }
+              }
+
+              // Collect candidate <a> links: prefer those under the CC section
+              const allLinks = Array.from(document.querySelectorAll('a'));
+              const visibleCardLinks = allLinks.filter(a => {
+                if (!visible(a)) return false;
+                const t = (a.innerText || a.textContent || '').trim();
+                return maskRe.test(t) || /\\d{4}X{4,}\\d{2,4}/i.test(t) || /\\d{12,}/i.test(t);
+              });
+
+              if (visibleCardLinks.length === 0) return { clicked: false, last4: '' };
+
+              // Try preferred last4 first
+              for (const last4 of preferredLast4List) {
+                const match = visibleCardLinks.find(a => {
+                  const t = (a.innerText || a.textContent || '').trim();
+                  return t.endsWith(last4) || t.includes(last4);
+                });
+                if (match) {
+                  match.click();
+                  return { clicked: true, last4 };
+                }
+              }
+
+              // Fallback: click the first card link (topmost in the Credit Cards table)
+              visibleCardLinks[0].click();
+              const t = (visibleCardLinks[0].innerText || visibleCardLinks[0].textContent || '').trim();
+              return { clicked: true, last4: t.slice(-4) };
+            }
+            """,
+            {"preferredLast4List": last4_values},
+        )
+    except Exception:  # noqa: BLE001
+        return False
+
+    if not result or not result.get("clicked"):
+        return False
+
+    last4 = result.get("last4", "")
+    logger.info("ADCB: clicked credit card link in landing table (last4=%s)", last4)
+    return _wait_for_card_details_screen(page, timeout_ms=6000)
+
+
 def _open_card_details(page: Any, logger: logging.Logger, bank_cfg: dict) -> bool:
     if _is_card_details_screen(page):
         return True
@@ -1520,15 +1595,18 @@ def _open_card_details(page: Any, logger: logging.Logger, bank_cfg: dict) -> boo
 
     _wait_for_landing_ready(page, logger)
 
+    # Try up to 7 times, scrolling down slightly each round so the card table is in view.
+    # Do NOT navigate via the sidebar — the credit card links live directly in the
+    # Credit Cards table on the landing/dashboard page.
     for _ in range(7):
         _dismiss_optional_ad_popup(page, logger)
-        _click_sidebar_credit_cards(page, logger)
-        click_keyword(page, "Credit Cards", logger)
-        click_keyword(page, "Cards", logger)
+        # Primary: click the card link directly in the landing page table (by last4 or first card)
+        if _click_card_link_in_landing_table(page, logger, bank_cfg):
+            return True
+        # Secondary: match by credit limit amount
         if _click_card_by_limit(page, logger, target_limit_aed):
             return True
-        if _click_card_with_last4(page, logger, bank_cfg):
-            return True
+        # Tertiary: generic card-pattern fallback scan
         if _click_card_tile_fallback(page, logger):
             return True
         page.mouse.wheel(0, 420)
