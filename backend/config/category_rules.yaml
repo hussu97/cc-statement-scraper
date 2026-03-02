@@ -19,6 +19,13 @@ global_rules:
       - ALL DAY GOURMET
       - COFFEE
       - ABSOLUTE BARBECUE
+      - CAFE
+      - REST
+      - RESTAUR
+      - FOOD
+      - BRASSERIE
+      - RAMEN
+      - JAYS ONE SWEET AND FLOWER
   - category: Grocery
     keywords:
       - NOON MINUTES
@@ -76,6 +83,10 @@ global_rules:
       - LIME
       - GENTS SALON
       - MASSAGE
+      - SPA 1DUBAI
+      - SENSAS
+      - THE PALACE DOWNTOWN
+      - WILD PAINT HOUSE
   - category: Transport
     keywords:
       - ZED MOBILITY
@@ -102,6 +113,9 @@ global_rules:
       - IMMIGRATION
       - AIR ARABIA
       - EMIRATES
+      - AIR INDIA
+      - RESORT
+      - FLIGHTNETWRK
   - category: Utilities
     keywords:
       - DUBAI ELECTRICITY
@@ -111,6 +125,8 @@ global_rules:
       - DEWA
       - ETISALAT
       - DESCO
+      - URBAN COMPANY
+      - DU APPLEPAY
   - category: Insurance
     keywords:
       - ZURICH INTL
@@ -143,14 +159,7 @@ global_rules:
     keywords:
       - INWARD IPP CC
       - PAYMENT RECEIVED
-  - category: Dining
-    keywords:
-      - CAFE
-      - REST
-      - RESTAUR
-      - FOOD
-      - BRASSERIE
-      - RAMEN
+      - PAYMENTS RECEIVED
   - category: Apple in-app purchase
     keywords:
       - APPLE.COM/BILL CORK
