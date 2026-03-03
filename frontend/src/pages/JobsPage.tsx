@@ -311,6 +311,21 @@ export function JobsPage() {
     }
   }
 
+  async function downloadExport(exportId: number) {
+    try {
+      setError(null);
+      const { blob, filename } = await api.downloadFile(`/exports/${exportId}/download`);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
   useEffect(() => {
     loadBanks();
     setJobsPage(1);
@@ -482,6 +497,9 @@ export function JobsPage() {
                     }}>View</button>{' '}
                     {job.status === 'queued' || job.status === 'running' ? (
                       <button className="ghost" onClick={() => cancelJob(job.id)}>Cancel</button>
+                    ) : null}
+                    {job.job_type === 'export_workbook' && job.status === 'succeeded' && job.result_json?.export_id ? (
+                      <>{' '}<button className="ghost" onClick={() => downloadExport(job.result_json!.export_id as number)}>Download</button></>
                     ) : null}
                   </td>
                 </tr>

@@ -64,6 +64,7 @@ export type Job = {
   started_at: string | null;
   finished_at: string | null;
   error_message: string | null;
+  result_json: Record<string, unknown> | null;
   items: JobItem[];
   [key: string]: unknown;
 };
