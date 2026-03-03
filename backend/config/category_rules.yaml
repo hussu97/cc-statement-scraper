@@ -28,11 +28,14 @@ global_rules:
       - RAMEN
       - JAYS ONE SWEET AND FLOWER
       - ADNH CATERING
+      - ADNH COMPASS
       - AMAZON CATERINGNA
       - THE BLUE BOX
       - CAREEM DINEOUT
       - QUICK MART
       - AMARAVATHIDUBAI
+      - STARBUCKS
+      - DUNKIN
   - category: Grocery
     keywords:
       - NOON MINUTES
@@ -46,6 +49,7 @@ global_rules:
       - CHOITHRAM
       - DAY TO DAY
       - GMG CONSUMER
+      - NOWNOW
   - category: Subscription
     keywords:
       - WHOOPDUBLIN
@@ -64,6 +68,9 @@ global_rules:
       - GODADDY
       - CAREEM PLUSDUBAI
       - OPENAI.COM
+      - CANVA
+      - CURSOR.COM
+      - SPOTIFY
   - category: Shopping
     keywords:
       - NOON
@@ -72,8 +79,10 @@ global_rules:
       - AMAZON.AE
       - HOME CENTRE
       - DECATHLON
+      - VAPE
       - DODO FLOWERS
       - UNIQLO
+      - AL TAQDEER
       - BERSHKA
       - JASHANMAL
       - MINISO
@@ -88,6 +97,9 @@ global_rules:
       - HENNES &MA
       - MARKS AND SPENCER
       - SKECHERS
+      - DANUBE
+      - KOTHARI TRADING
+      - MADINAT JUMEIRAH
   - category: Entertainment
     keywords:
       - SKYDIVE
@@ -102,6 +114,7 @@ global_rules:
       - SENSAS
       - THE PALACE DOWNTOWN
       - WILD PAINT HOUSE
+      - CINEMA
   - category: Transport
     keywords:
       - ZED MOBILITY
@@ -136,6 +149,7 @@ global_rules:
       - HOTEL
       - MAKEMYTRIP
       - TRAVELWINGS.COM
+      - JABAL AL DHANNA
   - category: Utilities
     keywords:
       - DUBAI ELECTRICITY
@@ -149,25 +163,31 @@ global_rules:
       - DU APPLE PAY
       - CAREEM HOMESRVICES
       - CAREEM LAUNDRY
+      - E& DIGITAL
   - category: Insurance
     keywords:
       - ZURICH INTL
       - VAT ON INSURANCE
+      - UNION INSURANCE
   - category: Investment
     keywords:
       - RL360
+      - AL JAMEA TUS
   - category: Fines/Govt Services
     keywords:
       - SMART DUBAI GOVERNMENT DUBAI
       - AL ETIHAD CREDIT BUREA
       - SHARJAH FINANCE DEPART
       - PARKONIC
+      - CASH ADVANCE FEE
   - category: Fraud
     keywords:
       - UPFRONTCR DISP
   - category: Forex Charge
     keywords:
       - VAT ON SERVICE CHARGES
+      - VAT ON
+      - FOREIGN TRANSACTION FEE
   - category: Medicine
     keywords:
       - HEALTH
@@ -175,6 +195,7 @@ global_rules:
       - CITY LIFE PHY
       - LIFE PHY
       - HALA PHY
+      - PHYSIOCARE
   - category: Cashback
     keywords:
       - FAB REWARDS REDEMPTION - CASHBACK
