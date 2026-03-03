@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 from typing import BinaryIO, Union
 
@@ -18,8 +19,8 @@ def _line_rows_for_year(db: Session, year: int, *, profile_id: int) -> list[dict
         select(models.StatementLine, models.Statement)
         .join(models.Statement)
         .where(models.Statement.profile_id == profile_id)
-        .where(models.Statement.statement_date >= f"{year}-01-01")
-        .where(models.Statement.statement_date <= f"{year}-12-31")
+        .where(models.Statement.statement_date >= date(year, 1, 1))
+        .where(models.Statement.statement_date <= date(year, 12, 31))
     )
     for line, statement in db.execute(query).all():
         rows.append(
@@ -136,3 +137,20 @@ def build_yearly_workbook_from_statements(
         fx_gaps_df.to_excel(writer, sheet_name="FXGaps", index=False)
 
     return output_path
+
+
+def build_yearly_csv_bytes(db: Session, year: int, *, profile_id: int) -> bytes:
+    """Return a UTF-8 CSV of all transaction rows for *year* as raw bytes."""
+    import pandas as pd  # noqa: PLC0415
+
+    rows = _line_rows_for_year(db, year, profile_id=profile_id)
+    df = pd.DataFrame(rows) if rows else pd.DataFrame(
+        columns=[
+            "statement_id", "bank_code", "statement_reference", "statement_date",
+            "line_no", "transaction_date", "transaction_time", "posting_date",
+            "merchant_raw", "merchant_normalized", "amount_original", "currency_original",
+            "amount_aed", "direction", "transaction_kind", "country_code",
+            "card_last4", "category", "is_time_inferred",
+        ]
+    )
+    return df.to_csv(index=False).encode("utf-8")
