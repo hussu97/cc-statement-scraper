@@ -103,3 +103,34 @@ All paginated tables in the web app must use the following page size options, in
 - All new paginated tables must use `usePagination(50)` and pass `onPageSizeChange={setPageSize}` to `<Pagination>`.
 - Backend list endpoints must accept `page_size` up to `2000` (`le=2000`) with a default of `100`.
 - Never hardcode a `PAGE_SIZE` constant — always use `usePagination`.
+
+## 13. Timeout Logging in Bank Scrapers
+
+Every system-initiated wait in a bank scraper adapter **must** have a `logger.info(...)` call immediately before it, using the existing `{BANK}: ...` message format.
+
+**Applies to:**
+- `time.sleep(s)` — always log with duration in ms and reason
+- `page.wait_for_timeout(ms)` — log for all waits **≥ 700ms**; log all waits in auth-polling loops regardless of duration
+- `page.expect_download(timeout=ms)` — always log ("waiting for download event (up to Xms)")
+- `page.wait_for_event("download", timeout=ms)` — always log
+- `locator.wait_for(state=..., timeout=ms)` — log for timeouts **≥ 4000ms**
+
+**Format:** `logger.info("{BANK}: waiting {X}ms — {reason}")`
+
+**Examples:**
+```python
+# Before time.sleep
+logger.info("FAB: waiting 2000ms — re-login submitted; pausing before next auth poll")
+time.sleep(2)
+
+# Before page.wait_for_timeout
+logger.info("ADCB: waiting 3000ms — allowing 'Refer & Earn' popup time to appear before dismissal")
+page.wait_for_timeout(3000)
+
+# Before expect_download
+logger.info("MASHREQ: waiting for download event for month=%s (up to 20000ms)", month_token)
+with page.expect_download(timeout=20000) as download_info:
+    ...
+```
+
+**Why:** This makes it easy to distinguish a stuck scraper (no log for a long time) from one that is actively working (regular log entries showing each deliberate pause).

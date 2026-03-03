@@ -151,6 +151,7 @@ def _click_control_by_terms(
             )
             if clicked:
                 logger.info("MASHREQ: clicked %s via terms=%s", action_name, lowered_terms)
+                logger.info("MASHREQ: waiting 1200ms — %s clicked; allowing navigation to settle", action_name)
                 page.wait_for_timeout(1200)
                 return True
         except Exception:  # noqa: BLE001
@@ -280,6 +281,7 @@ def _open_cards_page(page: Any, logger: logging.Logger) -> bool:
         "[role='button']:has-text('Cards')",
     ]
     if _click_first_visible(page, selectors):
+        logger.info("MASHREQ: waiting 1600ms — Cards page link clicked; waiting for navigation")
         page.wait_for_timeout(1600)
         logger.info("MASHREQ: opened Cards page via selector click")
         return True
@@ -409,12 +411,14 @@ def _open_card_details(page: Any, logger: logging.Logger, bank_cfg: dict[str, An
                 page.wait_for_url("**/product/card/activityAndDetails/**", timeout=10000)
             except Exception:  # noqa: BLE001
                 pass
+            logger.info("MASHREQ: waiting 1400ms — card tile clicked; waiting for card details page")
             page.wait_for_timeout(1400)
             if _is_card_details_page(page):
                 logger.info("MASHREQ: opened card details for last4=%s via card tile click", target_last4)
                 return True
 
         if _click_first_visible(page, card_selectors):
+            logger.info("MASHREQ: waiting 1400ms — card selector clicked; waiting for card details page")
             page.wait_for_timeout(1400)
             if _is_card_details_page(page):
                 logger.info("MASHREQ: opened card details for last4=%s via selector click", target_last4)
@@ -427,6 +431,7 @@ def _open_card_details(page: Any, logger: logging.Logger, bank_cfg: dict[str, An
             action_name=f"card ending {target_last4}",
             attempts=1,
         ):
+            logger.info("MASHREQ: waiting 1400ms — card term-match clicked; waiting for card details page")
             page.wait_for_timeout(1400)
             if _is_card_details_page(page):
                 logger.info("MASHREQ: opened card details for last4=%s via term click", target_last4)
@@ -762,11 +767,13 @@ def _wait_for_estatement_rows(page: Any, logger: logging.Logger) -> bool:
             return True
 
         if _is_estatement_shell(page):
+            logger.info("MASHREQ: waiting 1000ms — E-statement shell visible but rows not loaded yet (attempt %d/60)", attempt + 1)
             page.wait_for_timeout(1000)
             continue
 
         if attempt % 10 == 0:
             _open_estatements(page, logger)
+        logger.info("MASHREQ: waiting 1000ms — statement rows not visible yet; polling (attempt %d/60)", attempt + 1)
         page.wait_for_timeout(1000)
 
     logger.info("MASHREQ: statement rows were not detected on E-Statements page")
@@ -865,6 +872,7 @@ def _click_month_download_and_capture(
     logger: logging.Logger,
 ) -> Path | None:
     try:
+        logger.info("MASHREQ: waiting for download event for month=%s (up to 20000ms)", month_token)
         with page.expect_download(timeout=20000) as download_info:
             clicked = page.evaluate(
                 r"""
@@ -1115,9 +1123,11 @@ def _on_auth_poll_tick(page: Any, low_text: str, logger: logging.Logger, state: 
                 state.relogin_attempts + 1,
                 pause,
             )
+            logger.info("MASHREQ: waiting %dms — 'not authorized' detected; pausing before portal re-navigation", int(pause * 1000))
             time.sleep(float(pause))
             try:
                 page.goto(state.portal_url, wait_until="domcontentloaded", timeout=60000)
+                logger.info("MASHREQ: waiting 1200ms — portal navigation after auth retry; allowing page to load")
                 page.wait_for_timeout(1200)
             except Exception:  # noqa: BLE001
                 pass

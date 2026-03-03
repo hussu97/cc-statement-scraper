@@ -128,11 +128,13 @@ def _wait_for_authenticated_session(
             adapter.login(page, logger, credentials)
             state.relogin_attempts += 1
             state.last_login_attempt_unix = time.time()
+            logger.info("%s: waiting 2000ms — re-login submitted; pausing before next auth poll", bank_code)
             time.sleep(2)
             continue
 
         if action is AuthPollAction.WAIT:
             page = _active_page(page)
+            logger.info("%s: waiting 1200ms — adapter requested WAIT action", bank_code)
             page.wait_for_timeout(1200)
             continue
 
@@ -168,6 +170,7 @@ def _wait_for_authenticated_session(
                             bank_code,
                         )
                 state.prompted_for_mfa = True
+            logger.info("%s: waiting 2000ms — MFA/OTP pending; polling for completion", bank_code)
             time.sleep(2)
             continue
 
@@ -178,6 +181,7 @@ def _wait_for_authenticated_session(
 
         # --- Adapter login screen detection ---
         if adapter.is_login_screen(low):
+            logger.info("%s: waiting 2000ms — login screen still visible; polling", bank_code)
             time.sleep(2)
             continue
 
@@ -193,6 +197,7 @@ def _wait_for_authenticated_session(
                 logger.info("%s: proceeding with post-login navigation", bank_code)
                 return page
 
+        logger.info("%s: waiting 2000ms — polling for authenticated session", bank_code)
         time.sleep(2)
 
     raise BrowserDownloadError(f"{bank_code}: timed out waiting for authenticated session")

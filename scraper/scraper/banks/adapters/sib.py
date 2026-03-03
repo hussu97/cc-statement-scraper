@@ -506,6 +506,7 @@ def login(page: Any, logger: logging.Logger, credentials: dict[str, str] | None 
     user_id = require_env("SIB_USER_ID", credentials)
     password = require_env("SIB_PASSWORD", credentials)
 
+    logger.info("SIB: waiting 1200ms — login page loaded; allowing initial render")
     page.wait_for_timeout(1200)
 
     if not _has_visible_password_input(page):
@@ -540,6 +541,7 @@ def login(page: Any, logger: logging.Logger, credentials: dict[str, str] | None 
             )
             if not clicked:
                 clicked = _click_shadow_best_match(page, ["secure login"], logger, action_name="Secure Login")
+            logger.info("SIB: waiting 1400ms — Secure Login clicked; waiting for password input")
             page.wait_for_timeout(1400)
             if _has_visible_password_input(page):
                 break
@@ -621,6 +623,7 @@ def _open_estatement_popup(page: Any, logger: logging.Logger) -> bool:
     for _ in range(10):
         # Best-effort path: open Credit Card section then E-statement.
         _click_shadow_best_match(page, ["credit card"], logger, action_name="Credit Card")
+        logger.info("SIB: waiting 800ms — Credit Card section clicked; allowing E-statement to appear")
         page.wait_for_timeout(800)
         clicked_estatement = _click_first_visible(
             page,
@@ -649,6 +652,7 @@ def _open_estatement_popup(page: Any, logger: logging.Logger) -> bool:
                 action_name="E-statement",
             )
 
+        logger.info("SIB: waiting 1000ms — E-statement clicked; waiting for popup to load")
         page.wait_for_timeout(1000)
         if _popup_has_download_controls(page):
             logger.info("SIB: E-statement popup detected")
@@ -847,6 +851,7 @@ def _download_statement(page: Any, incoming_dir: Path, logger: logging.Logger) -
             try:
                 if not item.is_visible():
                     continue
+                logger.info("SIB: waiting for download event via explicit control (up to 18000ms)")
                 with page.expect_download(timeout=18000) as download_info:
                     item.click(timeout=3500)
                 path = save_download(download_info.value, incoming_dir, "SIB", logger)
@@ -857,6 +862,7 @@ def _download_statement(page: Any, incoming_dir: Path, logger: logging.Logger) -
 
     before = _snapshot_pdf_mtimes(incoming_dir)
     try:
+        logger.info("SIB: waiting for download event via shadow fallback control (up to 12000ms)")
         with page.expect_download(timeout=12000) as download_info:
             if not _click_shadow_best_match(
                 page,

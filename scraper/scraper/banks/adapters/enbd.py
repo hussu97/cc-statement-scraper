@@ -123,6 +123,7 @@ def _click_cards_tile(page: Any, logger: logging.Logger) -> bool:
             if not has_tiles:
                 try:
                     page.go_back(timeout=4000)
+                    logger.info("ENBD: waiting 1500ms — navigating back after landing on wrong tile page")
                     page.wait_for_timeout(1500)
                     _dismiss_overlays(page, logger)
                     logger.info("ENBD: navigated back after landing on wrong tile page")
@@ -164,6 +165,7 @@ def _click_cards_tile(page: Any, logger: logging.Logger) -> bool:
                 """
             )
             if clicked:
+                logger.info("ENBD: waiting 2200ms — Cards tile clicked via JS; waiting for navigation")
                 page.wait_for_timeout(2200)
                 logger.info("ENBD: clicked Cards tile via JS heading evaluator")
                 if _is_cards_detail(page):
@@ -187,6 +189,7 @@ def _click_cards_tile(page: Any, logger: logging.Logger) -> bool:
                         item.click(timeout=2500)
                     except Exception:  # noqa: BLE001
                         item.click(timeout=2500, force=True)
+                    logger.info("ENBD: waiting 2200ms — cards entry clicked via %s; waiting for navigation", selector)
                     page.wait_for_timeout(2200)
                     logger.info("ENBD: clicked cards entry via %s", selector)
                     if _is_cards_detail(page):
@@ -248,6 +251,7 @@ def _open_statements_view(page: Any, logger: logging.Logger) -> bool:
                 """
             )
             if clicked:
+                logger.info("ENBD: waiting 1800ms — Statements View All clicked; waiting for download controls")
                 page.wait_for_timeout(1800)
                 if _is_statements_download_page(page):
                     logger.info("ENBD: clicked Statements -> View All")
@@ -1046,6 +1050,7 @@ def _select_statement_period(
 
             if selected_year:
                 # ENBD can refresh month options asynchronously after year changes.
+                logger.info("ENBD: waiting 1300ms — year selected; allowing month options to refresh asynchronously")
                 page.wait_for_timeout(1300)
 
                 refreshed_months: list[Any] = []
@@ -1241,6 +1246,7 @@ def _select_statement_period_with_retry(
 
         if attempt < attempts - 1:
             _dismiss_overlays(page, logger)
+            logger.info("ENBD: waiting %dms — statement period selection attempt %d failed; retrying", 900 + (attempt * 300), attempt + 1)
             page.wait_for_timeout(900 + (attempt * 300))
     return False
 
@@ -1268,6 +1274,7 @@ def _click_download(page: Any, incoming_dir: Path, logger: logging.Logger) -> Pa
             try:
                 if not item.is_visible():
                     continue
+                logger.info("ENBD: waiting for download event (up to 9000ms)")
                 with page.expect_download(timeout=9000) as download_info:
                     item.click(timeout=3000)
                 return save_download(download_info.value, incoming_dir, "ENBD", logger)
@@ -1334,6 +1341,7 @@ def _dismiss_post_download_ui(page: Any, logger: logging.Logger) -> None:
                 if not item.is_visible():
                     continue
                 item.click(timeout=2500)
+                logger.info("ENBD: waiting 1000ms — DONE clicked; allowing post-download screen to dismiss")
                 page.wait_for_timeout(1000)
                 logger.info("ENBD: clicked post-download DONE action")
                 break
@@ -1362,6 +1370,7 @@ def _dismiss_post_download_ui(page: Any, logger: logging.Logger) -> None:
             """
         )
         if clicked_done:
+            logger.info("ENBD: waiting 900ms — DONE clicked via JS; allowing post-download screen to dismiss")
             page.wait_for_timeout(900)
             logger.info("ENBD: clicked DONE action via JS fallback")
     except Exception:  # noqa: BLE001
@@ -1387,6 +1396,7 @@ def _ensure_statements_download_page(page: Any, logger: logging.Logger) -> bool:
         done = page.locator("button:has-text('DONE'), [role='button']:has-text('DONE')")
         if done.count() > 0 and done.first.is_visible():
             done.first.click(timeout=2500)
+            logger.info("ENBD: waiting 1000ms — DONE clicked to dismiss success screen before reopening statements")
             page.wait_for_timeout(1000)
             logger.info("ENBD: dismissed success screen via DONE before reopening statements")
             if _is_statements_download_page(page):
@@ -1396,6 +1406,7 @@ def _ensure_statements_download_page(page: Any, logger: logging.Logger) -> bool:
 
     for _ in range(2):
         if _open_statements_view(page, logger):
+            logger.info("ENBD: waiting 1000ms — statements view opened; waiting for download controls")
             page.wait_for_timeout(1000)
             if _is_statements_download_page(page):
                 return True

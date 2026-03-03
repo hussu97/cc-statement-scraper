@@ -398,6 +398,7 @@ def login(page: Any, logger: logging.Logger, credentials: dict[str, str] | None 
             except Exception:  # noqa: BLE001
                 pass
             page.goto(portal, wait_until="domcontentloaded", timeout=30000)
+            logger.info("ADCB: waiting 2000ms — portal navigation after storage clear; allowing login page to render")
             page.wait_for_timeout(2000)
             return  # Caller will detect login screen and retry.
     except Exception:  # noqa: BLE001
@@ -885,6 +886,7 @@ def handle_concurrent_session_gate(page: Any, logger: logging.Logger, low_text: 
                 if not item.is_visible() or not item.is_enabled():
                     continue
                 item.click(timeout=2500)
+                logger.info("ADCB: waiting 2000ms — 'Continue browsing' clicked; allowing session to resume")
                 page.wait_for_timeout(2000)
                 logger.info("ADCB: clicked 'Continue browsing' on gate (using existing session)")
                 return True
@@ -911,6 +913,7 @@ def handle_concurrent_session_gate(page: Any, logger: logging.Logger, low_text: 
                     continue
                 item.click(timeout=2500)
                 # Give ADCB's backend a moment to register the session termination.
+                logger.info("ADCB: waiting 3000ms — Login clicked to terminate concurrent session; allowing backend to register")
                 page.wait_for_timeout(3000)
                 logger.info("ADCB: cleared concurrent-session gate via %s", selector)
                 return True
@@ -1204,6 +1207,7 @@ def _download_statement_for_selected_period(page: Any, incoming_dir: Path, logge
                 try:
                     if not item.is_visible() or not item.is_enabled():
                         continue
+                    logger.info("ADCB: waiting for download event via anchored statement block (up to 14000ms)")
                     with page.expect_download(timeout=14000) as download_info:
                         item.click(timeout=2500)
                     path = save_download(download_info.value, incoming_dir, "ADCB", logger)
@@ -1213,6 +1217,7 @@ def _download_statement_for_selected_period(page: Any, incoming_dir: Path, logge
                     continue
 
     try:
+        logger.info("ADCB: waiting for download event via JS page-level scan (up to 14000ms)")
         with page.expect_download(timeout=14000) as download_info:
             clicked = page.evaluate(
                 """
@@ -1288,6 +1293,7 @@ def _download_statement_for_selected_period(page: Any, incoming_dir: Path, logge
             try:
                 if not item.is_visible() or not item.is_enabled():
                     continue
+                logger.info("ADCB: waiting for download event via %s (up to 14000ms)", selector)
                 with page.expect_download(timeout=14000) as download_info:
                     item.click(timeout=2500)
                 path = save_download(download_info.value, incoming_dir, "ADCB", logger)
@@ -1588,6 +1594,7 @@ def _wait_for_landing_ready(page: Any, logger: logging.Logger) -> None:
             # ALWAYS wait 3 s minimum so the popup has time to appear — then
             # actively dismiss it.  Without this fixed pause, the popup arrives
             # mid-sidebar-click and its overlay intercepts all mouse events.
+            logger.info("ADCB: waiting 3000ms — allowing 'Refer & Earn' popup time to appear before dismissal")
             page.wait_for_timeout(3000)
             for _pw in range(6):  # up to 3 more s (6 × 500 ms) of dismissal
                 _dismiss_optional_ad_popup(page, logger)
@@ -2240,6 +2247,7 @@ def _navigate_via_sidebar_to_credit_cards(page: Any, logger: logging.Logger) -> 
     # ADCB's sidebar "Credit Cards" link may navigate directly (no accordion sub-items).
     # The Account Summary page has CC widgets with ID prefix "segCreditCardsbox_*".
     # The CC Statement page has DIFFERENT container IDs for the card rows.
+    logger.info("ADCB: waiting 1500ms — sidebar Credit Cards clicked; giving content a moment to render")
     page.wait_for_timeout(1500)  # give content a moment to render
     try:
         on_cc_stmt_page = page.evaluate(
@@ -2385,6 +2393,7 @@ def _navigate_via_sidebar_to_credit_cards(page: Any, logger: logging.Logger) -> 
                 "ADCB: mouse-clicked CC sub-item: '%s' at (%.0f, %.0f), url=%s",
                 best_sub_item_text, sub_cx, sub_cy, page.url,
             )
+            logger.info("ADCB: waiting 2000ms — CC sub-item mouse-clicked; waiting for page to update")
             page.wait_for_timeout(2000)
             logger.info("ADCB: after sub-item click, url=%s", page.url)
             return True
@@ -2412,6 +2421,7 @@ def _navigate_via_sidebar_to_credit_cards(page: Any, logger: logging.Logger) -> 
             best_sub_item_text,
         )
         if sub_clicked:
+            logger.info("ADCB: waiting 2000ms — CC sub-item JS-clicked; waiting for page to update")
             page.wait_for_timeout(2000)
             logger.info("ADCB: JS-clicked CC sub-item: '%s' (fallback), url=%s", sub_clicked, page.url)
             return True
@@ -2444,6 +2454,7 @@ def _open_card_details(page: Any, logger: logging.Logger, bank_cfg: dict) -> boo
 
     # Give the CC list content a moment to finish rendering before we click.
     if cc_page_ready:
+        logger.info("ADCB: waiting 1500ms — CC list page ready; allowing content to finish rendering")
         page.wait_for_timeout(1500)
 
     # Diagnostic: log whether we're on Account Summary or CC Statement page.
@@ -2469,6 +2480,7 @@ def _open_card_details(page: Any, logger: logging.Logger, bank_cfg: dict) -> boo
     if in_acct_summary:
         logger.info("ADCB: still on Account Summary after initial sidebar nav — retrying navigation")
         for nav_retry in range(2):
+            logger.info("ADCB: waiting 2000ms — still on Account Summary; pausing before sidebar nav retry %d/2", nav_retry + 1)
             page.wait_for_timeout(2000)
             _navigate_via_sidebar_to_credit_cards(page, logger)
             cc_page_ready = _wait_for_credit_cards_list_page(page, logger)
@@ -2538,6 +2550,7 @@ def _logout_adcb(page: Any, logger: logging.Logger) -> None:
                 el = page.locator(selector).first
                 if el.is_visible(timeout=800):
                     el.click(timeout=2000)
+                    logger.info("ADCB: waiting 1500ms — logout button clicked; allowing session termination")
                     page.wait_for_timeout(1500)
                     logger.info("ADCB: clicked logout button (%s)", selector)
                     return
@@ -2549,6 +2562,7 @@ def _logout_adcb(page: Any, logger: logging.Logger) -> None:
             wait_until="domcontentloaded",
             timeout=10000,
         )
+        logger.info("ADCB: waiting 1000ms — logout URL navigation; allowing server session to terminate")
         page.wait_for_timeout(1000)
         logger.info("ADCB: navigated to logout URL to terminate server session")
     except Exception:  # noqa: BLE001
@@ -2705,6 +2719,7 @@ def _on_auth_poll_tick(page: Any, low_text: str, logger: logging.Logger, state: 
         portal = state.portal_url or "https://online.adcb.com/apps/ADCBIB/#_frmLogin"
         try:
             page.goto(portal, wait_until="domcontentloaded", timeout=30000)
+            logger.info("ADCB: waiting 1500ms — portal navigation after gate dismissal; allowing login page to render")
             page.wait_for_timeout(1500)
         except Exception:  # noqa: BLE001
             pass
@@ -2743,6 +2758,7 @@ def _on_auth_poll_tick(page: Any, low_text: str, logger: logging.Logger, state: 
         portal = state.portal_url or "https://online.adcb.com/apps/ADCBIB/#_frmLogin"
         try:
             page.goto(portal, wait_until="domcontentloaded", timeout=30000)
+            logger.info("ADCB: waiting 2500ms — portal navigation after OTP challenge; allowing login page to render")
             page.wait_for_timeout(2500)
         except Exception:  # noqa: BLE001
             pass
