@@ -56,6 +56,22 @@ async function request<T>(
   return (await resp.json()) as T;
 }
 
+async function downloadFile(path: string): Promise<{ blob: Blob; filename: string }> {
+  const headers: Record<string, string> = {
+    'X-Profile-Key': getActiveProfileKey(),
+  };
+  const resp = await fetch(`${API_PREFIX}${path}`, { method: 'GET', headers, credentials: 'include' });
+  if (resp.status === 401) clearAuthUser();
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`HTTP ${resp.status} ${resp.statusText}: ${text}`);
+  }
+  const disposition = resp.headers.get('Content-Disposition') ?? '';
+  const match = disposition.match(/filename=(.+)/);
+  const filename = match ? match[1].trim() : 'export.xlsx';
+  return { blob: await resp.blob(), filename };
+}
+
 export const api = {
   get: <T>(path: string, init?: RequestInit) => request<T>('GET', path, undefined, init),
   post: <T>(path: string, body?: unknown, init?: RequestInit) => request<T>('POST', path, body, init),
@@ -63,4 +79,5 @@ export const api = {
   patch: <T>(path: string, body?: unknown, init?: RequestInit) => request<T>('PATCH', path, body, init),
   delete: <T>(path: string, init?: RequestInit) => request<T>('DELETE', path, undefined, init),
   upload: <T>(path: string, form: FormData, init?: RequestInit) => request<T>('POST', path, form, init),
+  downloadFile,
 };
