@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Frontend (web)
+
+- **fix** Proxy API calls through Vercel to fix session cookies on Safari and Chrome incognito — `vercel.json` now rewrites `/api/:path*` to the Render backend so the session cookie is first-party, bypassing browser third-party cookie blocking (`SameSite=None` cross-site cookies were silently dropped)
+
 ### Backend
 
 - **feat** Log security events — login success/failure logged via Python logger and audit table; service token creation/revocation emit `service_token_created` / `service_token_revoked` audit events with actor metadata
