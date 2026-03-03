@@ -189,57 +189,126 @@ def _selected_option_score(select_element: Any, mode: str) -> int | None:
 
 
 def _dismiss_optional_ad_popup(page: Any, logger: logging.Logger) -> bool:
+    """Dismiss any optional ad/promo popup in any frame on the page."""
+    # First: force-click ADCB's "Refer & earn" popup "Do Later" link.
+    # GWT renders this with opacity/transform transitions, so Playwright's normal
+    # visibility check (is_visible) returns False even when the popup is shown.
+    # Using force=True bypasses all actionability checks and fires the click.
+    try:
+        do_later = page.locator("a:has-text('Do Later')")
+        if do_later.count() > 0:
+            do_later.first.click(force=True, timeout=2000)
+            page.wait_for_timeout(500)
+            logger.info("ADCB: force-clicked 'Do Later' to dismiss Refer & earn popup")
+            return True
+    except Exception:  # noqa: BLE001
+        pass
+    # Also try the × close button with force click.
+    try:
+        close_btn = page.locator("button:has-text('×'), button:has-text('✕')")
+        if close_btn.count() > 0:
+            close_btn.first.click(force=True, timeout=1500)
+            page.wait_for_timeout(400)
+            logger.info("ADCB: force-clicked × to dismiss popup")
+            return True
+    except Exception:  # noqa: BLE001
+        pass
+
+    selectors = [
+        # "Refer & earn" popup — "Do Later" link (anchor, not button)
+        "a:has-text('Do Later')",
+        "a:has-text('do later')",
+        # Bootstrap-style close button (data-dismiss="modal")
+        "[data-dismiss='modal']",
+        "button.close",
+        ".modal-header button.close",
+        # Generic dialog close patterns
+        "[role='dialog'] button:has-text('Close')",
+        "[role='dialog'] button:has-text('Dismiss')",
+        "[role='dialog'] button:has-text('Skip')",
+        "[role='dialog'] button:has-text('Not now')",
+        "[role='dialog'] button:has-text('Later')",
+        "[role='dialog'] a:has-text('Later')",
+        "[role='dialog'] [aria-label='Close']",
+        ".modal button:has-text('Close')",
+        ".popup button:has-text('Close')",
+        ".modal [aria-label='Close']",
+        ".popup [aria-label='Close']",
+        "button:has-text('Close')",
+        "[aria-label='Close']",
+    ]
     dismissed = False
+    # Search both main frame and any child frames (ADCB may render popups in iframes).
+    try:
+        frames = list(page.frames)
+    except Exception:  # noqa: BLE001
+        frames = []
+    if page not in frames:
+        frames = [page] + frames
+
     for _ in range(4):
         dismissed_this_round = False
-
-        for selector in [
-            # "Refer & earn" popup — "Do Later" link (anchor, not button)
-            "a:has-text('Do Later')",
-            "a:has-text('do later')",
-            # Bootstrap-style close button (data-dismiss="modal")
-            "[data-dismiss='modal']",
-            "button.close",
-            ".modal-header button.close",
-            # Generic dialog close patterns
-            "[role='dialog'] button:has-text('Close')",
-            "[role='dialog'] button:has-text('Dismiss')",
-            "[role='dialog'] button:has-text('Skip')",
-            "[role='dialog'] button:has-text('Not now')",
-            "[role='dialog'] button:has-text('Later')",
-            "[role='dialog'] a:has-text('Later')",
-            "[role='dialog'] [aria-label='Close']",
-            ".modal button:has-text('Close')",
-            ".popup button:has-text('Close')",
-            ".modal [aria-label='Close']",
-            ".popup [aria-label='Close']",
-            "button:has-text('Close')",
-            "[aria-label='Close']",
-        ]:
-            locator = page.locator(selector)
-            try:
-                count = min(locator.count(), 5)
-            except Exception:  # noqa: BLE001
-                count = 0
-
-            for idx in range(count):
-                item = locator.nth(idx)
+        for frame in frames:
+            for selector in selectors:
                 try:
-                    if not item.is_visible():
-                        continue
-                    item.click(timeout=1800)
-                    page.wait_for_timeout(500)
-                    logger.info("ADCB: dismissed optional popup via %s", selector)
-                    dismissed = True
-                    dismissed_this_round = True
-                    break
+                    locator = frame.locator(selector)
+                    count = min(locator.count(), 5)
                 except Exception:  # noqa: BLE001
-                    continue
+                    count = 0
+                for idx in range(count):
+                    item = locator.nth(idx)
+                    try:
+                        if not item.is_visible():
+                            continue
+                        item.click(timeout=1800)
+                        page.wait_for_timeout(500)
+                        logger.info("ADCB: dismissed optional popup via %s (frame=%s)", selector, getattr(frame, "name", "main"))
+                        dismissed = True
+                        dismissed_this_round = True
+                        break
+                    except Exception:  # noqa: BLE001
+                        continue
+                if dismissed_this_round:
+                    break
             if dismissed_this_round:
                 break
-
         if not dismissed_this_round:
             break
+
+    # JavaScript fallback: click "Do Later" or × by innerText regardless of CSS
+    # visibility.  ADCB's "Refer & earn" popup renders via GWT with opacity/transform
+    # transitions, so Playwright's is_visible() may return False for the anchor.
+    # Always run the JS fallback to catch cases that the selector loop missed.
+        try:
+            clicked_text = page.evaluate(
+                """
+                () => {
+                  const targets = ['Do Later', 'do later', 'Not Now', 'not now', 'Skip', 'skip'];
+                  for (const el of [...document.querySelectorAll('a, button, span, div')]) {
+                    const t = (el.innerText || el.textContent || '').trim();
+                    if (targets.some(tx => t.toLowerCase() === tx.toLowerCase())) {
+                      el.click();
+                      return t;
+                    }
+                  }
+                  // × / ✕ close button (popup header X)
+                  for (const el of [...document.querySelectorAll('button, span, a, div')]) {
+                    const t = (el.innerText || el.textContent || '').trim();
+                    if (t === '\xd7' || t === '\u2715' || t === 'x' || t === 'X') {
+                      const r = el.getBoundingClientRect();
+                      if (r.width > 0 && r.height > 0) { el.click(); return t; }
+                    }
+                  }
+                  return null;
+                }
+                """
+            )
+            if clicked_text:
+                page.wait_for_timeout(700)
+                logger.info("ADCB: dismissed popup via JS fallback (clicked '%s')", clicked_text)
+                dismissed = True
+        except Exception:  # noqa: BLE001
+            pass
 
     return dismissed
 
@@ -285,12 +354,55 @@ def login(page: Any, logger: logging.Logger, credentials: dict[str, str] | None 
     cid = require_env("ADCB_CID", credentials)
     password = require_env("ADCB_LOGIN_PASSWORD", credentials)
 
+    # Click ADCB's own Reset button first — this is the only reliable way to
+    # clear ADCB's internal virtual-keyboard password buffer.  Programmatic
+    # page.fill("", "") only clears the visible field value, not the encrypted
+    # password buffer maintained by ADCB's JS.  On re-login attempts, without
+    # this reset, the previous password is still in the buffer and the new
+    # characters are appended, doubling the password.
+    try:
+        reset_btn = page.locator("#frmLogin_btnReset, input[value='Reset'], button:has-text('Reset')")
+        if reset_btn.count() > 0 and reset_btn.first.is_visible():
+            reset_btn.first.click(timeout=2000)
+            page.wait_for_timeout(400)
+            logger.info("ADCB: reset login form")
+    except Exception:  # noqa: BLE001
+        pass
+
     cid_radio = page.locator("input[aria-label='ADCB CID']")
     if cid_radio.count() > 0:
         cid_radio.first.check()
 
     page.fill("#frmLogin_txtUserId", cid)
     _fill_password_via_virtual_keyboard(page, password, logger)
+
+    # Wait for the login button to be enabled.  If it stays disabled after
+    # waiting (e.g. ADCB in a bad state), clear cookies/storage and reload the
+    # page so we start from a clean slate on the next attempt.
+    portal = "https://online.adcb.com/apps/ADCBIB/#_frmLogin"
+    try:
+        btn = page.locator("#frmLogin_btnLogin")
+        for _ in range(20):
+            if btn.count() > 0 and btn.first.is_enabled():
+                break
+            page.wait_for_timeout(300)
+        else:
+            # Button never became enabled — hard reset.
+            logger.warning("ADCB: login button stayed disabled; clearing session and reloading")
+            try:
+                page.context.clear_cookies()
+                page.evaluate(
+                    "() => { try { localStorage.clear(); } catch(_) {} "
+                    "try { sessionStorage.clear(); } catch(_) {} }"
+                )
+            except Exception:  # noqa: BLE001
+                pass
+            page.goto(portal, wait_until="domcontentloaded", timeout=30000)
+            page.wait_for_timeout(2000)
+            return  # Caller will detect login screen and retry.
+    except Exception:  # noqa: BLE001
+        pass
+
     page.click("#frmLogin_btnLogin")
     logger.info("ADCB: login submitted")
 
@@ -323,15 +435,21 @@ def is_concurrent_session_gate(text: str) -> bool:
 
 def is_authenticated_session(page: Any, low_text: str) -> bool:
     url = page.url.lower()
-    if "#_frmlogin" in url and is_login_screen(low_text):
+    low = low_text.lower()
+    # Logout / session-timeout pages are NOT authenticated.
+    if "#_frmlogout" in url:
         return False
-    if is_concurrent_session_gate(low_text):
+    if "timed out" in low and "inactivity" in low:
+        return False
+    if "#_frmlogin" in url and is_login_screen(low):
+        return False
+    if is_concurrent_session_gate(low):
         return False
     if login_selector_visible(page):
         return False
-    if is_otp_screen(low_text):
+    if is_otp_screen(low):
         return False
-    return not is_login_screen(low_text)
+    return not is_login_screen(low)
 
 
 def _open_virtual_keyboard(page: Any, logger: logging.Logger) -> None:
@@ -733,13 +851,29 @@ def handle_concurrent_session_gate(page: Any, logger: logging.Logger, low_text: 
     if not is_concurrent_session_gate(low):
         return False
 
-    selectors = [
-        "button:has-text('Login')",
-        "[role='button']:has-text('Login')",
-        "input[type='button'][value='Login']",
-        "input[type='submit'][value='Login']",
+    # Strategy: prefer "Continue browsing" over "Login".
+    #
+    # "Continue browsing" resumes the EXISTING authenticated session — no new
+    # OTP required.  "Login" terminates the existing session and starts a fresh
+    # login, requiring a new OTP and triggering ADCB rate-limiting when multiple
+    # runs happen in quick succession.
+    #
+    # Try "Continue browsing" first; if it navigates us to the authenticated
+    # dashboard, perfect.  If the button isn't there, fall back to "Login".
+    continue_selectors = [
+        "button:has-text('Continue browsing')",
+        "button:has-text('Continue Browsing')",
+        "button:has-text('Continue')",
+        "[role='button']:has-text('Continue browsing')",
+        "[role='button']:has-text('Continue')",
+        "input[type='button'][value='Continue browsing']",
+        "input[type='button'][value='Continue']",
+        "input[type='button'][value*='Continue' i]",
+        "input[type='submit'][value*='Continue' i]",
+        "a:has-text('Continue browsing')",
+        "a:has-text('Continue')",
     ]
-    for selector in selectors:
+    for selector in continue_selectors:
         locator = page.locator(selector)
         try:
             count = min(locator.count(), 4)
@@ -751,23 +885,39 @@ def handle_concurrent_session_gate(page: Any, logger: logging.Logger, low_text: 
                 if not item.is_visible() or not item.is_enabled():
                     continue
                 item.click(timeout=2500)
-                page.wait_for_timeout(1200)
-                logger.info("ADCB: cleared concurrent-session gate via %s", selector)
-                # Wipe all session cookies and storage so the session token
-                # created during this login cycle's OTP validation doesn't
-                # carry over and trigger another concurrent-session gate on
-                # the subsequent re-login attempt.
-                try:
-                    page.context.clear_cookies()
-                    page.evaluate("() => { try { localStorage.clear(); } catch(_) {} try { sessionStorage.clear(); } catch(_) {} }")
-                    logger.info("ADCB: cleared browser session cookies and storage after concurrent-gate dismissal")
-                except Exception:  # noqa: BLE001
-                    pass
+                page.wait_for_timeout(2000)
+                logger.info("ADCB: clicked 'Continue browsing' on gate (using existing session)")
                 return True
             except Exception:  # noqa: BLE001
                 continue
 
-    logger.info("ADCB: concurrent-session gate detected but Login button click failed")
+    # Fallback: "Login" terminates the existing session and forces re-login.
+    login_selectors = [
+        "button:has-text('Login')",
+        "[role='button']:has-text('Login')",
+        "input[type='button'][value='Login']",
+        "input[type='submit'][value='Login']",
+    ]
+    for selector in login_selectors:
+        locator = page.locator(selector)
+        try:
+            count = min(locator.count(), 4)
+        except Exception:  # noqa: BLE001
+            count = 0
+        for idx in range(count):
+            item = locator.nth(idx)
+            try:
+                if not item.is_visible() or not item.is_enabled():
+                    continue
+                item.click(timeout=2500)
+                # Give ADCB's backend a moment to register the session termination.
+                page.wait_for_timeout(3000)
+                logger.info("ADCB: cleared concurrent-session gate via %s", selector)
+                return True
+            except Exception:  # noqa: BLE001
+                continue
+
+    logger.info("ADCB: concurrent-session gate detected but no button click succeeded")
     return False
 
 
@@ -1210,32 +1360,61 @@ def _download_requested_months(
 
 
 def _is_card_details_screen(page: Any) -> bool:
+    """Return True only when the per-card statement DOWNLOAD section is visible.
+
+    ADCB's SPA keeps the URL at #_frmLanding for all views.  We cannot use URL
+    or general page text to distinguish screens.  Instead, we require positive
+    evidence of the statement-download form (month/year selects, download button,
+    or the "to download previous statements" heading).
+
+    The CC Statement LIST page (showing all cards before one is selected) must NOT
+    match — it shares masked card numbers, "credit card statement", and "card number"
+    column header with the per-card details screen.
+    """
     low = text_snapshot(page).lower()
     url = page.url.lower()
     if "#_frmlogin" in url or is_login_screen(low):
         return False
-    if "#_frmlanding" in url and "account summary" in low:
-        return False
 
     has_masked_card = bool(MASKED_CARD_PATTERN.search(low))
-    if "card" in url and has_masked_card and ("statement" in low or "transactions" in low):
+
+    # Strongest positive: the "to download previous statements" prompt.
+    if "to download previous statements" in low and has_masked_card:
         return True
-    if has_masked_card and "credit card" in low and "card number" in low:
+
+    # Download form: month/year selects are visible.
+    if has_masked_card and ("select month" in low or "select year" in low):
         return True
-    if has_masked_card and "statement" in low and "card number" in low:
-        return True
-    if has_masked_card and any(
-        marker in low
-        for marker in [
-            "card limit",
-            "minimum due",
-            "available balance",
-            "download statement",
-            "download statements",
-            "unbilled transactions",
-        ]
+
+    # "To download" combined with a period-selection hint.
+    if has_masked_card and "to download" in low and (
+        "month" in low or "year" in low or "period" in low
     ):
         return True
+
+    # "Generate e-statement" or "e-statement" button/heading.
+    if has_masked_card and any(m in low for m in ["generate e-statement", "e-statement"]):
+        return True
+
+    # "Unbilled transactions" section only appears on card details (not CC list).
+    if has_masked_card and "unbilled transactions" in low:
+        return True
+
+    # "Select card" + "download" — appears on single-card download forms.
+    if has_masked_card and "select card" in low and "download" in low:
+        return True
+
+    # Playwright-visible check: at least 2 <select> elements + a Download button.
+    try:
+        if (
+            page.locator("select").count() >= 2
+            and page.locator("button:has-text('Download'), input[value*='Download' i]").count() > 0
+            and has_masked_card
+        ):
+            return True
+    except Exception:  # noqa: BLE001
+        pass
+
     return False
 
 
@@ -1352,23 +1531,42 @@ def _click_card_by_limit(page: Any, logger: logging.Logger, limit_aed: int) -> b
 
 
 def _is_popup_blocking(page: Any) -> bool:
-    """Return True if a known modal/popup overlay is currently visible."""
-    for selector in [
+    """Return True if a known modal/popup overlay is currently visible in any frame."""
+    selectors = [
         "a:has-text('Do Later')",
         "[data-dismiss='modal']:visible",
         "button.close:visible",
         "[role='dialog']:visible",
-    ]:
-        try:
-            if page.locator(selector).first.is_visible():
-                return True
-        except Exception:  # noqa: BLE001
-            pass
+    ]
+    try:
+        frames = list(page.frames)
+    except Exception:  # noqa: BLE001
+        frames = []
+    if page not in frames:
+        frames = [page] + frames
+    for frame in frames:
+        for selector in selectors:
+            try:
+                if frame.locator(selector).first.is_visible():
+                    return True
+            except Exception:  # noqa: BLE001
+                pass
+    # JS fallback: detect "Do Later" by innerText (GWT popups may not be
+    # Playwright-visible due to opacity/transform transitions).
+    # Use only "do later" — it is unique to the popup modal, not the main content.
+    try:
+        found = page.evaluate(
+            "() => (document.body.innerText || '').toLowerCase().includes('do later')"
+        )
+        if found:
+            return True
+    except Exception:  # noqa: BLE001
+        pass
     return False
 
 
 def _wait_for_landing_ready(page: Any, logger: logging.Logger) -> None:
-    for _ in range(22):
+    for _ in range(40):
         _dismiss_optional_ad_popup(page, logger)
         low = text_snapshot(page).lower()
         landing_ready = (
@@ -1377,7 +1575,26 @@ def _wait_for_landing_ready(page: Any, logger: logging.Logger) -> None:
             and "account summary" in low
             and "credit cards" in low
         )
-        if landing_ready and not _is_popup_blocking(page):
+        # Require the Account Summary MAIN CONTENT area to be rendered, not just
+        # the sidebar (which loads instantly).  The masked card number or the CC
+        # list hint confirms the content area has loaded.  Without this, sidebar
+        # nav clicks get ignored by ADCB's SPA while the page is still loading.
+        # NOTE: "touchpoints" was removed — it is always present in the sidebar
+        # nav item and caused an immediate (premature) content_loaded = True.
+        content_loaded = bool(MASKED_CARD_PATTERN.search(low)) or "click on credit card number" in low
+        if landing_ready and content_loaded and not _is_popup_blocking(page):
+            logger.info("ADCB: landing page ready (content loaded)")
+            # The "Refer & earn" popup appears 1-3 s AFTER content loads, async.
+            # ALWAYS wait 3 s minimum so the popup has time to appear — then
+            # actively dismiss it.  Without this fixed pause, the popup arrives
+            # mid-sidebar-click and its overlay intercepts all mouse events.
+            page.wait_for_timeout(3000)
+            for _pw in range(6):  # up to 3 more s (6 × 500 ms) of dismissal
+                _dismiss_optional_ad_popup(page, logger)
+                if not _is_popup_blocking(page):
+                    logger.info("ADCB: popup cleared, proceeding to sidebar nav")
+                    break
+                page.wait_for_timeout(500)
             return
         page.wait_for_timeout(650)
 
@@ -1467,7 +1684,7 @@ def _click_card_tile_fallback(page: Any, logger: logging.Logger) -> bool:
                 return cs.visibility !== 'hidden' && cs.display !== 'none' && r.width > 0 && r.height > 0;
               };
               const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim().toLowerCase();
-              const cardPattern = /(credit\\s*card|card\\s*number|\\d{2,4}\\s*\\*{2,}\\s*\\d{2,4}|\\*{4})/i;
+              const cardPattern = /(credit\\s*card|card\\s*number|\\d{2,4}\\s*[\\*xX]{2,}\\s*\\d{2,4}|[\\*xX]{4})/i;
 
               const nodes = Array.from(document.querySelectorAll('a,button,[role="button"],div,span,li,td'));
               for (const node of nodes) {
@@ -1513,6 +1730,9 @@ def _click_card_link_in_landing_table(page: Any, logger: logging.Logger, bank_cf
 
     Prefers a card whose last-4 digits match bank_cfg['cards'][*]['last4']; falls back to the
     first masked-card link found inside the Credit Cards section.
+
+    Uses Playwright locators (which auto-scroll into view) as the primary strategy so that
+    card links that are below the initial viewport fold are still reliably clicked.
     """
     last4_values = [
         str(card.get("last4", "")).strip()
@@ -1520,54 +1740,282 @@ def _click_card_link_in_landing_table(page: Any, logger: logging.Logger, bank_cf
         if str(card.get("last4", "")).strip()
     ]
 
+    # --- DOM diagnostic: log what elements contain the last4 values ---
+    for last4 in last4_values:
+        try:
+            matches = page.evaluate(
+                """
+                (last4) => {
+                  const results = [];
+                  for (const el of Array.from(document.querySelectorAll('*'))) {
+                    const t = (el.innerText || el.textContent || '').trim();
+                    if (t.includes(last4) && t.length < 120) {
+                      const r = el.getBoundingClientRect();
+                      results.push({
+                        tag: el.tagName,
+                        text: t.substring(0, 80),
+                        id: el.id || '',
+                        cls: (typeof el.className === 'string' ? el.className : '').substring(0, 40),
+                        href: el.href || '',
+                        w: Math.round(r.width),
+                        h: Math.round(r.height),
+                      });
+                      if (results.length >= 10) break;
+                    }
+                  }
+                  return results;
+                }
+                """,
+                last4,
+            )
+            logger.info("ADCB: DOM elements containing '%s': %s", last4, matches)
+        except Exception:  # noqa: BLE001
+            pass
+
+    # --- Primary: Playwright locator approach (anchors, handles auto-scroll) ---
+    # locator.click() automatically scrolls the element into view.
+    for last4 in last4_values:
+        for selector in [
+            f"a:has-text('{last4}')",
+            f"a[href*='{last4}']",
+        ]:
+            locator = page.locator(selector)
+            try:
+                count = min(locator.count(), 5)
+            except Exception:  # noqa: BLE001
+                count = 0
+            if count:
+                logger.info("ADCB: '%s' found count=%s", selector, count)
+            for idx in range(count):
+                item = locator.nth(idx)
+                try:
+                    item.click(timeout=3500)
+                    logger.info("ADCB: clicked credit card link in landing table (last4=%s via %s)", last4, selector)
+                    if _wait_for_card_details_screen(page, timeout_ms=6000):
+                        return True
+                except Exception:  # noqa: BLE001
+                    continue
+
+    # --- Secondary: direct pixel-level mouse click on the card row ---
+    # ADCB's GWT SPA may require genuine mouse events at pixel coordinates.
+    # Strategy: find the li.seg2Normal row containing last4, then prefer the
+    # sKHbxTrans transparent overlay WITHIN that row as the actual click target
+    # (GWT event delegation typically attaches handlers to the overlay div).
+    for last4 in last4_values:
+        try:
+            rect = page.evaluate(
+                """
+                (last4) => {
+                  // Helper: check if an element is inside the Account Summary CC widget.
+                  // That widget's containers have IDs starting with "segCreditCardsbox_".
+                  // Clicking those rows does NOTHING (display-only widget).
+                  const isAcctSummary = (el) => {
+                    let cur = el;
+                    while (cur && cur !== document.body) {
+                      if (cur.id && cur.id.startsWith('segCreditCardsbox_')) return true;
+                      cur = cur.parentElement;
+                    }
+                    return false;
+                  };
+
+                  // Find the card row li.seg2Normal that contains this last4.
+                  for (const li of document.querySelectorAll('li.seg2Normal, tr.seg2Normal')) {
+                    const liText = (li.innerText || li.textContent || '').trim();
+                    if (!liText.includes(last4)) continue;
+                    const liRect = li.getBoundingClientRect();
+                    if (liRect.width === 0 || liRect.height === 0) continue;
+
+                    // Flag Account Summary rows — they are not navigable.
+                    const inAcctSummary = isAcctSummary(li);
+
+                    // Prefer the transparent GWT overlay div within this row.
+                    const overlay = li.querySelector(
+                      'div[class*="Trans"], div[class*="sKHb"], div[class*="trans"]'
+                    );
+                    if (overlay) {
+                      const r = overlay.getBoundingClientRect();
+                      if (r.width > 0 && r.height > 0)
+                        return { left: r.left, top: r.top, width: r.width, height: r.height,
+                                 tag: 'DIV', cls: overlay.className || '', source: 'overlay',
+                                 acct_summary: inAcctSummary };
+                    }
+
+                    // Fall back to a child div/span that directly contains last4.
+                    for (const child of li.querySelectorAll('div, span')) {
+                      const ct = (child.innerText || child.textContent || '').trim();
+                      if (!ct.includes(last4)) continue;
+                      const r = child.getBoundingClientRect();
+                      if (r.width > 0 && r.height > 0)
+                        return { left: r.left, top: r.top, width: r.width, height: r.height,
+                                 tag: child.tagName, cls: child.className || '', source: 'child',
+                                 acct_summary: inAcctSummary };
+                    }
+
+                    // Last resort: click the row itself.
+                    return { left: liRect.left, top: liRect.top, width: liRect.width, height: liRect.height,
+                             tag: li.tagName, cls: li.className || '', source: 'row',
+                             acct_summary: inAcctSummary };
+                  }
+
+                  // Fallback: any element with last4 text (mark acct_summary if applicable).
+                  for (const el of document.querySelectorAll('li.seg2Normal, div.sKHbxTrans')) {
+                    const t = (el.innerText || el.textContent || '').trim();
+                    if (t.includes(last4)) {
+                      const r = el.getBoundingClientRect();
+                      if (r.width > 0 && r.height > 0)
+                        return { left: r.left, top: r.top, width: r.width, height: r.height,
+                                 tag: el.tagName, cls: el.className || '', source: 'fallback',
+                                 acct_summary: isAcctSummary(el) };
+                    }
+                  }
+                  return null;
+                }
+                """,
+                last4,
+            )
+        except Exception:  # noqa: BLE001
+            rect = None
+
+        # Skip if this element belongs to the Account Summary read-only CC widget.
+        # That widget's container IDs start with "segCreditCardsbox_" and clicking
+        # its rows does nothing (the widget is display-only on Account Summary).
+        if rect and rect.get("acct_summary"):
+            logger.info(
+                "ADCB: skipping Account Summary CC widget element (%s.%s) — not navigable",
+                rect.get("tag", "?"), rect.get("cls", "")[:30],
+            )
+            rect = None
+
+        if rect:
+            cx = rect["left"] + rect["width"] / 2
+            cy = rect["top"] + rect["height"] / 2
+            logger.info(
+                "ADCB: mouse-clicking card row (%s.%s source=%s) at (%.0f, %.0f)",
+                rect.get("tag", "?"), rect.get("cls", "")[:30], rect.get("source", "?"), cx, cy,
+            )
+            try:
+                page.mouse.click(cx, cy)
+                if _wait_for_card_details_screen(page, timeout_ms=10000):
+                    logger.info("ADCB: card details opened via pixel click at (%.0f, %.0f)", cx, cy)
+                    return True
+                # Log page text to diagnose what's there after click.
+                try:
+                    post_snap = text_snapshot(page).lower()[:600]
+                    logger.info("ADCB: page text after card pixel click: %s", post_snap)
+                except Exception:  # noqa: BLE001
+                    pass
+            except Exception:  # noqa: BLE001
+                pass
+            # Try double-click in case the SPA requires it.
+            try:
+                page.mouse.dblclick(cx, cy)
+                if _wait_for_card_details_screen(page, timeout_ms=6000):
+                    logger.info("ADCB: card details opened via pixel double-click")
+                    return True
+            except Exception:  # noqa: BLE001
+                pass
+
+    # --- Tertiary: broader element search (li / td / span / div cells) ---
+    # ADCB renders credit card rows as <li class="seg2Normal"> items with nested
+    # div cells.  The clickable element is the row li or the inner card-info cell.
+    for last4 in last4_values:
+        for selector in [
+            f"li:has-text('{last4}')",
+            f"td:has-text('{last4}')",
+            f"span:has-text('{last4}')",
+            f"div.kcell:has-text('{last4}')",
+            f"div.sKHbxTrans:has-text('{last4}')",
+        ]:
+            locator = page.locator(selector)
+            try:
+                count = min(locator.count(), 5)
+            except Exception:  # noqa: BLE001
+                count = 0
+            if count:
+                logger.info("ADCB: '%s' found count=%s — trying force click", selector, count)
+            for idx in range(count):
+                item = locator.nth(idx)
+                try:
+                    item.scroll_into_view_if_needed(timeout=2000)
+                    try:
+                        item.click(timeout=3500)
+                    except Exception:  # noqa: BLE001
+                        item.click(timeout=3500, force=True)
+                    logger.info("ADCB: clicked %s with last4=%s", selector, last4)
+                    if _wait_for_card_details_screen(page, timeout_ms=6000):
+                        return True
+                except Exception:  # noqa: BLE001
+                    continue
+
+    # --- Tertiary: any link by card-number role ---
+    card_pattern = re.compile(r"\d{4}[xX*\s]{4,}\d{2,4}", re.IGNORECASE)
+    locator = page.get_by_role("link", name=card_pattern)
+    try:
+        count = min(locator.count(), 8)
+    except Exception:  # noqa: BLE001
+        count = 0
+    if count:
+        logger.info("ADCB: card link role-pattern found count=%s", count)
+    for idx in range(count):
+        item = locator.nth(idx)
+        try:
+            item.click(timeout=3500)
+            logger.info("ADCB: clicked credit card link via role-pattern (idx=%s)", idx)
+            if _wait_for_card_details_screen(page, timeout_ms=6000):
+                return True
+        except Exception:  # noqa: BLE001
+            continue
+
+    # --- Quaternary: JS-based approach using dispatchEvent (handles onclick-less TDs) ---
     try:
         result = page.evaluate(
             """
             ({ preferredLast4List }) => {
-              const maskRe = /(\\d{4}[xX*]{4,}\\d{2,4}|[xX*]{2,}\\s*\\d{2,4})/i;
-              const visible = (el) => {
-                const cs = getComputedStyle(el);
-                const r = el.getBoundingClientRect();
-                return cs.visibility !== 'hidden' && cs.display !== 'none' && r.width > 0 && r.height > 0;
-              };
-
-              // Find the Credit Cards section heading
-              let creditCardsSection = null;
-              for (const el of Array.from(document.querySelectorAll('h1,h2,h3,h4,h5,h6,td,th,div,span,p'))) {
-                if (!visible(el)) continue;
+              const maskRe = /(\\d{4}[xX*\\s]{4,}\\d{2,4}|[xX*]{2,}\\s*\\d{2,4})/i;
+              const allEls = Array.from(
+                document.querySelectorAll('a,td,span,div,li,tr,[role="link"],[role="button"]')
+              );
+              const cardEls = allEls.filter(el => {
                 const t = (el.innerText || el.textContent || '').trim();
-                if (/^credit\\s+cards?$/i.test(t)) {
-                  creditCardsSection = el;
-                  break;
-                }
-              }
-
-              // Collect candidate <a> links: prefer those under the CC section
-              const allLinks = Array.from(document.querySelectorAll('a'));
-              const visibleCardLinks = allLinks.filter(a => {
-                if (!visible(a)) return false;
-                const t = (a.innerText || a.textContent || '').trim();
-                return maskRe.test(t) || /\\d{4}X{4,}\\d{2,4}/i.test(t) || /\\d{12,}/i.test(t);
+                return (maskRe.test(t) || /\\d{4}[Xx*]{4,}\\d{2,4}/i.test(t)) && t.length < 120;
               });
 
-              if (visibleCardLinks.length === 0) return { clicked: false, last4: '' };
+              if (cardEls.length === 0) return { clicked: false, last4: '' };
 
               // Try preferred last4 first
               for (const last4 of preferredLast4List) {
-                const match = visibleCardLinks.find(a => {
-                  const t = (a.innerText || a.textContent || '').trim();
+                const match = cardEls.find(el => {
+                  const t = (el.innerText || el.textContent || '').trim();
                   return t.endsWith(last4) || t.includes(last4);
                 });
                 if (match) {
-                  match.click();
-                  return { clicked: true, last4 };
+                  // Walk up to find nearest clickable ancestor; otherwise dispatch on the node.
+                  let cur = match;
+                  while (cur && cur !== document.body) {
+                    const tag = (cur.tagName || '').toLowerCase();
+                    const role = (cur.getAttribute && cur.getAttribute('role')) || '';
+                    const hasHandler = !!(
+                      cur.getAttribute('onclick') ||
+                      cur.getAttribute('ng-click') ||
+                      cur.getAttribute('data-ng-click')
+                    );
+                    if (tag === 'a' || tag === 'button' || role === 'button' || role === 'link' || hasHandler) {
+                      cur.click();
+                      return { clicked: true, last4, element: tag };
+                    }
+                    cur = cur.parentElement;
+                  }
+                  // No clickable ancestor found — dispatch click on the node itself.
+                  match.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+                  return { clicked: true, last4, element: (match.tagName || '').toLowerCase() };
                 }
               }
 
-              // Fallback: click the first card link (topmost in the Credit Cards table)
-              visibleCardLinks[0].click();
-              const t = (visibleCardLinks[0].innerText || visibleCardLinks[0].textContent || '').trim();
-              return { clicked: true, last4: t.slice(-4) };
+              // Fallback: first card element found
+              const first = cardEls[0];
+              first.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+              const t = (first.innerText || first.textContent || '').trim();
+              return { clicked: true, last4: t.slice(-4), element: (first.tagName || '').toLowerCase() };
             }
             """,
             {"preferredLast4List": last4_values},
@@ -1579,8 +2027,399 @@ def _click_card_link_in_landing_table(page: Any, logger: logging.Logger, bank_cf
         return False
 
     last4 = result.get("last4", "")
-    logger.info("ADCB: clicked credit card link in landing table (last4=%s)", last4)
+    element = result.get("element", "?")
+    logger.info("ADCB: clicked credit card element (tag=%s, last4=%s) via JS dispatchEvent", element, last4)
     return _wait_for_card_details_screen(page, timeout_ms=6000)
+
+
+def _wait_for_credit_cards_list_page(page: Any, logger: logging.Logger) -> bool:
+    """Wait until the dedicated Credit Cards list page has loaded.
+
+    This page is reached by clicking the sidebar "Credit Cards" → sub-item.
+    It shows a list of masked card numbers (li.seg2Normal rows).  Returns True
+    if the page is ready, False on timeout.
+    """
+    for tick in range(25):
+        _dismiss_optional_ad_popup(page, logger)
+        url = page.url.lower()
+        low = text_snapshot(page).lower()
+        has_masked = bool(MASKED_CARD_PATTERN.search(low))
+
+        if _is_popup_blocking(page):
+            page.wait_for_timeout(600)
+            continue
+
+        # Strong indicator: "click on credit card number" hint text.
+        # NOTE: this text ALSO appears in the Account Summary CC widget (read-only).
+        # Only accept it if segCreditCardsbox_* (Account Summary container) is absent.
+        if "click on credit card number" in low:
+            try:
+                in_acct_summary = page.evaluate(
+                    "() => !!document.querySelector('[id^=\"segCreditCardsbox_\"]')"
+                )
+            except Exception:  # noqa: BLE001
+                in_acct_summary = False
+            if not in_acct_summary:
+                logger.info("ADCB: CC list page ready (hint text, not AcctSummary, tick=%d), url=%s", tick, page.url)
+                return True
+            logger.info("ADCB: 'click on credit card number' found but still on AcctSummary (tick=%d)", tick)
+
+        # ADCB SPA keeps URL at #_frmLanding always.  Use content as indicator.
+        # The CC Statement page shows masked cards + "credit card statement" heading
+        # WITHOUT the "account summary" full text (account summary is in the sidebar
+        # nav only, but the Account Summary *page* heading text would also contain it).
+        # The critical distinction: on the CC Statement page the main content area
+        # should show the word "statement" prominently combined with card rows.
+        # NOTE: do NOT rely on li.seg2Normal alone — Account Summary widget has these too.
+        if has_masked and "credit card statement" in low:
+            logger.info("ADCB: CC list page ready (CC statement heading + masked card, tick=%d), url=%s", tick, page.url)
+            return True
+
+        # URL changed away from landing — masked card present → probably CC page.
+        if "#_frmlanding" not in url and has_masked:
+            logger.info("ADCB: CC list page ready (url changed, tick=%d), url=%s", tick, page.url)
+            return True
+
+        page.wait_for_timeout(600)
+
+    logger.info("ADCB: CC list page wait timed out, url=%s", page.url)
+    return False
+
+
+def _get_sidebar_item_texts(page: Any) -> set:
+    """Return the set of short text strings visible in the left sidebar (x < 250)."""
+    try:
+        items = page.evaluate(
+            """
+            () => {
+              return [...document.querySelectorAll('a, li, div, span')]
+                .filter(el => {
+                  const r = el.getBoundingClientRect();
+                  return r.left < 250 && r.width > 0 && r.height > 0;
+                })
+                .map(el => (el.innerText || el.textContent || '').trim()
+                  .replace(/^[+\\-\\s]+/, '').trim().toLowerCase())
+                .filter(t => t.length > 1 && t.length < 40);
+            }
+            """
+        )
+        return set(items)
+    except Exception:  # noqa: BLE001
+        return set()
+
+
+def _navigate_via_sidebar_to_credit_cards(page: Any, logger: logging.Logger) -> bool:
+    """Click the sidebar '+ Credit Cards' item, wait for sub-items, then click the best one."""
+
+    # Step 1: Ensure popup is gone before touching the sidebar.
+    # ADCB's SPA ignores sidebar nav clicks while a modal overlay is open.
+    for _ in range(15):  # up to 7.5 s
+        _dismiss_optional_ad_popup(page, logger)
+        if not _is_popup_blocking(page):
+            break
+        page.wait_for_timeout(500)
+    else:
+        logger.info("ADCB: popup still blocking after 7.5 s — proceeding anyway")
+
+    # Step 2: Snapshot sidebar items BEFORE clicking Credit Cards.
+    before_items = _get_sidebar_item_texts(page)
+    logger.info(
+        "ADCB: sidebar before CC click (%d unique texts): %s",
+        len(before_items), sorted(before_items),
+    )
+
+    # Step 3: Click "Credit Cards" (+ prefix) in sidebar.
+    # Use real mouse coordinates so ADCB's SPA receives proper mouse events.
+    try:
+        rect = page.evaluate(
+            """
+            () => {
+              const els = [...document.querySelectorAll('a, li, div, span')];
+              const match = els.find(el => {
+                const t = (el.innerText || el.textContent || '').trim()
+                  .replace(/^[+\\-\\s]+/, '').trim();
+                if (t.toLowerCase() !== 'credit cards') return false;
+                const r = el.getBoundingClientRect();
+                return r.width > 0 && r.height > 0 && r.left < 250;
+              });
+              if (!match) return null;
+              const r = match.getBoundingClientRect();
+              return { left: r.left, top: r.top, width: r.width, height: r.height };
+            }
+            """
+        )
+    except Exception:  # noqa: BLE001
+        rect = None
+
+    if not rect:
+        logger.info("ADCB: sidebar Credit Cards element not found")
+        return False
+
+    # Scroll the element into view before clicking (in case sidebar is long).
+    # Also log the element's tag/class for diagnostics.
+    try:
+        scroll_info = page.evaluate(
+            """
+            () => {
+              const match = [...document.querySelectorAll('a, li, div, span')].find(el => {
+                const t = (el.innerText || el.textContent || '').trim()
+                  .replace(/^[+\\-\\s]+/, '').trim();
+                if (t.toLowerCase() !== 'credit cards') return false;
+                const r = el.getBoundingClientRect();
+                return r.width > 0 && r.height > 0 && r.left < 250;
+              });
+              if (!match) return null;
+              match.scrollIntoView({ block: 'center', behavior: 'instant' });
+              return { tag: match.tagName, cls: (match.className || '').substring(0, 40),
+                       txt: (match.innerText || match.textContent || '').trim().substring(0, 30) };
+            }
+            """
+        )
+        if scroll_info:
+            logger.info("ADCB: Credit Cards sidebar element: %s", scroll_info)
+        page.wait_for_timeout(300)
+        # Re-fetch rect after scroll (position may have shifted).
+        rect = page.evaluate(
+            """
+            () => {
+              const els = [...document.querySelectorAll('a, li, div, span')];
+              const match = els.find(el => {
+                const t = (el.innerText || el.textContent || '').trim()
+                  .replace(/^[+\\-\\s]+/, '').trim();
+                if (t.toLowerCase() !== 'credit cards') return false;
+                const r = el.getBoundingClientRect();
+                return r.width > 0 && r.height > 0 && r.left < 250;
+              });
+              if (!match) return null;
+              const r = match.getBoundingClientRect();
+              return { left: r.left, top: r.top, width: r.width, height: r.height };
+            }
+            """
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
+    if not rect:
+        logger.info("ADCB: sidebar Credit Cards element not found after scroll")
+        return False
+
+    # Click at the centre of the element using real mouse events.
+    # Move to the element first (GWT uses mouseenter/mouseover for menu activation).
+    cx = rect["left"] + rect["width"] / 2
+    cy = rect["top"] + rect["height"] / 2
+    try:
+        page.mouse.move(cx, cy)
+        page.wait_for_timeout(300)
+        page.mouse.click(cx, cy)
+        logger.info("ADCB: mouse-clicked Credit Cards in sidebar at (%.0f, %.0f)", cx, cy)
+    except Exception:  # noqa: BLE001
+        # Fall back to JS synthetic click.
+        try:
+            page.evaluate(
+                """
+                (pos) => {
+                  const els = [...document.querySelectorAll('a, li, div, span')];
+                  const match = els.find(el => {
+                    const t = (el.innerText || el.textContent || '').trim()
+                      .replace(/^[+\\-\\s]+/, '').trim();
+                    if (t.toLowerCase() !== 'credit cards') return false;
+                    const r = el.getBoundingClientRect();
+                    return r.width > 0 && r.height > 0 && r.left < 250;
+                  });
+                  if (match) match.click();
+                }
+                """,
+                {"cx": cx, "cy": cy},
+            )
+            logger.info("ADCB: JS-clicked Credit Cards fallback at (%.0f, %.0f)", cx, cy)
+        except Exception:  # noqa: BLE001
+            logger.info("ADCB: sidebar Credit Cards click failed entirely")
+            return False
+
+    # Step 3b: Immediately check whether the main content changed to CC Statement page.
+    # ADCB's sidebar "Credit Cards" link may navigate directly (no accordion sub-items).
+    # The Account Summary page has CC widgets with ID prefix "segCreditCardsbox_*".
+    # The CC Statement page has DIFFERENT container IDs for the card rows.
+    page.wait_for_timeout(1500)  # give content a moment to render
+    try:
+        on_cc_stmt_page = page.evaluate(
+            """
+            () => {
+              // If Account Summary CC widget exists, we're on Account Summary (NOT CC Statement).
+              const acctSummaryWidget = document.querySelector('[id^="segCreditCardsbox_"]');
+              if (acctSummaryWidget) return false;
+              // If li.seg2Normal exists (CC Statement card rows) without segCreditCardsbox, we're there.
+              const ccRow = document.querySelector('li.seg2Normal');
+              return !!ccRow;
+            }
+            """
+        )
+        if on_cc_stmt_page:
+            logger.info("ADCB: CC Statement page already loaded after sidebar click (direct nav, no sub-items)")
+            return True
+    except Exception:  # noqa: BLE001
+        pass
+
+    # Step 4: Poll up to 10 s for NEW sidebar items that appeared after the click.
+    # Sub-items are identified by text that:
+    #   - Was NOT present before the click
+    #   - Contains 'credit card' but is not exactly 'credit cards' or 'islamic credit cards'
+    #   - Is short (< 40 chars)
+    _KNOWN_TOP_LEVEL = {
+        "credit cards", "islamic credit cards", "accounts", "loans",
+        "islamic finance", "touchpoints", "fixed deposit",
+        "term investment deposits", "investments", "bill payments",
+        "money transfer", "uae direct debit", "insurance", "refer a friend",
+        "other services", "service request", "account summary", "offers & updates",
+    }
+    _SUB_ITEM_PRIORITY = [
+        "credit card statement",
+        "card statement",
+        "credit card detail",
+        "credit card summary",
+        "card detail",
+        "card summary",
+    ]
+
+    best_sub_item_text: str | None = None
+    for tick in range(20):  # 20 × 500ms = 10 s
+        page.wait_for_timeout(500)
+        after_items = _get_sidebar_item_texts(page)
+        new_items = after_items - before_items - _KNOWN_TOP_LEVEL
+        if new_items:
+            logger.info("ADCB: new sidebar items after CC expand (tick=%d): %s", tick, sorted(new_items))
+            # Pick the highest-priority sub-item.
+            for keyword in _SUB_ITEM_PRIORITY:
+                match = next((t for t in new_items if keyword in t), None)
+                if match:
+                    best_sub_item_text = match
+                    break
+            if best_sub_item_text:
+                break
+
+    if not best_sub_item_text:
+        after_items_local = after_items if 'after_items' in dir() else set()
+        logger.info(
+            "ADCB: no CC sub-items after first 10 s; new items: %s — retrying click",
+            sorted(after_items_local - before_items),
+        )
+        # Retry: click Credit Cards again (SPA may have ignored the first click
+        # if the page was still settling).
+        try:
+            retry_rect = page.evaluate(
+                """
+                () => {
+                  const match = [...document.querySelectorAll('a, li, div, span')].find(el => {
+                    const t = (el.innerText || el.textContent || '').trim()
+                      .replace(/^[+\\-\\s]+/, '').trim();
+                    if (t.toLowerCase() !== 'credit cards') return false;
+                    const r = el.getBoundingClientRect();
+                    return r.width > 0 && r.height > 0 && r.left < 250;
+                  });
+                  if (!match) return null;
+                  const r = match.getBoundingClientRect();
+                  return { left: r.left, top: r.top, width: r.width, height: r.height };
+                }
+                """
+            )
+            if retry_rect:
+                rcx = retry_rect["left"] + retry_rect["width"] / 2
+                rcy = retry_rect["top"] + retry_rect["height"] / 2
+                page.mouse.move(rcx, rcy)
+                page.wait_for_timeout(400)
+                page.mouse.click(rcx, rcy)
+                logger.info("ADCB: retry-clicked Credit Cards in sidebar at (%.0f, %.0f)", rcx, rcy)
+        except Exception:  # noqa: BLE001
+            pass
+
+        # Poll another 10 s for sub-items after the retry click.
+        retry_before = after_items_local
+        for tick in range(20):
+            page.wait_for_timeout(500)
+            after_items = _get_sidebar_item_texts(page)
+            new_items = after_items - retry_before - _KNOWN_TOP_LEVEL
+            if new_items:
+                logger.info("ADCB: new sidebar items after CC retry (tick=%d): %s", tick, sorted(new_items))
+                for keyword in _SUB_ITEM_PRIORITY:
+                    match = next((t for t in new_items if keyword in t), None)
+                    if match:
+                        best_sub_item_text = match
+                        break
+                if best_sub_item_text:
+                    break
+
+    if not best_sub_item_text:
+        logger.info("ADCB: no CC sub-items appeared even after retry; giving up")
+        return False
+
+    # Step 5: Click the identified sub-item using REAL mouse events.
+    # JS el.click() does not reliably trigger ADCB's GWT SPA handlers — use
+    # page.mouse.click() at the element's pixel coordinates instead.
+    try:
+        sub_rect = page.evaluate(
+            """
+            (targetText) => {
+              const els = [...document.querySelectorAll('a, div, span, li')];
+              for (const el of els) {
+                const t = (el.innerText || el.textContent || '').trim().toLowerCase()
+                  .replace(/^[+\\-\\s]+/, '').trim();
+                if (t !== targetText) continue;
+                const r = el.getBoundingClientRect();
+                if (r.left < 250 && r.width > 0 && r.height > 0)
+                  return { left: r.left, top: r.top, width: r.width, height: r.height };
+              }
+              return null;
+            }
+            """,
+            best_sub_item_text,
+        )
+    except Exception:  # noqa: BLE001
+        sub_rect = None
+
+    if sub_rect:
+        sub_cx = sub_rect["left"] + sub_rect["width"] / 2
+        sub_cy = sub_rect["top"] + sub_rect["height"] / 2
+        try:
+            page.mouse.click(sub_cx, sub_cy)
+            logger.info(
+                "ADCB: mouse-clicked CC sub-item: '%s' at (%.0f, %.0f), url=%s",
+                best_sub_item_text, sub_cx, sub_cy, page.url,
+            )
+            page.wait_for_timeout(2000)
+            logger.info("ADCB: after sub-item click, url=%s", page.url)
+            return True
+        except Exception:  # noqa: BLE001
+            pass
+
+    # Fallback: JS synthetic click (may not fire GWT handlers but worth trying).
+    try:
+        sub_clicked = page.evaluate(
+            """
+            (targetText) => {
+              for (const el of document.querySelectorAll('a, div, span, li')) {
+                const t = (el.innerText || el.textContent || '').trim().toLowerCase()
+                  .replace(/^[+\\-\\s]+/, '').trim();
+                if (t !== targetText) continue;
+                const r = el.getBoundingClientRect();
+                if (r.left < 250 && r.width > 0 && r.height > 0) {
+                  el.click();
+                  return t;
+                }
+              }
+              return null;
+            }
+            """,
+            best_sub_item_text,
+        )
+        if sub_clicked:
+            page.wait_for_timeout(2000)
+            logger.info("ADCB: JS-clicked CC sub-item: '%s' (fallback), url=%s", sub_clicked, page.url)
+            return True
+    except Exception:  # noqa: BLE001
+        pass
+
+    logger.info("ADCB: could not click CC sub-item '%s'", best_sub_item_text)
+    return False
 
 
 def _open_card_details(page: Any, logger: logging.Logger, bank_cfg: dict) -> bool:
@@ -1595,12 +2434,67 @@ def _open_card_details(page: Any, logger: logging.Logger, bank_cfg: dict) -> boo
 
     _wait_for_landing_ready(page, logger)
 
-    # Try up to 7 times, scrolling down slightly each round so the card table is in view.
-    # Do NOT navigate via the sidebar — the credit card links live directly in the
-    # Credit Cards table on the landing/dashboard page.
-    for _ in range(7):
+    # --- Stage 1: Navigate to the dedicated Credit Cards list page via sidebar.
+    # The Account Summary landing page shows a read-only CC summary widget;
+    # clicking card rows there does NOT navigate to statement details.
+    # The correct path is: sidebar "Credit Cards" → CC list (Image 1) → click card.
+    _navigate_via_sidebar_to_credit_cards(page, logger)
+    cc_page_ready = _wait_for_credit_cards_list_page(page, logger)
+    logger.info("ADCB: CC list page ready=%s, url=%s", cc_page_ready, page.url)
+
+    # Give the CC list content a moment to finish rendering before we click.
+    if cc_page_ready:
+        page.wait_for_timeout(1500)
+
+    # Diagnostic: log whether we're on Account Summary or CC Statement page.
+    try:
+        page_info = page.evaluate(
+            """
+            () => {
+              const inAcctSummary = !!document.querySelector('[id^="segCreditCardsbox_"]');
+              const ccRows = document.querySelectorAll('li.seg2Normal').length;
+              const clickHint = document.body.innerText.includes('click on credit card number') ||
+                                document.body.innerText.toLowerCase().includes('click on credit card number');
+              return { inAcctSummary, ccRows, clickHint };
+            }
+            """
+        )
+        logger.info("ADCB: page diagnosis before card click loop: %s", page_info)
+        in_acct_summary = page_info.get("inAcctSummary", True)
+    except Exception:  # noqa: BLE001
+        in_acct_summary = True
+
+    # If still on Account Summary, sidebar navigation didn't work.
+    # Retry sidebar navigation up to 2 more times before giving up.
+    if in_acct_summary:
+        logger.info("ADCB: still on Account Summary after initial sidebar nav — retrying navigation")
+        for nav_retry in range(2):
+            page.wait_for_timeout(2000)
+            _navigate_via_sidebar_to_credit_cards(page, logger)
+            cc_page_ready = _wait_for_credit_cards_list_page(page, logger)
+            try:
+                in_acct_summary = page.evaluate(
+                    "() => !!document.querySelector('[id^=\"segCreditCardsbox_\"]')"
+                )
+            except Exception:  # noqa: BLE001
+                in_acct_summary = True
+            logger.info(
+                "ADCB: nav retry #%d: cc_page_ready=%s, inAcctSummary=%s",
+                nav_retry + 1, cc_page_ready, in_acct_summary,
+            )
+            if not in_acct_summary:
+                break
+        if in_acct_summary:
+            logger.info("ADCB: still on Account Summary after all sidebar retries — card click will likely fail")
+
+    # --- Stage 2: Click the specific card from whatever page we're on.
+    for attempt in range(7):
         _dismiss_optional_ad_popup(page, logger)
-        # Primary: click the card link directly in the landing page table (by last4 or first card)
+
+        if _is_card_details_screen(page):
+            return True
+
+        # Primary: click by last4 from the current CC list page
         if _click_card_link_in_landing_table(page, logger, bank_cfg):
             return True
         # Secondary: match by credit limit amount
@@ -1609,13 +2503,74 @@ def _open_card_details(page: Any, logger: logging.Logger, bank_cfg: dict) -> boo
         # Tertiary: generic card-pattern fallback scan
         if _click_card_tile_fallback(page, logger):
             return True
-        page.mouse.wheel(0, 420)
+
+        # Re-navigate via sidebar every other attempt
+        if attempt % 2 == 1:
+            _navigate_via_sidebar_to_credit_cards(page, logger)
+            _wait_for_credit_cards_list_page(page, logger)
+
+        try:
+            page.mouse.wheel(0, 200)
+        except Exception:  # noqa: BLE001
+            pass
         page.wait_for_timeout(500)
 
     return _is_card_details_screen(page)
 
 
+def _logout_adcb(page: Any, logger: logging.Logger) -> None:
+    """Attempt to log out of ADCB so the server-side session is terminated.
+
+    This prevents the concurrent-session gate from appearing on the next run.
+    """
+    try:
+        logout_selectors = [
+            "a:has-text('Logout')",
+            "a:has-text('Log Out')",
+            "a:has-text('Log out')",
+            "button:has-text('Logout')",
+            "button:has-text('Log Out')",
+            "[role='button']:has-text('Logout')",
+            "[role='button']:has-text('Log Out')",
+        ]
+        for selector in logout_selectors:
+            try:
+                el = page.locator(selector).first
+                if el.is_visible(timeout=800):
+                    el.click(timeout=2000)
+                    page.wait_for_timeout(1500)
+                    logger.info("ADCB: clicked logout button (%s)", selector)
+                    return
+            except Exception:  # noqa: BLE001
+                continue
+        # Fallback: navigate directly to the ADCB logout hash URL.
+        page.goto(
+            "https://online.adcb.com/apps/ADCBIB/#_frmLogout",
+            wait_until="domcontentloaded",
+            timeout=10000,
+        )
+        page.wait_for_timeout(1000)
+        logger.info("ADCB: navigated to logout URL to terminate server session")
+    except Exception:  # noqa: BLE001
+        logger.info("ADCB: logout attempt failed (non-fatal)")
+
+
 def download_latest_statement(
+    page: Any,
+    incoming_dir: Path,
+    logger: logging.Logger,
+    bank_cfg: dict,
+) -> int:
+    try:
+        return _download_latest_statement_impl(page, incoming_dir, logger, bank_cfg)
+    finally:
+        # Always log out after the download attempt so the server-side session is
+        # terminated.  Without this, the next run hits the concurrent-session gate
+        # which triggers OTP rate-limiting and cascading re-login failures.
+        _logout_adcb(page, logger)
+
+
+def _download_latest_statement_impl(
     page: Any,
     incoming_dir: Path,
     logger: logging.Logger,
@@ -1699,8 +2654,10 @@ def _on_auth_poll_tick(page: Any, low_text: str, logger: logging.Logger, state: 
         extra["otp_challenge_started_unix"] = None
         extra.setdefault("attempted_otp_codes", set()).clear()
 
-    # Concurrent session gate
+    # Concurrent session gate — dismiss it and record the time so we can
+    # immediately re-login without the 45-second OTP delay.
     if handle_concurrent_session_gate(page, logger, low_text):
+        extra["gate_dismissed_unix"] = time.time()
         extra["had_challenge"] = True
         return AuthPollAction.WAIT
 
@@ -1714,17 +2671,165 @@ def _on_auth_poll_tick(page: Any, low_text: str, logger: logging.Logger, state: 
     ):
         return AuthPollAction.WAIT
 
-    # Re-login after challenge
+    # Timeout / logout screen — treat as unauthenticated, stop retrying.
+    low = low_text.lower()
+    if ("timed out" in low and "inactivity" in low) or "#_frmlogout" in page.url.lower():
+        logger.info("ADCB: session timed out / logged out — cannot recover")
+        return AuthPollAction.CONTINUE
+
+    # Immediate re-login after gate dismissal.
+    # The gate click terminates the old server-side session.  KEEP browser cookies
+    # so ADCB can recognise the device and send OTPs without rate-limiting.
+    # Only clear sessionStorage/localStorage (in-page state), NOT cookies.
+    gate_dismissed = extra.get("gate_dismissed_unix")
+    gate_relogin_count = extra.get("gate_relogin_count", 0)
+    if (
+        is_login_screen(low_text)
+        and gate_dismissed is not None
+        and time.time() - gate_dismissed >= 5  # give ADCB 5 s to terminate the old session
+        and gate_relogin_count < 5  # allow up to 5 gate-triggered re-logins
+    ):
+        extra.pop("gate_dismissed_unix", None)
+        extra["gate_relogin_count"] = gate_relogin_count + 1
+        # Clear in-page state (sessionStorage, localStorage) but KEEP cookies.
+        # Clearing cookies removes device-recognition tokens which causes ADCB to
+        # rate-limit OTP delivery on the subsequent login.
+        try:
+            page.evaluate(
+                "() => { try { sessionStorage.clear(); } catch(_) {} "
+                "try { localStorage.clear(); } catch(_) {} }"
+            )
+            logger.info("ADCB: cleared page storage before gate re-login (cookies kept)")
+        except Exception:  # noqa: BLE001
+            pass
+        portal = state.portal_url or "https://online.adcb.com/apps/ADCBIB/#_frmLogin"
+        try:
+            page.goto(portal, wait_until="domcontentloaded", timeout=30000)
+            page.wait_for_timeout(1500)
+        except Exception:  # noqa: BLE001
+            pass
+        logger.info(
+            "ADCB: re-logging in after gate dismissal "
+            "(gate attempt %d/5, waited 5 s, cookies kept)",
+            gate_relogin_count + 1,
+        )
+        return AuthPollAction.RETRY_LOGIN
+
+    # Standard re-login after OTP challenge with no subsequent gate dismissal.
+    # Use a longer gap when we previously dismissed a concurrent-session gate,
+    # because ADCB rate-limits OTP delivery after the gate flow.  Normal timeout
+    # is 45 s; after a gate dismissal give 120 s so the delayed OTP can arrive.
+    # Skip if gate_dismissed_unix is set — that path is handled above.
+    _relogin_threshold = 200 if extra.get("gate_relogin_count", 0) > 0 else 45
     if (
         is_login_screen(low_text)
         and extra.get("had_challenge")
+        and extra.get("gate_dismissed_unix") is None
         and state.relogin_attempts < 3
-        and time.time() - state.last_login_attempt_unix >= 15
+        and time.time() - state.last_login_attempt_unix >= _relogin_threshold
     ):
+        # Clear session cookies/storage BEFORE re-login so the SPA renders a
+        # fresh login form (stale cookies from a previous OTP flow can cause
+        # silent form-submission failures).
+        try:
+            page.context.clear_cookies()
+            page.evaluate(
+                "() => { try { localStorage.clear(); } catch(_) {} "
+                "try { sessionStorage.clear(); } catch(_) {} }"
+            )
+            logger.info("ADCB: cleared stale session before re-login")
+        except Exception:  # noqa: BLE001
+            pass
+        portal = state.portal_url or "https://online.adcb.com/apps/ADCBIB/#_frmLogin"
+        try:
+            page.goto(portal, wait_until="domcontentloaded", timeout=30000)
+            page.wait_for_timeout(2500)
+        except Exception:  # noqa: BLE001
+            pass
         logger.info("ADCB: returned to login after challenge; retrying login")
         return AuthPollAction.RETRY_LOGIN
 
     return AuthPollAction.CONTINUE
+
+
+def _browser_launch_overrides() -> dict:
+    """Return ADCB-specific browser launch overrides.
+
+    Fills in the fingerprint gaps that bot-detectors commonly probe after
+    ``--disable-blink-features=AutomationControlled`` removes ``webdriver``:
+    - A fuller ``window.chrome`` object (``app``, ``csi``, ``loadTimes``)
+    - Realistic ``hardwareConcurrency`` and ``deviceMemory``
+    """
+    init_script = """
+    (() => {
+      // --- window.chrome (fuller object) ------------------------------------
+      try {
+        const chrome = window.chrome || {};
+        if (!chrome.app) {
+          chrome.app = {
+            isInstalled: false,
+            InstallState: {
+              DISABLED: 'disabled',
+              INSTALLED: 'installed',
+              NOT_INSTALLED: 'not_installed',
+            },
+            RunningState: {
+              CANNOT_RUN: 'cannot_run',
+              READY_TO_RUN: 'ready_to_run',
+              RUNNING: 'running',
+            },
+            getDetails: function() { return null; },
+            getIsInstalled: function() { return false; },
+            installState: function() { return 'not_installed'; },
+            runningState: function() { return 'cannot_run'; },
+          };
+        }
+        if (!chrome.csi) {
+          chrome.csi = function() {
+            return {
+              startE:  Date.now(),
+              onloadT: Date.now() + 300,
+              pageT:   2000,
+              tran:    15,
+            };
+          };
+        }
+        if (!chrome.loadTimes) {
+          chrome.loadTimes = function() {
+            return {
+              requestTime:             performance.timeOrigin / 1000,
+              startLoadTime:           performance.timeOrigin / 1000,
+              commitLoadTime:          (performance.timeOrigin + 50) / 1000,
+              finishDocumentLoadTime:  (performance.timeOrigin + 200) / 1000,
+              finishLoadTime:          (performance.timeOrigin + 300) / 1000,
+              firstPaintTime:          (performance.timeOrigin + 150) / 1000,
+              firstPaintAfterLoadTime: 0,
+              navigationType:          'Other',
+              wasFetchedViaSpdy:       false,
+              wasNpnNegotiated:        false,
+              npnNegotiatedProtocol:   'unknown',
+              wasAlternateProtocolAvailable: false,
+              connectionInfo:          'unknown',
+            };
+          };
+        }
+        window.chrome = chrome;
+      } catch (_) {}
+
+      // --- hardware concurrency / device memory ----------------------------
+      try {
+        Object.defineProperty(navigator, 'hardwareConcurrency', {
+          get: function() { return 8; },
+        });
+      } catch (_) {}
+      try {
+        Object.defineProperty(navigator, 'deviceMemory', {
+          get: function() { return 8; },
+        });
+      } catch (_) {}
+    })();
+    """
+    return {"init_scripts": [init_script]}
 
 
 ADAPTER = BankAdapter(
@@ -1735,6 +2840,7 @@ ADAPTER = BankAdapter(
     is_authenticated_session=is_authenticated_session,
     is_login_screen=is_login_screen,
     on_auth_poll_tick=_on_auth_poll_tick,
+    browser_launch_overrides=_browser_launch_overrides,
     skip_mfa_user_prompt=True,
     skip_keyword_fallback=True,
 )

@@ -13,6 +13,7 @@ global_rules:
       - PANDA EXPRESS
       - TALABAT.COM
       - KFC
+      - KITOPIDUBAI
       - MCDONALD
       - SUBWAY
       - ALL DAY GOURMENT
@@ -26,6 +27,12 @@ global_rules:
       - BRASSERIE
       - RAMEN
       - JAYS ONE SWEET AND FLOWER
+      - ADNH CATERING
+      - AMAZON CATERINGNA
+      - THE BLUE BOX
+      - CAREEM DINEOUT
+      - QUICK MART
+      - AMARAVATHIDUBAI
   - category: Grocery
     keywords:
       - NOON MINUTES
@@ -36,6 +43,9 @@ global_rules:
       - LULU
       - GRAB.COM
       - CARREFOUR
+      - CHOITHRAM
+      - DAY TO DAY
+      - GMG CONSUMER
   - category: Subscription
     keywords:
       - WHOOPDUBLIN
@@ -51,6 +61,9 @@ global_rules:
       - ICONSCOUT.COM
       - NAME-CHEAP.COM
       - NOVORESUME
+      - GODADDY
+      - CAREEM PLUSDUBAI
+      - OPENAI.COM
   - category: Shopping
     keywords:
       - NOON
@@ -65,6 +78,7 @@ global_rules:
       - JASHANMAL
       - MINISO
       - DANUBE HOME
+      - AMERICAN EAGLE
       - SEPHORA
       - TABBY FZ
       - AL SHAMSI HOLDINGS
@@ -73,7 +87,8 @@ global_rules:
       - TRADING LLC
       - HENNES &MA
       - MARKS AND SPENCER
-  - category: Entretainment
+      - SKECHERS
+  - category: Entertainment
     keywords:
       - SKYDIVE
       - PRISON ISLAND
@@ -100,6 +115,8 @@ global_rules:
       - ADNOC
       - ENOC
       - EMARAT
+      - CAREEMDUBAI
+      - EPPCO
   - category: Travel
     keywords:
       - TRANS SINGAPORE
@@ -116,6 +133,9 @@ global_rules:
       - AIR INDIA
       - RESORT
       - FLIGHTNETWRK
+      - HOTEL
+      - MAKEMYTRIP
+      - TRAVELWINGS.COM
   - category: Utilities
     keywords:
       - DUBAI ELECTRICITY
@@ -126,7 +146,9 @@ global_rules:
       - ETISALAT
       - DESCO
       - URBAN COMPANY
-      - DU APPLEPAY
+      - DU APPLE PAY
+      - CAREEM HOMESRVICES
+      - CAREEM LAUNDRY
   - category: Insurance
     keywords:
       - ZURICH INTL
@@ -151,6 +173,8 @@ global_rules:
       - HEALTH
       - PHARMACY
       - CITY LIFE PHY
+      - LIFE PHY
+      - HALA PHY
   - category: Cashback
     keywords:
       - FAB REWARDS REDEMPTION - CASHBACK
@@ -163,3 +187,6 @@ global_rules:
   - category: Apple in-app purchase
     keywords:
       - APPLE.COM/BILL CORK
+  - category: Donation
+    keywords:
+      - SHARETHEMEAL

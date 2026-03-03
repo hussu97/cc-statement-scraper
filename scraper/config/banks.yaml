@@ -8,10 +8,13 @@ banks:
       - "*CreditCardEStatement*.PDF"
 
   ADCB:
-    bank_name: Abu Dhabi Central Bank
+    bank_name: Abu Dhabi Commercial Bank
     portal_url: https://online.adcb.com/apps/ADCBIB/#_frmLogin
     file_glob_patterns:
       - "*ADCB*Statement*.pdf"
+    cards:
+      - last4: "3687"
+    target_card_limit_aed: 27000
 
   ENBD:
     bank_name: Emirates National Bank of Dubai
