@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ccs_platform.db import models
-from ccs_platform.application.exports.workbook import build_yearly_workbook_from_statements
+from ccs_platform.application.exports.workbook import build_yearly_workbook_from_statements, build_yearly_csv_bytes
 from .context import JobContext
 
 
@@ -31,6 +31,14 @@ def handle_export_workbook_job(
         content=content,
         filename=f"credit-card-tracker-{year}.xlsx",
         folder="exports/workbooks",
+        profile_key=profile_key,
+    )
+
+    csv_bytes = build_yearly_csv_bytes(db, year, profile_id=job.profile_id)
+    stored_csv = ctx.storage.save_binary(
+        content=csv_bytes,
+        filename=f"credit-card-tracker-{year}.csv",
+        folder="exports/csv",
         profile_key=profile_key,
     )
 
@@ -63,4 +71,6 @@ def handle_export_workbook_job(
         "storage_backend": stored.backend,
         "storage_key": stored.key,
         "filename": export_row.filename,
+        "csv_storage_key": stored_csv.key,
+        "csv_filename": f"credit-card-tracker-{year}.csv",
     }
