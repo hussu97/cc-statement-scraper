@@ -100,6 +100,7 @@ global_rules:
       - DANUBE
       - KOTHARI TRADING
       - MADINAT JUMEIRAH
+      - GETYOURGUIDE
   - category: Entertainment
     keywords:
       - SKYDIVE
@@ -188,6 +189,7 @@ global_rules:
       - VAT ON SERVICE CHARGES
       - VAT ON
       - FOREIGN TRANSACTION FEE
+      - ANNUAL FEE
   - category: Medicine
     keywords:
       - HEALTH
@@ -200,6 +202,7 @@ global_rules:
     keywords:
       - FAB REWARDS REDEMPTION - CASHBACK
       - JOINING_BONUS_CASHBACK
+      - CASHBACK
   - category: Card Repayment
     keywords:
       - INWARD IPP CC
