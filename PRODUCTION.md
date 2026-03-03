@@ -256,9 +256,12 @@ TEJASVIE_SIB_PDF_PASSWORD=...
 
 ### 4.3 Set environment variables
 
-| Key | Value |
-|-----|-------|
-| `VITE_API_BASE_URL` | `https://your-service.onrender.com` |
+No frontend env vars are required. `VITE_API_BASE_URL` must be **unset** (or empty) so the
+frontend uses same-origin paths (`/api/v1/…`) which are proxied to Render by `vercel.json`.
+
+> **Do not set `VITE_API_BASE_URL` to the Render URL** — doing so breaks session cookies on
+> Safari and Chrome incognito because cross-site `SameSite=None` cookies are blocked by
+> browser privacy settings.
 
 ### 4.4 Deploy
 
