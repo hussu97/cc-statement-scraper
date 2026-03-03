@@ -131,6 +131,7 @@ def handle_continue_gate(page: Any, logger: logging.Logger) -> bool:
                 if not item.is_visible():
                     continue
                 item.click(timeout=2500)
+                logger.info("FAB: waiting 1200ms — Continue gate clicked; allowing navigation to settle")
                 page.wait_for_timeout(1200)
                 logger.info("FAB: clicked safer-experience Continue gate")
                 return True
@@ -233,6 +234,7 @@ def _navigate_to_cards_activity(page: Any, logger: logging.Logger, bank_cfg: dic
 
     if "/dashboard" not in _current_url() and "/cards/" not in _current_url():
         click_keyword(page, "Dashboard", logger)
+        logger.info("FAB: waiting 1200ms — Dashboard clicked; allowing navigation to settle")
         if not _safe_wait(1200):
             return False
         handle_continue_gate(page, logger)
@@ -252,6 +254,7 @@ def _navigate_to_cards_activity(page: Any, logger: logging.Logger, bank_cfg: dic
 
         for keyword in ["Credit Cards", "Cards", "My FAB Products"]:
             if click_keyword(page, keyword, logger):
+                logger.info("FAB: waiting 1600ms — '%s' link clicked; waiting for cards navigation", keyword)
                 if not _safe_wait(1600):
                     return False
                 handle_continue_gate(page, logger)
@@ -271,6 +274,7 @@ def _navigate_to_cards_activity(page: Any, logger: logging.Logger, bank_cfg: dic
                     if not item.is_visible():
                         continue
                     item.click(timeout=2500)
+                    logger.info("FAB: waiting 1800ms — last4=%s card tile clicked; waiting for navigation", last4)
                     if not _safe_wait(1800):
                         return False
                     logger.info("FAB: clicked dashboard card candidate with last4=%s", last4)
@@ -280,13 +284,16 @@ def _navigate_to_cards_activity(page: Any, logger: logging.Logger, bank_cfg: dic
                     continue
 
         if click_keyword(page, "CASHBACK CARD", logger):
+            logger.info("FAB: waiting 1800ms — CASHBACK CARD clicked; waiting for navigation")
             if not _safe_wait(1800):
                 return False
             if _on_cards_activity():
                 return True
 
-        if attempt < 5 and not _safe_wait(900):
-            return False
+        if attempt < 5:
+            logger.info("FAB: waiting 900ms — attempt %d/6 complete; pausing before retry", attempt + 1)
+            if not _safe_wait(900):
+                return False
 
     portal_url = str(bank_cfg.get("portal_url", "")).strip()
     if portal_url:
@@ -294,6 +301,7 @@ def _navigate_to_cards_activity(page: Any, logger: logging.Logger, bank_cfg: dic
         target = f"{base_url}/PersonalBankingWeb/cards/cardsActivity"
         try:
             page.goto(target, wait_until="domcontentloaded", timeout=30000)
+            logger.info("FAB: waiting 1800ms — portal URL fallback navigation; waiting for page load")
             if not _safe_wait(1800):
                 return False
             handle_continue_gate(page, logger)
@@ -451,6 +459,7 @@ def _try_popup_download(popup_scope: Any, page: Any, incoming_dir: Path, logger:
                     except Exception:  # noqa: BLE001
                         pass
 
+                    logger.info("FAB: waiting for download event via %s force=%s (up to %dms)", description, force_click, DOWNLOAD_EVENT_TIMEOUT_MS)
                     with page.expect_download(timeout=DOWNLOAD_EVENT_TIMEOUT_MS) as download_info:
                         if force_click:
                             item.click(timeout=2500, force=True)
@@ -466,6 +475,7 @@ def _try_popup_download(popup_scope: Any, page: Any, incoming_dir: Path, logger:
                     # FAB can emit the download event late; wait once before another click.
                     if "timeout" in str(exc).lower():
                         try:
+                            logger.info("FAB: waiting for late download event after timeout (up to %dms)", LATE_DOWNLOAD_WAIT_MS)
                             late_download = page.wait_for_event("download", timeout=LATE_DOWNLOAD_WAIT_MS)
                             logger.info(
                                 "FAB: captured late download event after timeout via %s (force=%s)",
@@ -499,6 +509,7 @@ def _try_popup_download(popup_scope: Any, page: Any, incoming_dir: Path, logger:
     # that do not use onclick/ng-click attributes. Try clicking any visible element containing
     # the download text — including elements with cursor:pointer or a known download class.
     try:
+        logger.info("FAB: waiting for download event via JS ancestor click (up to %dms)", DOWNLOAD_EVENT_TIMEOUT_MS)
         with page.expect_download(timeout=DOWNLOAD_EVENT_TIMEOUT_MS) as download_info:
             clicked = popup_scope.evaluate(
                 """
@@ -542,6 +553,7 @@ def _try_popup_download(popup_scope: Any, page: Any, incoming_dir: Path, logger:
         return save_download(download_info.value, incoming_dir, "FAB", logger)
     except Exception:  # noqa: BLE001
         try:
+            logger.info("FAB: waiting for late download event via JS fallback path (up to %dms)", LATE_DOWNLOAD_WAIT_MS)
             late_download = page.wait_for_event("download", timeout=LATE_DOWNLOAD_WAIT_MS)
             logger.info("FAB: captured late download event via JS fallback path")
             return save_download(late_download, incoming_dir, "FAB", logger)
@@ -564,11 +576,14 @@ def _try_popup_download(popup_scope: Any, page: Any, incoming_dir: Path, logger:
 def _open_download_statements_modal(page: Any, logger: logging.Logger) -> bool:
     for _ in range(4):
         if _click_exact_control_text(page, "DOWNLOAD STATEMENTS", logger):
+            logger.info("FAB: waiting 1200ms — Download Statements modal triggered; allowing render")
             page.wait_for_timeout(1200)
             return True
         if click_keyword(page, "Download Statements", logger):
+            logger.info("FAB: waiting 1200ms — Download Statements modal triggered; allowing render")
             page.wait_for_timeout(1200)
             return True
+        logger.info("FAB: waiting 700ms — Download Statements click not matched; retrying")
         page.wait_for_timeout(700)
     return False
 
@@ -589,6 +604,7 @@ def _wait_for_popup_download_control(popup_scope: Any, page: Any, logger: loggin
     for locator, description in checks:
         try:
             if locator.count() > 0:
+                logger.info("FAB: waiting up to 7000ms for download control to become visible via %s", description)
                 locator.first.wait_for(state="visible", timeout=7000)
                 logger.info("FAB: download control ready via %s", description)
                 return
@@ -606,12 +622,14 @@ def _wait_for_popup_download_control(popup_scope: Any, page: Any, logger: loggin
         locator = page.locator(selector)
         try:
             if locator.count() > 0:
+                logger.info("FAB: waiting up to 7000ms for download control to become visible via page selector %s", selector)
                 locator.first.wait_for(state="visible", timeout=7000)
                 logger.info("FAB: download control ready via page selector %s", selector)
                 return
         except Exception:  # noqa: BLE001
             continue
 
+    logger.info("FAB: waiting 500ms — download control not found; fallback pause")
     page.wait_for_timeout(500)
 
 
@@ -630,6 +648,7 @@ def _wait_for_popup_idle(page: Any, popup_scope: Any, logger: logging.Logger) ->
         for locator in targets:
             try:
                 if locator.count() > 0 and locator.first.is_visible():
+                    logger.info("FAB: waiting up to 5000ms for popup busy state to clear via %s", selector)
                     locator.first.wait_for(state="hidden", timeout=5000)
                     logger.info("FAB: waited for popup busy state to clear via %s", selector)
             except Exception:  # noqa: BLE001
@@ -680,9 +699,11 @@ def _wait_after_download(page: Any, logger: logging.Logger) -> None:
         locator = page.locator(selector)
         try:
             if locator.count() > 0 and locator.first.is_visible():
+                logger.info("FAB: waiting up to 4000ms for post-download notification to clear via %s", selector)
                 locator.first.wait_for(state="hidden", timeout=4000)
         except Exception:  # noqa: BLE001
             continue
+    logger.info("FAB: waiting 900ms — post-download UI settling")
     page.wait_for_timeout(900)
 
 
@@ -735,6 +756,7 @@ def _download_requested_months(
             )
             continue
 
+        logger.info("FAB: waiting 500ms — tenure selected; allowing popup to update for month=%s", month_token)
         page.wait_for_timeout(500)
         path: Path | None = None
         for attempt in range(2):
@@ -742,6 +764,7 @@ def _download_requested_months(
             _wait_for_popup_idle(page, popup_scope, logger)
             _wait_for_popup_download_control(popup_scope, page, logger)
             if not _download_control_enabled(popup_scope, page):
+                logger.info("FAB: waiting 900ms — download control not enabled yet; pausing before retry")
                 page.wait_for_timeout(900)
                 _wait_for_popup_idle(page, popup_scope, logger)
             path = _try_popup_download(popup_scope, page, incoming_dir, logger)
@@ -751,6 +774,7 @@ def _download_requested_months(
                 break
             if attempt == 0:
                 logger.info("FAB: retrying download click for month=%s after first attempt", month_token)
+                logger.info("FAB: waiting 1200ms — first download attempt unsuccessful; pausing before retry")
                 page.wait_for_timeout(1200)
 
         if path is None:
@@ -789,6 +813,7 @@ def download_latest_statement(
         return 0
 
     popup_scope = _resolve_popup_scope(page, logger)
+    logger.info("FAB: waiting 700ms — modal opened; allowing popup to render")
     page.wait_for_timeout(700)
 
     requested_months = _normalize_requested_months(bank_cfg.get("requested_months"))
@@ -829,6 +854,7 @@ def download_latest_statement(
                     "failed": [],
                 }
                 return 1
+        logger.info("FAB: waiting 900ms — download attempt unsuccessful; retrying")
         page.wait_for_timeout(900)
 
     bank_cfg["download_diagnostics"] = {

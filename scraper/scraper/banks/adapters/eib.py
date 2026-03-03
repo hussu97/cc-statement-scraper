@@ -128,6 +128,7 @@ def _click_cards_tile(page: Any, logger: logging.Logger) -> bool:
                         item.click(timeout=2500)
                     except Exception:  # noqa: BLE001
                         item.click(timeout=2500, force=True)
+                    logger.info("EIB: waiting 2200ms — cards entry clicked via %s; waiting for navigation", selector)
                     page.wait_for_timeout(2200)
                     logger.info("EIB: clicked cards entry via %s", selector)
                     if _is_cards_detail(page):
@@ -189,6 +190,7 @@ def _open_statements_view(page: Any, logger: logging.Logger) -> bool:
                 """
             )
             if clicked:
+                logger.info("EIB: waiting 1800ms — Statements View All clicked; waiting for download controls")
                 page.wait_for_timeout(1800)
                 logger.info("EIB: clicked Statements -> View All")
                 return True
@@ -686,6 +688,7 @@ def _select_statement_period(
 
             if selected_year:
                 # EIB can refresh month options asynchronously after year changes.
+                logger.info("EIB: waiting 1300ms — year selected; allowing month options to refresh asynchronously")
                 page.wait_for_timeout(1300)
 
                 refreshed_months: list[Any] = []
@@ -798,6 +801,7 @@ def _select_statement_period_with_retry(
             return True
         if attempt < attempts - 1:
             _dismiss_overlays(page, logger)
+            logger.info("EIB: waiting %dms — statement period selection attempt %d failed; retrying", 900 + (attempt * 300), attempt + 1)
             page.wait_for_timeout(900 + (attempt * 300))
     return False
 
@@ -825,6 +829,7 @@ def _click_download(page: Any, incoming_dir: Path, logger: logging.Logger) -> Pa
             try:
                 if not item.is_visible():
                     continue
+                logger.info("EIB: waiting for download event (up to 9000ms)")
                 with page.expect_download(timeout=9000) as download_info:
                     item.click(timeout=3000)
                 return save_download(download_info.value, incoming_dir, "EIB", logger)
@@ -889,6 +894,7 @@ def _dismiss_post_download_ui(page: Any, logger: logging.Logger) -> None:
                 if not item.is_visible():
                     continue
                 item.click(timeout=2500)
+                logger.info("EIB: waiting 1000ms — DONE clicked; allowing post-download screen to dismiss")
                 page.wait_for_timeout(1000)
                 logger.info("EIB: clicked post-download DONE action")
                 break
@@ -917,6 +923,7 @@ def _dismiss_post_download_ui(page: Any, logger: logging.Logger) -> None:
             """
         )
         if clicked_done:
+            logger.info("EIB: waiting 900ms — DONE clicked via JS; allowing post-download screen to dismiss")
             page.wait_for_timeout(900)
             logger.info("EIB: clicked DONE action via JS fallback")
     except Exception:  # noqa: BLE001
@@ -942,6 +949,7 @@ def _ensure_statements_download_page(page: Any, logger: logging.Logger) -> bool:
         done = page.locator("button:has-text('DONE'), [role='button']:has-text('DONE')")
         if done.count() > 0 and done.first.is_visible():
             done.first.click(timeout=2500)
+            logger.info("EIB: waiting 1000ms — DONE clicked to dismiss success screen before reopening statements")
             page.wait_for_timeout(1000)
             logger.info("EIB: dismissed success screen via DONE before reopening statements")
             if _is_statements_download_page(page):
@@ -951,6 +959,7 @@ def _ensure_statements_download_page(page: Any, logger: logging.Logger) -> bool:
 
     for _ in range(2):
         if _open_statements_view(page, logger):
+            logger.info("EIB: waiting 1000ms — statements view opened; waiting for download controls")
             page.wait_for_timeout(1000)
             if _is_statements_download_page(page):
                 return True
