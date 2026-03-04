@@ -9,7 +9,9 @@ global_rules:
       - ZOMATO
       - DUSIT THANI
       - DELIVEROO
+      - SEVA WELLBEING
       - QLUB
+      - MALL MART
       - PANDA EXPRESS
       - TALABAT.COM
       - KFC
@@ -92,6 +94,7 @@ global_rules:
       - TABBY FZ
       - AL SHAMSI HOLDINGS
       - TEMU.COM
+      - LANDMARK
       - AL BASHA SMOKING
       - TRADING LLC
       - HENNES &MA
@@ -107,6 +110,7 @@ global_rules:
       - PRISON ISLAND
       - RIVER SPA
       - OMISE*PHUKET
+      - PYGMY ANIMAL PARK
       - VOX CINEMAS
       - LIME
       - GENTS SALON
