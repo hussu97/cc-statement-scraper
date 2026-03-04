@@ -25,6 +25,7 @@ class RuntimeSettingSpec:
 DEFAULT_RUNTIME_SETTING_SPECS: tuple[RuntimeSettingSpec, ...] = (
     RuntimeSettingSpec("FAB_USERNAME", "FAB", True, "FAB online banking username"),
     RuntimeSettingSpec("FAB_PASSWORD", "FAB", True, "FAB online banking password"),
+    RuntimeSettingSpec("FAB_PDF_PASSWORD", "FAB", True, "FAB PDF password (optional; required for email-sourced encrypted statements)"),
     RuntimeSettingSpec("ADCB_CID", "ADCB", True, "ADCB customer identifier"),
     RuntimeSettingSpec("ADCB_LOGIN_PASSWORD", "ADCB", True, "ADCB login password"),
     RuntimeSettingSpec("ADCB_PDF_PASSWORD", "ADCB", True, "ADCB PDF password (falls back to ADCB_CID when empty)"),

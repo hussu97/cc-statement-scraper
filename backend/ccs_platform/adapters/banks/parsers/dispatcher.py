@@ -13,7 +13,10 @@ def parse_statement_for_bank(bank_code: str, pdf_path: str | Path) -> StatementP
 
     if code == "FAB":
         from ccs_platform.adapters.banks.parsers.fab import parse_fab_statement  # noqa: PLC0415
-        return parse_fab_statement(pdf_path)
+        # Password is optional — scraper/manual PDFs are unencrypted; email-sourced
+        # PDFs are encrypted with a profile-specific password.
+        pdf_password = os.getenv("FAB_PDF_PASSWORD") or None
+        return parse_fab_statement(pdf_path, pdf_password)
 
     if code == "ADCB":
         pdf_password = os.getenv("ADCB_PDF_PASSWORD") or os.getenv("ADCB_CID")
