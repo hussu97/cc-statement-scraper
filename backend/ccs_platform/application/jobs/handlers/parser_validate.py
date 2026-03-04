@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import fnmatch
-import os
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from ccs_platform.db import models
 from ccs_platform.core.bank_config import load_app_config
+from ccs_platform.core.runtime_settings import get_runtime_settings_as_dict
 from ccs_platform.domain.parsing.bank_samples import PARSER_SAMPLE_EXPECTED_COUNTS
 
 
@@ -46,7 +46,8 @@ def handle_parser_validate_job(db: Session, job: models.Job) -> dict[str, Any]:
             raise RuntimeError(f"Missing sample files for: {', '.join(missing)}")
         return {"missing": missing}
 
-    adcb_password = os.getenv("ADCB_PDF_PASSWORD") or os.getenv("ADCB_CID")
+    bank_settings = get_runtime_settings_as_dict(db, profile_id=job.profile_id)
+    adcb_password = bank_settings.get("ADCB_PDF_PASSWORD") or bank_settings.get("ADCB_CID")
     if not adcb_password:
         raise RuntimeError("ADCB_PDF_PASSWORD or ADCB_CID must be set for parser validation")
 
@@ -56,9 +57,9 @@ def handle_parser_validate_job(db: Session, job: models.Job) -> dict[str, Any]:
     from ccs_platform.adapters.banks.parsers.enbd import parse_enbd_statement  # noqa: PLC0415
 
     counts = {
-        "FAB": len(parse_fab_statement(fab_file).transactions),
+        "FAB": len(parse_fab_statement(fab_file, bank_settings.get("FAB_PDF_PASSWORD")).transactions),
         "ADCB": len(parse_adcb_statement(adcb_file, adcb_password).transactions),
-        "ENBD": len(parse_enbd_statement(enbd_file).transactions),
+        "ENBD": len(parse_enbd_statement(enbd_file, bank_settings.get("ENBD_PDF_PASSWORD")).transactions),
     }
 
     mismatches = {

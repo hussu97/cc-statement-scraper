@@ -13,7 +13,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ccs_platform.core.metrics import METRICS
-from ccs_platform.core.runtime_settings import apply_runtime_settings_to_process_env
 from ccs_platform.db import models
 from ccs_platform.core.settings import PlatformSettings
 from ccs_platform.db.session import get_session_local
@@ -236,9 +235,6 @@ class JobRunner:
         profile = db.get(models.Profile, job.profile_id)
         if profile is None:
             raise RuntimeError(f"Profile not found for job {job.id}: {job.profile_id}")
-
-        # TODO: apply_runtime_settings_to_process_env is still needed for parsers that read env vars directly.
-        apply_runtime_settings_to_process_env(db, profile_id=job.profile_id)
 
         ctx = JobContext(
             settings=self.settings,

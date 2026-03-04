@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from ccs_platform.db import models
 from ccs_platform.application.statements.ingestion import ingest_statement_pdf
+from ccs_platform.core.runtime_settings import get_runtime_settings_as_dict
 from .context import JobContext
 
 
@@ -18,6 +19,8 @@ def handle_reparse_statement_job(
     profile_key: str,
 ) -> dict[str, Any]:
     payload = job.payload_json or {}
+    bank_settings = get_runtime_settings_as_dict(db, profile_id=job.profile_id)
+
     if bool(payload.get("all_statements")):
         statement_ids = db.execute(
             select(models.Statement.id)
@@ -38,6 +41,7 @@ def handle_reparse_statement_job(
                     profile_id=job.profile_id,
                     profile_key=profile_key,
                     ctx=ctx,
+                    bank_settings=bank_settings,
                 )
                 reparsed.append({"statement_id": int(statement_id), "new_summary": summary})
             except Exception as exc:  # noqa: BLE001
@@ -62,6 +66,7 @@ def handle_reparse_statement_job(
         profile_id=job.profile_id,
         profile_key=profile_key,
         ctx=ctx,
+        bank_settings=bank_settings,
     )
     return {"reparsed_statement_id": statement_id, "new_summary": summary}
 
@@ -73,6 +78,7 @@ def _reparse_single_statement(
     profile_id: int,
     profile_key: str,
     ctx: JobContext,
+    bank_settings: dict[str, str],
 ) -> dict[str, Any]:
     statement = db.execute(
         select(models.Statement).where(
@@ -106,6 +112,7 @@ def _reparse_single_statement(
         filename=pdf_file.original_filename,
         content=content,
         source=models.SourceType.UPLOAD,
+        runtime_settings=bank_settings,
     )
     db.commit()
     return summary

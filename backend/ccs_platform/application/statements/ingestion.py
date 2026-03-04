@@ -42,6 +42,7 @@ def ingest_statement_pdf(
     filename: str,
     content: bytes,
     source: models.SourceType,
+    runtime_settings: dict[str, str] | None = None,
 ) -> dict:
     if not content:
         raise ValueError("Empty PDF content")
@@ -52,7 +53,7 @@ def ingest_statement_pdf(
     temp_path.write_bytes(content)
 
     try:
-        parsed = parse_statement_pdf(bank_code, temp_path, source_filename=filename)
+        parsed = parse_statement_pdf(bank_code, temp_path, source_filename=filename, runtime_settings=runtime_settings)
     finally:
         temp_path.unlink(missing_ok=True)
 
