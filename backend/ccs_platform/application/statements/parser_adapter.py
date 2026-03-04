@@ -102,8 +102,14 @@ def _convert_tx(idx: int, tx: TransactionRecord) -> ParsedLine:
     )
 
 
-def parse_statement_pdf(bank_code: str, pdf_path: Path, *, source_filename: str | None = None) -> ParsedStatement:
-    result = parse_statement_for_bank(bank_code, pdf_path)
+def parse_statement_pdf(
+    bank_code: str,
+    pdf_path: Path,
+    *,
+    source_filename: str | None = None,
+    runtime_settings: dict[str, str] | None = None,
+) -> ParsedStatement:
+    result = parse_statement_for_bank(bank_code, pdf_path, runtime_settings)
 
     statement_date = _statement_date_from_result(result)
     period_end = _parse_iso_date(str(result.metadata.get("statement_period_end")) if result.metadata else None)

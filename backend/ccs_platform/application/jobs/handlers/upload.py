@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from ccs_platform.db import models
 from ccs_platform.application.statements.ingestion import ingest_statement_pdf
+from ccs_platform.core.runtime_settings import get_runtime_settings_as_dict
 from .context import JobContext
 
 
@@ -20,6 +21,7 @@ def handle_upload_job(
     uploads: list[dict[str, str]] = payload.get("uploads", [])
     ingested: list[dict[str, Any]] = []
     failures: list[dict[str, Any]] = []
+    bank_settings = get_runtime_settings_as_dict(db, profile_id=job.profile_id)
 
     for idx, item in enumerate(uploads):
         ctx.assert_not_cancelled(db, job.id)
@@ -47,6 +49,7 @@ def handle_upload_job(
                 filename=item.get("filename") or "statement.pdf",
                 content=content,
                 source=models.SourceType.UPLOAD,
+                runtime_settings=bank_settings,
             )
             ingested.append(summary)
             db.commit()

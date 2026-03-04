@@ -1,25 +1,29 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from ccs_platform.domain.parsing.models import ParserError, StatementParseResult
 
 
-def parse_statement_for_bank(bank_code: str, pdf_path: str | Path) -> StatementParseResult:
+def parse_statement_for_bank(
+    bank_code: str,
+    pdf_path: str | Path,
+    settings: dict[str, str] | None = None,
+) -> StatementParseResult:
     # Parsers are imported lazily so that pdfplumber (~15 MB) is not loaded
     # at startup — only when the first parse job actually runs.
+    _s = settings or {}
     code = bank_code.upper()
 
     if code == "FAB":
         from ccs_platform.adapters.banks.parsers.fab import parse_fab_statement  # noqa: PLC0415
         # Password is optional — scraper/manual PDFs are unencrypted; email-sourced
         # PDFs are encrypted with a profile-specific password.
-        pdf_password = os.getenv("FAB_PDF_PASSWORD") or None
+        pdf_password = _s.get("FAB_PDF_PASSWORD") or None
         return parse_fab_statement(pdf_path, pdf_password)
 
     if code == "ADCB":
-        pdf_password = os.getenv("ADCB_PDF_PASSWORD") or os.getenv("ADCB_CID")
+        pdf_password = _s.get("ADCB_PDF_PASSWORD") or _s.get("ADCB_CID")
         if not pdf_password:
             raise ParserError(
                 "PDF_DECRYPT_FAILED",
@@ -32,7 +36,7 @@ def parse_statement_for_bank(bank_code: str, pdf_path: str | Path) -> StatementP
         from ccs_platform.adapters.banks.parsers.enbd import parse_enbd_statement  # noqa: PLC0415
         # Password is optional — scraper/manual PDFs are unencrypted; email-sourced
         # PDFs are encrypted with a profile-specific password.
-        pdf_password = os.getenv("ENBD_PDF_PASSWORD") or None
+        pdf_password = _s.get("ENBD_PDF_PASSWORD") or None
         return parse_enbd_statement(pdf_path, pdf_password)
 
     if code == "EIB":
@@ -40,7 +44,7 @@ def parse_statement_for_bank(bank_code: str, pdf_path: str | Path) -> StatementP
         return parse_eib_statement(pdf_path)
 
     if code == "SIB":
-        pdf_password = os.getenv("SIB_PDF_PASSWORD")
+        pdf_password = _s.get("SIB_PDF_PASSWORD")
         if not pdf_password:
             raise ParserError(
                 "PDF_DECRYPT_FAILED",
