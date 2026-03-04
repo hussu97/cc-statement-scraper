@@ -7,33 +7,20 @@ import { useActiveProfileKey } from '../profileStore';
 import { formatLocalDateTime } from '../utils/datetime';
 import type { PagedResponse, Schedule } from '../types/statements';
 
-function currentDubaiMonthToken(): string {
-  const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Asia/Dubai',
-    year: 'numeric',
-    month: '2-digit',
-  }).formatToParts(new Date());
-
-  const year = parts.find((part) => part.type === 'year')?.value ?? String(new Date().getFullYear());
-  const month = parts.find((part) => part.type === 'month')?.value ?? String(new Date().getMonth() + 1).padStart(2, '0');
-  return `${year}-${month}`;
-}
-
 export function SchedulesPage() {
   const activeProfileKey = useActiveProfileKey();
-  const defaultMonth = currentDubaiMonthToken();
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
-    name: 'Monthly scrape',
-    job_type: 'scrape',
+    name: '',
+    job_type: '',
     rrule: 'FREQ=WEEKLY;BYDAY=MO;BYHOUR=19;BYMINUTE=0',
     timezone: 'Asia/Dubai',
     status: 'active',
-    payload_json: `{"banks":["FAB","ADCB","ENBD","SIB"],"month_from":"${defaultMonth}","month_to":"${defaultMonth}","download":true,"headless":false,"login_timeout_minutes":20}`,
+    payload_json: '{}',
   });
 
   async function load() {

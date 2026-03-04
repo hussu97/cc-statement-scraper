@@ -20,7 +20,7 @@ from ccs_platform.api.v1.schemas.dashboard import (
     TrendPoint,
     TrendSeriesResponse,
 )
-from ccs_platform.api.v1.schemas.diagnostics import BankConnectionTestRequest, ParserValidateRequest
+from ccs_platform.api.v1.schemas.diagnostics import ParserValidateRequest
 from ccs_platform.api.v1.schemas.email_ingestion import (
     EmailBankRouteOut,
     EmailBankRouteUpsert,
@@ -71,7 +71,6 @@ from ccs_platform.api.v1.schemas.transactions import TransactionBulkCategoryPatc
 
 __all__ = [
     "AuthUserOut",
-    "BankConnectionTestRequest",
     "BankOut",
     "BreakdownPoint",
     "CategoryCreate",
