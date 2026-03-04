@@ -398,19 +398,14 @@ def test_runtime_settings_list_and_patch() -> None:
         assert isinstance(rows, list)
 
         row_by_key = {row['key']: row for row in rows}
-        assert 'FAB_USERNAME' in row_by_key
+        assert 'FAB_PDF_PASSWORD' in row_by_key
 
         patch_resp = client.patch(
-            '/api/v1/runtime-settings/FAB_USERNAME',
-            json={
-                'value': 'test-user',
-                'bank_code': 'FAB',
-                'is_secret': True,
-                'description': 'FAB online banking username',
-            },
+            '/api/v1/runtime-settings/FAB_PDF_PASSWORD',
+            json={'value': 'test-password'},
         )
         assert patch_resp.status_code == 200
-        assert patch_resp.json()['value'] == 'test-user'
+        assert patch_resp.json()['value'] == 'test-password'
 
         seed_resp = client.post('/api/v1/runtime-settings/seed-from-env', json={'overwrite_existing': False})
         assert seed_resp.status_code == 200
@@ -490,8 +485,8 @@ def test_runtime_settings_hide_secret_values_in_production(monkeypatch: pytest.M
         with TestClient(prod_app) as client:
             _login_default(client)
             patch_resp = client.patch(
-                "/api/v1/runtime-settings/FAB_USERNAME",
-                json={"value": "prod-secret-user"},
+                "/api/v1/runtime-settings/FAB_PDF_PASSWORD",
+                json={"value": "prod-secret-password"},
             )
             assert patch_resp.status_code == 200
             patched = patch_resp.json()
@@ -509,8 +504,8 @@ def test_runtime_setting_patch_emits_actor_audit_event(monkeypatch: pytest.Monke
         with TestClient(auth_app) as client:
             _login_default(client)
             patch_resp = client.patch(
-                "/api/v1/runtime-settings/FAB_USERNAME",
-                json={"value": "audit-user"},
+                "/api/v1/runtime-settings/FAB_PDF_PASSWORD",
+                json={"value": "audit-password"},
             )
             assert patch_resp.status_code == 200
 
@@ -524,7 +519,7 @@ def test_runtime_setting_patch_emits_actor_audit_event(monkeypatch: pytest.Monke
                     models.AuditEvent.profile_id == profile.id,
                     models.AuditEvent.event_type == "runtime_setting_updated",
                     models.AuditEvent.entity_type == "runtime_setting",
-                    models.AuditEvent.entity_id == "FAB_USERNAME",
+                    models.AuditEvent.entity_id == "FAB_PDF_PASSWORD",
                 )
                 .order_by(models.AuditEvent.id.desc())
             ).scalars().first()

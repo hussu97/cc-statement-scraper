@@ -74,7 +74,7 @@ def test_seed_runtime_settings_from_env_file_and_apply(monkeypatch, tmp_path) ->
 
 def test_seed_runtime_settings_none_source_mode_keeps_blank_values(tmp_path) -> None:
     env_path = tmp_path / ".env"
-    env_path.write_text("FAB_USERNAME=user-fab\n", encoding="utf-8")
+    env_path.write_text("FAB_PDF_PASSWORD=test-password\n", encoding="utf-8")
 
     with _session() as db:
         profile = models.Profile(key="hussain", name="Hussain", is_default=True)
@@ -92,7 +92,7 @@ def test_seed_runtime_settings_none_source_mode_keeps_blank_values(tmp_path) -> 
         assert result["source_mode"] == "none"
         rows = db.execute(select(models.RuntimeSetting)).scalars().all()
         by_key = {row.key: row for row in rows}
-        assert by_key["FAB_USERNAME"].value == ""
+        assert by_key["FAB_PDF_PASSWORD"].value == ""
 
 
 def test_seed_runtime_settings_supports_profile_scoped_env_keys(tmp_path) -> None:
@@ -100,9 +100,9 @@ def test_seed_runtime_settings_supports_profile_scoped_env_keys(tmp_path) -> Non
     env_path.write_text(
         "\n".join(
             [
-                "FAB_USERNAME=legacy-fallback",
-                "HUSSAIN_FAB_USERNAME=hussain-fab-user",
-                "HUSSAIN_ENBD_USERNAME=hussain-enbd-user",
+                "FAB_PDF_PASSWORD=legacy-fallback",
+                "HUSSAIN_FAB_PDF_PASSWORD=hussain-fab-password",
+                "HUSSAIN_ADCB_PDF_PASSWORD=hussain-adcb-password",
                 "TEJASVIE_MASHREQ_USERNAME=tejasvie-mashreq-user",
                 "TEJASVIE_MASHREQ_PASSWORD=tejasvie-mashreq-pass",
             ]
@@ -140,9 +140,10 @@ def test_seed_runtime_settings_supports_profile_scoped_env_keys(tmp_path) -> Non
         rows = db.execute(select(models.RuntimeSetting)).scalars().all()
         by_profile_key = {(row.profile_id, row.key): row for row in rows}
 
-        assert by_profile_key[(hussain.id, "FAB_USERNAME")].value == "hussain-fab-user"
-        assert by_profile_key[(hussain.id, "ENBD_USERNAME")].value == "hussain-enbd-user"
+        assert by_profile_key[(hussain.id, "FAB_PDF_PASSWORD")].value == "hussain-fab-password"
+        assert by_profile_key[(hussain.id, "ADCB_PDF_PASSWORD")].value == "hussain-adcb-password"
         # Non-default profile with blank_values only accepts explicit TEJASVIE_* keys.
         assert by_profile_key[(tejasvie.id, "MASHREQ_USERNAME")].value == "tejasvie-mashreq-user"
         assert by_profile_key[(tejasvie.id, "MASHREQ_PASSWORD")].value == "tejasvie-mashreq-pass"
-        assert by_profile_key[(tejasvie.id, "FAB_USERNAME")].value == ""
+        # Spec-catalog key is still seeded for non-default profile, but with blank value.
+        assert by_profile_key[(tejasvie.id, "FAB_PDF_PASSWORD")].value == ""
