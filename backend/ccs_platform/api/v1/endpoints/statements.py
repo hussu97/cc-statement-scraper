@@ -160,19 +160,26 @@ def patch_statement_date(
     if new_date == old_date:
         return to_statement_out(statement, line_count=line_count)
 
-    if repo.date_conflict_exists(
+    conflicting_id = repo.date_conflict_exists(
         profile_id=profile.profile_id,
         exclude_id=statement.id,
         bank_code=statement.bank_code,
         statement_reference=statement.statement_reference,
         new_date=new_date,
-    ):
+    )
+    if conflicting_id is not None:
+        conflicting_stmt = repo.get_by_id(conflicting_id, profile_id=profile.profile_id)
+        conflicting_line_count = len(repo.get_lines_for_statement(conflicting_id)) if conflicting_stmt else 0
         raise HTTPException(
             status_code=409,
-            detail=(
-                "Statement date update conflicts with an existing statement identity "
-                "(bank_code + statement_reference + statement_date)."
-            ),
+            detail={
+                "code": "DATE_CONFLICT",
+                "conflicting_statement": (
+                    to_statement_out(conflicting_stmt, line_count=conflicting_line_count).model_dump(mode="json")
+                    if conflicting_stmt
+                    else None
+                ),
+            },
         )
 
     statement.statement_date = new_date
