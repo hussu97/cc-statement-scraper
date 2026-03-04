@@ -74,7 +74,7 @@ def test_seed_runtime_settings_from_env_file_and_apply(monkeypatch, tmp_path) ->
 
 def test_seed_runtime_settings_none_source_mode_keeps_blank_values(tmp_path) -> None:
     env_path = tmp_path / ".env"
-    env_path.write_text("FAB_USERNAME=user-fab\n", encoding="utf-8")
+    env_path.write_text("FAB_PDF_PASSWORD=test-password\n", encoding="utf-8")
 
     with _session() as db:
         profile = models.Profile(key="alice", name="Alice", is_default=True)
@@ -92,7 +92,7 @@ def test_seed_runtime_settings_none_source_mode_keeps_blank_values(tmp_path) -> 
         assert result["source_mode"] == "none"
         rows = db.execute(select(models.RuntimeSetting)).scalars().all()
         by_key = {row.key: row for row in rows}
-        assert by_key["FAB_USERNAME"].value == ""
+        assert by_key["FAB_PDF_PASSWORD"].value == ""
 
 
 def test_seed_runtime_settings_supports_profile_scoped_env_keys(tmp_path) -> None:
@@ -100,9 +100,9 @@ def test_seed_runtime_settings_supports_profile_scoped_env_keys(tmp_path) -> Non
     env_path.write_text(
         "\n".join(
             [
-                "FAB_USERNAME=legacy-fallback",
-                "ALICE_FAB_USERNAME=alice-fab-user",
-                "ALICE_ENBD_USERNAME=alice-enbd-user",
+                "FAB_PDF_PASSWORD=legacy-fallback",
+                "ALICE_FAB_PDF_PASSWORD=alice-fab-password",
+                "ALICE_ADCB_PDF_PASSWORD=alice-adcb-password",
                 "BOB_MASHREQ_USERNAME=bob-mashreq-user",
                 "BOB_MASHREQ_PASSWORD=bob-mashreq-pass",
             ]
@@ -140,9 +140,10 @@ def test_seed_runtime_settings_supports_profile_scoped_env_keys(tmp_path) -> Non
         rows = db.execute(select(models.RuntimeSetting)).scalars().all()
         by_profile_key = {(row.profile_id, row.key): row for row in rows}
 
-        assert by_profile_key[(alice.id, "FAB_USERNAME")].value == "alice-fab-user"
-        assert by_profile_key[(alice.id, "ENBD_USERNAME")].value == "alice-enbd-user"
+        assert by_profile_key[(alice.id, "FAB_PDF_PASSWORD")].value == "alice-fab-password"
+        assert by_profile_key[(alice.id, "ADCB_PDF_PASSWORD")].value == "alice-adcb-password"
         # Non-default profile with blank_values only accepts explicit BOB_* keys.
         assert by_profile_key[(bob.id, "MASHREQ_USERNAME")].value == "bob-mashreq-user"
         assert by_profile_key[(bob.id, "MASHREQ_PASSWORD")].value == "bob-mashreq-pass"
-        assert by_profile_key[(bob.id, "FAB_USERNAME")].value == ""
+        # Spec-catalog key is still seeded for non-default profile, but with blank value.
+        assert by_profile_key[(bob.id, "FAB_PDF_PASSWORD")].value == ""
