@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { api } from '../api';
+import { api, ApiError } from '../api';
 import { JsonView } from '../components/JsonView';
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown';
 import { Panel } from '../components/Panel';
@@ -29,6 +29,8 @@ export function StatementsPage() {
   const [reparseAllRunning, setReparseAllRunning] = useState(false);
   const [editingStatementDate, setEditingStatementDate] = useState('');
   const [savingStatementDate, setSavingStatementDate] = useState(false);
+  const [dateConflict, setDateConflict] = useState<{ conflicting: Statement; pendingDate: string } | null>(null);
+  const [resolvingConflict, setResolvingConflict] = useState(false);
 
   async function loadBanks() {
     try {
@@ -188,9 +190,41 @@ export function StatementsPage() {
       setStatements((prev) => prev.map((row) => (row.id === updated.id ? { ...row, ...updated } : row)));
       await load();
     } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        const body = err.data as { detail?: { code?: string; conflicting_statement?: Statement } };
+        if (body?.detail?.code === 'DATE_CONFLICT' && body.detail.conflicting_statement) {
+          setDateConflict({ conflicting: body.detail.conflicting_statement, pendingDate: editingStatementDate });
+          return;
+        }
+      }
       setError((err as Error).message);
     } finally {
       setSavingStatementDate(false);
+    }
+  }
+
+  async function resolveConflict(deleteId: number) {
+    if (!dateConflict || !selected) return;
+    const survivorId = deleteId === selected.id ? dateConflict.conflicting.id : selected.id;
+    try {
+      setResolvingConflict(true);
+      setError(null);
+      await api.delete(`/statements/${deleteId}`);
+      await api.patch(`/statements/${survivorId}`, { statement_date: dateConflict.pendingDate });
+      if (deleteId === selected.id) {
+        setSelected(null);
+        setEditingStatementDate('');
+        setLines([]);
+        setLinesTotal(0);
+      } else {
+        setEditingStatementDate(dateConflict.pendingDate);
+      }
+      setDateConflict(null);
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setResolvingConflict(false);
     }
   }
 
@@ -216,6 +250,80 @@ export function StatementsPage() {
   }, [activeProfileKey, selected?.id, linesPage, linesPageSize]);
 
   return (
+    <>
+    {dateConflict && selected && (
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(0,0,0,0.45)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+        }}
+        onClick={() => setDateConflict(null)}
+      >
+        <div
+          style={{
+            background: 'var(--surface, #1e1e2e)',
+            border: '1px solid var(--border, #3a3a4a)',
+            borderRadius: '8px',
+            padding: '1.5rem',
+            maxWidth: '720px',
+            width: '95%',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <h4 style={{ margin: '0 0 0.35rem' }}>Date Conflict</h4>
+          <p className="muted" style={{ margin: '0 0 1.25rem', lineHeight: 1.5 }}>
+            Another statement shares the same bank and reference with date <strong>{dateConflict.pendingDate}</strong>.
+            Choose which statement to delete — the survivor will be set to <strong>{dateConflict.pendingDate}</strong>.
+          </p>
+          <div className="row" style={{ gap: '1rem', alignItems: 'stretch' }}>
+            {([
+              { stmt: selected, label: 'Current statement (being edited)' },
+              { stmt: dateConflict.conflicting, label: 'Conflicting statement' },
+            ] as { stmt: Statement; label: string }[]).map(({ stmt, label }) => (
+              <div
+                key={stmt.id}
+                style={{
+                  flex: 1,
+                  border: '1px solid var(--border, #3a3a4a)',
+                  borderRadius: '6px',
+                  padding: '1rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.35rem',
+                }}
+              >
+                <span className="muted" style={{ fontSize: '0.75rem' }}>{label}</span>
+                <div><strong>ID:</strong> {stmt.id}</div>
+                <div><strong>Bank:</strong> {stmt.bank_code}</div>
+                <div><strong>Reference:</strong> {stmt.statement_reference}</div>
+                <div><strong>Date:</strong> {stmt.statement_date}</div>
+                <div><strong>Lines:</strong> {stmt.line_count}</div>
+                <div><strong>Uploaded:</strong> {stmt.ingested_at ? formatLocalDateTime(stmt.ingested_at) : '—'}</div>
+                <button
+                  className="ghost"
+                  style={{ marginTop: '0.75rem', color: 'var(--error, #e06c75)' }}
+                  disabled={resolvingConflict}
+                  onClick={() => resolveConflict(stmt.id)}
+                >
+                  {resolvingConflict ? 'Working...' : 'Delete this one'}
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="row" style={{ justifyContent: 'flex-end', marginTop: '1rem' }}>
+            <button className="ghost" onClick={() => setDateConflict(null)} disabled={resolvingConflict}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     <div className="grid">
       <div ref={detailPanelRef} style={{ scrollMarginTop: '5rem' }}>
         <Panel title="Statement Detail">
@@ -390,5 +498,6 @@ export function StatementsPage() {
         />
       </Panel>
     </div>
+    </>
   );
 }

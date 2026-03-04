@@ -170,8 +170,8 @@ class StatementRepository:
         bank_code: str,
         statement_reference: str,
         new_date: date,
-    ) -> bool:
-        result = self._db.execute(
+    ) -> int | None:
+        return self._db.execute(
             select(models.Statement.id).where(
                 models.Statement.profile_id == profile_id,
                 models.Statement.id != exclude_id,
@@ -180,4 +180,3 @@ class StatementRepository:
                 models.Statement.statement_date == new_date,
             )
         ).scalar_one_or_none()
-        return result is not None
