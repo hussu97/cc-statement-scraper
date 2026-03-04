@@ -1,56 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { api } from '../api';
 import { Panel } from '../components/Panel';
 import { TablePagination } from '../components/TablePagination';
 import { useActiveProfileKey } from '../profileStore';
 import { formatLocalDateTime } from '../utils/datetime';
-import type { Bank, Job, JobItem, JobLogEntry, PagedResponse } from '../types/statements';
-
-type MonthOption = {
-  value: string;
-  label: string;
-};
-
-const MIN_MONTH_YEAR = 2024;
-const MIN_MONTH_INDEX = 1;
-
-function dubaiCurrentYearMonth() {
-  const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Asia/Dubai',
-    year: 'numeric',
-    month: '2-digit',
-  }).formatToParts(new Date());
-
-  const yearPart = parts.find((part) => part.type === 'year')?.value;
-  const monthPart = parts.find((part) => part.type === 'month')?.value;
-
-  const year = Number(yearPart || new Date().getFullYear());
-  const month = Number(monthPart || new Date().getMonth() + 1);
-  return { year, month };
-}
-
-function buildMonthOptions(): MonthOption[] {
-  const { year: maxYear, month: maxMonth } = dubaiCurrentYearMonth();
-  const options: MonthOption[] = [];
-
-  for (let year = MIN_MONTH_YEAR; year <= maxYear; year += 1) {
-    const startMonth = year === MIN_MONTH_YEAR ? MIN_MONTH_INDEX : 1;
-    const endMonth = year === maxYear ? maxMonth : 12;
-
-    for (let month = startMonth; month <= endMonth; month += 1) {
-      const value = `${year}-${String(month).padStart(2, '0')}`;
-      const label = new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString('en-US', {
-        month: 'short',
-        year: 'numeric',
-        timeZone: 'UTC',
-      });
-      options.push({ value, label });
-    }
-  }
-
-  return options;
-}
+import type { Job, JobItem, JobLogEntry, PagedResponse } from '../types/statements';
 
 const ITEM_STATUS_ICON: Record<string, string> = {
   queued: '·',
@@ -219,36 +174,17 @@ function JobLogPanel({ job, logs }: { job: Job | null; logs: JobLogEntry[] }) {
 
 export function JobsPage() {
   const activeProfileKey = useActiveProfileKey();
-  const monthOptions = useMemo(() => buildMonthOptions(), []);
-  const defaultMonth = monthOptions[monthOptions.length - 1]?.value ?? `${MIN_MONTH_YEAR}-01`;
 
-  const [banks, setBanks] = useState<Bank[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [jobsPage, setJobsPage] = useState(1);
   const [jobsPageSize, setJobsPageSize] = useState(100);
   const [jobsTotal, setJobsTotal] = useState(0);
-  const [selectedBanks, setSelectedBanks] = useState<string[]>([]);
-  const [monthFrom, setMonthFrom] = useState(defaultMonth);
-  const [monthTo, setMonthTo] = useState(defaultMonth);
-  const [timeout, setTimeoutMinutes] = useState(20);
   const [activeJob, setActiveJob] = useState<Job | null>(null);
   const [liveJob, setLiveJob] = useState<Job | null>(null);
   const [jobLogs, setJobLogs] = useState<JobLogEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
   const liveJobPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const jobLogPanelRef = useRef<HTMLDivElement | null>(null);
-
-  const fromIndex = monthOptions.findIndex((item) => item.value === monthFrom);
-  const toIndex = monthOptions.findIndex((item) => item.value === monthTo);
-  const monthCount =
-    fromIndex >= 0 && toIndex >= 0 && toIndex >= fromIndex
-      ? toIndex - fromIndex + 1
-      : 0;
-
-  async function loadBanks() {
-    const rows = await api.get<Bank[]>('/banks');
-    setBanks(rows);
-  }
 
   async function loadJobs(nextPage = jobsPage, nextPageSize = jobsPageSize) {
     const params = new URLSearchParams();
@@ -261,34 +197,6 @@ export function JobsPage() {
     const totalPages = Math.max(1, Math.ceil(total / Math.max(nextPageSize, 1)));
     if (nextPage > totalPages) {
       setJobsPage(totalPages);
-    }
-  }
-
-  async function createScrapeJob() {
-    try {
-      setError(null);
-      if (monthFrom > monthTo) {
-        setError('Month From must be earlier than or equal to Month To.');
-        return;
-      }
-
-      const payload = {
-        banks: selectedBanks,
-        month_from: monthFrom,
-        month_to: monthTo,
-        login_timeout_minutes: timeout,
-      };
-      const job = await api.post<Job>('/jobs/scrape', payload);
-      setActiveJob(job);
-      setJobsPage(1);
-      await loadJobs(1, jobsPageSize);
-    } catch (err) {
-      const message = (err as Error).message || '';
-      if (message.includes('HTTP 409')) {
-        setError('An identical scrape job is already queued/running.');
-        return;
-      }
-      setError(message);
     }
   }
 
@@ -327,7 +235,6 @@ export function JobsPage() {
   }
 
   useEffect(() => {
-    loadBanks();
     setJobsPage(1);
   }, [activeProfileKey]);
 
@@ -394,66 +301,6 @@ export function JobsPage() {
 
   return (
     <div className="grid">
-      <Panel title="Scrape Statements">
-        <p className="muted">Select banks and a month-year range (from Jan 2024 to current month), then run scraper job.</p>
-        {error && <p className="error">{error}</p>}
-        <div className="row">
-          {banks.map((bank) => (
-            <label key={bank.code} style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
-              <input
-                type="checkbox"
-                checked={selectedBanks.includes(bank.code)}
-                onChange={(e) => {
-                  setSelectedBanks((prev) => {
-                    if (e.target.checked) {
-                      return [...prev, bank.code];
-                    }
-                    return prev.filter((code) => code !== bank.code);
-                  });
-                }}
-              />
-              <span>{bank.code}</span>
-            </label>
-          ))}
-        </div>
-
-        <div className="row" style={{ marginTop: '0.75rem' }}>
-          <label>
-            Month From
-            <select value={monthFrom} onChange={(e) => setMonthFrom(e.target.value)}>
-              {monthOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            Month To
-            <select value={monthTo} onChange={(e) => setMonthTo(e.target.value)}>
-              {monthOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <input
-            type="number"
-            min={5}
-            max={60}
-            value={timeout}
-            onChange={(e) => setTimeoutMinutes(Number(e.target.value))}
-          />
-          <button className="primary" onClick={createScrapeJob}>Run Scrape Job</button>
-        </div>
-        <p className="muted" style={{ marginTop: '0.5rem' }}>
-          Requested range: {monthCount} month(s). Unsupported bank/month combinations are marked as MANUAL_REQUIRED.
-        </p>
-      </Panel>
-
       <div ref={jobLogPanelRef} style={{ scrollMarginTop: '5rem' }}>
         <Panel title={liveJob ? `Job Log — #${liveJob.id}` : 'Job Log'}>
           <JobLogPanel job={liveJob} logs={jobLogs} />
@@ -461,8 +308,9 @@ export function JobsPage() {
       </div>
 
       <Panel title="Jobs">
+        {error && <p className="error">{error}</p>}
         <div className="row" style={{ justifyContent: 'space-between' }}>
-          <span className="muted">Live status for scrape/upload/reclassify/export/diagnostics jobs across all pages.</span>
+          <span className="muted">Live status for upload/reclassify/export/diagnostics jobs across all pages.</span>
           <div className="row">
             <button className="ghost" onClick={() => loadJobs()}>Refresh</button>
             <button className="ghost" onClick={cancelAllJobs}>Cancel All Jobs</button>

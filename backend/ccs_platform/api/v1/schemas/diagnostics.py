@@ -8,5 +8,3 @@ class ParserValidateRequest(BaseModel):
     strict: bool = True
 
 
-class BankConnectionTestRequest(BaseModel):
-    bank_code: str
