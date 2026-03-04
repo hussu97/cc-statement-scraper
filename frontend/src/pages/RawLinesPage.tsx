@@ -10,7 +10,7 @@ import { Panel } from '../components/Panel';
 import { TablePagination } from '../components/TablePagination';
 import { useActiveProfileKey } from '../profileStore';
 import { DashboardFilterMeta } from '../types/dashboard';
-import type { PagedResponse, RawLine } from '../types/statements';
+import type { Category, PagedResponse, RawLine } from '../types/statements';
 
 const EMPTY_FILTER_META: DashboardFilterMeta = {
   banks: [],
@@ -40,19 +40,29 @@ export function RawLinesPage() {
   });
   const [rows, setRows] = useState<RawLine[]>([]);
   const [filterMeta, setFilterMeta] = useState<DashboardFilterMeta>(EMPTY_FILTER_META);
+  const [allCategories, setAllCategories] = useState<Category[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
   const [totalRows, setTotalRows] = useState(0);
   const [filteredAmountTotal, setFilteredAmountTotal] = useState(0);
-  const [categoryPatch, setCategoryPatch] = useState<Record<number, string>>({});
+  const [overridePending, setOverridePending] = useState<Record<number, string>>({});
   const debouncedMerchantSearch = useDebouncedValue(filters.merchantSearch, 300);
 
   async function loadFilterMeta() {
     try {
       const meta = await api.get<DashboardFilterMeta>('/dashboard/filter-meta');
       setFilterMeta(meta);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function loadCategories() {
+    try {
+      const cats = await api.get<Category[]>('/categories');
+      setAllCategories(cats);
     } catch (err) {
       setError((err as Error).message);
     }
@@ -100,15 +110,26 @@ export function RawLinesPage() {
     }
   }
 
-  async function patchCategory(lineId: number) {
-    const category = (categoryPatch[lineId] || '').trim();
-    if (!category) {
-      return;
-    }
-
+  async function pinOverride(lineId: number) {
+    const category = overridePending[lineId];
+    if (!category) return;
     try {
-      await api.patch(`/transactions/${lineId}`, { category });
-      setRows((prev) => prev.map((row) => (row.id === lineId ? { ...row, category } : row)));
+      const updated = await api.put<RawLine>(`/transactions/${lineId}/category-override`, { category });
+      setRows((prev) => prev.map((row) => (row.id === lineId ? { ...row, category: updated.category, category_override: updated.category_override } : row)));
+      setOverridePending((prev) => {
+        const next = { ...prev };
+        delete next[lineId];
+        return next;
+      });
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function clearOverride(lineId: number) {
+    try {
+      const updated = await api.delete<RawLine>(`/transactions/${lineId}/category-override`);
+      setRows((prev) => prev.map((row) => (row.id === lineId ? { ...row, category: updated.category, category_override: updated.category_override } : row)));
     } catch (err) {
       setError((err as Error).message);
     }
@@ -116,6 +137,7 @@ export function RawLinesPage() {
 
   useEffect(() => {
     loadFilterMeta();
+    loadCategories();
     setPage(1);
   }, [activeProfileKey]);
 
@@ -242,7 +264,7 @@ export function RawLinesPage() {
                 <th>Amount AED</th>
                 <th>Direction</th>
                 <th>Category</th>
-                <th>Quick Edit</th>
+                <th>Override</th>
               </tr>
             </thead>
             <tbody>
@@ -254,17 +276,30 @@ export function RawLinesPage() {
                   <td>{row.merchant_normalized}</td>
                   <td>{row.amount_aed}</td>
                   <td>{row.direction}</td>
-                  <td>{row.category}</td>
                   <td>
-                    <div className="row" style={{ flexWrap: 'nowrap' }}>
-                      <input
-                        value={categoryPatch[row.id] ?? row.category}
+                    {row.category_override ? (
+                      <span title="Category pinned">{row.category} &#x229D;</span>
+                    ) : (
+                      row.category
+                    )}
+                  </td>
+                  <td>
+                    <div className="row" style={{ flexWrap: 'nowrap', gap: '0.25rem' }}>
+                      <select
+                        value={overridePending[row.id] ?? row.category ?? ''}
                         onChange={(event) =>
-                          setCategoryPatch((prev) => ({ ...prev, [row.id]: event.target.value }))
+                          setOverridePending((prev) => ({ ...prev, [row.id]: event.target.value }))
                         }
-                        style={{ width: '160px' }}
-                      />
-                      <button className="ghost" onClick={() => patchCategory(row.id)}>Save</button>
+                        style={{ minWidth: '130px' }}
+                      >
+                        {allCategories.map((cat) => (
+                          <option key={cat.id} value={cat.name}>{cat.name}</option>
+                        ))}
+                      </select>
+                      <button className="ghost" onClick={() => pinOverride(row.id)}>Pin</button>
+                      {row.category_override && (
+                        <button className="ghost" onClick={() => clearOverride(row.id)}>Clear</button>
+                      )}
                     </div>
                   </td>
                 </tr>

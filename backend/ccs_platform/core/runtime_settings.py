@@ -23,29 +23,11 @@ class RuntimeSettingSpec:
 
 
 DEFAULT_RUNTIME_SETTING_SPECS: tuple[RuntimeSettingSpec, ...] = (
-    RuntimeSettingSpec("FAB_USERNAME", "FAB", True, "FAB online banking username"),
-    RuntimeSettingSpec("FAB_PASSWORD", "FAB", True, "FAB online banking password"),
     RuntimeSettingSpec("FAB_PDF_PASSWORD", "FAB", True, "FAB PDF password (optional; required for email-sourced encrypted statements)"),
-    RuntimeSettingSpec("ADCB_CID", "ADCB", True, "ADCB customer identifier"),
-    RuntimeSettingSpec("ADCB_LOGIN_PASSWORD", "ADCB", True, "ADCB login password"),
+    RuntimeSettingSpec("ADCB_CID", "ADCB", True, "ADCB customer identifier (also used as PDF password fallback)"),
     RuntimeSettingSpec("ADCB_PDF_PASSWORD", "ADCB", True, "ADCB PDF password (falls back to ADCB_CID when empty)"),
-    RuntimeSettingSpec("ADCB_FORCE_VIRTUAL_KEYBOARD", "ADCB", False, "ADCB virtual keyboard automation toggle"),
-    RuntimeSettingSpec("ENBD_USERNAME", "ENBD", True, "ENBD online banking username"),
-    RuntimeSettingSpec("ENBD_PASSWORD", "ENBD", True, "ENBD online banking password"),
     RuntimeSettingSpec("ENBD_PDF_PASSWORD", "ENBD", True, "ENBD PDF password (required for email-sourced encrypted statements)"),
-    RuntimeSettingSpec("EIB_USERNAME", "EIB", True, "EIB online banking username"),
-    RuntimeSettingSpec("EIB_PASSWORD", "EIB", True, "EIB online banking password"),
-    RuntimeSettingSpec("SIB_USER_ID", "SIB", True, "SIB online banking user ID"),
-    RuntimeSettingSpec("SIB_PASSWORD", "SIB", True, "SIB online banking password"),
     RuntimeSettingSpec("SIB_PDF_PASSWORD", "SIB", True, "SIB PDF password (DOB in DDMMYY format)"),
-    RuntimeSettingSpec(
-        "SIB_SECURE_IMAGE_TEMPLATE_BASE64",
-        "SIB",
-        False,
-        "Optional SIB secure image template (base64 PNG) for PAM image matching",
-    ),
-    RuntimeSettingSpec("MASHREQ_USERNAME", "MASHREQ", True, "Mashreq online banking username"),
-    RuntimeSettingSpec("MASHREQ_PASSWORD", "MASHREQ", True, "Mashreq online banking password"),
 )
 
 DEFAULT_SPEC_MAP = {spec.key: spec for spec in DEFAULT_RUNTIME_SETTING_SPECS}

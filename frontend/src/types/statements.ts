@@ -27,6 +27,7 @@ export type StatementLine = {
   amount_aed: number;
   direction: string;
   category: string | null;
+  category_override: string | null;
 };
 
 export type PagedResponse<T> = {
@@ -105,6 +106,7 @@ export type RawLine = {
   amount_aed: number;
   direction: string;
   category: string | null;
+  category_override: string | null;
   bank_code: string;
   statement_id: number;
 };

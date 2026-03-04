@@ -49,4 +49,5 @@ def to_line_out(line: models.StatementLine) -> StatementLineOut:
         country_code=line.country_code,
         card_last4=line.card_last4,
         category=line.category,
+        category_override=line.category_override,
     )

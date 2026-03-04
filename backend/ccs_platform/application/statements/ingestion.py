@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from ccs_platform.db import models
 from ccs_platform.core.settings import PlatformSettings
-from ccs_platform.domain.categorization.engine import categorize, ensure_category
+from ccs_platform.domain.categorization.engine import apply_override_if_exists, categorize, ensure_category
 from ccs_platform.domain.statements.identity import checksum_sha256, resolve_statement_identity
 from ccs_platform.application.statements.parser_adapter import parse_statement_pdf
 from ccs_platform.adapters.storage import StorageAdapter
@@ -168,6 +168,7 @@ def ingest_parsed_statement(
             fingerprint=parsed_line.fingerprint,
             raw_json=parsed_line.raw,
         )
+        apply_override_if_exists(db, fingerprint=parsed_line.fingerprint, line=line)
         db.add(line)
         inserted_lines += 1
 
