@@ -114,6 +114,7 @@ class StatementLine(Base):
         Index("ix_statement_lines_merchant_normalized", "merchant_normalized"),
         Index("ix_statement_lines_category", "category"),
         Index("ix_statement_lines_direction", "direction"),
+        Index("ix_statement_lines_category_override", "category_override"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -140,6 +141,7 @@ class StatementLine(Base):
     country_code: Mapped[str | None] = mapped_column(String(3), nullable=True)
     card_last4: Mapped[str | None] = mapped_column(String(4), nullable=True)
     category: Mapped[str] = mapped_column(String(128), nullable=False, default="Uncategorized")
+    category_override: Mapped[str | None] = mapped_column(String(128), nullable=True, default=None)
 
     fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     raw_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)

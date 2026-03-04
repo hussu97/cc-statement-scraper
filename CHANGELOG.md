@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Backend
+
+- **chore** Remove scraper-only runtime settings from seed catalog — `DEFAULT_RUNTIME_SETTING_SPECS` now only includes PDF-password keys used by backend parsers (`FAB_PDF_PASSWORD`, `ADCB_CID`, `ADCB_PDF_PASSWORD`, `ENBD_PDF_PASSWORD`, `SIB_PDF_PASSWORD`); login credentials and scraper-specific flags (`FAB_USERNAME/PASSWORD`, `ADCB_LOGIN_PASSWORD`, `ADCB_FORCE_VIRTUAL_KEYBOARD`, `ENBD_USERNAME/PASSWORD`, `EIB_USERNAME/PASSWORD`, `SIB_USER_ID/PASSWORD/SECURE_IMAGE_TEMPLATE_BASE64`, `MASHREQ_USERNAME/PASSWORD`) are no longer seeded or shown in the UI; migration `20260304_000015` deletes any existing rows for these keys
+
+- **feat** Statement line category override — users can pin a category on any transaction line via `PUT /api/v1/transactions/{id}/category-override`; the pin is stored in a new `category_overrides` table (keyed by fingerprint) and survives both reclassify (skipped by `reclassify_statement_lines`) and reparse (applied during ingestion); `DELETE /api/v1/transactions/{id}/category-override` clears the pin and restores auto-classification; migration `20260304_000014` adds the `category_overrides` table and `category_override` column on `statement_lines`
+
+### Frontend (web)
+
+- **feat** Category override controls — `RawLinesPage` and `StatementsPage` lines tables now show a category dropdown with Pin/Clear buttons; pinned rows display a ⊘ lock indicator; category list is fetched from `GET /api/v1/categories` on mount
+
 ### Frontend (web)
 
 - **fix** Proxy API calls through Vercel to fix session cookies on Safari and Chrome incognito — `vercel.json` now rewrites `/api/:path*` to the Render backend so the session cookie is first-party, bypassing browser third-party cookie blocking (`SameSite=None` cross-site cookies were silently dropped)

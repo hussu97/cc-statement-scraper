@@ -7,7 +7,7 @@ import { Panel } from '../components/Panel';
 import { TablePagination } from '../components/TablePagination';
 import { useActiveProfileKey } from '../profileStore';
 import { formatLocalDateTime } from '../utils/datetime';
-import type { Job, PagedResponse, Statement, StatementLine } from '../types/statements';
+import type { Category, Job, PagedResponse, Statement, StatementLine } from '../types/statements';
 
 export function StatementsPage() {
   const activeProfileKey = useActiveProfileKey();
@@ -23,6 +23,8 @@ export function StatementsPage() {
   const [linesPage, setLinesPage] = useState(1);
   const [linesPageSize, setLinesPageSize] = useState(100);
   const [linesTotal, setLinesTotal] = useState(0);
+  const [allCategories, setAllCategories] = useState<Category[]>([]);
+  const [overridePending, setOverridePending] = useState<Record<number, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [reparseAllRunning, setReparseAllRunning] = useState(false);
   const [editingStatementDate, setEditingStatementDate] = useState('');
@@ -79,11 +81,46 @@ export function StatementsPage() {
     }
   }
 
+  async function loadCategories() {
+    try {
+      const cats = await api.get<Category[]>('/categories');
+      setAllCategories(cats);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function pinOverride(lineId: number) {
+    const category = overridePending[lineId];
+    if (!category) return;
+    try {
+      const updated = await api.put<StatementLine>(`/transactions/${lineId}/category-override`, { category });
+      setLines((prev) => prev.map((line) => (line.id === lineId ? { ...line, category: updated.category, category_override: updated.category_override } : line)));
+      setOverridePending((prev) => {
+        const next = { ...prev };
+        delete next[lineId];
+        return next;
+      });
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function clearOverride(lineId: number) {
+    try {
+      const updated = await api.delete<StatementLine>(`/transactions/${lineId}/category-override`);
+      setLines((prev) => prev.map((line) => (line.id === lineId ? { ...line, category: updated.category, category_override: updated.category_override } : line)));
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
   function openStatement(statement: Statement) {
     setSelected(statement);
     setEditingStatementDate(String(statement.statement_date || ''));
     setLinesPage(1);
     setLinesTotal(0);
+    loadCategories();
     window.requestAnimationFrame(() => {
       detailPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
@@ -217,6 +254,7 @@ export function StatementsPage() {
                     <th>Amount AED</th>
                     <th>Direction</th>
                     <th>Category</th>
+                    <th>Override</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -227,7 +265,32 @@ export function StatementsPage() {
                       <td>{line.merchant_normalized}</td>
                       <td>{line.amount_aed}</td>
                       <td>{line.direction}</td>
-                      <td>{line.category}</td>
+                      <td>
+                        {line.category_override ? (
+                          <span title="Category pinned">{line.category} &#x229D;</span>
+                        ) : (
+                          line.category
+                        )}
+                      </td>
+                      <td>
+                        <div className="row" style={{ flexWrap: 'nowrap', gap: '0.25rem' }}>
+                          <select
+                            value={overridePending[line.id] ?? line.category ?? ''}
+                            onChange={(event) =>
+                              setOverridePending((prev) => ({ ...prev, [line.id]: event.target.value }))
+                            }
+                            style={{ minWidth: '130px' }}
+                          >
+                            {allCategories.map((cat) => (
+                              <option key={cat.id} value={cat.name}>{cat.name}</option>
+                            ))}
+                          </select>
+                          <button className="ghost" onClick={() => pinOverride(line.id)}>Pin</button>
+                          {line.category_override && (
+                            <button className="ghost" onClick={() => clearOverride(line.id)}>Clear</button>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

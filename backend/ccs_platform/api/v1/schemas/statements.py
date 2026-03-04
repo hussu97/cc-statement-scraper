@@ -44,6 +44,7 @@ class StatementLineOut(BaseModel):
     country_code: str | None
     card_last4: str | None
     category: str
+    category_override: str | None = None
 
 
 class PaginatedStatements(BaseModel):

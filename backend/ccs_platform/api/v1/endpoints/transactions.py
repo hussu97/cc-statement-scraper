@@ -3,13 +3,13 @@ from __future__ import annotations
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from ccs_platform.db import models
 from ccs_platform.api.deps import ProfileContext, get_db, get_profile_context
 from ccs_platform.api.v1.schemas import StatementLineOut, TransactionBulkCategoryPatch, TransactionCategoryPatch
-from ccs_platform.domain.categorization.engine import ensure_category
+from ccs_platform.domain.categorization.engine import categorize, ensure_category
 from ccs_platform.application.statements.serializers import to_line_out
 
 
@@ -140,6 +140,72 @@ def patch_transaction_category(
 
     ensure_category(db, payload.category)
     line.category = payload.category
+    db.commit()
+    db.refresh(line)
+    return to_line_out(line)
+
+
+@router.put("/{line_id}/category-override", response_model=StatementLineOut)
+def set_category_override(
+    line_id: int,
+    payload: TransactionCategoryPatch,
+    db: Session = Depends(get_db),
+    profile: ProfileContext = Depends(get_profile_context),
+) -> StatementLineOut:
+    line = db.execute(
+        select(models.StatementLine)
+        .join(models.Statement)
+        .where(
+            models.StatementLine.id == line_id,
+            models.Statement.profile_id == profile.profile_id,
+        )
+    ).scalar_one_or_none()
+    if not line:
+        raise HTTPException(status_code=404, detail="Transaction line not found")
+
+    ensure_category(db, payload.category)
+    line.category = payload.category
+    line.category_override = payload.category
+
+    if line.fingerprint:
+        override = db.execute(
+            select(models.CategoryOverride).where(models.CategoryOverride.fingerprint == line.fingerprint)
+        ).scalar_one_or_none()
+        if override:
+            override.category_name = payload.category
+        else:
+            db.add(models.CategoryOverride(fingerprint=line.fingerprint, category_name=payload.category))
+
+    db.commit()
+    db.refresh(line)
+    return to_line_out(line)
+
+
+@router.delete("/{line_id}/category-override", response_model=StatementLineOut)
+def clear_category_override(
+    line_id: int,
+    db: Session = Depends(get_db),
+    profile: ProfileContext = Depends(get_profile_context),
+) -> StatementLineOut:
+    line = db.execute(
+        select(models.StatementLine)
+        .join(models.Statement)
+        .where(
+            models.StatementLine.id == line_id,
+            models.Statement.profile_id == profile.profile_id,
+        )
+    ).scalar_one_or_none()
+    if not line:
+        raise HTTPException(status_code=404, detail="Transaction line not found")
+
+    if line.fingerprint:
+        db.execute(
+            delete(models.CategoryOverride).where(models.CategoryOverride.fingerprint == line.fingerprint)
+        )
+    line.category_override = None
+    category, _ = categorize(db, merchant_normalized=line.merchant_normalized)
+    line.category = category
+
     db.commit()
     db.refresh(line)
     return to_line_out(line)

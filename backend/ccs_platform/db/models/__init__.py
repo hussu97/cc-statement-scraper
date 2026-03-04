@@ -20,12 +20,13 @@ from ccs_platform.db.models.profiles import Profile, ProfileBank
 from ccs_platform.db.models.operations import AuditEvent, Export, Job, JobItem, JobLog, Schedule
 from ccs_platform.db.models.runtime_settings import RuntimeSetting
 from ccs_platform.db.models.statements import Bank, PdfFile, Statement, StatementLine
-from ccs_platform.db.models.taxonomy import Category, CategoryRule
+from ccs_platform.db.models.taxonomy import Category, CategoryOverride, CategoryRule
 
 __all__ = [
     "AuditEvent",
     "Bank",
     "Category",
+    "CategoryOverride",
     "CategoryRule",
     "Direction",
     "EmailBankRoute",

@@ -108,6 +108,27 @@ def categorize(
     return "Uncategorized", None
 
 
+def apply_override_if_exists(
+    db: Session,
+    *,
+    fingerprint: str | None,
+    line: models.StatementLine,
+) -> bool:
+    """Set line.category and line.category_override from the overrides table if one exists.
+    Returns True if an override was applied."""
+    if not fingerprint:
+        return False
+    override = db.execute(
+        select(models.CategoryOverride).where(models.CategoryOverride.fingerprint == fingerprint)
+    ).scalar_one_or_none()
+    if override:
+        ensure_category(db, override.category_name)
+        line.category = override.category_name
+        line.category_override = override.category_name
+        return True
+    return False
+
+
 def reclassify_statement_lines(
     db: Session,
     statement_ids: list[int] | None = None,
@@ -125,6 +146,8 @@ def reclassify_statement_lines(
 
     updated = 0
     for line, _statement in db.execute(query).all():
+        if line.category_override is not None:
+            continue
         rule = find_best_rule(active_rules, line.merchant_normalized)
         category = rule.category_name if rule else "Uncategorized"
         if rule:
