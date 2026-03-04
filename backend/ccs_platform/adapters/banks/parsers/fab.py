@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pdfplumber
 
-from ccs_platform.domain.parsing.models import StatementParseResult, TransactionRecord
+from ccs_platform.domain.parsing.models import ParserError, StatementParseResult, TransactionRecord
 from ccs_platform.domain.parsing.utils import (
     classify_transaction_kind,
     extract_last4_masked,
@@ -38,6 +38,39 @@ _STATEMENT_REF_RE = re.compile(
 
 # Minimum x-coordinate to search for column headers (avoids Arabic/header copies)
 _COL_HEADER_X_MIN = 400
+
+
+def _open_pdf(path: Path, pdf_password: str | None):
+    """Context-manager factory that opens a pdfplumber PDF with optional password.
+
+    Tries without a password first (scraper/manual uploads are unencrypted).
+    If that raises — indicating an email-sourced encrypted PDF — retries with
+    the supplied pdf_password.
+    """
+    import contextlib
+
+    @contextlib.contextmanager
+    def _ctx():
+        kwargs: dict = {"password": pdf_password} if pdf_password else {}
+        try:
+            with pdfplumber.open(str(path)) as pdf:
+                yield pdf
+        except Exception:  # noqa: BLE001
+            if not pdf_password:
+                raise ParserError(
+                    "PDF_DECRYPT_FAILED",
+                    "FAB statement PDF is encrypted. Set FAB_PDF_PASSWORD in runtime settings.",
+                )
+            try:
+                with pdfplumber.open(str(path), **kwargs) as pdf:
+                    yield pdf
+            except Exception as exc:
+                raise ParserError(
+                    "PDF_DECRYPT_FAILED",
+                    "Unable to decrypt FAB statement PDF. Verify FAB_PDF_PASSWORD.",
+                ) from exc
+
+    return _ctx()
 
 
 def _extract_country_code(description: str) -> str | None:
@@ -164,7 +197,7 @@ def _parse_txn_row(
     }
 
 
-def parse_fab_statement(pdf_path: str | Path) -> StatementParseResult:
+def parse_fab_statement(pdf_path: str | Path, pdf_password: str | None = None) -> StatementParseResult:
     path = Path(pdf_path)
 
     # ------------------------------------------------------------------
@@ -172,7 +205,7 @@ def parse_fab_statement(pdf_path: str | Path) -> StatementParseResult:
     # holder names, statement reference).  Column info is not needed here.
     # ------------------------------------------------------------------
     text_lines: list[str] = []
-    with pdfplumber.open(str(path)) as pdf:
+    with _open_pdf(path, pdf_password) as pdf:
         for page in pdf.pages:
             page_lines = [
                 ln.strip()
@@ -247,7 +280,7 @@ def parse_fab_statement(pdf_path: str | Path) -> StatementParseResult:
     page_current_last4: str | None = main_last4
     page_current_holder: str | None = main_holder
 
-    with pdfplumber.open(str(path)) as pdf:
+    with _open_pdf(path, pdf_password) as pdf:
         for page in pdf.pages:
             words = page.extract_words()
             if not words:
