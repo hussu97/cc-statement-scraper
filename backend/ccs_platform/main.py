@@ -28,11 +28,16 @@ from ccs_platform.application.jobs.worker_loop import WorkerLoop
 
 logger = logging.getLogger(__name__)
 
+# This prints at import time — if this line appears in Render logs, the new
+# code is running. If it never appears, Render is still on an old deploy.
+print("[STARTUP] ccs_platform.main imported", flush=True)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
     configure_logging(level_name=settings.log_level)
+    print(f"[STARTUP] lifespan started | log_level={settings.log_level}", flush=True)
 
     init_db()
     with db_session() as db:

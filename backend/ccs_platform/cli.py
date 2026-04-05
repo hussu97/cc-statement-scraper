@@ -12,7 +12,14 @@ cli = typer.Typer(help="CCS platform backend and worker commands")
 
 @cli.command("api")
 def run_api(host: str = "127.0.0.1", port: int = 8000, reload: bool = False) -> None:
-    uvicorn.run("ccs_platform.main:app", host=host, port=port, reload=reload)
+    uvicorn.run(
+        "ccs_platform.main:app",
+        host=host,
+        port=port,
+        reload=reload,
+        log_level="info",
+        access_log=True,
+    )
 
 
 @cli.command("worker")
