@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import fnmatch
 import tempfile
 from pathlib import Path
 from datetime import UTC, datetime
@@ -10,7 +9,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ccs_platform.api.audit import append_audit_event
-from ccs_platform.core.bank_config import load_app_config
 from ccs_platform.core.runtime_settings import decode_runtime_setting_row_value
 from ccs_platform.db import models
 from ccs_platform.db.repositories import JobRepository
@@ -34,16 +32,6 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 def _job_to_out(job: models.Job) -> JobOut:
     return JobOut.model_validate(job)
-
-
-def _detect_bank_code_from_filename(filename: str) -> str | None:
-    app_cfg = load_app_config()
-    lower = filename.lower()
-    for bank_code, bank_cfg in app_cfg.banks.items():
-        patterns = bank_cfg.get("file_glob_patterns", [])
-        if any(fnmatch.fnmatch(lower, pattern.lower()) for pattern in patterns):
-            return bank_code
-    return None
 
 
 def _extract_pdf_text(pdf_path: Path, max_pages: int = 2, extra_passwords: list[str | None] | None = None) -> str:
@@ -117,12 +105,9 @@ def _infer_bank_code_from_text(pdf_text: str) -> str | None:
 
 
 def _detect_bank_code_for_upload(
-    filename: str, pdf_path: Path, extra_passwords: list[str | None] | None = None
+    pdf_path: Path, extra_passwords: list[str | None] | None = None
 ) -> str | None:
-    detected = _infer_bank_code_from_text(_extract_pdf_text(pdf_path, extra_passwords=extra_passwords))
-    if detected:
-        return detected
-    return _detect_bank_code_from_filename(filename)
+    return _infer_bank_code_from_text(_extract_pdf_text(pdf_path, extra_passwords=extra_passwords))
 
 
 @router.get("", response_model=PaginatedJobs)
@@ -221,7 +206,7 @@ async def create_upload_job(
                     tmp.write(content)
                     tmp.flush()
                     bank_code = (
-                        _detect_bank_code_for_upload(filename, Path(tmp.name), extra_passwords=adcb_pdf_passwords) or ""
+                        _detect_bank_code_for_upload(Path(tmp.name), extra_passwords=adcb_pdf_passwords) or ""
                     ).upper().strip()
 
             if not bank_code:
