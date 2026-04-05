@@ -13,7 +13,7 @@ WORKDIR /app
 
 COPY backend/requirements.txt ./
 RUN pip install --upgrade pip \
-    && pip install -r requirements.txt
+    && grep -v '^-e' requirements.txt | pip install -r /dev/stdin
 
 COPY backend/scripts/gmail_ingest_relay.py \
      backend/scripts/email_ingestion_common.py \
