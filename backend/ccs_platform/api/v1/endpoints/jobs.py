@@ -175,14 +175,14 @@ async def create_upload_job(
             detail=f"Bank {hint} is not enabled for profile {profile.profile_key}",
         )
 
-    # Load ADCB PDF passwords from runtime settings instead of os.environ so that
-    # credentials updated via the admin UI are reflected without a process restart.
-    adcb_password_rows = JobRepository(db).get_runtime_settings(
+    # Load all PDF passwords from runtime settings so encrypted PDFs from any
+    # bank can be decrypted during bank detection.
+    pdf_password_rows = JobRepository(db).get_runtime_settings(
         profile_id=profile.profile_id,
-        keys=["ADCB_PDF_PASSWORD", "ADCB_CID"],
+        keys=["FAB_PDF_PASSWORD", "ADCB_PDF_PASSWORD", "ADCB_CID", "ENBD_PDF_PASSWORD", "SIB_PDF_PASSWORD"],
     )
-    adcb_pdf_passwords: list[str | None] = [
-        decode_runtime_setting_row_value(row) or None for row in adcb_password_rows
+    pdf_passwords: list[str | None] = [
+        decode_runtime_setting_row_value(row) or None for row in pdf_password_rows
     ]
 
     uploads: list[dict] = []
@@ -206,7 +206,7 @@ async def create_upload_job(
                     tmp.write(content)
                     tmp.flush()
                     bank_code = (
-                        _detect_bank_code_for_upload(Path(tmp.name), extra_passwords=adcb_pdf_passwords) or ""
+                        _detect_bank_code_for_upload(Path(tmp.name), extra_passwords=pdf_passwords) or ""
                     ).upper().strip()
 
             if not bank_code:
