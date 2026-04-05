@@ -51,7 +51,10 @@ def handle_upload_job(
                 source=models.SourceType.UPLOAD,
                 runtime_settings=bank_settings,
             )
-            ingested.append(summary)
+            if isinstance(summary, list):
+                ingested.extend(summary)
+            else:
+                ingested.append(summary)
             db.commit()
         except Exception as exc:  # noqa: BLE001
             db.rollback()

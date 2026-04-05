@@ -102,15 +102,12 @@ def _convert_tx(idx: int, tx: TransactionRecord) -> ParsedLine:
     )
 
 
-def parse_statement_pdf(
-    bank_code: str,
+def _build_parsed_statement(
+    result: StatementParseResult,
     pdf_path: Path,
     *,
     source_filename: str | None = None,
-    runtime_settings: dict[str, str] | None = None,
 ) -> ParsedStatement:
-    result = parse_statement_for_bank(bank_code, pdf_path, runtime_settings)
-
     statement_date = _statement_date_from_result(result)
     period_end = _parse_iso_date(str(result.metadata.get("statement_period_end")) if result.metadata else None)
     period_start = _parse_iso_date(str(result.metadata.get("statement_period_start")) if result.metadata else None)
@@ -156,3 +153,21 @@ def parse_statement_pdf(
         warnings=list(result.warnings),
         metadata=metadata,
     )
+
+
+def parse_statement_pdf(
+    bank_code: str,
+    pdf_path: Path,
+    *,
+    source_filename: str | None = None,
+    runtime_settings: dict[str, str] | None = None,
+) -> ParsedStatement | list[ParsedStatement]:
+    result = parse_statement_for_bank(bank_code, pdf_path, runtime_settings)
+
+    if isinstance(result, list):
+        return [
+            _build_parsed_statement(r, pdf_path, source_filename=source_filename)
+            for r in result
+        ]
+
+    return _build_parsed_statement(result, pdf_path, source_filename=source_filename)

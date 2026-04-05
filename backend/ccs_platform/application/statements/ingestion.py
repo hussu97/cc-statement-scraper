@@ -74,6 +74,19 @@ def ingest_statement_pdf(
     db.add(pdf_file)
     db.flush()
 
+    if isinstance(parsed, list):
+        results = [
+            ingest_parsed_statement(
+                db,
+                parsed=p,
+                profile_id=profile_id,
+                pdf_file=pdf_file,
+                pdf_checksum_sha256=checksum,
+            )
+            for p in parsed
+        ]
+        return results
+
     return ingest_parsed_statement(
         db,
         parsed=parsed,

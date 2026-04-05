@@ -93,12 +93,14 @@ def _infer_bank_code_from_text(pdf_text: str) -> str | None:
     if "CARD E-STATEMENT" in text and "AED" in text:
         return "FAB"
 
-    # SIB statements often include these bank markers.
+    # SIB statements and transaction history exports include these bank markers.
     if "SHARJAH ISLAMIC BANK" in text:
         return "SIB"
     if "SIB" in text and "ISLAMIC BANK" in text:
         return "SIB"
     if "SIB DIGITAL" in text and "STATEMENT" in text:
+        return "SIB"
+    if "TRANSACTION HISTORY" in text and "ACCOUNT NO." in text and "ACCOUNT TYPE" in text:
         return "SIB"
 
     return None
