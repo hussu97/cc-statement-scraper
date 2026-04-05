@@ -55,6 +55,7 @@ global_rules:
   - category: Subscription
     keywords:
       - WHOOPDUBLIN
+      - OSNDUBAI
       - NOON ONE
       - DUOLINGO
       - EXCELLENCY BENEFIT
@@ -76,6 +77,7 @@ global_rules:
   - category: Shopping
     keywords:
       - NOON
+      - ZIINA
       - NAMSHI
       - ALSAYYEDA
       - AMAZON.AE
@@ -174,6 +176,7 @@ global_rules:
       - ZURICH INTL
       - VAT ON INSURANCE
       - UNION INSURANCE
+      - SUKOON INSURANCEDUBAI
   - category: Investment
     keywords:
       - RL360
@@ -202,6 +205,7 @@ global_rules:
       - LIFE PHY
       - HALA PHY
       - PHYSIOCARE
+      - MEDCARE
   - category: Cashback
     keywords:
       - FAB REWARDS REDEMPTION - CASHBACK
@@ -212,6 +216,7 @@ global_rules:
       - INWARD IPP CC
       - PAYMENT RECEIVED
       - PAYMENTS RECEIVED
+      - CREDIT CARD PAYMENT
   - category: Apple in-app purchase
     keywords:
       - APPLE.COM/BILL CORK
