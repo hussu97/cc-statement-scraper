@@ -30,7 +30,7 @@ click==8.3.1
     # via
     #   typer
     #   uvicorn
-cryptography==46.0.5
+cryptography==46.0.6
     # via
     #   ccs-platform
     #   google-auth
@@ -91,7 +91,7 @@ psycopg[binary]==3.3.3
     # via ccs-platform
 psycopg-binary==3.3.3
     # via psycopg
-pyasn1==0.6.2
+pyasn1==0.6.3
     # via
     #   pyasn1-modules
     #   rsa
@@ -108,7 +108,7 @@ pydantic-core==2.41.5
     # via pydantic
 pydantic-settings==2.13.1
     # via ccs-platform
-pygments==2.19.2
+pygments==2.20.0
     # via rich
 pypdfium2==5.5.0
     # via pdfplumber
@@ -122,7 +122,7 @@ python-multipart==0.0.22
     # via ccs-platform
 pyyaml==6.0.3
     # via ccs-platform
-requests==2.32.5
+requests==2.33.0
     # via
     #   google-api-core
     #   google-cloud-storage
