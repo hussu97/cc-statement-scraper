@@ -9,7 +9,7 @@ def parse_statement_for_bank(
     bank_code: str,
     pdf_path: str | Path,
     settings: dict[str, str] | None = None,
-) -> StatementParseResult:
+) -> StatementParseResult | list[StatementParseResult]:
     # Parsers are imported lazily so that pdfplumber (~15 MB) is not loaded
     # at startup — only when the first parse job actually runs.
     _s = settings or {}
@@ -45,12 +45,29 @@ def parse_statement_for_bank(
 
     if code == "SIB":
         pdf_password = _s.get("SIB_PDF_PASSWORD")
+        from ccs_platform.adapters.banks.parsers.sib import (  # noqa: PLC0415
+            is_transaction_history,
+            parse_sib_statement,
+            parse_sib_transaction_history,
+        )
+        import pdfplumber  # noqa: PLC0415
+        try:
+            open_kwargs: dict = {"password": pdf_password} if pdf_password else {}
+            with pdfplumber.open(str(pdf_path), **open_kwargs) as _pdf:
+                _first_lines = []
+                for _page in _pdf.pages[:2]:
+                    _first_lines.extend((_page.extract_text() or "").splitlines())
+        except Exception:  # noqa: BLE001
+            _first_lines = []
+
+        if is_transaction_history(_first_lines):
+            return parse_sib_transaction_history(pdf_path, pdf_password)
+
         if not pdf_password:
             raise ParserError(
                 "PDF_DECRYPT_FAILED",
                 "SIB statement requires SIB_PDF_PASSWORD.",
             )
-        from ccs_platform.adapters.banks.parsers.sib import parse_sib_statement  # noqa: PLC0415
         return parse_sib_statement(pdf_path, pdf_password)
 
     if code == "MASHREQ":
