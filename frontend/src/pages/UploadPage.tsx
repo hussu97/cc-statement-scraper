@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { api } from '../api';
+import { api, ApiError } from '../api';
 import { JsonView } from '../components/JsonView';
 import { Panel } from '../components/Panel';
 import type { Job } from '../types/statements';
@@ -8,11 +8,11 @@ import type { Job } from '../types/statements';
 export function UploadPage() {
   const [files, setFiles] = useState<FileList | null>(null);
   const [response, setResponse] = useState<Job | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; data?: unknown } | null>(null);
 
   async function upload() {
     if (!files || files.length === 0) {
-      setError('Select one or more PDF files first.');
+      setError({ message: 'Select one or more PDF files first.' });
       return;
     }
 
@@ -24,7 +24,11 @@ export function UploadPage() {
       const job = await api.upload<Job>('/jobs/upload', form);
       setResponse(job);
     } catch (err) {
-      setError((err as Error).message);
+      if (err instanceof ApiError) {
+        setError({ message: err.message, data: err.data });
+      } else {
+        setError({ message: (err as Error).message });
+      }
     }
   }
 
@@ -34,7 +38,16 @@ export function UploadPage() {
         <p className="muted">
           Upload one or more statement PDFs. Bank is detected automatically from PDF contents.
         </p>
-        {error && <p className="error">{error}</p>}
+        {error && (
+          <div className="error">
+            <p>{error.message}</p>
+            {error.data !== undefined && (
+              <pre style={{ marginTop: '0.5rem', fontSize: '0.8em', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                {typeof error.data === 'string' ? error.data : JSON.stringify(error.data, null, 2)}
+              </pre>
+            )}
+          </div>
+        )}
         <div className="row">
           <input type="file" accept="application/pdf" multiple onChange={(e) => setFiles(e.target.files)} />
           <button className="primary" onClick={upload}>Upload & Ingest</button>
