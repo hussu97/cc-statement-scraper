@@ -4,7 +4,7 @@
 
 ### Backend
 
-- **chore** Migrate production database from Neon to Supabase — updated PRODUCTION.md setup steps (session pooler DSN, Supabase dashboard instructions), ARCHITECTURE.md provider references, and `.env.example` PostgreSQL DSN example; no application code changes required
+- **chore** Migrate production database from Neon to Supabase — updated PRODUCTION.md setup steps (session pooler DSN, Supabase dashboard instructions), ARCHITECTURE.md provider references, and `.env.example` PostgreSQL DSN example; escape `%` as `%%` in `set_main_option` calls in `session.py` and `alembic/env.py` to fix configparser interpolation error when database password contains percent-encoded characters
 
 
 
