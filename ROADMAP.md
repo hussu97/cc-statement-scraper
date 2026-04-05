@@ -8,44 +8,31 @@ The platform (backend, frontend, scraper, gmail-relay) is deployed to production
 
 ## Priority 1 — Fix This Week (Broken / Security)
 
-### 1. Broken: `Dockerfile.frontend` references missing nginx config
-- **File**: `deploy/Dockerfile.frontend:11`
-- **Issue**: `COPY deploy/nginx/frontend.conf` — directory was deleted. Docker build for frontend is **broken**.
-- **Fix**: Recreate `deploy/nginx/frontend.conf` with a standard SPA config (try_files $uri /index.html, listen 8080).
+### 1. ~~Broken: `Dockerfile.frontend` references missing nginx config~~ ✅ DONE
+- **Fix**: `deploy/nginx/frontend.conf` recreated with SPA config (try_files, listen 8080).
 
-### 2. Broken: `security.yml` references deleted `Dockerfile.app`
-- **File**: `.github/workflows/security.yml:32`
-- **Issue**: Trivy scan builds `deploy/Dockerfile.app` which no longer exists. CI security job always fails.
-- **Fix**: Change to `deploy/Dockerfile.api`.
+### 2. ~~Broken: `security.yml` references deleted `Dockerfile.app`~~ ✅ DONE
+- **Fix**: Changed to `deploy/Dockerfile.api`.
 
-### 3. Security: CORS defaults to `["*"]` when env var is empty
-- **File**: `backend/ccs_platform/main.py:77`
-- **Issue**: `allow_origins=origins if origins else ["*"]` — if `CCS_PLATFORM_CORS_ALLOW_ORIGINS` is unset/empty, all origins are allowed with `allow_credentials=True`. This is a credential-stealing vector.
-- **Fix**: In production mode, refuse to start if CORS origins are empty. In dev, allow `["*"]` but without credentials.
+### 3. ~~Security: CORS defaults to `["*"]` when env var is empty~~ ✅ DONE
+- **Fix**: `settings.py` `model_post_init` raises `RuntimeError` in production if CORS origins are empty/wildcard. Dev allows wildcard without credentials.
 
-### 4. Security: Bcrypt exceptions silently swallowed
-- **File**: `backend/ccs_platform/application/auth/service.py:74`
-- **Issue**: `except Exception: return None` — if bcrypt crashes (corrupted hash, wrong encoding), it silently denies login with no logging. Ops can't distinguish "wrong password" from "system error".
-- **Fix**: Log the exception at ERROR level, then return None. Don't change the auth result, just add observability.
+### 4. ~~Security: Bcrypt exceptions silently swallowed~~ ✅ DONE
+- **Fix**: `logger.exception(...)` added before returning `None` in `authenticate_credentials`.
 
-### 5. Security: No file upload size limit
-- **File**: `backend/ccs_platform/api/v1/endpoints/jobs.py` (upload endpoint)
-- **Issue**: No max file size enforced. A single request could upload gigabytes.
-- **Fix**: Add a setting `max_upload_size_mb` (default 50) and enforce in the upload endpoint. Reject files over limit with 413.
+### 5. ~~Security: No file upload size limit~~ ✅ DONE
+- **Fix**: `max_upload_size_mb` setting (default 50) enforced in upload endpoint; returns 413 on oversize files.
 
 ### 6. Security: Service tokens never expire
 - **File**: `backend/ccs_platform/db/models/email_ingestion.py` (ServiceApiToken model)
 - **Issue**: No `expires_at` field. A leaked token is valid forever.
 - **Fix**: Add optional `expires_at` column. Check in `require_service_token`. Existing tokens remain valid (NULL = no expiry).
 
-### 7. Security: Docker images run as root
-- **Files**: `deploy/Dockerfile.api`, `deploy/Dockerfile.gmail-relay`, `deploy/Dockerfile.frontend`
-- **Fix**: Add `RUN useradd -m -u 1000 appuser && USER appuser` (or `adduser` for alpine).
+### 7. ~~Security: Docker images run as root~~ ✅ DONE
+- **Fix**: All images run as non-root (`appuser` uid 1000 in api/gmail-relay, `nginx` user in frontend).
 
-### 8. Reliability: No React Error Boundary
-- **File**: Frontend — no error boundary component exists
-- **Issue**: Any component throw = full white screen, no recovery.
-- **Fix**: Add a top-level `<ErrorBoundary>` that catches render errors and shows a "Something went wrong" fallback with a reload button.
+### 8. ~~Reliability: No React Error Boundary~~ ✅ DONE
+- **Fix**: `ErrorBoundary` component wraps entire app in `main.tsx`; shows "Something went wrong" fallback with reload button.
 
 ---
 
