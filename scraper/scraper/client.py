@@ -8,17 +8,6 @@ import httpx
 _RETRY_DELAYS = (5, 15, 45)  # seconds between attempts 1→2, 2→3, 3→fail
 
 
-def _bank_code_from_filename(name: str) -> str | None:
-    """Last-resort fallback: infer bank code from the scraper filename prefix.
-
-    Only used when no authoritative bank_map entry exists (e.g. the standalone
-    ``upload`` CLI command pointing at arbitrary files).
-    """
-    candidate = name.split("_")[0].upper()
-    if 2 <= len(candidate) <= 16 and candidate.isalpha():
-        return candidate
-    return None
-
 
 class ScraperClient:
     def __init__(self, base_url: str, api_token: str, profile_key: str) -> None:
@@ -51,8 +40,7 @@ class ScraperClient:
             "X-Profile-Key": self._profile_key,
         }
 
-        # Use caller-supplied code; fall back to filename prefix as last resort.
-        hint = bank_code or _bank_code_from_filename(files[0].name) if files else None
+        hint = bank_code or None
         data = {"bank_code_hint": hint} if hint else {}
 
         last_exc: Exception = RuntimeError("Upload failed")
