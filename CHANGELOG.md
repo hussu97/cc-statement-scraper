@@ -4,6 +4,10 @@
 
 ### Backend
 
+- **chore** Migrate production database from Neon to Supabase — updated PRODUCTION.md setup steps (session pooler DSN, Supabase dashboard instructions), ARCHITECTURE.md provider references, and `.env.example` PostgreSQL DSN example; no application code changes required
+
+
+
 - **feat** SIB transaction history PDF support — `parse_sib_transaction_history()` parses SIB's "Transaction history" export (date format `DD MMM YYYY`, amount format `CUR [-]amount`) and splits transactions into per-billing-cycle statements using the 12th of each month as the statement cutoff date (13th of M through 12th of M+1 → statement dated 12th of M+1); duplicate rows across PDF pages are deduplicated by fingerprint; the `parse_statement_for_bank()` dispatcher auto-detects the PDF type for SIB and returns a list when multiple statements are produced; `ingest_statement_pdf()`, the parser adapter, and the upload handler all support 1 PDF → N statements; bank detection in the upload endpoint recognises "TRANSACTION HISTORY" + "ACCOUNT NO." + "ACCOUNT TYPE" as SIB
 
 - **chore** Remove scraper-only runtime settings from seed catalog — `DEFAULT_RUNTIME_SETTING_SPECS` now only includes PDF-password keys used by backend parsers (`FAB_PDF_PASSWORD`, `ADCB_CID`, `ADCB_PDF_PASSWORD`, `ENBD_PDF_PASSWORD`, `SIB_PDF_PASSWORD`); login credentials and scraper-specific flags (`FAB_USERNAME/PASSWORD`, `ADCB_LOGIN_PASSWORD`, `ADCB_FORCE_VIRTUAL_KEYBOARD`, `ENBD_USERNAME/PASSWORD`, `EIB_USERNAME/PASSWORD`, `SIB_USER_ID/PASSWORD/SECURE_IMAGE_TEMPLATE_BASE64`, `MASHREQ_USERNAME/PASSWORD`) are no longer seeded or shown in the UI; migration `20260304_000015` deletes any existing rows for these keys
