@@ -4,8 +4,6 @@
 
 ### Backend
 
-- **fix** Service token expiry — added optional `expires_at` column to `ServiceApiToken` (migration `20260405_000016`); `require_service_token` now rejects tokens where `expires_at` is in the past with HTTP 401; NULL = no expiry, so existing tokens are unaffected
-
 - **chore** Migrate production database from Neon to Supabase — updated PRODUCTION.md setup steps (session pooler DSN, Supabase dashboard instructions), ARCHITECTURE.md provider references, and `.env.example` PostgreSQL DSN example; escape `%` as `%%` in `set_main_option` calls in `session.py` and `alembic/env.py` to fix configparser interpolation error when database password contains percent-encoded characters
 
 
