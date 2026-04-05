@@ -180,8 +180,11 @@ def require_operator_or_service_token(*required_scopes: str):
                 subject=f"service_token:{svc.token_id}",
                 request_id=str(getattr(request.state, "request_id", "") or "").strip() or None,
             )
-        actor_dep = _require_role("operator")
-        return actor_dep(request=request)
+        actor = get_actor_context(request=request)
+        settings = request.app.state.settings
+        if settings.rbac_enforced() and ROLE_RANK[actor.role] < ROLE_RANK["operator"]:
+            raise HTTPException(status_code=403, detail="operator role required")
+        return actor
 
     return _dependency
 
