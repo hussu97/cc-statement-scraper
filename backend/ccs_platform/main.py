@@ -109,7 +109,11 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(StarletteHTTPException)
     async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
-        if exc.status_code >= 400:
+        # 401/403 are routine auth rejections — debug only, not warnings.
+        if exc.status_code >= 500:
+            print(f"[ERROR] {exc.status_code} HTTP error | {request.method} {request.url.path} | {exc.detail}", file=sys.stdout, flush=True)
+            logger.error("%s HTTP error | method=%s path=%s detail=%s", exc.status_code, request.method, request.url.path, exc.detail)
+        elif exc.status_code >= 400 and exc.status_code not in (401, 403):
             print(f"[WARN] {exc.status_code} HTTP error | {request.method} {request.url.path} | {exc.detail}", file=sys.stdout, flush=True)
             logger.warning("%s HTTP error | method=%s path=%s detail=%s", exc.status_code, request.method, request.url.path, exc.detail)
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
