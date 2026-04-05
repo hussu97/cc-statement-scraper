@@ -64,6 +64,10 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    # Configure logging early — before any middleware or request handler runs.
+    # The lifespan also calls this, but create_app() runs at import time which
+    # is earlier than lifespan startup, ensuring logs are available immediately.
+    configure_logging(level_name=settings.log_level)
     app = FastAPI(title=settings.app_name, lifespan=lifespan)
 
     origins = [token.strip() for token in settings.cors_allow_origins.split(",") if token.strip()]
