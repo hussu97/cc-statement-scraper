@@ -21,7 +21,7 @@ The Credit Card Statement Platform is composed of four independent components:
 - Embedded job worker (`CCS_PLATFORM_EMBEDDED_WORKER=true`) processes upload, reclassify, export, parser-validate, and reparse jobs in-process using a thread pool
 - **No browser code** — Playwright is not a dependency; the API never launches a browser
 - Stores PDFs in GCS (production) or local filesystem (development)
-- PostgreSQL (Neon) database for all state
+- PostgreSQL (Supabase) database for all state
 - In-process sliding-window rate limiter on `/auth/login` (5 req/min per IP)
 - Service API tokens support optional `expires_at` and are logged as audit events on creation and revocation
 
@@ -97,7 +97,7 @@ Service tokens are created in the admin UI under **Service API Tokens**.
 | Layer | Technology |
 |-------|-----------|
 | Backend | Python 3.12, FastAPI, SQLAlchemy 2, Alembic, Pydantic v2 |
-| Database | PostgreSQL (Neon, free tier) |
+| Database | PostgreSQL (Supabase, free tier) |
 | Storage | GCS bucket (PDFs) |
 | Frontend | React 18, TypeScript, Vite |
 | Scraper | Python 3.12, Playwright, Chromium, httpx, Typer |

@@ -31,7 +31,7 @@ def _engine_kwargs(database_url: str) -> dict:
         # dropped server-side after ~5 min.  pool_pre_ping catches stale
         # connections but adds a round-trip; pool_recycle proactively retires
         # them before they go stale.  Keep the pool small to stay within the
-        # free tier's 25-connection limit.
+        # Supabase free tier's direct connection limit.
         kwargs["pool_size"] = 2
         kwargs["max_overflow"] = 2
         kwargs["pool_recycle"] = 300  # seconds — retire connections after 5 min

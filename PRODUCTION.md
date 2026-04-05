@@ -10,7 +10,7 @@ For the system architecture overview see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 | Service | Platform | Notes |
 |---------|----------|-------|
-| Database | Neon | Free managed PostgreSQL |
+| Database | Supabase | Free managed PostgreSQL |
 | Backend API | Render | `Dockerfile.api`, embedded worker |
 | PDF Storage | GCS | Cloud Storage bucket |
 | Frontend | Vercel | Static React build |
@@ -38,21 +38,23 @@ gcloud config set project YOUR_GCP_PROJECT_ID
 
 ---
 
-## 1 — Neon (PostgreSQL)
+## 1 — Supabase (PostgreSQL)
 
 ### 1.1 Create a project
 
-1. Sign up at [neon.tech](https://neon.tech) and create a new project.
-2. Name the database `ccs_platform`.
-3. Choose a region close to your Render region (e.g. `us-east-1`).
+1. Sign up at [supabase.com](https://supabase.com) and click **New project**.
+2. Choose an organisation, set a project name, and pick a region close to your Render region (e.g. `us-east-1`).
+3. The default database name is `postgres` — leave it as-is.
 
 ### 1.2 Get the connection string
 
-In the Neon dashboard go to **Connection Details**, select the **psycopg** (not asyncpg) driver, and copy the full DSN. It looks like:
+In the Supabase dashboard go to **Project Settings → Database → Connection string** and select the **Session pooler** tab (not Transaction pooler — transaction mode breaks SQLAlchemy's prepared statements). Copy the URI. It looks like:
 
 ```
-postgresql+psycopg://user:password@ep-xxx.us-east-1.aws.neon.tech/ccs_platform?sslmode=require
+postgresql+psycopg://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres?sslmode=require
 ```
+
+> **Why session pooler?** Supabase exposes three connection modes. The session pooler (port 5432 on the pooler host) is compatible with SQLAlchemy because it supports prepared statements. The transaction pooler (port 6543) does not and will cause errors at runtime.
 
 Save this — it becomes `CCS_PLATFORM_DATABASE_URL` on Render.
 
@@ -69,7 +71,7 @@ Alembic runs automatically on every app startup — `init_db()` calls `alembic u
 ```bash
 export PROJECT=your-gcp-project-id
 export BUCKET=ccs-platform-pdfs        # must be globally unique
-export REGION=us-east1                 # match Render/Neon region
+export REGION=us-east1                 # match Render/Supabase region
 
 gsutil mb -p $PROJECT -l $REGION -b on gs://$BUCKET
 ```
@@ -136,7 +138,7 @@ ccs-platform hash-password    # enter tejasvie's password → copy $2b$... outpu
    - **Dockerfile path**: `deploy/Dockerfile.api`
    - **Docker context**: `.` (repo root)
    - **Instance type**: Free (512 MB RAM)
-   - **Region**: Choose one closest to your Neon region
+   - **Region**: Choose one closest to your Supabase region
 
 ### 3.3 Add the GCS key as a secret file
 
@@ -164,7 +166,7 @@ In the Render service → **Environment → Environment Variables**, add all of 
 | Key | Value |
 |-----|-------|
 | `CCS_PLATFORM_ENVIRONMENT` | `production` |
-| `CCS_PLATFORM_DATABASE_URL` | The Neon DSN from step 1.2 |
+| `CCS_PLATFORM_DATABASE_URL` | The Supabase session-pooler DSN from step 1.2 |
 | `CCS_PLATFORM_SESSION_SECRET_KEY` | Output from `secrets.token_hex(32)` |
 | `CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY` | Output from `Fernet.generate_key()` |
 | `CCS_PLATFORM_LOGIN_HASH_HUSSAIN` | `$2b$...` hash from `hash-password` |
