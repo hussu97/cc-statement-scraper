@@ -7,7 +7,10 @@ from threading import Thread
 import uuid
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
 from ccs_platform.core.logging import configure_logging
@@ -85,6 +88,45 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(api_v1_router, prefix=settings.api_prefix)
+
+    @app.exception_handler(Exception)
+    async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        logger.exception(
+            "500 Unhandled exception | method=%s path=%s",
+            request.method,
+            request.url.path,
+        )
+        return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
+
+    @app.exception_handler(StarletteHTTPException)
+    async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+        if exc.status_code >= 500:
+            logger.error(
+                "%s HTTP error | method=%s path=%s detail=%s",
+                exc.status_code,
+                request.method,
+                request.url.path,
+                exc.detail,
+            )
+        elif exc.status_code >= 400:
+            logger.warning(
+                "%s HTTP error | method=%s path=%s detail=%s",
+                exc.status_code,
+                request.method,
+                request.url.path,
+                exc.detail,
+            )
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+        logger.warning(
+            "422 Validation error | method=%s path=%s errors=%s",
+            request.method,
+            request.url.path,
+            exc.errors(),
+        )
+        return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
     @app.middleware("http")
     async def guard_and_log_requests(request: Request, call_next):
