@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import io
 from datetime import date
+
+from pypdf import PdfReader, PdfWriter
 
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
@@ -9,7 +12,7 @@ from ccs_platform.db import models
 from ccs_platform.db import Base
 from ccs_platform.domain.categorization.engine import categorize
 from ccs_platform.domain.statements.identity import resolve_statement_identity
-from ccs_platform.application.statements.ingestion import ingest_parsed_statement
+from ccs_platform.application.statements.ingestion import ingest_parsed_statement, _storage_pdf_content
 from ccs_platform.application.jobs.scheduler import compute_next_run
 from ccs_platform.domain.statements.types import ParsedLine, ParsedStatement
 
@@ -60,6 +63,15 @@ def _parsed_statement(
         warnings=[],
         metadata={},
     )
+
+
+def _encrypted_pdf(password: str) -> bytes:
+    writer = PdfWriter()
+    writer.add_blank_page(width=72, height=72)
+    writer.encrypt(password)
+    output = io.BytesIO()
+    writer.write(output)
+    return output.getvalue()
 
 
 def test_statement_identity_fallback_is_deterministic() -> None:
@@ -115,6 +127,34 @@ def test_statement_identity_ignores_placeholder_card_token() -> None:
 
     assert identity_a.statement_reference == "AUTO-ADCB-2026-01-31-AAAAAAAAAAAA"
     assert identity_b.statement_reference == "AUTO-ADCB-2026-01-31-BBBBBBBBBBBB"
+
+
+def test_storage_pdf_content_decrypts_encrypted_bank_pdf() -> None:
+    encrypted = _encrypted_pdf("secret")
+
+    stored = _storage_pdf_content(
+        content=encrypted,
+        bank_code="ENBD",
+        runtime_settings={"ENBD_PDF_PASSWORD": "secret"},
+    )
+
+    assert stored != encrypted
+    assert not PdfReader(io.BytesIO(stored)).is_encrypted
+
+
+def test_storage_pdf_content_requires_matching_bank_password() -> None:
+    encrypted = _encrypted_pdf("secret")
+
+    try:
+        _storage_pdf_content(
+            content=encrypted,
+            bank_code="ENBD",
+            runtime_settings={"ENBD_PDF_PASSWORD": "wrong"},
+        )
+    except ValueError as exc:
+        assert "could not be decrypted" in str(exc)
+    else:
+        raise AssertionError("encrypted PDF should not be archived without a matching password")
 
 
 def test_category_matching_prefers_most_specific_pattern() -> None:
