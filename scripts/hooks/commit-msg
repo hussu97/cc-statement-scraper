@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Commit message hook — enforce the project commit author identity.
+
+set -euo pipefail
+
+REQUIRED_NAME="Hussain Abbasi"
+REQUIRED_EMAIL="h_abbasi97@hotmail.com"
+
+AUTHOR_NAME="${GIT_AUTHOR_NAME:-$(git config user.name || true)}"
+AUTHOR_EMAIL="${GIT_AUTHOR_EMAIL:-$(git config user.email || true)}"
+
+if [ "$AUTHOR_NAME" != "$REQUIRED_NAME" ] || [ "$AUTHOR_EMAIL" != "$REQUIRED_EMAIL" ]; then
+  echo "Commit author must be exactly:"
+  echo "  $REQUIRED_NAME <$REQUIRED_EMAIL>"
+  echo ""
+  echo "Current author:"
+  echo "  ${AUTHOR_NAME:-<unset>} <${AUTHOR_EMAIL:-unset}>"
+  echo ""
+  echo "Use:"
+  echo "  git commit --author=\"$REQUIRED_NAME <$REQUIRED_EMAIL>\" -m \"...\""
+  exit 1
+fi

@@ -27,6 +27,9 @@ done
 
 echo -e "\n${GREEN}Git hooks installed.${NC}"
 echo "  pre-commit : fast checks (syntax, bandit, eslint)"
+echo "  prepare-commit-msg : enforce commit author identity"
+echo "  commit-msg : enforce commit author identity"
 echo "  pre-push   : full CI mirror (tests, build)"
 echo ""
-echo "Skip a hook when needed: git commit --no-verify / git push --no-verify"
+echo "Skip verification checks when needed: git commit --no-verify / git push --no-verify"
+echo "Author identity is still enforced by prepare-commit-msg."
