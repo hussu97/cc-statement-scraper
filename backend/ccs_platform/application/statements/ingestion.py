@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import io
 from datetime import UTC, datetime, time
 from pathlib import Path
+
+from pypdf import PdfReader, PdfWriter
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -15,10 +18,56 @@ from ccs_platform.adapters.storage import StorageAdapter
 from ccs_platform.domain.statements.types import ParsedStatement
 
 
+_PDF_PASSWORD_KEYS_BY_BANK = {
+    "ADCB": ("ADCB_PDF_PASSWORD", "ADCB_CID"),
+    "ENBD": ("ENBD_PDF_PASSWORD",),
+    "FAB": ("FAB_PDF_PASSWORD",),
+    "SIB": ("SIB_PDF_PASSWORD",),
+}
+
+
 def _temp_pdf_path(settings: PlatformSettings, profile_key: str, bank_code: str, filename: str) -> Path:
     stamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
     safe = filename.replace("/", "_").replace("\\", "_")
     return settings.uploads_temp_dir / profile_key / f"{bank_code}_{stamp}_{safe}"
+
+
+def _pdf_password_candidates(bank_code: str, runtime_settings: dict[str, str] | None) -> list[str]:
+    settings = runtime_settings or {}
+    seen: set[str] = set()
+    candidates: list[str] = []
+    for key in _PDF_PASSWORD_KEYS_BY_BANK.get(bank_code.upper(), ()):
+        value = (settings.get(key) or "").strip()
+        if value and value not in seen:
+            candidates.append(value)
+            seen.add(value)
+    return candidates
+
+
+def _storage_pdf_content(
+    *,
+    content: bytes,
+    bank_code: str,
+    runtime_settings: dict[str, str] | None,
+) -> bytes:
+    reader = PdfReader(io.BytesIO(content))
+    if not reader.is_encrypted:
+        return content
+
+    for password in _pdf_password_candidates(bank_code, runtime_settings):
+        reader = PdfReader(io.BytesIO(content))
+        if not reader.decrypt(password):
+            continue
+
+        writer = PdfWriter()
+        for page in reader.pages:
+            writer.add_page(page)
+
+        output = io.BytesIO()
+        writer.write(output)
+        return output.getvalue()
+
+    raise ValueError(f"{bank_code.upper()} PDF is encrypted and could not be decrypted for storage")
 
 
 def _line_count_for_statement(db: Session, statement_id: int) -> int:
@@ -47,7 +96,7 @@ def ingest_statement_pdf(
     if not content:
         raise ValueError("Empty PDF content")
 
-    checksum = checksum_sha256(content)
+    identity_checksum = checksum_sha256(content)
     temp_path = _temp_pdf_path(settings, profile_key, bank_code, filename)
     temp_path.parent.mkdir(parents=True, exist_ok=True)
     temp_path.write_bytes(content)
@@ -57,8 +106,14 @@ def ingest_statement_pdf(
     finally:
         temp_path.unlink(missing_ok=True)
 
-    stored_obj = storage.save_pdf(
+    storage_content = _storage_pdf_content(
         content=content,
+        bank_code=bank_code,
+        runtime_settings=runtime_settings,
+    )
+    storage_checksum = checksum_sha256(storage_content)
+    stored_obj = storage.save_pdf(
+        content=storage_content,
         filename=filename,
         source=source.value,
         profile_key=profile_key,
@@ -66,7 +121,7 @@ def ingest_statement_pdf(
     pdf_file = models.PdfFile(
         profile_id=profile_id,
         original_filename=filename,
-        checksum_sha256=checksum,
+        checksum_sha256=storage_checksum,
         storage_backend=stored_obj.backend,
         storage_key=stored_obj.key,
         source=source,
@@ -81,7 +136,7 @@ def ingest_statement_pdf(
                 parsed=p,
                 profile_id=profile_id,
                 pdf_file=pdf_file,
-                pdf_checksum_sha256=checksum,
+                pdf_checksum_sha256=identity_checksum,
             )
             for p in parsed
         ]
@@ -92,7 +147,7 @@ def ingest_statement_pdf(
         parsed=parsed,
         profile_id=profile_id,
         pdf_file=pdf_file,
-        pdf_checksum_sha256=checksum,
+        pdf_checksum_sha256=identity_checksum,
     )
 
 

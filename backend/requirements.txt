@@ -115,6 +115,8 @@ pydantic-settings==2.13.1
     # via ccs-platform
 pygments==2.20.0
     # via rich
+pypdf==6.13.0
+    # via ccs-platform
 pypdfium2==5.5.0
     # via pdfplumber
 python-dateutil==2.9.0.post0
