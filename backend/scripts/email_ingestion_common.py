@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+# No-op marker touched only to trigger a fresh Gmail relay deployment.
 from dataclasses import dataclass
 from datetime import UTC, datetime
 import json
@@ -304,4 +305,3 @@ class ApiClient:
 def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-
