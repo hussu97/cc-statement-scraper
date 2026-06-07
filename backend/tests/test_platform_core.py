@@ -26,6 +26,9 @@ def _parsed_statement(
     bank_code: str = "FAB",
     statement_reference_raw: str | None = None,
     amount_aed: float = 100.0,
+    primary_card_last4: str | None = "2777",
+    line_card_last4: str | None = "2777",
+    with_lines: bool = True,
 ) -> ParsedStatement:
     return ParsedStatement(
         bank_code=bank_code,
@@ -33,7 +36,7 @@ def _parsed_statement(
         statement_date=date(2026, 1, 31),
         statement_period_start=date(2026, 1, 1),
         statement_period_end=date(2026, 1, 31),
-        primary_card_last4="2777",
+        primary_card_last4=primary_card_last4,
         card_holder="TEST USER",
         card_type="Credit Card",
         lines=[
@@ -50,10 +53,10 @@ def _parsed_statement(
                 direction="debit" if amount_aed >= 0 else "credit",
                 transaction_kind="purchase",
                 country_code=None,
-                card_last4="2777",
+                card_last4=line_card_last4,
                 fingerprint="abc123",
             )
-        ],
+        ] if with_lines else [],
         warnings=[],
         metadata={},
     )
@@ -84,6 +87,34 @@ def test_statement_identity_ignores_timestamp_like_reference() -> None:
 
     assert identity.reference_source == "fallback"
     assert identity.statement_reference.startswith("AUTO-FAB-2026-01-31-2777")
+
+
+def test_statement_identity_uses_primary_card_for_empty_statement() -> None:
+    parsed = _parsed_statement(
+        bank_code="ADCB",
+        primary_card_last4="3687",
+        with_lines=False,
+    )
+
+    identity_a = resolve_statement_identity(parsed_statement=parsed, pdf_checksum_sha256="a" * 64)
+    identity_b = resolve_statement_identity(parsed_statement=parsed, pdf_checksum_sha256="b" * 64)
+
+    assert identity_a.statement_reference == identity_b.statement_reference
+    assert identity_a.statement_reference == "AUTO-ADCB-2026-01-31-3687"
+
+
+def test_statement_identity_ignores_placeholder_card_token() -> None:
+    parsed = _parsed_statement(
+        bank_code="ADCB",
+        primary_card_last4="0000",
+        line_card_last4="0000",
+    )
+
+    identity_a = resolve_statement_identity(parsed_statement=parsed, pdf_checksum_sha256="a" * 64)
+    identity_b = resolve_statement_identity(parsed_statement=parsed, pdf_checksum_sha256="b" * 64)
+
+    assert identity_a.statement_reference == "AUTO-ADCB-2026-01-31-AAAAAAAAAAAA"
+    assert identity_b.statement_reference == "AUTO-ADCB-2026-01-31-BBBBBBBBBBBB"
 
 
 def test_category_matching_prefers_most_specific_pattern() -> None:

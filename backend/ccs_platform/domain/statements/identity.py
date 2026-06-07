@@ -44,6 +44,13 @@ def _is_low_quality_reference(value: str) -> bool:
     return False
 
 
+def _valid_card_token(value: str | None) -> str | None:
+    token = (value or "").strip()
+    if len(token) != 4 or not token.isdigit() or token == "0000":
+        return None
+    return token
+
+
 def resolve_statement_identity(
     *,
     parsed_statement: ParsedStatement,
@@ -61,11 +68,14 @@ def resolve_statement_identity(
 
     card_tokens = sorted(
         {
-            line.card_last4.strip()
+            token
             for line in parsed_statement.lines
-            if line.card_last4 and len(line.card_last4.strip()) == 4
+            if (token := _valid_card_token(line.card_last4)) is not None
         }
     )
+    primary_card_token = _valid_card_token(parsed_statement.primary_card_last4)
+    if primary_card_token is not None:
+        card_tokens = sorted({*card_tokens, primary_card_token})
 
     if card_tokens:
         joined = "-".join(card_tokens)
