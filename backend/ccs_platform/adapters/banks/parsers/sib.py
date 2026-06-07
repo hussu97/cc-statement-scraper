@@ -49,6 +49,8 @@ _TH_DATE_FMT = "%d %b %Y"
 _ACCOUNT_NO_RE = re.compile(r"Account\s+no\.\s+(.+)", re.IGNORECASE)
 _ACCOUNT_TYPE_RE = re.compile(r"Account\s+type\s+(.+)", re.IGNORECASE)
 _STATEMENT_CUTOFF_DAY = 12
+_TH_PAYMENT_KEYWORDS = ("CREDIT CARD PAYMENT",)
+_TH_FEE_KEYWORDS = ("MURABAHA PROFIT", "FINANCE CHARGE", "SERVICE CHARGE")
 
 
 def _extract_statement_reference(lines: list[str]) -> str | None:
@@ -207,6 +209,22 @@ def _period_start_for_statement_date(stmt_date: date) -> date:
     return date(prior_year, prior_month, 13)
 
 
+def _sib_history_platform_amount(source_amount: float) -> float:
+    """SIB history exports card spend as negative and credits as positive."""
+    return -source_amount
+
+
+def _classify_sib_history_kind(merchant_normalized: str, source_amount: float, platform_amount: float) -> str:
+    merchant = merchant_normalized.upper()
+    if source_amount > 0:
+        if any(keyword in merchant for keyword in _TH_PAYMENT_KEYWORDS):
+            return "payment"
+        return "refund"
+    if any(keyword in merchant for keyword in _TH_FEE_KEYWORDS):
+        return "fee"
+    return classify_transaction_kind(merchant_normalized, platform_amount)
+
+
 def parse_sib_transaction_history(pdf_path: str | Path, pdf_password: str | None = None) -> list[StatementParseResult]:
     """Parse a SIB 'Transaction history' PDF and split into per-billing-cycle statements.
 
@@ -287,17 +305,25 @@ def parse_sib_transaction_history(pdf_path: str | Path, pdf_password: str | None
             continue
 
         merchant_norm = merchant_normalize(description)
-        # For AED transactions, amount_aed = amount_raw; for foreign, amount_aed unknown
-        amount_aed = amount_raw if currency == "AED" else None
+        amount_platform = _sib_history_platform_amount(amount_raw)
+        # For AED transactions, amount_aed is the normalized platform amount;
+        # for foreign transactions, AED equivalent is not available in history PDFs.
+        amount_aed = amount_platform if currency == "AED" else None
 
-        fp = fingerprint_for(BANK_NAME, card_last4, txn_date, amount_aed if amount_aed is not None else amount_raw, merchant_norm)
+        fp = fingerprint_for(
+            BANK_NAME,
+            card_last4,
+            txn_date,
+            amount_aed if amount_aed is not None else amount_platform,
+            merchant_norm,
+        )
         if fp in seen_fingerprints:
             continue
         seen_fingerprints.add(fp)
 
         stmt_date = _statement_date_for_txn(txn_date)
         stmt_month = statement_month_from_date(stmt_date)
-        kind = classify_transaction_kind(merchant_norm, amount_aed)
+        kind = _classify_sib_history_kind(merchant_norm, amount_raw, amount_platform)
 
         all_txns.append(
             TransactionRecord(
@@ -311,7 +337,7 @@ def parse_sib_transaction_history(pdf_path: str | Path, pdf_password: str | None
                 merchant_raw=description,
                 merchant_normalized=merchant_norm,
                 country_code=None,
-                amount_original=amount_raw,
+                amount_original=amount_platform,
                 currency_original=currency,
                 amount_aed=amount_aed,
                 fx_rate_to_aed=1.0 if currency == "AED" else None,
