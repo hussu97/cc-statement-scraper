@@ -112,6 +112,17 @@ def _normalize_list(values: list[str] | None) -> list[str] | None:
     return normalized or None
 
 
+def _email_ingestion_job_idempotency_key(
+    *,
+    route_id: int,
+    provider_message_id: str,
+    provider_attachment_id: str,
+) -> str:
+    raw_identity = f"{route_id}:{provider_message_id}:{provider_attachment_id}"
+    digest = hashlib.sha256(raw_identity.encode("utf-8")).hexdigest()
+    return f"email-ingest:{route_id}:{digest}"
+
+
 _SETTINGS_FALLBACK_MAP: dict[str, str] = {
     "EMAIL_MS_CLIENT_ID": "email_ms_client_id",
     "EMAIL_MS_CLIENT_SECRET": "email_ms_client_secret",
@@ -1018,7 +1029,11 @@ async def ingestion_upload(
             "event_id": event.id,
             "route_id": route.id,
         }
-        dedupe_key = f"email-ingest:{route.id}:{normalized_provider_message_id}:{normalized_provider_attachment_id}"[:128]
+        dedupe_key = _email_ingestion_job_idempotency_key(
+            route_id=route.id,
+            provider_message_id=normalized_provider_message_id,
+            provider_attachment_id=normalized_provider_attachment_id,
+        )
         job, created, requeued = create_or_get_job(
             db,
             profile_id=profile_id,
