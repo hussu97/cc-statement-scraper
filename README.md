@@ -87,23 +87,79 @@ curl http://127.0.0.1:8040/api/v1/health
 ```bash
 cd scraper
 python3 -m venv .venv && source .venv/bin/activate
-pip install -e .
-ccs-scraper install-browser
+pip install -e ".[dev]"
+ccs-scraper install-browser          # downloads Chromium (~200 MB, one-time)
 ```
 
 Configure `scraper/.env` (copy from `.env.example`):
 ```bash
 cp scraper/.env.example scraper/.env
-# fill in CCS_SCRAPER_API_TOKEN and bank credentials
 ```
 
-Run:
+Key settings:
+
+| Variable | Default | Description |
+|---|---|---|
+| `CCS_SCRAPER_TARGET_URL` | `http://127.0.0.1:8040` | Backend API URL |
+| `CCS_SCRAPER_API_TOKEN` | — | Service API token (`upload` scope — create in admin UI → Service API Tokens) |
+| `CCS_SCRAPER_HEADLESS` | `true` | `false` to watch the browser session for debugging |
+| `CCS_SCRAPER_BROWSER_PROXY_URL` | — | Optional SOCKS5/HTTP proxy for all browser traffic |
+| `CCS_SCRAPER_DOWNLOAD_DIR` | `./downloads` | Local directory for downloaded PDFs |
+
+### Multi-profile credentials
+
+Credentials are namespaced by profile using a `{PROFILE}_` prefix. Banks with missing credentials are automatically skipped.
+
+```
+ALICE_FAB_USERNAME=           BOB_FAB_USERNAME=
+ALICE_FAB_PASSWORD=           BOB_FAB_PASSWORD=
+
+ALICE_ADCB_CID=               BOB_ADCB_CID=
+ALICE_ADCB_LOGIN_PASSWORD=    BOB_ADCB_LOGIN_PASSWORD=
+ALICE_ADCB_PDF_PASSWORD=      BOB_ADCB_PDF_PASSWORD=
+
+ALICE_ENBD_USERNAME=          BOB_ENBD_USERNAME=
+ALICE_ENBD_PASSWORD=          BOB_ENBD_PASSWORD=
+
+ALICE_EIB_USERNAME=           BOB_EIB_USERNAME=
+ALICE_EIB_PASSWORD=           BOB_EIB_PASSWORD=
+
+ALICE_SIB_USER_ID=            BOB_SIB_USER_ID=
+ALICE_SIB_PASSWORD=           BOB_SIB_PASSWORD=
+ALICE_SIB_PDF_PASSWORD=       BOB_SIB_PDF_PASSWORD=
+
+ALICE_MASHREQ_USERNAME=       BOB_MASHREQ_USERNAME=
+ALICE_MASHREQ_PASSWORD=       BOB_MASHREQ_PASSWORD=
+```
+
+### Commands
+
+`--profile` is required on every `scrape` and `upload` call.
+
 ```bash
-ccs-scraper scrape --months 2024-01:2025-12
-ccs-scraper upload ./downloads/statement.pdf
+# Scrape all configured banks for the current month
+ccs-scraper scrape --profile alice
+
+# Scrape specific banks only
+ccs-scraper scrape --profile alice --banks FAB,ADCB
+
+# Scrape a date range (inclusive)
+ccs-scraper scrape --profile alice --months 2024-01:2025-12
+
+# Scrape a single month
+ccs-scraper scrape --profile alice --months 2025-03
+
+# Download only — skip upload to backend
+ccs-scraper scrape --profile alice --no-upload
+
+# Upload existing local PDFs manually
+ccs-scraper upload --profile alice ./downloads/statement.pdf
+
+# Install / reinstall Chromium
+ccs-scraper install-browser
 ```
 
-See [`scraper/README.md`](scraper/README.md) for full CLI reference.
+See [`scraper/README.md`](scraper/README.md) for the full CLI reference and bank-specific notes.
 
 ## Setup — Frontend
 
