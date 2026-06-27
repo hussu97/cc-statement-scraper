@@ -526,23 +526,40 @@ def login(page: Any, logger: logging.Logger, credentials: dict[str, str] | None 
         )
         page.wait_for_timeout(400)
 
-        for _ in range(3):
-            clicked = _click_first_visible(
-                page,
-                selectors=[
-                    "sib-button#proceed",
-                    "#proceed",
-                    "button:has-text('Secure Login')",
-                    "[role='button']:has-text('Secure Login')",
-                    "text=Secure Login",
-                ],
-                logger=logger,
-                action_name="Secure Login",
-            )
-            if not clicked:
-                clicked = _click_shadow_best_match(page, ["secure login"], logger, action_name="Secure Login")
-            logger.info("SIB: waiting 1400ms — Secure Login clicked; waiting for password input")
-            page.wait_for_timeout(1400)
+        _SECURE_LOGIN_SELECTORS = [
+            "sib-button#proceed",
+            "#proceed",
+            "button:has-text('Secure Login')",
+            "[role='button']:has-text('Secure Login')",
+            "text=Secure Login",
+        ]
+        for click_attempt in range(2):
+            # Click once per attempt; do not re-click while the page is
+            # transitioning to the password screen — it can reset the flow.
+            if not _has_visible_password_input(page):
+                clicked = _click_first_visible(
+                    page,
+                    selectors=_SECURE_LOGIN_SELECTORS,
+                    logger=logger,
+                    action_name="Secure Login",
+                )
+                if not clicked:
+                    clicked = _click_shadow_best_match(
+                        page, ["secure login"], logger, action_name="Secure Login"
+                    )
+
+            # Poll up to 10.5s (7 × 1500ms) for the password input to appear.
+            for poll in range(7):
+                logger.info(
+                    "SIB: waiting 1500ms — Secure Login clicked; waiting for password input"
+                    " (attempt %d/2, poll %d/7)",
+                    click_attempt + 1,
+                    poll + 1,
+                )
+                page.wait_for_timeout(1500)
+                if _has_visible_password_input(page):
+                    break
+
             if _has_visible_password_input(page):
                 break
 
