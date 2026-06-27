@@ -176,6 +176,10 @@ class ApiClient:
                 break
             except urllib_error.HTTPError as exc:
                 body_text = exc.read().decode("utf-8", errors="ignore")
+                # Retry on 5xx (transient server errors); raise immediately on 4xx
+                if exc.code >= 500 and attempt < _RETRY_ATTEMPTS - 1:
+                    last_exc = RuntimeError(f"API {method} {path} failed: HTTP {exc.code} {body_text[:100]}")
+                    continue
                 raise RuntimeError(f"API {method} {path} failed: HTTP {exc.code} {body_text[:400]}") from exc
             except (TimeoutError, OSError) as exc:  # transient — retry
                 last_exc = exc

@@ -4,6 +4,17 @@
 
 ### Backend
 
+- **fix** Email ingestion 500 — `save_binary` (GCS upload) was outside the `try/except` block in `POST /email-ingestion/upload`; unhandled exceptions rolled back the DB and returned a generic 500 with no event record; moved `save_binary` inside the block so storage failures produce a FAILED event and a structured error response
+- **fix** Email ingestion script: retry on 5xx — `email_ingestion_common.py` now retries HTTP 5xx responses (up to 3 attempts with backoff) instead of raising immediately; 4xx still raises immediately
+- **fix** Email ingestion script: per-attachment error isolation — `email_ingest_microsoft.py` now wraps each `api.upload_pdf` call in a try/except; a single failed attachment is counted as `failed` and recorded in `attachment_errors` but no longer aborts the rest of the mailbox; the delta link still advances so future runs do not reprocess messages that already succeeded
+- **feat** Sentry error monitoring — `sentry-sdk[fastapi]` added; `init_sentry()` in `ccs_platform/core/sentry.py` wires up FastAPI and SQLAlchemy integrations on startup; controlled via `CCS_PLATFORM_SENTRY_DSN` and `CCS_PLATFORM_SENTRY_TRACES_SAMPLE_RATE` env vars (no-op if DSN is unset)
+
+### Frontend (web)
+
+- **feat** Sentry error monitoring — `@sentry/react` added; initialised in `main.tsx` with browser tracing and session replay (errors only); controlled via `VITE_SENTRY_DSN` and `VITE_ENVIRONMENT` env vars (no-op if DSN is unset)
+
+### Backend
+
 - **chore** Migrate production database from Neon to Supabase — updated PRODUCTION.md setup steps (session pooler DSN, Supabase dashboard instructions), ARCHITECTURE.md provider references, and `.env.example` PostgreSQL DSN example; escape `%` as `%%` in `set_main_option` calls in `session.py` and `alembic/env.py` to fix configparser interpolation error when database password contains percent-encoded characters
 
 

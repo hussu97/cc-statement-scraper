@@ -171,6 +171,7 @@ def run_ingestion(
         "uploads_ignored": 0,
         "uploads_failed": 0,
         "mailbox_errors": [],
+        "attachment_errors": [],
     }
 
     # Folders to scan per mailbox. Well-known Graph folder names.
@@ -272,22 +273,33 @@ def run_ingestion(
                             upload_results["uploaded"] += 1
                             continue
 
-                        upload = api.upload_pdf(
-                            route_id=route_id,
-                            provider_message_id=message_id,
-                            provider_attachment_id=attachment_id,
-                            internet_message_id=internet_message_id,
-                            provider_received_at=received_at,
-                            filename=filename,
-                            content=content,
-                            metadata={
+                        try:
+                            upload = api.upload_pdf(
+                                route_id=route_id,
+                                provider_message_id=message_id,
+                                provider_attachment_id=attachment_id,
+                                internet_message_id=internet_message_id,
+                                provider_received_at=received_at,
+                                filename=filename,
+                                content=content,
+                                metadata={
+                                    "bank_code": bank_code,
+                                    "provider": "microsoft",
+                                    "folder": folder,
+                                    "sender": sender,
+                                    "subject": subject,
+                                },
+                            )
+                        except Exception as att_exc:  # noqa: BLE001
+                            upload_results["failed"] += 1
+                            summary["attachment_errors"].append({
+                                "message_id": message_id,
+                                "attachment_id": attachment_id,
+                                "filename": filename,
                                 "bank_code": bank_code,
-                                "provider": "microsoft",
-                                "folder": folder,
-                                "sender": sender,
-                                "subject": subject,
-                            },
-                        )
+                                "error": str(att_exc),
+                            })
+                            continue
                         status = str(upload.get("status") or "").strip().lower()
                         if status == "uploaded":
                             upload_results["uploaded"] += 1
