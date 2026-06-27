@@ -30,7 +30,7 @@ click==8.3.1
     # via
     #   typer
     #   uvicorn
-cryptography==48.0.0
+cryptography==48.0.1
     # via
     #   ccs-platform
     #   google-auth
@@ -111,11 +111,11 @@ pydantic==2.12.5
     #   pydantic-settings
 pydantic-core==2.41.5
     # via pydantic
-pydantic-settings==2.13.1
+pydantic-settings==2.14.2
     # via ccs-platform
 pygments==2.20.0
     # via rich
-pypdf==6.13.0
+pypdf==6.13.3
     # via ccs-platform
 pypdfium2==5.5.0
     # via pdfplumber
@@ -145,7 +145,7 @@ sqlalchemy==2.0.47
     # via
     #   alembic
     #   ccs-platform
-starlette==1.2.1
+starlette==1.3.1
     # via
     #   ccs-platform
     #   fastapi

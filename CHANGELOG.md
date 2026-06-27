@@ -4,6 +4,8 @@
 
 ### Backend
 
+- **chore** Bump vulnerable dependencies — `cryptography` 48.0.0→48.0.1 (GHSA-537c-gmf6-5ccf), `pydantic-settings` 2.13.1→2.14.2 (GHSA-4xgf-cpjx-pc3j), `pypdf` 6.13.0→6.13.3 (GHSA-jm82-fx9c-mx94), `starlette` 1.2.1→1.3.1 (PYSEC-2026-248, PYSEC-2026-249); tightened lower bounds in `pyproject.toml` to prevent re-introduction
+
 - **fix** Email ingestion 500 — `save_binary` (GCS upload) was outside the `try/except` block in `POST /email-ingestion/upload`; unhandled exceptions rolled back the DB and returned a generic 500 with no event record; moved `save_binary` inside the block so storage failures produce a FAILED event and a structured error response
 - **fix** Email ingestion script: retry on 5xx — `email_ingestion_common.py` now retries HTTP 5xx responses (up to 3 attempts with backoff) instead of raising immediately; 4xx still raises immediately
 - **fix** Email ingestion script: per-attachment error isolation — `email_ingest_microsoft.py` now wraps each `api.upload_pdf` call in a try/except; a single failed attachment is counted as `failed` and recorded in `attachment_errors` but no longer aborts the rest of the mailbox; the delta link still advances so future runs do not reprocess messages that already succeeded
