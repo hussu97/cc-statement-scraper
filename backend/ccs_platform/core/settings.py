@@ -88,6 +88,9 @@ class PlatformSettings(BaseSettings):
     email_gmail_client_secret: str | None = None
     email_oauth_redirect_uri: str = "http://localhost"
 
+    sentry_dsn: str | None = None
+    sentry_traces_sample_rate: float = 0.1
+
     def model_post_init(self, __context: object) -> None:
         if self.is_production():
             default_key = "change-this-in-production"

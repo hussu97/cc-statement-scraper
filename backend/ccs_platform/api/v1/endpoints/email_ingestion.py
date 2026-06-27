@@ -1009,14 +1009,13 @@ async def ingestion_upload(
     db.add(event)
     db.flush()
 
-    staging = request.app.state.storage.save_binary(
-        content=content,
-        filename=f"email_ingest_{event.id}_{filename}",
-        folder="staging",
-        profile_key=profile_key,
-    )
-
     try:
+        staging = request.app.state.storage.save_binary(
+            content=content,
+            filename=f"email_ingest_{event.id}_{filename}",
+            folder="staging",
+            profile_key=profile_key,
+        )
         payload_json = {
             "uploads": [
                 {

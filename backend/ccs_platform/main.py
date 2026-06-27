@@ -18,6 +18,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from ccs_platform.core.logging import configure_logging
 from ccs_platform.core.metrics import METRICS
 from ccs_platform.core.settings import get_settings
+from ccs_platform.core.sentry import init_sentry
 from ccs_platform.db import db_session, init_db
 from ccs_platform.api.v1.router import router as api_v1_router
 from ccs_platform.application.jobs.runner import JobRunner
@@ -75,6 +76,7 @@ def create_app() -> FastAPI:
     # The lifespan also calls this, but create_app() runs at import time which
     # is earlier than lifespan startup, ensuring logs are available immediately.
     configure_logging(level_name=settings.log_level)
+    init_sentry(settings)
     app = FastAPI(title=settings.app_name, lifespan=lifespan)
 
     origins = [token.strip() for token in settings.cors_allow_origins.split(",") if token.strip()]
