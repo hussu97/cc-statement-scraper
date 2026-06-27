@@ -87,23 +87,79 @@ curl http://127.0.0.1:8040/api/v1/health
 ```bash
 cd scraper
 python3 -m venv .venv && source .venv/bin/activate
-pip install -e .
-ccs-scraper install-browser
+pip install -e ".[dev]"
+ccs-scraper install-browser          # downloads Chromium (~200 MB, one-time)
 ```
 
 Configure `scraper/.env` (copy from `.env.example`):
 ```bash
 cp scraper/.env.example scraper/.env
-# fill in CCS_SCRAPER_API_TOKEN and bank credentials
 ```
 
-Run:
+Key settings:
+
+| Variable | Default | Description |
+|---|---|---|
+| `CCS_SCRAPER_TARGET_URL` | `http://127.0.0.1:8040` | Backend API URL |
+| `CCS_SCRAPER_API_TOKEN` | — | Service API token (`upload` scope — create in admin UI → Service API Tokens) |
+| `CCS_SCRAPER_HEADLESS` | `true` | `false` to watch the browser session for debugging |
+| `CCS_SCRAPER_BROWSER_PROXY_URL` | — | Optional SOCKS5/HTTP proxy for all browser traffic |
+| `CCS_SCRAPER_DOWNLOAD_DIR` | `./downloads` | Local directory for downloaded PDFs |
+
+### Multi-profile credentials
+
+Credentials are namespaced by profile using a `{PROFILE}_` prefix. Banks with missing credentials are automatically skipped.
+
+```
+HUSSAIN_FAB_USERNAME=           TEJASVIE_FAB_USERNAME=
+HUSSAIN_FAB_PASSWORD=           TEJASVIE_FAB_PASSWORD=
+
+HUSSAIN_ADCB_CID=               TEJASVIE_ADCB_CID=
+HUSSAIN_ADCB_LOGIN_PASSWORD=    TEJASVIE_ADCB_LOGIN_PASSWORD=
+HUSSAIN_ADCB_PDF_PASSWORD=      TEJASVIE_ADCB_PDF_PASSWORD=
+
+HUSSAIN_ENBD_USERNAME=          TEJASVIE_ENBD_USERNAME=
+HUSSAIN_ENBD_PASSWORD=          TEJASVIE_ENBD_PASSWORD=
+
+HUSSAIN_EIB_USERNAME=           TEJASVIE_EIB_USERNAME=
+HUSSAIN_EIB_PASSWORD=           TEJASVIE_EIB_PASSWORD=
+
+HUSSAIN_SIB_USER_ID=            TEJASVIE_SIB_USER_ID=
+HUSSAIN_SIB_PASSWORD=           TEJASVIE_SIB_PASSWORD=
+HUSSAIN_SIB_PDF_PASSWORD=       TEJASVIE_SIB_PDF_PASSWORD=
+
+HUSSAIN_MASHREQ_USERNAME=       TEJASVIE_MASHREQ_USERNAME=
+HUSSAIN_MASHREQ_PASSWORD=       TEJASVIE_MASHREQ_PASSWORD=
+```
+
+### Commands
+
+`--profile` is required on every `scrape` and `upload` call.
+
 ```bash
-ccs-scraper scrape --months 2024-01:2025-12
-ccs-scraper upload ./downloads/statement.pdf
+# Scrape all configured banks for the current month
+ccs-scraper scrape --profile hussain
+
+# Scrape specific banks only
+ccs-scraper scrape --profile hussain --banks FAB,ADCB
+
+# Scrape a date range (inclusive)
+ccs-scraper scrape --profile hussain --months 2024-01:2025-12
+
+# Scrape a single month
+ccs-scraper scrape --profile hussain --months 2025-03
+
+# Download only — skip upload to backend
+ccs-scraper scrape --profile hussain --no-upload
+
+# Upload existing local PDFs manually
+ccs-scraper upload --profile hussain ./downloads/statement.pdf
+
+# Install / reinstall Chromium
+ccs-scraper install-browser
 ```
 
-See [`scraper/README.md`](scraper/README.md) for full CLI reference.
+See [`scraper/README.md`](scraper/README.md) for the full CLI reference and bank-specific notes.
 
 ## Setup — Frontend
 
