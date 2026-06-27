@@ -588,6 +588,19 @@ def _open_download_statements_modal(page: Any, logger: logging.Logger) -> bool:
     return False
 
 
+def _wait_for_tenure_select(page: Any, logger: logging.Logger, *, timeout_ms: int = 8000) -> bool:
+    sel = page.locator("select[name='estatementTenure']")
+    try:
+        if sel.count() > 0:
+            logger.info("FAB: waiting up to %dms for estatementTenure select to become visible", timeout_ms)
+            sel.first.wait_for(state="visible", timeout=timeout_ms)
+            logger.info("FAB: estatementTenure select is ready")
+            return True
+    except Exception:  # noqa: BLE001
+        logger.info("FAB: estatementTenure select not visible after %dms; proceeding", timeout_ms)
+    return False
+
+
 def _wait_for_popup_download_control(popup_scope: Any, page: Any, logger: logging.Logger) -> None:
     checks = [
         (popup_scope.locator("[validatedownloadestatement]"), "validatedownloadestatement div"),
@@ -736,11 +749,20 @@ def _download_requested_months(
             has_tenure = False
 
         if not has_tenure:
+            # Give the modal a chance to finish rendering before deciding to re-open it.
+            _wait_for_tenure_select(page, logger)
+            try:
+                has_tenure = page.locator("select[name='estatementTenure']:visible").count() > 0
+            except Exception:  # noqa: BLE001
+                has_tenure = False
+
+        if not has_tenure:
             if not _open_download_statements_modal(page, logger):
                 diagnostics["failed"].append(
                     {"month": month_token, "reason": "download_statements_modal_not_opened"}
                 )
                 continue
+            _wait_for_tenure_select(page, logger)
             popup_scope = _resolve_popup_scope(page, logger)
 
         selected = _select_estatement_tenure(
@@ -815,6 +837,12 @@ def download_latest_statement(
     popup_scope = _resolve_popup_scope(page, logger)
     logger.info("FAB: waiting 700ms — modal opened; allowing popup to render")
     page.wait_for_timeout(700)
+    # Wait for the tenure dropdown to be interactive before proceeding — the
+    # modal renders asynchronously and the select isn't ready immediately after
+    # the trigger click.  Without this, _download_requested_months sees
+    # has_tenure=False and tries to re-open the modal, which fails because the
+    # "DOWNLOAD STATEMENTS" button is no longer visible while the modal is open.
+    _wait_for_tenure_select(page, logger)
 
     requested_months = _normalize_requested_months(bank_cfg.get("requested_months"))
     requested_month = str(bank_cfg.get("requested_month") or "").strip()

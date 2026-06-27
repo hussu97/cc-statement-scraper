@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Scraper
+
+- **fix** FAB: after "DOWNLOAD STATEMENTS" modal opens, wait for `select[name='estatementTenure']` to become visible before attempting to select months — previously a fixed 700ms wait was insufficient, causing `_download_requested_months` to see `has_tenure=False` and try to re-open the modal (which fails while the modal is already shown), silently skipping all requested months
+- **fix** ADCB: wrap `login_selector_visible` and `is_authenticated_session` in try/except to handle `TargetClosedError` — after clicking "Login" on the concurrent-session gate, ADCB navigates/reloads the page and the old page reference closes, causing a crash on the next auth-poll tick
+- **fix** SIB: restructure "Secure Login" polling from 3 × 1400ms (4.2s) to 2 × (7 × 1500ms) = up to 21s; click the button once per outer attempt rather than on every inner poll iteration, preventing unintended re-clicks while the password screen is loading
+
 ### Backend
 
 - **chore** Bump vulnerable dependencies — `cryptography` 48.0.0→48.0.1 (GHSA-537c-gmf6-5ccf), `pydantic-settings` 2.13.1→2.14.2 (GHSA-4xgf-cpjx-pc3j), `pypdf` 6.13.0→6.13.3 (GHSA-jm82-fx9c-mx94), `starlette` 1.2.1→1.3.1 (PYSEC-2026-248, PYSEC-2026-249); tightened lower bounds in `pyproject.toml` to prevent re-introduction

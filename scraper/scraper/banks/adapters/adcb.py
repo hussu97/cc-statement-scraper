@@ -409,7 +409,12 @@ def login(page: Any, logger: logging.Logger, credentials: dict[str, str] | None 
 
 
 def login_selector_visible(page: Any) -> bool:
-    return page.locator("#frmLogin_txtUserId").first.is_visible()
+    try:
+        return page.locator("#frmLogin_txtUserId").first.is_visible()
+    except Exception:  # noqa: BLE001
+        # TargetClosedError: page navigated/closed during concurrent-session gate
+        # handling.  Treat as not visible so the caller doesn't crash.
+        return False
 
 
 def is_login_screen(text: str) -> bool:
@@ -435,7 +440,12 @@ def is_concurrent_session_gate(text: str) -> bool:
 
 
 def is_authenticated_session(page: Any, low_text: str) -> bool:
-    url = page.url.lower()
+    try:
+        url = page.url.lower()
+    except Exception:  # noqa: BLE001
+        # TargetClosedError: page closed mid-navigation after concurrent-session
+        # gate dismissal.  Return False so the auth poll retries.
+        return False
     low = low_text.lower()
     # Logout / session-timeout pages are NOT authenticated.
     if "#_frmlogout" in url:
