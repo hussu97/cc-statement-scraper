@@ -38,6 +38,9 @@ global_rules:
       - AMARAVATHIDUBAI
       - STARBUCKS
       - DUNKIN
+      - BESH CAIRO
+      - AVATARA
+      - REVELRY
   - category: Grocery
     keywords:
       - NOON MINUTES
@@ -106,6 +109,7 @@ global_rules:
       - KOTHARI TRADING
       - MADINAT JUMEIRAH
       - GETYOURGUIDE
+      - EDIT BY AHMEDSEDDIQIDUBAI
   - category: Entertainment
     keywords:
       - SKYDIVE
@@ -157,6 +161,7 @@ global_rules:
       - MAKEMYTRIP
       - TRAVELWINGS.COM
       - JABAL AL DHANNA
+      - INDIGO AIRLINES
   - category: Utilities
     keywords:
       - DUBAI ELECTRICITY
@@ -184,10 +189,12 @@ global_rules:
   - category: Fines/Govt Services
     keywords:
       - SMART DUBAI GOVERNMENT DUBAI
+      - SMART DUBAIGOVERNMENTDUBAI
       - AL ETIHAD CREDIT BUREA
       - SHARJAH FINANCE DEPART
       - PARKONIC
       - CASH ADVANCE FEE
+      - INVOLUNTARY LOSS OF
   - category: Fraud
     keywords:
       - UPFRONTCR DISP
@@ -211,6 +218,9 @@ global_rules:
       - FAB REWARDS REDEMPTION - CASHBACK
       - JOINING_BONUS_CASHBACK
       - CASHBACK
+      - WAKALA PROFIT
+      - BONUS
+      - MURABAHA PROFIT
   - category: Card Repayment
     keywords:
       - INWARD IPP CC
