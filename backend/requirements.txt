@@ -26,11 +26,11 @@ charset-normalizer==3.4.4
     # via
     #   pdfminer-six
     #   requests
-click==8.3.1
+click==8.4.2
     # via
     #   typer
     #   uvicorn
-cryptography==48.0.1
+cryptography==50.0.0
     # via
     #   ccs-platform
     #   google-auth
@@ -81,7 +81,7 @@ pdfminer-six==20251230
     # via pdfplumber
 pdfplumber==0.11.9
     # via ccs-platform
-pillow==12.2.0
+pillow==12.3.0
     # via
     #   ccs-platform
     #   pdfplumber
@@ -96,7 +96,7 @@ psycopg[binary]==3.3.3
     # via ccs-platform
 psycopg-binary==3.3.3
     # via psycopg
-pyasn1==0.6.3
+pyasn1==0.6.4
     # via
     #   pyasn1-modules
     #   rsa
@@ -115,7 +115,7 @@ pydantic-settings==2.14.2
     # via ccs-platform
 pygments==2.20.0
     # via rich
-pypdf==6.13.3
+pypdf==6.15.0
     # via ccs-platform
 pypdfium2==5.5.0
     # via pdfplumber
