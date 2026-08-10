@@ -21,13 +21,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Copy dependency files first so pip install is cached unless requirements change
-COPY backend/requirements.txt backend/requirements-dev.txt backend/pyproject.toml README.md ./
+COPY backend/requirements.txt backend/requirements-export.txt backend/pyproject.toml README.md ./
+# Dependencies come from the lockfiles rather than from pyproject.toml's version
+# ranges, so the image ships exactly the versions CI tests and pip-audit scans
+# instead of re-resolving to whatever is newest at build time. Both lockfiles go
+# to a single pip invocation so their shared transitive pins are resolved
+# together and any drift fails the build. The `-e .` line is stripped because the
+# project itself is installed separately, with --no-deps so that step cannot pull
+# in anything unpinned.
+#
 # pip is uninstalled once the dependencies are in place: a runtime image needs no
 # package installer, and pip bundles copies of its own dependencies together with
 # a CycloneDX SBOM (pip/_vendor/bom.cdx.json) that image scanners read as if those
 # copies were installed packages — reporting CVEs for code this app never imports.
 RUN pip install --upgrade pip \
-    && pip install ".[export]" \
+    && grep -v '^-e' requirements.txt > /tmp/requirements.lock \
+    && pip install -r /tmp/requirements.lock -r requirements-export.txt \
+    && pip install --no-deps . \
+    && rm -f /tmp/requirements.lock \
     && python -m pip uninstall -y pip
 
 # Copy remaining source (changes here won't re-trigger pip install)
