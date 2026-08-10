@@ -22,8 +22,13 @@ WORKDIR /app
 
 # Copy dependency files first so pip install is cached unless requirements change
 COPY backend/requirements.txt backend/requirements-dev.txt backend/pyproject.toml README.md ./
+# pip is uninstalled once the dependencies are in place: a runtime image needs no
+# package installer, and pip bundles copies of its own dependencies together with
+# a CycloneDX SBOM (pip/_vendor/bom.cdx.json) that image scanners read as if those
+# copies were installed packages — reporting CVEs for code this app never imports.
 RUN pip install --upgrade pip \
-    && pip install ".[export]"
+    && pip install ".[export]" \
+    && python -m pip uninstall -y pip
 
 # Copy remaining source (changes here won't re-trigger pip install)
 COPY backend/alembic.ini ./
