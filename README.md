@@ -26,7 +26,8 @@ credit-card-scraper/
 │   ├── config/                ← YAML config
 │   ├── scripts/               ← ops/maintenance scripts
 │   ├── tests/                 ← pytest test suite
-│   ├── requirements.txt
+│   ├── requirements.txt       ← production pins (pip-compile)
+│   ├── requirements-export.txt ← extra pins for the [export] extra
 │   ├── requirements-dev.txt
 │   └── pyproject.toml
 ├── scraper/                   ← Standalone browser scraper CLI

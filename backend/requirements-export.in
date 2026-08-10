@@ -1,0 +1,15 @@
+# Pins for the optional [export] extra (Excel workbook export via
+# ccs_platform/application/exports/workbook.py). Installed on top of
+# requirements.txt by deploy/Dockerfile.api — kept out of requirements.txt so the
+# Gmail relay image, which shares that lockfile, does not pull in pandas/numpy.
+#
+# Bounds mirror pyproject.toml [project.optional-dependencies].export, which
+# remains the source of truth. Dockerfile.api passes both lockfiles to a single
+# pip invocation, so pip resolves them together and any drift between the shared
+# transitive pins (python-dateutil, six) fails the build instead of silently
+# upgrading whichever file is installed second.
+#
+# Generate the pinned requirements-export.txt with:
+#   pip-compile requirements-export.in --output-file requirements-export.txt
+pandas>=2.2
+openpyxl>=3.1

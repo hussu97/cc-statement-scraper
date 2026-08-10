@@ -18,7 +18,9 @@ jobs:
       - run: pip install pip-audit bandit
 
       - name: Dependency vulnerability scan
-        run: grep -v '^-e' backend/requirements.txt | pip-audit -r /dev/stdin --strict
+        run: |
+          grep -v '^-e' backend/requirements.txt | pip-audit -r /dev/stdin --strict
+          pip-audit -r backend/requirements-export.txt --strict
 
       - name: SAST scan
         run: bandit -q -r backend/ccs_platform -x backend/tests -ll -ii
