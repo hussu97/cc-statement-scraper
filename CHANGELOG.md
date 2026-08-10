@@ -10,6 +10,7 @@
 
 ### Backend
 
+- **chore** Bump vulnerable dependencies (pip-audit) — `click` 8.3.1→8.4.2 (PYSEC-2026-2132), `cryptography` 48.0.1→50.0.0 (PYSEC-2026-3552/3553/3554), `pillow` 12.2.0→12.3.0 (PYSEC-2026-2253…2257, 3451…3454, 3493…3496), `pyasn1` 0.6.3→0.6.4 (PYSEC-2026-3455/3456/3457), `pypdf` 6.13.3→6.15.0 (PYSEC-2026-3610…3613, CVE-2026-71852, CVE-2026-71870); lower bounds for the direct dependencies tightened in `pyproject.toml` to prevent re-introduction
 - **chore** Bump vulnerable dependencies — `cryptography` 48.0.0→48.0.1 (GHSA-537c-gmf6-5ccf), `pydantic-settings` 2.13.1→2.14.2 (GHSA-4xgf-cpjx-pc3j), `pypdf` 6.13.0→6.13.3 (GHSA-jm82-fx9c-mx94), `starlette` 1.2.1→1.3.1 (PYSEC-2026-248, PYSEC-2026-249); tightened lower bounds in `pyproject.toml` to prevent re-introduction
 
 - **fix** Email ingestion 500 — `save_binary` (GCS upload) was outside the `try/except` block in `POST /email-ingestion/upload`; unhandled exceptions rolled back the DB and returned a generic 500 with no event record; moved `save_binary` inside the block so storage failures produce a FAILED event and a structured error response
