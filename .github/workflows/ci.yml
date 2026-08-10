@@ -5,6 +5,14 @@ on:
   push:
     branches: [main]
 
+# dorny/paths-filter resolves the changed-file list for pull_request events via
+# the PR listFiles API, which needs pull-requests: read. Without it the token
+# falls back to the repo default and the `changes` job fails with
+# "Resource not accessible by integration".
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   # ------------------------------------------------------------------
   # Detect which top-level areas changed so downstream jobs can skip
