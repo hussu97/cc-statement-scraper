@@ -12,8 +12,12 @@ RUN useradd -m -u 1000 appuser
 WORKDIR /app
 
 COPY backend/requirements.txt ./
+# pip is uninstalled after the install for the same reason as in Dockerfile.api:
+# no package installer is needed at runtime, and pip's vendored-dependency SBOM
+# otherwise shows up as vulnerability findings in image scans.
 RUN pip install --upgrade pip \
-    && grep -v '^-e' requirements.txt | pip install -r /dev/stdin
+    && grep -v '^-e' requirements.txt | pip install -r /dev/stdin \
+    && python -m pip uninstall -y pip
 
 COPY backend/scripts/gmail_ingest_relay.py \
      backend/scripts/email_ingestion_common.py \
