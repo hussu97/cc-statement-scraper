@@ -62,7 +62,7 @@ cd apps/ios && xcodegen generate && open Ledger.xcodeproj
 |---|---|---|
 | `LEDGER_SUPABASE_URL` | `http:/$()/127.0.0.1:54321` | `https:/$()/<ref>.supabase.co` |
 | `LEDGER_SUPABASE_ANON_KEY` | `supabase status` → `ANON_KEY` | dashboard → API keys |
-| `LEDGER_SENTRY_DSN` | empty (Sentry off) | Sentry project `ledger-ios` DSN |
+| `LEDGER_SENTRY_DSN` | empty (Sentry off) | Sentry project `ledger-apps` DSN (shared with web; events tagged `app=ios`) |
 | `LEDGER_ENVIRONMENT` | `local` | `production` (set by Release.xcconfig) |
 
 `//` starts an xcconfig comment, hence `$()` between the slashes. The simulator reaches

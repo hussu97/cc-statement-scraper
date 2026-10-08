@@ -152,6 +152,8 @@ Later v2 follow-ups are listed under [Unreleased] below.
 ### Backend
 
 - **feat** Ledger v2 migration `20261008001300_web_followups.sql` — `list_profile_members` (members with auth emails plus pending invites), owner-only `remove_profile_member` (refuses to remove the last owner, 22023) and `cancel_profile_invite`; `preview_rule` now honours `currency` and `card_code` conditions exactly like `private.recategorize` and counts every match (20-row sample); `overview` adds per-account `utilisation` and `change_vs_prev_month_to_date` / `change_vs_avg_3m` fractions (existing keys unchanged); `spend_series` gains optional `p_top` that folds the long tail into an "Other" group (signature change: dropped and recreated). pgTAP suite `06_web_followups.test.sql`; regenerated `packages/db-types`
+- **feat** Edge Functions: Sentry tags every event `service=edge` at init (`_shared/sentry.ts`), alongside the per-request `function`, so Edge and parser events separate in the shared `ledger-backend` project; asserted in `sentry_runtime_test.ts`
+- **fix** `scripts/migrate_legacy.py --step secrets` writes `GMAIL_OAUTH_CLIENT_ID/SECRET` (was `GOOGLE_OAUTH_CLIENT_*`), exactly the names `_shared/oauth.ts` reads, so the exported env file can be pushed with `supabase secrets set --env-file` without renaming
 
 ### Frontend (web)
 
@@ -159,13 +161,30 @@ Later v2 follow-ups are listed under [Unreleased] below.
 - **refactor** Ledger web: Overview uses the server's `utilisation` and change fractions (removed `latestCycleByAccount` and `formatDeltaPercent`; `formatChange` only formats a server fraction); Insights → Trends asks the server for the top 8 groups (`p_top`) instead of folding client-side, and keeps grouping/bucket in the URL (`?group=&grain=`), preserved when the range changes
 - **chore** `@ledger/tokens` build emits `dist/chart.d.ts` (exported via `types`) and skips unchanged outputs; removed the `apps/web/src/types/tokens.d.ts` stopgap
 - **fix** `.gitignore`: the root `data/` rule no longer hides `apps/web/src/data/` (the web data layer)
+- **feat** `apps/web/vercel.json`: SPA rewrite to `/index.html` for every path except `/assets/*`, immutable caching for hashed assets, and security headers (`nosniff`, `strict-origin-when-cross-origin`, `X-Frame-Options: DENY`, `Permissions-Policy`, a CSP allowing only self, the inline theme script by hash, the Supabase project over https + wss, and Sentry ingest). Vitest guard `src/test/vercel-config.test.ts` keeps the script hash and CSP in sync with `index.html`
+- **feat** Sentry tags every web event `app=web` (`initialScope` in `src/lib/sentry.ts`, tested in `sentry.test.ts`); the source-map upload project defaults to `ledger-apps` (was `ledger-web`) in `vite.config.ts` and `.env.example`
+- **fix** `pnpm --filter @ledger/tokens check` works from a clean clone: it regenerates the gitignored `dist/` in memory and fails only when the committed `Tokens.swift` drifts from `tokens.json`
+
+### Parser
+
+- **feat** Sentry tags every parser event `service=parser` at init (`ccs_parser/sentry.py`), sharing `ledger-backend` with the Edge Functions; covered by a pytest case
+
+### iOS
+
+- **feat** LedgerKit `Telemetry` tags every event `app=ios` (plus `target`) via `Telemetry.scopeTags(target:)`, for the shared `ledger-apps` project; dSYM upload in `scripts/publish-build.sh` defaults to `SENTRY_PROJECT=ledger-apps` (was `ledger-ios`)
+
+### Docs
+
+- **docs** PRODUCTION.md: documented `apps/web/vercel.json` (§4) and dropped the "add a vercel.json" note; removed the cutover step to rename `GOOGLE_OAUTH_*` by hand; the scraper cutover step uses per-profile tokens; Sentry tags are no longer "until the runtimes set them". ARCHITECTURE.md §10, README, `scraper/README.md`, iOS README and ROADMAP updated to match
 
 ### CI / Infra
 
 - **chore** Pre-commit hook runs `pnpm --filter @ledger/web lint` and `test` when `apps/web/**/*.{ts,tsx}` files are staged (legacy `frontend/` ESLint check unchanged)
+- **chore** CI `web` job: the tokens step is just `pnpm --filter @ledger/tokens check` (the build-then-`git diff` workaround is gone)
 
 ### Scraper
 
+- **feat** Per-profile service tokens: `get_config(profile)` reads `<PROFILE>_CCS_SCRAPER_API_TOKEN` (profile upper-cased, like the bank credentials) and falls back to the global `CCS_SCRAPER_API_TOKEN`; the fail-fast error names both. Ledger v2 tokens belong to one profile, so `scrape --profile tejasvie` no longer needs the token swapped per run. Updated `.env.example` and README
 - **fix** FAB: after "DOWNLOAD STATEMENTS" modal opens, wait for `select[name='estatementTenure']` to become visible before attempting to select months — previously a fixed 700ms wait was insufficient, causing `_download_requested_months` to see `has_tenure=False` and try to re-open the modal (which fails while the modal is already shown), silently skipping all requested months
 - **fix** ADCB: wrap `login_selector_visible` and `is_authenticated_session` in try/except to handle `TargetClosedError` — after clicking "Login" on the concurrent-session gate, ADCB navigates/reloads the page and the old page reference closes, causing a crash on the next auth-poll tick
 - **fix** SIB: restructure "Secure Login" polling from 3 × 1400ms (4.2s) to 2 × (7 × 1500ms) = up to 21s; click the button once per outer attempt rather than on every inner poll iteration, preventing unintended re-clicks while the password screen is loading

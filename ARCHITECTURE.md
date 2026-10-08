@@ -467,9 +467,10 @@ Bank SMS → Shortcuts automation → LogBankSMSIntent (openAppWhenRun = false, 
   - `dlq:*` issues
   - iOS crash-free sessions below 99%, filtered `app:ios` in `ledger-apps`
 
-> The `service` and `app` tags are the agreed topology. Until each runtime's Sentry helper sets
-> them (see ROADMAP), filter by `function` (Edge), `parser_version` (parser), and platform or
-> `target` (iOS).
+- **Tags at init.** Each runtime's Sentry helper sets its tag on every event:
+  `_shared/sentry.ts` (`service=edge`), `ccs_parser/sentry.py` (`service=parser`),
+  `apps/web/src/lib/sentry.ts` (`app=web`, via `initialScope`) and LedgerKit `Telemetry`
+  (`app=ios`). Each has a unit test asserting it.
 
 ---
 

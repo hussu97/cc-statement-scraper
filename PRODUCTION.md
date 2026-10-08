@@ -229,15 +229,25 @@ curl -s "$(gcloud run services describe $SERVICE --region $REGION --format 'valu
 | `VITE_SENTRY_DSN` | `ledger-apps` DSN |
 | `VITE_SENTRY_ENVIRONMENT` | `production` |
 | `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` | source-map upload (build only) |
-| `SENTRY_PROJECT` | `ledger-apps` (`vite.config.ts` defaults to `ledger-web`, so this must be set) |
+| `SENTRY_PROJECT` | `ledger-apps` (also the `vite.config.ts` default) |
 
-**SPA rewrites.** TanStack Router uses browser history (`/activity`, `/settings`, …), so deep
-links need a fallback to `index.html`. **`apps/web` has no `vercel.json` yet.** Add
-`apps/web/vercel.json` before switching production:
-
-```json
-{ "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }] }
-```
+**`apps/web/vercel.json`** (picked up from the Root Directory):
+- **SPA rewrite.** TanStack Router uses browser history (`/activity`, `/settings`, …), so every
+  path except `/assets/*` falls back to `/index.html`. A missing hashed asset stays a 404
+  instead of returning HTML.
+- **Caching.** `/assets/*` (content-hashed by Vite) is `public, max-age=31536000, immutable`.
+  `index.html` keeps Vercel's default revalidation, so a deploy is picked up immediately.
+- **Security headers** on every path: `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: DENY`, a restrictive
+  `Permissions-Policy`, and a CSP:
+  - `script-src 'self'` plus the sha256 of the inline theme script in `index.html`
+  - `connect-src` the project's Supabase URL over `https://` (REST, Auth, Storage, Functions)
+    and `wss://` (Realtime), plus Sentry ingest (`*.ingest[.us|.de].sentry.io`)
+  - `font-src 'self'` (Inter and Fraunces are self-hosted via `@fontsource`; no Google Fonts)
+  - `worker-src blob:` for the Sentry Replay worker; `frame-ancestors 'none'`
+- The CSP hard-codes the project ref (`nkmylznisjcnmqbxosey`). If `VITE_SUPABASE_URL` ever
+  points elsewhere, update `connect-src`. If the inline script in `index.html` changes, update
+  its hash. The vitest guard `src/test/vercel-config.test.ts` fails until both match.
 
 Unlike legacy `frontend/vercel.json`, there is no `/api` proxy: the app talks to Supabase
 directly.
@@ -338,9 +348,9 @@ Two projects (see ARCHITECTURE.md §10):
 | `ledger-backend` | Deno / Python | `supabase secrets set SENTRY_DSN=…`, Secret Manager `parser-sentry-dsn` |
 | `ledger-apps` | React / Apple | Vercel `VITE_SENTRY_DSN` (+ `SENTRY_PROJECT=ledger-apps` for source maps), iOS `LEDGER_SENTRY_DSN` (+ `SENTRY_PROJECT=ledger-apps` for dSYMs) |
 
-Events carry the tag `service` (edge | parser) in `ledger-backend` and `app` (web | ios) in
-`ledger-apps`. Until the runtimes set these tags (ROADMAP), filter by `function` or
-`parser_version` (backend) and by platform or `target` (iOS).
+Every event carries the tag `service` (edge | parser) in `ledger-backend` and `app` (web | ios)
+in `ledger-apps`, set at SDK init by each runtime. Edge events also carry `function`, parser
+events `parser_version`, and iOS events `target` (app | intent | share_extension).
 
 **Alerts:**
 
@@ -452,11 +462,9 @@ parsing time. Steps are in order; nothing is deleted until step 12.
      invites and claimed at sign-up.
    - **secrets** moves PDF passwords and mailbox refresh tokens into Vault, and writes the
      OAuth app credentials to the env file. That file is gitignored by the root `.env.*`
-     rule; delete it after use.
-     > The script writes `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET`, but the
-     > functions read **`GMAIL_OAUTH_CLIENT_ID` / `GMAIL_OAUTH_CLIENT_SECRET`**. Rename those
-     > two lines before running `supabase secrets set --env-file supabase/functions/.env.production`.
-     > The `MS_OAUTH_*` names match.
+     rule; delete it after use. The names it writes (`GMAIL_OAUTH_CLIENT_ID/SECRET`,
+     `MS_OAUTH_CLIENT_ID/SECRET`) are exactly the ones the functions read, so push it as-is with
+     `supabase secrets set --env-file supabase/functions/.env.production`.
    - **pdfs** uploads every legacy PDF into Storage as `documents(source='legacy')`. Real
      statements go first, oldest first, and SIB history extracts last. The worker re-parses
      them through the v2 pipeline.
@@ -486,11 +494,13 @@ parsing time. Steps are in order; nothing is deleted until step 12.
     CCS_SCRAPER_TARGET_URL=https://nkmylznisjcnmqbxosey.supabase.co
     CCS_SCRAPER_UPLOAD_PATH=/functions/v1/statements-upload
     CCS_SCRAPER_SUPABASE_ANON_KEY=<anon key>
-    CCS_SCRAPER_API_TOKEN=ccs_…     # new v2 token, scope statements:upload
+    HUSSAIN_CCS_SCRAPER_API_TOKEN=ccs_…    # new v2 tokens, scope statements:upload,
+    TEJASVIE_CCS_SCRAPER_API_TOKEN=ccs_…   # one per profile
     ```
-    - v2 tokens belong to one profile. Create one per profile in Settings → Sources → Tokens,
-      and pass the matching one per run, e.g.
-      `CCS_SCRAPER_API_TOKEN=$TEJASVIE_TOKEN ccs-scraper scrape --profile tejasvie`.
+    - v2 tokens belong to one profile. Create one per profile in Settings → Sources → Tokens.
+      `--profile <name>` picks `<NAME>_CCS_SCRAPER_API_TOKEN`, falling back to the global
+      `CCS_SCRAPER_API_TOKEN` (remove the legacy global token so a missing profile token fails
+      fast instead of uploading with the wrong one).
     - Run `ccs-scraper upload-pending --profile hussain` to confirm the upload path. Already
       imported PDFs return `duplicate`.
 11. **Switch email.**
