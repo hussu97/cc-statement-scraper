@@ -5,6 +5,7 @@ import type { ActivitySearch } from "@/lib/activity-filters";
 export const keys = {
   session: ["session"] as const,
   profiles: ["profiles"] as const,
+  passkeys: (userId: string) => ["passkeys", userId] as const,
   profile: (p: string) => ["p", p] as const,
   domain: (p: string, d: Domain) => ["p", p, d] as const,
 

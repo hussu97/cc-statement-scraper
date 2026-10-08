@@ -254,7 +254,7 @@ export function useSmsHealth(profileCode: string) {
 
 // ── pure helpers for the Settings screen ───────────────────────────────────
 
-export const SETTINGS_TABS = ["sources", "members", "sms", "appearance", "ledger"] as const;
+export const SETTINGS_TABS = ["sources", "members", "sms", "account", "appearance", "ledger"] as const;
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 
 export function settingsTab(v: string | undefined): SettingsTab {

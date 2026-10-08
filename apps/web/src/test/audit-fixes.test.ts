@@ -7,7 +7,7 @@ import { syncSearchText } from "@/lib/activity-filters";
 import { reviewFooterActions, reviewQueriesEnabled } from "@/data/reviews";
 import { insightTarget } from "@/data/overview";
 import { mergeMerchants } from "@/data/rules";
-import { magicLinkOptions, NO_ACCOUNT_MESSAGE, signInErrorMessage } from "@/data/auth";
+import { emailCodeOptions, NO_ACCOUNT_MESSAGE, signInErrorMessage } from "@/data/auth";
 import { axisTickInterval } from "@/components/insights/labels";
 
 describe("WEB-01: out-of-range pages", () => {
@@ -57,15 +57,14 @@ describe("match_reviews before session restore", () => {
   });
 });
 
-describe("WEB-04: magic link never signs anyone up", () => {
-  it("passes shouldCreateUser: false", () => {
-    expect(magicLinkOptions("https://ledger.example")).toEqual({ emailRedirectTo: "https://ledger.example/", shouldCreateUser: false });
+describe("WEB-04: the email code never signs anyone up", () => {
+  it("passes shouldCreateUser: false and no redirect link", () => {
+    expect(emailCodeOptions()).toEqual({ shouldCreateUser: false });
   });
 
   it("explains an unknown email instead of GoTrue's wording", () => {
     expect(signInErrorMessage({ message: "Signups not allowed for otp", code: "otp_disabled" })).toBe(NO_ACCOUNT_MESSAGE);
     expect(signInErrorMessage(new Error("Signups not allowed for otp"))).toBe(NO_ACCOUNT_MESSAGE);
-    expect(signInErrorMessage({ message: "Invalid login credentials", code: "invalid_credentials" })).toBe("That email and password don't match.");
     expect(signInErrorMessage(new Error("Something else"))).toBe("Something else");
   });
 });
