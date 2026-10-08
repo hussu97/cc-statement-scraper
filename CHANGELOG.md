@@ -10,11 +10,14 @@
 - **fix** Mashreq foreign rows (`<ref> MYR 500.00 @0.9400 470.00`) report `currency_original`, `amount_original` and the printed `fx_rate`, and the description is the merchant only: 38 lines in the local corpus. Kind and `legacy_fingerprint` are unchanged (DP-11)
 - **fix** `EIB_PDF_PASSWORD` and `MASHREQ_PDF_PASSWORD` reach their parsers and the password list used by detection, page counting and totals. The worker already sends every stored key, so no worker or SQL change (X-17)
 - **fix** Mashreq `country_code` comes only from an upper-case trailing token, like the other banks (legacy upper-cased any last word)
+- **feat** `country_code` is ISO 3166-1 alpha-2 or null (`ccs_parser/countries.py`): alpha-3 codes, `UAE` and FAB's emirate codes (`DXB`, `AUH`, `SHJ`, …) map to alpha-2; `YOU`, `FEE`, `VAT` and other non-codes are null (X-25r)
+- **fix** `fx_rate` is `"1"` on every AED line, and null instead of a contract failure for a rate below 1e-8 (X-33, parser part)
+- **feat** Wrong bank hint: when the hinted parse fails (layout, decryption, output) or finds no lines and detection names another bank, the parser retries once as that bank and warns; a hinted parse with lines keeps the hint and warns when detection disagrees (SRV-17)
 - **test** `tests/synthetic_pdf.py` (dependency-free PDF writer) and fictional statements in `tests/synthetic/cases.py`; `test_pdf_passwords.py`, `test_mashreq_fx.py`, totals cases
 
 ### Docs
 
-- parse-v1: password keys, totals per bank, Mashreq foreign rows; parser README; BACKLOG (DP-10, DP-11, DP-12, X-17 done; NEW-4 Mashreq `card_last4` is the card's BIN); 02 and 06 fix status
+- parse-v1: password keys, totals per bank, Mashreq foreign rows, bank-hint retry, `fx_rate`, `country_code`; parser README; BACKLOG (DP-10, DP-11, DP-12, X-17, SRV-17, X-25r done; X-33 parser part done; NEW-4 Mashreq `card_last4` is the card's BIN); 02, 03 and 06 fix status
 
 ## Supabase publishable / secret API keys — 2026-10-08 (branch `ledger-v2`)
 

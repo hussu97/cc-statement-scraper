@@ -74,7 +74,7 @@ Set `PARSER_ALLOW_HTTP=true` to fetch from a plain-http local file server while 
 
 | Method | Path | Auth | Notes |
 |---|---|---|---|
-| `POST` | `/parse` | `X-Parser-Secret` | Contract parse-v1. Downloads `document_url` (30 s timeout, 25 MB max), detects the bank when `bank_code_hint` is null, parses in a resource-limited child process (see `ccs_parser/limits.py`), validates the output against the DB constraints, returns statements. |
+| `POST` | `/parse` | `X-Parser-Secret` | Contract parse-v1. Downloads `document_url` (30 s timeout, 25 MB max), detects the bank when `bank_code_hint` is null, parses in a resource-limited child process (see `ccs_parser/limits.py`), validates the output against the DB constraints, returns statements. A wrong hint is retried once as the detected bank, with a warning (SRV-17). |
 | `GET` | `/health` | none | `{"status": "ok", "parser_version", "contract_version"}` |
 | `GET` | `/debug-sentry` | `X-Parser-Secret` | Raises an error to test Sentry. Not registered when `SENTRY_ENVIRONMENT=production`. |
 
@@ -99,7 +99,10 @@ Implementation notes beyond the contract:
   (negative = card in credit), per the contract.
 - Fee classification uses whole words (`FEE(S)`, `CHARGE(S)`): unlike legacy,
   "COFFEE" or "RECHARGE" lines are no longer `fee`. Fingerprints and amounts are unaffected.
-- `fx_rate` passes through the legacy `fx_rate_to_aed` (so AED lines report `"1"`).
+- `fx_rate` passes through the legacy `fx_rate_to_aed`, except that AED lines always report `"1"`
+  and a rate that rounds to zero at 8 places is null (X-33).
+- `country_code` is ISO 3166-1 alpha-2 or null (`countries.py`, X-25r): alpha-3, `UAE` and FAB's
+  emirate codes (`DXB`, `AUH`, `SHJ`, …) map to alpha-2; words such as `YOU`, `FEE` or `VAT` are null.
 - The legacy unknown-card sentinel `"0000"` is emitted as `null` in `card_last4` /
   `primary_card_last4` (the fingerprint still uses `"0000"`, as legacy did).
 - `statement_date` never falls back to today: an undeterminable date is `UNSUPPORTED_LAYOUT`.

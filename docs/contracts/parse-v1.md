@@ -32,6 +32,14 @@ Body (JSON):
 ```
 
 - `bank_code_hint` may be null. The parser then detects the bank from the PDF text, trying each password.
+- With a hint, the hinted parser runs first and the bank is also detected from the PDF. If the
+  hinted parse fails with `UNSUPPORTED_LAYOUT`, `PDF_DECRYPT_FAILED` or `PARSE_OUTPUT_INVALID`, or
+  finds no lines at all, and detection names a different bank, the parser retries **once** as the
+  detected bank. The response then carries the detected `bank_code` (ingest updates the document's
+  bank from it) and every statement starts with the warning `Bank hint <HINT> did not match this
+  PDF; parsed as <BANK> (detected from the PDF)`. If the retry fails too, the hinted outcome is
+  returned. A hinted parse that found lines is kept, with the warning `This PDF looks like <BANK>,
+  not <HINT>; parsed as <HINT> because of the bank hint` when detection disagrees.
 - `settings` holds the profile's PDF passwords: the keys `set_profile_secret` accepts
   (`<BANK>_PDF_PASSWORD` for FAB, ADCB, ENBD, EIB, SIB and MASHREQ, plus `ADCB_CID`). The worker
   sends every key the profile has stored (`worker_document_context`). Each bank parser uses its own
@@ -111,9 +119,16 @@ Field rules:
 - MASHREQ foreign rows (`<merchant> <ref> MYR 500.00 @0.9400 470.00`) are split into
   `currency_original`, `amount_original` and `fx_rate` (the printed rate); `description_raw` is the
   merchant only. `legacy_fingerprint` is still computed from the unsplit text, as legacy did.
-- `fx_rate` is AED per one unit of `currency_original`, as a decimal string, or null.
+- `fx_rate` is AED per one unit of `currency_original`, as a decimal string, or null. An AED line is
+  always `"1"`. A foreign line has the bank's printed rate (MASHREQ `@0.9400`, ADCB `[1 EUR=AED …]`)
+  or the ratio of the two amounts; null when unknown or when it would round to zero at 8 places.
 - `legacy_fingerprint` is `domain.parsing.utils.fingerprint_for(...)`, computed exactly as the legacy backend did. It is used to carry legacy category overrides across.
-- `country_code` is free text from the statement (values seen: `AE`, `ARE`, `UAE`, `IRL`, …). It has no defined format yet.
+- `country_code` is an **ISO 3166-1 alpha-2** code or null. Statements print a trailing token in
+  several forms; the parser maps ISO alpha-3 (`ARE` → `AE`, `IRL` → `IE`), `UAE` and the UAE emirate
+  codes FAB prints for domestic merchants (`DXB`, `AUH`, `SHJ`, `AJM`, `FUJ`, `RAK`, `UAQ`, `AAN`)
+  to alpha-2, and anything else to null: `YOU` ("THANK YOU"), `FEE`, `USD`, typos, and alpha-3
+  codes that are also common words (`VAT`, `CAN`, `AND`, …). Best effort: the token is read from
+  free text.
 - A `history_extract` is a **window**, not a complete record of its cycle. Ingest unions the lines of every document of a statement by `(line_key, occurrence)`, so a later, shorter export never removes lines an earlier one contributed (ARCHITECTURE §4).
 
 ### Output validation
