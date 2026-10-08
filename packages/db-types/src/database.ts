@@ -1258,6 +1258,7 @@ export type Database = {
           msg_kind: string
           name: string
           priority: number
+          scope_profile_code: string | null
           sender_pattern: string
           source: string
           template_code: string
@@ -1275,6 +1276,7 @@ export type Database = {
           msg_kind: string
           name: string
           priority?: number
+          scope_profile_code?: string | null
           sender_pattern?: string
           source?: string
           template_code?: string
@@ -1292,6 +1294,7 @@ export type Database = {
           msg_kind?: string
           name?: string
           priority?: number
+          scope_profile_code?: string | null
           sender_pattern?: string
           source?: string
           template_code?: string
@@ -1305,6 +1308,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "banks"
             referencedColumns: ["bank_code"]
+          },
+          {
+            foreignKeyName: "sms_templates_scope_profile_code_fkey"
+            columns: ["scope_profile_code"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["profile_code"]
           },
         ]
       }
@@ -2234,6 +2244,10 @@ export type Database = {
           p_rule_code?: string
         }
         Returns: Json
+      }
+      promote_sms_template: {
+        Args: { p_template_code: string }
+        Returns: undefined
       }
       propose_sms_template: {
         Args: { p_sms_code: string; p_template: Json }

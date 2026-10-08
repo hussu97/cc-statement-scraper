@@ -26,6 +26,11 @@
   - `preview_rule(…, p_rule_code text default null)`: `would_change` follows `recategorize`'s full tie-break and leaves out the rule being edited (DB-31)
   - `public.merchant_category_skips` (`declined` / `rejected`): `apply_llm_suggestions(…, p_merchant_codes text[] default null)` records merchants the LLM declined for the current category set; `public.reject_merchant_suggestion(p_profile_code, p_merchant_code)` drops a suggestion for good; `enqueue_llm_categorize` skips both (DB-37, WEB-14 SQL side)
 - **test** `14_db_categorisation_and_jobs.test.sql`; `11_privileges` matrix gains `merchant_category_skips` SELECT
+- **fix** `20261009000300_db_sms_templates.sql`:
+  - A template change re-processes messages only when the template is live and its pattern, priority, scope or activation changed; only messages its sender pattern (and scope) reaches; newest first, 500 at most. Deactivations and renames re-process nothing (two statement triggers with transition tables) (DB-22)
+  - `sms_templates_examples_required`: every template has at least one example (DB-26r)
+  - `sms_templates.scope_profile_code`: `propose_sms_template` scopes an LLM template to the proposing profile and builds its sender pattern from `banks.sms_senders` (a message from another sender is `22023`); `private.match_sms_template(…, p_profile_code)` honours the scope; `public.promote_sms_template(p_template_code)` (service role) makes an approved template global (DB-26r)
+- **test** `15_db_sms_templates.test.sql`; `02_ledger`'s reversal template gains an example
 
 ## Supabase publishable / secret API keys — 2026-10-08 (branch `ledger-v2`)
 
