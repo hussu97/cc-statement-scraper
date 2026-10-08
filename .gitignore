@@ -41,6 +41,10 @@ tmp_*.db
 
 .playwright-mcp/
 
+# Claude Code: settings.json, hooks/ are shared; these are per-machine
+.claude/worktrees/
+.claude/settings.local.json
+
 downloads/
 # Ledger v2
 node_modules/

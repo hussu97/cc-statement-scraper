@@ -1,5 +1,11 @@
 # Changelog
 
+## Claude rules and guard hook — 2026-10-08
+
+### Docs
+
+- **chore** `.claude/settings.json` + `.claude/hooks/guard.py`: a Claude Code PreToolUse guard that denies blanket staging (`git add -A`/`.`/`-u`, `git commit -a`), commits without the exact author or with a co-author trailer, printing secret files / env dumps / tokens (Bash and `Read`), dropping or writing the `legacy` schema, `rm -r` of `backend/` or `data/` and `db reset --linked`; and asks before every production action (push to `main`, `db push`, functions deploy, secrets, Vault, Cloud Run, Vercel, `gh secret`/`workflow run`, TestFlight, prod SQL) and hook bypasses. Tested by `guard_test.py` (`python3 .claude/hooks/guard_test.py`). `.gitignore`: `.claude/worktrees/`, `.claude/settings.local.json`
+
 ## Supabase publishable / secret API keys — 2026-10-08 (branch `ledger-v2`)
 
 ### Backend
