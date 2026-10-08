@@ -42,7 +42,7 @@ public final class SessionStore {
     }
 
     /// A sign-in whose session could not be saved is not a sign-in: every
-    /// request would go out with the anon key. Pure, so it is unit-tested.
+    /// request would go out with only the publishable key. Pure, so it is unit-tested.
     public nonisolated static func phase(signedInAs userID: String, email: String?,
                                          persistence: Persistence) -> (phase: Phase, error: String?) {
         switch persistence {

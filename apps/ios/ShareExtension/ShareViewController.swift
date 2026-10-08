@@ -33,7 +33,7 @@ final class ShareViewController: UIViewController {
 
         Task { @MainActor in
             guard let services else {
-                state.finish(.failed("Ledger isn't configured."))
+                state.finish(.failed("Bank Ledger isn't configured."))
                 return
             }
             // Shared PDFs go to the same ledger as SMS ("SMS go to", owned only),

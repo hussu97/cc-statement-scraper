@@ -212,10 +212,20 @@ struct PresentationTests {
         #expect(ProfileStore.resolveSelection(stored: nil, profiles: [a]) == "prf_a")
     }
 
+    @Test("Info.plist config refuses a secret key")
+    func configRejectsSecretKey() {
+        #expect(throws: LedgerConfig.ConfigError.self) {
+            try LedgerConfig.load(info: [
+                "LedgerSupabaseURL": "http://127.0.0.1:54321", "LedgerSupabasePublishableKey": "sb_secret_x",
+                "LedgerAppGroup": "group.com.example.ledger",
+            ])
+        }
+    }
+
     @Test("Info.plist config: xcconfig blanks are treated as missing")
     func config() throws {
         let c = try LedgerConfig.load(info: [
-            "LedgerSupabaseURL": "http://127.0.0.1:54321", "LedgerSupabaseAnonKey": "anon",
+            "LedgerSupabaseURL": "http://127.0.0.1:54321", "LedgerSupabasePublishableKey": "sb_publishable_test",
             "LedgerAppGroup": "group.com.example.ledger", "LedgerKeychainGroup": ".com.example.ledger.shared",
             "LedgerSentryDSN": "", "LedgerEnvironment": "$(LEDGER_ENVIRONMENT)",
         ])

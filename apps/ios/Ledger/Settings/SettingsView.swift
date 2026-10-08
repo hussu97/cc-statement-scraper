@@ -93,7 +93,7 @@ struct SettingsView: View {
         .background(Palette.bg)
         .ledgerNavigation("Settings")
         .task { await settings.refresh() }
-        .confirmationDialog("Discard messages that haven't reached Ledger?", isPresented: $confirmClear,
+        .confirmationDialog("Discard messages that haven't reached Bank Ledger?", isPresented: $confirmClear,
                             titleVisibility: .visible) {
             Button("Discard", role: .destructive) { Task { await settings.clearOutbox() } }
         }
@@ -174,7 +174,7 @@ struct SMSSetupGuideView: View {
         Page {
             VStack(alignment: .leading, spacing: 8) {
                 Text("SMS capture").font(Typography.display)
-                Text("iOS doesn't let apps read messages. A Shortcuts automation hands each bank SMS to Ledger's “Log Bank SMS” action the moment it arrives.")
+                Text("iOS doesn't let apps read messages. A Shortcuts automation hands each bank SMS to Bank Ledger's “Log Bank SMS” action the moment it arrives.")
                     .font(Typography.body).foregroundStyle(Palette.muted)
             }
             .padding(.top, 8)

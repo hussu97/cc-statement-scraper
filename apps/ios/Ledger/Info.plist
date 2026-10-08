@@ -30,8 +30,8 @@
 	<string>$(AppIdentifierPrefix)$(LEDGER_KEYCHAIN_GROUP)</string>
 	<key>LedgerSentryDSN</key>
 	<string>$(LEDGER_SENTRY_DSN)</string>
-	<key>LedgerSupabaseAnonKey</key>
-	<string>$(LEDGER_SUPABASE_ANON_KEY)</string>
+	<key>LedgerSupabasePublishableKey</key>
+	<string>$(LEDGER_SUPABASE_PUBLISHABLE_KEY)</string>
 	<key>LedgerSupabaseURL</key>
 	<string>$(LEDGER_SUPABASE_URL)</string>
 	<key>NSAppTransportSecurity</key>
