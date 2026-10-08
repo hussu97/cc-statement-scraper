@@ -6,7 +6,8 @@ export function parseTabSearch(raw: Record<string, unknown>): { tab?: string } {
 }
 
 // Trends view options (spend_series grouping and bucket size).
-export const SPEND_GROUPS = ["none", "category", "merchant", "account", "card"] as const;
+// "bank" is monthly only (spend_breakdown); the Trends tab forces month buckets for it.
+export const SPEND_GROUPS = ["none", "category", "bank", "merchant", "account", "card"] as const;
 export type SpendGroup = (typeof SPEND_GROUPS)[number];
 export const GRAINS = ["day", "week", "month"] as const;
 export type Grain = (typeof GRAINS)[number];
