@@ -21,6 +21,7 @@ import { CategoryPicker, EvidenceBadge, StatusBadge, TxnAmount } from "@/compone
 import { Pagination } from "@/components/pagination";
 import { ActivityFilters } from "@/components/activity/filters";
 import { TransactionDrawer } from "@/components/activity/drawer";
+import { CardRef } from "@/components/bank-logo";
 
 export function ActivityPage() {
   const { profile_code, isOwner } = useActiveProfile();
@@ -266,7 +267,7 @@ function TxnLine({
           </span>
           <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-muted">
             {t.txn_at && <span className="tabular">{formatTime(t.txn_at)}</span>}
-            <span className="truncate md:hidden">{t.bank_code} •{t.card_last4}</span>
+            <CardRef bankCode={t.bank_code} last4={t.card_last4} className="md:hidden" />
             <EvidenceBadge kind={evidenceBadge(t)} />
             <StatusBadge status={t.status} />
             {t.exclude_from_spend && <span>excluded</span>}
@@ -286,7 +287,7 @@ function TxnLine({
         />
       </span>
       <span role="cell" className="hidden truncate text-[12px] text-muted md:block">
-        {t.bank_code} •{t.card_last4 ?? "—"}
+        <CardRef bankCode={t.bank_code} last4={t.card_last4} size="sm" />
       </span>
       <span role="cell" className="text-right">
         <TxnAmount t={t} className="text-sm" />
