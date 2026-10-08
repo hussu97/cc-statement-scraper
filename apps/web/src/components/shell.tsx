@@ -127,7 +127,7 @@ function ProfileSwitcher({ compact }: { compact?: boolean }) {
 function Wordmark() {
   return (
     <Link to="/" className="flex items-baseline gap-1.5 px-2 text-ink">
-      <span className="font-display text-[22px] leading-none tracking-[-0.02em]">Ledger</span>
+      <span className="font-display text-[22px] leading-none tracking-[-0.02em]">Bank Ledger</span>
       <span className="size-1.5 translate-y-[-2px] rounded-pill bg-accent" aria-hidden />
     </Link>
   );
@@ -234,7 +234,7 @@ function MobileNav({ nav }: { nav: NavItem[] }) {
 export function Splash() {
   return (
     <div className="flex min-h-dvh items-center justify-center" role="status" aria-label="Loading">
-      <span className="font-display text-2xl text-subtle animate-pulse">Ledger</span>
+      <span className="font-display text-2xl text-subtle animate-pulse">Bank Ledger</span>
     </div>
   );
 }
