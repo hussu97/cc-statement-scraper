@@ -17,8 +17,16 @@ struct SettingsView: View {
                 if profiles.canSwitch {
                     Button("Switch ledger") { profiles.select(nil) }
                 }
+            }
+
+            Section("Account") {
                 if case .signedIn(_, let email) = model.session.phase, let email {
                     LabeledContent("Signed in as", value: email)
+                }
+                NavigationLink {
+                    PasskeysView(session: model.session)
+                } label: {
+                    Label("Passkeys", systemImage: "person.badge.key")
                 }
             }
 
