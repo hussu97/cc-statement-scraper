@@ -135,10 +135,13 @@ gcloud run services update-traffic ccs-parser --project <gcp-project> \
 **Decision: keep Vercel's Git integration; add a post-deploy smoke test, not a CLI deploy.**
 
 - Vercel already builds Production from every `main` push (project `cc-statement-scraper`,
-  root `apps/web`) and a Preview for every PR. A CLI deploy workflow on top would
-  double-deploy; replacing the integration would cost the free PR previews, add a
-  `VERCEL_TOKEN` with account-wide scope to GitHub, and duplicate the build environment
-  (`VITE_*`, `SENTRY_*`) that already lives in Vercel.
+  root `apps/web`). A CLI deploy workflow on top would double-deploy; replacing the
+  integration would add a `VERCEL_TOKEN` with account-wide scope to GitHub and duplicate the
+  build environment (`VITE_*`, `SENTRY_*`) that already lives in Vercel.
+- **Preview deployments are off** (decision, audit X-32): a preview would run unreviewed
+  branch code against the production Supabase project with the production CSP, and its auth
+  redirects aren't allow-listed. Set in Vercel → Settings → Git → Ignored Build Step ("Only
+  build production"); PRODUCTION.md §4 has the rationale. PRs are checked by `ci.yml` → `web`.
 - What the integration lacks is a check that what it shipped works. Vercel reports each
   deployment back to GitHub as a Deployment; `web-smoke.yml` runs on the Production one's
   `success` and checks the production URL: `/` is 200 with `<title>Bank Ledger</title>`, the CSP
