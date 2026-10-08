@@ -67,6 +67,19 @@ def test_scrubber_handles_list_headers_and_missing_request() -> None:
     assert scrub_event({"message": "plain"}, None) == {"message": "plain"}
 
 
+def test_scrubber_removes_free_text_emails() -> None:
+    event = {
+        "message": "statement for Jane.Doe+cards@example.co.uk failed",
+        "extra": {"note": "sender alerts@bankfab.com", "count": 2},
+        "exception": {"values": [{"type": "ValueError", "value": "no account for me@gmail.com"}]},
+    }
+    dumped = json.dumps(scrub_event(event, None))
+    for email in ("Jane.Doe+cards@example.co.uk", "alerts@bankfab.com", "me@gmail.com"):
+        assert email not in dumped, email
+    assert "[email]" in dumped
+    assert '"count": 2' in dumped
+
+
 def test_strip_query_removes_query_and_fragment() -> None:
     assert strip_query("https://h/p/a.pdf?token=x&y=1#frag") == "https://h/p/a.pdf"
     assert strip_query("https://h/p/a.pdf") == "https://h/p/a.pdf"

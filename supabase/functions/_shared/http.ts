@@ -45,12 +45,24 @@ export interface PgLikeError {
   hint?: string | null;
 }
 
+/**
+ * Constraint violations carry schema details (`duplicate key value violates unique
+ * constraint "documents_profile_code_sha256_key"`, `Key (x)=(y)`): clients get a fixed
+ * message instead (SRV-18). The codes our RPCs raise deliberately (22023, 42501, P0002,
+ * 28000) keep their message, which is written for the client.
+ */
+const FIXED_MESSAGES: Record<string, string> = {
+  "23505": "this record already exists",
+  "23503": "a referenced record does not exist",
+  "23514": "a value is out of the allowed range",
+};
+
 /** Map a supabase-js / PostgREST error to an HttpError (500 when unknown). */
 export function pgErrorToHttp(err: PgLikeError | null | undefined, fallbackMessage = "database error"): HttpError {
   const code = err?.code ?? "";
   const mapped = SQLSTATE_TO_HTTP[code];
   if (mapped) {
-    return new HttpError(mapped[0], mapped[1], err?.message || fallbackMessage);
+    return new HttpError(mapped[0], mapped[1], FIXED_MESSAGES[code] ?? (err?.message || fallbackMessage));
   }
   return new HttpError(500, "INTERNAL", fallbackMessage, { sqlstate: code || undefined });
 }

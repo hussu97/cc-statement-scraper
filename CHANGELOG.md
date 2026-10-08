@@ -1,5 +1,19 @@
 # Changelog
 
+## Edge Functions and CI backlog (audit P2/P3) — 2026-10-09 (branch `ledger-v2`)
+
+### Backend (Supabase)
+
+- **fix** SRV-18 Sentry hygiene: `scrubString` replaces free-text email addresses with `[email]`; `pgErrorToHttp` returns fixed messages for 23505/23503/23514 (no constraint or key names to clients; RPC-raised 22023/42501/P0002 messages are kept). Request isolation was **verified broken**: the Deno SDK has no async context, so a scope tag set in one request leaked into another request's events. Per-request tags (`function`, `execution_id`, new `setRequestTag`) now live in an `AsyncLocalStorage` applied by an event processor; nothing request-specific is written to Sentry's shared scopes. Test: `_tests/sentry_scope_test.ts` interleaves two `withSentry` handlers against a fake ingest server (failed before the fix)
+
+### Parser
+
+- **fix** SRV-18: the Sentry scrubber (`ccs_parser/sentry.py`) also replaces free-text email addresses with `[email]` (`test_scrubber_removes_free_text_emails`)
+
+### Docs
+
+- ARCHITECTURE §10: email scrubbing and per-request tag isolation
+
 ## Supabase publishable / secret API keys — 2026-10-08 (branch `ledger-v2`)
 
 ### Backend

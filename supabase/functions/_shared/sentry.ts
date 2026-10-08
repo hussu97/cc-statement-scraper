@@ -3,11 +3,20 @@
 //   Deno.serve(withSentry("name", handler));
 //
 // Sentry is initialised once per isolate when SENTRY_DSN is set and SENTRY_ENVIRONMENT
-// is not local ('', local, development, test — unset means local). The Deno SDK does
-// not isolate concurrent requests, so each request runs inside Sentry.withScope.
+// is not local ('', local, development, test — unset means local).
+//
+// Request isolation (SRV-18, verified by _tests/sentry_scope_test.ts): the Deno SDK has
+// no async context strategy, so a scope tag set during one request leaks into events of
+// another request interleaved in the same isolate. Per-request tags therefore live in an
+// AsyncLocalStorage (`function`, `execution_id`, and anything set with setRequestTag)
+// and are applied by an event processor; nothing request-specific is written to Sentry's
+// shared scopes. Use setRequestTag, never Sentry.getCurrentScope().setTag, in handlers.
+//
 // Events go through scrubEvent(), which removes request bodies, auth headers, query
-// strings and any body/sms/password/token-like fields before they leave the isolate.
+// strings, email addresses and any body/sms/password/token-like fields before they
+// leave the isolate.
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import { Sentry } from "./deps.ts";
 import { errorResponse, HttpError, isExpected } from "./http.ts";
 import { preflight } from "./cors.ts";
@@ -37,13 +46,18 @@ export function isSensitiveKey(key: string): boolean {
   return SENSITIVE_KEY_EXACT.test(key) || SENSITIVE_KEY_SUBSTR.test(key);
 }
 
-/** Remove bearer tokens, service tokens and URL query strings from free text. */
+// Email addresses in free text (SRV-18): local part, @, a dotted domain. Service-account
+// style addresses are emails too and are filtered the same way.
+const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g;
+
+/** Remove bearer tokens, service tokens, JWTs, email addresses and URL query strings from free text. */
 export function scrubString(s: string): string {
   return s
     .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, `Bearer ${FILTERED}`)
     .replace(/ccs_[0-9a-f]{16,}/gi, FILTERED)
     .replace(/eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*/g, FILTERED)
-    .replace(/(https?:\/\/[^\s?#"']+)\?[^\s#"']*/gi, `$1?${FILTERED}`);
+    .replace(/(https?:\/\/[^\s?#"']+)\?[^\s#"']*/gi, `$1?${FILTERED}`)
+    .replace(EMAIL_RE, "[email]");
 }
 
 function scrubValue(v: unknown, depth: number): unknown {
@@ -172,8 +186,27 @@ function ensureInit(): boolean {
   Sentry.setTag("service", "edge");
   const region = Deno.env.get("SB_REGION");
   if (region) Sentry.setTag("region", region);
+  // Per-request tags from the AsyncLocalStorage; tags set explicitly on the event win.
+  // deno-lint-ignore no-explicit-any
+  Sentry.addEventProcessor((event: any) => {
+    const tags = requestContext.getStore()?.tags;
+    if (tags) event.tags = { ...tags, ...(event.tags ?? {}) };
+    return event;
+  });
   enabled = true;
   return true;
+}
+
+interface RequestContext {
+  tags: Record<string, string>;
+}
+
+const requestContext = new AsyncLocalStorage<RequestContext>();
+
+/** Tag every event of the current request (opaque codes only). No-op outside withSentry. */
+export function setRequestTag(key: string, value: string | number): void {
+  const store = requestContext.getStore();
+  if (store) store.tags[key] = String(value);
 }
 
 export function sentryEnabled(): boolean {
@@ -273,29 +306,30 @@ export function withSentry(name: string, handler: Handler): (req: Request) => Pr
 
     if (!ensureInit()) return await run();
 
-    return await Sentry.withScope(async (scope) => {
-      scope.setTag("function", name);
-      const execId = Deno.env.get("SB_EXECUTION_ID");
-      if (execId) scope.setTag("execution_id", execId);
-      try {
-        return await Sentry.continueTrace(
-          {
-            sentryTrace: req.headers.get("sentry-trace") ?? undefined,
-            baggage: req.headers.get("baggage") ?? undefined,
-          },
-          () =>
-            Sentry.startSpan(
-              { name: `${req.method} /${name}`, op: "http.server", forceTransaction: true },
-              async (span) => {
-                const res = await run();
-                span.setAttribute("http.response.status_code", res.status);
-                return res;
-              },
-            ),
-        );
-      } finally {
-        flushLater();
-      }
-    });
+    const tags: Record<string, string> = { function: name };
+    const execId = Deno.env.get("SB_EXECUTION_ID");
+    if (execId) tags.execution_id = execId;
+    return await requestContext.run({ tags }, () =>
+      Sentry.withScope(async () => {
+        try {
+          return await Sentry.continueTrace(
+            {
+              sentryTrace: req.headers.get("sentry-trace") ?? undefined,
+              baggage: req.headers.get("baggage") ?? undefined,
+            },
+            () =>
+              Sentry.startSpan(
+                { name: `${req.method} /${name}`, op: "http.server", forceTransaction: true },
+                async (span) => {
+                  const res = await run();
+                  span.setAttribute("http.response.status_code", res.status);
+                  return res;
+                },
+              ),
+          );
+        } finally {
+          flushLater();
+        }
+      }));
   };
 }

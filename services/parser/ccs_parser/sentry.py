@@ -25,6 +25,9 @@ _SENSITIVE_KEY_RE = re.compile(
     re.IGNORECASE,
 )
 _URL_RE = re.compile(r"https?://[^\s\"'<>]+", re.IGNORECASE)
+# Email addresses in free text (SRV-18); same pattern as the Edge scrubber.
+_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
+EMAIL_PLACEHOLDER = "[email]"
 
 
 def strip_query(url: str) -> str:
@@ -37,7 +40,7 @@ def strip_query(url: str) -> str:
 
 
 def _scrub_string(value: str) -> str:
-    return _URL_RE.sub(lambda m: strip_query(m.group(0)), value)
+    return _EMAIL_RE.sub(EMAIL_PLACEHOLDER, _URL_RE.sub(lambda m: strip_query(m.group(0)), value))
 
 
 def _scrub(value: Any, depth: int = 0) -> Any:
