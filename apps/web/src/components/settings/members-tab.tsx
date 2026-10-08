@@ -1,8 +1,21 @@
 import { useState } from "react";
-import { UserPlus, Users } from "lucide-react";
+import { MailQuestionMark, UserPlus, Users } from "lucide-react";
 import { useActiveProfile } from "@/data/profile";
 import { useAuth } from "@/data/auth";
-import { addMemberError, isEmail, shortUserId, useAddMember, useMembers } from "@/data/settings";
+import {
+  addMemberError,
+  canRemoveMember,
+  isEmail,
+  memberActionError,
+  memberInitials,
+  memberKey,
+  memberName,
+  useAddMember,
+  useCancelInvite,
+  useMembers,
+  useRemoveMember,
+  type ProfileMember,
+} from "@/data/settings";
 import { formatDate } from "@/lib/dates";
 import { Badge, Card, CardHeader } from "@/components/ui/display";
 import { Button } from "@/components/ui/button";
@@ -10,7 +23,7 @@ import { Field, Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { EmptyState, QueryView } from "@/components/ui/states";
 import { useToast } from "@/components/ui/toast";
-import { ViewerNote } from "@/components/rules/shared";
+import { ConfirmDialog, ViewerNote } from "@/components/rules/shared";
 
 const ROLES = [
   { value: "viewer", label: "Viewer · can look, not change" },
@@ -21,6 +34,11 @@ export function MembersTab() {
   const { profile_code: profileCode, name, isOwner } = useActiveProfile();
   const { userId } = useAuth();
   const members = useMembers(profileCode);
+  const remove = useRemoveMember(profileCode);
+  const cancel = useCancelInvite(profileCode);
+  const toast = useToast();
+  const [removing, setRemoving] = useState<ProfileMember | null>(null);
+  const [cancelling, setCancelling] = useState<ProfileMember | null>(null);
 
   return (
     <div className="flex flex-col gap-4">
@@ -34,17 +52,40 @@ export function MembersTab() {
           {(list) => (
             <ul className="divide-y divide-border border-t border-border">
               {list.map((m) => {
-                const me = m.user_id === userId;
+                const me = !!m.user_id && m.user_id === userId;
                 return (
-                  <li key={m.user_id} className="flex items-center gap-3 px-5 py-3">
-                    <span className="flex size-8 shrink-0 items-center justify-center rounded-pill bg-surface-2 text-[12px] font-medium text-ink-2">
-                      {me ? "You" : shortUserId(m.user_id).slice(0, 2).toUpperCase()}
+                  <li key={memberKey(m)} className="flex flex-wrap items-center gap-3 px-5 py-3">
+                    <span
+                      aria-hidden
+                      className="flex size-8 shrink-0 items-center justify-center rounded-pill bg-surface-2 text-[12px] font-medium text-ink-2"
+                    >
+                      {m.pending ? <MailQuestionMark className="size-4 text-subtle" /> : memberInitials(m)}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-ink">{me ? "You" : <span className="font-mono text-[13px]">Member {shortUserId(m.user_id)}</span>}</p>
-                      <p className="text-[12px] text-muted">Joined {formatDate(m.created_at.slice(0, 10))}</p>
+                      <p className="truncate text-sm text-ink">
+                        {memberName(m)}
+                        {me && <span className="text-muted"> (you)</span>}
+                      </p>
+                      <p className="text-[12px] text-muted">
+                        {m.pending
+                          ? `Invited ${formatDate(m.created_at.slice(0, 10))} · gets access on first sign-in`
+                          : `Joined ${formatDate(m.created_at.slice(0, 10))}`}
+                      </p>
                     </div>
-                    <Badge tone={m.role === "owner" ? "accent" : "neutral"}>{m.role === "owner" ? "Owner" : "Viewer"}</Badge>
+                    <div className="flex items-center gap-2">
+                      {m.pending && <Badge tone="warn">Pending</Badge>}
+                      <Badge tone={m.role === "owner" ? "accent" : "neutral"}>{m.role === "owner" ? "Owner" : "Viewer"}</Badge>
+                      {isOwner && m.pending && (
+                        <Button size="sm" variant="ghost" onClick={() => setCancelling(m)}>
+                          Cancel invite
+                        </Button>
+                      )}
+                      {isOwner && canRemoveMember(m, list, userId) && (
+                        <Button size="sm" variant="danger" onClick={() => setRemoving(m)}>
+                          Remove
+                        </Button>
+                      )}
+                    </div>
                   </li>
                 );
               })}
@@ -53,7 +94,57 @@ export function MembersTab() {
         </QueryView>
       </Card>
 
-      {isOwner ? <AddMember ledgerName={name} /> : <ViewerNote>Only owners can invite people to this ledger.</ViewerNote>}
+      {isOwner ? <AddMember ledgerName={name} /> : <ViewerNote>Only owners can invite or remove people.</ViewerNote>}
+
+      <ConfirmDialog
+        open={!!removing}
+        onOpenChange={(o) => {
+          if (!o) {
+            setRemoving(null);
+            remove.reset();
+          }
+        }}
+        title="Remove access?"
+        confirmLabel="Remove"
+        pending={remove.isPending}
+        error={remove.error ? new Error(memberActionError(remove.error)) : null}
+        onConfirm={() =>
+          removing?.user_id &&
+          remove.mutate(removing.user_id, {
+            onSuccess: () => {
+              toast({ title: "Access removed", description: `${memberName(removing)} can no longer open ${name}.`, tone: "positive" });
+              setRemoving(null);
+            },
+          })
+        }
+      >
+        {removing ? memberName(removing) : "They"} will lose access to {name} straight away. You can add them again later.
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={!!cancelling}
+        onOpenChange={(o) => {
+          if (!o) {
+            setCancelling(null);
+            cancel.reset();
+          }
+        }}
+        title="Cancel this invite?"
+        confirmLabel="Cancel invite"
+        pending={cancel.isPending}
+        error={cancel.error ? new Error(memberActionError(cancel.error)) : null}
+        onConfirm={() =>
+          cancelling?.email &&
+          cancel.mutate(cancelling.email, {
+            onSuccess: () => {
+              toast({ title: "Invite cancelled", tone: "positive" });
+              setCancelling(null);
+            },
+          })
+        }
+      >
+        {cancelling?.email ?? "They"} won't get access to {name} when they sign in.
+      </ConfirmDialog>
     </div>
   );
 }

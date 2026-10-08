@@ -5,7 +5,7 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { useCategoryBreakdown } from "@/data/analytics";
 import type { RpcReturn } from "@/lib/supabase";
 import type { DateRange } from "@/lib/dates";
-import { displayRatio, formatDeltaPercent, formatMoney, formatPercent, toAmount } from "@/lib/money";
+import { displayRatio, formatChange, formatMoney, formatPercent, toAmount } from "@/lib/money";
 import { UNCATEGORIZED } from "@/lib/activity-filters";
 import { Money } from "@/components/ledger";
 import { Badge, Card, CardHeader, Dot } from "@/components/ui/display";
@@ -72,7 +72,9 @@ function Breakdown({ rows, range }: { rows: Row[]; range: DateRange }) {
 }
 
 function CategoryRow({ row, range, barRatio }: { row: Row; range: DateRange; barRatio: number | null }) {
-  const delta = formatDeltaPercent(row.amount, row.prev_amount);
+  // category_breakdown returns both periods' amounts; the ratio is display-only.
+  const ratio = displayRatio(row.amount, row.prev_amount);
+  const delta = formatChange(ratio === null ? null : ratio - 1);
   const tone = deltaTone(row.amount, row.prev_amount);
   const isNew = delta === null && (toAmount(row.prev_amount) ?? 0) === 0;
   return (

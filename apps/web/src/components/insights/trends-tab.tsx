@@ -1,7 +1,10 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { insightsRoute } from "@/router";
 import { pivotSeries, useSpendSeries, type Grain, type SpendGroup, type SpendSeriesRow } from "@/data/analytics";
 import type { DateRange } from "@/lib/dates";
+import { DEFAULT_TREND_GROUP, withTrends } from "@/lib/search";
 import { Card, CardHeader } from "@/components/ui/display";
 import { Segmented } from "@/components/ui/primitives";
 import { EmptyState, LoadingBlock, QueryView } from "@/components/ui/states";
@@ -16,6 +19,9 @@ const GROUPS: { value: SpendGroup; label: string }[] = [
   { value: "account", label: "Account" },
   { value: "card", label: "Card" },
 ];
+/** Groups beyond this many fold into "Other" on the server. */
+const TOP_GROUPS = 8;
+
 const GRAINS: { value: Grain; label: string }[] = [
   { value: "month", label: "Month" },
   { value: "week", label: "Week" },
@@ -23,19 +29,23 @@ const GRAINS: { value: Grain; label: string }[] = [
 ];
 
 export function TrendsTab({ profileCode, range }: { profileCode: string; range: DateRange }) {
-  const [group, setGroup] = useState<SpendGroup>("category");
-  const [grainPref, setGrain] = useState<Grain | null>(null);
-  const grain = grainPref ?? defaultGrain(range.from, range.to);
-  const q = useSpendSeries(profileCode, range, grain, group);
+  // Grouping and bucket size live in the URL (?group=&grain=), like Activity filters.
+  const search = insightsRoute.useSearch();
+  const navigate = useNavigate({ from: "/insights" });
+  const group = search.group ?? DEFAULT_TREND_GROUP;
+  const grain = search.grain ?? defaultGrain(range.from, range.to);
+  const setTrends = (patch: { group?: SpendGroup; grain?: Grain }) =>
+    void navigate({ search: (s) => withTrends(s, patch), replace: true });
+  const q = useSpendSeries(profileCode, range, grain, group, TOP_GROUPS);
 
   return (
     <Card>
       <CardHeader eyebrow={rangeLabel(range.from, range.to)} title="Spending over time" />
       <div className="flex flex-wrap items-center justify-between gap-2 px-5 pb-2">
         <div className="-mx-1 max-w-full overflow-x-auto px-1 [scrollbar-width:none]">
-          <Segmented ariaLabel="Group by" value={group} onChange={setGroup} options={GROUPS} />
+          <Segmented ariaLabel="Group by" value={group} onChange={(g) => setTrends({ group: g })} options={GROUPS} />
         </div>
-        <Segmented ariaLabel="Bucket size" value={grain} onChange={setGrain} options={GRAINS} />
+        <Segmented ariaLabel="Bucket size" value={grain} onChange={(g) => setTrends({ grain: g })} options={GRAINS} />
       </div>
       <QueryView
         query={q}
@@ -54,7 +64,7 @@ export function TrendsTab({ profileCode, range }: { profileCode: string; range: 
 }
 
 function TrendsChart({ rows, grain, byCategory }: { rows: SpendSeriesRow[]; grain: Grain; byCategory: boolean }) {
-  const pivot = useMemo(() => pivotSeries(rows, 6), [rows]);
+  const pivot = useMemo(() => pivotSeries(rows), [rows]);
   const series = useMemo(
     () =>
       pivot.groups.map((g, index) => {

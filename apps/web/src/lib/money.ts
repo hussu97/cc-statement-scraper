@@ -91,12 +91,14 @@ export function formatPercent(ratio: number | string | null | undefined, digits 
   return new Intl.NumberFormat("en-US", { style: "percent", maximumFractionDigits: digits, minimumFractionDigits: digits }).format(n);
 }
 
-/** "+12%" / "−8%" for a display delta between two server-provided amounts. */
-export function formatDeltaPercent(current: MoneyInput, previous: MoneyInput): string | null {
-  const c = toAmount(current);
-  const p = toAmount(previous);
-  if (c === null || p === null || p === 0) return null;
-  const pct = Math.round(((c - p) / Math.abs(p)) * 100);
+/**
+ * "+12%" / "−8%" / "±0%" for a server-provided change fraction (0.12 = +12%).
+ * Display formatting only; null when the server had no base to compare with.
+ */
+export function formatChange(fraction: number | string | null | undefined): string | null {
+  const f = toAmount(fraction);
+  if (f === null) return null;
+  const pct = Math.round(f * 100);
   if (pct === 0) return "±0%";
   return `${pct > 0 ? "+" : "−"}${Math.abs(pct)}%`;
 }

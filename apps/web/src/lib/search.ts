@@ -5,11 +5,22 @@ export function parseTabSearch(raw: Record<string, unknown>): { tab?: string } {
   return typeof raw.tab === "string" && /^[a-z-]{1,24}$/.test(raw.tab) ? { tab: raw.tab } : {};
 }
 
+// Trends view options (spend_series grouping and bucket size).
+export const SPEND_GROUPS = ["none", "category", "merchant", "account", "card"] as const;
+export type SpendGroup = (typeof SPEND_GROUPS)[number];
+export const GRAINS = ["day", "week", "month"] as const;
+export type Grain = (typeof GRAINS)[number];
+export const DEFAULT_TREND_GROUP: SpendGroup = "category";
+
 export interface InsightsSearch {
   tab?: string;
   range?: RangePreset;
   from?: ISODate;
   to?: ISODate;
+  /** Trends grouping; omitted when it is the default ("category"). */
+  group?: SpendGroup;
+  /** Trends bucket size; omitted to follow the range (see defaultGrain). */
+  grain?: Grain;
 }
 
 export function parseInsightsSearch(raw: Record<string, unknown>): InsightsSearch {
@@ -20,7 +31,22 @@ export function parseInsightsSearch(raw: Record<string, unknown>): InsightsSearc
     out.to = raw.to;
     delete out.range;
   }
+  if (typeof raw.group === "string" && (SPEND_GROUPS as readonly string[]).includes(raw.group) && raw.group !== DEFAULT_TREND_GROUP) {
+    out.group = raw.group as SpendGroup;
+  }
+  if (typeof raw.grain === "string" && (GRAINS as readonly string[]).includes(raw.grain)) out.grain = raw.grain as Grain;
   return out;
+}
+
+/** Replace the date range, keeping the tab and Trends options. */
+export function withInsightsRange(s: InsightsSearch, r: { range: RangePreset } | { from: ISODate; to: ISODate }): InsightsSearch {
+  const { range: _range, from: _from, to: _to, ...rest } = s;
+  return parseInsightsSearch({ ...rest, ...r });
+}
+
+/** Change the Trends grouping / bucket size; defaults drop out of the URL. */
+export function withTrends(s: InsightsSearch, patch: { group?: SpendGroup; grain?: Grain }): InsightsSearch {
+  return parseInsightsSearch({ ...s, ...patch });
 }
 
 export const DEFAULT_INSIGHTS_RANGE: RangePreset = "last_6_months";

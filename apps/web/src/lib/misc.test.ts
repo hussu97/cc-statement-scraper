@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { labelLanes, placeMarks } from "./pace";
 import { reconChecks } from "./recon";
-import { insightsRange, parseInsightsSearch, parseTabSearch } from "./search";
+import { insightsRange, parseInsightsSearch, parseTabSearch, withInsightsRange, withTrends } from "./search";
 
 describe("pace rule geometry", () => {
   it("places marks on a shared scale with headroom", () => {
@@ -46,5 +46,32 @@ describe("search codecs", () => {
     expect(parseInsightsSearch({ range: "ytd", tab: "fx" })).toEqual({ range: "ytd", tab: "fx" });
     expect(parseInsightsSearch({ range: "ytd", from: "2026-01-01", to: "2026-02-01" })).toEqual({ from: "2026-01-01", to: "2026-02-01" });
     expect(insightsRange({}, "2026-10-08")).toEqual({ from: "2026-05-01", to: "2026-10-31", preset: "last_6_months" });
+  });
+
+  it("parses Trends grouping and bucket size, dropping defaults and junk", () => {
+    expect(parseInsightsSearch({ group: "merchant", grain: "week" })).toEqual({ group: "merchant", grain: "week" });
+    expect(parseInsightsSearch({ group: "category", grain: "day" })).toEqual({ grain: "day" });
+    expect(parseInsightsSearch({ group: "planet", grain: "year" })).toEqual({});
+  });
+
+  it("changes the range without losing the tab or Trends options", () => {
+    const s = { tab: "trends", range: "ytd" as const, group: "card" as const, grain: "month" as const };
+    expect(withInsightsRange(s, { from: "2026-01-01", to: "2026-03-31" })).toEqual({
+      tab: "trends",
+      from: "2026-01-01",
+      to: "2026-03-31",
+      group: "card",
+      grain: "month",
+    });
+    expect(withInsightsRange({ tab: "fx", from: "2026-01-01", to: "2026-03-31" }, { range: "last_6_months" })).toEqual({
+      tab: "fx",
+      range: "last_6_months",
+    });
+  });
+
+  it("updates Trends options in the URL", () => {
+    expect(withTrends({ range: "ytd" }, { group: "merchant" })).toEqual({ range: "ytd", group: "merchant" });
+    expect(withTrends({ group: "merchant", grain: "week" }, { group: "category" })).toEqual({ grain: "week" });
+    expect(withTrends({ group: "merchant" }, { grain: "day" })).toEqual({ group: "merchant", grain: "day" });
   });
 });

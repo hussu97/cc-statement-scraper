@@ -6,7 +6,10 @@
   "exports": {
     "./tokens.css": "./dist/tokens.css",
     "./tokens.json": "./tokens.json",
-    "./chart": "./dist/chart.js"
+    "./chart": {
+      "types": "./dist/chart.d.ts",
+      "default": "./dist/chart.js"
+    }
   },
   "scripts": {
     "build": "node scripts/build.mjs",
