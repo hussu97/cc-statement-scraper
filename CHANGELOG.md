@@ -18,6 +18,14 @@
   - Ingest rejects a statement dated more than 31 days ahead with a permanent `22023` (DP-04r)
   - `transactions.fx_rate` is null for AED (backfilled); a statement `fx_rate` that rounds to 0 is stored as unknown instead of failing the ingest (X-33)
 - **test** `13_db_ledger_fixes.test.sql`; `09` and `12` pin `ledger.test_today` for their fixed future dates
+- **fix** `20261009000200_db_categorisation_and_jobs.sql`:
+  - Seed rules `REST`, `NOON`, `LIME`, `HEALTH`, `BONUS` match whole words (regex), so `INTEREST`, `AFTERNOON`, `SUBLIME` no longer mis-categorise; existing profiles updated where the rule is still exactly as seeded (DB-24)
+  - Cashback seeds `MURABAHA PROFIT` and `BONUS` require `direction = credit`: an Islamic-card finance charge is spend again (DP-09)
+  - `nightly`, `enqueue_llm_categorize`, `recategorize_stale` and `reestimate_pending_fx` catch errors per profile (per transaction for the FX job) and log them to `private.job_errors` (30-day retention) (DB-25)
+  - `generate_insights` produces `spend_pace`, `new_recurring`, `large_transaction` (from `anomalies`) and `review_backlog` (DB-29r)
+  - `preview_rule(…, p_rule_code text default null)`: `would_change` follows `recategorize`'s full tie-break and leaves out the rule being edited (DB-31)
+  - `public.merchant_category_skips` (`declined` / `rejected`): `apply_llm_suggestions(…, p_merchant_codes text[] default null)` records merchants the LLM declined for the current category set; `public.reject_merchant_suggestion(p_profile_code, p_merchant_code)` drops a suggestion for good; `enqueue_llm_categorize` skips both (DB-37, WEB-14 SQL side)
+- **test** `14_db_categorisation_and_jobs.test.sql`; `11_privileges` matrix gains `merchant_category_skips` SELECT
 
 ## Supabase publishable / secret API keys — 2026-10-08 (branch `ledger-v2`)
 
