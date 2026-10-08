@@ -1,7 +1,12 @@
 # LEGACY (v1) — deploys/operates the frozen backend/, frontend/ or Gmail relay.
 # Replaced by Ledger v2 (Supabase + deploy-supabase.yml / deploy-parser.yml,
-# outlook-poll and gmail-push Edge Functions). Disable at cutover and delete at
-# decommission (PRODUCTION.md §10). Do not extend.
+# outlook-poll and gmail-push Edge Functions). Do not extend.
+#
+# Guarded by the repository variable LEGACY_DEPLOYS_ENABLED: every job is
+# skipped unless it is exactly 'true'. Set it to 'true' BEFORE merging
+# ledger-v2 into main (keeps legacy running until cutover), set it to 'false'
+# and `gh workflow disable` this file at cutover step 1, delete the file at
+# decommission (PRODUCTION.md §10).
 name: Email Ingest Microsoft
 
 on:
@@ -14,6 +19,7 @@ permissions:
 
 jobs:
   ingest:
+    if: vars.LEGACY_DEPLOYS_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

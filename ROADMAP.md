@@ -18,8 +18,21 @@
 
 ### 1. Cutover (blocking)
 - [x] Add `apps/web/vercel.json` (SPA rewrite, asset caching, CSP and security headers).
-- [x] Fix `scripts/migrate_legacy.py --step secrets` to emit `GMAIL_OAUTH_CLIENT_*`, the names
-      the functions read.
+- [x] Map legacy OAuth settings to the names the functions read in
+      `scripts/migrate_legacy.py --step secrets`. In practice the legacy DB holds only the **MS**
+      client (`MS_OAUTH_CLIENT_*`); the Gmail client was never in `runtime_settings`.
+- [ ] Copy the Gmail OAuth client from Render (`CCS_PLATFORM_EMAIL_GMAIL_CLIENT_ID/SECRET`) into
+      `GMAIL_OAUTH_CLIENT_ID/SECRET` before Render is deleted. It must be the same client that
+      issued the Gmail refresh token (PRODUCTION.md §5.4).
+- [x] Single-source production secrets: `scripts/cutover/set-edge-secrets.sh` (refuses
+      placeholders) and `scripts/cutover/set-vault-secrets.sql`, so `CRON_SECRET` and Vault
+      `edge_cron_secret` always match.
+- [x] Guard legacy workflows behind `LEGACY_DEPLOYS_ENABLED` and the production deploy
+      workflows to `main`; cutover disable list in PRODUCTION.md §10 step 1.
+- [ ] Merge `ledger-v2` into `main` before the cutover day (after setting
+      `LEGACY_DEPLOYS_ENABLED=true`), so the manual deploy workflows can be dispatched.
+- [ ] Dashboard settings at cutover (PRODUCTION.md §2.7): API max rows 2000, sign-ups off.
+- [ ] Purge `cron.job_run_details` older than 7 days with a daily pg_cron job (migration).
 - [ ] Upgrade Supabase Postgres off 17.6.1.104 and re-test the `REVOKE EXECUTE` segfault.
 - [ ] Run the cutover runbook (PRODUCTION.md §10), sign off parity, run old and new side by
       side.

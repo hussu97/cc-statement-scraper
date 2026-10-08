@@ -5,6 +5,9 @@ on:
     - cron: "0 3 * * 1"  # Every Monday at 03:00 UTC
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   # Ledger v2 parser (Cloud Run image).
   parser:
@@ -25,7 +28,10 @@ jobs:
         run: bandit -q -r services/parser/ccs_parser -ll -ii
 
   # LEGACY (v1): backend/ and its image; remove at decommission (PRODUCTION.md §10).
+  # Skipped unless the repo variable LEGACY_DEPLOYS_ENABLED is 'true', so these
+  # jobs stop at cutover and never fail once backend/ is deleted.
   python:
+    if: vars.LEGACY_DEPLOYS_ENABLED == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -42,8 +48,9 @@ jobs:
       - name: SAST scan
         run: bandit -q -r backend/ccs_platform -x backend/tests -ll -ii
 
-  # LEGACY (v1)
+  # LEGACY (v1); same guard as `python`.
   container:
+    if: vars.LEGACY_DEPLOYS_ENABLED == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

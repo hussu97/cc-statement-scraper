@@ -1,12 +1,26 @@
+# Build context for services/parser/Dockerfile (also used by deploy-parser.yml).
+# Keep in sync with .gcloudignore.
+.git/
+.gitignore
+.gcloudignore
+.dockerignore
+
+# Secrets: never copy local env files into the image or build context.
+.env
+.env.*
+!.env.example
+
 .venv/
+venv/
 **/__pycache__/
 *.py[cod]
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
+*.egg-info/
+.DS_Store
+
 tests/
 scripts/
-.env
-.env.*
-!.env.example
 *.pdf
 *.PDF

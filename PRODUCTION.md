@@ -14,7 +14,7 @@ v1. Read [ARCHITECTURE.md](ARCHITECTURE.md) first.
 | Service | Platform (free tier) | Identifier |
 |---|---|---|
 | Database, Auth, Storage, Edge Functions, Realtime, Vault, pg_cron, pgmq | Supabase Free | project **`cc-statement-scraper`**, ref **`<project-ref>`** (the same project legacy uses) |
-| Statement parser | GCP Cloud Run | service `ccs-parser`, region `europe-west1`, min instances 0 |
+| Statement parser | GCP Cloud Run | GCP project `<gcp-project>`, service `ccs-parser`, region `me-central1` (Doha), min instances 0 |
 | Web app | Vercel Hobby | root directory `apps/web` |
 | iPhone app | TestFlight | bundle `com.example.ledger`, team `<apple-team-id>` |
 | Gmail push | GCP Pub/Sub | topic `ccs-gmail-push`, push subscription → `gmail-push` function |
@@ -65,7 +65,9 @@ Dashboard → Authentication:
 - **Providers → Email** enabled (email OTP or magic link). Sign in with Apple isn't used yet.
 - **Sign-ups.** Members must be able to sign up to claim their invite: `add_profile_member`
   stores pending invites by email, and sign-up attaches them. Leave email sign-ups on until both
-  members exist, then optionally disable them. RLS isolates any stray account anyway.
+  members have signed in to v2 (§10 step 9), then **turn them off**: Authentication → Sign In /
+  Providers → *Allow new users to sign up* = off. RLS isolates any stray account anyway, but
+  there is no reason to accept strangers. Turn it back on briefly to add a new member.
 - **SMTP.** The built-in sender is heavily rate-limited (a few emails an hour). That is fine for
   two people. Configure custom SMTP if OTP emails go missing.
 
@@ -92,13 +94,31 @@ The **Deploy Supabase** workflow (§9) does the same from GitHub.
 
 ### 2.4 Vault secrets
 
-Run these once in the SQL editor. Values never go in migrations.
+Two Vault secrets drive every pg_cron → Edge call: `project_url` and `edge_cron_secret`.
+`edge_cron_secret` **must be the same value** as the `CRON_SECRET` function secret (§2.5), so
+both come from one place: the `CRON_SECRET=` line of the gitignored
+`supabase/functions/.env.production`. Generate it once, never inline:
 
-```sql
-select vault.create_secret('https://<project-ref>.supabase.co', 'project_url');
-select vault.create_secret('<CRON_SECRET>', 'edge_cron_secret');   -- same value as the CRON_SECRET function secret
--- to change later: select vault.update_secret(id, '<new>') from vault.secrets where name = 'edge_cron_secret';
+```bash
+# Only if the file has no CRON_SECRET yet (it does today; never regenerate during the cutover):
+#   printf 'CRON_SECRET=%s\n' "$(openssl rand -hex 32)" >> supabase/functions/.env.production
+export CRON_SECRET="$(grep '^CRON_SECRET=' supabase/functions/.env.production | cut -d= -f2-)"
+
+psql "$LEDGER_DB_URL" -X -q \
+  -v project_url=https://<project-ref>.supabase.co \
+  -v edge_cron_secret="$CRON_SECRET" \
+  -f scripts/cutover/set-vault-secrets.sql
 ```
+
+- The template ([scripts/cutover/set-vault-secrets.sql](scripts/cutover/set-vault-secrets.sql))
+  holds no values. It refuses empty, placeholder (`<…>`) or short secrets and uses
+  `private.vault_upsert`, so re-running it updates instead of failing.
+- Never run it with `psql -a`/`-e`: they echo the interpolated secret.
+- Setting `edge_cron_secret` switches the cron calls on. Do it only after the functions are
+  deployed and their secrets are pushed (§10 step 6).
+- To check Vault matches the function secret without printing either, compare
+  `select encode(extensions.digest(decrypted_secret, 'sha256'), 'hex') from vault.decrypted_secrets where name = 'edge_cron_secret';`
+  with `printf %s "$CRON_SECRET" | shasum -a 256`.
 
 Per-profile and per-mailbox secrets are written through RPCs, never by hand:
 
@@ -110,29 +130,45 @@ Per-profile and per-mailbox secrets are written through RPCs, never by hand:
 ### 2.5 Edge Functions
 
 Function secrets (`SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are
-injected automatically):
+injected automatically) have **one source of truth**: the gitignored
+`supabase/functions/.env.production`. Complete it, then push it with
+[`scripts/cutover/set-edge-secrets.sh`](scripts/cutover/set-edge-secrets.sh). Never type
+secrets inline and never push a file that still holds placeholders.
+
+| Key | Where the value comes from | In the file today |
+|---|---|---|
+| `CRON_SECRET` | generated once (`openssl rand -hex 32`); the same value goes to Vault `edge_cron_secret` (§2.4) | yes |
+| `PARSER_SECRET` | the Secret Manager `parser-secret` value (identical to `services/parser/.env.production`) | yes |
+| `PARSER_URL` | the URL printed by the parser deploy (§3), **only after it has deployed** | placeholder |
+| `ANTHROPIC_API_KEY`, `LLM_MODEL` | Anthropic console | yes |
+| `SENTRY_DSN`, `SENTRY_ENVIRONMENT` | Sentry `ledger-backend` DSN; `production` | yes |
+| `SENTRY_RELEASE` | the commit being deployed: pass `--sentry-release "$(git rev-parse --short HEAD)"` (the Deploy Supabase workflow also sets it) | placeholder |
+| `GMAIL_OAUTH_CLIENT_ID`, `GMAIL_OAUTH_CLIENT_SECRET` | **Render env** `CCS_PLATFORM_EMAIL_GMAIL_CLIENT_ID` / `_SECRET` (§5.4). Not in the legacy DB | missing |
+| `MS_OAUTH_CLIENT_ID`, `MS_OAUTH_CLIENT_SECRET` | legacy DB, written into this file by `migrate_legacy.py --step secrets` (§10 step 7) | missing |
+| `GMAIL_PUSH_AUDIENCE` | `https://<project-ref>.supabase.co/functions/v1/gmail-push` | missing |
+| `GMAIL_PUSH_SA_EMAIL`, `GMAIL_PUBSUB_TOPIC` | §5: `ccs-gmail-push@<gcp-project>.iam.gserviceaccount.com` (or the reused relay SA), `projects/<gcp-project>/topics/ccs-gmail-push` | missing |
+| `ALLOWED_ORIGINS` | the Vercel production URL(s), comma-separated | missing |
 
 ```bash
-supabase secrets set --project-ref <project-ref> \
-  CRON_SECRET="$(openssl rand -hex 32)" \
-  PARSER_URL=https://ccs-parser-<hash>-ew.a.run.app \
-  PARSER_SECRET=<same value as the parser-secret Secret Manager secret> \
-  ANTHROPIC_API_KEY=<key> \
-  GMAIL_PUSH_AUDIENCE=https://<project-ref>.supabase.co/functions/v1/gmail-push \
-  GMAIL_PUSH_SA_EMAIL=ccs-gmail-push@<gcp-project>.iam.gserviceaccount.com \
-  GMAIL_PUBSUB_TOPIC=projects/<gcp-project>/topics/ccs-gmail-push \
-  GMAIL_OAUTH_CLIENT_ID=<google oauth client id> GMAIL_OAUTH_CLIENT_SECRET=<secret> \
-  MS_OAUTH_CLIENT_ID=<azure client id> MS_OAUTH_CLIENT_SECRET=<secret> \
-  ALLOWED_ORIGINS=https://<vercel-domain> \
-  SENTRY_DSN=<ledger-backend DSN> SENTRY_ENVIRONMENT=production SENTRY_RELEASE=$(git rev-parse --short HEAD)
-supabase secrets list --project-ref <project-ref>
+# 1. Fill in the missing lines with an editor (not `echo`, which lands in shell history).
+# 2. Check without pushing — prints key names only, refuses empty/<placeholder> values:
+scripts/cutover/set-edge-secrets.sh --dry-run --sentry-release "$(git rev-parse --short HEAD)"
+# 3. Push (asks you to type the project ref):
+scripts/cutover/set-edge-secrets.sh --sentry-release "$(git rev-parse --short HEAD)"
+supabase secrets list --project-ref <project-ref>      # names and digests only
 ```
 
-- Use the `CRON_SECRET` value you put in Vault as `edge_cron_secret`.
-- Optional overrides: `LLM_MODEL`, `MS_OAUTH_TENANT` (`consumers`), `OUTLOOK_LOOKBACK_DAYS`,
+- The script pushes exactly the keys in the file, through a private temp copy, and never
+  prints values. Keys absent from the file are left unchanged in production, so you can push
+  early (without the OAuth keys) and push again after step 7. Every push is the complete,
+  validated file, so a later push can never reset a good value to a placeholder.
+- It refuses to run if `CRON_SECRET`, `PARSER_URL` or `PARSER_SECRET` is missing, if
+  `PARSER_URL` isn't `https://` or points at a local host, or if the file contains
+  `PARSER_DOCUMENT_BASE_URL` or `LEDGER_E2E` (local only).
+- Optional overrides: `MS_OAUTH_TENANT` (`consumers`), `OUTLOOK_LOOKBACK_DAYS`,
   `OUTLOOK_BUDGET_MS`, `WORKER_BUDGET_MS`, `PARSER_TIMEOUT_MS`,
   `OPS_SMS_UNPARSED_THRESHOLD`, `OPS_OPEN_REVIEWS_THRESHOLD` and `SENTRY_TRACES_SAMPLE_RATE`
-  (see README).
+  (see README). Add them to the same file.
 - **Never set `PARSER_DOCUMENT_BASE_URL` in production.** It exists for local Docker only.
 
 Deploy every function. Each one's `verify_jwt = false` comes from `supabase/config.toml`:
@@ -142,9 +178,10 @@ supabase functions deploy --project-ref <project-ref>
 # statements-upload sms-ingest worker gmail-push gmail-watch-renew outlook-poll ops-monitor fx-rates
 ```
 
-Smoke test:
+Smoke test (`CRON_SECRET` exported from the same file as in §2.4):
 
 ```bash
+export CRON_SECRET="$(grep '^CRON_SECRET=' supabase/functions/.env.production | cut -d= -f2-)"
 curl -s -o /dev/null -w '%{http_code}\n' -X POST https://<project-ref>.supabase.co/functions/v1/worker   # 401 without x-cron-secret
 curl -s -X POST https://<project-ref>.supabase.co/functions/v1/worker \
   -H "x-cron-secret: $CRON_SECRET" -d '{"sync":true}'                                                         # summary JSON
@@ -169,19 +206,48 @@ Check job health with `select jobname, schedule, active from cron.job;` and
 signed off and every staged choice has applied, unschedule the legacy helper with
 `select cron.unschedule('ledger-legacy-choices')`. Do this in a new migration.
 
+**Run-history growth.** pg_cron logs every run in `cron.job_run_details` and never purges it:
+about 1.6k rows a day (the every-minute worker kick alone is 1,440), against the 500 MB free
+tier, and `ops_health()` scans the table. A daily purge keeping 7 days belongs in a migration
+(owned by the DB work, audit X-11):
+
+```sql
+select cron.schedule('ledger-cron-history-purge', '50 23 * * *',
+  $$delete from cron.job_run_details where coalesce(end_time, start_time) < now() - interval '7 days'$$);
+```
+
+Until that migration lands, run the `delete` by hand monthly. Keep the window ≥ 2 days so
+`ops_health`'s `cron_last_success` still sees each daily job.
+
+### 2.7 Dashboard settings to change at cutover
+
+`db push` doesn't manage these. Tick them off in the §10 step listed.
+
+| Setting | Where | Value | When |
+|---|---|---|---|
+| Postgres version | Project Settings → Infrastructure → Upgrade | latest 17.x (off **17.6.1.104**, which segfaults when a caller lacks EXECUTE, §2.1) | step 3, after the backup |
+| API max rows | Project Settings → Data API → *Max rows* | **2000** (the web's largest page size; the default 1000 silently truncates 2000/page). Local `supabase/config.toml` `[api] max_rows` must match | step 4 |
+| New user sign-ups | Authentication → Sign In / Providers → *Allow new users to sign up* | **off**, once both members have signed in | step 9 |
+| Site URL and redirect URLs | Authentication → URL Configuration | the Vercel production URL (§2.2) | step 9 |
+
 ---
 
 ## 3. Parser on Cloud Run
 
-From `services/parser/README.md`, with legacy GCP conventions (project from
-`GCP_PROJECT_ID`, Artifact Registry repo `ccs-platform` in `europe-west1`).
+From `services/parser/README.md`. The parser lives in its own GCP project
+`<gcp-project>` (billing linked; Cloud Run, Artifact Registry, Cloud Build and
+Secret Manager APIs enabled), Artifact Registry repo `ledger` in `me-central1`
+(create once: `gcloud artifacts repositories create ledger --repository-format=docker --location=me-central1 --project=<gcp-project>`).
 
 ```bash
-PROJECT=<gcp-project>; REGION=europe-west1; SERVICE=ccs-parser
+PROJECT=<gcp-project>; REGION=me-central1; SERVICE=ccs-parser
+envval() { grep "^$1=" "$2" | cut -d= -f2- | tr -d '\n'; }   # piped straight into gcloud, never printed
 
-# One time: secrets in Secret Manager and a least-privilege service account
-printf '%s' "$(openssl rand -hex 32)" | gcloud secrets create parser-secret --data-file=- --project "$PROJECT"
-printf '%s' "<ledger-backend DSN>"    | gcloud secrets create parser-sentry-dsn --data-file=- --project "$PROJECT"
+# One time: secrets in Secret Manager, from the gitignored prod env file (the same
+# PARSER_SECRET is in supabase/functions/.env.production), and a least-privilege SA.
+# If a secret already exists, use `gcloud secrets versions add <name> --data-file=-` instead.
+envval PARSER_SECRET services/parser/.env.production | gcloud secrets create parser-secret     --data-file=- --project "$PROJECT"
+envval SENTRY_DSN    services/parser/.env.production | gcloud secrets create parser-sentry-dsn --data-file=- --project "$PROJECT"
 gcloud iam service-accounts create ccs-parser --project "$PROJECT"
 for s in parser-secret parser-sentry-dsn; do
   gcloud secrets add-iam-policy-binding "$s" --project "$PROJECT" \
@@ -195,13 +261,24 @@ gcloud run deploy "$SERVICE" --source . --project "$PROJECT" --region "$REGION" 
   --cpu 1 --memory 1Gi --concurrency 4 --timeout 120 \
   --set-secrets PARSER_SECRET=parser-secret:latest,SENTRY_DSN=parser-sentry-dsn:latest \
   --set-env-vars SENTRY_ENVIRONMENT=production,SENTRY_RELEASE=$(git rev-parse --short HEAD),PARSER_ALLOWED_HOSTS=<project-ref>.supabase.co
-curl -s "$(gcloud run services describe $SERVICE --region $REGION --format 'value(status.url)')/health"
+PARSER_URL="$(gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format 'value(status.url)')"
+echo "$PARSER_URL"; curl -s "$PARSER_URL/health"      # the URL is not a secret
 ```
 
 - `--allow-unauthenticated` is required. The worker authenticates with `X-Parser-Secret`, not a
   Google identity token. `PARSER_ALLOWED_HOSTS` limits downloads to the project's Storage.
-- After deploying, set the service URL as `PARSER_URL` and the `parser-secret` value as
-  `PARSER_SECRET` in the function secrets (§2.5).
+- After deploying, copy the printed service URL into the `PARSER_URL=` line of
+  `supabase/functions/.env.production` (replacing the placeholder) and push it with
+  `scripts/cutover/set-edge-secrets.sh` (§2.5). `PARSER_SECRET` there must equal the
+  `parser-secret` value; both local prod files already agree.
+- The parser runs in **`me-central1`** (`.env.cutover` `GCP_REGION`), in project
+  `<gcp-project>`, image repo `ledger`. The legacy `europe-west1` / `ccs-platform`
+  repo belongs to the old project and is only used by the legacy gmail-relay workflow.
+- `--source .` uploads `services/parser` to the Cloud Build bucket. `services/parser/.gcloudignore`
+  keeps `.env`, `.env.production`, `.venv/`, `tests/` (including `tests/golden/` PDFs) and
+  caches out of that upload; `.dockerignore` keeps them out of the image. Check with
+  `gcloud meta list-files-for-upload services/parser` (no `.env*` but `.env.example`). The
+  Deploy Parser workflow builds from a clean checkout, so it never sees local env files.
 - To rotate the secret: add a new secret version, redeploy the parser, then
   `supabase secrets set PARSER_SECRET=…`. Parses fail as *transient* in between and retry.
 - The **Deploy Parser** workflow (§9) builds the image with `services/parser/Dockerfile`, pushes
@@ -213,7 +290,7 @@ curl -s "$(gcloud run services describe $SERVICE --region $REGION --format 'valu
 
 | Setting | Value |
 |---|---|
-| Root Directory | `apps/web` (enable "Include files outside the root directory", since it uses workspace packages) |
+| Root Directory | **`apps/web`** (enable "Include files outside the root directory", since it uses workspace packages). Never `frontend/` |
 | Framework preset | Vite |
 | Install command | `pnpm install --frozen-lockfile` (Vercel detects pnpm 10 from `packageManager`) |
 | Build command | `pnpm build` (`prebuild` builds `@ledger/tokens`, then `tsc -b && vite build`) |
@@ -230,6 +307,18 @@ curl -s "$(gcloud run services describe $SERVICE --region $REGION --format 'valu
 | `VITE_SENTRY_ENVIRONMENT` | `production` |
 | `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` | source-map upload (build only) |
 | `SENTRY_PROJECT` | `ledger-apps` (also the `vite.config.ts` default) |
+
+The production values are in the gitignored `apps/web/.env.production.local`, which holds
+exactly these names: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_SENTRY_DSN`,
+`VITE_SENTRY_ENVIRONMENT`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`. Paste them into
+Vercel → Settings → Environment Variables (Production), or `vercel env add <NAME> production`
+one at a time. `SENTRY_AUTH_TOKEN` must be a Vercel env var: `vite.config.ts` reads it from
+`process.env`, which Vite does not fill from `.env*` files.
+
+**Git integration.** A Git-connected Vercel project builds Production on every push to `main`
+from the day it is created. That is harmless before the cutover (it serves only its
+`*.vercel.app` URL), but the **legacy** project, rooted at `frontend/`, also builds on every
+`main` push until it is disconnected (§10 step 1).
 
 **`apps/web/vercel.json`** (picked up from the Root Directory):
 - **SPA rewrite.** TanStack Router uses browser history (`/activity`, `/settings`, …), so every
@@ -282,6 +371,15 @@ the production domain moves.
    For a fresh setup, use `subscriptions create … --topic ccs-gmail-push` with the same flags.
 4. **OAuth client.**
    - Function secrets: `GMAIL_OAUTH_CLIENT_ID` and `GMAIL_OAUTH_CLIENT_SECRET`.
+   - **Source: the Render env, not the legacy DB.** Legacy reads the Gmail client from
+     `CCS_PLATFORM_EMAIL_GMAIL_CLIENT_ID` and `CCS_PLATFORM_EMAIL_GMAIL_CLIENT_SECRET` (Render →
+     `ccs-platform` → Environment); `legacy.runtime_settings` holds only the Gmail *refresh
+     token*, so `migrate_legacy.py --step secrets` cannot emit these. Copy both values into
+     `GMAIL_OAUTH_CLIENT_ID=` / `GMAIL_OAUTH_CLIENT_SECRET=` in
+     `supabase/functions/.env.production` (§2.5) before Render is deleted.
+   - **Same client.** A Google refresh token only works with the OAuth client that issued it.
+     Use exactly the legacy client; a new client means re-consenting the mailbox and pasting a
+     new refresh token in Settings.
    - Refresh tokens: the cutover moves the existing ones into Vault. For a new mailbox, get a
      refresh token with scope `https://www.googleapis.com/auth/gmail.readonly`, for example
      through the OAuth Playground using your own client after adding
@@ -376,10 +474,40 @@ Non-production debug triggers to verify delivery:
 | `ci.yml` | PRs, pushes to `main`, manual | Path-filtered jobs:<br>• `supabase`: `supabase start`, `db reset`, `test db`, DB types drift<br>• `edge`: `deno test`<br>• `parser`: ruff, pytest<br>• `web`: tokens check, lint, test, build<br>• `ios`: `swift test` on LedgerKit, macOS; only on LedgerKit/tokens changes or manual runs<br>• `scraper`<br>• legacy `backend`, `backend-security`, `frontend` |
 | `deploy-supabase.yml` | **manual only** | `supabase db push` and/or `supabase functions deploy`. Requires typing the project ref to confirm. Runs in the `production` environment. |
 | `deploy-parser.yml` | **manual only** | Builds `services/parser`, pushes to Artifact Registry, runs `gcloud run deploy ccs-parser` (min instances 0, secrets from Secret Manager) |
-| `security.yml` | weekly, manual | pip-audit (legacy backend and parser), bandit, Trivy (legacy image) |
-| `deploy-backend.yml`, `deploy-frontend.yml`, `deploy-gmail-relay.yml`, `email-ingest-microsoft.yml` | **legacy** | Remove at decommission (§10, step 12) |
+| `security.yml` | weekly, manual | pip-audit and bandit (parser); legacy pip-audit, bandit and Trivy jobs only while `LEGACY_DEPLOYS_ENABLED == 'true'` |
+| `deploy-backend.yml`, `deploy-frontend.yml`, `deploy-gmail-relay.yml`, `email-ingest-microsoft.yml` | **legacy**; every job requires `LEGACY_DEPLOYS_ENABLED == 'true'` | Disable at cutover (§10 step 1), remove at decommission (step 12) |
 
 Production deploys are never automatic.
+
+**Guards.**
+- `deploy-supabase` and `deploy-parser` run only from `main`: a `guard` job fails any dispatch
+  from another ref before the `production` environment gate, and both still need their typed
+  confirmation. Also give the `production` environment a deployment-branch policy of
+  `main` only (Settings → Environments → production → Deployment branches).
+- The legacy workflows are gated on the **repository variable** `LEGACY_DEPLOYS_ENABLED`
+  (Settings → Secrets and variables → Actions → Variables). Unset or anything but `true` skips
+  every legacy job, including the `email-ingest-microsoft` cron and the legacy security scans.
+  `workflow_run` and `schedule` workflows always run from the default branch's copy, so the
+  guard takes effect the moment `ledger-v2` is merged.
+
+**Merge timing.** `workflow_dispatch` workflows can be dispatched only once the file is on the
+default branch, so `ledger-v2` must be merged to `main` **before** the cutover day (§10, Before
+the day). Merging is safe for legacy: no `backend/`, `frontend/` or `deploy/` path changes,
+and the legacy workflows keep running only if `LEGACY_DEPLOYS_ENABLED` is `true`:
+
+```bash
+gh variable set LEGACY_DEPLOYS_ENABLED --body true     # BEFORE merging: keeps legacy (MS ingest cron) running
+# merge ledger-v2 → main
+gh variable set LEGACY_DEPLOYS_ENABLED --body false    # at cutover step 1
+```
+
+Merging also triggers any Git-connected platform that builds `main`: Render auto-deploy and
+the legacy Vercel project rebuild unchanged legacy code (harmless before step 4, broken after,
+so they are switched off in step 1), and the new `apps/web` Vercel project builds Production.
+
+**Permissions.** Every workflow sets `permissions: contents: read` (or none, for the guard).
+CI's `changes` job adds `pull-requests: read`, which `dorny/paths-filter` needs to list PR files
+in a private repo.
 
 **GitHub secrets.** Create a `production` environment with required reviewers.
 
@@ -402,69 +530,126 @@ the `legacy` schema, which stops the legacy backend. Plan a quiet evening, about
 parsing time. Steps are in order; nothing is deleted until step 12.
 
 **Before the day:**
-- Parser deployed and healthy (§3); new Vercel project building `apps/web` (§4, with
-  `vercel.json`).
+- **Merge `ledger-v2` into `main`** so the manual deploy workflows can be dispatched (§9,
+  Merge timing). First run `gh variable set LEGACY_DEPLOYS_ENABLED --body true`, so the legacy
+  MS ingest cron keeps running until step 1. Create the `production` environment (required
+  reviewers, deployment branch `main`) and its secrets (§9).
+- Parser deployed and healthy (§3). Copy the URL the deploy printed into `PARSER_URL=` in
+  `supabase/functions/.env.production`.
+- Copy the Gmail OAuth client from Render (`CCS_PLATFORM_EMAIL_GMAIL_CLIENT_ID` / `_SECRET`) into
+  `GMAIL_OAUTH_CLIENT_ID` / `GMAIL_OAUTH_CLIENT_SECRET` in the same file (§5.4), and add the other
+  missing keys from the §2.5 table. Only `MS_OAUTH_*` may stay missing (step 7 adds them).
+  `scripts/cutover/set-edge-secrets.sh --dry-run --sentry-release "$(git rev-parse --short HEAD)"`
+  must pass.
+- New Vercel project building `apps/web` with the env vars from `apps/web/.env.production.local`
+  (§4).
 - Sentry projects created (§8).
 - Both members' emails confirmed: **`h_abbasi97@hotmail.com`** owns profile `alice` and
   **`bob@example.com`** owns profile `bob`.
-- Local tools ready:
+- Local tools ready (quote the extra in zsh):
   ```bash
-  backend/.venv/bin/pip install psycopg[binary] httpx cryptography google-cloud-storage
+  backend/.venv/bin/pip install 'psycopg[binary]' httpx cryptography google-cloud-storage
   ```
-- Legacy values at hand: the Fernet key (`CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY` from
-  Render), the GCS bucket name and a read-capable SA key.
+- Legacy values at hand: a read-capable SA key for the GCS bucket (`GOOGLE_APPLICATION_CREDENTIALS`).
+  The Fernet key and bucket name are already in `.env.cutover`.
+
+**Local secret files (all gitignored, mode 600; values never go in the repo or the shell
+history):**
+
+| File | Holds | Used in |
+|---|---|---|
+| `supabase/functions/.env.production` | `CRON_SECRET`, `PARSER_SECRET`, `ANTHROPIC_API_KEY`, `LLM_MODEL`, `SENTRY_DSN`, `SENTRY_ENVIRONMENT`; **placeholders** `PARSER_URL`, `SENTRY_RELEASE` | single source for function secrets and Vault `edge_cron_secret` (§2.4, §2.5; steps 5–7) |
+| `services/parser/.env.production` | `PARSER_SECRET` (same value as above), `PARSER_ALLOWED_HOSTS`, `SENTRY_DSN`, `SENTRY_ENVIRONMENT` | Secret Manager `parser-secret` / `parser-sentry-dsn` (§3). Never uploaded (`.gcloudignore`) |
+| `apps/web/.env.production.local` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_SENTRY_DSN`, `VITE_SENTRY_ENVIRONMENT`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` | Vercel env (§4) |
+| `apps/ios/Config/Secrets.Release.xcconfig` | `LEDGER_SUPABASE_URL`, `LEDGER_SUPABASE_ANON_KEY`, `LEDGER_SENTRY_DSN`, `LEDGER_ENVIRONMENT` (its `SENTRY_AUTH_TOKEN`/`SENTRY_ORG` are unused: `publish-build.sh` reads them from the shell) | TestFlight builds (§7) |
+| `.env.cutover` (repo root) | `LEGACY_FERNET_KEY`, `LEGACY_STORAGE`, `LEGACY_GCS_BUCKET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, Sentry org token and DSNs, `GCP_PROJECT=<gcp-project>`, `GCP_REGION=me-central1` (not the parser's region); **placeholder** `LEDGER_DB_URL` | steps 2 and 7. Fill `LEDGER_DB_URL` (session pooler, port 5432, Dashboard → Connect) before the day |
+
+At the start of the session:
+
+```bash
+set -a; source .env.cutover; set +a                  # LEDGER_DB_URL, SUPABASE_*, LEGACY_*
+export LEGACY_DB_URL="$LEDGER_DB_URL"                # same database: legacy and v2 share the project
+export CRON_SECRET="$(grep '^CRON_SECRET=' supabase/functions/.env.production | cut -d= -f2-)"
+```
 
 ### Steps
 
-1. **Freeze legacy.**
-   - Render: suspend the `ccs-platform` web service, which runs the API and embedded worker.
-   - Disable the `email-ingest-microsoft` workflow (`gh workflow disable email-ingest-microsoft.yml`).
-   - Pause the Cloud Scheduler job `ccs-gmail-watch-renew`.
-   - Don't run the scraper.
-   - Gmail notifications keep queueing in Pub/Sub, which retries them. Optionally detach the
-     push endpoint so they wait.
+1. **Freeze legacy.** In this order: stop the things that write, then the things that build.
+   1. **GitHub Actions.** Turn off every legacy workflow (the variable guards them; disabling
+      is belt and braces):
+      ```bash
+      gh variable set LEGACY_DEPLOYS_ENABLED --body false
+      for w in email-ingest-microsoft.yml deploy-backend.yml deploy-frontend.yml deploy-gmail-relay.yml; do
+        gh workflow disable "$w"
+      done
+      ```
+      `email-ingest-microsoft` is the daily MS ingest cron. The three `deploy-*` workflows fire
+      on `workflow_run` after any green CI on `main`. The `security.yml` legacy jobs stop with
+      the variable.
+   2. **Render** (`ccs-platform`, the API and embedded worker): Settings → Build & Deploy →
+      **Auto-Deploy: off** first, so no later `main` commit rebuilds it (and a rollback resume
+      doesn't build new code), then **Suspend** the service.
+   3. **Legacy Vercel project** (root `frontend/`): Settings → Git → **disconnect** the repo (or
+      set Ignored Build Step to `exit 0`). It keeps serving the production domain until step 9.
+   4. **Cloud Scheduler** `ccs-gmail-watch-renew`: pause it
+      (`gcloud scheduler jobs pause ccs-gmail-watch-renew --project <gcp-project> --location <region>`;
+      `gcloud scheduler jobs list` shows the region).
+   5. **Cloud Run relay** `ccs-gmail-relay`: leave it deployed. Its target API is suspended, so
+      Gmail notifications fail and Pub/Sub retries them until step 11. Optionally detach the
+      push endpoint (`--push-endpoint=""`) so they queue instead.
+   6. **Scraper:** don't run it, and unload any cron/launchd job you set up for `ccs-scraper`
+      (none is defined in this repo).
 2. **Back up.**
    ```bash
    pg_dump "$LEGACY_DB_URL" -Fc -f legacy-$(date +%F).dump        # whole DB (session pooler, port 5432)
    pg_dump "$LEGACY_DB_URL" --schema=public --data-only -Fc -f legacy-public-data-$(date +%F).dump
-   gsutil ls -l -r gs://<legacy-bucket> > gcs-listing-$(date +%F).txt
+   gsutil ls -l -r "gs://$LEGACY_GCS_BUCKET" > gcs-listing-$(date +%F).txt
    ```
    - Keep the dumps and listing off-machine.
    - Record the legacy row counts (`statements`, `statement_lines`, `pdf_files`) for comparison.
-3. **Upgrade Postgres** (§2.1, recommended). Wait until the project is healthy.
-4. **Apply v2 migrations.** `supabase db push --dry-run`, then `supabase db push`. Or run the
-   Deploy Supabase workflow with `db_push = true`.
+3. **Upgrade Postgres** (§2.1, §2.7). Wait until the project is healthy.
+4. **Apply v2 migrations.** `supabase migration list --linked` (expect only local versions,
+   all pending), `supabase db push --dry-run`, then `supabase db push`. Or run the Deploy
+   Supabase workflow from `main` with `db_push = true`.
    - Verify `select count(*) from legacy.statements;` matches the backup.
    - Verify `public` now holds the v2 tables.
-5. **Set Vault and secrets.**
-   - Vault `project_url` and `edge_cron_secret` (§2.4).
-   - All function secrets (§2.5) except the Gmail and MS OAuth client values, which come from
-     step 7.
-6. **Deploy Edge Functions** (§2.5) and confirm that the parser `/health` responds and that the
-   `worker` smoke test returns a summary.
+   - Dashboard → Data API → **Max rows = 2000** (§2.7).
+5. **Push function secrets and deploy the functions.**
+   ```bash
+   scripts/cutover/set-edge-secrets.sh --sentry-release "$(git rev-parse --short HEAD)"
+   supabase functions deploy --project-ref <project-ref>   # or Deploy Supabase, deploy_functions only
+   ```
+   - The script refuses placeholders, so `PARSER_URL` must already be the real Cloud Run URL.
+   - Smoke test (§2.5): parser `/health` responds; `worker` returns 401 without the header and
+     a summary with `x-cron-secret: $CRON_SECRET`.
+6. **Set Vault** `project_url` and `edge_cron_secret` from the same `CRON_SECRET` (§2.4). This
+   switches pg_cron → Edge on. From here:
+   - `ledger-outlook-poll` reports `MISCONFIGURED` hourly until step 7 pushes the MS keys
+     (expected Sentry noise), then starts ingesting before step 11. Dedup makes that safe.
+   - `ledger-gmail-watch-renew` (03:00 UTC) renews the watch on the same topic; the push
+     subscription still targets the relay until step 11.
 7. **Migrate data** with `scripts/migrate_legacy.py`. Run each step dry first, then `--apply`.
    ```bash
-   export LEDGER_DB_URL=postgresql://postgres.<project-ref>:<pw>@aws-0-<region>.pooler.supabase.com:5432/postgres
-   export SUPABASE_URL=https://<project-ref>.supabase.co SUPABASE_SERVICE_ROLE_KEY=<service role key>
-   export LEGACY_FERNET_KEY=<legacy runtime settings key> LEGACY_STORAGE=gcs LEGACY_GCS_BUCKET=<bucket> \
-          GOOGLE_APPLICATION_CREDENTIALS=/path/to/legacy-reader.json
+   export GOOGLE_APPLICATION_CREDENTIALS=/path/to/legacy-reader.json   # the rest came from .env.cutover
    M='{"alice":"h_abbasi97@hotmail.com","bob":"bob@example.com"}'
 
    backend/.venv/bin/python scripts/migrate_legacy.py --step metadata --members "$M"            # dry run
    backend/.venv/bin/python scripts/migrate_legacy.py --step metadata --members "$M" --apply
    backend/.venv/bin/python scripts/migrate_legacy.py --step secrets                           # dry run
    backend/.venv/bin/python scripts/migrate_legacy.py --step secrets --apply --functions-env-out supabase/functions/.env.production
+   scripts/cutover/set-edge-secrets.sh --sentry-release "$(git rev-parse --short HEAD)"       # push MS_OAUTH_*
    backend/.venv/bin/python scripts/migrate_legacy.py --step pdfs --limit 3 --apply             # canary: watch them parse
    backend/.venv/bin/python scripts/migrate_legacy.py --step pdfs --apply
    ```
    - **metadata** imports profiles, legacy-only categories, user rules, staged category choices
      and email mailboxes and routes. Members who haven't signed up are stored as pending
      invites and claimed at sign-up.
-   - **secrets** moves PDF passwords and mailbox refresh tokens into Vault, and writes the
-     OAuth app credentials to the env file. That file is gitignored by the root `.env.*`
-     rule; delete it after use. The names it writes (`GMAIL_OAUTH_CLIENT_ID/SECRET`,
-     `MS_OAUTH_CLIENT_ID/SECRET`) are exactly the ones the functions read, so push it as-is with
-     `supabase secrets set --env-file supabase/functions/.env.production`.
+   - **secrets** moves PDF passwords and mailbox refresh tokens into Vault. It finds only the
+     **MS** OAuth client in the legacy DB and merges `MS_OAUTH_CLIENT_ID/SECRET` into
+     `supabase/functions/.env.production`, replacing just those lines. Push with
+     `set-edge-secrets.sh` as above, **not** the `supabase secrets set --env-file` hint the
+     script prints, and keep the file (it is the source of truth until step 12). The Gmail
+     client is not in the DB; it came from Render before the day (§5.4).
    - **pdfs** uploads every legacy PDF into Storage as `documents(source='legacy')`. Real
      statements go first, oldest first, and SIB history extracts last. The worker re-parses
      them through the v2 pipeline.
@@ -487,8 +672,9 @@ parsing time. Steps are in order; nothing is deleted until step 12.
      the expected deltas: SIB history duplicates that legacy double-counted now disappear, and
      Mashreq FX rows gain AED estimates. Anything else blocks the rest of the cutover.
 9. **Switch the web app.** Promote the `apps/web` Vercel project to the production domain and
-   remove the domain from the legacy project. Sign in as both members and check Overview,
-   Activity and Cards & Statements against legacy numbers.
+   remove the domain from the legacy project. Update Auth → URL Configuration (§2.2). Sign in
+   as both members and check Overview, Activity and Cards & Statements against legacy numbers.
+   Once both have signed in, **turn off new user sign-ups** (§2.7).
 10. **Point the scraper at v2** (in `scraper/.env`):
     ```dotenv
     CCS_SCRAPER_TARGET_URL=https://<project-ref>.supabase.co
@@ -520,11 +706,17 @@ parsing time. Steps are in order; nothing is deleted until step 12.
       service and its Cloud Scheduler job, and the GCS bucket. Export the bucket first if you
       want a cold copy.
     - Delete the workflows `deploy-backend.yml`, `deploy-frontend.yml`, `deploy-gmail-relay.yml`
-      and `email-ingest-microsoft.yml`, and the legacy CI jobs.
+      and `email-ingest-microsoft.yml`, the legacy CI jobs (`backend`, `backend-security`,
+      `frontend` and their `changes` filters) and the `security.yml` `python`/`container` jobs,
+      then `gh variable delete LEGACY_DEPLOYS_ENABLED`. The git hooks skip `backend/` and
+      `frontend/` once they are gone.
     - Delete `backend/`, `frontend/`, `deploy/Dockerfile.api`, `deploy/Dockerfile.frontend`,
       `deploy/Dockerfile.gmail-relay` and the legacy `docs/operations` and `docs/security`
       notes.
     - Optionally `select cron.unschedule('ledger-legacy-choices')` (in a migration).
+    - Shred the cutover-only secret files: `rm -P .env.cutover` and the legacy reader SA key.
+      Keep `supabase/functions/.env.production` (or move it to a password manager) for future
+      rotations; it is the only place `CRON_SECRET` is readable.
     - Dropping the `legacy` schema is a separate, explicit decision. Take a final `pg_dump`
       first.
 
@@ -532,8 +724,8 @@ parsing time. Steps are in order; nothing is deleted until step 12.
 
 | Failure point | Rollback |
 |---|---|
-| Before step 4 | Resume Render, re-enable the MS workflow and the scheduler job. Nothing changed. |
-| Steps 4–8 (v2 schema applied, parity not signed off) | Stop the v2 cron by deleting the Vault secret `edge_cron_secret`, which makes `invoke_edge` skip, or unschedule `ledger-worker-kick`. Move the legacy tables back: in one transaction, `alter table legacy.<t> set schema public` and `alter type legacy.<type> set schema public` for every table and enum listed in `20261008000000_quarantine_legacy.sql`. Rename or drop the clashing v2 tables first; `profiles`, `banks`, `categories`, `category_rules`, `statements`, `statement_lines`, `email_mailboxes` and `audit_events` share names. As a last resort, restore `legacy-<date>.dump` into a fresh project. Then resume Render and the legacy jobs and repoint nothing (no external endpoints were switched yet). |
+| Before step 4 | Undo step 1 in reverse: reconnect the legacy Vercel project's Git (if wanted), resume the scheduler job, resume Render (leave Auto-Deploy off unless you need it), then `gh variable set LEGACY_DEPLOYS_ENABLED --body true` and `gh workflow enable` the four legacy workflows. Nothing changed. |
+| Steps 4–8 (v2 schema applied, parity not signed off) | Stop the v2 cron by deleting the Vault secret `edge_cron_secret`, which makes `invoke_edge` skip, or unschedule `ledger-worker-kick`. Move the legacy tables back: in one transaction, `alter table legacy.<t> set schema public` and `alter type legacy.<type> set schema public` for every table and enum listed in `20261008000000_quarantine_legacy.sql`. Rename or drop the clashing v2 tables first; `profiles`, `banks`, `categories`, `category_rules`, `statements`, `statement_lines`, `email_mailboxes` and `audit_events` share names. As a last resort, restore `legacy-<date>.dump` into a fresh project. Then undo step 1 as in the row above and repoint nothing (no external endpoints were switched yet). |
 | Steps 9–11 | Point the Vercel domain back at the legacy project, restore the Pub/Sub push endpoint to the legacy relay URL, set the scraper back to `CCS_SCRAPER_UPLOAD_PATH=/api/v1/jobs/upload` and the Render URL, then follow the row above. |
 | After step 12 | No rollback to legacy. Restore from the final dump if ever needed. |
 
@@ -557,10 +749,13 @@ cut over again. sha256 and `client_msg_id` dedup make re-sending them safe.
   `examples`. The validation trigger proves it parses, and unparsed messages re-run
   automatically. Or approve an LLM proposal in the Review inbox.
 - **Secret rotation:**
-  - `CRON_SECRET`: update Vault `edge_cron_secret` and the function secret together.
+  - `CRON_SECRET`: replace the line in `supabase/functions/.env.production`, then run
+    `scripts/cutover/set-edge-secrets.sh` and `scripts/cutover/set-vault-secrets.sql` (§2.4)
+    back to back. Cron calls get 401 in between.
   - `PARSER_SECRET`: see §3.
   - Service tokens: revoke and re-create in Settings.
-  - OAuth clients: rotate in Google or Azure, then `supabase secrets set`.
+  - OAuth clients: rotate in Google or Azure, update the file, then `set-edge-secrets.sh`.
+    A new *Google* client invalidates the stored Gmail refresh tokens (§5.4).
   - Mailbox tokens: Set refresh token in Settings.
 - **Backups:** the free tier has no downloadable automated backups. Take a monthly
   `supabase db dump --linked -f ledger-$(date +%F).sql` (schema) and `--data-only` (data). The
