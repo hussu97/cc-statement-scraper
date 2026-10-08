@@ -46,7 +46,29 @@ _TH_ROW_RE = re.compile(
     r"(?P<currency>[A-Z]{3})\s+(?P<amount>-?[\d,]+\.\d{2})$",
 )
 _TH_DATE_FMT = "%d %b %Y"
-_ACCOUNT_NO_RE = re.compile(r"Account\s+no\.\s+(.+)", re.IGNORECASE)
+# The card number header of a history export: "Account no. 5290 xxxx xxxx 9218". Tolerates
+# "Card no." / "Card number" and a ':'; the number itself is read by _masked_card_last4.
+_ACCOUNT_NO_RE = re.compile(r"(?:Account|Card)\s+(?:no\.?|number)\s*[:.]?\s*(.+)", re.IGNORECASE)
+# A masked card number: "5290 xxxx xxxx 9218", "5290XXXXXXXX9218", "5290 **** **** 9218",
+# "xxxx xxxx xxxx 9218". A replaced card has a new number on the same layout.
+_MASKED_CARD_RE = re.compile(
+    r"(?<!\d)(?:\d{4}[\s-]*)?(?:\d{2}[xX*•]{2}|[xX*•]{4})[\s-]*[xX*•]{4}[\s-]*(\d{4})(?!\d)"
+)
+
+
+def _masked_card_last4(text: str) -> str | None:
+    """Last four digits of a masked card number in ``text`` (any masking character, any case)."""
+    match = _MASKED_CARD_RE.search(text or "")
+    return match.group(1) if match else None
+
+
+def _header_card_last4(value: str) -> str | None:
+    """The card's last four from a history header value: the masked number, else its last digits."""
+    masked = _masked_card_last4(value)
+    if masked:
+        return masked
+    digits = re.sub(r"[^0-9]", "", value or "")
+    return digits[-4:] if len(digits) >= 4 else None
 _ACCOUNT_TYPE_RE = re.compile(r"Account\s+type\s+(.+)", re.IGNORECASE)
 _STATEMENT_CUTOFF_DAY = 12
 _TH_PAYMENT_KEYWORDS = ("CREDIT CARD PAYMENT",)
@@ -98,7 +120,9 @@ def parse_sib_statement(pdf_path: str | Path, pdf_password: str) -> StatementPar
     transactions: list[TransactionRecord] = []
 
     for line in lines:
-        possible_last4 = extract_last4_masked(line)
+        # A statement can list more than one card (a replaced card and its successor): each
+        # transaction row carries the card whose section it is in.
+        possible_last4 = extract_last4_masked(line) or _masked_card_last4(line)
         if possible_last4:
             card_last4 = possible_last4
 
@@ -256,11 +280,8 @@ def parse_sib_transaction_history(pdf_path: str | Path, pdf_password: str | None
     for line in lines[:15]:
         acct_match = _ACCOUNT_NO_RE.search(line)
         if acct_match:
-            raw_acct = acct_match.group(1).strip()
-            # Format: "5290 xxxx xxxx 9218" — last 4 digits are card last4
-            digits = re.sub(r"[^0-9]", "", raw_acct)
-            if len(digits) >= 4:
-                card_last4 = digits[-4:]
+            if card_last4 is None:
+                card_last4 = _header_card_last4(acct_match.group(1))
             continue
         acct_type_match = _ACCOUNT_TYPE_RE.search(line)
         if acct_type_match:
@@ -283,12 +304,21 @@ def parse_sib_transaction_history(pdf_path: str | Path, pdf_password: str | None
     if not card_last4:
         card_last4 = "0000"
 
-    # Parse all transaction rows; deduplicate by fingerprint
+    # Parse all transaction rows; deduplicate by fingerprint. Rows belong to the card of the
+    # last card-number header above them (one export per card today; an export that ever
+    # lists a replaced card and its successor keeps each row on its own card).
     all_txns: list[TransactionRecord] = []
     seen_fingerprints: set[str] = set()
+    primary_last4 = card_last4
 
     for line in lines:
         m = _TH_ROW_RE.match(line)
+        acct_match = None if m else _ACCOUNT_NO_RE.search(line)
+        if acct_match:
+            section_last4 = _masked_card_last4(acct_match.group(1))
+            if section_last4:
+                card_last4 = section_last4
+            continue
         if not m:
             continue
 
@@ -364,6 +394,7 @@ def parse_sib_transaction_history(pdf_path: str | Path, pdf_password: str | None
         txns = buckets[stmt_date]
         stmt_month = statement_month_from_date(stmt_date)
         period_start = _period_start_for_statement_date(stmt_date)
+        bucket_last4 = _bucket_primary_last4(txns, primary_last4)
 
         results.append(
             StatementParseResult(
@@ -374,7 +405,7 @@ def parse_sib_transaction_history(pdf_path: str | Path, pdf_password: str | None
                 transactions=txns,
                 warnings=[],
                 metadata={
-                    "card_last4": card_last4,
+                    "card_last4": bucket_last4,
                     "card_holder": card_holder,
                     "card_type": card_type,
                     "statement_date": stmt_date.isoformat(),
@@ -387,3 +418,14 @@ def parse_sib_transaction_history(pdf_path: str | Path, pdf_password: str | None
         )
 
     return results
+
+
+def _bucket_primary_last4(txns: list[TransactionRecord], default: str) -> str:
+    """The card with the most rows in a billing-cycle bucket (ties: the card of the latest row)."""
+    counts: dict[str, int] = {}
+    for txn in txns:
+        counts[txn.card_last4] = counts.get(txn.card_last4, 0) + 1
+    if not counts:
+        return default
+    latest = max(txns, key=lambda t: t.transaction_date).card_last4
+    return max(counts, key=lambda last4: (counts[last4], last4 == latest))
