@@ -4,36 +4,41 @@ import SwiftUI
 
 struct OverviewView: View {
     let model: OverviewModel
+    let month: MonthSelection
     let review: ReviewModel
     let profileCode: String
     let canResolve: Bool
 
     var body: some View {
         Page {
+            MonthSwitcher(month: month).padding(.top, 8)
             StateContainer(state: model.state, retry: reload) { content in
-                HeroCard(overview: content.overview)
-                if let pending = content.overview.pendingSummary {
-                    PendingStrip(summary: pending, lastSMS: content.overview.lastSMSLabel())
+                let overview = content.overview
+                HeroCard(overview: overview)
+                if overview.showsLiveSections(), let pending = overview.pendingSummary {
+                    PendingStrip(summary: pending, lastSMS: overview.lastSMSLabel())
                 }
-                if !content.overview.attention.isEmpty {
-                    AttentionCard(items: content.overview.attention, review: review, profileCode: profileCode,
+                if !overview.attention().isEmpty {
+                    AttentionCard(items: overview.attention(), review: review, profileCode: profileCode,
                                   canResolve: canResolve)
                 }
-                CategoryRingCard(categories: content.overview.ringCategories, total: content.overview.spend)
+                CategoryRingCard(categories: overview.ringCategories, total: overview.spend,
+                                 scope: overview.scopeLabel(), emptyMessage: overview.emptyCategoriesMessage())
                 AccountsCard(accounts: content.accounts)
                 if !content.insights.isEmpty {
                     InsightsCard(insights: content.insights) { insight in
                         Task { await model.dismiss(insight, profileCode: profileCode) }
                     }
                 }
-                RecentCard(recent: content.overview.recent)
+                if overview.showsLiveSections() { RecentCard(recent: overview.recent) }
             }
         }
         .ledgerNavigation("Overview")
-        .refreshable { await model.load(profileCode: profileCode) }
+        .task(id: month.requestMonth) { await model.loadIfNeeded(profileCode: profileCode, month: month.requestMonth) }
+        .refreshable { await model.load(profileCode: profileCode, month: month.requestMonth) }
     }
 
-    private func reload() { Task { await model.load(profileCode: profileCode) } }
+    private func reload() { Task { await model.load(profileCode: profileCode, month: month.requestMonth) } }
 }
 
 private struct HeroCard: View {
@@ -147,13 +152,15 @@ private struct AttentionCard: View {
 private struct CategoryRingCard: View {
     let categories: [Overview.TopCategory]
     let total: Decimal
+    let scope: String
+    let emptyMessage: String
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         Card {
-            SectionHeader(title: "Where it went", trailing: "This month")
+            SectionHeader(title: "Where it went", trailing: scope)
             if categories.isEmpty {
-                Text("No spending this month yet.").font(Typography.rowMeta).foregroundStyle(Palette.muted)
+                Text(emptyMessage).font(Typography.rowMeta).foregroundStyle(Palette.muted)
             } else if typeSize.prefersStackedRows {
                 VStack(alignment: .leading, spacing: 16) {
                     ring.frame(maxWidth: .infinity)

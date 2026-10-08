@@ -125,7 +125,14 @@ struct PresentationTests {
         let october = CalendarDay(iso: "2026-10-08")!
         #expect(o.comparison(today: october)?.text == "18% below the same day last month")
         #expect(o.heroEyebrow(today: october) == "October 2026 · posted so far")
-        #expect(o.referenceLines == ["Same day last month AED 2,100", "3-month average AED 9,000 a month"])
+        #expect(o.referenceLines(today: october) == ["Same day last month AED 2,100", "3-month average AED 9,000 a month"])
+        // A completed month is set against the whole previous month.
+        #expect(o.referenceLines(today: CalendarDay(iso: "2026-11-02")!)
+                == ["September AED 8,450", "3-month average AED 9,000 a month"])
+        #expect(o.referenceLines(today: CalendarDay(iso: "2027-01-02")!).first == "September 2026 AED 8,450")
+        #expect(o.showsLiveSections(today: october) && !o.showsLiveSections(today: CalendarDay(iso: "2026-11-02")!))
+        #expect(o.scopeLabel(today: CalendarDay(iso: "2026-11-02")!) == "October 2026")
+        #expect(o.emptyCategoriesMessage(today: CalendarDay(iso: "2026-11-02")!) == "No spending in October.")
         // Viewed in November, October is complete: its avg ratio is null in the fixture → no chip.
         #expect(o.comparison(today: CalendarDay(iso: "2026-11-02")!) == nil)
         #expect(o.heroEyebrow(today: CalendarDay(iso: "2026-11-02")!) == "October 2026")
@@ -134,9 +141,13 @@ struct PresentationTests {
     @Test("Needs attention lists open reviews first, then uncategorised")
     func attention() throws {
         let o = try LedgerJSON.decode(Overview.self, from: try fixture("overview"))
-        #expect(o.attention.map(\.kind) == [.reviews, .uncategorized])
-        #expect(o.attention[0].title == "1 item to review")
-        #expect(o.attention[1].title == "3 uncategorised this month")
+        let october = CalendarDay(iso: "2026-10-08")!
+        #expect(o.attention(today: october).map(\.kind) == [.reviews, .uncategorized])
+        #expect(o.attention(today: october)[0].title == "1 item to review")
+        #expect(o.attention(today: october)[1].title == "3 uncategorised this month")
+        // Looking back at October from later on: the count is October's.
+        #expect(o.attention(today: CalendarDay(iso: "2026-11-02")!)[1].title == "3 uncategorised in October")
+        #expect(o.attention(today: CalendarDay(iso: "2027-01-02")!)[1].title == "3 uncategorised in October 2026")
     }
 
     @Test("due dates: one rule for Overview and Statements")
@@ -173,11 +184,11 @@ struct PresentationTests {
     }
 
     @Test func paging() {
-        var q = ActivityQuery()
-        #expect(q.pageSize == 100)
-        q.page = 2
-        #expect(q.rangeStart == 200 && q.rangeEnd == 299)
+        let request = PageRequest(offset: 200, limit: ActivityQuery.defaultPageSize)
+        #expect(request.limit == 100)
+        #expect(request.offset == 200 && request.lastIndex == 299)
         #expect(ActivityQuery.pageSizeOptions == [100, 200, 500, 1000, 2000])
+        #expect(Paginator<LedgerTransaction>.defaultPageSize == 100)
     }
 
     @Test("activity rows group by business date, newest first, keeping server order")
@@ -185,7 +196,7 @@ struct PresentationTests {
         let rows = try LedgerJSON.decode([LedgerTransaction].self, from: try fixture("transactions"))
         let sections = ActivityModel.sections(rows, today: CalendarDay(iso: "2026-10-08")!)
         #expect(sections.map(\.title) == ["Today", "Yesterday"])
-        #expect(ActivityModel.merge(rows, rows).count == 2)
+        #expect(Paginator<LedgerTransaction>.merge(rows, rows).count == 2)
     }
 
     @Test func evidenceBadges() {

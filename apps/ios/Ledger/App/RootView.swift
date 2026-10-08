@@ -17,8 +17,15 @@ struct RootView: View {
             case .pickProfile:
                 ProfilePickerView(profiles: model.profiles, onSignOut: { Task { await model.signOut() } })
             case .main(let code):
-                MainTabs(model: model, profileCode: code)
-                    .task(id: code) { await model.profileSelected(code) }
+                Group {
+                    // Until the tabs point at this ledger, nothing of the previous one shows.
+                    if model.screens.activeProfile == code {
+                        MainTabs(model: model, profileCode: code)
+                    } else {
+                        ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity).background(Palette.bg)
+                    }
+                }
+                .task(id: code) { await model.profileSelected(code) }
             }
         }
         .task { model.start() }
@@ -39,15 +46,17 @@ struct MainTabs: View {
         TabView {
             Tab("Overview", systemImage: "circle.grid.2x2") {
                 NavigationStack {
-                    OverviewView(model: model.overview, review: model.review, profileCode: profileCode,
-                                 canResolve: model.profiles.canWrite)
+                    OverviewView(model: model.overview, month: model.month, review: model.review,
+                                 profileCode: profileCode, canResolve: model.profiles.canWrite)
                 }
             }
             Tab("Activity", systemImage: "list.bullet.rectangle") {
-                NavigationStack { ActivityView(model: model.activity, profileCode: profileCode) }
+                NavigationStack {
+                    ActivityView(model: model.activity, months: model.month.range, profileCode: profileCode)
+                }
             }
             Tab("Insights", systemImage: "chart.bar.xaxis") {
-                NavigationStack { InsightsView(model: model.insights, profileCode: profileCode) }
+                NavigationStack { InsightsView(model: model.insights, month: model.month, profileCode: profileCode) }
             }
             Tab("Statements", systemImage: "doc.text") {
                 NavigationStack {
