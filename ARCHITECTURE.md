@@ -120,7 +120,7 @@ fx_rates (global)
 | `profile_members` | `(profile_code, user_id)`, role `owner` or `viewer`. Pending invites live in `private.pending_members` and are claimed by `auth.users` triggers once the user's email is **confirmed** (on insert when already confirmed, or on the confirmation / email change); `add_profile_member` also treats an unconfirmed account as not signed up. Self sign-up is disabled (§8), so that user is created by an Auth invite. An owner deletes a whole profile with `delete_profile(p_profile_code, p_confirm_key)`: its Vault secrets go with it and its PDFs are queued on `storage_cleanup`. |
 | `service_tokens` | `ccs_<hex>` tokens. Only the sha256 is stored. Scopes are `statements:upload` and `sms:ingest`, each tied to one profile. |
 | `banks` | FAB, ADCB, ENBD, EIB, SIB, MASHREQ, plus their SMS sender ids. `logo_path` names the bank's image in the public `bank-logos` bucket (`<bank_code>.png`); clients build `<SUPABASE_URL>/storage/v1/object/public/bank-logos/<logo_path>`. |
-| `accounts`, `cards` | Credit-card accounts (kind `credit_card` only) and their cards by `last4`. A replacement card is a new card on the same account. |
+| `accounts`, `cards` | Credit-card accounts (kind `credit_card` only) and their cards by `last4`. A replacement card is a new card on the same account: the old card becomes `replaced` and keeps its transactions. It joins the account either by the owner (`add_replacement_card(profile, old card_code, new last4)`) or automatically for a history extract (§4, statement path step 1). |
 | `documents` | One PDF as received: `sha256` unique per profile, `source` scraper/upload/ios/gmail/outlook/legacy, `parse_status` queued/parsing/parsed/failed. Stored at `statements/<profile_code>/<doc_code>.pdf`. |
 | `statements` | `kind` is `statement` or `history_extract` (SIB history exports). Identity is `(account, statement_date)` per kind among active rows. Holds totals, due date, min due and credit limit. `doc_code` is the document that currently evidences it; several documents can evidence one statement (§4). |
 | `statement_lines` | **Immutable evidence.** `line_key` is a sha256 of the raw facts and `occurrence` is the ordinal among identical keys, so two identical coffees are two lines. Only `is_current`, `superseded_at` and `source_doc_codes` change. `source_doc_codes` lists the documents whose parse contains the line; it stays current while any of them does. Carries `fx_rate` and `legacy_fingerprint`. |
@@ -180,6 +180,16 @@ timeout applies.
    document already produced, else the bank's only active account, else an explicit statement
    reference seen on exactly one account, else a permanent `22023`. A card-less statement with
    no rows (the ADCB companion PDF) is skipped with a document warning.
+   **Replacement cards.** An unknown last4 normally creates a new account. For a
+   `history_extract` only (it carries no account identity, totals or reference, so it cannot
+   overwrite a real statement), the card joins the bank's existing account when the profile has
+   exactly **one** active account at that bank, the card type matches the account's product when
+   both are known, and the extract's first transaction is not earlier than 31 days before the
+   account's last current line (`private.successor_card_account`). The account's older primary
+   cards become `replaced`, the timeline's `ingested` event says so, and SMS waiting as
+   `unknown_card` for the new number are re-processed. Two live cards (overlapping activity or a
+   different product) stay on separate accounts; anything else is registered by the owner with
+   `add_replacement_card`.
 2. **Lines are a union over documents.** One statement can be evidenced by several documents:
    the same PDF from email and the scraper, a card-less companion PDF, or overlapping SIB
    history windows. Lines are diffed on `(line_key, occurrence)`, and each line records the
