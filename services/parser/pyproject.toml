@@ -1,6 +1,6 @@
 [project]
 name = "ccs-parser"
-version = "2026.10.2"
+version = "2026.10.3"
 description = "Stateless credit-card statement PDF parsing service (contract parse-v1)."
 requires-python = ">=3.12"
 dependencies = [

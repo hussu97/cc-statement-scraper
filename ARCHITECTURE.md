@@ -119,7 +119,7 @@ fx_rates (global)
 | `profiles` | A ledger (`key` is the legacy `X-Profile-Key`, e.g. `alice`). |
 | `profile_members` | `(profile_code, user_id)`, role `owner` or `viewer`. Pending invites live in `private.pending_members` and are claimed by `auth.users` triggers once the user's email is **confirmed** (on insert when already confirmed, or on the confirmation / email change); `add_profile_member` also treats an unconfirmed account as not signed up. Self sign-up is disabled (§8), so that user is created by an Auth invite. An owner deletes a whole profile with `delete_profile(p_profile_code, p_confirm_key)`: its Vault secrets go with it and its PDFs are queued on `storage_cleanup`. |
 | `service_tokens` | `ccs_<hex>` tokens. Only the sha256 is stored. Scopes are `statements:upload` and `sms:ingest`, each tied to one profile. |
-| `banks` | FAB, ADCB, ENBD, EIB, SIB, MASHREQ, plus their SMS sender ids. |
+| `banks` | FAB, ADCB, ENBD, EIB, SIB, MASHREQ, plus their SMS sender ids. `logo_path` names the bank's image in the public `bank-logos` bucket (`<bank_code>.png`); clients build `<SUPABASE_URL>/storage/v1/object/public/bank-logos/<logo_path>`. |
 | `accounts`, `cards` | Credit-card accounts (kind `credit_card` only) and their cards by `last4`. A replacement card is a new card on the same account. |
 | `documents` | One PDF as received: `sha256` unique per profile, `source` scraper/upload/ios/gmail/outlook/legacy, `parse_status` queued/parsing/parsed/failed. Stored at `statements/<profile_code>/<doc_code>.pdf`. |
 | `statements` | `kind` is `statement` or `history_extract` (SIB history exports). Identity is `(account, statement_date)` per kind among active rows. Holds totals, due date, min due and credit limit. `doc_code` is the document that currently evidences it; several documents can evidence one statement (§4). |
@@ -134,6 +134,7 @@ fx_rates (global)
 | `categories`, `category_rules`, `merchant_profile_category` | Per profile. Categories are archived, never deleted. Rules are exact/prefix/contains/regex with optional conditions, validated on write (known keys and types, own `card_code`, pattern ≤ 200 chars, no back-references). Merchant categories come from a user's manual choice or an LLM suggestion. `merchant_category_skips` remembers merchants the LLM declined (per category-set hash) and suggestions an owner rejected (`reject_merchant_suggestion`), so neither is re-asked. |
 | `budgets`, `recurring_series`, `insights`, `audit_events` | Monthly budgets (total or per category), detected subscriptions, the nightly insight feed, and an audit trail of user edits. |
 | `email_mailboxes`, `email_routes`, `email_events` | Mailbox (gmail/outlook, `sync_state` cursor), per-bank routing rules, and per-attachment idempotency log. |
+| `document_events` | A document's timeline for the apps (`event_code` `dev_…`, `doc_code`, `stage` received/stored/duplicate/queued/parsing/parsed/ingested/failed/retry, `level` info/warn/error, `message` a sentence for end users, `detail` codes and counts only). Member read, in the Realtime publication; written only by the service role and SQL functions (§4). No FK on `doc_code`: `received`/`stored` precede the documents row. Kept 90 days. |
 | `fx_rates` | Global AED-per-unit market rates (fallback estimate only). |
 
 Queues (pgmq): `parse_document`, `llm_categorize`, `sms_fallback` and `storage_cleanup`, each with a `_dlq`;
@@ -141,7 +142,9 @@ Queues (pgmq): `parse_document`, `llm_categorize`, `sms_fallback` and `storage_c
 through the Storage API, so the worker removes them). `drain_dlq(queue)` and `requeue_dlq(queue, limit)` are the service-role
 DLQ tools.
 Storage: private bucket `statements` (25 MB limit, `application/pdf`). Members can read their
-profile's folder. Only Edge Functions write to it.
+profile's folder. Only Edge Functions write to it. Public bucket `bank-logos` (1 MB, PNG/SVG/
+WebP/JPEG) holds the bank logos named by `banks.logo_path`; no policy lets clients write it,
+the operator uploads them (PRODUCTION §11).
 
 ---
 
@@ -223,6 +226,24 @@ are idempotent: `begin_document_parse` marks a `queued`/`parsing` document `pars
 its context, but answers `{skip: 'parsed'|'failed'}` for a duplicate or stale queue message;
 `fail_document` never flips a `parsed` document back; `resubmit_document` re-queues a failed PDF
 that is uploaded again (otherwise the upload is a plain duplicate).
+
+**Document timeline.** Every step appends a `document_events` row the apps follow over Realtime
+(`statements-upload` returns each file's `doc_code`; subscribe with `doc_code=eq.<code>` and read
+the earlier rows once):
+
+| Stage | Written by | Message / detail |
+|---|---|---|
+| `received`, `stored`, `queued` | `storeDocument` (statements-upload, gmail-push, outlook-poll) via `log_document_event` | file name and size; source |
+| `duplicate` | `storeDocument` for an already-stored PDF | the earlier upload's `parse_status` |
+| `parsing` | `begin_document_parse` | attempt number |
+| `parsed` | the worker, after the parser answers | bank, document kind, statement and line counts, parser warnings (generic notes, never line text) |
+| `ingested` | `ingest_parsed_document` | statements; lines new / unchanged / withdrawn; transactions created / matched; lines held for review; cards added |
+| `failed` | `fail_document(permanent)` | a sentence per error code (`private.document_failure_message`: wrong PDF password, unsupported layout, …); `detail.error_code` |
+| `retry` | `fail_document(transient)`, `resubmit_document`, `requeue_documents` | reason |
+
+Messages never carry passwords, PDF text, statement-line text or SMS bodies (the raw parser or
+database error stays in `documents.parse_error`). A failed log write never fails an upload or a
+parse. `created_at` defaults to `clock_timestamp()` so events of one transaction keep their order.
 
 ### SMS path
 
@@ -408,15 +429,37 @@ ignore and income categories, void and orphaned transactions, and anything marke
 `exclude_from_spend`. Buckets use `txn_date`, a Dubai date. Every analytics RPC builds on it.
 Clients render results and never re-derive money.
 
-Analytics RPCs (all security invoker, so RLS applies):
+Analytics RPCs (security invoker, so RLS applies, except the two marked *, which are
+SECURITY DEFINER with an explicit member check and filter by profile themselves):
 
 | Group | RPCs |
 |---|---|
-| Overview and trends | `overview`, `spend_series` (grain, group_by, optional `p_top` with an "Other" fold) |
+| Overview and trends | `overview`, `spend_series` (grain, group_by, optional `p_top` with an "Other" fold), `spend_breakdown`* |
 | Breakdowns | `category_breakdown`, `merchant_leaderboard`, `daily_spend`, `hour_weekday_pattern` |
-| Currency and cycles | `fx_spend`, `statement_cycles`, `yoy_compare` |
+| Currency and cycles | `fx_spend`, `statement_cycles`, `statement_detail`*, `yoy_compare` |
 | Exceptions and metadata | `anomalies`, `filter_meta` |
 | Budgets and recurring | `budget_status`, `recurring_list` |
+
+`overview` (accounts), `statement_cycles` and `filter_meta` (banks) carry each bank's `logo_path`.
+
+`spend_breakdown(profile, from, to, group_by, top_n = 10)` returns monthly spend from `v_spend`
+grouped by `category`, `bank` or `merchant`:
+`{group_by, total, months: ['YYYY-MM'…], groups: [{key, label, color_token, logo_path, total, share}],
+series: [{month, total, values: {<key>: amount}}]}`. The top N groups by total over the whole
+range keep their key (`__uncategorized__` / `__unknown__` for none); the rest fold into
+`__other__` ("Others"). Every month of the range is listed and every series row carries every
+group key, zero-filled. Money is a decimal string; `share` is the group's part of the range
+total with 4 decimals, clamped to 0..1 (a group of only refunds can be net negative).
+`color_token` is set for categories only, `logo_path` for banks only.
+
+`statement_detail(profile, stmt)` returns one statement with its current lines:
+`{statement: {stmt_code, kind, bank_code, account_code, card_last4s, statement_date, period_start,
+period_end, due_date, opening_balance, closing_balance, total_debits, total_credits, min_due,
+credit_limit, doc_code, recon_status, recon_checks}, debits: {count, total, lines}, credits: {…}}`;
+a line is `{line_code, txn_code, txn_date, posting_date, description, merchant_name, amount_aed,
+amount_original, currency_original, category_code, kind, card_last4}`, ordered by `txn_date`,
+`line_no`. `description` is the line as the statement printed it; `merchant_name` and
+`category_code` come from the transaction the line evidences.
 
 `v_transactions` is the Activity read model. It carries category source, evidence flags
 (`has_sms`, `has_statement`; scalar sub-queries on the evidence index, evaluated only for the
@@ -427,7 +470,8 @@ rows a page returns), bank and last4.
 rate yet, which spend cannot include), and computes utilisation from `greatest(closing_balance, 0)`.
 Business dates stay `Asia/Dubai`: `profiles.timezone` and `base_currency` are reserved, not used.
 
-The nightly job `private.nightly()` (22:00 UTC = 02:00 Dubai) runs three steps:
+The nightly job `private.nightly()` (22:00 UTC = 02:00 Dubai) runs three steps (and, for the
+all-profiles run, purges `document_events` older than 90 days first):
 1. Voids released authorisations.
 2. Detects recurring charges: ≥ 3 charges (≥ 2 for yearly) at a weekly, monthly or yearly
    cadence with amount CV below 10%.
@@ -476,8 +520,8 @@ Clients can set and list secrets but never read values back. Only the worker rea
 under a row lock, so concurrent writers keep each other's keys, and `gmail_history_id`,
 `last_synced_at` and `watch_expires_at` never move back.
 
-Realtime publishes `transactions`, `sms_messages`, `documents`, `match_reviews` and `insights`.
-RLS applies to every change event.
+Realtime publishes `transactions`, `sms_messages`, `documents`, `match_reviews`, `insights` and
+`document_events`. RLS applies to every change event.
 
 ---
 
