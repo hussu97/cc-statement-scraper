@@ -388,6 +388,47 @@ export type Database = {
           },
         ]
       }
+      document_events: {
+        Row: {
+          created_at: string
+          detail: Json
+          doc_code: string
+          event_code: string
+          level: string
+          message: string
+          profile_code: string
+          stage: string
+        }
+        Insert: {
+          created_at?: string
+          detail?: Json
+          doc_code: string
+          event_code?: string
+          level?: string
+          message: string
+          profile_code: string
+          stage: string
+        }
+        Update: {
+          created_at?: string
+          detail?: Json
+          doc_code?: string
+          event_code?: string
+          level?: string
+          message?: string
+          profile_code?: string
+          stage?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_events_profile_code_fkey"
+            columns: ["profile_code"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["profile_code"]
+          },
+        ]
+      }
       documents: {
         Row: {
           bank_code: string | null
@@ -2200,6 +2241,17 @@ export type Database = {
           key: string
           updated_at: string
         }[]
+      }
+      log_document_event: {
+        Args: {
+          p_detail?: Json
+          p_doc_code: string
+          p_level: string
+          p_message: string
+          p_profile_code: string
+          p_stage: string
+        }
+        Returns: string
       }
       merchant_key: { Args: { p: string }; Returns: string }
       merchant_leaderboard: {

@@ -134,6 +134,7 @@ fx_rates (global)
 | `categories`, `category_rules`, `merchant_profile_category` | Per profile. Categories are archived, never deleted. Rules are exact/prefix/contains/regex with optional conditions, validated on write (known keys and types, own `card_code`, pattern ≤ 200 chars, no back-references). Merchant categories come from a user's manual choice or an LLM suggestion. `merchant_category_skips` remembers merchants the LLM declined (per category-set hash) and suggestions an owner rejected (`reject_merchant_suggestion`), so neither is re-asked. |
 | `budgets`, `recurring_series`, `insights`, `audit_events` | Monthly budgets (total or per category), detected subscriptions, the nightly insight feed, and an audit trail of user edits. |
 | `email_mailboxes`, `email_routes`, `email_events` | Mailbox (gmail/outlook, `sync_state` cursor), per-bank routing rules, and per-attachment idempotency log. |
+| `document_events` | A document's timeline for the apps (`event_code` `dev_…`, `doc_code`, `stage` received/stored/duplicate/queued/parsing/parsed/ingested/failed/retry, `level` info/warn/error, `message` a sentence for end users, `detail` codes and counts only). Member read, in the Realtime publication; written only by the service role and SQL functions (§4). No FK on `doc_code`: `received`/`stored` precede the documents row. Kept 90 days. |
 | `fx_rates` | Global AED-per-unit market rates (fallback estimate only). |
 
 Queues (pgmq): `parse_document`, `llm_categorize`, `sms_fallback` and `storage_cleanup`, each with a `_dlq`;
@@ -225,6 +226,24 @@ are idempotent: `begin_document_parse` marks a `queued`/`parsing` document `pars
 its context, but answers `{skip: 'parsed'|'failed'}` for a duplicate or stale queue message;
 `fail_document` never flips a `parsed` document back; `resubmit_document` re-queues a failed PDF
 that is uploaded again (otherwise the upload is a plain duplicate).
+
+**Document timeline.** Every step appends a `document_events` row the apps follow over Realtime
+(`statements-upload` returns each file's `doc_code`; subscribe with `doc_code=eq.<code>` and read
+the earlier rows once):
+
+| Stage | Written by | Message / detail |
+|---|---|---|
+| `received`, `stored`, `queued` | `storeDocument` (statements-upload, gmail-push, outlook-poll) via `log_document_event` | file name and size; source |
+| `duplicate` | `storeDocument` for an already-stored PDF | the earlier upload's `parse_status` |
+| `parsing` | `begin_document_parse` | attempt number |
+| `parsed` | the worker, after the parser answers | bank, document kind, statement and line counts, parser warnings (generic notes, never line text) |
+| `ingested` | `ingest_parsed_document` | statements; lines new / unchanged / withdrawn; transactions created / matched; lines held for review; cards added |
+| `failed` | `fail_document(permanent)` | a sentence per error code (`private.document_failure_message`: wrong PDF password, unsupported layout, …); `detail.error_code` |
+| `retry` | `fail_document(transient)`, `resubmit_document`, `requeue_documents` | reason |
+
+Messages never carry passwords, PDF text, statement-line text or SMS bodies (the raw parser or
+database error stays in `documents.parse_error`). A failed log write never fails an upload or a
+parse. `created_at` defaults to `clock_timestamp()` so events of one transaction keep their order.
 
 ### SMS path
 
@@ -451,7 +470,8 @@ rows a page returns), bank and last4.
 rate yet, which spend cannot include), and computes utilisation from `greatest(closing_balance, 0)`.
 Business dates stay `Asia/Dubai`: `profiles.timezone` and `base_currency` are reserved, not used.
 
-The nightly job `private.nightly()` (22:00 UTC = 02:00 Dubai) runs three steps:
+The nightly job `private.nightly()` (22:00 UTC = 02:00 Dubai) runs three steps (and, for the
+all-profiles run, purges `document_events` older than 90 days first):
 1. Voids released authorisations.
 2. Detects recurring charges: ≥ 3 charges (≥ 2 for yearly) at a weekly, monthly or yearly
    cadence with amount CV below 10%.
@@ -500,8 +520,8 @@ Clients can set and list secrets but never read values back. Only the worker rea
 under a row lock, so concurrent writers keep each other's keys, and `gmail_history_id`,
 `last_synced_at` and `watch_expires_at` never move back.
 
-Realtime publishes `transactions`, `sms_messages`, `documents`, `match_reviews` and `insights`.
-RLS applies to every change event.
+Realtime publishes `transactions`, `sms_messages`, `documents`, `match_reviews`, `insights` and
+`document_events`. RLS applies to every change event.
 
 ---
 

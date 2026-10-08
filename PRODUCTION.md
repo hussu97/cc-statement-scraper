@@ -131,6 +131,11 @@ supabase db push                    # applies supabase/migrations/* in order
   in the comment at the top of `20261008000000_quarantine_legacy.sql` (the file is
   `20261008000950_legacy_import.sql`). The final definition of a redefined function is listed in
   docs/audit/01-database.md, Appendix A.
+- **`20261010000410_document_events_retention.sql` is flagged destructive.** Its
+  `private.purge_document_events()` body contains a `DELETE FROM public.document_events` (90-day
+  retention), which the deploy gate's grep reports. Nothing is deleted when the migration runs;
+  rows are purged later by `ledger-nightly`. A push-triggered deploy stops on it: run the
+  **Deploy Supabase** workflow by hand with `allow_destructive` (after a yes in chat, §9).
 - **Tests that pin "today".** `ingest_parsed_document` rejects statements dated more than 31
   days ahead. pgTAP suites with fixed future dates set `ledger.test_today`; nothing in
   production sets it.
@@ -249,7 +254,7 @@ curl -s -X POST https://nkmylznisjcnmqbxosey.supabase.co/functions/v1/worker \
 | `ledger-worker-kick` | every minute | `worker`, only when a queue has visible messages |
 | `ledger-recategorize-sweep` | `17 */3 * * *` | stale `rules_version` sweep |
 | `ledger-fx-rates` | `0 21 * * *` | `fx-rates` function |
-| `ledger-nightly` | `0 22 * * *` (02:00 Dubai) | void released authorisations, recurring detection, insights |
+| `ledger-nightly` | `0 22 * * *` (02:00 Dubai) | purge `document_events` older than 90 days, void released authorisations, recurring detection, insights |
 | `ledger-llm-enqueue` | `30 22 * * *` | queue uncategorised merchants for the LLM |
 | `ledger-legacy-choices` | `45 22 * * *` | apply staged legacy category choices once per transaction (cutover helper); unschedules itself when nothing is pending or 30 days after staging |
 | `ledger-ops-monitor` | `*/15 * * * *` | `ops-monitor` → Sentry plus the `ops-heartbeat` check-in |
