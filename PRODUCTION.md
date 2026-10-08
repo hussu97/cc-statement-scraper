@@ -220,6 +220,7 @@ supabase secrets list --project-ref <project-ref>      # names and digests only
   `PARSER_URL` isn't `https://` or points at a local host, or if the file contains
   `PARSER_DOCUMENT_BASE_URL` or `LEDGER_E2E` (local only).
 - Optional overrides: `MS_OAUTH_TENANT` (`consumers`), `OUTLOOK_LOOKBACK_DAYS`,
+  `GMAIL_SENTRY_ALERTS` (unset = Gmail errors and Gmail mailbox/watch health stay out of Sentry until Gmail is configured; set `on` afterwards),
   `OUTLOOK_BUDGET_MS`, `GMAIL_PUSH_BUDGET_MS`, `WORKER_BUDGET_MS`, `PARSER_TIMEOUT_MS`, `EDGE_WALL_CLOCK_MS`,
   `OPS_SMS_UNPARSED_THRESHOLD`, `OPS_OPEN_REVIEWS_THRESHOLD`, `OPS_QUEUED_DOCUMENT_AGE_S` and `SENTRY_TRACES_SAMPLE_RATE`
   (see README). Add them to the same file.
