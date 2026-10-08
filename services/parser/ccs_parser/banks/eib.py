@@ -57,10 +57,13 @@ def _extract_statement_reference(lines: list[str]) -> str | None:
     return None
 
 
-def parse_eib_statement(pdf_path: str | Path) -> StatementParseResult:
+def parse_eib_statement(pdf_path: str | Path, pdf_password: str | None = None) -> StatementParseResult:
     path = Path(pdf_path)
 
-    with pdfplumber.open(str(path)) as pdf:
+    # An encrypted PDF without the right password raises here; the service maps it
+    # to PDF_DECRYPT_FAILED (audit X-17).
+    open_kwargs: dict = {"password": pdf_password} if pdf_password else {}
+    with pdfplumber.open(str(path), **open_kwargs) as pdf:
         lines: list[str] = []
         for page in pdf.pages:
             page_lines = [ln.strip() for ln in (page.extract_text() or "").splitlines() if ln.strip()]

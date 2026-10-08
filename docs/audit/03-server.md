@@ -536,6 +536,10 @@ scraper `pytest` 135 passed; `scripts/tests` 12 passed (run with `backend/.venv`
 | SRV-05, 07, 10 | deferred | Contained in `gmail-push` / `outlook-poll` / `ops-monitor`, but each needs its own design and tests (cursor paging, base64 decoder swap, new `ops_health` checks in SQL, which is not owned here). Backlog. |
 | SRV-11 | partly | New `_tests/worker_test.ts` covers the parse state machine (404/403/422/23514/22023/57014, DLQ at max attempts, send-before-delete), budget, backoff, SMS `NO_BANKS`, and the body cap. Gmail/Outlook/storeDocument paths are still untested. |
 | SRV-12 … SRV-24 | deferred | P3. SRV-21 is partly done: `card_last4` and `txn_time` are now validated, and the worker keys on code. |
+| SRV-12 | decided (later) | Measured: a parse peaks at 150-180 MB; four concurrent largest statements peaked at 444 MiB and took 14 s on 1 vCPU (amd64 emulated). `--concurrency 4` kept; PRODUCTION §3. |
+| SRV-13 | parser part fixed (later) | Hashed `requirements.txt`, `--require-hashes --only-binary=:all:`, digest-pinned base image, plain `uvicorn`; image verified locally. `deno.lock` remains (BACKLOG SRV-13r). |
+| SRV-24 | fixed (later) | Synthetic golden set `tests/synthetic/` (eight fictional statements, PDFs built at test time) runs in CI; `versions.json` ties its snapshots to `PARSER_VERSION` (NEW-2). |
+| SRV-17 | fixed (later) | A hinted parse that fails (layout, decryption, output) or finds no lines is retried once as the detected bank, with a warning; a hinted parse with lines keeps the hint and warns when detection disagrees. |
 
 **Follow-ups for files outside this change set:**
 - `docs/contracts/parse-v1.md`: add `PARSE_TIMEOUT`, `PDF_TOO_LARGE`, `PARSE_OUTPUT_INVALID` (422) and the new validation rules.

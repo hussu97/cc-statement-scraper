@@ -90,6 +90,29 @@
 - PRODUCTION §2.3 (X-10, DB-41, `ledger.test_today`), §2.6 (legacy alias report, DP-21), §11 (DLQ tools, job errors, template promotion, profile deletion)
 - README: new RPCs in the RPC table, pgTAP suites 13–18
 
+## Parser P2/P3 audit fixes — 2026-10-08 (branch `ledger-v2`)
+
+### Parser
+
+- **chore** `PARSER_VERSION` and the `pyproject.toml` version 2026.10.2: the fixes below change parser output (NEW-2)
+- **fix** FAB `total_credits` includes the credits the summary's Payments/Credits column leaves out (rewards redemptions, dispute credits), taken from the row's own Total Payment Due when it equals the Current Balance. Every local FAB PDF now reconciles debits, credits and balance, including the three statements (19 copies) that were short (DP-10)
+- **feat** Mashreq totals from the "Summary AED" block (all six values and the due date), used only when the block is complete and adds up. All 20 local Mashreq PDFs reconcile debits, credits and balance (DP-12)
+- **fix** Mashreq foreign rows (`<ref> MYR 500.00 @0.9400 470.00`) report `currency_original`, `amount_original` and the printed `fx_rate`, and the description is the merchant only: 38 lines in the local corpus. Kind and `legacy_fingerprint` are unchanged (DP-11)
+- **fix** `EIB_PDF_PASSWORD` and `MASHREQ_PDF_PASSWORD` reach their parsers and the password list used by detection, page counting and totals. The worker already sends every stored key, so no worker or SQL change (X-17)
+- **fix** Mashreq `country_code` comes only from an upper-case trailing token, like the other banks (legacy upper-cased any last word)
+- **feat** `country_code` is ISO 3166-1 alpha-2 or null (`ccs_parser/countries.py`): alpha-3 codes, `UAE` and FAB's emirate codes (`DXB`, `AUH`, `SHJ`, …) map to alpha-2; `YOU`, `FEE`, `VAT` and other non-codes are null (X-25r)
+- **fix** `fx_rate` is `"1"` on every AED line, and null instead of a contract failure for a rate below 1e-8 (X-33, parser part)
+- **feat** Wrong bank hint: when the hinted parse fails (layout, decryption, output) or finds no lines and detection names another bank, the parser retries once as that bank and warns; a hinted parse with lines keeps the hint and warns when detection disagrees (SRV-17)
+- **test** Synthetic golden set that runs in CI (`tests/test_synthetic_golden.py`): eight fictional statements (FAB, ENBD Dec/Jan year, EIB and Mashreq encrypted, ADCB, SIB history, a wrong hint) built as PDFs at test time and compared with committed snapshots (SRV-24)
+- **test** `tests/synthetic/versions.json` records the snapshot digest per `PARSER_VERSION`: changed output under a recorded version fails the suite, and `python -m tests.synthetic.update` refuses to record it (NEW-2). A test pins `pyproject.toml`'s version to `PARSER_VERSION`
+- **chore** Supply chain (SRV-13, parser part): `requirements.txt` with hashes (`uv pip compile --generate-hashes`), installed with `pip --require-hashes --only-binary=:all:`; base image pinned by digest; plain `uvicorn` without the `[standard]` extras; the image copies `ccs_parser/` instead of pip-installing it (no unpinned build backend). Built and run locally: `/health` and `/parse` OK
+- **docs** Capacity measured, `--concurrency 4` kept (SRV-12): a parse peaks at 150-180 MB; four concurrent parses peaked at 444 MiB and took 14 s on one vCPU
+- **test** `tests/synthetic_pdf.py` (dependency-free PDF writer) and fictional statements in `tests/synthetic/cases.py`; `test_pdf_passwords.py`, `test_mashreq_fx.py`, totals cases
+
+### Docs
+
+- parse-v1: password keys, totals per bank, Mashreq foreign rows, bank-hint retry, `fx_rate`, `country_code`, versioning; parser README; BACKLOG (DP-10, DP-11, DP-12, X-17, SRV-17, X-25r, SRV-24, NEW-2, SRV-12 done; SRV-13 parser part done; X-33 parser part done; NEW-4 Mashreq `card_last4` is the card's BIN); 02, 03 and 06 fix status; PRODUCTION §3 capacity note
+
 ## Supabase publishable / secret API keys — 2026-10-08 (branch `ledger-v2`)
 
 ### Backend

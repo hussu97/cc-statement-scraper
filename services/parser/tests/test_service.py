@@ -178,3 +178,125 @@ def test_corrupt_pdf_with_hint_is_unsupported_layout(tmp_path) -> None:
     with pytest.raises(ParserError) as exc:
         service.parse_document(bad, bank_code_hint="MASHREQ")
     assert exc.value.code == "UNSUPPORTED_LAYOUT"
+
+
+# ---------------------------------------------------------------- SRV-17: wrong bank hint
+
+
+@pytest.fixture
+def per_bank(monkeypatch):
+    """Install a per-bank parser outcome (a result or a ParserError) and a detection result."""
+
+    def _install(outcomes: dict, *, detected: str | None):
+        calls: list[str] = []
+
+        def parse(bank_code, *_a, **_k):
+            calls.append(bank_code)
+            outcome = outcomes[bank_code]
+            if isinstance(outcome, Exception):
+                raise outcome
+            return outcome
+
+        monkeypatch.setattr(parser_adapter, "parse_statement_for_bank", parse)
+        monkeypatch.setattr(service, "detect_bank_code", lambda *_a, **_k: detected)
+        monkeypatch.setattr(service, "read_text_lines", lambda *_a, **_k: None)
+        return calls
+
+    return _install
+
+
+def _fab_result():
+    return make_result([make_tx(desc="CORNER SHOP DUBAI ARE", amount_aed=10.0)], bank_code="FAB")
+
+
+@pytest.mark.parametrize("code", ["UNSUPPORTED_LAYOUT", "PDF_DECRYPT_FAILED", "PARSE_OUTPUT_INVALID"])
+def test_wrong_hint_is_retried_as_the_detected_bank(pdf_file, per_bank, code) -> None:
+    calls = per_bank({"ADCB": ParserError(code, "no"), "FAB": _fab_result()}, detected="FAB")
+    out = service.parse_document(pdf_file, bank_code_hint="ADCB")
+    assert calls == ["ADCB", "FAB"]
+    assert out["bank_code"] == "FAB"
+    assert out["statements"][0]["warnings"][0] == (
+        "Bank hint ADCB did not match this PDF; parsed as FAB (detected from the PDF)"
+    )
+    ParseResponse.model_validate(out)
+
+
+def test_hint_with_no_lines_is_retried(pdf_file, per_bank) -> None:
+    empty = make_result([], bank_code="MASHREQ")
+    calls = per_bank({"MASHREQ": empty, "FAB": _fab_result()}, detected="FAB")
+    out = service.parse_document(pdf_file, bank_code_hint="MASHREQ")
+    assert calls == ["MASHREQ", "FAB"]
+    assert out["bank_code"] == "FAB"
+
+
+def test_empty_hinted_result_stands_when_the_retry_finds_nothing_either(pdf_file, per_bank) -> None:
+    calls = per_bank(
+        {"MASHREQ": make_result([], bank_code="MASHREQ"), "FAB": ParserError("UNSUPPORTED_LAYOUT", "no")},
+        detected="FAB",
+    )
+    out = service.parse_document(pdf_file, bank_code_hint="MASHREQ")
+    assert calls == ["MASHREQ", "FAB"]
+    assert out["bank_code"] == "MASHREQ"
+    assert out["statements"][0]["lines"] == []
+
+
+@pytest.mark.parametrize("detected", [None, "ADCB", "HSBC"])
+def test_hint_error_stands_without_a_different_detection(pdf_file, per_bank, detected) -> None:
+    calls = per_bank({"ADCB": ParserError("UNSUPPORTED_LAYOUT", "layout")}, detected=detected)
+    with pytest.raises(ParserError) as exc:
+        service.parse_document(pdf_file, bank_code_hint="ADCB")
+    assert exc.value.code == "UNSUPPORTED_LAYOUT"
+    assert calls == ["ADCB"]
+
+
+def test_failed_retry_raises_the_hinted_error(pdf_file, per_bank) -> None:
+    calls = per_bank(
+        {"ADCB": ParserError("PDF_DECRYPT_FAILED", "hinted"), "FAB": ParserError("UNSUPPORTED_LAYOUT", "retry")},
+        detected="FAB",
+    )
+    with pytest.raises(ParserError) as exc:
+        service.parse_document(pdf_file, bank_code_hint="ADCB")
+    assert (exc.value.code, str(exc.value)) == ("PDF_DECRYPT_FAILED", "hinted")
+    assert calls == ["ADCB", "FAB"]
+
+
+def test_hinted_parse_with_lines_stands_with_a_warning(pdf_file, per_bank) -> None:
+    calls = per_bank({"MASHREQ": _fab_result()}, detected="ENBD")
+    out = service.parse_document(pdf_file, bank_code_hint="MASHREQ")
+    assert calls == ["MASHREQ"]
+    assert out["bank_code"] == "MASHREQ"
+    assert out["statements"][0]["warnings"][0] == (
+        "This PDF looks like ENBD, not MASHREQ; parsed as MASHREQ because of the bank hint"
+    )
+
+
+def test_matching_hint_has_no_warning(pdf_file, per_bank) -> None:
+    per_bank({"FAB": _fab_result()}, detected="FAB")
+    out = service.parse_document(pdf_file, bank_code_hint="FAB")
+    assert not any("hint" in w for w in out["statements"][0]["warnings"])
+
+
+def test_other_parser_errors_are_not_retried(pdf_file, per_bank) -> None:
+    calls = per_bank({"ADCB": ParserError("PDF_TOO_LARGE", "big")}, detected="FAB")
+    with pytest.raises(ParserError) as exc:
+        service.parse_document(pdf_file, bank_code_hint="ADCB")
+    assert exc.value.code == "PDF_TOO_LARGE"
+    assert calls == ["ADCB"]
+
+
+# ---------------------------------------------------------------- X-25r / X-33 output normalisation
+
+
+def test_country_codes_and_aed_rates_are_normalised(pdf_file, stub_parser) -> None:
+    txs = [
+        make_tx(desc="SHOP DUBAI ARE", amount_aed=10.0, fx=None),
+        make_tx(desc="SHOP DXB", amount_aed=10.0),
+        make_tx(desc="PAYMENT THANK YOU", amount_aed=-10.0, kind="payment"),
+        make_tx(desc="HOTEL DUBLIN IRL", amount_aed=36.73, amount_original=10.0, currency="EUR", fx=3.673),
+    ]
+    for tx, raw in zip(txs, ["ARE", "DXB", "YOU", "IRL"], strict=True):
+        tx.country_code = raw
+    stub_parser(make_result(txs))
+    lines = service.parse_document(pdf_file)["statements"][0]["lines"]
+    assert [ln["country_code"] for ln in lines] == ["AE", "AE", None, "IE"]
+    assert [ln["fx_rate"] for ln in lines] == ["1", "1", "1", "3.673"]

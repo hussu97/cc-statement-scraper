@@ -386,9 +386,11 @@ echo "$PARSER_URL"; curl -s "$PARSER_URL/health"      # the URL is not a secret
   `PARSER_*` variables in `services/parser/.env.example`.
 - **Timeouts nest:** parser kill 60 s < worker `PARSER_TIMEOUT_MS` 75 s < Cloud Run
   `--timeout 120`. Keep `--timeout 120`.
-- `--concurrency 4` with `--memory 1Gi`: real statements use far less than the 768 MB child
-  cap, but four pathological PDFs at once could exhaust the instance. If parses ever die with
-  out-of-memory, drop to `--concurrency 2` (more instances instead; BACKLOG SRV-12).
+- `--concurrency 4` with `--memory 1Gi`, measured (SRV-12): a parse peaks at 150-180 MB in its
+  child; four concurrent parses of the largest statements peaked at 444 MiB and took 14 s on one
+  vCPU (amd64 under emulation), well inside 1 GiB and the 60 s kill. Eight at once would take
+  about 52 s, which is why concurrency stays at 4 (each worker run sends at most 3). If parses ever hit
+  `PARSE_TIMEOUT` or out-of-memory under load, drop to `--concurrency 2` and raise `--max-instances`.
 - After deploying, copy the printed service URL into the `PARSER_URL=` line of
   `supabase/functions/.env.production` (replacing the placeholder) and push it with
   `scripts/cutover/set-edge-secrets.sh` (§2.5). `PARSER_SECRET` there must equal the

@@ -24,13 +24,26 @@ Body (JSON):
     "ADCB_PDF_PASSWORD": "…",
     "ADCB_CID": "…",
     "ENBD_PDF_PASSWORD": "…",
-    "SIB_PDF_PASSWORD": "…"
+    "EIB_PDF_PASSWORD": "…",
+    "SIB_PDF_PASSWORD": "…",
+    "MASHREQ_PDF_PASSWORD": "…"
   }
 }
 ```
 
 - `bank_code_hint` may be null. The parser then detects the bank from the PDF text, trying each password.
-- `settings` uses the same keys as the legacy runtime settings consumed by `parsers/dispatcher.py`.
+- With a hint, the hinted parser runs first and the bank is also detected from the PDF. If the
+  hinted parse fails with `UNSUPPORTED_LAYOUT`, `PDF_DECRYPT_FAILED` or `PARSE_OUTPUT_INVALID`, or
+  finds no lines at all, and detection names a different bank, the parser retries **once** as the
+  detected bank. The response then carries the detected `bank_code` (ingest updates the document's
+  bank from it) and every statement starts with the warning `Bank hint <HINT> did not match this
+  PDF; parsed as <BANK> (detected from the PDF)`. If the retry fails too, the hinted outcome is
+  returned. A hinted parse that found lines is kept, with the warning `This PDF looks like <BANK>,
+  not <HINT>; parsed as <HINT> because of the bank hint` when detection disagrees.
+- `settings` holds the profile's PDF passwords: the keys `set_profile_secret` accepts
+  (`<BANK>_PDF_PASSWORD` for FAB, ADCB, ENBD, EIB, SIB and MASHREQ, plus `ADCB_CID`). The worker
+  sends every key the profile has stored (`worker_document_context`). Each bank parser uses its own
+  key; detection, page counting and totals try all of them. Unknown keys are ignored.
 
 ## Response 200
 
@@ -39,7 +52,7 @@ All money values are **decimal strings, absolute (non-negative)**, except `total
 ```json
 {
   "contract_version": 1,
-  "parser_version": "2026.10.0",
+  "parser_version": "2026.10.2",
   "bank_code": "ADCB",
   "document_kind": "statement_pdf",
   "statements": [
@@ -91,18 +104,42 @@ All money values are **decimal strings, absolute (non-negative)**, except `total
 ```
 
 Field rules:
+- `parser_version` changes whenever the output for the same PDF changes (see [Versioning](#versioning)).
 - `document_kind` is `statement_pdf` or `history_pdf`. SIB "transaction history" exports are `history_pdf`.
 - `statements[].kind` is `statement` or `history_extract`. A `history_pdf` produces only `history_extract` statements.
 - `reference_source` is `explicit`, `fallback` or null.
-- `totals` contains every key. A value is null when that parser doesn't extract it yet.
+- `totals` contains every key. A value is null when that parser doesn't extract it. FAB, ENBD/EIB and
+  MASHREQ extract all six; ADCB only the two balances; SIB none. MASHREQ's summary block is used only
+  when all of its lines are present and add up (otherwise the balances stay null and a warning says so).
+  FAB's `total_credits` includes credits that the summary's Payments/Credits column leaves out
+  (rewards redemptions, dispute credits): it is what the row's own Total Payment Due implies.
 - `totals.opening_balance` and `totals.closing_balance` are **signed** decimal strings: positive = amount owed, negative = card in credit (e.g. `"-1579.06"`). All other totals (`total_debits`, `total_credits`, `min_due`, `credit_limit`) are absolute.
 - `lines[].direction` is `debit` or `credit`. Sign normalisation happens in the parser; SIB history is inverted at source.
 - `lines[].kind` is one of `purchase | refund | payment | fee | interest | cash_advance | adjustment`.
-- `amount_aed` is null when the bank does not print the AED amount (e.g. Mashreq foreign rows).
-- `fx_rate` is AED per one unit of `currency_original`, as a decimal string, or null.
+- `amount_aed` is null when the bank does not print the AED amount (e.g. SIB history foreign rows).
+- MASHREQ foreign rows (`<merchant> <ref> MYR 500.00 @0.9400 470.00`) are split into
+  `currency_original`, `amount_original` and `fx_rate` (the printed rate); `description_raw` is the
+  merchant only. `legacy_fingerprint` is still computed from the unsplit text, as legacy did.
+- `fx_rate` is AED per one unit of `currency_original`, as a decimal string, or null. An AED line is
+  always `"1"`. A foreign line has the bank's printed rate (MASHREQ `@0.9400`, ADCB `[1 EUR=AED …]`)
+  or the ratio of the two amounts; null when unknown or when it would round to zero at 8 places.
 - `legacy_fingerprint` is `domain.parsing.utils.fingerprint_for(...)`, computed exactly as the legacy backend did. It is used to carry legacy category overrides across.
-- `country_code` is free text from the statement (values seen: `AE`, `ARE`, `UAE`, `IRL`, …). It has no defined format yet.
+- `country_code` is an **ISO 3166-1 alpha-2** code or null. Statements print a trailing token in
+  several forms; the parser maps ISO alpha-3 (`ARE` → `AE`, `IRL` → `IE`), `UAE` and the UAE emirate
+  codes FAB prints for domestic merchants (`DXB`, `AUH`, `SHJ`, `AJM`, `FUJ`, `RAK`, `UAQ`, `AAN`)
+  to alpha-2, and anything else to null: `YOU` ("THANK YOU"), `FEE`, `USD`, typos, and alpha-3
+  codes that are also common words (`VAT`, `CAN`, `AND`, …). Best effort: the token is read from
+  free text.
 - A `history_extract` is a **window**, not a complete record of its cycle. Ingest unions the lines of every document of a statement by `(line_key, occurrence)`, so a later, shorter export never removes lines an earlier one contributed (ARCHITECTURE §4).
+
+### Versioning
+
+`parser_version` (`ccs_parser.PARSER_VERSION`, equal to the `pyproject.toml` version that the
+deploy smoke test checks against `/health`) is bumped whenever the output for the same PDF changes,
+so `documents.parser_version` tells old parses from new ones and `requeue_documents` can target
+them. `services/parser/tests/test_synthetic_golden.py` enforces it: the synthetic golden snapshots
+are recorded per version in `tests/synthetic/versions.json`, and a snapshot change under an already
+recorded version fails the suite.
 
 ### Output validation
 
@@ -120,6 +157,7 @@ field paths instead of a failed ingest:
 | money | decimal strings within `numeric(14,2)` (≤ 12 integer digits); only `opening_balance` / `closing_balance` may be negative |
 | `fx_rate` | within `numeric(18,8)` and **> 0**, or null |
 | `currency_original` | `^[A-Z]{3}$` |
+| `country_code` | `^[A-Z]{2}$` (ISO 3166-1 alpha-2) or null; the parser normalises it before validation |
 | `legacy_fingerprint` | 64 lowercase hex characters |
 | `statements` | at least one; unknown keys are rejected everywhere |
 

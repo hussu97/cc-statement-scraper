@@ -31,7 +31,7 @@ services/parser/
 ├── tests/                  # unit tests, ported legacy tests, golden parity
 ├── Dockerfile
 ├── pyproject.toml
-└── requirements.txt        # pinned, generated with `uv pip compile`
+└── requirements.txt        # pinned with hashes, generated with `uv pip compile --generate-hashes`
 ```
 
 ## Setup
@@ -47,11 +47,15 @@ uv pip install --python .venv/bin/python pytest ruff
 source .venv/bin/activate
 ```
 
-Regenerate pins after changing `pyproject.toml` dependencies:
+Regenerate pins (with hashes) after changing `pyproject.toml` dependencies:
 
 ```bash
-uv pip compile pyproject.toml -o requirements.txt --python-version 3.12
+uv pip compile pyproject.toml -o requirements.txt --python-version 3.12 --generate-hashes
 ```
+
+The image installs them with `pip install --require-hashes --only-binary=:all:`, from a base image
+pinned by digest (`Dockerfile`), and copies `ccs_parser/` without pip-installing it (no unpinned
+build backend). Plain `uvicorn`, without the `[standard]` extras (SRV-13).
 
 `pdfplumber` and `pdfminer.six` are pinned exactly: their text output drives every
 parser regex. Re-run the golden parity suite before changing them.
@@ -74,7 +78,7 @@ Set `PARSER_ALLOW_HTTP=true` to fetch from a plain-http local file server while 
 
 | Method | Path | Auth | Notes |
 |---|---|---|---|
-| `POST` | `/parse` | `X-Parser-Secret` | Contract parse-v1. Downloads `document_url` (30 s timeout, 25 MB max), detects the bank when `bank_code_hint` is null, parses in a resource-limited child process (see `ccs_parser/limits.py`), validates the output against the DB constraints, returns statements. |
+| `POST` | `/parse` | `X-Parser-Secret` | Contract parse-v1. Downloads `document_url` (30 s timeout, 25 MB max), detects the bank when `bank_code_hint` is null, parses in a resource-limited child process (see `ccs_parser/limits.py`), validates the output against the DB constraints, returns statements. A wrong hint is retried once as the detected bank, with a warning (SRV-17). |
 | `GET` | `/health` | none | `{"status": "ok", "parser_version", "contract_version"}` |
 | `GET` | `/debug-sentry` | `X-Parser-Secret` | Raises an error to test Sentry. Not registered when `SENTRY_ENVIRONMENT=production`. |
 
@@ -99,12 +103,23 @@ Implementation notes beyond the contract:
   (negative = card in credit), per the contract.
 - Fee classification uses whole words (`FEE(S)`, `CHARGE(S)`): unlike legacy,
   "COFFEE" or "RECHARGE" lines are no longer `fee`. Fingerprints and amounts are unaffected.
-- `fx_rate` passes through the legacy `fx_rate_to_aed` (so AED lines report `"1"`).
+- `fx_rate` passes through the legacy `fx_rate_to_aed`, except that AED lines always report `"1"`
+  and a rate that rounds to zero at 8 places is null (X-33).
+- `country_code` is ISO 3166-1 alpha-2 or null (`countries.py`, X-25r): alpha-3, `UAE` and FAB's
+  emirate codes (`DXB`, `AUH`, `SHJ`, …) map to alpha-2; words such as `YOU`, `FEE` or `VAT` are null.
 - The legacy unknown-card sentinel `"0000"` is emitted as `null` in `card_last4` /
   `primary_card_last4` (the fingerprint still uses `"0000"`, as legacy did).
 - `statement_date` never falls back to today: an undeterminable date is `UNSUPPORTED_LAYOUT`.
 - `kind = interest` for debit fee/purchase lines mentioning `INTEREST`, `PROFIT CHARGE`,
   `FINANCE CHARGE` or `MURABAHA PROFIT` (VAT lines excluded). Other kinds are legacy.
+- Mashreq foreign rows are split into currency, original amount and the printed rate (DP-11);
+  legacy kept them as AED with that text in the description. The kind and `legacy_fingerprint`
+  are still computed from the legacy description.
+- Totals (`totals.py`): FAB, ENBD/EIB and Mashreq give all six values, ADCB the two balances, SIB
+  none. FAB's `total_credits` adds the credits its Payments/Credits column omits (DP-10); Mashreq's
+  summary is used only when complete and consistent (DP-12).
+- Every PDF password in `settings` is tried for detection, page counting and totals; each bank
+  parser uses its own key, including `EIB_PDF_PASSWORD` and `MASHREQ_PDF_PASSWORD` (X-17).
 
 ## Environment variables
 
@@ -146,6 +161,26 @@ pytest -q
 `tests/test_parsers.py` (ported) needs sample PDFs in `~/Downloads` and
 `ADCB_SAMPLE_PASSWORD`; it is skipped otherwise.
 
+### Synthetic golden set (runs in CI)
+
+`tests/test_synthetic_golden.py` parses eight fictional statements (`tests/synthetic/cases.py`:
+FAB, ENBD with the Dec/Jan year fix, EIB and Mashreq encrypted, ADCB, SIB history, a wrong bank
+hint). Each is written as a PDF at test time by `tests/synthetic_pdf.py` (plain text placed like the
+bank's layout; no real data) and compared with `tests/synthetic/expected/<case>.json`.
+
+When parser output changes on purpose:
+
+```bash
+# 1. bump PARSER_VERSION in ccs_parser/__init__.py and version in pyproject.toml (they must match)
+# 2. regenerate the snapshots and review the JSON diff
+PARSER_ISOLATION=inline .venv/bin/python -m tests.synthetic.update
+```
+
+`tests/synthetic/versions.json` records the snapshot digest of every `PARSER_VERSION`. Changed
+output under a version that is already recorded fails `test_snapshot_digest_matches_parser_version`,
+and `update` refuses to record it, so `documents.parser_version` always tells old output from new
+(NEW-2). New layouts get a case here.
+
 ### Golden parity
 
 `tests/test_golden_parity.py` compares the service with the **legacy v1 parser's output**
@@ -167,8 +202,9 @@ pytest -q tests/test_golden_parity.py
   whole-word fee classifier.
 - A case whose source PDF has moved is skipped; the suite is skipped when `tests/golden/`
   is empty (fresh clones, CI).
-- New layouts and banks are covered by unit tests (`test_*.py`) rather than new golden
-  files. To rebuild the fixtures from scratch, use a checkout of a commit that still has
+- New layouts and banks are covered by the synthetic set and unit tests (`test_*.py`) rather
+  than new golden files. The real corpus does not compare totals, `country_code` or `fx_rate`.
+  To rebuild the fixtures from scratch, use a checkout of a commit that still has
   `backend/` and `scripts/build_golden.py` (e.g. `cdd77b1`, or the parent of
   `git log --diff-filter=D -1 -- services/parser/scripts/build_golden.py`).
 
@@ -199,6 +235,12 @@ gcloud run deploy "$SERVICE" --source . --project "$PROJECT" --region "$REGION" 
   --set-secrets PARSER_SECRET=parser-secret:latest,SENTRY_DSN=parser-sentry-dsn:latest \
   --set-env-vars SENTRY_ENVIRONMENT=production,SENTRY_RELEASE=$(git rev-parse --short HEAD),PARSER_ALLOWED_HOSTS=<project>.supabase.co
 ```
+
+Capacity (SRV-12, measured 2026-10-08): a parse takes 0.9 s CPU (p95 1.1 s) and peaks at
+150-180 MB RSS in its child process (95 local statements). In the image (1 vCPU, 1 GiB, amd64
+under emulation), four concurrent parses of the largest statements peaked at 444 MiB and finished
+in 14 s; eight would take 52 s, close to the 60 s kill. `--concurrency 4` is kept: Cloud Run never
+sends an instance more than four, and each worker run sends at most three.
 
 `--allow-unauthenticated` is required because the Supabase worker authenticates with
 `X-Parser-Secret` rather than a Google identity token. Store the same secret value
