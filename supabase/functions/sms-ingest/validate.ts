@@ -18,7 +18,9 @@ export interface SmsRequest {
 }
 
 export function validateSmsRequest(raw: unknown): SmsRequest {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new HttpError(400, "INVALID_BODY", "expected a JSON object");
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new HttpError(400, "INVALID_BODY", "expected a JSON object");
+  }
   const r = raw as Record<string, unknown>;
   let profile: string | null = null;
   if (r.profile_code !== undefined && r.profile_code !== null) {

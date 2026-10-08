@@ -253,7 +253,7 @@ function InsightsPanel({ profileCode }: { profileCode: string }) {
       ) : q.isError ? (
         <ErrorState error={q.error} onRetry={() => void q.refetch()} />
       ) : list.length === 0 ? (
-        <EmptyState icon={<Lightbulb />} title="All quiet">Ledger checks your spending every night and notes anything unusual here.</EmptyState>
+        <EmptyState icon={<Lightbulb />} title="All quiet">Bank Ledger checks your spending every night and notes anything unusual here.</EmptyState>
       ) : (
         <ul className="flex flex-col gap-2 px-5 pb-5">
           {list.slice(0, 5).map((i) => (

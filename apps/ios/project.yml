@@ -40,7 +40,7 @@ targets:
     info:
       path: Ledger/Info.plist
       properties:
-        CFBundleDisplayName: Ledger
+        CFBundleDisplayName: Bank Ledger
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen:
@@ -51,7 +51,7 @@ targets:
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         LedgerSupabaseURL: $(LEDGER_SUPABASE_URL)
-        LedgerSupabaseAnonKey: $(LEDGER_SUPABASE_ANON_KEY)
+        LedgerSupabasePublishableKey: $(LEDGER_SUPABASE_PUBLISHABLE_KEY)
         LedgerSentryDSN: $(LEDGER_SENTRY_DSN)
         LedgerEnvironment: $(LEDGER_ENVIRONMENT)
         LedgerAppGroup: $(LEDGER_APP_GROUP)
@@ -82,13 +82,13 @@ targets:
     info:
       path: ShareExtension/Info.plist
       properties:
-        CFBundleDisplayName: Add to Ledger
+        CFBundleDisplayName: Add to Bank Ledger
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         LedgerSupabaseURL: $(LEDGER_SUPABASE_URL)
-        LedgerSupabaseAnonKey: $(LEDGER_SUPABASE_ANON_KEY)
+        LedgerSupabasePublishableKey: $(LEDGER_SUPABASE_PUBLISHABLE_KEY)
         LedgerSentryDSN: $(LEDGER_SENTRY_DSN)
         LedgerEnvironment: $(LEDGER_ENVIRONMENT)
         LedgerAppGroup: $(LEDGER_APP_GROUP)

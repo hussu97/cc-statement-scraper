@@ -53,7 +53,9 @@ export function senderOf(m: GraphMessage): string {
 }
 
 export function pdfAttachments(values: GraphAttachment[]): GraphAttachment[] {
-  return values.filter((a) => a && !a.isInline && a.id && isPdfAttachment(String(a.name ?? ""), String(a.contentType ?? "")));
+  return values.filter((a) =>
+    a && !a.isInline && a.id && isPdfAttachment(String(a.name ?? ""), String(a.contentType ?? ""))
+  );
 }
 
 export class GraphClient {
@@ -62,7 +64,11 @@ export class GraphClient {
   async get(url: string): Promise<Record<string, unknown>> {
     if (!url.startsWith(GRAPH)) throw new Error("refusing to call a non-Graph URL");
     const res = await this.fetchFn(url, {
-      headers: { Authorization: `Bearer ${this.accessToken}`, Accept: "application/json", Prefer: "odata.maxpagesize=50" },
+      headers: {
+        Authorization: `Bearer ${this.accessToken}`,
+        Accept: "application/json",
+        Prefer: "odata.maxpagesize=50",
+      },
       signal: AbortSignal.timeout(30_000),
     });
     if (!res.ok) {
@@ -74,7 +80,9 @@ export class GraphClient {
 
   async listPdfAttachments(messageId: string): Promise<GraphAttachment[]> {
     const out: GraphAttachment[] = [];
-    let url: string | null = `${GRAPH}/me/messages/${encodeURIComponent(messageId)}/attachments?$select=id,name,contentType,isInline,size`;
+    let url: string | null = `${GRAPH}/me/messages/${
+      encodeURIComponent(messageId)
+    }/attachments?$select=id,name,contentType,isInline,size`;
     while (url) {
       const page = await this.get(url);
       out.push(...pdfAttachments((page.value ?? []) as GraphAttachment[]));

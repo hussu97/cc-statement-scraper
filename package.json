@@ -2,7 +2,9 @@
   "name": "ledger",
   "private": true,
   "packageManager": "pnpm@10.30.3",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "tokens": "pnpm --filter @ledger/tokens build",
     "db:types": "supabase gen types typescript --local > packages/db-types/src/database.ts",
@@ -10,6 +12,23 @@
     "db:test": "supabase test db",
     "web:dev": "pnpm --filter @ledger/web dev",
     "web:test": "pnpm --filter @ledger/web test",
-    "web:build": "pnpm --filter @ledger/web build"
+    "web:build": "pnpm --filter @ledger/web build",
+    "hooks:install": "bash scripts/install-hooks.sh",
+    "check": "bash scripts/hooks/pre-push",
+    "check:all": "PRE_PUSH_ALL=1 bash scripts/hooks/pre-push",
+    "check:plan": "PRE_PUSH_DRY_RUN=1 bash scripts/hooks/pre-push",
+    "web:lint": "pnpm --filter @ledger/web lint",
+    "web:typecheck": "pnpm --filter @ledger/tokens build && pnpm --filter @ledger/web typecheck",
+    "tokens:check": "pnpm --filter @ledger/tokens check",
+    "edge:lint": "cd supabase/functions && deno lint",
+    "edge:test": "cd supabase/functions && deno test -A .",
+    "db:migrations:check": "bash scripts/ci/check-migrations.sh diff origin/main HEAD",
+    "lint:workflows": "actionlint && shellcheck -x scripts/hooks/* scripts/ci/*.sh scripts/install-hooks.sh",
+    "smoke:web": "bash scripts/ci/web-smoke.sh",
+    "brand:icons": "node scripts/brand/generate-icons.mjs",
+    "brand:icons:check": "node scripts/brand/generate-icons.mjs --check"
+  },
+  "devDependencies": {
+    "@resvg/resvg-js": "2.6.2"
   }
 }

@@ -26,7 +26,15 @@ const welcomeRoute = createRoute({
   component: lazyRouteComponent(() => import("@/routes/auth"), "WelcomePage"),
 });
 
-const appRoute = createRoute({ getParentRoute: () => rootRoute, id: "app", component: AppShell });
+// Public: rendered outside AppShell so it works signed out and as a deep link.
+const privacyRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/privacy",
+  component: lazyRouteComponent(() => import("@/routes/privacy"), "PrivacyPage"),
+});
+
+/** Authenticated layout: AppShell redirects to /signin without a session. */
+export const appRoute = createRoute({ getParentRoute: () => rootRoute, id: "app", component: AppShell });
 
 const overviewRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -86,6 +94,7 @@ const settingsRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   signInRoute,
   welcomeRoute,
+  privacyRoute,
   appRoute.addChildren([overviewRoute, activityRoute, insightsRoute, budgetsRoute, cardsRoute, reviewRoute, rulesRoute, settingsRoute]),
 ]);
 

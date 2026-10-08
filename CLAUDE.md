@@ -1,6 +1,6 @@
-# Project Rules — Ledger
+# Project Rules — Bank Ledger
 
-Ledger is a personal credit-card finance system: a Supabase backend (Postgres + Edge Functions), a Python statement parser on Cloud Run, a React web app, a SwiftUI iPhone app, and a local Playwright scraper.
+Bank Ledger is a personal credit-card finance system: a Supabase backend (Postgres + Edge Functions), a Python statement parser on Cloud Run, a React web app, a SwiftUI iPhone app, and a local Playwright scraper. Code identifiers keep the `ledger` name (`@ledger/*`, `LedgerKit`, function and Sentry project names); only prose and UI say "Bank Ledger".
 
 Every rule below exists because the codebase once had several coexisting variants of a convention and the wrong one got copied. Copy THESE patterns, not a neighbouring file's. When you touch code that predates a rule, migrate it opportunistically.
 
@@ -14,9 +14,9 @@ Every rule below exists because the codebase once had several coexisting variant
 | `apps/web/` | React web app (Vite) | `pnpm web:test`, `pnpm web:build` |
 | `apps/ios/` | SwiftUI iPhone app + `LedgerKit` Swift package | `cd apps/ios/LedgerKit && swift test` |
 | `packages/tokens/` | Design tokens → CSS + Swift | `pnpm tokens` |
+| `assets/brand/` | Mark source SVG; every web icon and the iOS 1024 icon render from it | `pnpm brand:icons` (`:check` in CI-style runs) |
 | `packages/db-types/` | Generated DB types | `pnpm db:types` |
 | `scraper/` | Local-only bank scraper CLI (architecture frozen) | `cd scraper && .venv/bin/pytest -q` |
-| `backend/`, `frontend/` | **Legacy** FastAPI + React. Frozen; deleted at cutover. Do not extend. | — |
 
 ## 1. Database (Supabase Postgres)
 

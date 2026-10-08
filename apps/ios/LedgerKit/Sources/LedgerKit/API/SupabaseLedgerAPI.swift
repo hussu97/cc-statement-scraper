@@ -156,7 +156,7 @@ public final class SupabaseLedgerAPI: LedgerAPI, @unchecked Sendable {
 
     public func uploadStatements(profileCode: String, files: [UploadFile]) async throws -> UploadResponse {
         let token = try await accessToken()
-        let uploader = StatementUploader(functionsURL: config.functionsURL, anonKey: config.supabaseAnonKey, session: session)
+        let uploader = StatementUploader(functionsURL: config.functionsURL, apiKey: config.supabasePublishableKey, session: session)
         return try await uploader.upload(files: files, profileCode: profileCode, accessToken: token)
     }
 

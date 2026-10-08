@@ -23,7 +23,7 @@ export function AnomaliesTab({ profileCode, range }: { profileCode: string; rang
           <>
             <CardHeader eyebrow={rangeLabel(range.from, range.to)} title="Unusual spending" />
             <EmptyState icon={<ShieldCheck />} title="Nothing unusual in this range">
-              Ledger flags charges far above what you normally spend at a merchant or in a category, and large first purchases.
+              Bank Ledger flags charges far above what you normally spend at a merchant or in a category, and large first purchases.
             </EmptyState>
           </>
         }

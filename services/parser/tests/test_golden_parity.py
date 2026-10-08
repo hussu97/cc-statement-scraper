@@ -1,7 +1,8 @@
-"""Golden parity: the new service must reproduce the legacy backend parser.
+"""Golden parity: the service must reproduce the legacy v1 backend parser.
 
-Golden files are produced by ``scripts/build_golden.py`` (gitignored, private data).
-The test is skipped when ``tests/golden/`` is empty.
+The golden files in ``tests/golden/`` are a frozen snapshot of the legacy parser's output
+(gitignored, private data), built before the legacy code was removed; they can't be
+rebuilt from this repo. The test is skipped when ``tests/golden/`` is empty.
 """
 
 from __future__ import annotations
@@ -37,7 +38,7 @@ ALLOWED_DELTAS: dict[str, set[str]] = {
 }
 RECOVERED_LINES: dict[str, int] = {}
 
-pytestmark = pytest.mark.skipif(not GOLDEN_FILES, reason="no golden files; run scripts/build_golden.py")
+pytestmark = pytest.mark.skipif(not GOLDEN_FILES, reason="no golden files (frozen, local-only legacy snapshot)")
 
 
 def _load(path: Path) -> dict:

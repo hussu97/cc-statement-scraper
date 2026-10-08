@@ -5,6 +5,11 @@ Built on 2026-10-08 from the six pre-cutover audits ([01 database](01-database.m
 [05 iOS](05-ios.md), [06 cross-cutting](06-cross-cutting.md)) and each report's **Fix status**,
 as of commits `6286e6b`…`98f901c` on `ledger-v2`.
 
+> **Legacy code removed.** After the cutover the legacy v1 code (`backend/`, `frontend/`,
+> `deploy/`) and the one-off cutover script `scripts/migrate_legacy.py` were deleted from the
+> repo. Findings that only concerned that script (SRV-09r, DP-17) were dropped; the audit
+> reports keep their original file references, which now resolve only in git history.
+
 - IDs are the reports' own. A trailing **r** (for example `DB-17r`) is the unfixed remainder of a
   finding that is otherwise fixed. `NEW-n` items were found while cross-checking the fixes. `MA-n`
   and `UX-n` / `N-n` are the web and iOS reports' unnumbered recommendations.
@@ -24,9 +29,9 @@ separately):
 | Parser | 5 | 3 | – | – | 8 |
 | Web | 16 | 26 | 5 | – | 47 |
 | iOS | 14 | 10 | 7 | 3 | 34 |
-| Scraper and cutover script | – | 4 | – | – | 4 |
+| Scraper | – | 2 | – | – | 2 |
 | CI, config and ops | 1 | 6 | – | 1 | 8 |
-| **Total** | **53** | **76** | **12** | **6** | **147** |
+| **Total** | **53** | **74** | **12** | **6** | **145** |
 
 There are no open P0 or P1 findings. The last P1 remainders (WEB-02 statements beyond 500 and
 merchant search, WEB-07 "Retry AI") landed in `98f901c`. What is left of the P1s are the device
@@ -255,13 +260,11 @@ These are actions, not code changes. Most are already steps in [PRODUCTION.md](.
 | IOS-30 | Sentry failed-request capture can carry Activity search text in the PostgREST URL; `NSAllowsLocalNetworking` ships in Release | Hygiene | Strip query strings in `beforeSend`; set the ATS key in Debug only | S |
 | IOS-31 | Filter edges: a merchant named "OTP …" is dropped; "payment received … via transfer from account" is sent (server classifies it) | Accepted | Document both in the tests | S |
 
-### Scraper and cutover script
+### Scraper
 
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
 | SRV-16 | `uploaded.json` is written non-atomically and a corrupt file is silently treated as empty; long or padded filenames never get recorded | Out of the P1 pass | Temp file + `os.replace`, keep a `.corrupt` copy with a warning; normalise names before matching | S |
-| SRV-09r | `migrate_legacy.py --step pdfs` dry run downloads every PDF from GCS to compute sha256 | Read-only, just slow | Use the GCS object's MD5/CRC metadata to skip known objects, or cache hashes | S |
-| DP-17 | `is_history` is `statement_reference LIKE 'AUTO-SIB-%'`, true only by coincidence | Ordering no longer matters (union ingest), so low impact | Decide history by the legacy `pdf_type` / document kind | S |
 | NEW-3 | `scraper/README.md` doesn't document `CCS_SCRAPER_UPLOAD_MAX_FILES` / `_MAX_MB` or the batch-and-retry behaviour (root README does) | File outside the docs pass | Add both to the scraper README's env table and upload section | S |
 
 ### CI, config and ops

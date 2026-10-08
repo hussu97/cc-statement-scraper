@@ -11,6 +11,10 @@ public final class ProfileStore {
     public private(set) var selectedCode: String?
     public private(set) var smsTarget: SMSTarget?
     public var errorMessage: String?
+    /// The last load failed because the server rejected the stored session
+    /// (revoked, expired beyond refresh, or issued by another project). The app
+    /// signs out locally instead of showing "You are signed out" on a signed-in screen.
+    public private(set) var sessionRejected = false
 
     private let api: any LedgerAPI
     private let selection: ProfileSelection
@@ -57,6 +61,7 @@ public final class ProfileStore {
     /// with exactly one profile it is selected automatically.
     public func load() async {
         state = state.startLoading()
+        sessionRejected = false
         do {
             async let profiles = api.profiles()
             async let members = api.memberships()
@@ -66,6 +71,7 @@ public final class ProfileStore {
             select(Self.resolveSelection(stored: selectedCode, profiles: p))
             storeSMSTarget(SMSTarget.resolve(stored: smsTargets?.target ?? smsTarget, profiles: p, memberships: m))
         } catch {
+            sessionRejected = (error as? LedgerAPIError) == .notSignedIn
             state = state.fail(error)
         }
     }

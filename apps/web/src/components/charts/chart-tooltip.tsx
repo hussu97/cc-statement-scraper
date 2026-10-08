@@ -41,7 +41,7 @@ export function TooltipCard({ title, rows, footer }: { title: ReactNode; rows: R
 }
 
 /**
- * Recharts tooltip content in Ledger's style. Series with no value in the
+ * Recharts tooltip content in Bank Ledger's style. Series with no value in the
  * hovered bucket are skipped; the order follows the stack (top first).
  */
 export function MoneyTooltip({

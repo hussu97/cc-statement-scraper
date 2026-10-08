@@ -9,9 +9,9 @@ import {
   isTransientLlmError,
   type LlmCategory,
   llmErrorReason,
-  LlmNotApplicable,
   type LlmMerchant,
   llmModel,
+  LlmNotApplicable,
   SMS_SYSTEM,
   smsTemplateSchema,
   smsUserPrompt,
@@ -19,7 +19,7 @@ import {
   validateSuggestions,
   validateTemplateProposal,
 } from "../_shared/llm.ts";
-import { MAX_READS, type QueueMessage, queueDelete, toDlq } from "./queue.ts";
+import { MAX_READS, queueDelete, type QueueMessage, toDlq } from "./queue.ts";
 
 export const LLM_QUEUE = "llm_categorize";
 export const SMS_QUEUE = "sms_fallback";
@@ -141,7 +141,7 @@ export async function processSmsFallback(svc: Db, msg: QueueMessage): Promise<Jo
     await queueDelete(svc, SMS_QUEUE, msg.msg_id);
     return { queue: SMS_QUEUE, outcome: "skipped" };
   }
-  const banks = ((ctx.banks ?? []) as { bank_code: string; senders: string[] }[]);
+  const banks = (ctx.banks ?? []) as { bank_code: string; senders: string[] }[];
   const bankCodes = banks.map((b) => b.bank_code);
   if (bankCodes.length === 0) {
     // An empty enum is an invalid schema (Anthropic 400): don't call the model at all.

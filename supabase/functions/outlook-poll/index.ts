@@ -15,9 +15,23 @@ import { runCronJob } from "../_shared/cron.ts";
 import { type Db, serviceClient } from "../_shared/supabase.ts";
 import { mailboxAccessToken } from "../_shared/oauth.ts";
 import { pickRoute } from "../_shared/email_routes.ts";
-import { enabledMailboxes, ingestAttachment, type Mailbox, mailboxRoutes, saveSyncState } from "../_shared/email_ingest.ts";
+import {
+  enabledMailboxes,
+  ingestAttachment,
+  type Mailbox,
+  mailboxRoutes,
+  saveSyncState,
+} from "../_shared/email_ingest.ts";
 import { ProviderHttpError } from "../_shared/gmail.ts";
-import { deltaKey, GraphClient, type GraphMessage, initialDeltaUrl, SCAN_FOLDERS, senderOf, storedCursor } from "./graph.ts";
+import {
+  deltaKey,
+  GraphClient,
+  type GraphMessage,
+  initialDeltaUrl,
+  SCAN_FOLDERS,
+  senderOf,
+  storedCursor,
+} from "./graph.ts";
 
 async function pollMailbox(svc: Db, mb: Mailbox, deadline: number) {
   const routes = await mailboxRoutes(svc, mb.mailbox_code);
@@ -54,7 +68,12 @@ async function pollMailbox(svc: Db, mb: Mailbox, deadline: number) {
         const attachments = await graph.listPdfAttachments(m.id);
         for (const a of attachments) {
           const filename = String(a.name ?? "").trim() || "statement.pdf";
-          const route = pickRoute(routes, { sender: senderOf(m), subject: String(m.subject ?? ""), filename, labels: null });
+          const route = pickRoute(routes, {
+            sender: senderOf(m),
+            subject: String(m.subject ?? ""),
+            filename,
+            labels: null,
+          });
           if (!route) continue;
           const outcome = await ingestAttachment(svc, {
             mailbox: mb,
@@ -93,7 +112,9 @@ async function pollAll() {
       results.push(await pollMailbox(svc, mb, deadline));
     } catch (e) {
       const code = e instanceof HttpError ? e.code : e instanceof ProviderHttpError ? `GRAPH_${e.status}` : "ERROR";
-      captureException(e, { tags: { function: "outlook-poll", mailbox_code: mb.mailbox_code, profile_code: mb.profile_code } });
+      captureException(e, {
+        tags: { function: "outlook-poll", mailbox_code: mb.mailbox_code, profile_code: mb.profile_code },
+      });
       await saveSyncState(svc, mb, { last_error: { at: new Date().toISOString(), code } }).catch(() => undefined);
       results.push({ mailbox_code: mb.mailbox_code, status: "failed", error: code });
     }

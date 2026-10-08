@@ -14,14 +14,15 @@ const enabled = Deno.env.get("LEDGER_E2E") === "1";
 
 async function localKeys(): Promise<{ url: string; anon: string; service: string }> {
   const url = Deno.env.get("SUPABASE_URL") ?? "http://127.0.0.1:54321";
-  let anon = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-  let service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  // Publishable / secret keys (sb_publishable_… / sb_secret_…); legacy JWT keys only as a fallback.
+  let anon = Deno.env.get("SB_PUBLISHABLE_KEY") ?? "";
+  let service = Deno.env.get("SB_SECRET_KEY") ?? "";
   if (!anon || !service) {
     const out = await new Deno.Command("supabase", { args: ["status", "-o", "json"], stdout: "piped", stderr: "null" })
       .output();
     const status = JSON.parse(new TextDecoder().decode(out.stdout));
-    anon ||= status.ANON_KEY;
-    service ||= status.SERVICE_ROLE_KEY;
+    anon ||= status.PUBLISHABLE_KEY || status.ANON_KEY;
+    service ||= status.SECRET_KEY || status.SERVICE_ROLE_KEY;
   }
   return { url, anon, service };
 }
@@ -106,7 +107,10 @@ Deno.test({
       assertEquals(b2.uploads[0], { filename: `FAB_${rand}.pdf`, doc_code: docCode, status: "duplicate" });
 
       // ── auth failures ──
-      assertEquals((await (await legacyUpload(pdf, { Authorization: "Bearer ccs_nope" })).json()).error.code, "UNAUTHORIZED");
+      assertEquals(
+        (await (await legacyUpload(pdf, { Authorization: "Bearer ccs_nope" })).json()).error.code,
+        "UNAUTHORIZED",
+      );
       const wrongKey = await legacyUpload(pdf, { ...tokenHeaders, "X-Profile-Key": "someone-else" });
       assertEquals(wrongKey.status, 401);
       await wrongKey.body?.cancel();
@@ -127,18 +131,31 @@ Deno.test({
       });
       assertEquals(otherProfile.status, 403);
       await otherProfile.body?.cancel();
-      const r3 = await legacyUpload(syntheticPdf(`${rand}-ios`), jwtHeaders, { profile_code: profileCode, source: "ios" });
+      const r3 = await legacyUpload(syntheticPdf(`${rand}-ios`), jwtHeaders, {
+        profile_code: profileCode,
+        source: "ios",
+      });
       const b3 = await r3.json();
       assertEquals(r3.status, 200, JSON.stringify(b3));
       assertEquals(b3.uploads[0].status, "queued");
-      const { data: doc3 } = await svc.from("documents").select("source, storage_path").eq("doc_code", b3.uploads[0].doc_code)
+      const { data: doc3 } = await svc.from("documents").select("source, storage_path").eq(
+        "doc_code",
+        b3.uploads[0].doc_code,
+      )
         .single();
       assertEquals(doc3!.source, "ios");
       storedPaths.push(doc3!.storage_path);
 
       // ── sms-ingest (token and JWT), idempotent on client_msg_id ──
       const msgId = crypto.randomUUID();
-      const smsBody = { messages: [{ client_msg_id: msgId, sender: "E2E", body: `e2e synthetic ${rand}`, received_at: new Date().toISOString() }] };
+      const smsBody = {
+        messages: [{
+          client_msg_id: msgId,
+          sender: "E2E",
+          body: `e2e synthetic ${rand}`,
+          received_at: new Date().toISOString(),
+        }],
+      };
       const s1 = await fetch(`${fnUrl}/sms-ingest`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },

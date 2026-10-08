@@ -1,147 +1,309 @@
 #!/usr/bin/env bash
-# Pre-push hook — CI mirror (runs on git push)
-# Catches failures before wasting GitHub Actions minutes.
-# Skip with: git push --no-verify
+# Pre-push hook: the CI mirror. Runs, for every area this push changes, the
+# same lints, tests and builds as .github/workflows/ci.yml, so a red CI run is
+# never the first place a failure shows up. Then, on a push to main that
+# changes the iOS app, builds + stages the TestFlight IPA
+# (apps/ios/scripts/publish-build.sh), like mm-pos.
 #
-# Every section skips cleanly when its directory or tool is missing, so the hook
-# keeps working after legacy backend/ and frontend/ are deleted (PRODUCTION.md
-# §10 step 12) and on machines without every toolchain installed.
+#   SKIP_PRE_PUSH=1 git push      skip every check (and the iOS release)
+#   SKIP_RELEASE=1 git push       run the checks, skip the iOS release build
+#   git push --no-verify          git's own bypass
+#
+# Run it by hand (stdin is a terminal, so it diffs HEAD against its upstream,
+# or origin/main):
+#   pnpm check                    changed areas, same as a push
+#   pnpm check:all                every area (PRE_PUSH_ALL=1)
+#   pnpm check:plan               print what would run, run nothing (PRE_PUSH_DRY_RUN=1)
+#   PRE_PUSH_AREAS=web,parser bash scripts/hooks/pre-push
+#
+# Areas and their path rules mirror the `changes` job in ci.yml; keep
+# area_of() below in sync with it. Supabase pgTAP needs Docker and a running
+# local stack: without them it warns and does not block (CI runs it).
+# Works on macOS bash 3.2.
 
-set -euo pipefail
+set -uo pipefail
+
+[ -n "${SKIP_PRE_PUSH:-}" ] && { echo "pre-push: SKIP_PRE_PUSH set, skipping all checks"; exit 0; }
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-cd "$REPO_ROOT"
+cd "$REPO_ROOT" || exit 1
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+if [ -t 1 ]; then
+  RED=$'\033[0;31m'; GREEN=$'\033[0;32m'; YELLOW=$'\033[1;33m'; BLUE=$'\033[0;34m'; DIM=$'\033[2m'; NC=$'\033[0m'
+else
+  RED=""; GREEN=""; YELLOW=""; BLUE=""; DIM=""; NC=""
+fi
 
-pass() { echo -e "${GREEN}✓${NC} $1"; }
-fail() { echo -e "${RED}✗${NC} $1"; }
-info() { echo -e "${YELLOW}→${NC} $1"; }
-skip() { echo "  $1 — skipping"; }
-section() { echo -e "\n${BLUE}══ $1 ══${NC}"; }
-
+DRY_RUN="${PRE_PUSH_DRY_RUN:-}"
+ZERO="0000000000000000000000000000000000000000"
+RESULTS=""   # lines: status|label|seconds|note
 ERRORS=0
+WARNINGS=0
 
-# run_check <label> <command...>: runs in a subshell so a failed `cd` never leaks.
+record() { RESULTS="${RESULTS}$1|$2|$3|${4:-}"$'\n'; }
+section() { echo; echo "${BLUE}== $1 ==${NC}"; }
+
+# run_check <label> <command...>: runs in a subshell so a `cd` never leaks.
 run_check() {
   local label="$1"; shift
-  info "$label..."
-  if ( "$@" ) 2>&1; then
-    pass "$label OK"
+  if [ -n "$DRY_RUN" ]; then
+    echo "  would run: $label ${DIM}($*)${NC}"
+    record PLAN "$label" 0
+    return 0
+  fi
+  echo "${YELLOW}->${NC} $label"
+  local start end
+  start=$(date +%s)
+  if ( "$@" ) 2>&1 | sed 's/^/   /'; then
+    end=$(date +%s)
+    echo "${GREEN}ok${NC} $label ($((end - start))s)"
+    record PASS "$label" $((end - start))
   else
-    fail "$label failed"
+    end=$(date +%s)
+    echo "${RED}FAIL${NC} $label ($((end - start))s)"
+    record FAIL "$label" $((end - start))
     ERRORS=$((ERRORS + 1))
   fi
 }
 
-# ===========================================================================
-section "LEDGER v2"
-# ===========================================================================
+skip() { echo "  ${DIM}skip${NC} $1 — $2"; record SKIP "$1" 0 "$2"; }
+warn() { echo "${YELLOW}warn${NC} $1 — $2"; record WARN "$1" 0 "$2"; WARNINGS=$((WARNINGS + 1)); }
+have() { command -v "$1" >/dev/null 2>&1; }
 
-# Edge Functions (deno unit tests; e2e is opt-in and not run here)
-if [ -d supabase/functions ]; then
-  if command -v deno >/dev/null 2>&1; then
-    run_check "Edge Functions (deno test)" bash -c 'cd supabase/functions && deno test -A -q .'
+# ---------------------------------------------------------------------------
+# What is being pushed?
+# ---------------------------------------------------------------------------
+default_base() {
+  local up
+  up="$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)"
+  if [ -n "$up" ] && git rev-parse -q --verify "$up" >/dev/null; then echo "$up"; return; fi
+  git rev-parse -q --verify refs/remotes/origin/main >/dev/null && { echo origin/main; return; }
+  echo ""
+}
+
+CHANGED=""
+PUSH_TO_MAIN=""
+PUSH_SHA="HEAD" # the commit whose migrations are checked
+if [ -t 0 ]; then
+  # Run by hand: compare HEAD with its upstream (or origin/main).
+  base="$(default_base)"
+  if [ -n "$base" ]; then
+    CHANGED="$(git diff --name-only "$(git merge-base "$base" HEAD)" HEAD; git diff --name-only HEAD)"
+    echo "pre-push (manual): comparing with $base, including uncommitted changes"
   else
-    skip "deno not found (brew install deno)"
+    PRE_PUSH_ALL=1
   fi
-fi
-
-# Parser (ruff + pytest)
-if [ -d services/parser ]; then
-  if [ -x services/parser/.venv/bin/pytest ] && [ -x services/parser/.venv/bin/ruff ]; then
-    run_check "Parser (ruff)" bash -c 'cd services/parser && .venv/bin/ruff check .'
-    run_check "Parser (pytest)" bash -c 'cd services/parser && .venv/bin/pytest -q'
-  else
-    skip "services/parser/.venv not set up (see services/parser/README.md)"
-  fi
-fi
-
-# Web (tokens drift, lint, unit tests)
-if [ -d apps/web ]; then
-  if command -v pnpm >/dev/null 2>&1 && [ -d node_modules ]; then
-    run_check "Tokens (Tokens.swift drift)" pnpm --silent --filter @ledger/tokens check
-    run_check "Web lint" pnpm --silent --filter @ledger/web lint
-    run_check "Web tests (Vitest)" pnpm --silent --filter @ledger/web test
-  else
-    skip "pnpm or node_modules missing (corepack enable && pnpm install)"
-  fi
-fi
-
-# DB types drift — only when the local Supabase stack is running.
-if command -v supabase >/dev/null 2>&1 && command -v pnpm >/dev/null 2>&1 \
-   && supabase status >/dev/null 2>&1; then
-  run_check "DB types drift" pnpm --silent db:types:check
 else
-  skip "DB types drift: local Supabase stack not running"
+  while read -r _local_ref local_sha remote_ref remote_sha; do
+    [ -n "${local_sha:-}" ] || continue
+    [ "$local_sha" = "$ZERO" ] && continue # deleting a ref
+    [ "$remote_ref" = "refs/heads/main" ] && PUSH_TO_MAIN=1
+    PUSH_SHA="$local_sha"
+    if [ "$remote_sha" = "$ZERO" ] || ! git cat-file -e "${remote_sha}^{commit}" 2>/dev/null; then
+      # New remote branch (or unknown remote tip): diff against origin/main.
+      if git rev-parse -q --verify refs/remotes/origin/main >/dev/null; then
+        CHANGED="$CHANGED"$'\n'"$(git diff --name-only "$(git merge-base refs/remotes/origin/main "$local_sha")" "$local_sha")"
+      else
+        CHANGED="$CHANGED"$'\n'"$(git show --name-only --format= "$local_sha")"
+      fi
+    else
+      CHANGED="$CHANGED"$'\n'"$(git diff --name-only "$remote_sha" "$local_sha")"
+    fi
+  done
 fi
 
-# Scraper
-if [ -d scraper ]; then
+CHANGED="$(printf '%s\n' "$CHANGED" | grep -v '^$' | sort -u || true)"
+
+# area_of <path>: prints the areas a path belongs to (mirror of ci.yml `changes`).
+area_of() {
+  case "$1" in
+    supabase/migrations/*) echo supabase; echo migrations ;;
+    supabase/tests/*|supabase/seed.sql|packages/db-types/*|scripts/ci/check-migrations.sh) echo supabase ;;
+    supabase/config.toml) echo supabase; echo edge ;;
+    supabase/functions/*) echo edge ;;
+    services/parser/*|docs/contracts/*) echo parser ;;
+    packages/tokens/*) echo web; echo ios ;;
+    apps/web/*|packages/*|package.json|pnpm-lock.yaml|pnpm-workspace.yaml) echo web ;;
+    scraper/*) echo scraper ;;
+    apps/ios/LedgerKit/*) echo ios ;;
+    .github/workflows/ci.yml) echo tooling; echo supabase; echo edge; echo parser; echo web; echo scraper ;;
+    .github/workflows/*|scripts/hooks/*|scripts/ci/*|scripts/install-hooks.sh|scripts/cutover/*.sh|apps/ios/scripts/*.sh) echo tooling ;;
+  esac
+}
+
+if [ -n "${PRE_PUSH_ALL:-}" ]; then
+  AREAS=" supabase migrations edge parser web scraper ios tooling "
+elif [ -n "${PRE_PUSH_AREAS:-}" ]; then
+  AREAS=" $(echo "$PRE_PUSH_AREAS" | tr ',' ' ') "
+else
+  AREAS=" "
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    for a in $(area_of "$f"); do
+      case "$AREAS" in *" $a "*) ;; *) AREAS="$AREAS$a " ;; esac
+    done
+  done <<<"$CHANGED"
+fi
+want() { case "$AREAS" in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
+
+# iOS release trigger (mm-pos rule): app code on a push to main. Never the
+# build-number counter on its own (publish-build.sh commits it).
+IOS_RELEASE=""
+if [ -n "$PUSH_TO_MAIN" ] && grep -qE '^apps/ios/(Ledger|LedgerKit|ShareExtension|Ledger\.xcodeproj|Config)/|^apps/ios/project\.yml$' <<<"$CHANGED"; then
+  IOS_RELEASE=1
+fi
+
+AREA_LIST="$(echo "$AREAS" | xargs)"
+echo "${BLUE}pre-push${NC}: $(printf '%s\n' "$CHANGED" | grep -c . || true) changed file(s); areas: ${AREA_LIST:-none}${DRY_RUN:+ (dry run)}"
+if [ -z "$AREA_LIST" ] && [ -z "$IOS_RELEASE" ]; then
+  echo "${GREEN}Nothing CI checks changed (docs only?) — push away.${NC}"
+  exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# Checks, cheapest first.
+# ---------------------------------------------------------------------------
+if want tooling; then
+  section "Workflows & scripts"
+  if have actionlint; then run_check "actionlint" actionlint; else skip "actionlint" "not installed (brew install actionlint)"; fi
+  if have shellcheck; then
+    run_check "shellcheck" bash -c 'shellcheck -x scripts/hooks/* scripts/ci/*.sh scripts/install-hooks.sh'
+  else
+    skip "shellcheck" "not installed (brew install shellcheck)"
+  fi
+fi
+
+if want migrations; then
+  section "Migrations (append-only)"
+  if git rev-parse -q --verify refs/remotes/origin/main >/dev/null; then
+    run_check "migrations append-only vs origin/main" bash scripts/ci/check-migrations.sh diff refs/remotes/origin/main "$PUSH_SHA"
+  else
+    skip "migrations append-only" "no origin/main to compare with (git fetch)"
+  fi
+fi
+
+if want edge; then
+  section "Edge Functions"
+  if have deno; then
+    run_check "deno lint" bash -c 'cd supabase/functions && deno lint -q'
+    run_check "deno fmt --check" bash -c 'cd supabase/functions && deno fmt --check -q'
+    run_check "deno test" bash -c 'cd supabase/functions && deno test -A -q .'
+  else
+    skip "Edge Functions" "deno not found (brew install deno)"
+  fi
+fi
+
+if want parser; then
+  section "Parser"
+  if [ -x services/parser/.venv/bin/pytest ] && [ -x services/parser/.venv/bin/ruff ]; then
+    run_check "parser ruff" bash -c 'cd services/parser && .venv/bin/ruff check -q .'
+    run_check "parser pytest" bash -c 'cd services/parser && .venv/bin/pytest -q'
+  else
+    warn "Parser" "services/parser/.venv missing ruff/pytest (see services/parser/README.md); CI will run it"
+  fi
+fi
+
+if want scraper; then
+  section "Scraper"
   if [ -x scraper/.venv/bin/pytest ]; then
-    run_check "Scraper tests" bash -c 'cd scraper && .venv/bin/pytest -q'
+    run_check "scraper pytest" bash -c 'cd scraper && .venv/bin/pytest -q'
   else
-    skip "scraper/.venv not found (cd scraper && pip install -e '.[dev]')"
+    warn "Scraper" "scraper/.venv missing (cd scraper && uv venv && uv pip install -e '.[dev]'); CI will run it"
   fi
 fi
 
-# ===========================================================================
-# LEGACY v1 — removed at decommission. Each block runs only if its dir exists.
-# ===========================================================================
-if [ -d backend/ccs_platform ]; then
-  section "LEGACY BACKEND"
-
-  LEGACY_PYTHON=""
-  if [ -x backend/.venv/bin/python ]; then
-    LEGACY_PYTHON="$REPO_ROOT/backend/.venv/bin/python"
+if want web; then
+  section "Web"
+  if have pnpm && [ -d node_modules ]; then
+    run_check "tokens check (Tokens.swift drift)" pnpm --silent --filter @ledger/tokens check
+    run_check "web lint" pnpm --silent --filter @ledger/web lint
+    run_check "web typecheck" bash -c 'pnpm --silent --filter @ledger/tokens build && pnpm --silent --filter @ledger/web typecheck'
+    run_check "web test" pnpm --silent --filter @ledger/web test
+    run_check "web build" pnpm --silent --filter @ledger/web build
   else
-    LEGACY_PYTHON="$(command -v python3 || command -v python || true)"
-  fi
-
-  if [ -n "$LEGACY_PYTHON" ]; then
-    LEGACY_PY_DIRS="backend/ccs_platform"
-    [ -d backend/scripts ] && LEGACY_PY_DIRS="$LEGACY_PY_DIRS backend/scripts"
-    # shellcheck disable=SC2086
-    run_check "Python syntax" "$LEGACY_PYTHON" -m compileall -q $LEGACY_PY_DIRS
-    # Force a non-production environment so the session-key validation never fires.
-    run_check "Backend tests (pytest)" bash -c \
-      "cd backend && CCS_PLATFORM_ENVIRONMENT=test '$LEGACY_PYTHON' -m pytest -q"
-  else
-    skip "python not found"
-  fi
-
-  BANDIT="$(command -v bandit || true)"
-  if [ -z "$BANDIT" ] && [ -x backend/.venv/bin/bandit ]; then
-    BANDIT="backend/.venv/bin/bandit"
-  fi
-  if [ -n "$BANDIT" ]; then
-    run_check "Bandit SAST" "$BANDIT" -q -r backend/ccs_platform -x backend/tests -ll -ii
-  else
-    skip "bandit not found (pip install bandit)"
+    warn "Web" "pnpm or node_modules missing (corepack enable && pnpm install); CI will run it"
   fi
 fi
 
-if [ -f frontend/package.json ]; then
-  section "LEGACY FRONTEND"
-  if [ -d frontend/node_modules ]; then
-    run_check "ESLint" bash -c 'cd frontend && npm run lint --silent'
-    run_check "Frontend tests (Vitest)" bash -c 'cd frontend && npm test -- --run'
-    run_check "Frontend build (tsc + vite)" bash -c 'cd frontend && npm run build'
+if want supabase; then
+  section "Supabase (local stack)"
+  if ! have supabase; then
+    warn "Supabase" "supabase CLI not found; pgTAP + types drift run in CI"
+  elif ! have docker || ! docker info >/dev/null 2>&1; then
+    warn "Supabase" "Docker is not running; pgTAP + types drift run in CI"
+  elif ! supabase status >/dev/null 2>&1; then
+    warn "Supabase" "local stack not running (supabase start); pgTAP + types drift run in CI"
   else
-    skip "frontend/node_modules missing (cd frontend && npm ci)"
+    # pgTAP against a local DB that ran older (or fewer) migrations than the
+    # repo has fails confusingly; check-migrations.sh spots both.
+    local_db_state="ok"
+    if [ -z "${PRE_PUSH_DB_RESET:-}" ] && [ -z "$DRY_RUN" ]; then
+      if ! db_report="$(bash scripts/ci/check-migrations.sh remote local 2>&1)"; then
+        local_db_state="ran older versions of some migrations"
+      elif ! grep -q 'Pending: 0 ' <<<"$db_report"; then
+        local_db_state="has unapplied migrations"
+      fi
+    fi
+    if [ "$local_db_state" != ok ]; then
+      warn "Supabase pgTAP" "local DB $local_db_state; run 'supabase db reset' (or push with PRE_PUSH_DB_RESET=1) — skipped"
+    else
+      if [ -n "${PRE_PUSH_DB_RESET:-}" ]; then
+        run_check "supabase db reset (PRE_PUSH_DB_RESET=1)" supabase db reset
+      fi
+      run_check "pgTAP (supabase test db)" supabase test db
+      run_check "DB types drift" bash -c 'supabase gen types typescript --local 2>/dev/null | diff -q - packages/db-types/src/database.ts'
+    fi
+  fi
+fi
+
+if want ios; then
+  section "iOS (LedgerKit)"
+  if [ "$(uname -s)" = Darwin ] && have swift; then
+    run_check "swift test (LedgerKit)" bash -c 'cd apps/ios/LedgerKit && swift test -q'
+  else
+    warn "iOS" "swift test needs macOS + Xcode; CI runs it on macOS"
   fi
 fi
 
 # ---------------------------------------------------------------------------
-echo ""
+# Summary
+# ---------------------------------------------------------------------------
+echo
+echo "${BLUE}== Summary ==${NC}"
+printf '%s' "$RESULTS" | while IFS='|' read -r status label secs note; do
+  [ -n "$status" ] || continue
+  case "$status" in
+    PASS) c="$GREEN" ;; FAIL) c="$RED" ;; WARN) c="$YELLOW" ;; *) c="$DIM" ;;
+  esac
+  extra=""
+  [ "${secs:-0}" != 0 ] && extra=" ${DIM}${secs}s${NC}"
+  [ -n "$note" ] && extra="$extra ${DIM}($note)${NC}"
+  printf '  %s%-5s%s %s%s\n' "$c" "$status" "$NC" "$label" "$extra"
+done
+
 if [ "$ERRORS" -gt 0 ]; then
-  echo -e "${RED}Pre-push failed ($ERRORS check(s)). Fix the issues above before pushing.${NC}"
-  echo -e "${RED}To bypass: git push --no-verify (only when you know what you're doing)${NC}"
+  echo
+  echo "${RED}pre-push failed: $ERRORS check(s). Fix them, or bypass with SKIP_PRE_PUSH=1 git push.${NC}"
   exit 1
-else
-  echo -e "${GREEN}All checks passed — safe to push.${NC}"
 fi
+[ "$WARNINGS" -gt 0 ] && echo "${YELLOW}$WARNINGS warning(s): not blocking; CI covers what was skipped.${NC}"
+
+# ---------------------------------------------------------------------------
+# iOS release (after every check passed): build, sign and stage the IPA for
+# .github/workflows/ios-testflight.yml.
+# ---------------------------------------------------------------------------
+if [ -n "$IOS_RELEASE" ]; then
+  if [ -n "$DRY_RUN" ]; then
+    echo "  would run: apps/ios/scripts/publish-build.sh (iOS app changed on a push to main)"
+  elif [ -n "${SKIP_RELEASE:-}" ]; then
+    echo "pre-push: SKIP_RELEASE set — iOS app changed but no build staged; TestFlight will not ship this push."
+  else
+    echo
+    echo "${BLUE}pre-push${NC}: iOS app changed on main — building and staging the signed IPA."
+    echo "          Takes a few minutes. SKIP_RELEASE=1 git push to bypass."
+    exec "$REPO_ROOT/apps/ios/scripts/publish-build.sh"
+  fi
+fi
+
+[ -n "$DRY_RUN" ] && { echo "${GREEN}Dry run: nothing executed.${NC}"; exit 0; }
+echo "${GREEN}All checks passed — safe to push.${NC}"

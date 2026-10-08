@@ -32,7 +32,7 @@ export function SecretsSection() {
         }
       />
       <p className="-mt-1 px-5 pb-3 text-[13px] text-muted">
-        Banks lock statement PDFs with a password. Ledger stores them encrypted and uses them only to open your statements. They're never shown back.
+        Banks lock statement PDFs with a password. Bank Ledger stores them encrypted and uses them only to open your statements. They're never shown back.
       </p>
       <QueryView query={secrets} loading={<div className="h-40" />}>
         {(list) => (

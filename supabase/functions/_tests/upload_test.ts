@@ -6,7 +6,8 @@ import { validateSmsRequest } from "../sms-ingest/validate.ts";
 
 const enc = new TextEncoder();
 const PDF = enc.encode("%PDF-1.7\n%âãÏÓ\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n");
-const pdfFile = (name: string, bytes: Uint8Array = PDF) => new File([bytes as BlobPart], name, { type: "application/pdf" });
+const pdfFile = (name: string, bytes: Uint8Array = PDF) =>
+  new File([bytes as BlobPart], name, { type: "application/pdf" });
 const PRF = "prf_01k6abcdefghjkmnpqrstvwxyz".slice(0, 30);
 
 Deno.test("isPdf checks the %PDF- magic within the first 1024 bytes", () => {
@@ -84,10 +85,19 @@ Deno.test("parseUploadForm: rejects bad input", () => {
 Deno.test("validateSmsRequest", () => {
   const ok = validateSmsRequest({
     profile_code: "prf_01k6zz0000000000000000000a",
-    messages: [{ client_msg_id: "6F9619FF-8B86-D011-B42D-00C04FC964FF", sender: "FAB", body: "x", received_at: "2026-10-08T10:00:00+04:00" }],
+    messages: [{
+      client_msg_id: "6F9619FF-8B86-D011-B42D-00C04FC964FF",
+      sender: "FAB",
+      body: "x",
+      received_at: "2026-10-08T10:00:00+04:00",
+    }],
   });
   assertEquals(ok.messages[0].client_msg_id, "6f9619ff-8b86-d011-b42d-00c04fc964ff");
-  assertEquals(validateSmsRequest({ messages: [{ client_msg_id: "6f9619ff-8b86-d011-b42d-00c04fc964ff", body: "x" }] }).messages[0].sender, "");
+  assertEquals(
+    validateSmsRequest({ messages: [{ client_msg_id: "6f9619ff-8b86-d011-b42d-00c04fc964ff", body: "x" }] }).messages[0]
+      .sender,
+    "",
+  );
 
   const bad = (b: unknown) => assertThrows(() => validateSmsRequest(b), HttpError);
   bad(null);
@@ -96,9 +106,15 @@ Deno.test("validateSmsRequest", () => {
   bad({ messages: [{ client_msg_id: "6f9619ff-8b86-d011-b42d-00c04fc964ff", body: "" }] });
   bad({ messages: [{ client_msg_id: "6f9619ff-8b86-d011-b42d-00c04fc964ff", body: "x", received_at: "yesterday" }] });
   bad({ profile_code: "hussain", messages: [{ client_msg_id: "6f9619ff-8b86-d011-b42d-00c04fc964ff", body: "x" }] });
-  const tooMany = Array.from({ length: 201 }, () => ({ client_msg_id: "6f9619ff-8b86-d011-b42d-00c04fc964ff", body: "x" }));
+  const tooMany = Array.from(
+    { length: 201 },
+    () => ({ client_msg_id: "6f9619ff-8b86-d011-b42d-00c04fc964ff", body: "x" }),
+  );
   bad({ messages: tooMany });
   // Errors never echo the SMS body.
-  const err = assertThrows(() => validateSmsRequest({ messages: [{ client_msg_id: "x", body: "SECRET BODY" }] }), HttpError);
+  const err = assertThrows(
+    () => validateSmsRequest({ messages: [{ client_msg_id: "x", body: "SECRET BODY" }] }),
+    HttpError,
+  );
   assert(!err.message.includes("SECRET"));
 });

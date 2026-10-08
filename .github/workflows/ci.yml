@@ -1,5 +1,12 @@
 name: CI
 
+# Path-filtered checks for every Ledger area, plus one aggregator job (`ci-ok`)
+# that branch protection can require instead of a list of job names that
+# changes whenever a job is added. The local pre-push hook
+# (scripts/hooks/pre-push) runs the same checks with the same path rules, so a
+# red CI run should never be the first place a failure shows up.
+# Docs: docs/ci-cd.md.
+
 on:
   pull_request:
   push:
@@ -7,29 +14,35 @@ on:
   workflow_dispatch:
     inputs:
       include_ios:
-        description: "Also run the macOS LedgerKit tests (expensive runner)"
+        description: "Also run the macOS LedgerKit tests (10x-billed runner)"
         type: boolean
         default: false
 
 permissions:
   contents: read
 
+# PRs: only the newest commit matters, so cancel superseded runs. main: let
+# every push finish (each one is a candidate for the deploy workflows).
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   # Pinned so `supabase gen types` output is stable for the drift check.
-  # Bump together with a `pnpm db:types` regeneration.
+  # Bump together with a `pnpm db:types` regeneration (and in deploy-supabase.yml).
   SUPABASE_CLI_VERSION: 2.109.1
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "22"
 
 jobs:
   # ------------------------------------------------------------------
-  # Detect which areas changed so downstream jobs can skip. A manual
-  # run (workflow_dispatch) runs every v2 job (iOS only on request).
+  # Which areas changed. A manual run checks everything (iOS on request).
+  # Keep these globs in sync with area_of() in scripts/hooks/pre-push.
   # ------------------------------------------------------------------
   changes:
+    name: Detect changed paths
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     # dorny/paths-filter lists PR files through the REST API, which needs
     # pull-requests: read in a private repo (job-level permissions replace the
     # workflow-level block, so contents: read is repeated).
@@ -37,14 +50,14 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      supabase: ${{ steps.filter.outputs.supabase }}
-      edge: ${{ steps.filter.outputs.edge }}
-      parser: ${{ steps.filter.outputs.parser }}
-      web: ${{ steps.filter.outputs.web }}
-      ios: ${{ steps.filter.outputs.ios }}
-      scraper: ${{ steps.filter.outputs.scraper }}
-      backend: ${{ steps.filter.outputs.backend }}
-      frontend: ${{ steps.filter.outputs.frontend }}
+      supabase: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.supabase == 'true' }}
+      migrations: ${{ steps.filter.outputs.migrations == 'true' }}
+      edge: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.edge == 'true' }}
+      parser: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.parser == 'true' }}
+      web: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.web == 'true' }}
+      scraper: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.scraper == 'true' }}
+      tooling: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.tooling == 'true' }}
+      ios: ${{ (github.event_name == 'workflow_dispatch' && inputs.include_ios) || (github.event_name != 'workflow_dispatch' && steps.filter.outputs.ios == 'true') }}
     steps:
       - uses: actions/checkout@v4
         if: github.event_name != 'workflow_dispatch'
@@ -59,7 +72,10 @@ jobs:
               - 'supabase/seed.sql'
               - 'supabase/config.toml'
               - 'packages/db-types/**'
+              - 'scripts/ci/check-migrations.sh'
               - '.github/workflows/ci.yml'
+            migrations:
+              - 'supabase/migrations/**'
             edge:
               - 'supabase/functions/**'
               - 'supabase/config.toml'
@@ -75,29 +91,64 @@ jobs:
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
               - '.github/workflows/ci.yml'
+            scraper:
+              - 'scraper/**'
+              - '.github/workflows/ci.yml'
+            tooling:
+              - '.github/workflows/**'
+              - 'scripts/hooks/**'
+              - 'scripts/ci/**'
+              - 'scripts/install-hooks.sh'
+              - 'scripts/cutover/*.sh'
+              - 'apps/ios/scripts/*.sh'
             ios:
               - 'apps/ios/LedgerKit/**'
               - 'packages/tokens/**'
-            scraper:
-              - 'scraper/**'
-            backend:
-              - 'backend/**'
-              - 'deploy/Dockerfile.api'
-              - 'deploy/docker-compose.prod.yml'
-            frontend:
-              - 'frontend/**'
-              - 'deploy/Dockerfile.frontend'
 
   # ------------------------------------------------------------------
-  # Supabase: migrations from scratch, pgTAP, generated-types drift
+  # Workflows + shell: actionlint (with shellcheck on run: blocks) and
+  # shellcheck on the hooks and CI scripts. Seconds, Linux.
+  # ------------------------------------------------------------------
+  tooling:
+    name: Workflows & scripts lint
+    needs: changes
+    if: needs.changes.outputs.tooling == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: actionlint
+        run: |
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12
+          ./actionlint -color
+
+      - name: shellcheck
+        run: |
+          shellcheck --version | head -2
+          shellcheck -x scripts/hooks/* scripts/ci/*.sh scripts/install-hooks.sh
+
+  # ------------------------------------------------------------------
+  # Supabase: append-only migrations, migrations from scratch, pgTAP,
+  # generated-types drift.
   # ------------------------------------------------------------------
   supabase:
+    name: Supabase (migrations, pgTAP, types)
     needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.supabase == 'true'
+    if: needs.changes.outputs.supabase == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The append-only check diffs against the PR base / previous main.
+          fetch-depth: 0
+
+      - name: Migrations are append-only
+        if: needs.changes.outputs.migrations == 'true' && github.event_name != 'workflow_dispatch'
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: bash scripts/ci/check-migrations.sh diff "$BASE" HEAD
 
       - uses: supabase/setup-cli@v1
         with:
@@ -114,8 +165,8 @@ jobs:
 
       - name: DB types drift
         run: |
-          supabase gen types typescript --local > /tmp/database.ts
-          if ! diff -u packages/db-types/src/database.ts /tmp/database.ts; then
+          supabase gen types typescript --local > "$RUNNER_TEMP/database.ts"
+          if ! diff -u packages/db-types/src/database.ts "$RUNNER_TEMP/database.ts"; then
             echo "::error::packages/db-types is stale. Run 'pnpm db:types' and commit the result."
             exit 1
           fi
@@ -125,30 +176,42 @@ jobs:
         run: supabase stop --no-backup
 
   # ------------------------------------------------------------------
-  # Edge Functions: deno unit tests (local e2e is opt-in, skipped here)
+  # Edge Functions: deno lint + deno fmt --check + unit tests (type-checked)
   # ------------------------------------------------------------------
   edge:
+    name: Edge Functions (deno)
     needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.edge == 'true'
+    if: needs.changes.outputs.edge == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: supabase/functions
     steps:
       - uses: actions/checkout@v4
 
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
+          cache: true
+          cache-hash: ${{ hashFiles('supabase/functions/**/*.ts', 'supabase/functions/deno.json') }}
+
+      - name: deno lint
+        run: deno lint
+
+      - name: deno fmt --check
+        run: deno fmt --check
 
       - name: deno test
-        working-directory: supabase/functions
         run: deno test -A .
 
   # ------------------------------------------------------------------
-  # Parser: ruff + pytest (golden parity skips without private PDFs)
+  # Parser: ruff + pytest (golden parity skips without the private PDFs)
   # ------------------------------------------------------------------
   parser:
+    name: Parser (ruff, pytest)
     needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.parser == 'true'
+    if: needs.changes.outputs.parser == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -157,31 +220,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
       - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            services/parser/requirements.txt
+            services/parser/pyproject.toml
 
       - name: Install
         run: |
-          uv venv --python 3.12 .venv
+          uv venv --python "$PYTHON_VERSION" .venv
           uv pip sync --python .venv/bin/python requirements.txt
           uv pip install --python .venv/bin/python --no-deps -e .
           uv pip install --python .venv/bin/python pytest ruff
 
       - name: ruff
-        run: .venv/bin/ruff check .
+        run: .venv/bin/ruff check --output-format=github .
 
       - name: pytest
         run: .venv/bin/pytest -q
 
   # ------------------------------------------------------------------
-  # Web: design tokens drift, lint, unit tests, production build
+  # Web: design tokens drift, lint, typecheck, unit tests, production build
   # ------------------------------------------------------------------
   web:
+    name: Web (tokens, lint, typecheck, test, build)
     needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.web == 'true'
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -191,7 +256,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
@@ -204,6 +269,9 @@ jobs:
       - name: Lint
         run: pnpm --filter @ledger/web lint
 
+      - name: Typecheck
+        run: pnpm --filter @ledger/tokens build && pnpm --filter @ledger/web typecheck
+
       - name: Test
         run: pnpm --filter @ledger/web test
 
@@ -211,14 +279,44 @@ jobs:
         run: pnpm --filter @ledger/web build
 
   # ------------------------------------------------------------------
-  # iOS: LedgerKit unit tests on macOS. macOS minutes are expensive,
-  # so this runs only when LedgerKit/tokens change or on request.
+  # Scraper: unit tests (no browser needed; Playwright is mocked)
+  # ------------------------------------------------------------------
+  scraper:
+    name: Scraper (pytest)
+    needs: changes
+    if: needs.changes.outputs.scraper == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: scraper
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            scraper/pyproject.toml
+            scraper/requirements.txt
+
+      - name: Install
+        run: |
+          uv venv --python "$PYTHON_VERSION" .venv
+          uv pip install --python .venv/bin/python -e ".[dev]"
+
+      - name: pytest
+        run: .venv/bin/pytest -q
+
+  # ------------------------------------------------------------------
+  # iOS: LedgerKit unit tests on macOS. macOS minutes bill at 10x, so
+  # this runs only when LedgerKit/tokens change or on request (the
+  # pre-push hook runs the same `swift test` locally for free).
   # ------------------------------------------------------------------
   ios:
+    name: iOS (LedgerKit swift test)
     needs: changes
-    if: >-
-      (github.event_name == 'workflow_dispatch' && inputs.include_ios) ||
-      (github.event_name != 'workflow_dispatch' && needs.changes.outputs.ios == 'true')
+    if: needs.changes.outputs.ios == 'true'
     runs-on: macos-26
     timeout-minutes: 30
     steps:
@@ -228,146 +326,45 @@ jobs:
         with:
           xcode-version: latest-stable
 
-      - uses: actions/cache@v4
+      - name: Cache SwiftPM
+        uses: actions/cache@v4
         with:
-          path: apps/ios/LedgerKit/.build
-          key: ledgerkit-${{ runner.os }}-${{ hashFiles('apps/ios/LedgerKit/Package.resolved') }}
-          restore-keys: ledgerkit-${{ runner.os }}-
+          path: |
+            apps/ios/LedgerKit/.build
+            ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ runner.os }}-${{ hashFiles('apps/ios/LedgerKit/Package.resolved') }}
+          restore-keys: spm-${{ runner.os }}-
 
       - name: swift test (LedgerKit)
         working-directory: apps/ios/LedgerKit
         run: swift test
 
   # ------------------------------------------------------------------
-  # Scraper: unit tests (no browser needed — mocked)
+  # The single required check. Skipped jobs (area unchanged) count as
+  # passing; a failed or cancelled job fails this one.
   # ------------------------------------------------------------------
-  scraper:
-    needs: changes
-    if: needs.changes.outputs.scraper == 'true'
+  ci-ok:
+    name: ci-ok
+    if: always()
+    needs: [changes, tooling, supabase, edge, parser, web, scraper, ios]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: scraper/requirements.txt
-
-      - name: Install dependencies
-        run: pip install -e "scraper/[dev]"
-
-      - name: Run tests
-        run: cd scraper && python -m pytest -q
-
-  # ==================================================================
-  # LEGACY (v1) — backend/ and frontend/ are frozen and deleted at
-  # cutover (PRODUCTION.md §10). Remove these jobs with them.
-  # ==================================================================
-
-  # Backend: tests + migrations (runs in parallel with backend-security)
-  backend:
-    needs: changes
-    if: needs.changes.outputs.backend == 'true'
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
+      - name: Summarise and gate
         env:
-          POSTGRES_USER: ccs
-          POSTGRES_PASSWORD: ccs
-          POSTGRES_DB: ccs
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U ccs -d ccs"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: backend/requirements*.txt
-
-      - name: Install dependencies
-        run: cd backend && pip install -e . -r requirements.txt -r requirements-dev.txt pytest-xdist
-
-      - name: Syntax check
-        run: python -m compileall backend/ccs_platform backend/scripts
-
-      - name: Run tests
-        run: cd backend && python -m pytest -q -n auto
-
-      - name: Migration smoke (SQLite)
-        env:
-          CCS_PLATFORM_DATABASE_URL: sqlite:///./ci.db
+          RESULTS: ${{ toJSON(needs) }}
         run: |
-          cd backend
-          python scripts/migration_preflight.py --skip-database-state
-          alembic upgrade head
-          alembic downgrade base
-          alembic upgrade head
-          python scripts/migration_preflight.py
-
-      - name: Migration smoke (Postgres)
-        env:
-          CCS_PLATFORM_DATABASE_URL: postgresql+psycopg://ccs:ccs@127.0.0.1:5432/ccs
-        run: |
-          cd backend
-          alembic upgrade head
-          alembic downgrade base
-          alembic upgrade head
-          python scripts/migration_preflight.py
-
-  # Backend security: vulnerability + SAST scans (parallel with backend)
-  backend-security:
-    needs: changes
-    if: needs.changes.outputs.backend == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: backend/requirements*.txt
-
-      - name: Install audit tools
-        run: pip install pip-audit bandit
-
-      - name: Dependency vulnerability scan
-        run: |
-          grep -v '^-e' backend/requirements.txt | pip-audit -r /dev/stdin --strict
-          pip-audit -r backend/requirements-export.txt --strict
-
-      - name: SAST scan
-        run: bandit -q -r backend/ccs_platform -x backend/tests -ll -ii
-
-  # Frontend: unit tests + build
-  frontend:
-    needs: changes
-    if: needs.changes.outputs.frontend == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
-      - run: npm ci
-        working-directory: frontend
-
-      - run: npm test -- --run
-        working-directory: frontend
-
-      - run: npm run build
-        working-directory: frontend
+          {
+            echo "### CI results"
+            echo ""
+            echo "| Job | Result |"
+            echo "|---|---|"
+            jq -r 'to_entries[] | "| \(.key) | \(.value.result) |"' <<<"$RESULTS"
+          } >> "$GITHUB_STEP_SUMMARY"
+          bad=$(jq -r 'to_entries[] | select(.value.result == "failure" or .value.result == "cancelled") | .key' <<<"$RESULTS")
+          if [ -n "$bad" ]; then
+            echo "::error::Failed or cancelled: $(echo "$bad" | tr '\n' ' ')"
+            exit 1
+          fi
+          echo "All required checks passed or were skipped (area unchanged)."

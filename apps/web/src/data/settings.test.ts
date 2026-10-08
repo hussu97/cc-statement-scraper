@@ -33,8 +33,8 @@ describe("members", () => {
   });
 
   it("explains unknown emails", () => {
-    expect(addMemberError({ code: "P0002", message: "no user with that email has signed up yet" })).toMatch(/sign in to Ledger once first/);
-    expect(addMemberError(new Error("no user with that email has signed up yet"))).toMatch(/sign in to Ledger once first/);
+    expect(addMemberError({ code: "P0002", message: "no user with that email has signed up yet" })).toMatch(/sign in to Bank Ledger once first/);
+    expect(addMemberError(new Error("no user with that email has signed up yet"))).toMatch(/sign in to Bank Ledger once first/);
     expect(addMemberError({ code: "42501", message: "x" })).toMatch(/Only owners/);
     expect(addMemberError({ message: "boom" })).toBe("boom");
   });

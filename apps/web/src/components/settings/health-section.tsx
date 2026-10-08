@@ -122,7 +122,7 @@ export function HealthSection() {
                   {h.lastSender && <p className="mt-3 text-[12px] text-muted">Latest from {h.lastSender}.</p>}
                   {h.unparsed > 0 && (
                     <Link to="/review" className="tap mt-3 inline-flex items-center gap-1 text-[13px] text-accent hover:underline">
-                      Review messages Ledger couldn't read <ArrowRight className="size-3.5" aria-hidden />
+                      Review messages Bank Ledger couldn't read <ArrowRight className="size-3.5" aria-hidden />
                     </Link>
                   )}
                 </>

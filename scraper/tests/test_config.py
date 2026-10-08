@@ -17,6 +17,7 @@ _SCRAPER_KEYS = [
     "CCS_SCRAPER_BROWSER_LOCALE",
     "CCS_SCRAPER_DOWNLOAD_DIR",
     "CCS_SCRAPER_UPLOAD_PATH",
+    "CCS_SCRAPER_SUPABASE_PUBLISHABLE_KEY",
     "CCS_SCRAPER_SUPABASE_ANON_KEY",
 ]
 
@@ -45,7 +46,7 @@ def test_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     cfg = ScraperConfig()
     assert cfg.target_url == "http://127.0.0.1:8040"
     assert cfg.upload_path == "/api/v1/jobs/upload"
-    assert cfg.supabase_anon_key is None
+    assert cfg.supabase_publishable_key is None
     assert cfg.api_token == ""
     assert cfg.profile_key == ""
     assert cfg.headless is True
@@ -78,16 +79,26 @@ def test_env_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
     assert cfg.browser_locale == "en-US"
 
 
-def test_upload_path_and_anon_key_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_upload_path_and_publishable_key_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     _clear_scraper_env(monkeypatch)
     monkeypatch.setenv("CCS_SCRAPER_TARGET_URL", "https://abc.supabase.co")
     monkeypatch.setenv("CCS_SCRAPER_UPLOAD_PATH", "/functions/v1/statements-upload")
-    monkeypatch.setenv("CCS_SCRAPER_SUPABASE_ANON_KEY", "anon_123")
+    monkeypatch.setenv("CCS_SCRAPER_SUPABASE_PUBLISHABLE_KEY", "sb_publishable_123")
+    monkeypatch.setenv("CCS_SCRAPER_SUPABASE_ANON_KEY", "anon_ignored")
 
     cfg = ScraperConfig()
     assert cfg.target_url == "https://abc.supabase.co"
     assert cfg.upload_path == "/functions/v1/statements-upload"
-    assert cfg.supabase_anon_key == "anon_123"
+    assert cfg.supabase_publishable_key == "sb_publishable_123"
+
+
+def test_deprecated_anon_key_env_is_a_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_scraper_env(monkeypatch)
+    monkeypatch.setenv("CCS_SCRAPER_SUPABASE_ANON_KEY", "anon_123")
+
+    with pytest.warns(DeprecationWarning, match="CCS_SCRAPER_SUPABASE_PUBLISHABLE_KEY"):
+        cfg = ScraperConfig()
+    assert cfg.supabase_publishable_key == "anon_123"
 
 
 def test_blank_upload_settings_fall_back_to_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -99,7 +110,7 @@ def test_blank_upload_settings_fall_back_to_defaults(monkeypatch: pytest.MonkeyP
     cfg = ScraperConfig()
     assert cfg.target_url == "http://127.0.0.1:8040"
     assert cfg.upload_path == "/api/v1/jobs/upload"
-    assert cfg.supabase_anon_key is None
+    assert cfg.supabase_publishable_key is None
 
 
 @pytest.mark.parametrize("value", ["false", "False", "FALSE"])

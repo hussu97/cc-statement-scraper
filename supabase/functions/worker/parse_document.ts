@@ -2,7 +2,7 @@
 
 import { captureMessage, traceHeaders } from "../_shared/sentry.ts";
 import type { Db } from "../_shared/supabase.ts";
-import { attemptOf, MAX_READS, type QueueMessage, queueDelete, retryLater, toDlq } from "./queue.ts";
+import { attemptOf, MAX_READS, queueDelete, type QueueMessage, retryLater, toDlq } from "./queue.ts";
 
 export const PARSE_QUEUE = "parse_document";
 
@@ -156,7 +156,11 @@ export async function processParseMessage(svc: Db, msg: QueueMessage): Promise<P
   if (attempt > MAX_READS) {
     await toDlq(svc, PARSE_QUEUE, msg, "max reads exceeded");
     await failDocument(svc, docCode, "MAX_ATTEMPTS", "parsing failed repeatedly; moved to the dead-letter queue", true);
-    captureMessage("parse_document moved to DLQ", { level: "error", tags, fingerprint: ["worker", "dlq", PARSE_QUEUE] });
+    captureMessage("parse_document moved to DLQ", {
+      level: "error",
+      tags,
+      fingerprint: ["worker", "dlq", PARSE_QUEUE],
+    });
     return { doc_code: docCode, outcome: "dlq", code: "MAX_ATTEMPTS" };
   }
 
@@ -166,7 +170,12 @@ export async function processParseMessage(svc: Db, msg: QueueMessage): Promise<P
     await queueDelete(svc, PARSE_QUEUE, msg.msg_id); // document was deleted
     return { doc_code: docCode, outcome: "skipped" };
   }
-  const doc = ctx.doc as { storage_path: string; original_filename: string; bank_code: string | null; profile_code: string };
+  const doc = ctx.doc as {
+    storage_path: string;
+    original_filename: string;
+    bank_code: string | null;
+    profile_code: string;
+  };
 
   await svc.from("documents").update({ parse_status: "parsing", parse_attempts: Math.min(attempt, 32767) })
     .eq("doc_code", docCode);
@@ -234,7 +243,9 @@ export async function processParseMessage(svc: Db, msg: QueueMessage): Promise<P
 
   const parserUrl = (Deno.env.get("PARSER_URL") ?? "").replace(/\/+$/, "");
   const parserSecret = Deno.env.get("PARSER_SECRET") ?? "";
-  if (!parserUrl || !parserSecret) return await handleTransient("PARSER_NOT_CONFIGURED", "PARSER_URL / PARSER_SECRET not set");
+  if (!parserUrl || !parserSecret) {
+    return await handleTransient("PARSER_NOT_CONFIGURED", "PARSER_URL / PARSER_SECRET not set");
+  }
 
   let res: Response;
   let body: unknown = null;
@@ -255,12 +266,17 @@ export async function processParseMessage(svc: Db, msg: QueueMessage): Promise<P
     const timedOut = e instanceof DOMException && e.name === "TimeoutError";
     const code = timedOut ? "PARSER_TIMEOUT" : "PARSER_UNREACHABLE";
     const reason = timedOut ? `no response within ${parserTimeoutMs()} ms` : `${(e as Error)?.name ?? "Error"}`;
-    return await handleTransient(code, `parser request failed: ${reason}`, { extra: { parser_host: hostOf(parserUrl) } });
+    return await handleTransient(code, `parser request failed: ${reason}`, {
+      extra: { parser_host: hostOf(parserUrl) },
+    });
   }
 
   const outcome = classifyParserResponse(res.status, body);
   if (outcome.action === "transient") {
-    return await handleTransient(outcome.code, outcome.message, { http_status: outcome.status, config: outcome.config });
+    return await handleTransient(outcome.code, outcome.message, {
+      http_status: outcome.status,
+      config: outcome.config,
+    });
   }
   if (outcome.action === "permanent") {
     await failDocument(svc, docCode, outcome.code, outcome.message, true);
@@ -303,7 +319,9 @@ export async function processParseMessage(svc: Db, msg: QueueMessage): Promise<P
   // Ingest warnings are statement kind/date notes (e.g. "statement 2026-01-28 skipped: no card
   // number and no transaction rows"), never amounts or descriptions.
   const warnings = ingestWarnings(ing.data);
-  if (warnings.length) console.log(`worker: ${docCode} ingested with ${warnings.length} warning(s):`, warnings.slice(0, 5));
+  if (warnings.length) {
+    console.log(`worker: ${docCode} ingested with ${warnings.length} warning(s):`, warnings.slice(0, 5));
+  }
   return { doc_code: docCode, outcome: "parsed", ...(warnings.length ? { warnings: warnings.length } : {}) };
 }
 

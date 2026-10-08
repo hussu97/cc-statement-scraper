@@ -1,138 +1,140 @@
 #!/usr/bin/env bash
-# Pre-commit hook — fast checks only (runs on every commit)
-# Full test suite runs in pre-push. Skip with: git commit --no-verify
+# Pre-commit hook: fast, staged-files-only checks (lint-staged style). The full
+# suite (tests, builds, pgTAP, swift test) runs in pre-push and CI.
+#
+#   * secrets guard  refuse staged .env* (not .env.example), *.p8, *.p12,
+#                    Secrets*.xcconfig other than the example
+#   * migrations     refuse edits/deletes of migrations already on origin/main
+#   * web            eslint on the staged apps/web .ts/.tsx files
+#   * edge           deno lint on the staged supabase/functions .ts files
+#   * parser         ruff on the staged services/parser .py files
+#   * scraper        python syntax check on the staged scraper .py files
+#   * shell          shellcheck on staged hooks/CI scripts
+#   * workflows      actionlint on staged workflow files
+#
+# Linters read the working-tree copy of each staged file. Missing tools are
+# skipped, never fatal. Bypass: git commit --no-verify (author identity is
+# still enforced by prepare-commit-msg / commit-msg).
+# Works on macOS bash 3.2.
 
-set -euo pipefail
+set -uo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-cd "$REPO_ROOT"
+cd "$REPO_ROOT" || exit 1
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-
-pass() { echo -e "${GREEN}✓${NC} $1"; }
-fail() { echo -e "${RED}✗${NC} $1"; }
-info() { echo -e "${YELLOW}→${NC} $1"; }
+if [ -t 1 ]; then
+  RED=$'\033[0;31m'; GREEN=$'\033[0;32m'; DIM=$'\033[2m'; NC=$'\033[0m'
+else
+  RED=""; GREEN=""; DIM=""; NC=""
+fi
 
 ERRORS=0
+ok() { echo "${GREEN}ok${NC} $1"; }
+fail() { echo "${RED}FAIL${NC} $1"; ERRORS=$((ERRORS + 1)); }
+skip() { echo "  ${DIM}skip $1${NC}"; }
+have() { command -v "$1" >/dev/null 2>&1; }
 
-# Activate virtualenv if present
-if [ -f "backend/.venv/bin/activate" ]; then
-  # shellcheck disable=SC1091
-  source backend/.venv/bin/activate
+STAGED="$(git diff --cached --name-only --diff-filter=ACMR)"
+# staged <ERE>: staged, still-existing paths matching the pattern.
+staged() {
+  local f
+  printf '%s\n' "$STAGED" | grep -E "$1" | while IFS= read -r f; do [ -f "$f" ] && echo "$f"; done
+}
+
+# --- secrets guard ----------------------------------------------------------
+LEAKS="$(staged '(^|/)\.env(\..+)?$|\.p8$|\.p12$|\.mobileprovision$|(^|/)Secrets[^/]*\.xcconfig$' \
+  | grep -vE '(^|/)\.env\.example$|Secrets\.example\.xcconfig$' || true)"
+if [ -n "$LEAKS" ]; then
+  fail "secrets guard — these must never be committed:"
+  # shellcheck disable=SC2086 # one path per word
+  printf '       %s\n' $LEAKS
 fi
 
-# Resolve python binary (prefer venv, fall back to python3/python)
-PYTHON="$(command -v python3 || command -v python || true)"
-if [ -z "$PYTHON" ]; then
-  echo "  python not found in PATH — skipping Python checks"
-  PYTHON=""
-fi
-
-# ---------------------------------------------------------------------------
-# 1–3. Legacy v1 checks. backend/ and frontend/ are deleted at decommission
-# (PRODUCTION.md §10 step 12); each check skips cleanly when its dir is gone.
-# ---------------------------------------------------------------------------
-if [ -d backend/ccs_platform ]; then
-  if [ -n "$PYTHON" ]; then
-    info "Python syntax check (legacy backend)..."
-    LEGACY_PY_DIRS="backend/ccs_platform"
-    [ -d backend/scripts ] && LEGACY_PY_DIRS="$LEGACY_PY_DIRS backend/scripts"
+# --- migrations are append-only ---------------------------------------------
+if git rev-parse -q --verify refs/remotes/origin/main >/dev/null; then
+  TOUCHED="$(git diff --cached --name-only --diff-filter=MDR -- supabase/migrations || true)"
+  BAD=""
+  for f in $TOUCHED; do
+    git cat-file -e "refs/remotes/origin/main:$f" 2>/dev/null && BAD="$BAD $f"
+  done
+  if [ -n "$BAD" ]; then
+    fail "migrations are append-only — these are on main already:"
     # shellcheck disable=SC2086
-    if "$PYTHON" -m compileall -q $LEGACY_PY_DIRS 2>&1; then
-      pass "Python syntax OK"
-    else
-      fail "Python syntax errors found"
-      ERRORS=$((ERRORS + 1))
-    fi
+    printf '       %s\n' $BAD
+    echo "       Add a new migration instead (supabase migration new <name>)."
   fi
-
-  info "Bandit SAST (legacy backend)..."
-  BANDIT="$(command -v bandit || true)"
-  if [ -n "$BANDIT" ]; then
-    if "$BANDIT" -q -r backend/ccs_platform -x backend/tests -ll -ii 2>&1; then
-      pass "Bandit SAST OK"
-    else
-      fail "Bandit found security issues"
-      ERRORS=$((ERRORS + 1))
-    fi
-  else
-    echo "  bandit not found — skipping (pip install bandit)"
-  fi
-else
-  info "Legacy backend/ not present — skipping syntax and bandit checks"
 fi
 
-STAGED_FRONTEND=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '^frontend/src/.*\.(ts|tsx)$' || true)
-
-if [ -n "$STAGED_FRONTEND" ] && [ -f frontend/package.json ]; then
-  info "ESLint (legacy frontend)..."
-  if (cd frontend && npm run lint --silent 2>&1); then
-    pass "ESLint OK"
+# --- web: eslint on staged files --------------------------------------------
+WEB="$(staged '^apps/web/.*\.(ts|tsx)$' | sed 's#^apps/web/##')"
+if [ -n "$WEB" ]; then
+  if have pnpm && [ -d apps/web/node_modules ]; then
+    # shellcheck disable=SC2086 # one path per word
+    if (cd apps/web && pnpm --silent exec eslint --max-warnings 0 $WEB); then ok "eslint (apps/web, $(echo "$WEB" | wc -l | xargs) file(s))"; else fail "eslint (apps/web)"; fi
   else
-    fail "ESLint errors found"
-    ERRORS=$((ERRORS + 1))
+    skip "eslint — pnpm/node_modules missing"
   fi
-else
-  info "ESLint (legacy frontend) — nothing staged or frontend/ absent, skipping"
 fi
 
-# ---------------------------------------------------------------------------
-# 4. Ledger web ESLint + Vitest (only if apps/web files changed)
-# ---------------------------------------------------------------------------
-STAGED_LEDGER_WEB=$(git diff --cached --name-only | grep -E '^apps/web/.*\.(ts|tsx)$' || true)
-
-if [ -n "$STAGED_LEDGER_WEB" ]; then
-  if command -v pnpm >/dev/null 2>&1; then
-    info "ESLint (apps/web)..."
-    if pnpm --silent --filter @ledger/web lint 2>&1; then
-      pass "ESLint (apps/web) OK"
-    else
-      fail "ESLint (apps/web) errors found"
-      ERRORS=$((ERRORS + 1))
-    fi
-    info "Vitest (apps/web)..."
-    if pnpm --silent --filter @ledger/web test 2>&1; then
-      pass "Vitest (apps/web) OK"
-    else
-      fail "Vitest (apps/web) failed"
-      ERRORS=$((ERRORS + 1))
-    fi
+# --- edge: deno lint on staged files ----------------------------------------
+EDGE="$(staged '^supabase/functions/.*\.(ts|tsx)$' | sed 's#^supabase/functions/##')"
+if [ -n "$EDGE" ]; then
+  if have deno; then
+    # shellcheck disable=SC2086
+    if (cd supabase/functions && deno lint -q $EDGE); then ok "deno lint ($(echo "$EDGE" | wc -l | xargs) file(s))"; else fail "deno lint (supabase/functions)"; fi
   else
-    echo "  pnpm not found — skipping apps/web checks (corepack enable)"
+    skip "deno lint — deno not found"
   fi
-else
-  info "ESLint/Vitest — no apps/web .ts/.tsx files staged, skipping"
 fi
 
-# ---------------------------------------------------------------------------
-# 5. Scraper tests (only if scraper files changed)
-# ---------------------------------------------------------------------------
-STAGED_SCRAPER=$(git diff --cached --name-only | grep -E '^scraper/' || true)
-
-if [ -n "$STAGED_SCRAPER" ]; then
-  info "Scraper tests..."
-  if [ -f "scraper/.venv/bin/pytest" ]; then
-    if (cd scraper && .venv/bin/pytest 2>&1); then
-      pass "Scraper tests OK"
-    else
-      fail "Scraper tests failed"
-      ERRORS=$((ERRORS + 1))
-    fi
+# --- parser: ruff on staged files -------------------------------------------
+PARSER="$(staged '^services/parser/.*\.py$' | sed 's#^services/parser/##')"
+if [ -n "$PARSER" ]; then
+  RUFF=""
+  [ -x services/parser/.venv/bin/ruff ] && RUFF="$REPO_ROOT/services/parser/.venv/bin/ruff"
+  [ -z "$RUFF" ] && have ruff && RUFF="ruff"
+  if [ -n "$RUFF" ]; then
+    # shellcheck disable=SC2086
+    if (cd services/parser && "$RUFF" check -q $PARSER); then ok "ruff (parser)"; else fail "ruff (parser) — try: cd services/parser && .venv/bin/ruff check --fix ."; fi
   else
-    echo "  scraper/.venv not found — skipping (cd scraper && pip install -e '.[dev]')"
+    skip "ruff — not installed"
   fi
-else
-  info "Scraper tests — no scraper files staged, skipping"
 fi
 
-# ---------------------------------------------------------------------------
-echo ""
+# --- scraper: syntax ---------------------------------------------------------
+SCRAPER="$(staged '^scraper/.*\.py$')"
+if [ -n "$SCRAPER" ]; then
+  PY="$(command -v python3 || true)"
+  [ -x scraper/.venv/bin/python ] && PY="scraper/.venv/bin/python"
+  if [ -n "$PY" ]; then
+    # shellcheck disable=SC2086
+    if "$PY" -m py_compile $SCRAPER; then ok "python syntax (scraper)"; else fail "python syntax (scraper)"; fi
+  fi
+fi
+
+# --- shell + workflows -------------------------------------------------------
+SHELL_FILES="$(staged '^scripts/(hooks/[^/]+|ci/.*\.sh|install-hooks\.sh)$')"
+if [ -n "$SHELL_FILES" ]; then
+  if have shellcheck; then
+    # shellcheck disable=SC2086
+    if shellcheck -x $SHELL_FILES; then ok "shellcheck"; else fail "shellcheck"; fi
+  else
+    skip "shellcheck — not installed"
+  fi
+fi
+
+WORKFLOWS="$(staged '^\.github/workflows/.*\.ya?ml$')"
+if [ -n "$WORKFLOWS" ]; then
+  if have actionlint; then
+    # shellcheck disable=SC2086
+    if actionlint $WORKFLOWS; then ok "actionlint"; else fail "actionlint"; fi
+  else
+    skip "actionlint — not installed"
+  fi
+fi
+
 if [ "$ERRORS" -gt 0 ]; then
-  echo -e "${RED}Pre-commit failed ($ERRORS check(s)). Fix the issues above or use --no-verify to skip.${NC}"
+  echo "${RED}pre-commit failed ($ERRORS). Fix the above, or git commit --no-verify.${NC}"
   exit 1
-else
-  echo -e "${GREEN}All pre-commit checks passed.${NC}"
 fi
+exit 0

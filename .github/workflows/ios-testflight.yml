@@ -1,0 +1,254 @@
+name: iOS TestFlight
+
+# Uploads the Ledger IPA that the pre-push hook already built and signed on the
+# Mac (apps/ios/scripts/publish-build.sh → rolling prerelease
+# `ios-ledger-staged`: Ledger.ipa + build-meta.json), then releases it to the
+# external testers. Modeled on mm-pos/.github/workflows/testflight.yml.
+#
+# Nothing here runs on macOS: the upload uses the App Store Connect API
+# (apple-actions/upload-testflight-build, plain HTTPS) and distribution is plain
+# Node, so every job is a 1x-billed Linux job. Signing stays on the Mac; GitHub
+# only holds the App Store Connect API key.
+#
+#   stage      is there a staged build for THIS source? No secrets. A push with
+#              nothing staged (pushed without the hook, or from a machine
+#              without Xcode) is not a failure: it says so and stops.
+#   upload     downloads, re-verifies against what `stage` approved, uploads.
+#   distribute waits for processing, attaches the build to "Friends & Family"
+#              and submits it for Beta App Review
+#              (apps/ios/scripts/testflight-distribute.mjs).
+#
+# Secrets: ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8 (repository or `testflight`
+# environment). Docs: docs/ci-cd.md.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/ios/**'
+      # The counter publish-build.sh commits after staging records which build
+      # already shipped; on its own it is a push with nothing to ship.
+      - '!apps/ios/build-number.json'
+      - '!apps/ios/**/*.md'
+      - '.github/workflows/ios-testflight.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Uploads must not race: App Store Connect rejects a duplicate build number,
+# and cancelling mid-upload leaves a half-processed build.
+concurrency:
+  group: ios-testflight
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ios-ledger-staged
+  COUNTER_FILE: apps/ios/build-number.json
+
+jobs:
+  stage:
+    name: Check for a staged build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      match: ${{ steps.check.outputs.match }}
+      build: ${{ steps.check.outputs.build }}
+      # The commit this job approved, for `upload` to re-check against. Not
+      # github.sha: the two may differ by the build-number commit.
+      commit: ${{ steps.check.outputs.commit }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The source comparison diffs this commit against the staged one.
+          fetch-depth: 0
+
+      - name: Fetch the staged build metadata
+        id: fetch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p staged
+          if ! gh release download "$RELEASE_TAG" --dir staged --pattern 'build-meta.json' --clobber 2>/dev/null; then
+            echo "::warning::No '$RELEASE_TAG' release found. Stage a build with apps/ios/scripts/publish-build.sh (the pre-push hook does it on main pushes that change the app)."
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "found=true" >> "$GITHUB_OUTPUT"
+
+      - name: Check the artifact was built from this source
+        id: check
+        if: steps.fetch.outputs.found == 'true'
+        run: |
+          # The question is "was this binary built from the source we are
+          # shipping". publish-build.sh commits build-number.json from inside
+          # the pre-push hook, and git re-resolves the ref after the hook, so
+          # the workflow usually runs for that counter commit while the
+          # artifact names the commit before it. They differ only by a file
+          # nothing compiles, so that difference is allowed; any other is not.
+          [[ -f staged/build-meta.json ]] || { echo "::error::staged release has no build-meta.json"; exit 1; }
+          STAGED_COMMIT=$(jq -r .commit staged/build-meta.json)
+          STAGED_BUILD=$(jq -r .build staged/build-meta.json)
+          echo "Staged build $STAGED_BUILD from $STAGED_COMMIT; this run is for $GITHUB_SHA"
+
+          match=false
+          if [[ "$STAGED_COMMIT" == "$GITHUB_SHA" ]]; then
+            match=true
+          elif ! git cat-file -e "${STAGED_COMMIT}^{commit}" 2>/dev/null; then
+            echo "::warning::Staged commit $STAGED_COMMIT is not in this repository's history (rebased or force-pushed away)."
+          else
+            differing=$(git diff --name-only "$STAGED_COMMIT" "$GITHUB_SHA")
+            if [[ -z "$differing" || "$differing" == "$COUNTER_FILE" ]]; then
+              match=true
+              echo "::notice::Staged artifact is from $STAGED_COMMIT, which differs from this commit only by $COUNTER_FILE; shipping it."
+            else
+              echo "::warning::Staged artifact is for $STAGED_COMMIT; this commit differs by:"
+              echo "$differing"
+            fi
+          fi
+
+          echo "match=$match" >> "$GITHUB_OUTPUT"
+          if [[ "$match" == true ]]; then
+            { echo "build=$STAGED_BUILD"; echo "commit=$STAGED_COMMIT"; } >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Nothing uploaded."
+          fi
+
+      - name: No local build for this commit
+        if: steps.fetch.outputs.found != 'true' || steps.check.outputs.match != 'true'
+        run: |
+          {
+            echo "### No TestFlight upload for this commit"
+            echo ""
+            echo "No Mac-built IPA was staged for \`$GITHUB_SHA\`."
+            echo ""
+            echo "To ship it: on the Mac, \`git pull && apps/ios/scripts/publish-build.sh\`, push the"
+            echo "build-number commit it makes (or re-run this workflow)."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  upload:
+    name: Upload staged build
+    needs: stage
+    if: needs.stage.outputs.match == 'true'
+    runs-on: ubuntu-latest
+    environment: testflight
+    timeout-minutes: 30
+    steps:
+      - name: Verify required secrets are set
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          missing=()
+          for v in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8; do
+            [[ -n "${!v}" ]] || missing+=("$v")
+          done
+          if (( ${#missing[@]} )); then
+            echo "::error::Missing secrets: ${missing[*]} (docs/ci-cd.md)"
+            exit 1
+          fi
+
+      - name: Fetch the staged build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p staged
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir staged --clobber
+          ls -lh staged
+
+      - name: Re-check the artifact is the one the gate approved
+        env:
+          APPROVED: ${{ needs.stage.outputs.commit }}
+        run: |
+          # The release is a rolling tag and could be replaced between the gate
+          # and here. Compare with what the gate approved, not with github.sha
+          # (the gate already accepted a build-number-only difference).
+          STAGED_COMMIT=$(jq -r .commit staged/build-meta.json)
+          [[ "$STAGED_COMMIT" == "$APPROVED" ]] \
+            || { echo "::error::staged release changed under this run (gate saw $APPROVED, now $STAGED_COMMIT)"; exit 1; }
+          IPA="staged/$(jq -r '.apps[0].ipa' staged/build-meta.json)"
+          [[ -f "$IPA" ]] || { echo "::error::$IPA is missing from the staged release"; exit 1; }
+          echo "IPA=$IPA" >> "$GITHUB_ENV"
+
+      - name: Normalise the App Store Connect key
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          # Accepted as PEM or base64; the action wants PKCS8 PEM content.
+          if printf '%s' "$ASC_KEY_P8" | grep -q 'BEGIN PRIVATE KEY'; then
+            printf '%s' "$ASC_KEY_P8" > key.pem
+          else
+            printf '%s' "$ASC_KEY_P8" | tr -d '[:space:]' | base64 --decode > key.pem
+          fi
+          grep -q 'BEGIN PRIVATE KEY' key.pem \
+            || { echo "::error::ASC_KEY_P8 did not decode to a PKCS8 PEM private key"; exit 1; }
+          # A decoded secret is not masked automatically; mask every line.
+          while IFS= read -r line; do
+            [[ -n "$line" ]] && echo "::add-mask::$line"
+          done < key.pem
+          # Exactly one trailing newline, or the heredoc delimiter lands on the
+          # last key line and Actions rejects the block.
+          {
+            echo 'ASC_PRIVATE_KEY<<PEM_EOF'
+            printf '%s\n' "$(cat key.pem)"
+            echo 'PEM_EOF'
+          } >> "$GITHUB_ENV"
+          rm -f key.pem
+
+      - name: Upload Ledger
+        uses: apple-actions/upload-testflight-build@v5
+        with:
+          app-path: ${{ env.IPA }}
+          app-type: ios
+          issuer-id: ${{ secrets.ASC_ISSUER_ID }}
+          api-key-id: ${{ secrets.ASC_KEY_ID }}
+          api-private-key: ${{ env.ASC_PRIVATE_KEY }}
+          # distribute polls until processing finishes; don't bill the wait twice.
+          wait-for-processing: false
+
+      - name: Summary
+        env:
+          BUILD: ${{ needs.stage.outputs.build }}
+        run: |
+          {
+            echo "### Uploaded Ledger build $BUILD to TestFlight"
+            echo ""
+            echo "Internal testers get it once Apple finishes processing; the"
+            echo "*distribute* job releases it to the external group."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  distribute:
+    name: Release to external testers
+    needs: [stage, upload]
+    runs-on: ubuntu-latest
+    environment: testflight
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # "What to Test" defaults to the last apps/ios commit subject.
+          fetch-depth: 50
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Release the build to testers
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          BUILD: ${{ needs.stage.outputs.build }}
+        run: node apps/ios/scripts/testflight-distribute.mjs --build "$BUILD" --timeout 35
+
+      - name: Summary
+        if: success()
+        env:
+          BUILD: ${{ needs.stage.outputs.build }}
+        run: |
+          {
+            echo "### Ledger build $BUILD released to testers"
+            echo ""
+            echo "External testers install once Apple clears Beta App Review."
+          } >> "$GITHUB_STEP_SUMMARY"

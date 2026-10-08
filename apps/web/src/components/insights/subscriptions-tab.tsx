@@ -26,7 +26,7 @@ export function SubscriptionsTab({ profileCode }: { profileCode: string }) {
           <>
             <CardHeader title="Subscriptions" />
             <EmptyState icon={<Repeat />} title="Nothing recurring found yet">
-              Ledger needs 3 charges at a steady interval from the same merchant before it calls something a subscription.
+              Bank Ledger needs 3 charges at a steady interval from the same merchant before it calls something a subscription.
             </EmptyState>
           </>
         }

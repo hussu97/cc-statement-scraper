@@ -21,8 +21,8 @@ function Root() {
     return (
       <ErrorState
         className="min-h-dvh"
-        title="Ledger isn't configured"
-        error={new Error("Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in apps/web/.env.local, then restart the dev server.")}
+        title="Bank Ledger isn't configured"
+        error={new Error("Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in apps/web/.env.local, then restart the dev server.")}
       />
     );
   }
