@@ -29,6 +29,7 @@ struct ActivityView: View {
                     Image(systemName: model.query.hasFilters
                           ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
                 }
+                .accessibilityLabel(model.query.hasFilters ? "Filters, active" : "Filters")
             }
         }
         .refreshable { await model.load(profileCode: profileCode) }
@@ -90,32 +91,57 @@ struct ActivityView: View {
 
 struct TransactionRow: View {
     let txn: LedgerTransaction
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             CategoryDot(token: txn.categoryColor, size: 10).padding(.top, 6)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(txn.title).font(Typography.rowTitle).foregroundStyle(Palette.ink).lineLimit(1)
-                HStack(spacing: 6) {
-                    Text(txn.categoryName ?? "Uncategorized")
-                    Text("·")
-                    Text(txn.cardLabel)
+            AdaptiveRow {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(txn.title).font(Typography.rowTitle).foregroundStyle(Palette.ink)
+                        .lineLimit(typeSize.prefersStackedRows ? 3 : 1)
+                    meta
                 }
-                .font(Typography.caption)
-                .foregroundStyle(Palette.muted)
-                .lineLimit(1)
-            }
-            Spacer(minLength: 8)
-            VStack(alignment: .trailing, spacing: 3) {
-                Text(txn.amountLabel).font(Typography.amount)
-                    .foregroundStyle(txn.isCredit ? Palette.positive : Palette.ink)
-                if let original = txn.originalAmountLabel {
-                    Text(original).font(Typography.caption).monospacedDigit().foregroundStyle(Palette.muted)
+            } trailing: {
+                if typeSize.prefersStackedRows {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) { amounts; Chip(label: txn.badge.label, tone: txn.badge.tone) }
+                } else {
+                    VStack(alignment: .trailing, spacing: 3) { amounts; Chip(label: txn.badge.label, tone: txn.badge.tone) }
                 }
-                Chip(label: txn.badge.label, tone: txn.badge.tone)
             }
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder private var meta: some View {
+        if typeSize.prefersStackedRows {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(txn.categoryName ?? "Uncategorized")
+                Text(txn.cardLabel)
+            }
+            .font(Typography.caption)
+            .foregroundStyle(Palette.muted)
+        } else {
+            HStack(spacing: 6) {
+                Text(txn.categoryName ?? "Uncategorized")
+                Text("·")
+                Text(txn.cardLabel)
+            }
+            .font(Typography.caption)
+            .foregroundStyle(Palette.muted)
+            .lineLimit(1)
+        }
+    }
+
+    @ViewBuilder private var amounts: some View {
+        VStack(alignment: typeSize.prefersStackedRows ? .leading : .trailing, spacing: 2) {
+            Text(txn.amountLabel).font(Typography.amount).moneyLine()
+                .foregroundStyle(txn.isCredit ? Palette.positive : Palette.ink)
+            if let original = txn.originalAmountLabel {
+                Text(original).font(Typography.caption).moneyLine().foregroundStyle(Palette.muted)
+            }
+        }
     }
 }

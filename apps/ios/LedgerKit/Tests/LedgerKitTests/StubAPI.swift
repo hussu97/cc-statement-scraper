@@ -7,6 +7,8 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
     enum IngestBehaviour {
         case succeed(status: String)
         case fail(LedgerAPIError)
+        /// Decide per call (profile, messages): return results or throw.
+        case custom(@Sendable (String, [SMSPayload]) throws -> [SMSIngestResult])
     }
 
     private let lock = NSLock()
@@ -37,7 +39,17 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
             }
         case .fail(let error):
             throw error
+        case .custom(let decide):
+            return try decide(profileCode, messages)
         }
+    }
+
+    var inbox = ReviewInbox(reviews: [])
+    private(set) var resolved: [(String, ReviewAction)] = []
+    func reviewInbox(profileCode: String) async throws -> ReviewInbox { inbox }
+    func resolveReview(reviewCode: String, action: ReviewAction) async throws -> String {
+        lock.withLock { resolved.append((reviewCode, action)) }
+        return "dismissed"
     }
 
     // MARK: Unused by these tests

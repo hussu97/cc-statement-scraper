@@ -5,8 +5,19 @@ import SwiftUI
 /// (launched in the background when the app is not running), so it shares the
 /// outbox actor and the Supabase client with the UI.
 enum AppServices {
-    static let result: Result<LedgerServices, any Error> = Result { try LedgerServices.fromBundle() }
+    static let result: Result<LedgerServices, any Error> = Result {
+        try LedgerServices.fromBundle(debugSessionFallback: BuildFlavor.isDebug)
+    }
     static var shared: LedgerServices? { try? result.get() }
+}
+
+/// This target's own build flavour (LedgerKit is compiled separately).
+enum BuildFlavor {
+    #if DEBUG
+    static let isDebug = true
+    #else
+    static let isDebug = false
+    #endif
 }
 
 @main
@@ -15,7 +26,7 @@ struct LedgerApp: App {
     @State private var model: AppModel?
 
     init() {
-        Telemetry.start(target: .app, config: AppServices.shared?.config)
+        Telemetry.start(target: .app, config: AppServices.shared?.config, isDebugBuild: BuildFlavor.isDebug)
         _model = State(initialValue: AppServices.shared.map { AppModel(services: $0) })
     }
 

@@ -5,10 +5,31 @@ import UniformTypeIdentifiers
 struct StatementsView: View {
     let model: StatementsModel
     let profileCode: String
+    let canUpload: Bool
     @State private var picking = false
 
     var body: some View {
         Page {
+            if canUpload { uploadCard } else {
+                Text("You're a viewer on this ledger. Only its owners can add statements.")
+                    .font(Typography.rowMeta).foregroundStyle(Palette.muted).padding(.top, 8)
+            }
+
+            StateContainer(state: model.state, retry: reload) { content in
+                CyclesCard(cycles: content.cycles, latest: content.latestStatementCodes)
+                DocumentsCard(documents: content.documents)
+            }
+        }
+        .ledgerNavigation("Statements")
+        .task { await model.load(profileCode: profileCode) }
+        .refreshable { await model.load(profileCode: profileCode) }
+        .fileImporter(isPresented: $picking, allowedContentTypes: [.pdf], allowsMultipleSelection: true) { result in
+            guard case .success(let urls) = result, !urls.isEmpty else { return }
+            Task { await model.upload(urls: urls, profileCode: profileCode) }
+        }
+    }
+
+    private var uploadCard: some View {
             Card {
                 SectionHeader(title: "Add statements")
                 Text("PDFs are parsed on the server and reconciled against your SMS. Password-protected PDFs use the passwords saved on the web.")
@@ -26,19 +47,6 @@ struct StatementsView: View {
                 }
             }
             .padding(.top, 8)
-
-            StateContainer(state: model.state, retry: reload) { content in
-                CyclesCard(cycles: content.cycles)
-                DocumentsCard(documents: content.documents)
-            }
-        }
-        .ledgerNavigation("Statements")
-        .task { await model.load(profileCode: profileCode) }
-        .refreshable { await model.load(profileCode: profileCode) }
-        .fileImporter(isPresented: $picking, allowedContentTypes: [.pdf], allowsMultipleSelection: true) { result in
-            guard case .success(let urls) = result, !urls.isEmpty else { return }
-            Task { await model.upload(urls: urls, profileCode: profileCode) }
-        }
     }
 
     private func reload() { Task { await model.load(profileCode: profileCode) } }
@@ -46,6 +54,7 @@ struct StatementsView: View {
 
 private struct CyclesCard: View {
     let cycles: [StatementCycle]
+    let latest: Set<String>
 
     var body: some View {
         Card {
@@ -56,19 +65,19 @@ private struct CyclesCard: View {
             }
             ForEach(cycles) { cycle in
                 VStack(alignment: .leading, spacing: 6) {
-                    HStack(alignment: .firstTextBaseline) {
+                    AdaptiveRow(alignment: .firstTextBaseline) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(cycle.title).font(Typography.rowTitle)
                             Text(cycle.periodLabel ?? "\(cycle.kindLabel) · \(LedgerDates.dayLabel(cycle.statementDate))")
                                 .font(Typography.caption).foregroundStyle(Palette.muted)
                         }
-                        Spacer()
+                    } trailing: {
                         VStack(alignment: .trailing, spacing: 2) {
                             if let balance = cycle.closingBalance {
-                                Text(MoneyFormat.aed(balance)).font(Typography.amount)
+                                Text(MoneyFormat.aed(balance)).font(Typography.amount).moneyLine()
                             }
-                            if let due = cycle.dueText() {
-                                Text(due).font(Typography.caption).foregroundStyle(Palette.muted)
+                            if let due = cycle.due(isLatest: latest.contains(cycle.stmtCode)) {
+                                Text(due.text).font(Typography.caption).foregroundStyle(due.tone.color)
                             }
                         }
                     }
@@ -94,14 +103,16 @@ private struct DocumentsCard: View {
                 Text("Nothing uploaded yet.").font(Typography.rowMeta).foregroundStyle(Palette.muted)
             }
             ForEach(documents) { doc in
-                HStack {
-                    Image(systemName: "doc.text").foregroundStyle(Palette.subtle)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(doc.originalFilename).font(Typography.rowTitle).lineLimit(1)
-                        Text("\(doc.bankCode ?? "Bank unknown") · \(LedgerDates.dayLabel(CalendarDay(date: doc.createdAt)))")
-                            .font(Typography.caption).foregroundStyle(Palette.muted)
+                AdaptiveRow(alignment: .center) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "doc.text").foregroundStyle(Palette.subtle)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(doc.originalFilename).font(Typography.rowTitle).lineLimit(2)
+                            Text("\(doc.bankCode ?? "Bank unknown") · \(LedgerDates.dayLabel(CalendarDay(date: doc.createdAt)))")
+                                .font(Typography.caption).foregroundStyle(Palette.muted)
+                        }
                     }
-                    Spacer()
+                } trailing: {
                     Chip(label: doc.statusLabel, tone: doc.tone)
                 }
             }

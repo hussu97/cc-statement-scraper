@@ -16,6 +16,8 @@
 		659B1CF789C0735789CC64EE /* StatementsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F52CAA6FE73B46EFE59439A4 /* StatementsView.swift */; };
 		748435885CB091FA9BFCACAA /* ActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAE2E3AE75D7627DDCE82B40 /* ActivityView.swift */; };
 		7661F492311F61EFDB72CA0D /* LedgerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDC537589817A7B6C31CC447 /* LedgerApp.swift */; };
+		77AED5C567C9D18DFED64501 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 496168FB383326D0481C9AC8 /* PrivacyInfo.xcprivacy */; };
+		7A19A23E1C8368E0F3EB5B51 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 4C249495FC88BB9133CB717E /* PrivacyInfo.xcprivacy */; };
 		7B056F939B7822BC41E88540 /* LedgerShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F8A491D8C79A061F71F857D7 /* LedgerShare.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		860158FF70A963842E055393 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCE4248BBC6E6FA967938803 /* RootView.swift */; };
 		88E22D6FB72866F27D8AE476 /* ActivitySheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0120325ABB16C928EB7D78A2 /* ActivitySheets.swift */; };
@@ -23,6 +25,7 @@
 		ADA71066669326EC96C41A89 /* OverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A31E4CF859EB1BA241A2C0C1 /* OverviewView.swift */; };
 		C05BE17C5A3CB168D026EAAF /* LogBankSMSIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 306FF1BBB7DC9A30BCC65C13 /* LogBankSMSIntent.swift */; };
 		D735424BB191ECF6BEFB087C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F190BDC9EB8084E38F344EE7 /* Assets.xcassets */; };
+		E0FD108F9F8CAE01FBFFBA28 /* ReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7DE35B2ABB9AA3A980FD35D /* ReviewView.swift */; };
 		EBE6B98A364642BCAF0A7E52 /* ProfilePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842801DBC37F9A8E31C6DFA8 /* ProfilePickerView.swift */; };
 /* End PBXBuildFile section */
 
@@ -60,6 +63,8 @@
 		306FF1BBB7DC9A30BCC65C13 /* LogBankSMSIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogBankSMSIntent.swift; sourceTree = "<group>"; };
 		41E5147D73DD93C7A015339F /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		440D48465D990731AC380564 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		496168FB383326D0481C9AC8 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		4C249495FC88BB9133CB717E /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		4FCEADD59EE2BBF22D5B715A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		842801DBC37F9A8E31C6DFA8 /* ProfilePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilePickerView.swift; sourceTree = "<group>"; };
 		90DD295322C6F4844758D023 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
@@ -68,6 +73,7 @@
 		AAE2E3AE75D7627DDCE82B40 /* ActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityView.swift; sourceTree = "<group>"; };
 		B58A729CF0C51D66DEEDC26A /* Ledger.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Ledger.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BDC537589817A7B6C31CC447 /* LedgerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerApp.swift; sourceTree = "<group>"; };
+		E7DE35B2ABB9AA3A980FD35D /* ReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewView.swift; sourceTree = "<group>"; };
 		EFDA37FE8678FA89D04F3841 /* SignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInView.swift; sourceTree = "<group>"; };
 		F190BDC9EB8084E38F344EE7 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		F1E4A856AC27772DBFEAAA57 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -107,10 +113,12 @@
 				65D5F81E8AF042129118B445 /* Onboarding */,
 				4633D38C398A212F90654F29 /* Overview */,
 				AA228B2B5C90296C345ECEED /* Resources */,
+				E68653B65277F1FC17330CBE /* Review */,
 				D8F249B71FEBA5D190CA1D8F /* Settings */,
 				613F54D1A78E328AD04425BC /* Statements */,
 				F1E4A856AC27772DBFEAAA57 /* Info.plist */,
 				29A5D1F13A9777F8DF1C1BCC /* Ledger.entitlements */,
+				496168FB383326D0481C9AC8 /* PrivacyInfo.xcprivacy */,
 			);
 			path = Ledger;
 			sourceTree = "<group>";
@@ -207,6 +215,7 @@
 			children = (
 				440D48465D990731AC380564 /* Info.plist */,
 				18CF2690692498221A6F2653 /* LedgerShare.entitlements */,
+				4C249495FC88BB9133CB717E /* PrivacyInfo.xcprivacy */,
 				41E5147D73DD93C7A015339F /* ShareViewController.swift */,
 			);
 			path = ShareExtension;
@@ -227,6 +236,14 @@
 				AAE2E3AE75D7627DDCE82B40 /* ActivityView.swift */,
 			);
 			path = Activity;
+			sourceTree = "<group>";
+		};
+		E68653B65277F1FC17330CBE /* Review */ = {
+			isa = PBXGroup;
+			children = (
+				E7DE35B2ABB9AA3A980FD35D /* ReviewView.swift */,
+			);
+			path = Review;
 			sourceTree = "<group>";
 		};
 		EBFBF1ABEFB6004D629B4CF6 /* Insights */ = {
@@ -275,6 +292,7 @@
 			buildConfigurationList = A6BC08DDD17D92D4C800440D /* Build configuration list for PBXNativeTarget "LedgerShare" */;
 			buildPhases = (
 				928B4980483D167D2E8FDE30 /* Sources */,
+				1BA2AD4A0804783C9708591A /* Resources */,
 				ABD8F4F549B4DD2C598C0958 /* Frameworks */,
 			);
 			buildRules = (
@@ -337,6 +355,15 @@
 			buildActionMask = 2147483647;
 			files = (
 				D735424BB191ECF6BEFB087C /* Assets.xcassets in Resources */,
+				77AED5C567C9D18DFED64501 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1BA2AD4A0804783C9708591A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7A19A23E1C8368E0F3EB5B51 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -363,6 +390,7 @@
 				C05BE17C5A3CB168D026EAAF /* LogBankSMSIntent.swift in Sources */,
 				ADA71066669326EC96C41A89 /* OverviewView.swift in Sources */,
 				EBE6B98A364642BCAF0A7E52 /* ProfilePickerView.swift in Sources */,
+				E0FD108F9F8CAE01FBFFBA28 /* ReviewView.swift in Sources */,
 				860158FF70A963842E055393 /* RootView.swift in Sources */,
 				1D830163AD6DCE4782E30CE8 /* SettingsView.swift in Sources */,
 				96964A46ECACE02F55F2E30D /* SignInView.swift in Sources */,

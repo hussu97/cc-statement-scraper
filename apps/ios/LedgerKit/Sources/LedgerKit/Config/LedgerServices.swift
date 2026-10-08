@@ -1,8 +1,8 @@
 import Foundation
 import Supabase
 
-/// The selected profile, in the App Group's defaults so the App Intent and the
-/// Share Extension post to the same ledger the app shows.
+/// The ledger the app is showing, in the App Group's defaults. SMS and shared
+/// PDFs do NOT follow it; they go to `SMSTargetStore.target`.
 public struct ProfileSelection: @unchecked Sendable {
     // UserDefaults is documented thread-safe.
     private let defaults: UserDefaults
@@ -25,10 +25,17 @@ public final class LedgerServices: Sendable {
     public let api: SupabaseLedgerAPI
     public let outbox: Outbox
     public let selection: ProfileSelection
+    public let smsTargets: SMSTargetStore
+    public let captureLog: CaptureLog
+    public let sessionStorage: SharedKeychainStorage
 
-    public init(config: LedgerConfig, session: URLSession = .shared) {
+    /// `debugSessionFallback`: Debug builds only — keep the session in memory
+    /// when the keychain refuses it (an unsigned simulator build), instead of
+    /// appearing signed in while every request goes out anonymous.
+    public init(config: LedgerConfig, session: URLSession = .shared, debugSessionFallback: Bool = false) {
         self.config = config
-        let storage = SharedKeychainStorage(accessGroup: config.keychainGroup)
+        let storage = SharedKeychainStorage(accessGroup: config.keychainGroup, allowsMemoryFallback: debugSessionFallback)
+        sessionStorage = storage
         client = SupabaseClient(
             supabaseURL: config.supabaseURL,
             supabaseKey: config.supabaseAnonKey,
@@ -39,23 +46,26 @@ public final class LedgerServices: Sendable {
         api = SupabaseLedgerAPI(client: client, config: config, session: session)
         outbox = Outbox(fileURL: Outbox.defaultURL(container: config.sharedContainerURL), api: api)
         selection = ProfileSelection(defaults: config.sharedDefaults)
+        smsTargets = SMSTargetStore(defaults: config.sharedDefaults)
+        captureLog = CaptureLog(defaults: config.sharedDefaults)
     }
 
     /// Reads config from the running bundle. Extensions carry the same `Ledger*`
     /// Info.plist keys as the app.
-    public static func fromBundle(_ bundle: Bundle = .main) throws -> LedgerServices {
-        LedgerServices(config: try LedgerConfig.load(bundle: bundle))
+    public static func fromBundle(_ bundle: Bundle = .main, debugSessionFallback: Bool = false) throws -> LedgerServices {
+        LedgerServices(config: try LedgerConfig.load(bundle: bundle), debugSessionFallback: debugSessionFallback)
     }
 
-    /// The intent's whole path, bound to this process's outbox and selection.
+    /// The intent's whole path, bound to this process's outbox and the
+    /// "SMS go to" ledger.
     public func smsIntake() -> SMSIntake {
-        let selection = self.selection
-        return SMSIntake(outbox: outbox, profileCode: { selection.profileCode })
+        let targets = smsTargets
+        return SMSIntake(outbox: outbox, target: { targets.target }, log: captureLog)
     }
 
-    /// The share extension's upload, using the shared session.
+    /// The share extension's upload to the "SMS go to" ledger, using the shared session.
     public func uploadStatements(_ files: [UploadFile]) async throws -> UploadResponse {
-        guard let profile = selection.profileCode else { throw LedgerAPIError.noProfile }
+        guard let profile = smsTargets.target?.profileCode else { throw LedgerAPIError.noProfile }
         return try await api.uploadStatements(profileCode: profile, files: files)
     }
 }

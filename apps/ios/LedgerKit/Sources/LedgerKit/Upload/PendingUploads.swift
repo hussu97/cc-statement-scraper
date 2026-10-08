@@ -53,10 +53,11 @@ public struct PendingUploads: Sendable {
 extension LedgerServices {
     public var pendingUploads: PendingUploads { PendingUploads(container: config.sharedContainerURL) }
 
-    /// Sends PDFs the Share Extension queued. Called when the app becomes active.
+    /// Sends PDFs the Share Extension queued, to the "SMS go to" ledger (the
+    /// one the extension named when it saved them). Called when the app becomes active.
     @discardableResult
     public func flushPendingUploads() async -> Int {
-        guard let profile = selection.profileCode else { return 0 }
+        guard let profile = smsTargets.target?.profileCode else { return 0 }
         let api = self.api
         return await pendingUploads.flush(profileCode: profile) { file in
             try await api.uploadStatements(profileCode: profile, files: [file])
@@ -81,7 +82,7 @@ public enum ShareOutcome: Equatable, Sendable {
         case .savedForLater(let n):
             return n == 1 ? "Saved. It will upload next time you open Ledger." : "Saved \(n) PDFs. They will upload next time you open Ledger."
         case .noProfile:
-            return "Open Ledger and choose a ledger first."
+            return "Open Ledger → Settings and choose where SMS and statements go (a ledger you own)."
         case .failed(let message):
             return message
         }

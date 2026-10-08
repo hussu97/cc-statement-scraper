@@ -36,7 +36,10 @@ struct MainTabs: View {
     var body: some View {
         TabView {
             Tab("Overview", systemImage: "circle.grid.2x2") {
-                NavigationStack { OverviewView(model: model.overview, profileCode: profileCode) }
+                NavigationStack {
+                    OverviewView(model: model.overview, review: model.review, profileCode: profileCode,
+                                 canResolve: model.profiles.canWrite)
+                }
             }
             Tab("Activity", systemImage: "list.bullet.rectangle") {
                 NavigationStack { ActivityView(model: model.activity, profileCode: profileCode) }
@@ -45,7 +48,9 @@ struct MainTabs: View {
                 NavigationStack { InsightsView(model: model.insights, profileCode: profileCode) }
             }
             Tab("Statements", systemImage: "doc.text") {
-                NavigationStack { StatementsView(model: model.statements, profileCode: profileCode) }
+                NavigationStack {
+                    StatementsView(model: model.statements, profileCode: profileCode, canUpload: model.profiles.canWrite)
+                }
             }
             Tab("Settings", systemImage: "gearshape") {
                 NavigationStack { SettingsView(model: model) }

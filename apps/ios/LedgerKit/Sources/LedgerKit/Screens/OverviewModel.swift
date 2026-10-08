@@ -20,12 +20,11 @@ public final class OverviewModel {
         state = state.startLoading()
         do {
             async let overview = api.overview(profileCode: profileCode, month: nil)
-            async let cycles = api.statementCycles(profileCode: profileCode, limit: 24)
             async let insights = api.insights(profileCode: profileCode)
-            let (o, c, i) = try await (overview, cycles, insights)
+            let (o, i) = try await (overview, insights)
             state = .loaded(Content(
                 overview: o,
-                accounts: o.accounts.map { AccountSummary(account: $0, cycles: c) },
+                accounts: o.accounts.map { AccountSummary(account: $0) },
                 insights: i))
         } catch {
             state = state.fail(error)
@@ -41,11 +40,33 @@ public final class OverviewModel {
 extension Overview {
     public var monthTitle: String { LedgerDates.monthTitle(month) }
     public var heroAmount: String { MoneyFormat.hero(spend) }
-    public var comparison: (text: String, tone: Tone) {
-        SpendComparison.versusAverage(spend: spend, average: spendAvg3m)
+
+    /// `"October 2026 · posted so far"` — the hero counts posted spend; pending
+    /// alerts are listed under it, not in it.
+    public func heroEyebrow(today: CalendarDay = LedgerDates.today()) -> String {
+        isCurrentMonth(today: today) ? "\(monthTitle) · posted so far" : monthTitle
     }
-    public var paceText: String {
-        SpendComparison.versusLastMonthToDate(spend: spend, previous: spendPrevMonthToDate)
+
+    public func isCurrentMonth(today: CalendarDay = LedgerDates.today()) -> Bool {
+        month.year == today.year && month.month == today.month
+    }
+
+    /// The hero chip. The current month is compared with the same day last
+    /// month; a completed month with its 3-month average. Ratios are the server's.
+    public func comparison(today: CalendarDay = LedgerDates.today()) -> (text: String, tone: Tone)? {
+        if isCurrentMonth(today: today) {
+            return SpendComparison.versusSameDayLastMonth(change: changeVsPrevMonthToDate, spend: spend,
+                                                          previous: spendPrevMonthToDate)
+        }
+        return SpendComparison.versusAverage(change: changeVsAvg3m)
+    }
+
+    /// Reference figures under the chip, as the server returned them.
+    /// `["Same day last month AED 2,100", "3-month average AED 9,000 a month"]`.
+    public var referenceLines: [String] {
+        var lines = ["Same day last month \(MoneyFormat.aed(spendPrevMonthToDate, fractionDigits: 0))"]
+        if spendAvg3m > 0 { lines.append("3-month average \(MoneyFormat.aed(spendAvg3m, fractionDigits: 0)) a month") }
+        return lines
     }
 
     /// The live strip under the hero: `"2 pending · AED 145.00"`, or nil when none.
@@ -64,4 +85,31 @@ extension Overview {
     /// Categories with a positive amount — the ring cannot draw a refund-heavy
     /// (negative) slice.
     public var ringCategories: [TopCategory] { topCategories.filter { $0.amount > 0 } }
+
+    /// The "Needs attention" rows: open reviews first (they link to Review).
+    public var attention: [AttentionItem] {
+        var items: [AttentionItem] = []
+        if openReviews > 0 {
+            items.append(AttentionItem(kind: .reviews, count: openReviews,
+                                       title: openReviews == 1 ? "1 item to review" : "\(openReviews) items to review",
+                                       detail: "Unknown cards and uncertain matches"))
+        }
+        if uncategorizedCount > 0 {
+            items.append(AttentionItem(kind: .uncategorized, count: uncategorizedCount,
+                                       title: uncategorizedCount == 1 ? "1 uncategorised this month"
+                                           : "\(uncategorizedCount) uncategorised this month",
+                                       detail: "Tap a row in Activity to categorise it"))
+        }
+        return items
+    }
+}
+
+/// A row of Overview's "Needs attention" card.
+public struct AttentionItem: Sendable, Hashable, Identifiable {
+    public enum Kind: String, Sendable { case reviews, uncategorized }
+    public var id: Kind { kind }
+    public let kind: Kind
+    public let count: Int
+    public let title: String
+    public let detail: String
 }

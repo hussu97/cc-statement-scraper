@@ -54,44 +54,112 @@ struct ModelDecodingTests {
         #expect(c.periodLabel == "26 Aug – 25 Sep")
         #expect(cycles[1].chips.map(\.label) == ["Not reconciled"])
         #expect(cycles[1].kindLabel == "History extract")
-        #expect(c.dueText(today: CalendarDay(iso: "2026-10-15")!) == "Due in 5 days")
-        #expect(c.dueText(today: CalendarDay(iso: "2026-11-02")!) == "Was due 20 Oct")
-        #expect(cycles[1].dueText() == nil)
+        #expect(c.due(isLatest: true, today: CalendarDay(iso: "2026-10-15")!)?.text == "Due in 5 days")
+        #expect(c.due(isLatest: true, today: CalendarDay(iso: "2026-11-02")!)?.text == "Was due 20 Oct")
+        #expect(cycles[1].due(isLatest: false) == nil)
     }
 
     @Test("ingest_sms results")
     func ingest() throws {
         let results = try LedgerJSON.decode([SMSIngestResult].self, from: try fixture("ingest_sms"))
-        #expect(results.map(\.status) == ["new", "rejected_otp", "duplicate_delivery"])
+        #expect(results.map(\.status) == ["new", "rejected_otp", "duplicate_delivery", "invalid"])
+        #expect(results.map(\.isFailure) == [false, false, false, true])
+        #expect(results[3].failureReason == "Ledger rejected this message: received_at is not a timestamp")
         #expect(results[1].smsCode == nil)
         #expect(results[0].txnCode == "txn_01hzy3k8w9m2n4p6q8r0s2t4v6")
     }
 
-    @Test("accounts take utilisation from the server's statement_cycles")
+    @Test("accounts take utilisation from the overview RPC (accounts[].utilisation)")
     func accountSummary() throws {
         let o = try LedgerJSON.decode(Overview.self, from: try fixture("overview"))
-        let cycles = try LedgerJSON.decode([StatementCycle].self, from: try fixture("statement_cycles"))
         let today = CalendarDay(iso: "2026-10-17")!
-        let fab = AccountSummary(account: o.accounts[0], cycles: cycles)
+        let fab = AccountSummary(account: o.accounts[0])
+        #expect(fab.utilisation == Decimal(string: "0.1404")!)
         #expect(fab.utilisationLabel == "14% used")
         #expect(fab.utilisationTone == .positive)
-        #expect(fab.dueLabel(today: today) == "Due in 3 days")
-        #expect(fab.dueTone(today: today) == .warn)
-        let adcb = AccountSummary(account: o.accounts[1], cycles: cycles)
+        #expect(fab.due(today: today)?.text == "Due in 3 days")
+        #expect(fab.due(today: today)?.tone == .warn)
+        // Past the due date: payment isn't detected on the phone, so never "Overdue".
+        let later = fab.due(today: CalendarDay(iso: "2026-11-02")!)
+        #expect(later?.text == "Was due 20 Oct")
+        #expect(later?.tone == .neutral)
+        let adcb = AccountSummary(account: o.accounts[1])
         #expect(adcb.utilisation == nil)
-        #expect(adcb.dueLabel(today: today) == nil)
+        #expect(adcb.due(today: today) == nil)
+    }
+
+    @Test("overview carries the server's change fractions; null bases decode as nil")
+    func overviewChanges() throws {
+        let o = try LedgerJSON.decode(Overview.self, from: try fixture("overview"))
+        #expect(o.changeVsPrevMonthToDate == Decimal(string: "-0.1805")!)
+        #expect(o.changeVsAvg3m == nil)
+        let old = try LedgerJSON.decode(Overview.self, from: try fixture("overview_legacy"))
+        #expect(old.changeVsPrevMonthToDate == nil)
+        #expect(old.accounts.first?.utilisation == nil)
     }
 }
 
 @Suite("Presentation and query encoding")
 struct PresentationTests {
-    @Test func spendComparison() {
-        let below = SpendComparison.versusAverage(spend: 800, average: 1000)
-        #expect(below.text == "20% below your 3-month average")
-        #expect(below.tone == .positive)
-        #expect(SpendComparison.versusAverage(spend: 1500, average: 1000).text == "50% above your 3-month average")
-        #expect(SpendComparison.versusAverage(spend: 10, average: 0).text == "No 3-month history yet")
-        #expect(SpendComparison.versusLastMonthToDate(spend: 1200, previous: 1000) == "AED 200 more than this time last month")
+    @Test("the hero words the server's ratio; it never computes one")
+    func spendComparison() {
+        let below = SpendComparison.versusSameDayLastMonth(change: Decimal(string: "-0.2")!, spend: 800, previous: 1000)
+        #expect(below?.text == "20% below the same day last month")
+        #expect(below?.tone == .positive)
+        let above = SpendComparison.versusSameDayLastMonth(change: Decimal(string: "0.5")!, spend: 1500, previous: 1000)
+        #expect(above?.text == "50% above the same day last month")
+        #expect(above?.tone == .warn)
+        #expect(SpendComparison.versusSameDayLastMonth(change: Decimal(string: "0.001")!, spend: 1, previous: 1)?.text
+                == "Level with the same day last month")
+        // Null ratio: last month's base was 0.
+        #expect(SpendComparison.versusSameDayLastMonth(change: nil, spend: 10, previous: 0)?.text
+                == "Nothing spent by this day last month")
+        #expect(SpendComparison.versusSameDayLastMonth(change: nil, spend: 0, previous: 0) == nil)
+        #expect(SpendComparison.versusAverage(change: Decimal(string: "-0.2")!)?.text == "20% below your 3-month average")
+        #expect(SpendComparison.versusAverage(change: nil) == nil)
+    }
+
+    @Test("current month compares with the same day last month, a past month with the 3-month average")
+    func overviewComparison() throws {
+        let o = try LedgerJSON.decode(Overview.self, from: try fixture("overview"))
+        let october = CalendarDay(iso: "2026-10-08")!
+        #expect(o.comparison(today: october)?.text == "18% below the same day last month")
+        #expect(o.heroEyebrow(today: october) == "October 2026 · posted so far")
+        #expect(o.referenceLines == ["Same day last month AED 2,100", "3-month average AED 9,000 a month"])
+        // Viewed in November, October is complete: its avg ratio is null in the fixture → no chip.
+        #expect(o.comparison(today: CalendarDay(iso: "2026-11-02")!) == nil)
+        #expect(o.heroEyebrow(today: CalendarDay(iso: "2026-11-02")!) == "October 2026")
+    }
+
+    @Test("Needs attention lists open reviews first, then uncategorised")
+    func attention() throws {
+        let o = try LedgerJSON.decode(Overview.self, from: try fixture("overview"))
+        #expect(o.attention.map(\.kind) == [.reviews, .uncategorized])
+        #expect(o.attention[0].title == "1 item to review")
+        #expect(o.attention[1].title == "3 uncategorised this month")
+    }
+
+    @Test("due dates: one rule for Overview and Statements")
+    func dueStatus() {
+        let today = CalendarDay(iso: "2026-10-08")!
+        let past = CalendarDay(iso: "2026-09-25")!
+        #expect(DueStatus.describe(due: nil, isLatest: true, today: today) == nil)
+        #expect(DueStatus.describe(due: today.adding(days: 3), isLatest: true, today: today)! == ("Due in 3 days", .warn))
+        #expect(DueStatus.describe(due: today.adding(days: 12), isLatest: false, today: today)! == ("Due in 12 days", .neutral))
+        // Payment detection unavailable (nil): never overdue.
+        #expect(DueStatus.describe(due: past, isLatest: true, today: today)! == ("Was due 25 Sep", .neutral))
+        // Superseded by a newer statement: never overdue, even with no payment.
+        #expect(DueStatus.describe(due: past, isLatest: false, paymentDetected: false, today: today)! == ("Was due 25 Sep", .neutral))
+        #expect(DueStatus.describe(due: past, isLatest: true, paymentDetected: true, today: today)! == ("Was due 25 Sep", .neutral))
+        // Only the latest statement, past due, with no payment detected.
+        #expect(DueStatus.describe(due: past, isLatest: true, paymentDetected: false, today: today)! == ("Overdue by 13 days", .danger))
+    }
+
+    @Test("Statements knows which cycle is each account's latest statement")
+    func latestStatements() throws {
+        let cycles = try LedgerJSON.decode([StatementCycle].self, from: try fixture("statement_cycles"))
+        let content = StatementsModel.Content(cycles: cycles, documents: [])
+        #expect(content.latestStatementCodes == [cycles[0].stmtCode])
     }
 
     @Test("search is safe inside PostgREST's or=()")

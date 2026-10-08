@@ -8,6 +8,17 @@ public final class StatementsModel {
     public struct Content: Sendable {
         public let cycles: [StatementCycle]
         public let documents: [DocumentRecord]
+
+        /// The newest statement (not history extract) of each account; every
+        /// other cycle has been superseded by a newer statement.
+        public var latestStatementCodes: Set<String> {
+            var newest: [String: StatementCycle] = [:]
+            for cycle in cycles where cycle.kind == "statement" {
+                if let current = newest[cycle.accountCode], current.statementDate >= cycle.statementDate { continue }
+                newest[cycle.accountCode] = cycle
+            }
+            return Set(newest.values.map(\.stmtCode))
+        }
     }
 
     public private(set) var state: LoadState<Content> = .idle
@@ -52,11 +63,11 @@ public final class StatementsModel {
 
 extension StatementCycle {
     public var chips: [ReconChip] { ReconChip.chips(for: self) }
-    /// Upcoming: `"Due in 5 days"`. Past: `"Was due 20 Sep"` — whether an old
-    /// statement was paid is not known here, so it is never called overdue.
-    public func dueText(today: CalendarDay = LedgerDates.today()) -> String? {
-        guard let due = dueDate else { return nil }
-        return due >= today ? LedgerDates.dueLabel(due, today: today) : "Was due \(LedgerDates.dayLabel(due, today: today))"
+    /// Upcoming: `"Due in 5 days"`. Past: `"Was due 20 Sep"` — the same rule
+    /// as Overview (`DueStatus`): payment isn't detected on the phone, so a
+    /// statement is never called overdue.
+    public func due(isLatest: Bool, today: CalendarDay = LedgerDates.today()) -> (text: String, tone: Tone)? {
+        DueStatus.describe(due: dueDate, isLatest: isLatest, today: today)
     }
 
     public var kindLabel: String { kind == "history_extract" ? "History extract" : "Statement" }

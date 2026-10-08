@@ -9,21 +9,49 @@ import Supabase
 /// Accessibility is `afterFirstUnlock`: a Shortcuts automation fires on a
 /// locked phone, and the intent must still read the session then.
 ///
-/// If the access group is not in the binary's entitlements (an unsigned
-/// simulator build reports `errSecMissingEntitlement`), the item is stored
-/// without one so the app still works on its own.
+/// supabase-swift swallows storage errors, so a failed write would leave the
+/// UI "signed in" while every request goes out anonymous. This type records
+/// the failure (`persistenceFailure`) for `SessionStore` to act on. In Debug
+/// builds (`allowsMemoryFallback`) it also keeps the session in memory, and
+/// retries without the access group when the entitlement is missing (an
+/// unsigned simulator build); Release never silently drops the sharing the
+/// App Intent and the Share Extension rely on.
 public final class SharedKeychainStorage: AuthLocalStorage, @unchecked Sendable {
     private let service: String
     private let accessGroup: String?
+    private let allowsMemoryFallback: Bool
     private let lock = NSLock()
     private var groupUnavailable = false
+    private var memory: [String: Data] = [:]
+    private var _persistenceFailure: KeychainError?
 
-    public init(service: String = "ledger.supabase.auth", accessGroup: String?) {
+    public init(service: String = "ledger.supabase.auth", accessGroup: String?, allowsMemoryFallback: Bool = false) {
         self.service = service
         self.accessGroup = accessGroup
+        self.allowsMemoryFallback = allowsMemoryFallback
     }
 
+    /// The last keychain write failure, cleared by a successful write or a remove.
+    public var persistenceFailure: KeychainError? { lock.withLock { _persistenceFailure } }
+
+    /// True when the session lives only in this process's memory (Debug fallback).
+    public var isUsingMemoryFallback: Bool { lock.withLock { !memory.isEmpty } }
+
     public func store(key: String, value: Data) throws {
+        do {
+            try storeInKeychain(key: key, value: value)
+            lock.withLock {
+                _persistenceFailure = nil
+                memory[key] = nil
+            }
+        } catch let error as KeychainError {
+            lock.withLock { _persistenceFailure = error }
+            guard allowsMemoryFallback else { throw error }
+            lock.withLock { memory[key] = value }
+        }
+    }
+
+    private func storeInKeychain(key: String, value: Data) throws {
         try withGroupFallback { group in
             let query = baseQuery(key: key, group: group)
             let update: [String: Any] = [
@@ -41,6 +69,7 @@ public final class SharedKeychainStorage: AuthLocalStorage, @unchecked Sendable 
     }
 
     public func retrieve(key: String) throws -> Data? {
+        if let cached = lock.withLock({ memory[key] }) { return cached }
         var result: Data?
         try withGroupFallback { group in
             var query = baseQuery(key: key, group: group)
@@ -56,6 +85,15 @@ public final class SharedKeychainStorage: AuthLocalStorage, @unchecked Sendable 
     }
 
     public func remove(key: String) throws {
+        let hadMemory = lock.withLock {
+            _persistenceFailure = nil
+            return memory.removeValue(forKey: key) != nil
+        }
+        if hadMemory { try? removeFromKeychain(key: key); return }
+        try removeFromKeychain(key: key)
+    }
+
+    private func removeFromKeychain(key: String) throws {
         try withGroupFallback { group in
             let status = SecItemDelete(baseQuery(key: key, group: group) as CFDictionary)
             return status == errSecItemNotFound ? errSecSuccess : status
@@ -64,7 +102,7 @@ public final class SharedKeychainStorage: AuthLocalStorage, @unchecked Sendable 
 
     // MARK: -
 
-    public struct KeychainError: Error, CustomStringConvertible {
+    public struct KeychainError: Error, CustomStringConvertible, Equatable {
         public let status: OSStatus
         public var description: String { "Keychain error \(status)" }
     }
@@ -87,7 +125,7 @@ public final class SharedKeychainStorage: AuthLocalStorage, @unchecked Sendable 
         let useGroup = groupUnavailable ? nil : accessGroup
         lock.unlock()
         var status = body(useGroup)
-        if status == errSecMissingEntitlement, useGroup != nil {
+        if status == errSecMissingEntitlement, useGroup != nil, allowsMemoryFallback {
             lock.lock()
             groupUnavailable = true
             lock.unlock()

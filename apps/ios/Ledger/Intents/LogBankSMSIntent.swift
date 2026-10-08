@@ -2,11 +2,11 @@ import AppIntents
 import LedgerKit
 
 /// "Log Bank SMS" — run by a Shortcuts personal automation ("When I get a
-/// message containing AED → Log Bank SMS (Message content, Sender)").
+/// message containing Card → Log Bank SMS (Message content, Sender)").
 ///
 /// Runs without opening the app: iOS launches the app process in the
 /// background, the session comes from the shared keychain, the profile from
-/// the App Group. Every decision is in `SMSIntake` (LedgerKit), which
+/// the App Group ("SMS go to", an owned ledger). Every decision is in `SMSIntake` (LedgerKit), which
 /// `swift test` drives with a stub API. The message is never logged and never
 /// echoed in the result.
 struct LogBankSMSIntent: AppIntent {
@@ -31,10 +31,10 @@ struct LogBankSMSIntent: AppIntent {
         guard let services = AppServices.shared else {
             return .result(value: "not_configured", dialog: "Ledger isn't configured.")
         }
-        Telemetry.start(target: .intent, config: services.config)
-        let outcome = await services.smsIntake().handle(body: message, sender: sender)
+        Telemetry.start(target: .intent, config: services.config, isDebugBuild: BuildFlavor.isDebug)
+        let (outcome, dialog) = await services.smsIntake().handle(body: message, sender: sender)
         Telemetry.breadcrumb("sms_ingest", outcome: outcome.telemetryOutcome, data: ["entry": "intent"])
-        return .result(value: outcome.telemetryOutcome, dialog: IntentDialog(stringLiteral: outcome.dialog))
+        return .result(value: outcome.telemetryOutcome, dialog: IntentDialog(stringLiteral: dialog))
     }
 }
 

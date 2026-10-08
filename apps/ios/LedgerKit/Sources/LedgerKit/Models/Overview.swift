@@ -8,6 +8,11 @@ public struct Overview: Decodable, Sendable, Hashable {
     public let spendPrevMonth: Decimal
     public let spendPrevMonthToDate: Decimal
     public let spendAvg3m: Decimal
+    /// `(spend − base) / base` from the server; base is last month up to the
+    /// same day. Nil when the base is 0, or from a server without the field.
+    public let changeVsPrevMonthToDate: Decimal?
+    /// `(spend − spend_avg_3m) / spend_avg_3m`; fair only for completed months.
+    public let changeVsAvg3m: Decimal?
     public let payments: Decimal
     public let pendingCount: Int
     public let pendingAmount: Decimal
@@ -22,7 +27,9 @@ public struct Overview: Decodable, Sendable, Hashable {
     enum CodingKeys: String, CodingKey {
         case month, spend, spendPrevMonth, spendPrevMonthToDate, payments, pendingCount, pendingAmount
         case uncategorizedCount, openReviews, lastSmsAt, topCategories, accounts, recent
+        case changeVsPrevMonthToDate
         case spendAvg3m = "spendAvg3M"
+        case changeVsAvg3m = "changeVsAvg3M"
     }
 
     public struct TopCategory: Decodable, Sendable, Hashable, Identifiable {
@@ -46,6 +53,8 @@ public struct Overview: Decodable, Sendable, Hashable {
         public let last4: String?
         public let latestStatement: LatestStatement?
         public let unbilledAed: Decimal
+        /// Latest statement's closing balance / limit, from the server (4dp).
+        public let utilisation: Decimal?
 
         public var title: String { nickname ?? productName ?? bankCode }
         /// `"•1234, •5678"`.

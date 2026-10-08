@@ -148,40 +148,83 @@ struct OutboxTests {
 @Suite("Log Bank SMS — the App Intent's path, with a stub API")
 struct SMSIntakeTests {
     let card = "Your FAB Credit Card XXX1234 was used for AED 45.10 at CARREFOUR CITY CENTRE"
+    static let personal = SMSTarget(profileCode: "prf_01hzy3k8w9m2n4p6q8r0s2t4v6", name: "Personal")
 
-    func intake(_ api: StubAPI, profile: String? = "prf_01hzy3k8w9m2n4p6q8r0s2t4v6", url: URL = temporaryOutboxURL()) -> (SMSIntake, Outbox) {
+    func intake(_ api: StubAPI, target: SMSTarget? = SMSIntakeTests.personal, url: URL = temporaryOutboxURL(),
+                log: CaptureLog? = nil) -> (SMSIntake, Outbox) {
         let outbox = Outbox(fileURL: url, api: api)
-        return (SMSIntake(outbox: outbox, profileCode: { profile }), outbox)
+        return (SMSIntake(outbox: outbox, target: { target }, log: log), outbox)
     }
 
-    @Test("online: filtered, enqueued, delivered, and the outbox is empty after")
+    @Test("online: filtered, enqueued, delivered to the SMS ledger, and the outbox is empty after")
     func delivered() async throws {
-        let api = StubAPI(.succeed(status: "new"))
+        let api = StubAPI(.succeed(status: "created"))
         let (intake, outbox) = intake(api)
-        let outcome = await intake.handle(body: card, sender: "FAB")
-        #expect(outcome == .delivered(status: "new"))
-        #expect(outcome.dialog == "Logged to Ledger.")
+        let (outcome, dialog) = await intake.handle(body: card, sender: "FAB")
+        #expect(outcome == .delivered(status: "created"))
+        #expect(dialog == "Logged to Personal.")
         #expect(api.calls.count == 1)
+        #expect(api.calls[0].profile == Self.personal.profileCode)
         #expect(api.calls[0].messages[0].body == card)
         #expect(api.calls[0].messages[0].sender == "FAB")
         #expect(await outbox.status().isEmpty)
     }
 
-    @Test("offline: the message stays in the outbox and the dialog says so")
+    @Test("offline: the message stays in the outbox and the dialog says why")
     func queuedOffline() async throws {
         let api = StubAPI(.fail(.network("-1009")))
         let url = temporaryOutboxURL()
         let (intake, _) = intake(api, url: url)
-        let outcome = await intake.handle(body: card, sender: nil)
-        #expect(outcome == .queued(pending: 1))
-        #expect(outcome.dialog.contains("Saved"))
+        let (outcome, dialog) = await intake.handle(body: card, sender: nil)
+        #expect(outcome == .queued(.offline))
+        #expect(dialog == "Saved on this iPhone. It will be sent to Personal when you're back online.")
 
         // The app later flushes the same file with the same client_msg_id.
-        let appOutbox = Outbox(fileURL: url, api: StubAPI(.succeed(status: "matched")))
+        let appOutbox = Outbox(fileURL: url, api: StubAPI(.succeed(status: "linked")))
         let entries = try await appOutbox.entries()
         #expect(entries.count == 1)
         let report = await appOutbox.flush(force: true)
         #expect(report.results.first?.clientMsgId == entries[0].payload.clientMsgId.uuidString.lowercased())
+    }
+
+    @Test("signed out and server errors are not reported as 'offline'")
+    func honestQueueReasons() async {
+        let (signedOut, _) = intake(StubAPI(.fail(.notSignedIn)))
+        let a = await signedOut.handle(body: card, sender: "FAB")
+        #expect(a.outcome == .queued(.signedOut))
+        #expect(a.dialog.contains("signed out"))
+        let (busy, _) = intake(StubAPI(.fail(.server(status: 503, code: nil, message: "Service Unavailable"))))
+        let b = await busy.handle(body: card, sender: "FAB")
+        #expect(b.outcome == .queued(.serverUnavailable))
+        #expect(!b.dialog.contains("online"))
+    }
+
+    @Test("a viewer's ledger (42501) parks the message and says so — it is never 'saved for later'")
+    func permissionParks() async {
+        let api = StubAPI(.fail(.server(status: nil, code: "42501", message: "not an owner of profile")))
+        let (intake, outbox) = intake(api)
+        let (outcome, dialog) = await intake.handle(body: card, sender: "FAB")
+        guard case .parked = outcome else {
+            Issue.record("expected parked, got \(outcome)")
+            return
+        }
+        #expect(dialog.contains("only its owners"))
+        #expect(dialog.contains("Settings"))
+        #expect(await outbox.status().parked == 1)
+        #expect(await outbox.status().pending == 0)
+    }
+
+    @Test("a per-message 'invalid' status (new server) parks with the server's reason")
+    func invalidStatusParks() async {
+        let api = StubAPI(.custom { _, messages in
+            messages.map { SMSIngestResult(clientMsgId: $0.clientMsgId.uuidString.lowercased(), smsCode: nil,
+                                           status: "invalid", txnCode: nil, reason: "body too long") }
+        })
+        let (intake, outbox) = intake(api)
+        let (outcome, dialog) = await intake.handle(body: card, sender: "FAB")
+        #expect(outcome == .parked(reason: "Ledger rejected this message: body too long"))
+        #expect(dialog.hasPrefix("Not logged."))
+        #expect(await outbox.parkedEntries().first?.parkedReason == "Ledger rejected this message: body too long")
     }
 
     @Test("OTP and debit alerts never reach the API or the outbox", arguments: [
@@ -191,7 +234,7 @@ struct SMSIntakeTests {
     func dropped(body: String) async throws {
         let api = StubAPI()
         let (intake, outbox) = intake(api)
-        let outcome = await intake.handle(body: body, sender: "FAB")
+        let (outcome, _) = await intake.handle(body: body, sender: "FAB")
         guard case .dropped = outcome else {
             Issue.record("expected a drop, got \(outcome)")
             return
@@ -200,21 +243,61 @@ struct SMSIntakeTests {
         #expect(await outbox.status().isEmpty)
     }
 
-    @Test("no profile selected (never signed in): nothing is sent")
+    @Test("no SMS ledger set: nothing is sent and the dialog says where to set it")
     func noProfile() async {
         let api = StubAPI()
-        let (intake, _) = intake(api, profile: nil)
-        #expect(await intake.handle(body: card, sender: "FAB") == .noProfile)
+        let (intake, _) = intake(api, target: nil)
+        let (outcome, dialog) = await intake.handle(body: card, sender: "FAB")
+        #expect(outcome == .noProfile)
+        #expect(dialog.contains("SMS go to"))
         #expect(api.calls.isEmpty)
     }
 
-    @Test("server statuses map to short dialogs")
+    @Test("server statuses map to short dialogs that point at Review")
     func statusDialogs() async {
         let api = StubAPI(.succeed(status: "unknown_card"))
         let (intake, _) = intake(api)
-        let outcome = await intake.handle(body: card, sender: "FAB")
+        let (outcome, dialog) = await intake.handle(body: card, sender: "FAB")
         #expect(outcome == .delivered(status: "unknown_card"))
-        #expect(outcome.dialog.contains("doesn't know this card"))
-        #expect(SMSIntakeOutcome.delivered(status: "duplicate_delivery").dialog == "Already logged.")
+        #expect(dialog.contains("doesn't know this card"))
+        #expect(dialog.contains("Needs review"))
+        #expect(SMSIntakeOutcome.delivered(status: "duplicate_delivery").dialog() == "Already logged.")
+        #expect(SMSIntakeOutcome.delivered(status: "held").dialog(ledger: "Home").contains("Needs review"))
+    }
+
+    @Test("every run records the last capture (outcome only, never the message)")
+    func lastCapture() async throws {
+        let defaults = try #require(UserDefaults(suiteName: "ledger-tests-\(UUID().uuidString)"))
+        let log = CaptureLog(defaults: defaults)
+        let (intake, _) = intake(StubAPI(.succeed(status: "created")), log: log)
+        _ = await intake.handle(body: card, sender: "FAB")
+        let last = try #require(log.last)
+        #expect(last.outcome == "delivered_created")
+        #expect(last.message == "Logged to Personal.")
+        #expect(!last.message.contains("CARREFOUR"))
+        #expect(log.lastTest == nil)
+    }
+
+    @Test("Send test: a synthetic non-transaction message is dropped on the phone; nothing is sent")
+    func selfTest() async throws {
+        let defaults = try #require(UserDefaults(suiteName: "ledger-tests-\(UUID().uuidString)"))
+        let log = CaptureLog(defaults: defaults)
+        let api = StubAPI()
+        let (subject, _) = intake(api, log: log)
+        #expect(!SMSCapture.classify(body: SMSSelfTest.message).isAccepted)
+        let result = await subject.selfTest()
+        #expect(result.passed)
+        #expect(result.message.contains("files card alerts in Personal"))
+        #expect(api.calls.isEmpty)
+        #expect(log.lastTest?.isTest == true)
+        #expect(log.last == nil)   // a test never overwrites "Last captured"
+
+        let (noTarget, _) = intake(api, target: nil, log: log)
+        #expect(await noTarget.selfTest().passed == false)
+        let (signedOut, outbox) = intake(StubAPI(.fail(.notSignedIn)), log: log)
+        try await outbox.enqueue(SMSPayload(receivedAt: Date(), sender: "FAB", body: card), profileCode: "prf_x")
+        let failed = await signedOut.selfTest()
+        #expect(!failed.passed)
+        #expect(failed.message.contains("signed out"))
     }
 }

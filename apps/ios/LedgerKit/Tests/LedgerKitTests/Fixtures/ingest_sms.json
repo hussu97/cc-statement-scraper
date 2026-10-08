@@ -1,5 +1,6 @@
 [
   {"client_msg_id": "6f1c2a8e-8a0b-4f7e-9d61-2c1f6a3b9e10", "sms_code": "sms_01hzy3k8w9m2n4p6q8r0s2t4v6", "status": "new", "txn_code": "txn_01hzy3k8w9m2n4p6q8r0s2t4v6"},
   {"client_msg_id": "7a2d3b9f-9b1c-4a8f-8e72-3d2a7b4cae21", "status": "rejected_otp"},
-  {"client_msg_id": "8b3e4c0a-ac2d-4b90-9f83-4e3b8c5dbf32", "sms_code": "sms_01hzy3k8w9m2n4p6q8r0s2t4v7", "status": "duplicate_delivery"}
+  {"client_msg_id": "8b3e4c0a-ac2d-4b90-9f83-4e3b8c5dbf32", "sms_code": "sms_01hzy3k8w9m2n4p6q8r0s2t4v7", "status": "duplicate_delivery"},
+  {"client_msg_id": "9c4f5d1b-bd3e-4ca1-8a94-5f4c9d6ec043", "sms_code": null, "status": "invalid", "reason": "received_at is not a timestamp"}
 ]

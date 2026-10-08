@@ -194,7 +194,7 @@ public final class SupabaseLedgerAPI: LedgerAPI, @unchecked Sendable {
 
     // MARK: Plumbing
 
-    private struct Ignored: Decodable {}
+    struct Ignored: Decodable {}
 
     private func currentUserID() async throws -> String {
         do { return try await client.auth.session.user.id.uuidString.lowercased() } catch { throw LedgerAPIError.notSignedIn }
@@ -204,11 +204,11 @@ public final class SupabaseLedgerAPI: LedgerAPI, @unchecked Sendable {
         do { return try await client.auth.session.accessToken } catch { throw LedgerAPIError.notSignedIn }
     }
 
-    private func rpc<T: Decodable>(_ name: String, _ type: T.Type, _ params: [String: AnyJSON]) async throws -> T {
+    func rpc<T: Decodable>(_ name: String, _ type: T.Type, _ params: [String: AnyJSON]) async throws -> T {
         try await read(type) { try await client.rpc(name, params: params).execute() }
     }
 
-    private func read<T: Decodable>(_ type: T.Type, _ request: () async throws -> PostgrestResponse<Void>) async throws -> T {
+    func read<T: Decodable>(_ type: T.Type, _ request: () async throws -> PostgrestResponse<Void>) async throws -> T {
         let data: Data
         do {
             data = try await request().data

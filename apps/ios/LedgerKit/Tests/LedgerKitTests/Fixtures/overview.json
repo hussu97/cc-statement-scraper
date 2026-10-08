@@ -4,6 +4,8 @@
   "spend_prev_month": "8450.10",
   "spend_prev_month_to_date": "2100.00",
   "spend_avg_3m": "9000.33",
+  "change_vs_prev_month_to_date": "-0.1805",
+  "change_vs_avg_3m": null,
   "payments": "0",
   "pending_count": 2,
   "pending_amount": "145.30",
@@ -20,7 +22,7 @@
       "product_name": "Cashback Card", "credit_limit": "30000.00", "last4": "1234,5678",
       "latest_statement": {"stmt_code": "stm_01hzy3k8w9m2n4p6q8r0s2t4v6", "statement_date": "2026-09-25",
         "due_date": "2026-10-20", "closing_balance": "4210.55", "min_due": "210.53"},
-      "unbilled_aed": "512.00"
+      "unbilled_aed": "512.00", "utilisation": "0.1404"
     },
     {
       "account_code": "acc_01hzy3k8w9m2n4p6q8r0s2t4v7", "bank_code": "ADCB", "nickname": null,

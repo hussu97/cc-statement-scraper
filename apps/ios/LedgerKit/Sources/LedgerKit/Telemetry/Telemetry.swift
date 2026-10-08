@@ -25,11 +25,35 @@ public enum Telemetry {
         ["app": "ios", "target": target.rawValue]
     }
 
-    /// No-op when the DSN is unset (local builds without Secrets.xcconfig) or
-    /// when this process already started Sentry — the intent runs inside the
-    /// app process, which may have started it as `.app`.
-    public static func start(target: TelemetryTarget, config: LedgerConfig?, bundle: Bundle = .main) {
-        guard let dsn = config?.sentryDSN, !dsn.isEmpty, !SentrySDK.isEnabled else { return }
+    /// Environments that never report to Sentry, even with a DSN set.
+    public static let localEnvironments: Set<String> = ["local", "development", "dev", "test", "debug"]
+
+    /// Whether this LedgerKit build was compiled for debugging.
+    public static var isDebugBuild: Bool {
+        #if DEBUG
+        true
+        #else
+        false
+        #endif
+    }
+
+    /// Sentry runs only for a release build with a DSN and a non-local
+    /// environment (`LEDGER_ENVIRONMENT`), so simulator and local runs never
+    /// send events. Pure, so it is unit-tested.
+    public static func shouldStart(dsn: String?, environment: String?, isDebugBuild: Bool) -> Bool {
+        guard let dsn, !dsn.trimmingCharacters(in: .whitespaces).isEmpty, !isDebugBuild else { return false }
+        let env = (environment ?? "local").trimmingCharacters(in: .whitespaces).lowercased()
+        return !env.isEmpty && !localEnvironments.contains(env)
+    }
+
+    /// No-op unless `shouldStart` (a release build, a DSN, a non-local
+    /// environment), and when this process already started Sentry — the intent
+    /// runs inside the app process, which may have started it as `.app`.
+    /// `isDebugBuild` defaults to LedgerKit's own flag; the app passes its own.
+    public static func start(target: TelemetryTarget, config: LedgerConfig?, bundle: Bundle = .main,
+                             isDebugBuild: Bool = Telemetry.isDebugBuild) {
+        guard shouldStart(dsn: config?.sentryDSN, environment: config?.environment, isDebugBuild: isDebugBuild),
+              let dsn = config?.sentryDSN, !SentrySDK.isEnabled else { return }
         let info = bundle.infoDictionary
         SentrySDK.start { options in
             options.dsn = dsn
