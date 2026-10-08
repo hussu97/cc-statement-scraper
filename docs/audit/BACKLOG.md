@@ -24,14 +24,14 @@ separately):
 
 | Area | P2 | P3 | UX recs | Verify | Total |
 |---|---|---|---|---|---|
-| Database (Supabase SQL) | 0 | 2 | – | 2 | 4 |
-| Edge Functions | 5 | 8 | – | – | 13 |
+| Database (Supabase SQL) | 0 | 3 | – | 2 | 5 |
+| Edge Functions | 0 | 0 | – | – | 0 |
 | Parser | 1 | – | – | – | 1 |
 | Web | 16 | 26 | 5 | – | 47 |
 | iOS | 14 | 11 | 7 | 3 | 35 |
 | Scraper | – | 2 | – | – | 2 |
-| CI, config and ops | 1 | 5 | – | 1 | 7 |
-| **Total** | **37** | **54** | **12** | **6** | **109** |
+| CI, config and ops | 0 | 1 | – | 1 | 2 |
+| **Total** | **31** | **43** | **12** | **6** | **92** |
 
 There are no open P0 or P1 findings. The last P1 remainders (WEB-02 statements beyond 500 and
 merchant search, WEB-07 "Retry AI") landed in `98f901c`. What is left of the P1s are the device
@@ -51,7 +51,7 @@ These are actions, not code changes. Most are already steps in [PRODUCTION.md](.
    URL and redirects at step 9. While there, check Auth → *Confirm email* (V-DB-23).
 3. **Members with sign-ups off.** After `--step metadata`, invite both emails through Dashboard →
    Authentication → Users → *Invite user*; the pending invites attach on user creation
-   (PRODUCTION §2.2). There is no in-app invite yet (NEW-1).
+   (PRODUCTION §2.2), or with the `member-invite` Edge Function (NEW-1; the web button is NEW-1r).
 4. **Repo and CI.** `gh variable set LEGACY_DEPLOYS_ENABLED --body true` **before** merging
    `ledger-v2` into `main`; create the `production` environment with its secrets and a `main`-only
    branch policy (V-X-12).
@@ -77,8 +77,8 @@ These are actions, not code changes. Most are already steps in [PRODUCTION.md](.
     nor v2 ever ingested (DP-18); any legacy category name still listed by
     `private.legacy_unresolved_category_names()` at finalize (add an alias row; `Entretainment`
     is built in, DP-19/X-24). Prod's `public.rls_auto_enable()` stays (X-10, decided).
-11. **Vercel previews** talk to production (X-32): turn previews off for the `apps/web` project, or
-    accept it knowingly.
+11. **Vercel previews** talk to production (X-32). Decision (2026-10-09): previews are **off** for the
+    `apps/web` project; switch them off in the Vercel dashboard (PRODUCTION §4).
 
 ---
 
@@ -91,13 +91,7 @@ None open. All twelve were done or decided on 2026-10-09: see
 
 ### Edge Functions
 
-| ID | Summary | Why deferred / dependency | Suggested fix | Effort |
-|---|---|---|---|---|
-| SRV-05 | `gmail-push` has no time budget or incremental cursor, so a large backlog never finishes; a 404 cursor reset silently skips mail | Needs its own design and tests | Deadline like `outlook-poll`; save the cursor after each page; `labelId` filter on `history.list`; `captureMessage` on a 404 reset; optional bounded `messages.list` backfill | M |
-| SRV-07 | Base64 attachment decoding costs about 1 s of CPU per 20 MB against the 2 s Edge CPU limit | Needs a decoder swap and tests | `Uint8Array.fromBase64` / `@std/encoding` `decodeBase64Url`; skip attachments over 25 MB before downloading | S |
-| SRV-10 | Nothing alerts on stale mailboxes, expiring Gmail watches, mailbox `last_error` or parse-queue age | **SQL side done** (`20261009000400`: `ops_health` returns `mailboxes_stale`, `gmail_watch_expiring`, `mailbox_errors`); `evaluateHealth` still to do | Add `mailboxes_stale` (> 2 days), `gmail_watch_expiring` (< 24 h), `mailbox_errors` to `ops_health()` and `evaluateHealth` | M |
-| SRV-11r | Gmail push, Outlook resume, `ingestAttachment`/`storeDocument` races, token rotation and a viewer e2e (403 on upload and SMS) are untested | `worker_test.ts` covered the worker only | Fake `Db` and `fetch`, table-driven tests per path; e2e viewer case | M |
-| NEW-1 | No in-app invite: with sign-ups off, a new member needs a dashboard *Invite user* after `add_profile_member` | Found while documenting sign-ups off | An owner-only Edge Function that calls `auth.admin.inviteUserByEmail` when `add_profile_member` returns `invited` (rate-limited, same-origin redirect); a "Resend invite" action in web Settings → Members (and iOS later) | M |
+None open. All five were done on 2026-10-09: see [Done: Edge Functions and CI pass 2026-10-09](#done-edge-functions-and-ci-pass-2026-10-09).
 
 ### Parser
 
@@ -109,12 +103,12 @@ None open. All twelve were done or decided on 2026-10-09: see
 
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
+| NEW-1r | Settings → Members still calls `add_profile_member` directly, so a new member gets no email | The `member-invite` Edge Function (owner-only, rate-limited, same-origin redirect) landed; the UI is a follow-up | "Invite" calls `member-invite` (`action: invite`) and shows `invite_sent` / `invite_error`; "Resend invite" on pending members (`action: resend`; handle `INVITE_COOLDOWN` / `ALREADY_ACTIVE`). iOS later | S |
 | WEB-09 | Realtime channel topic reused while the old channel is still leaving can silently kill live updates (verified in source, not reproduced) | Out of the P1 pass | Unique topic per effect run (`ledger:${code}:${uuid}`) | S |
 | WEB-10r | Each review card runs 1–3 context queries, and every `transactions` event invalidates all review contexts | The badge part is fixed (head count) | One `review_context` RPC per list; invalidate only `["p", code, "reviews", "open"]` on txn events | M |
 | WEB-11 | First load is 1.16 MB JS (≈ 365 kB gz): Sentry with Replay, supabase-js and Radix preloaded on every route | Perf | Lazy-load Replay and Sentry after first paint, keep `/signin` free of chart and Radix chunks, drop `chunkSizeWarningLimit: 1200`, budget ~200 kB gz | M |
 | WEB-12 | "Apply to merchant" stays ticked after a pick, so the next change silently rewrites the whole merchant | Out of the P1 pass | Reset `toMerchant` on pick and on popover close | S |
 | WEB-13 | Rule regex validated with JS `RegExp` but run as Postgres ARE; Save stays enabled when the preview errors | Server now validates on write (DB-09/13), the client still lets you try | Block Save on `preview.isError`, show the server's 22023 message | S |
-| WEB-14 | Rejecting a merchant suggestion deletes the row, so the nightly LLM pass re-suggests it | **SQL side done**: `reject_merchant_suggestion` + `merchant_category_skips` (`20261009000200`); the Merchants tab must call it | Store `source = 'rejected'` and skip it in `enqueue_llm_categorize` (pairs with DB-37) | S |
 | WEB-15 | Calendar counts and draws future days ("135 days of 184"); heatmap uses ~35 % of the card on desktop | Out of the P1 pass | Clamp `to` at `todayDubai()` for display and counts; scale cells to the container | S |
 | WEB-16 | Anomalies show raw uppercase descriptions as separate rows, flag "Large first purchase" on a charge below usual, and use jargon | Partly server-side (`anomalies`) | Return `merchant_name`, require first purchase **and** above threshold, phrase as "about 4× your usual Shopping purchase", add a "this is fine" action | M |
 | WEB-17r | 18 categories over 12 hues still share colours (Medicine/Insurance, Forex Charge/Fines, Apple/Subscription/Cashback, Donation/Transport) | `…1900` moved the worst pairs; a full fix needs more hues or a policy | Extend the palette to ~16, or reserve unique hues for `kind = spend` categories; keep ΔE ≥ 15 | S |
@@ -131,7 +125,7 @@ None open. All twelve were done or decided on 2026-10-09: see
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
 | IOS-10 | OTP false negatives pass the filter ("Use 482913 as the code…", "authentication code", Arabic "رمز التحقق"); the server mirrors the same regex | Out of the P1 pass | Add `auth(entication)? code`, `secure code`, `3-?d ?secure`, code-near-digits patterns, `do not share`, `رمز`, `كلمة المرور`; one generated source or a parity test with the SQL regex | S |
-| IOS-11 | Filter tests use invented bodies, not the template examples; CI never compiles the app or extension targets | Out of the P1 pass (outbox failure tests were added) | Export `sms_templates` examples to a fixture with a drift check; CI `xcodebuild build … CODE_SIGNING_ALLOWED=NO` (with X-26) | M |
+| IOS-11 | Filter tests use invented bodies, not the template examples; CI never compiles the app or extension targets | Out of the P1 pass (outbox failure tests were added) | Export `sms_templates` examples to a fixture with a drift check (the app and extension build was done: `ios-build.yml`, 2026-10-09) | M |
 | IOS-12r | `noProfile` still discards the SMS; the outbox isn't cleared on sign-out; nothing outside Settings shows a stuck outbox | Honest queued reasons and "Not sent" were done | Enqueue with a pending profile; confirm-and-clear outbox and pending PDFs on sign-out; Settings badge and an Overview strip when the outbox is older than 1 h | S |
 | IOS-13 | A failed Realtime subscribe ends the stream with no retry; foreground reloads only Overview; Insights never refreshes | Out of the P1 pass | Restart with backoff while the profile is selected; reload or mark stale every loaded tab on foreground; include Insights in the fan-out | M |
 | IOS-14 | Switching ledger briefly shows the previous ledger's numbers | Out of the P1 pass | Reset screen models to `.idle` on profile change, or key `previous` by profile code | S |
@@ -147,9 +141,7 @@ None open. All twelve were done or decided on 2026-10-09: see
 
 ### CI, config and ops
 
-| ID | Summary | Why deferred / dependency | Suggested fix | Effort |
-|---|---|---|---|---|
-| X-16r | No committed `supabase/functions/.env.example`; the PRODUCTION §2.5 table is the only full inventory of function secrets | Functions directory wasn't owned by the docs pass | Commit an example grouped as required / prod-only / local-only / optional | S |
+None open. X-16r was done on 2026-10-09: see [Done: Edge Functions and CI pass 2026-10-09](#done-edge-functions-and-ci-pass-2026-10-09).
 
 ---
 
@@ -165,16 +157,7 @@ None open. All twelve were done or decided on 2026-10-09: see
 
 ### Edge Functions
 
-| ID | Summary | Why deferred / dependency | Suggested fix | Effort |
-|---|---|---|---|---|
-| SRV-14 | A failed save of a rotated Microsoft refresh token is ignored; `gmail-push` never records `sync_state.last_error` | Out of the P1 pass | Check the RPC error and capture a warning; record `last_error` in gmail-push and gmail-watch-renew | S |
-| SRV-15 | `saveSyncState` writes back a whole stale snapshot, so concurrent writers can regress the cursor | **SQL side done**: `save_mailbox_sync_state` (`20261009000400`); `saveSyncState` must call it | jsonb merge in SQL; keep the max cursor in an RPC | S |
-| SRV-18 | The Edge and parser scrubbers don't regex-strip free-text emails; `pgErrorToHttp` returns raw PG messages (constraint names) to clients; `withScope` isolation across concurrent requests unverified | Out of the P1 pass | Email regex in both scrubbers; fixed messages for 23505/23503; an interleaving test | S |
-| SRV-19 | Permanent `gmail-push` errors (bad envelope, `invalid_grant`, missing config) are nacked and redelivered for up to 7 days | Out of the P1 pass | Ack permanent errors (with `last_error`); dead-letter topic on the subscription | S |
-| SRV-20 | Re-uploading a failed PDF says `duplicate` and never re-parses; a duplicate queue message flips a parsed document back to `parsing`/`failed` | **SQL side done**: `begin_document_parse`, `resubmit_document`, guarded `fail_document` (`20261009000400`); the worker and `storeDocument` must call them | Return `parse_status` with `duplicate` and requeue failed ones; skip messages for already-parsed documents unless requeued | S |
-| SRV-22 | DLQ and `documents_stuck` alerts repeat every 15 min until a manual purge, including during the bulk import | **SQL side done**: `drain_dlq`, `requeue_dlq`, `documents_stuck` = `parsing` > 1 h, queue `newest_age_s` (`20261009000400`); alert-on-increase in `ops-monitor` still to do | Alert on depth increase; `drain_dlq`/`requeue_dlq` RPC; base "stuck" on `parsing` older than 1 h | S |
-| SRV-23 | Duplicated helpers, double `validatePdf`, `ProviderHttpError` in `gmail.ts`, long `processParseMessage`, unchecked `failDocument`/status results | Readability | `_shared/provider.ts`, `storeDocument` owns validation, split fetch/classify/apply | M |
-| DB-21e | `delete_profile` queues a deleted profile's PDFs on `storage_cleanup` (`{bucket, paths[]}`), but nothing drains that queue yet | New queue from the 2026-10-09 database pass | Worker: read `storage_cleanup`, `storage.from(bucket).remove(paths)`, delete the message; DLQ like the other queues (and add it to `private.assert_known_queue` for `drain_dlq`/`requeue_dlq`) | S |
+None open. All eight (including DB-21e) were done on 2026-10-09: see [Done: Edge Functions and CI pass 2026-10-09](#done-edge-functions-and-ci-pass-2026-10-09).
 
 ### Parser
 
@@ -238,11 +221,7 @@ None open (SRV-12, SRV-17 and X-25r are done).
 
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
-| SRV-13r | Supply chain, Edge part: `deno.json` `lock: false` (the parser part is done: hashed requirements, digest-pinned base image, plain `uvicorn`) | Out of the P1 pass | Commit `deno.lock` and deploy `--frozen` | S |
-| X-26 | CI runs no `deno lint`/`check`/`fmt` (fmt fails on 18 files) and never builds the iOS app or extension targets | Out of the P1 pass | Add lint and check (fix or drop fmt); a weekly `xcodegen && xcodebuild build` job (with IOS-11) | S |
-| X-32 | Vercel previews use the production Supabase project and CSP; their auth redirects aren't allow-listed | Decision | Disable previews, or point them at a non-prod project | S |
 | DP-22 | A rehearsal on the shared local stack also categorises the demo profiles' merchants and drains their `sms_fallback` queue (demo SMS sent to Claude) | Local ops only | Rehearse on a stack without seed data, or scope `enqueue_llm_categorize` by profile when run by hand | S |
-| FV-04 | `supabase migration up` matches migrations by version only, so a migration edited after a stack applied it is silently skipped (the shared local stack ran stale bodies of 4 migrations; 07 FV-04). Prod is safe only while no v2 version has been pushed | Process; no tooling yet | CI guard: fail a PR that modifies (`git diff --diff-filter=MDR`) an existing file under `supabase/migrations/` once that version is on `main` (or, after cutover, listed by `supabase migration list --linked`), with an explicit override label for pre-cutover edits. Optionally record a sha256 per applied migration in a local table and warn on mismatch | S |
 
 ---
 
@@ -285,6 +264,37 @@ Migrations `20261009000100_db_ledger_fixes` (`23d9480`), `…0200_db_categorisat
 | DP-21 | Accepted: noted in PRODUCTION §2.6 |
 | X-23 | Done |
 | X-33 | DB part done (AED `fx_rate`, sub-1e-8 rate); the `concat_ws` line key is kept on purpose (changing it would re-key all evidence); iOS part is X-33r above |
+
+## Done: Edge Functions and CI pass 2026-10-09
+
+Also done after the merge: WEB-14 (the web Merchants tab's Reject calls `reject_merchant_suggestion`, `76a4667`), SRV-13 parser half and SRV-24 (parser pass).
+
+Commits `24ec851`…`584b039`, then reconciled with the database pass (it uses its
+`save_mailbox_sync_state`, `begin_document_parse`, `resubmit_document` and `ops_health()`
+shapes). New: migration `20261009100100_storage_cleanup_worker` and test `19`. Details in
+[03 Fix status](03-server.md#fix-status), [06 Fix status](06-cross-cutting.md#fix-status) and
+CHANGELOG.
+
+| ID | Outcome |
+|---|---|
+| SRV-05 | Done: gmail-push budget (503 to continue), per-page cursor, watch-label filter, reported 404 reset with a bounded backfill |
+| SRV-07 | Done: native / `@std` base64 (~45 ms per 20 MB); attachments over 25 MB skipped before download |
+| SRV-10 | Done: `evaluateHealth` on the `ops_health()` mailbox lists, `job_errors_24h`, queued-document age |
+| SRV-11r | Done: fake Db/fetch tests for gmail-push, outlook-poll, `storeDocument`/`ingestAttachment`, token rotation, worker, ops-monitor; e2e viewer 403 on upload and SMS |
+| NEW-1 | Backend done: `member-invite` Edge Function. The web/iOS buttons are NEW-1r |
+| SRV-14 | Done: rotation save failures reported; `last_error` recorded and cleared by gmail-push, gmail-watch-renew, outlook-poll |
+| SRV-15 | Done: `saveSyncState` → `save_mailbox_sync_state` |
+| SRV-18 | Done: email regex in the Edge and parser scrubbers, fixed constraint messages; per-request Sentry tags (the interleaving test proved they leaked) |
+| SRV-19 | Done: permanent gmail-push failures recorded and acked; the subscription's dead-letter topic already existed |
+| SRV-20 | Done: uploads call `resubmit_document`; the worker claims with `begin_document_parse` |
+| SRV-22 | Done: a DLQ alerts when it grew (`newest_age_s < 900`), then daily |
+| SRV-23 | Done: `_shared/provider.ts`, `prepareDocument`, fetch/classify/apply split, checked status writes |
+| DB-21e | Done: the worker drains `storage_cleanup`; `storage_cleanup_dlq`, `kick_worker` and the DLQ tools cover it |
+| SRV-13 | Edge part done (frozen `deno.lock`); the parser part is SRV-13r |
+| X-16r | Done: `supabase/functions/.env.example` (names only) and a guard test |
+| X-26 | Done: `deno check` in CI; `ios-build.yml` compiles the app and extension (golden parity in CI stays SRV-24) |
+| X-32 | Decided: Vercel Preview deployments off (PRODUCTION §4; a dashboard switch) |
+| FV-04 | Already covered by `scripts/ci/check-migrations.sh` (`diff` in CI and hooks; `remote local` for edited local migrations) |
 
 ---
 

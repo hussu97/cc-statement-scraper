@@ -3,7 +3,7 @@ name: Deploy Supabase
 # Applies supabase/migrations to the production project and deploys the Edge
 # Functions. Production data is irreplaceable, so every run goes through:
 #
-#   test      pgTAP on a fresh local stack + deno lint/test. No secrets.
+#   test      pgTAP on a fresh local stack + deno lint/check/test (frozen lock). No secrets.
 #   deploy    `production` environment (put required reviewers on it, so a
 #             push waits for a human click). Links the project, then:
 #               1. history check: every applied migration still exists and is
@@ -167,14 +167,17 @@ jobs:
         with:
           deno-version: v2.x
           cache: true
-          cache-hash: ${{ hashFiles('supabase/functions/**/*.ts', 'supabase/functions/deno.json') }}
+          cache-hash: ${{ hashFiles('supabase/functions/deno.lock', 'supabase/functions/deno.json') }}
 
-      - name: deno lint + test
+      # The deploy bundles with supabase/functions/deno.lock (the edge runtime reads it);
+      # --frozen fails here, before anything ships, if the lock doesn't match the sources.
+      - name: deno lint + check + test (frozen lock)
         if: needs.plan.outputs.functions == 'true'
         working-directory: supabase/functions
         run: |
           deno lint
-          deno test -A .
+          deno check --frozen .
+          deno test --frozen -A .
 
   deploy:
     name: Deploy to production

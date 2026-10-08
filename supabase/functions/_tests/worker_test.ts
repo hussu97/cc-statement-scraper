@@ -135,11 +135,12 @@ function fakeDb(opts: { ingestError?: { code: string; message: string } } = {}) 
   const db = {
     rpc(name: string, args: Record<string, unknown>) {
       calls.push({ name, args });
-      if (name === "worker_document_context") {
+      if (name === "begin_document_parse") {
         return Promise.resolve({
           data: {
             doc: { storage_path: "p/doc.pdf", original_filename: "x.pdf", bank_code: "ENBD", profile_code: "prf_x" },
             settings: {},
+            skip: null,
           },
           error: null,
         });

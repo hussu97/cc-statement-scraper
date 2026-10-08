@@ -4,6 +4,7 @@
 // through the worker_mailbox_secret RPC (stored by set_mailbox_secret).
 
 import { HttpError } from "./http.ts";
+import { captureMessage } from "./sentry.ts";
 import type { Db } from "./supabase.ts";
 
 export type Provider = "gmail" | "outlook";
@@ -85,13 +86,21 @@ export async function mailboxAccessToken(
       `${provider} token refresh failed: HTTP ${res.status} ${doc.error ?? ""}`,
     );
   }
-  // Microsoft rotates refresh tokens; keep the newest one.
+  // Microsoft rotates refresh tokens; keep the newest one. A failed save is not fatal
+  // (the previous token usually stays valid), but it is reported (SRV-14).
   if (doc.refresh_token && doc.refresh_token !== refresh) {
-    await svc.rpc("set_mailbox_secret", {
+    const { error: saveErr } = await svc.rpc("set_mailbox_secret", {
       p_mailbox_code: mailboxCode,
       p_key: "refresh_token",
-      p_value: doc.refresh_token,
+      p_value: String(doc.refresh_token),
     });
+    if (saveErr) {
+      captureMessage(`${provider}: could not save the rotated refresh token`, {
+        level: "warning",
+        tags: { mailbox_code: mailboxCode, sqlstate: saveErr.code },
+        fingerprint: ["oauth", "rotation_save_failed", provider],
+      });
+    }
   }
   return { accessToken: String(doc.access_token), expiresIn: Number(doc.expires_in ?? 3600) };
 }

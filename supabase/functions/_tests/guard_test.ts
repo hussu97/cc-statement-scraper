@@ -18,6 +18,30 @@ Deno.test("there are function directories to check", () => {
   assert(functionNames().length >= 7, `found only ${functionNames().join(", ")}`);
 });
 
+// X-16: .env.example lists every key the code reads (names only, never values).
+Deno.test(".env.example covers every env key the functions read, with no values", () => {
+  const injected = new Set(["SUPABASE_URL", "SB_REGION", "SB_EXECUTION_ID"]);
+  const read = new Set<string>();
+  const walk = (dir: URL) => {
+    for (const e of Deno.readDirSync(dir)) {
+      if (e.isDirectory && e.name !== "_tests") walk(new URL(`${e.name}/`, dir));
+      else if (e.isFile && e.name.endsWith(".ts")) {
+        const src = Deno.readTextFileSync(new URL(e.name, dir));
+        for (const m of src.matchAll(/(?:env\.get|envNumber)\("([A-Z0-9_]+)"/g)) read.add(m[1]);
+      }
+    }
+  };
+  walk(functionsDir);
+  // oauth.ts builds these names from the provider prefix.
+  for (const p of ["GMAIL", "MS"]) for (const k of ["ID", "SECRET"]) read.add(`${p}_OAUTH_CLIENT_${k}`);
+  const example = Deno.readTextFileSync(new URL(".env.example", functionsDir));
+  const lines = example.split("\n").filter((l) => /^[A-Z0-9_]+=/.test(l));
+  for (const l of lines) assert(/^[A-Z0-9_]+=$/.test(l), `.env.example must not hold a value: ${l.split("=")[0]}`);
+  const listed = new Set(lines.map((l) => l.split("=")[0]));
+  const missing = [...read].filter((k) => !injected.has(k) && !listed.has(k)).sort();
+  assert(missing.length === 0, `.env.example is missing: ${missing.join(", ")}`);
+});
+
 for (const name of functionNames()) {
   Deno.test(`${name}/index.ts uses withSentry`, () => {
     const src = Deno.readTextFileSync(new URL(`${name}/index.ts`, functionsDir));

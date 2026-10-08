@@ -469,6 +469,9 @@ verify_jwt = false
 [functions.fx-rates]
 verify_jwt = false
 
+[functions.member-invite]
+verify_jwt = false
+
 # ---------------------------------------------------------------------------
 # Production overrides. `supabase config push` sends the WHOLE file and does
 # not ask for confirmation when stdin isn't a terminal, so every value that

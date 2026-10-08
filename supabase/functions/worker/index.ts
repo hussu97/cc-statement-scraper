@@ -5,6 +5,7 @@
 //   parse_document  (vt 300s, 3 at a time) → parser /parse → ingest_parsed_document
 //   llm_categorize  (vt 300s, 2 at a time) → Claude → apply_llm_suggestions
 //   sms_fallback    (vt 300s, 2 at a time) → Claude → propose_sms_template
+//   storage_cleanup (vt 120s, 5 at a time) → Storage remove (a deleted profile's PDFs, DB-21e)
 // A failing parse is retried with backoff (re-sent with a delay) and dead-lettered after
 // 5 attempts; LLM jobs are retried by visibility timeout.
 //
@@ -27,6 +28,10 @@ import { queueRead } from "./queue.ts";
 import { PARSE_QUEUE, processParseMessage } from "./parse_document.ts";
 import { canStart, llmRoundNeedMs, parseRoundNeedMs, type WorkerTiming, workerTiming } from "./budget.ts";
 import { LLM_QUEUE, processLlmCategorize, processSmsFallback, SMS_QUEUE } from "./llm_jobs.ts";
+import { processStorageCleanup, STORAGE_QUEUE } from "./storage_cleanup.ts";
+
+/** A storage round waits on at most one Storage API call per message (in parallel). */
+const STORAGE_ROUND_NEED_MS = 35_000;
 
 const VT_SECONDS = 300;
 
@@ -37,6 +42,7 @@ interface Summary {
   parse: unknown[];
   llm: unknown[];
   sms: unknown[];
+  storage: unknown[];
   errors: number;
   llm_enabled: boolean;
   elapsed_ms: number;
@@ -60,11 +66,20 @@ export async function runWorker(svc: Db, timing: WorkerTiming): Promise<Summary>
     console.warn("worker: ANTHROPIC_API_KEY not set; llm_categorize and sms_fallback messages are left queued");
     warnedNoLlm = true;
   }
-  const summary: Summary = { rounds: 0, parse: [], llm: [], sms: [], errors: 0, llm_enabled: llm, elapsed_ms: 0 };
+  const summary: Summary = {
+    rounds: 0,
+    parse: [],
+    llm: [],
+    sms: [],
+    storage: [],
+    errors: 0,
+    llm_enabled: llm,
+    elapsed_ms: 0,
+  };
   const parseNeed = parseRoundNeedMs(timing);
   const llmNeed = llmRoundNeedMs(timing);
 
-  while (canStart(timing, Date.now(), Math.min(parseNeed, llm ? llmNeed : parseNeed))) {
+  while (canStart(timing, Date.now(), Math.min(parseNeed, llm ? llmNeed : parseNeed, STORAGE_ROUND_NEED_MS))) {
     summary.rounds++;
     let seen = 0;
 
@@ -82,6 +97,11 @@ export async function runWorker(svc: Db, timing: WorkerTiming): Promise<Summary>
       const smsMsgs = await queueRead(svc, SMS_QUEUE, VT_SECONDS, 2);
       seen += smsMsgs.length;
       await settle(smsMsgs, (m) => processSmsFallback(svc, m), summary.sms, summary);
+    }
+    if (canStart(timing, Date.now(), STORAGE_ROUND_NEED_MS)) {
+      const storageMsgs = await queueRead(svc, STORAGE_QUEUE, 120, 5);
+      seen += storageMsgs.length;
+      await settle(storageMsgs, (m) => processStorageCleanup(svc, m), summary.storage, summary);
     }
     if (seen === 0) break;
   }

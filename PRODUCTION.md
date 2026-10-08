@@ -83,18 +83,24 @@ Dashboard → Authentication:
   never accepts self-registration. The email-code request never creates users
   (`shouldCreateUser: false` on web and iOS); an unknown email is told to ask a ledger owner for an invite.
 - **Adding a member** (sign-ups stay off):
-  1. An owner adds the email: web Settings → Members (`add_profile_member`). If the email has
-     no Auth user yet this stores a **pending invite**.
-  2. Create the Auth user: Dashboard → Authentication → Users → **Invite user** with that email
-     (or the admin API `auth.admin.inviteUserByEmail`). Invites work with sign-ups disabled. The
-     `auth.users` insert trigger claims the pending invite, so the person lands in the ledger
-     with the stored role.
+  1. An owner adds the email. The Edge Function **`member-invite`** (`{profile_code, email,
+     role}`) runs `add_profile_member` as the owner and, when the email has no confirmed Auth
+     user (`invited`), sends the Auth invite email itself (`auth.admin.inviteUserByEmail`;
+     invites work with sign-ups disabled). `{"action": "resend"}` re-sends it to a pending
+     member; neither sends to an address invited in the last 10 min. The web Settings → Members
+     screen still calls `add_profile_member` directly; its "Invite" / "Resend invite" buttons
+     calling `member-invite` are a follow-up (NEW-1r), so until then use the function (or step 2).
+  2. Fallback: Dashboard → Authentication → Users → **Invite user** with that email.
   3. The invite email tells them to open Bank Ledger and sign in with that address; the code
-     they request confirms the account (the *Confirm signup* template also sends a code).
+     they request confirms the account (the *Confirm signup* template also sends a code). The
+     pending invite attaches only then, once the address is **confirmed** (DB-23), so the
+     member shows as pending until their first sign-in.
 
-  If the email already has an Auth user, step 1 adds them directly (`added`) and step 2 is
-  skipped. An in-app invite that sends the email itself is on the backlog
-  ([docs/audit/BACKLOG.md](docs/audit/BACKLOG.md)).
+  If the email already has a confirmed account, step 1 adds them directly (`added`) and nothing
+  is sent. The invite's redirect is the caller's own web origin (`ALLOWED_ORIGINS` when set; it
+  must be in the Auth redirect allow-list), or the Site URL without an Origin (iOS); the
+  code-only templates don't link to it. Invites count against Auth's email rate limit (SMTP
+  below).
 - **SMTP.** The built-in sender is heavily rate-limited (a few emails an hour). That is fine for
   two people. Configure custom SMTP if OTP emails go missing.
 
@@ -111,8 +117,8 @@ supabase db push                    # applies supabase/migrations/* in order
 - The migrations also:
   - enable the extensions `pg_trgm`, `pgmq`, `pg_cron` and `pg_net`
   - create the private Storage bucket **`statements`** (25 MB, `application/pdf`)
-  - create the pgmq queues (`parse_document`, `llm_categorize`, `sms_fallback`, each with a
-    `_dlq`, and `storage_cleanup` for PDFs of a deleted profile)
+  - create the pgmq queues (`parse_document`, `llm_categorize`, `sms_fallback` and
+    `storage_cleanup` for PDFs of a deleted profile, each with a `_dlq`)
   - schedule the pg_cron jobs (§2.6)
   - add the Realtime publication
 - `supabase/seed.sql` is **local only**. `db push` never runs it.
@@ -173,7 +179,10 @@ Function secrets (`SUPABASE_URL` and the API keys — `SUPABASE_SECRET_KEYS` /
 are injected automatically; see §2.8) have **one source of truth**: the gitignored
 `supabase/functions/.env.production`. Complete it, then push it with
 [`scripts/cutover/set-edge-secrets.sh`](scripts/cutover/set-edge-secrets.sh). Never type
-secrets inline and never push a file that still holds placeholders.
+secrets inline and never push a file that still holds placeholders. The committed
+`supabase/functions/.env.example` lists every key name the functions read (required,
+production-only, local-only, optional; no values), and a `deno test` guard fails when code
+reads a key it doesn't list.
 
 | Key | Where the value comes from | In the file today |
 |---|---|---|
@@ -206,8 +215,8 @@ supabase secrets list --project-ref nkmylznisjcnmqbxosey      # names and digest
   `PARSER_URL` isn't `https://` or points at a local host, or if the file contains
   `PARSER_DOCUMENT_BASE_URL` or `LEDGER_E2E` (local only).
 - Optional overrides: `MS_OAUTH_TENANT` (`consumers`), `OUTLOOK_LOOKBACK_DAYS`,
-  `OUTLOOK_BUDGET_MS`, `WORKER_BUDGET_MS`, `PARSER_TIMEOUT_MS`, `EDGE_WALL_CLOCK_MS`,
-  `OPS_SMS_UNPARSED_THRESHOLD`, `OPS_OPEN_REVIEWS_THRESHOLD` and `SENTRY_TRACES_SAMPLE_RATE`
+  `OUTLOOK_BUDGET_MS`, `GMAIL_PUSH_BUDGET_MS`, `WORKER_BUDGET_MS`, `PARSER_TIMEOUT_MS`, `EDGE_WALL_CLOCK_MS`,
+  `OPS_SMS_UNPARSED_THRESHOLD`, `OPS_OPEN_REVIEWS_THRESHOLD`, `OPS_QUEUED_DOCUMENT_AGE_S` and `SENTRY_TRACES_SAMPLE_RATE`
   (see README). Add them to the same file.
 - **Worker timing.** Leave `PARSER_TIMEOUT_MS` at its default **75000** (set it explicitly only
   to document it): it must stay above the parser's own 60 s kill (§3) and below Cloud Run's
@@ -221,7 +230,7 @@ Deploy every function. Each one's `verify_jwt = false` comes from `supabase/conf
 
 ```bash
 supabase functions deploy --project-ref nkmylznisjcnmqbxosey
-# statements-upload sms-ingest worker gmail-push gmail-watch-renew outlook-poll ops-monitor fx-rates
+# statements-upload sms-ingest worker gmail-push gmail-watch-renew outlook-poll ops-monitor fx-rates member-invite
 ```
 
 Smoke test (`CRON_SECRET` exported from the same file as in §2.4):
@@ -443,6 +452,16 @@ one at a time. `SENTRY_AUTH_TOKEN` must be a Vercel env var: `vite.config.ts` re
 The **legacy** project (rooted at the removed `frontend/`) must stay disconnected from Git until
 it is deleted (§10 step 12); a build of `main` would fail.
 
+**Preview deployments: off (decision, audit X-32, 2026-10-09).** A preview build gets the same
+env as production (only `VITE_SENTRY_ENVIRONMENT` differs), so it would run unreviewed branch
+code against the production Supabase project and its real data, under the production CSP,
+and its magic-link redirects aren't in the Auth allow-list anyway. There is no non-production
+Supabase project to point previews at, and PR checks don't need them (`ci.yml` → `web` lints,
+type-checks, tests and builds every PR). To apply: Vercel → `cc-statement-scraper` → Settings →
+Git → **Ignored Build Step** → "Only build production" (or the custom command
+`[ "$VERCEL_ENV" != "production" ]`, which skips every non-production build). Revisit only
+together with a separate staging Supabase project whose URL the Preview env and CSP use.
+
 **`apps/web/vercel.json`** (picked up from the Root Directory):
 - **SPA rewrite.** TanStack Router uses browser history (`/activity`, `/settings`, …), so every
   path except `/assets/*` falls back to `/index.html`. A missing hashed asset stays a 404
@@ -489,7 +508,7 @@ it. `PROJECT=credit-card-scraper-ht`, `URL=https://nkmylznisjcnmqbxosey.supabase
 4. **Push subscription** `gmail-statements-push` → `gmail-push`. The OIDC audience is the function
    URL (= `GMAIL_PUSH_AUDIENCE`). `gmail-push` checks the Google signature, the audience, and
    `email == GMAIL_PUSH_SA_EMAIL`. The ack deadline is 180 s (it must be **≥ 120 s**: a push with
-   several PDFs is slow, and a 500 triggers redelivery). Retry backoff is 10 s → 600 s. After 10
+   several PDFs is slow; `gmail-push` answers 503 when its `GMAIL_PUSH_BUDGET_MS` runs out and 500 on a transient failure, both redelivered from the saved cursor, and acks permanent failures with 200 after recording `sync_state.last_error`). Retry backoff is 10 s → 600 s. After 10
    failed deliveries a message goes to the dead-letter topic `gmail-statements-dlq`, which is held
    by pull subscription `gmail-statements-dlq-hold` (7-day retention) for inspection. The Pub/Sub
    service agent has publisher on the DLQ topic and subscriber on the push subscription.
@@ -656,12 +675,13 @@ setup, branch protection, rollbacks). Summary:
 
 | Workflow | Trigger | What |
 |---|---|---|
-| `ci.yml` | PRs, pushes to `main`, manual (`include_ios`) | Path-filtered jobs `tooling` (actionlint, shellcheck), `supabase` (append-only migration check, `db reset`, pgTAP, DB types drift), `edge` (`deno lint`, `deno fmt --check`, `deno test`), `parser` (ruff, pytest), `web` (tokens, lint, typecheck, test, build), `scraper`, `ios` (`swift test` on LedgerKit, macOS, only on LedgerKit/tokens changes or manual), and the aggregator **`ci-ok`**, the only required check |
+| `ci.yml` | PRs, pushes to `main`, manual (`include_ios`) | Path-filtered jobs `tooling` (actionlint, shellcheck), `supabase` (append-only migration check, `db reset`, pgTAP, DB types drift), `edge` (`deno lint`, `deno fmt --check`, `deno check` and `deno test` against the frozen `deno.lock`), `parser` (ruff, pytest), `web` (tokens, lint, typecheck, test, build), `scraper`, `ios` (`swift test` on LedgerKit, macOS, only on LedgerKit/tokens changes or manual), and the aggregator **`ci-ok`**, the only required check |
 | `deploy-supabase.yml` | push to `main` touching `supabase/migrations/**`, `supabase/functions/**` or `config.toml`; manual (type the project ref, optional `dry_run`) | pgTAP + deno → `production` env → migration history check (`scripts/ci/check-migrations.sh remote linked`) → `db push --dry-run` → destructive-statement guard → `db push` → `functions deploy` |
 | `deploy-parser.yml` | push to `main` touching `services/parser/**`; manual (type `deploy`) | ruff + pytest → `production` env → build/push image → no-traffic tagged revision → `/health` smoke on the tag → 100% traffic |
 | `web-smoke.yml` | Vercel Production deployment success; daily; manual | Probes the production web app (title, CSP, security headers, SPA deep link, assets). Vercel's Git integration does the deploy |
 | `ios-testflight.yml` | push to `main` touching `apps/ios/**` (not `build-number.json`); manual | Uploads the IPA the pre-push hook staged on `ios-ledger-staged` to App Store Connect, then distributes to "Friends & Family" (§7) |
 | `security.yml` | weekly, manual | pip-audit and bandit (parser) |
+| `ios-build.yml` | weekly, PRs/pushes touching `apps/ios/**`, manual | `xcodegen generate` + unsigned simulator `xcodebuild build` of the app and share extension (macOS) |
 
 **Deploys.** Pushes to `main` deploy Supabase and the parser after the `production`
 environment's approval (required reviewers need GitHub Pro/Team on a private repo). Set the
@@ -679,8 +699,8 @@ builds and stages the TestFlight IPA. `SKIP_PRE_PUSH=1 git push` skips the hook,
 
 **Secrets and variables** (names only; how to set them: docs/ci-cd.md §4):
 `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `SUPABASE_PROJECT_REF` (env `production`);
-`GCP_WIF_PROVIDER`, `GCP_DEPLOY_SA` (repo variables; WIF setup in docs/ci-cd.md §5) or the
-fallback `GCP_SA_KEY` (env `production`), optional `GCP_PROJECT_ID`; `ASC_KEY_ID`,
+`GCP_WIF_PROVIDER`, `GCP_DEPLOY_SA` (repo variables; WIF setup in docs/ci-cd.md §5; the parser deploy is WIF-only, there is no
+service-account key secret), optional `GCP_PROJECT_ID`; `ASC_KEY_ID`,
 `ASC_ISSUER_ID`, `ASC_KEY_P8` (App Store Connect); optional `AUTO_DEPLOY`. The deployer SA
 needs `run.admin`, `artifactregistry.writer` and `iam.serviceAccountUser` on `ccs-parser@`.
 
@@ -791,7 +811,7 @@ history):
     count; for `parse_document` it also re-opens the failed documents. (`requeue_documents`
     still works per profile.)
   - `select public.drain_dlq('<queue>');` deletes them instead.
-  - `<queue>` is `parse_document`, `llm_categorize` or `sms_fallback`.
+  - `<queue>` is `parse_document`, `llm_categorize`, `sms_fallback` or `storage_cleanup`.
 - **Batch job errors:** `select * from private.job_errors order by created_at desc limit 50;`
   (per-profile failures of `nightly`, `enqueue_llm_categorize`, `recategorize_stale`,
   `reestimate_pending_fx`; kept 30 days, counted in `ops_health.job_errors_24h`).
@@ -799,12 +819,13 @@ history):
   To make it global: `select public.promote_sms_template('<tpl_…>');`.
 - **Delete a profile:** an owner calls `select public.delete_profile('<prf_…>', '<profile key>');`.
   Vault secrets go with it; its PDFs are queued on `storage_cleanup` (`{bucket, paths[]}`) for
-  the worker to remove through the Storage API.
+  the worker to remove through the Storage API (on its next run; `kick_worker` wakes it for
+  them). A batch that keeps failing lands in `storage_cleanup_dlq` and raises a `dlq:` issue.
 - **New SMS format:** add a template row in a guarded content migration (CLAUDE.md §1.9) with
   at least one `examples` entry (required). The validation trigger proves it parses, and the
   unparsed messages from its senders re-run automatically. Or approve an LLM proposal in the Review inbox.
-- **Add a member:** owner adds the email in Settings → Members, then Dashboard → Authentication
-  → Users → Invite user (§2.2). Sign-ups stay off.
+- **Add a member:** owner calls the `member-invite` Edge Function (or adds the email in Settings → Members, then Dashboard → Authentication
+  → Users → Invite user; §2.2). Sign-ups stay off.
 - **Secret rotation:**
   - `CRON_SECRET`: replace the line in `supabase/functions/.env.production`, then run
     `scripts/cutover/set-edge-secrets.sh` and `scripts/cutover/set-vault-secrets.sql` (§2.4)
