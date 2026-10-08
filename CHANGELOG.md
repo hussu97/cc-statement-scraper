@@ -1,6 +1,168 @@
 # Changelog
 
+## Ledger v2 — 2026-10-08 (branch `ledger-v2`)
+
+A rebuild around Supabase. The DB and business logic move into Postgres, ingress and I/O into
+Edge Functions, and parsing into a stateless Cloud Run service. There is a new web app, a new
+iPhone app with real-time SMS capture, and an evidence-based ledger reconciled against
+statements. Legacy `backend/` and `frontend/` are frozen until cutover (PRODUCTION.md §10).
+Later v2 follow-ups are listed under [Unreleased] below.
+
+### Backend (Supabase)
+
+- **feat** Schema in `supabase/migrations`:
+  - Tenancy: `profiles`, `profile_members` owner/viewer, profile-scoped `service_tokens`.
+  - `authz` RLS helpers on every table. RPCs guard in-body (`assert_member` /
+    `assert_service_role`); there is no `REVOKE EXECUTE`, because of the PG 17.6.1.104 segfault.
+  - Codes as PKs, text + CHECK statuses, numeric money, Dubai dates.
+- **feat** The first migration moves every legacy table and enum into a `legacy` schema, so v2
+  lives in the existing `cc-statement-scraper` project.
+- **feat** Documents, statements and immutable statement lines. Line identity is
+  `(line_key, occurrence)`, so identical same-day purchases stay distinct.
+- **feat** Canonical `transactions` derived from `transaction_evidence` (statement line >
+  history line > SMS).
+- **feat** Deterministic scored matcher:
+  - amount, date, merchant trigram and card components
+  - auto-link ≥ 75 with a 15-point margin, review 55–75
+  - interchangeable ties, FX estimates, pre-auth tolerance
+  - reversals and released-authorisation voiding
+  - in-place re-ingest diffing with orphaning instead of deletes
+  - SIB history extracts as separate evidence, never double-counted
+- **feat** Statement reconciliation (totals, balance equation, SMS coverage, missing-from-statement)
+  and a match review inbox.
+- **feat** Dynamic categorisation:
+  - generated `effective_category_code` (manual > merchant manual > rule > LLM)
+  - set-based `recategorize`, with triggers on transactions, rules and merchant choices
+  - `rules_version` sweep every 3 h
+  - `preview_rule`
+  - defaults seeded once per profile
+- **feat** One spend definition, `v_spend`, and analytics RPCs: `overview`, `spend_series`,
+  `category_breakdown`, `merchant_leaderboard`, `daily_spend`, `hour_weekday_pattern`,
+  `fx_spend`, `statement_cycles`, `yoy_compare`, `anomalies`, `filter_meta`, `budget_status`
+  and `recurring_list`.
+- **feat** Budgets, recurring-charge detection, a nightly insights feed and an audit trail.
+- **feat** Background plumbing:
+  - pgmq queues (`parse_document`, `llm_categorize`, `sms_fallback`, each with a DLQ)
+  - Vault secrets (PDF passwords, mailbox refresh tokens, `project_url` / `edge_cron_secret`)
+  - pg_cron schedules
+  - Realtime on transactions, SMS, documents, reviews and insights
+- **feat** Data-driven `sms_templates` that reject templates whose examples don't parse and
+  re-run unparsed messages on change. 25 real templates for ADCB, FAB, ENBD and SIB, including
+  known non-transaction alerts classified as ignored.
+- **feat** Daily `fx_rates` fallback for pending foreign-currency SMS (statement rate → USD peg
+  → market rate).
+- **feat** Legacy import: `private.import_legacy_metadata`, staged legacy category choices
+  re-applied nightly, `legacy_parity_report`, and pending member invites claimed on sign-up.
+- **feat** Edge Functions, all wrapped in `withSentry` with in-function auth:
+  - `statements-upload` (legacy scraper multipart contract or user JWT, sha256 dedup)
+  - `sms-ingest`
+  - `worker` (parser → `ingest_parsed_document`; Claude categorisation and SMS-template proposals)
+  - `gmail-push` (OIDC-verified), `gmail-watch-renew`, `outlook-poll` (Graph delta, resumable)
+  - `ops-monitor` (ops health → Sentry, `ops-heartbeat` cron check-in)
+  - `fx-rates`
+- **test** pgTAP suites (RLS and security guards, ledger and matching, legacy import, SMS
+  templates, FX) and deno tests (auth, upload, worker, email routes, LLM, Sentry scrubber,
+  `withSentry` guard, opt-in local e2e).
+
+### Parser
+
+- **feat** `services/parser`: stateless FastAPI `POST /parse` for Cloud Run, implementing
+  `docs/contracts/parse-v1.md`.
+  - Copies of the legacy FAB, ADCB, ENBD, EIB, SIB and Mashreq parsers.
+  - Adds decimal-string money with direction, the `interest` kind, `fx_rate`,
+    `legacy_fingerprint`, statement identity and best-effort totals.
+  - `X-Parser-Secret` auth that fails closed, a download host allow-list and size limit, and a
+    Sentry scrubber.
+- **test** Unit tests, ported legacy tests and golden parity tests against the legacy parsers.
+
+### Web
+
+- **feat** `apps/web`: Vite + React 19, TanStack Router/Query, supabase-js with Realtime,
+  Tailwind v4 on `@ledger/tokens`, owned Radix components, Recharts with stable category
+  colours, Fraunces/Inter, light/dark, responsive to 390 px.
+- **feat** Screens:
+  - Overview
+  - Activity (URL-synced filters, evidence timeline, inline, bulk and merchant categorisation)
+  - Insights (trends, categories, merchants, subscriptions, FX, heatmaps, YoY, anomalies)
+  - Budgets
+  - Cards & Statements
+  - Review inbox
+  - Rules (live impact preview)
+  - Settings (sources and health, tokens, PDF passwords, members, SMS setup)
+- **feat** Single data layer in `src/data` (ESLint-enforced), Sentry with a scrubber, and a no-hex
+  guard.
+- **feat** `packages/tokens` (CSS variables, chart palette, `Tokens.swift`), `packages/db-types`
+  (generated), and a pnpm workspace.
+- **chore** `supabase/seed.sql` adds synthetic demo ledgers (`demo@ledger.local`).
+
+### iOS
+
+- **feat** `apps/ios`: an XcodeGen project with the Ledger app and the LedgerShare "Add to
+  Ledger" PDF extension, an App Group and a shared keychain session.
+- **feat** `LedgerKit` holds every decision the app makes:
+  - Decimal-exact money and Dubai dates
+  - supabase-swift API behind a protocol
+  - on-device OTP and debit filtering, `client_msg_id` idempotency
+  - App Group outbox with backoff
+  - Sentry telemetry and scrubber
+  - screen models
+- **feat** `LogBankSMSIntent` for the Shortcuts "When I get a message containing…" automation.
+  Screens: Overview, Activity, Insights, Statements (upload) and Settings (SMS setup guide,
+  outbox status), refreshed by Realtime.
+- **chore** `scripts/publish-build.sh`: archive and export, dSYM upload, TestFlight upload.
+
+### Scraper
+
+- **feat** `CCS_SCRAPER_UPLOAD_PATH` (`/functions/v1/statements-upload` for v2) and optional
+  `CCS_SCRAPER_SUPABASE_ANON_KEY`. The default target is fixed to `:8040`.
+- **feat** Per-file `queued` / `duplicate` status. A failed bank upload no longer aborts the
+  others. New `upload-pending` command.
+
+### CI / Infra
+
+- **feat** `ci.yml` gains path-filtered v2 jobs:
+  - `supabase`: start, db reset, pgTAP, types drift
+  - `edge`: deno test
+  - `parser`: uv, ruff, pytest
+  - `web`: tokens check, lint, test, build
+  - `ios`: `swift test` on LedgerKit, macOS, on LedgerKit/tokens changes or manual runs
+
+  The legacy jobs are kept.
+- **feat** Manual-only `deploy-supabase.yml` (db push and/or functions deploy, typed project-ref
+  confirmation, `production` environment) and `deploy-parser.yml` (Artifact Registry + Cloud
+  Run, min instances 0, Secret Manager).
+- **chore** `security.yml` also audits the parser's dependencies. The legacy deploy workflows
+  are marked as legacy.
+
+### Docs
+
+- **docs** README, ARCHITECTURE, PRODUCTION and ROADMAP rewritten for v2:
+  - structure, prerequisites, local setup, every test command, env vars per component
+  - screens, API surface
+  - data model, matching and categorisation, auth and RLS, SMS capture
+  - Sentry topology (two projects: `ledger-backend`, `ledger-apps`)
+  - free-tier deployment
+  - cutover runbook with rollback
+
+  CLAUDE.md is rewritten for v2. The legacy `docs/operations` and `docs/security` notes are
+  marked as v1.
+
 ## [Unreleased]
+
+### Backend
+
+- **feat** Ledger v2 migration `20261008001300_web_followups.sql` — `list_profile_members` (members with auth emails plus pending invites), owner-only `remove_profile_member` (refuses to remove the last owner, 22023) and `cancel_profile_invite`; `preview_rule` now honours `currency` and `card_code` conditions exactly like `private.recategorize` and counts every match (20-row sample); `overview` adds per-account `utilisation` and `change_vs_prev_month_to_date` / `change_vs_avg_3m` fractions (existing keys unchanged); `spend_series` gains optional `p_top` that folds the long tail into an "Other" group (signature change: dropped and recreated). pgTAP suite `06_web_followups.test.sql`; regenerated `packages/db-types`
+
+### Frontend (web)
+
+- **feat** Ledger web: Settings → Members shows emails, roles and pending invites, with confirm dialogs to remove a member or cancel an invite
+- **refactor** Ledger web: Overview uses the server's `utilisation` and change fractions (removed `latestCycleByAccount` and `formatDeltaPercent`; `formatChange` only formats a server fraction); Insights → Trends asks the server for the top 8 groups (`p_top`) instead of folding client-side, and keeps grouping/bucket in the URL (`?group=&grain=`), preserved when the range changes
+- **chore** `@ledger/tokens` build emits `dist/chart.d.ts` (exported via `types`) and skips unchanged outputs; removed the `apps/web/src/types/tokens.d.ts` stopgap
+- **fix** `.gitignore`: the root `data/` rule no longer hides `apps/web/src/data/` (the web data layer)
+
+### CI / Infra
+
+- **chore** Pre-commit hook runs `pnpm --filter @ledger/web lint` and `test` when `apps/web/**/*.{ts,tsx}` files are staged (legacy `frontend/` ESLint check unchanged)
 
 ### Scraper
 
