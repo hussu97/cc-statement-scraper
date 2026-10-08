@@ -226,7 +226,10 @@ export interface UploadResult {
 
 export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
-/** Client-side pre-checks; the Edge Function validates again. */
+/** statements-upload accepts at most this many files per request (MAX_FILES in its form.ts). */
+export const MAX_UPLOAD_FILES = 20;
+
+/** Client-side pre-checks; the Edge Function validates again. Files past the 20th wait for the next upload (WEB-48). */
 export function checkUploadFiles(files: File[]): { ok: File[]; rejected: { name: string; reason: string }[] } {
   const ok: File[] = [];
   const rejected: { name: string; reason: string }[] = [];
@@ -234,6 +237,7 @@ export function checkUploadFiles(files: File[]): { ok: File[]; rejected: { name:
     if (!/\.pdf$/i.test(f.name) && f.type !== "application/pdf") rejected.push({ name: f.name, reason: "Not a PDF" });
     else if (f.size > MAX_UPLOAD_BYTES) rejected.push({ name: f.name, reason: "Larger than 25 MB" });
     else if (f.size === 0) rejected.push({ name: f.name, reason: "Empty file" });
+    else if (ok.length >= MAX_UPLOAD_FILES) rejected.push({ name: f.name, reason: `Over ${MAX_UPLOAD_FILES} files; upload it next` });
     else ok.push(f);
   }
   return { ok, rejected };
