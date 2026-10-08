@@ -279,7 +279,10 @@ export function withSentry(name: string, handler: Handler): (req: Request) => Pr
       if (execId) scope.setTag("execution_id", execId);
       try {
         return await Sentry.continueTrace(
-          { sentryTrace: req.headers.get("sentry-trace") ?? undefined, baggage: req.headers.get("baggage") ?? undefined },
+          {
+            sentryTrace: req.headers.get("sentry-trace") ?? undefined,
+            baggage: req.headers.get("baggage") ?? undefined,
+          },
           () =>
             Sentry.startSpan(
               { name: `${req.method} /${name}`, op: "http.server", forceTransaction: true },

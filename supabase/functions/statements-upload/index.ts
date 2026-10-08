@@ -12,7 +12,14 @@ import { withSentry } from "../_shared/sentry.ts";
 import { assertOwner, requireUserOrServiceToken } from "../_shared/auth.ts";
 import { HttpError, json, requireMethod } from "../_shared/http.ts";
 import { serviceClient } from "../_shared/supabase.ts";
-import { type DocumentSource, MAX_PDF_BYTES, sanitizeFilename, storeDocument, validateBankHint, validatePdf } from "../_shared/documents.ts";
+import {
+  type DocumentSource,
+  MAX_PDF_BYTES,
+  sanitizeFilename,
+  storeDocument,
+  validateBankHint,
+  validatePdf,
+} from "../_shared/documents.ts";
 import { parseMultipart, parseUploadForm, readBodyCapped } from "./form.ts";
 
 async function handler(req: Request): Promise<Response> {

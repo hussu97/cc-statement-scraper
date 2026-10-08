@@ -4,7 +4,7 @@
 #   scripts/ci/web-smoke.sh [base-url]
 #
 # Checks, each with retries for a just-promoted deployment:
-#   * /            200, <title>Ledger</title>, security headers (CSP pointing at
+#   * /            200, <title>Bank Ledger</title>, security headers (CSP pointing at
 #                  the Supabase project, X-Frame-Options, nosniff, HSTS)
 #   * /activity    200 HTML (SPA deep link served by the vercel.json rewrite)
 #   * a hashed /assets/*.js from index.html: 200 and cached immutable
@@ -42,7 +42,7 @@ echo "Smoke-testing $BASE"
 
 code="$(fetch / index)"
 [ "$code" = 200 ] && ok "/ -> 200" || bad "/ returned $code"
-grep -q '<title>Ledger</title>' "$TMP/index.body" && ok "title is Ledger" || bad "/ has no <title>Ledger</title>"
+grep -q '<title>Bank Ledger</title>' "$TMP/index.body" && ok "title is Bank Ledger" || bad "/ has no <title>Bank Ledger</title>"
 csp="$(header index content-security-policy)"
 if [ -z "$csp" ]; then
   bad "Content-Security-Policy header missing"
@@ -58,7 +58,7 @@ fi
 
 code="$(fetch /activity deeplink)"
 ctype="$(header deeplink content-type)"
-if [ "$code" = 200 ] && [[ "$ctype" == text/html* ]] && grep -q '<title>Ledger</title>' "$TMP/deeplink.body"; then
+if [ "$code" = 200 ] && [[ "$ctype" == text/html* ]] && grep -q '<title>Bank Ledger</title>' "$TMP/deeplink.body"; then
   ok "/activity deep link -> 200 HTML"
 else
   bad "/activity deep link returned $code ($ctype)"

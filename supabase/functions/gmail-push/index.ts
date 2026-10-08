@@ -131,7 +131,9 @@ async function handler(req: Request): Promise<Response> {
       results.push(await processMailbox(svc, mb, note.historyId));
     } catch (e) {
       failed++;
-      captureException(e, { tags: { function: "gmail-push", mailbox_code: mb.mailbox_code, profile_code: mb.profile_code } });
+      captureException(e, {
+        tags: { function: "gmail-push", mailbox_code: mb.mailbox_code, profile_code: mb.profile_code },
+      });
       results.push({ mailbox_code: mb.mailbox_code, status: "failed" });
     }
   }

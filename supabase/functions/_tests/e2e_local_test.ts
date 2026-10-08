@@ -106,7 +106,10 @@ Deno.test({
       assertEquals(b2.uploads[0], { filename: `FAB_${rand}.pdf`, doc_code: docCode, status: "duplicate" });
 
       // ── auth failures ──
-      assertEquals((await (await legacyUpload(pdf, { Authorization: "Bearer ccs_nope" })).json()).error.code, "UNAUTHORIZED");
+      assertEquals(
+        (await (await legacyUpload(pdf, { Authorization: "Bearer ccs_nope" })).json()).error.code,
+        "UNAUTHORIZED",
+      );
       const wrongKey = await legacyUpload(pdf, { ...tokenHeaders, "X-Profile-Key": "someone-else" });
       assertEquals(wrongKey.status, 401);
       await wrongKey.body?.cancel();
@@ -127,18 +130,31 @@ Deno.test({
       });
       assertEquals(otherProfile.status, 403);
       await otherProfile.body?.cancel();
-      const r3 = await legacyUpload(syntheticPdf(`${rand}-ios`), jwtHeaders, { profile_code: profileCode, source: "ios" });
+      const r3 = await legacyUpload(syntheticPdf(`${rand}-ios`), jwtHeaders, {
+        profile_code: profileCode,
+        source: "ios",
+      });
       const b3 = await r3.json();
       assertEquals(r3.status, 200, JSON.stringify(b3));
       assertEquals(b3.uploads[0].status, "queued");
-      const { data: doc3 } = await svc.from("documents").select("source, storage_path").eq("doc_code", b3.uploads[0].doc_code)
+      const { data: doc3 } = await svc.from("documents").select("source, storage_path").eq(
+        "doc_code",
+        b3.uploads[0].doc_code,
+      )
         .single();
       assertEquals(doc3!.source, "ios");
       storedPaths.push(doc3!.storage_path);
 
       // ── sms-ingest (token and JWT), idempotent on client_msg_id ──
       const msgId = crypto.randomUUID();
-      const smsBody = { messages: [{ client_msg_id: msgId, sender: "E2E", body: `e2e synthetic ${rand}`, received_at: new Date().toISOString() }] };
+      const smsBody = {
+        messages: [{
+          client_msg_id: msgId,
+          sender: "E2E",
+          body: `e2e synthetic ${rand}`,
+          received_at: new Date().toISOString(),
+        }],
+      };
       const s1 = await fetch(`${fnUrl}/sms-ingest`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },

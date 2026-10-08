@@ -176,8 +176,7 @@ jobs:
         run: supabase stop --no-backup
 
   # ------------------------------------------------------------------
-  # Edge Functions: deno lint + unit tests (type-checked); fmt is advisory
-  # until supabase/functions is formatted once (docs/ci-cd.md).
+  # Edge Functions: deno lint + deno fmt --check + unit tests (type-checked)
   # ------------------------------------------------------------------
   edge:
     name: Edge Functions (deno)
@@ -200,13 +199,8 @@ jobs:
       - name: deno lint
         run: deno lint
 
-      - name: deno fmt --check (advisory)
-        continue-on-error: true
-        run: |
-          if ! deno fmt --check; then
-            echo "::warning title=deno fmt::supabase/functions is not deno-fmt clean. Run 'cd supabase/functions && deno fmt' in its own commit, then make this step blocking."
-            exit 1
-          fi
+      - name: deno fmt --check
+        run: deno fmt --check
 
       - name: deno test
         run: deno test -A .
