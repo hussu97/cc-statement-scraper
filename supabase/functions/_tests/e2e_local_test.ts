@@ -44,6 +44,8 @@ Deno.test({
     const email = `e2e-${rand}@ledger.test`;
     const password = crypto.randomUUID();
     let userId: string | null = null;
+    let viewerId: string | null = null;
+    let inviteeId: string | null = null;
     let profileCode: string | null = null;
     const storedPaths: string[] = [];
 
@@ -104,7 +106,23 @@ Deno.test({
       const r2 = await legacyUpload(pdf, tokenHeaders);
       const b2 = await r2.json();
       assertEquals(r2.status, 200);
-      assertEquals(b2.uploads[0], { filename: `FAB_${rand}.pdf`, doc_code: docCode, status: "duplicate" });
+      assertEquals(b2.uploads[0], {
+        filename: `FAB_${rand}.pdf`,
+        doc_code: docCode,
+        status: "duplicate",
+        parse_status: "queued",
+      });
+
+      // SRV-20: re-sending a PDF whose parse failed queues it again.
+      await svc.from("documents").update({ parse_status: "failed", parse_error_code: "PDF_DECRYPT_FAILED" })
+        .eq("doc_code", docCode);
+      const rq = await legacyUpload(pdf, tokenHeaders);
+      const brq = await rq.json();
+      assertEquals(brq.uploads[0].requeued, true, JSON.stringify(brq));
+      assertEquals(brq.uploads[0].parse_status, "queued");
+      const { data: requeued } = await svc.from("documents").select("parse_status, parse_error_code")
+        .eq("doc_code", docCode).single();
+      assertEquals(requeued, { parse_status: "queued", parse_error_code: null });
 
       // ── auth failures ──
       assertEquals(
@@ -186,6 +204,63 @@ Deno.test({
       const w = await fetch(`${fnUrl}/worker`, { method: "POST", headers: { "x-cron-secret": "wrong" } });
       assertEquals(w.status, 401);
       await w.body?.cancel();
+
+      // ── a viewer can read but never upload or ingest SMS (SRV-11) ──
+      const viewerEmail = `e2e-viewer-${rand}@ledger.test`;
+      const vCreated = await svc.auth.admin.createUser({ email: viewerEmail, password, email_confirm: true });
+      assert(!vCreated.error, vCreated.error?.message);
+      viewerId = vCreated.data.user!.id;
+      const addViewer = await user.rpc("add_profile_member", {
+        p_profile_code: profileCode,
+        p_email: viewerEmail,
+        p_role: "viewer",
+      });
+      assertEquals(addViewer.data, "added");
+      const vSignIn = await pub.auth.signInWithPassword({ email: viewerEmail, password });
+      assert(!vSignIn.error, vSignIn.error?.message);
+      const viewerJwt = vSignIn.data.session!.access_token;
+      const vUpload = await legacyUpload(syntheticPdf(`${rand}-viewer`), { Authorization: `Bearer ${viewerJwt}` }, {
+        profile_code: profileCode,
+      });
+      assertEquals(vUpload.status, 403, "viewer upload");
+      await vUpload.body?.cancel();
+      const vSms = await fetch(`${fnUrl}/sms-ingest`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${viewerJwt}`, "content-type": "application/json" },
+        body: JSON.stringify({ profile_code: profileCode, ...smsBody }),
+      });
+      assertEquals(vSms.status, 403, "viewer SMS ingest");
+      await vSms.body?.cancel();
+
+      // ── member-invite (NEW-1): owner invites, viewer can't, resend has a cooldown ──
+      const invitee = `e2e-invitee-${rand}@ledger.test`;
+      const invite = (jwtToken: string, body: Record<string, unknown>) =>
+        fetch(`${fnUrl}/member-invite`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${jwtToken}`, "content-type": "application/json" },
+          body: JSON.stringify({ profile_code: profileCode, email: invitee, ...body }),
+        });
+      const vInvite = await invite(viewerJwt, {});
+      assertEquals(vInvite.status, 403, "viewer invite");
+      await vInvite.body?.cancel();
+      const i1 = await invite(jwt, {});
+      const ib1 = await i1.json();
+      assertEquals(i1.status, 200, JSON.stringify(ib1));
+      assertEquals(ib1, { status: "invited", invite_sent: true });
+      const { data: invitedList } = await user.rpc("list_profile_members", { p_profile_code: profileCode });
+      const invited = (invitedList as { email: string; user_id: string | null; pending: boolean }[])
+        .find((m) => m.email === invitee);
+      assert(invited && invited.user_id && !invited.pending, "the invite created the user and claimed the pending row");
+      inviteeId = invited.user_id;
+      const i2 = await invite(jwt, { action: "resend" });
+      const ib2 = await i2.json();
+      assertEquals(i2.status, 429, JSON.stringify(ib2));
+      assertEquals(ib2.error.code, "INVITE_COOLDOWN");
+      const i3 = await invite(jwt, { action: "invite" });
+      assertEquals((await i3.json()).status, "added", "re-adding an invited user sends nothing new");
+      const evil = await invite(jwt, { redirect_to: "https://evil.example/" });
+      assertEquals(evil.status, 422);
+      await evil.body?.cancel();
     } finally {
       if (storedPaths.length) await svc.storage.from("statements").remove(storedPaths);
       if (profileCode) {
@@ -195,7 +270,7 @@ Deno.test({
         const del = await svc.from("profiles").delete().eq("profile_code", profileCode);
         if (del.error) console.warn(`e2e cleanup: profile ${profileCode} not deleted (${del.error.code})`);
       }
-      if (userId) await svc.auth.admin.deleteUser(userId);
+      for (const id of [userId, viewerId, inviteeId]) if (id) await svc.auth.admin.deleteUser(id);
     }
   },
 });

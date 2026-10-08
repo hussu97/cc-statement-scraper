@@ -69,17 +69,23 @@ Dashboard → Authentication:
   never accepts self-registration. The web's magic link no longer creates users
   (`shouldCreateUser: false`); an unknown email is told to ask a ledger owner for an invite.
 - **Adding a member** (sign-ups stay off):
-  1. An owner adds the email: web Settings → Members (`add_profile_member`). If the email has
-     no Auth user yet this stores a **pending invite**.
-  2. Create the Auth user: Dashboard → Authentication → Users → **Invite user** with that email
-     (or the admin API `auth.admin.inviteUserByEmail`). Invites work with sign-ups disabled. The
+  1. An owner adds the email. The Edge Function **`member-invite`** (`{profile_code, email,
+     role}`) runs `add_profile_member` as the owner and, when the email has no Auth user yet
+     (`invited`), sends the Auth invite email itself (`auth.admin.inviteUserByEmail`; invites
+     work with sign-ups disabled). `{"action": "resend"}` re-sends it to a member who never
+     confirmed (not within 10 min of the last invite). The web Settings → Members screen still
+     calls `add_profile_member` directly; its "Invite" / "Resend invite" buttons calling
+     `member-invite` are a follow-up, so until then use the function (or step 2).
+  2. Fallback: Dashboard → Authentication → Users → **Invite user** with that email. The
      `auth.users` insert trigger claims the pending invite, so the person lands in the ledger
      with the stored role.
   3. They open the invite email (or request an email code) and sign in.
 
-  If the email already has an Auth user, step 1 adds them directly (`added`) and step 2 is
-  skipped. An in-app invite that sends the email itself is on the backlog
-  ([docs/audit/BACKLOG.md](docs/audit/BACKLOG.md)).
+  If the email already has an Auth user, step 1 adds them directly (`added`) and nothing is
+  sent. The invite link goes to the caller's own web origin (`ALLOWED_ORIGINS` when set), so
+  that origin must also be in the Auth redirect allow-list (URL Configuration above); without
+  an Origin (iOS) it goes to the Site URL. Invites count against Auth's email rate limit
+  (SMTP below).
 - **SMTP.** The built-in sender is heavily rate-limited (a few emails an hour). That is fine for
   two people. Configure custom SMTP if OTP emails go missing.
 
@@ -194,7 +200,7 @@ Deploy every function. Each one's `verify_jwt = false` comes from `supabase/conf
 
 ```bash
 supabase functions deploy --project-ref nkmylznisjcnmqbxosey
-# statements-upload sms-ingest worker gmail-push gmail-watch-renew outlook-poll ops-monitor fx-rates
+# statements-upload sms-ingest worker gmail-push gmail-watch-renew outlook-poll ops-monitor fx-rates member-invite
 ```
 
 Smoke test (`CRON_SECRET` exported from the same file as in §2.4):

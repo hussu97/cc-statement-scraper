@@ -70,6 +70,7 @@ a `deno test` guard enforces this.
 | `gmail-watch-renew` | pg_cron daily | Renews `users.watch` (watches expire after 7 days) on `GMAIL_PUBSUB_TOPIC`. |
 | `outlook-poll` | pg_cron hourly | Microsoft Graph delta over Inbox, DeletedItems and Archive. Resumable within `OUTLOOK_BUDGET_MS`. Replaces the legacy GitHub Actions cron. |
 | `ops-monitor` | pg_cron every 15 min | Reads `ops_health()` and raises one Sentry issue per problem type, then sends the `ops-heartbeat` cron check-in. |
+| `member-invite` | User JWT (owner) | Adds a member (`add_profile_member` as the caller) and, for an email with no Auth user (sign-ups are off), sends the Auth invite with the service client; `resend` re-sends to a never-confirmed member. Rate-limited per caller and per address; the invite redirects only to the caller's own origin. |
 | `fx-rates` | pg_cron daily 21:00 UTC | Fetches open.er-api.com, inverts quotes to AED per unit with exact decimals, calls `upsert_fx_rates` (which re-estimates pending SMS). |
 
 Shared code in `_shared/`: `auth.ts` (JWT, service token and cron secret), `sentry.ts`

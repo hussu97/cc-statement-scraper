@@ -349,6 +349,7 @@ Used for the production Edge Function secrets and Vault entries, and for secret 
 | `statements-upload` | POST multipart (`files`, `bank_code_hint`, `profile_code`); ≤ 20 files and ≤ 40 MB per request | Service token `statements:upload` (+ `X-Profile-Key`) or user JWT (owner) | Store PDFs, dedup, queue parsing. Each result has `status` (`queued`/`duplicate`), `parse_status` and, when a failed duplicate was queued again, `requeued: true` |
 | `sms-ingest` | POST JSON `{profile_code?, messages[≤200]}` | User JWT or service token `sms:ingest` | Batch SMS ingest (idempotent on `client_msg_id`) |
 | `gmail-push` | POST (Pub/Sub envelope) | Google OIDC token | Gmail notifications → documents (200 done or permanent failure acked, 503 budget used up, 500 transient: Pub/Sub redelivers) |
+| `member-invite` | POST JSON `{profile_code, email, role?, action?, redirect_to?}` (`action`: `invite` or `resend`) | User JWT (owner) | Add a member and send the Auth invite email (sign-ups are off), or resend it. `redirect_to` must be on the caller's own origin |
 | `worker`, `gmail-watch-renew`, `outlook-poll`, `ops-monitor`, `fx-rates` | POST | `x-cron-secret` | pg_cron-driven jobs |
 
 ### RPCs (`supabase.rpc(...)`, PostgREST)
