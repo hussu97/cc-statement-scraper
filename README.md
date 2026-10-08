@@ -303,6 +303,7 @@ JWTs. The service client logs which source it used (never the value).
 | `CCS_SCRAPER_UPLOAD_MAX_FILES`, `CCS_SCRAPER_UPLOAD_MAX_MB` | `20`, `32` | Upload batching: files and MB of PDF per request, clamped to the server's limits (20 files, 40 MB). A 413 halves the batch; batches that succeeded are recorded, so `upload-pending` retries only the rest |
 | `CCS_SCRAPER_HEADLESS`, `CCS_SCRAPER_DOWNLOAD_DIR`, `CCS_SCRAPER_BROWSER_*` | `true`, `./downloads`, Dubai | Browser settings |
 | `{PROFILE}_{BANK}_*` | — | Bank portal credentials per profile (see `scraper/.env.example`) |
+| `SIB_CARD_LAST4S` | every card the portal's Credit Card section lists | SIB cards to export, e.g. `4821` or `4821,6774` (also `card_last4s:` under `SIB` in `config/banks.yaml`). One export per card; a replaced card stays listed next to its successor |
 
 ### Production secret helpers (`scripts/cutover/`)
 
@@ -364,7 +365,7 @@ Used for the production Edge Function secrets and Vault entries, and for secret 
 |---|---|
 | Profiles and members | `create_profile`, `add_profile_member`*, `list_profile_members`, `remove_profile_member`*, `cancel_profile_invite`*, `delete_profile`* (with the profile key as confirmation) |
 | Tokens and secrets | `create_service_token`*, `revoke_service_token`*, `set_profile_secret`*, `list_profile_secrets`, `set_mailbox_secret`* |
-| Ingest and review | `ingest_sms`* (per-message statuses), `resolve_review`* (`link`, `create_new`, `dismiss`, `card`, `supersede`, `not_a_transaction`), `retry_sms_fallback`*, `requeue_documents`*, `set_sms_template_active`* |
+| Ingest and review | `add_replacement_card`* (a re-issued card's new number on the same account), `ingest_sms`* (per-message statuses), `resolve_review`* (`link`, `create_new`, `dismiss`, `card`, `supersede`, `not_a_transaction`), `retry_sms_fallback`*, `requeue_documents`*, `set_sms_template_active`* |
 | Categorisation | `set_transaction_category`*, `set_transactions_category`*, `preview_rule` (optional `p_rule_code` when editing), `merchant_search`, `reject_merchant_suggestion`* |
 | Analytics | `overview`, `spend_series`, `spend_breakdown` (monthly spend by category/bank/merchant, top N + Others), `category_breakdown`, `merchant_leaderboard`, `daily_spend`, `hour_weekday_pattern`, `fx_spend`, `statement_cycles`, `statement_detail` (one statement with its debit and credit lines), `yoy_compare`, `anomalies`, `filter_meta`, `budget_status`, `recurring_list` (shapes: ARCHITECTURE §6) |
 | Service-role only (Edge Functions) | `authenticate_service_token`, `ingest_parsed_document`, `fail_document`, `queue_read`, `queue_delete`, `queue_send`, `queue_to_dlq`, `worker_document_context`, `worker_llm_context`, `worker_sms_context`, `worker_mailbox_secret`, `apply_llm_suggestions`, `propose_sms_template`, `promote_sms_template`, `ops_health`, `upsert_fx_rates`, `begin_document_parse`, `resubmit_document`, `log_document_event`, `save_mailbox_sync_state`, `drain_dlq`, `requeue_dlq` |

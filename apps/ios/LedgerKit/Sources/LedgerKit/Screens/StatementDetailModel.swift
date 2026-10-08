@@ -52,7 +52,7 @@ public final class StatementDetailModel {
         opening = line.lineCode
         defer { opening = nil }
         do {
-            if let txn = try await api.transaction(profileCode: profileCode, txnCode: txnCode) {
+            if let txn = try await api.transactions(profileCode: profileCode, codes: [txnCode]).first {
                 selected = txn
             } else {
                 errorMessage = "This line's transaction is no longer in this ledger. Pull to refresh."

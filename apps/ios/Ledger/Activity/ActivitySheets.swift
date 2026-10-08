@@ -63,15 +63,29 @@ struct CategorySheet: View {
     }
 }
 
-/// Status, card and category filters for Activity.
+/// Month, status, card and category filters for Activity. Edits a copy of
+/// the query: only Apply changes the list; Cancel or a swipe-down drops it.
 struct ActivityFilterSheet: View {
-    @Binding var query: ActivityQuery
     let meta: FilterMeta?
-    let apply: () -> Void
+    let months: MonthRange
+    let apply: (ActivityQuery) -> Void
+    @State private var query: ActivityQuery
+    @Environment(\.dismiss) private var dismiss
+
+    init(initial: ActivityQuery, meta: FilterMeta?, months: MonthRange, apply: @escaping (ActivityQuery) -> Void) {
+        self.meta = meta
+        self.months = months
+        self.apply = apply
+        _query = State(initialValue: initial)
+    }
 
     var body: some View {
         NavigationStack {
             Form {
+                Picker("Month", selection: $query.month) {
+                    Text("Any time").tag(CalendarDay?.none)
+                    ForEach(months.months, id: \.self) { Text(LedgerDates.monthTitle($0)).tag(Optional($0)) }
+                }
                 Picker("Status", selection: $query.status) {
                     ForEach(ActivityQuery.StatusFilter.allCases) { Text($0.label).tag($0) }
                 }
@@ -92,7 +106,10 @@ struct ActivityFilterSheet: View {
             }
             .navigationTitle("Filters")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Apply", action: apply) } }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("Apply") { apply(query) } }
+            }
         }
         .presentationDetents([.medium, .large])
     }

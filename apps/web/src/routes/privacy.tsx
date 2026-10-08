@@ -30,13 +30,13 @@ export function PrivacyPage() {
   const { session } = useAuth();
   return (
     <div className="flex min-h-dvh flex-col bg-bg">
-      <div className="flex items-center justify-between px-gutter py-4 md:px-gutter-lg">
+      <div className="flex items-center justify-between gap-3 px-gutter pt-[max(1rem,env(safe-area-inset-top))] pb-4 md:px-gutter-lg">
         <BrandLockup to={session ? "/" : "/signin"} />
         <ThemeToggle />
       </div>
       <main className="flex flex-1 justify-center px-gutter pt-[6vh] pb-20">
         <article className="w-full max-w-[68ch] animate-rise">
-          <Link to={session ? "/settings" : "/signin"} className="mb-8 inline-flex items-center gap-1.5 text-sm text-muted hover:text-ink">
+          <Link to={session ? "/settings" : "/signin"} className="tap mb-8 inline-flex items-center gap-1.5 text-sm text-muted hover:text-ink">
             <ArrowLeft className="size-4" /> {session ? "Back to settings" : "Back to sign in"}
           </Link>
           <p className="mb-2 text-[11px] font-medium tracking-[0.1em] text-subtle uppercase">Bank Ledger</p>

@@ -38,7 +38,7 @@ function SearchBox({ value, onChange }: { value: string | undefined; onChange: (
       <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-subtle" aria-hidden />
       <Input value={text} onChange={(e) => setText(e.target.value)} placeholder="Search descriptions" aria-label="Search descriptions" className="pl-9" />
       {text && (
-        <button type="button" aria-label="Clear search" onClick={() => setText("")} className="absolute top-1/2 right-2 -translate-y-1/2 rounded-sm p-1 text-subtle hover:text-ink">
+        <button type="button" aria-label="Clear search" onClick={() => setText("")} className="absolute top-1/2 right-0.5 flex size-9 -translate-y-1/2 items-center justify-center rounded-sm text-subtle hover:text-ink">
           <X className="size-3.5" />
         </button>
       )}

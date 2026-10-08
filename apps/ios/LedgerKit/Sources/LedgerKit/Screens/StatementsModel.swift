@@ -11,26 +11,23 @@ public final class StatementsModel {
 
         /// The newest statement (not history extract) of each account; every
         /// other cycle has been superseded by a newer statement.
-        public var latestStatementCodes: Set<String> {
-            var newest: [String: StatementCycle] = [:]
-            for cycle in cycles where cycle.kind == "statement" {
-                if let current = newest[cycle.accountCode], current.statementDate >= cycle.statementDate { continue }
-                newest[cycle.accountCode] = cycle
-            }
-            return Set(newest.values.map(\.stmtCode))
-        }
+        public var latestStatementCodes: Set<String> { StatementsModel.latestStatementCodes(cycles) }
     }
 
-    public private(set) var state: LoadState<Content> = .idle
+    /// Statement cycles, newest first, page after page.
+    public let cycles = Paginator<StatementCycle>()
+    /// Uploads, newest first, page after page.
+    public let documents = Paginator<DocumentRecord>()
     /// The live per-file upload log (document picker).
     public let uploads: UploadSession
+    /// A picked file that couldn't be read on the phone.
+    public var uploadMessage: String?
     /// PDFs the Share Extension saved for later, and the ones the server refused.
     public private(set) var waitingLabel: String?
     public private(set) var rejected: [PendingUploads.Rejected] = []
     public private(set) var isSendingWaiting = false
-    /// A picked file that couldn't be read on the phone.
-    public var uploadMessage: String?
     private let api: any LedgerAPI
+    private var loadedProfile: String?
     private let pending: PendingUploads?
     private let flushPending: (@MainActor @Sendable () async -> Int)?
 
@@ -48,20 +45,64 @@ public final class StatementsModel {
 
     public var isUploading: Bool { uploads.isUploading }
 
+    public var hasLoaded: Bool { loadedProfile != nil }
+
+    /// The newest statement of each account among the loaded cycles (they load
+    /// newest first, so page 1 already holds every account's newest).
+    public var latestStatementCodes: Set<String> { Self.latestStatementCodes(cycles.items) }
+
     public func load(profileCode: String) async {
-        state = state.startLoading()
+        let same = loadedProfile == profileCode
+        loadedProfile = profileCode
         refreshWaiting()
-        do {
-            async let cycles = api.statementCycles(profileCode: profileCode, limit: 48)
-            async let docs = api.documents(profileCode: profileCode, limit: 30)
-            state = .loaded(try await Content(cycles: cycles, documents: docs))
-        } catch {
-            state = state.fail(error)
+        let api = self.api
+        async let a: Void = cycles.reload(keepingRows: same) { page in
+            // `statement_cycles` takes a limit only: ask for everything up to
+            // this page's end and keep the page's slice.
+            let rows = try await api.statementCycles(profileCode: profileCode, limit: page.offset + page.limit)
+            return ListPage(items: Array(rows.dropFirst(page.offset)), total: nil)
         }
+        async let b: Void = documents.reload(keepingRows: same) { page in
+            try await api.documents(profileCode: profileCode, page: page)
+        }
+        _ = await (a, b)
+    }
+
+    /// First visit of the tab for this ledger.
+    public func loadIfNeeded(profileCode: String) async {
+        guard loadedProfile != profileCode else { return }
+        await load(profileCode: profileCode)
+    }
+
+    /// Realtime / foreground: the newest pages again, scrolled pages kept.
+    public func refresh(profileCode: String) async {
+        guard loadedProfile == profileCode else { return }
+        refreshWaiting()
+        async let a: Void = cycles.refreshHead()
+        async let b: Void = documents.refreshHead()
+        _ = await (a, b)
+    }
+
+    public func reset() {
+        cycles.reset()
+        documents.reset()
+        loadedProfile = nil
+        uploadMessage = nil
+        uploads.stop()
+        uploads.clearFinished()
+    }
+
+    public nonisolated static func latestStatementCodes(_ cycles: [StatementCycle]) -> Set<String> {
+        var newest: [String: StatementCycle] = [:]
+        for cycle in cycles where cycle.kind == "statement" {
+            if let current = newest[cycle.accountCode], current.statementDate >= cycle.statementDate { continue }
+            newest[cycle.accountCode] = cycle
+        }
+        return Set(newest.values.map(\.stmtCode))
     }
 
     /// Reads the picked files (security-scoped URLs from the document picker)
-    /// and uploads them one by one into the live log.
+    /// and uploads them one by one into the live log (BACKLOG IOS-17).
     public func upload(urls: [URL], profileCode: String) async {
         var files: [UploadFile] = []
         var unreadable: [String] = []
@@ -70,12 +111,12 @@ public final class StatementsModel {
         }
         uploadMessage = unreadable.isEmpty ? nil : "Couldn't read \(unreadable.joined(separator: ", "))."
         await uploads.upload(files, profileCode: profileCode)
-        await load(profileCode: profileCode)
+        await refresh(profileCode: profileCode)
     }
 
     /// The detail screen for a statement row.
-    public func detailModel(for cycle: StatementCycle, isLatest: Bool) -> StatementDetailModel {
-        StatementDetailModel(api: api, stmtCode: cycle.stmtCode, isLatest: isLatest)
+    public func detailModel(for cycle: StatementCycle) -> StatementDetailModel {
+        StatementDetailModel(api: api, stmtCode: cycle.stmtCode, isLatest: latestStatementCodes.contains(cycle.stmtCode))
     }
 
     /// The full timeline of one document in the Uploads list.
@@ -83,7 +124,7 @@ public final class StatementsModel {
         DocumentLogModel(api: api, document: doc)
     }
 
-    // MARK: Share Extension queue (IOS-16r)
+    // MARK: Share Extension queue (BACKLOG IOS-16r)
 
     public func refreshWaiting() {
         waitingLabel = pending?.waitingLabel
@@ -97,7 +138,7 @@ public final class StatementsModel {
         defer { isSendingWaiting = false }
         let sent = await flushPending()
         refreshWaiting()
-        if sent > 0 { await load(profileCode: profileCode) }
+        if sent > 0 { await refresh(profileCode: profileCode) }
     }
 
     public func discard(_ item: PendingUploads.Rejected) {
