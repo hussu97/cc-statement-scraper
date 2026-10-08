@@ -61,3 +61,4 @@ apps/ios/Config/Secrets.Release.xcconfig
 .vercel/
 .vercel
 .env*
+!.env.example
