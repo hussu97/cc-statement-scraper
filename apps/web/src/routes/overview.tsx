@@ -13,6 +13,7 @@ import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
 import { EvidenceBadge, HeroAmount, StatusBadge, TxnAmount } from "@/components/ledger";
 import { PaceRule } from "@/components/overview/pace-rule";
 import { CategoryRing } from "@/components/overview/category-ring";
+import { MonthlySpendCard } from "@/components/overview/monthly-spend";
 import { BankLogo, CardRef } from "@/components/bank-logo";
 
 export function OverviewPage() {
@@ -74,6 +75,8 @@ export function OverviewPage() {
         </Card>
         <InsightsPanel profileCode={profile_code} />
       </div>
+
+      <MonthlySpendCard profileCode={profile_code} month={month} />
 
       <AccountsPanel overview={q.data} loading={q.isLoading} error={q.isError ? q.error : null} retry={() => void q.refetch()} />
 

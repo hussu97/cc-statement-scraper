@@ -12,10 +12,17 @@ import { AXIS_TICK, CURSOR_FILL, GRID_STROKE, MoneyTooltip, axisMoney } from "@/
 import { seriesFill, seriesToken } from "@/components/charts/palette";
 import { axisTickInterval, bucketLabel, defaultGrain, rangeLabel } from "./labels";
 import { useMediaQuery } from "@/lib/hooks";
+import { SpendSplitChart } from "@/components/charts/spend-split-chart";
+import { SPLITS, type SpendSplit } from "@/components/charts/spend-split";
+
+function isSplit(g: SpendGroup): g is SpendSplit {
+  return (SPLITS as readonly string[]).includes(g);
+}
 
 const GROUPS: { value: SpendGroup; label: string }[] = [
   { value: "none", label: "Total" },
   { value: "category", label: "Category" },
+  { value: "bank", label: "Bank" },
   { value: "merchant", label: "Merchant" },
   { value: "account", label: "Account" },
   { value: "card", label: "Card" },
@@ -34,10 +41,14 @@ export function TrendsTab({ profileCode, range }: { profileCode: string; range: 
   const search = insightsRoute.useSearch();
   const navigate = useNavigate({ from: "/insights" });
   const group = search.group ?? DEFAULT_TREND_GROUP;
-  const grain = search.grain ?? defaultGrain(range.from, range.to);
+  // Bank splits come from spend_breakdown, which is monthly.
+  const grain = group === "bank" ? "month" : (search.grain ?? defaultGrain(range.from, range.to));
+  // Monthly bars split by none / category / bank / merchant use spend_breakdown:
+  // top 10 + Others, with the range's totals and shares listed under the chart.
+  const split = grain === "month" && isSplit(group) ? group : null;
   const setTrends = (patch: { group?: SpendGroup; grain?: Grain }) =>
     void navigate({ search: (s) => withTrends(s, patch), replace: true });
-  const q = useSpendSeries(profileCode, range, grain, group, TOP_GROUPS);
+  const q = useSpendSeries(profileCode, range, grain, group, TOP_GROUPS, split === null);
 
   return (
     <Card>
@@ -46,20 +57,26 @@ export function TrendsTab({ profileCode, range }: { profileCode: string; range: 
         <div className="-mx-1 max-w-full overflow-x-auto px-1 [scrollbar-width:none]">
           <Segmented ariaLabel="Group by" value={group} onChange={(g) => setTrends({ group: g })} options={GROUPS} />
         </div>
-        <Segmented ariaLabel="Bucket size" value={grain} onChange={(g) => setTrends({ grain: g })} options={GRAINS} />
+        <Segmented ariaLabel="Bucket size" value={grain} onChange={(g) => setTrends({ grain: g })} options={group === "bank" ? GRAINS.filter((g) => g.value === "month") : GRAINS} />
       </div>
-      <QueryView
-        query={q}
-        loading={<LoadingBlock className="h-80" />}
-        isEmpty={(rows) => rows.length === 0}
-        empty={
-          <EmptyState title="No spending in this range" className="h-80">
-            Pick a longer range, or check that your cards are syncing.
-          </EmptyState>
-        }
-      >
-        {(rows) => <TrendsChart rows={rows} grain={grain} byCategory={group === "category"} />}
-      </QueryView>
+      {split !== null ? (
+        <div className="px-3 pb-4 md:px-4">
+          <SpendSplitChart profileCode={profileCode} range={range} split={split} height="h-72 md:h-80" />
+        </div>
+      ) : (
+        <QueryView
+          query={q}
+          loading={<LoadingBlock className="h-80" />}
+          isEmpty={(rows) => rows.length === 0}
+          empty={
+            <EmptyState title="No spending in this range" className="h-80">
+              Pick a longer range, or check that your cards are syncing.
+            </EmptyState>
+          }
+        >
+          {(rows) => <TrendsChart rows={rows} grain={grain} byCategory={group === "category"} />}
+        </QueryView>
+      )}
     </Card>
   );
 }
