@@ -16,6 +16,11 @@
 - **fix** Review: a "Possible matches" row no longer squeezes the merchant to "Dun…" with the date stacked one word per line on a phone; the amount and "Same purchase" wrap below instead
 - **fix** Rule editor on phones: "When the description" wrapping to two lines no longer pushes the match-type select below the text field
 - **fix** More phone hit areas: Overview category rows (40px), "All activity", Insights merchant names, Documents file names, the search box's clear button, the ledger switcher and the privacy-policy links
+- **feat** WEB-24 (mobile part): Activity has a **Select** button on phones that shows the checkbox column; in select mode tapping a row toggles it, and the bulk bar offers **All** and a **Categorise…** picker (it used to show a state-like "Uncategorised" pill). The bulk bar sits above the tab bar and the home indicator. Exclude, CSV export and a server-computed total remain open
+- **fix** WEB-20: each Activity row's main action is a real `<button>` inside a `role="cell"` span, not `<button role="cell">`
+- **fix** WEB-19: closing the URL-driven transaction drawer returns focus to the row that opened it
+- **fix** WEB-43: closing a drawer opened from the list pops its history entry (Back no longer reopens it); a deep-linked drawer closes with `replace`, and a "Reverses / Reversed by" link swaps the drawer in place
+- **fix** Transaction drawer on phones: narrower label column, a 32px amount, long raw statement lines wrap anywhere
 - **test** `lib/scroll.test.ts` (`scrollEdges`, `revealScrollLeft`)
 
 ## Edge Functions and CI backlog (audit P2/P3) — 2026-10-09 (branch `ledger-v2`)
