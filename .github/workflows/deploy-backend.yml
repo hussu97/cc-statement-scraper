@@ -1,3 +1,12 @@
+# LEGACY (v1) — deploys/operates the frozen backend/, frontend/ or Gmail relay.
+# Replaced by Ledger v2 (Supabase + deploy-supabase.yml / deploy-parser.yml,
+# outlook-poll and gmail-push Edge Functions). Do not extend.
+#
+# Guarded by the repository variable LEGACY_DEPLOYS_ENABLED: every job is
+# skipped unless it is exactly 'true'. Set it to 'true' BEFORE merging
+# ledger-v2 into main (keeps legacy running until cutover), set it to 'false'
+# and `gh workflow disable` this file at cutover step 1, delete the file at
+# decommission (PRODUCTION.md §10).
 name: Deploy Backend
 
 on:
@@ -6,6 +15,9 @@ on:
     types: [completed]
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   # ------------------------------------------------------------------
   # Detect whether backend-relevant files changed in this push.
@@ -13,7 +25,7 @@ jobs:
   # filters at the trigger level.
   # ------------------------------------------------------------------
   check-changes:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ vars.LEGACY_DEPLOYS_ENABLED == 'true' && github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     outputs:
       changed: ${{ steps.changes.outputs.changed }}
@@ -46,7 +58,7 @@ jobs:
 
   deploy:
     needs: check-changes
-    if: needs.check-changes.outputs.changed == 'true'
+    if: vars.LEGACY_DEPLOYS_ENABLED == 'true' && needs.check-changes.outputs.changed == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Deploy backend to Render

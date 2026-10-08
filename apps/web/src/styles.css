@@ -1,0 +1,146 @@
+/* Ledger web styles.
+ * Colour, type and shape come ONLY from @ledger/tokens (CSS variables). The
+ * @theme block below maps them onto Tailwind's namespaces with `inline`, so a
+ * utility like `bg-surface` compiles to `background: var(--color-surface)` and
+ * light/dark switching is handled entirely by the token variables. The token
+ * file is unlayered, so its :root values always win over Tailwind's theme layer. */
+@import "tailwindcss";
+@import "@ledger/tokens/tokens.css";
+@import "@fontsource-variable/inter/index.css";
+@import "@fontsource-variable/fraunces/index.css";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@theme inline {
+  --color-*: initial;
+  --color-bg: var(--color-bg);
+  --color-surface: var(--color-surface);
+  --color-surface-2: var(--color-surface-2);
+  --color-surface-3: var(--color-surface-3);
+  --color-ink: var(--color-ink);
+  --color-ink-2: var(--color-ink-2);
+  --color-muted: var(--color-muted);
+  --color-subtle: var(--color-subtle);
+  --color-border: var(--color-border);
+  --color-border-strong: var(--color-border-strong);
+  --color-accent: var(--color-accent);
+  --color-accent-hover: var(--color-accent-hover);
+  --color-accent-ink: var(--color-accent-ink);
+  --color-accent-soft: var(--color-accent-soft);
+  --color-positive: var(--color-positive);
+  --color-positive-soft: var(--color-positive-soft);
+  --color-warn: var(--color-warn);
+  --color-warn-soft: var(--color-warn-soft);
+  --color-danger: var(--color-danger);
+  --color-danger-soft: var(--color-danger-soft);
+  --color-info: var(--color-info);
+  --color-info-soft: var(--color-info-soft);
+  --color-focus: var(--color-focus);
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  --font-sans: var(--font-sans);
+  --font-display: var(--font-display);
+  --font-mono: var(--font-mono);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-pill: var(--radius-pill);
+
+  --spacing-gutter: var(--space-gutter);
+  --spacing-gutter-lg: var(--space-gutter-lg);
+  --spacing-tap: var(--space-tap-min);
+
+  --animate-fade-in: fade-in 180ms ease-out both;
+  --animate-rise: rise 240ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  --animate-slide-in-right: slide-in-right 220ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  --animate-slide-in-up: slide-in-up 220ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  @keyframes slide-in-right { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes slide-in-up { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+}
+
+@layer base {
+  html {
+    background: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    min-height: 100dvh;
+    background: var(--color-bg);
+  }
+  ::selection {
+    background: var(--color-accent-soft);
+    color: var(--color-ink);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  button, [role="button"] { cursor: pointer; }
+  button:disabled { cursor: not-allowed; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 1ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 1ms !important;
+    }
+  }
+}
+
+/*
+ * Tap target (WEB-22): on phone-sized screens, extend a small control's hit
+ * area to --space-tap-min (44px) with an invisible ::after, without changing
+ * layout. Sets position: relative, so never combine with absolute/fixed.
+ */
+@utility tap {
+  position: relative;
+  @media (max-width: 1023px) {
+    &::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: max(100%, var(--space-tap-min));
+      height: max(100%, var(--space-tap-min));
+      transform: translate(-50%, -50%);
+    }
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum", "lnum";
+}
+
+@utility display-num {
+  font-family: var(--font-display);
+  font-variant-numeric: lining-nums tabular-nums;
+  font-optical-sizing: auto;
+  font-variation-settings: "SOFT" 30, "WONK" 0;
+  letter-spacing: -0.02em;
+}
+
+@utility hairline {
+  border-color: var(--color-border);
+}
+
+/* The "ledger rule": a hairline with ruled ticks used under hero figures. */
+@utility ruled {
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--color-border-strong) 0 1px,
+    transparent 1px 10%
+  );
+  background-size: 100% 6px;
+  background-repeat: no-repeat;
+  background-position: bottom left;
+}

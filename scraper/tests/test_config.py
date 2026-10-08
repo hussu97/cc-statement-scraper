@@ -16,6 +16,8 @@ _SCRAPER_KEYS = [
     "CCS_SCRAPER_BROWSER_TIMEZONE_ID",
     "CCS_SCRAPER_BROWSER_LOCALE",
     "CCS_SCRAPER_DOWNLOAD_DIR",
+    "CCS_SCRAPER_UPLOAD_PATH",
+    "CCS_SCRAPER_SUPABASE_ANON_KEY",
 ]
 
 _CREDENTIAL_KEYS = [
@@ -33,6 +35,7 @@ def _clear_scraper_env(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(key, raising=False)
     # Also clear profile-prefixed variants used by the new multi-profile format.
     for profile in ("HUSSAIN", "TEJASVIE"):
+        monkeypatch.delenv(f"{profile}_CCS_SCRAPER_API_TOKEN", raising=False)
         for key in _CREDENTIAL_KEYS:
             monkeypatch.delenv(f"{profile}_{key}", raising=False)
 
@@ -40,7 +43,9 @@ def _clear_scraper_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     _clear_scraper_env(monkeypatch)
     cfg = ScraperConfig()
-    assert cfg.target_url == "http://127.0.0.1:8000"
+    assert cfg.target_url == "http://127.0.0.1:8040"
+    assert cfg.upload_path == "/api/v1/jobs/upload"
+    assert cfg.supabase_anon_key is None
     assert cfg.api_token == ""
     assert cfg.profile_key == ""
     assert cfg.headless is True
@@ -71,6 +76,30 @@ def test_env_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
     assert cfg.browser_geo_longitude == 54.0
     assert cfg.browser_timezone_id == "UTC"
     assert cfg.browser_locale == "en-US"
+
+
+def test_upload_path_and_anon_key_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_scraper_env(monkeypatch)
+    monkeypatch.setenv("CCS_SCRAPER_TARGET_URL", "https://abc.supabase.co")
+    monkeypatch.setenv("CCS_SCRAPER_UPLOAD_PATH", "/functions/v1/statements-upload")
+    monkeypatch.setenv("CCS_SCRAPER_SUPABASE_ANON_KEY", "anon_123")
+
+    cfg = ScraperConfig()
+    assert cfg.target_url == "https://abc.supabase.co"
+    assert cfg.upload_path == "/functions/v1/statements-upload"
+    assert cfg.supabase_anon_key == "anon_123"
+
+
+def test_blank_upload_settings_fall_back_to_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_scraper_env(monkeypatch)
+    monkeypatch.setenv("CCS_SCRAPER_TARGET_URL", "")
+    monkeypatch.setenv("CCS_SCRAPER_UPLOAD_PATH", "")
+    monkeypatch.setenv("CCS_SCRAPER_SUPABASE_ANON_KEY", "")
+
+    cfg = ScraperConfig()
+    assert cfg.target_url == "http://127.0.0.1:8040"
+    assert cfg.upload_path == "/api/v1/jobs/upload"
+    assert cfg.supabase_anon_key is None
 
 
 @pytest.mark.parametrize("value", ["false", "False", "FALSE"])
@@ -160,3 +189,38 @@ def test_credentials_profile_isolation(monkeypatch: pytest.MonkeyPatch) -> None:
     tejasvie_cfg = get_config(profile="tejasvie")
     assert hussain_cfg.credentials["FAB_USERNAME"] == "hussain_user"
     assert tejasvie_cfg.credentials["FAB_USERNAME"] == "tej_user"
+
+
+def test_profile_token_takes_precedence_over_global(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_scraper_env(monkeypatch)
+    monkeypatch.setenv("CCS_SCRAPER_API_TOKEN", "global-token")
+    monkeypatch.setenv("TEJASVIE_CCS_SCRAPER_API_TOKEN", "tej-token")
+
+    assert get_config(profile="tejasvie").api_token == "tej-token"
+    # Profile names are upper-cased like the credential namespace.
+    assert get_config(profile="Tejasvie").api_token == "tej-token"
+    # A profile without its own token falls back to the global one.
+    assert get_config(profile="hussain").api_token == "global-token"
+
+
+def test_profile_token_alone_is_enough(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_scraper_env(monkeypatch)
+    monkeypatch.setenv("HUSSAIN_CCS_SCRAPER_API_TOKEN", "hussain-token")
+
+    assert get_config(profile="hussain").api_token == "hussain-token"
+    with pytest.raises(RuntimeError, match="TEJASVIE_CCS_SCRAPER_API_TOKEN"):
+        get_config(profile="tejasvie")
+
+
+def test_blank_profile_token_falls_back_to_global(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_scraper_env(monkeypatch)
+    monkeypatch.setenv("CCS_SCRAPER_API_TOKEN", "global-token")
+    monkeypatch.setenv("HUSSAIN_CCS_SCRAPER_API_TOKEN", "")
+
+    assert get_config(profile="hussain").api_token == "global-token"
+
+
+def test_missing_tokens_raise(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_scraper_env(monkeypatch)
+    with pytest.raises(RuntimeError, match="HUSSAIN_CCS_SCRAPER_API_TOKEN"):
+        get_config(profile="hussain")

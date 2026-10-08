@@ -1,0 +1,4 @@
+#include "Base.xcconfig"
+LEDGER_ENVIRONMENT = production
+// Production Supabase/Sentry values for TestFlight builds (gitignored).
+#include? "Secrets.Release.xcconfig"

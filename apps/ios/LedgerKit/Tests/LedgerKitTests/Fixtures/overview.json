@@ -1,0 +1,38 @@
+{
+  "month": "2026-10-01",
+  "spend": "1234567.89",
+  "spend_prev_month": "8450.10",
+  "spend_prev_month_to_date": "2100.00",
+  "spend_avg_3m": "9000.33",
+  "change_vs_prev_month_to_date": "-0.1805",
+  "change_vs_avg_3m": null,
+  "payments": "0",
+  "pending_count": 2,
+  "pending_amount": "145.30",
+  "uncategorized_count": 3,
+  "open_reviews": 1,
+  "last_sms_at": "2026-10-08T05:12:44.123456+00:00",
+  "top_categories": [
+    {"category_code": "cat_01hzy3k8w9m2n4p6q8r0s2t4v6", "name": "Groceries", "color_token": "cat-2", "amount": 812.45, "txn_count": 9},
+    {"category_code": null, "name": null, "color_token": null, "amount": 0.30, "txn_count": 1}
+  ],
+  "accounts": [
+    {
+      "account_code": "acc_01hzy3k8w9m2n4p6q8r0s2t4v6", "bank_code": "FAB", "nickname": "FAB Cashback",
+      "product_name": "Cashback Card", "credit_limit": "30000.00", "last4": "1234,5678",
+      "latest_statement": {"stmt_code": "stm_01hzy3k8w9m2n4p6q8r0s2t4v6", "statement_date": "2026-09-25",
+        "due_date": "2026-10-20", "closing_balance": "4210.55", "min_due": "210.53"},
+      "unbilled_aed": "512.00", "utilisation": "0.1404"
+    },
+    {
+      "account_code": "acc_01hzy3k8w9m2n4p6q8r0s2t4v7", "bank_code": "ADCB", "nickname": null,
+      "product_name": null, "credit_limit": null, "last4": null, "latest_statement": null, "unbilled_aed": "0"
+    }
+  ],
+  "recent": [
+    {"txn_code": "txn_01hzy3k8w9m2n4p6q8r0s2t4v6", "txn_date": "2026-10-08", "txn_at": "2026-10-08T05:12:00+00:00",
+     "description": "CARREFOUR CITY CENTRE", "merchant_name": "Carrefour", "amount_aed": "45.10",
+     "amount_original": "45.10", "currency_original": "AED", "direction": "debit", "status": "pending",
+     "category_name": "Groceries", "category_color": "cat-2", "has_sms": true, "has_statement": false}
+  ]
+}

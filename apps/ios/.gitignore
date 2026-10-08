@@ -1,0 +1,21 @@
+# Secrets
+Config/Secrets.xcconfig
+Config/Secrets.Release.xcconfig
+*.mobileprovision
+*.p12
+
+# SwiftPM / Xcode
+.build/
+.swiftpm/
+LedgerKit/.build/
+LedgerKit/.swiftpm/
+xcuserdata/
+DerivedData/
+*.xcuserstate
+Ledger.xcodeproj/project.xcworkspace/xcuserdata/
+
+# Local release builds (scripts/publish-build.sh)
+build/
+*.ipa
+*.dSYM
+*.dSYM.zip
