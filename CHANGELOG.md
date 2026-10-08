@@ -1,5 +1,18 @@
 # Changelog
 
+## Web: statement page, bank logos, upload log, spend split, infinite scroll — 2026-10-10 (branch `ledger-v2`)
+
+### Web
+
+- **feat** Statement page `/statements/$stmtCode` (`statement_detail`): bank logo, cards, period, statement and due dates; tiles for opening balance, total debits and credits, closing balance, minimum due (with "in N d"), utilisation and the reconciliation chip; **Debits** and **Credits** sections with count, total and every line (date, merchant or printed description, category dot, AED with the FX original); a line opens the transaction drawer (`?txn=`); reconciliation checks explained; *Open PDF*, *In Activity*; a collapsible processing log. Every statement row (Cards & statements, the Overview card's statement balance, a statement line in the drawer's evidence) links to it; P0002 shows "not in this ledger"
+- **feat** `BankLogo` (`components/bank-logo.tsx`): each bank's mark from the public `bank-logos` bucket (`banks.logo_path`), accessible name = bank name, the short code when there is no logo or it fails to load; on a light chip (`.bank-chip`) so the navy/purple marks stay legible in dark mode. Shown on Overview cards and pending SMS, Cards & statements (cards, statements, documents), Activity rows, filters (account and card options) and drawer, calendar day sheet, Review candidates and templates, Settings email routes, and the bank split
+- **feat** Live upload log: after an upload each file lists its `document_events` as they arrive over Realtime (initial fetch + inserts, de-duplicated, in timeline order): received, saved, queued, reading, read, imported, or duplicate / failed / retrying, with stage icons and times. Failures are highlighted; a wrong or missing PDF password links to *Settings → Statement passwords* (`#statement-passwords`), transient failures offer *Read again*. The same log is in the statement page and behind *Processing log* on each Documents row
+- **feat** Monthly spend split (`spend_breakdown`, top 10 + Others): on Insights → Trends (month buckets; new *Bank* grouping, which is monthly only) and a new *Monthly spend* card on Overview (six months to the selected month). Stacked bars in token colours (a category's own `color_token`; banks and merchants by palette rank; Others neutral), tooltips with AED and share of the month, and a totals table (raw total and the server's share for the range; category rows link to Activity). No client-side totals
+- **feat** Pagination: below 768 px Activity, Statements, Documents and Review scroll forever (IntersectionObserver sentinel, 100 per page, rows de-duplicated across pages, spinner, retry row, end of list, a filter change starts from the top, *Load more* fallback). Wider screens keep numbered pages with 100/200/500/1000/2000; `page` and `size` are in the URL for Statements, Documents and Review too (`/cards?tab=…&page=&size=`, `/review?page=`), and a filter or tab change returns to page 1
+- **fix** WEB-48: uploads send at most 20 files (the Edge Function's limit), say "Up to 20 files", reset the file input and ignore drops while an upload is in flight
+- **chore** Statements and Documents tabs moved out of `routes/cards.tsx` into `components/cards/`; `usePageState` removed (every paged list keeps its page in the URL); `useTransactions`, `useStatementCycles`, `useDocuments`, `useOpenReviews` and `useSpendSeries` take an optional `enabled`
+- **test** `banks`, `statements`, `document-events`, `lib/infinite`, `spend-split`, `transactions-paging`, upload file cap
+
 ## Bank logos — 2026-10-08 (branch `ledger-v2`)
 
 ### Web
