@@ -14,7 +14,7 @@
     "count": 2, "total": "5120.10",
     "lines": [
       {"line_code": "stl_01hzy3k8w9m2n4p6q8r0s2t4a1", "txn_code": "txn_01hzy3k8w9m2n4p6q8r0s2t4a1",
-       "txn_date": "2026-08-28", "posting_date": "2026-08-29", "description": "AMAZON MKTPLACE PMTS SEATTLE",
+       "txn_date": "2026-08-28", "posting_date": "2026-08-29", "description": "AMZN MKTP US*2K4QJ71Z0",
        "merchant_name": "Amazon", "amount_aed": "45.32", "amount_original": "12.34", "currency_original": "USD",
        "category_code": "cat_01hzy3k8w9m2n4p6q8r0s2t4c1", "kind": "purchase", "card_last4": "1234"},
       {"line_code": "stl_01hzy3k8w9m2n4p6q8r0s2t4a2", "txn_code": null,

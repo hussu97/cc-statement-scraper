@@ -19,12 +19,12 @@ struct SpendSplitTests {
         #expect(bank.showsBankLogos)
     }
 
-    @Test("colours: category tokens; banks and merchants take the palette in rank order; Others is grey")
+    @Test("colours: category tokens; banks and merchants take the palette in rank order; Others its own neutral")
     func colours() throws {
         let cat = try SpendBreakdown.decode(try fixture("spend_breakdown_category"))
         #expect(cat.groups.map(cat.colorToken(for:)) == ["cat-3", nil])
         let bank = try SpendBreakdown.decode(try fixture("spend_breakdown_bank"))
-        #expect(bank.groups.map(bank.colorToken(for:)) == ["cat-1", "cat-2", nil])
+        #expect(bank.groups.map(bank.colorToken(for:)) == ["cat-1", "cat-2", "other"])
     }
 
     @Test("segments skip zero cells; every month stays on the axis")

@@ -21,7 +21,6 @@ struct StatementDetailScreen: View {
 struct StatementDetailView: View {
     @Bindable var model: StatementDetailModel
     let profileCode: String
-    @Environment(BankCatalog.self) private var banks: BankCatalog?
 
     var body: some View {
         Page {
@@ -55,10 +54,7 @@ struct StatementDetailView: View {
         }
     }
 
-    private var title: String {
-        guard let header = model.state.value?.detail.statement else { return "Statement" }
-        return header.bankCode.map { "\(banks?.name(for: $0) ?? $0) \(header.kindLabel.lowercased())" } ?? header.kindLabel
-    }
+    private var title: String { model.state.value?.detail.statement.kindLabel ?? "Statement" }
 
     private func reload() { Task { await model.load(profileCode: profileCode) } }
 }

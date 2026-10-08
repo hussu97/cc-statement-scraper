@@ -109,11 +109,22 @@ private struct StackedChart: View {
             }
         }
         .chartForegroundStyleScale(domain: breakdown.groups.map(\.key),
-                                   range: breakdown.groups.map { ChartPalette.color(for: breakdown.colorToken(for: $0)) })
+                                   range: breakdown.groups.map { splitColor(breakdown.colorToken(for: $0)) })
         .chartXScale(domain: breakdown.monthLabels)
         .chartLegend(.hidden)
         .chartYAxis { aedAxis }
-        .chartXSelection(value: $selected)
+        .chartOverlay { proxy in
+            // Tap a month to pin its callout; tap it again to clear.
+            GeometryReader { geo in
+                Rectangle().fill(.clear).contentShape(Rectangle())
+                    .onTapGesture { location in
+                        guard let plot = proxy.plotFrame else { return }
+                        let x = location.x - geo[plot].origin.x
+                        guard let month: String = proxy.value(atX: x) else { return }
+                        selected = selected == month ? nil : month
+                    }
+            }
+        }
         .frame(height: 200)
         .chartAccessibility(.breakdown(breakdown, grouping: SpendSplitGrouping(rawValue: breakdown.groupBy) ?? .category))
     }
@@ -135,7 +146,7 @@ private struct CalloutBox: View {
             }
             ForEach(callout.rows) { row in
                 HStack(spacing: 8) {
-                    CategoryDot(token: row.colorToken)
+                    SplitDot(token: row.colorToken)
                     Text(row.label).font(Typography.caption).lineLimit(1)
                     Spacer(minLength: 6)
                     Text(row.amount).font(Typography.caption).monospacedDigit()
@@ -160,7 +171,7 @@ private struct Legend: View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 8, alignment: .leading)], alignment: .leading, spacing: 6) {
             ForEach(breakdown.groups) { group in
                 HStack(spacing: 6) {
-                    CategoryDot(token: breakdown.colorToken(for: group))
+                    SplitDot(token: breakdown.colorToken(for: group))
                     Text(group.label).font(Typography.caption).foregroundStyle(Palette.ink2).lineLimit(1)
                 }
             }
@@ -181,7 +192,7 @@ private struct GroupList: View {
                     if breakdown.showsBankLogos && !group.isOther {
                         BankLogo(bankCode: group.key, size: 20)
                     } else {
-                        CategoryDot(token: breakdown.colorToken(for: group), size: 10).frame(width: 20)
+                        SplitDot(token: breakdown.colorToken(for: group), size: 10).frame(width: 20)
                     }
                     Text(group.label).font(Typography.rowMeta).foregroundStyle(Palette.ink).lineLimit(2)
                     Spacer(minLength: 8)
@@ -192,7 +203,7 @@ private struct GroupList: View {
                 .overlay(alignment: .leading) {
                     if breakdown.showsBankLogos && !group.isOther {
                         // The colour that bank has in the chart.
-                        Circle().fill(ChartPalette.color(for: breakdown.colorToken(for: group)))
+                        Circle().fill(splitColor(breakdown.colorToken(for: group)))
                             .frame(width: 6, height: 6).offset(x: 17, y: 8)
                     }
                 }
@@ -208,5 +219,19 @@ private struct GroupList: View {
         AxisValueLabel {
             if let v = value.as(Double.self) { Text(MoneyFormat.compact(Decimal(Int(v)))) }
         }
+    }
+}
+
+/// The chart palette, with Others in its own neutral (Uncategorized keeps the grey).
+private func splitColor(_ token: String?) -> Color {
+    token == SpendBreakdown.otherToken ? Palette.borderStrong : ChartPalette.color(for: token)
+}
+
+private struct SplitDot: View {
+    let token: String?
+    var size: CGFloat = 8
+
+    var body: some View {
+        Circle().fill(splitColor(token)).frame(width: size, height: size)
     }
 }

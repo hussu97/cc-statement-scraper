@@ -114,10 +114,13 @@ public struct SpendCallout: Sendable, Hashable {
 }
 
 extension SpendBreakdown {
+    /// Others' token: a lighter neutral than Uncategorized's grey.
+    public static let otherToken = "other"
+
     /// The colour token of a group: a category's own `color_token`; banks and
-    /// merchants take the chart palette in rank order; Others is grey (nil).
+    /// merchants take the chart palette in rank order; Others is `otherToken`.
     public func colorToken(for group: Group) -> String? {
-        if group.isOther { return nil }
+        if group.isOther { return Self.otherToken }
         if groupBy == "category" { return group.colorToken }
         let index = groups.firstIndex(of: group) ?? 0
         return "cat-\(index % 12 + 1)"
