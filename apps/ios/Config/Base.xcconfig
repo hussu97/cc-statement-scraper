@@ -1,0 +1,30 @@
+// Shared by every target and configuration. Secrets live in the gitignored
+// Secrets.xcconfig (copy Secrets.example.xcconfig); it is optional so a fresh
+// clone still builds — the app then shows a "configure Supabase" screen.
+
+// Bundle ids: app = prefix, share extension = prefix.share.
+LEDGER_BUNDLE_PREFIX = com.hussu97.ledger
+LEDGER_APP_GROUP = group.$(LEDGER_BUNDLE_PREFIX)
+LEDGER_KEYCHAIN_GROUP = $(LEDGER_BUNDLE_PREFIX).shared
+
+// Same Apple team as mm-pos. The Team ID is the certificate's OU, not the
+// ten characters in its common name.
+DEVELOPMENT_TEAM = 2F94NY8R3T
+CODE_SIGN_STYLE = Automatic
+
+MARKETING_VERSION = 1.0.0
+// Overridden by scripts/publish-build.sh from build-number.json.
+CURRENT_PROJECT_VERSION = 1
+
+IPHONEOS_DEPLOYMENT_TARGET = 18.0
+SWIFT_VERSION = 6.0
+TARGETED_DEVICE_FAMILY = 1
+
+// Defaults; Secrets.xcconfig overrides. `//` starts a comment in xcconfig, so
+// URLs are written with `$()` between the slashes: http:/$()/127.0.0.1:54321
+LEDGER_SUPABASE_URL = http:/$()/127.0.0.1:54321
+LEDGER_SUPABASE_ANON_KEY =
+LEDGER_SENTRY_DSN =
+LEDGER_ENVIRONMENT = local
+
+#include? "Secrets.xcconfig"

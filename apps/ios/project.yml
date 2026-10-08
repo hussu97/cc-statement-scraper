@@ -1,0 +1,120 @@
+# XcodeGen spec — the Xcode project is generated from this file:
+#   cd apps/ios && xcodegen generate
+# Ledger.xcodeproj is committed too so a fresh clone opens without XcodeGen.
+name: Ledger
+options:
+  bundleIdPrefix: com.hussu97.ledger
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+configFiles:
+  Debug: Config/Debug.xcconfig
+  Release: Config/Release.xcconfig
+settings:
+  base:
+    SWIFT_STRICT_CONCURRENCY: complete
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+packages:
+  LedgerKit:
+    path: LedgerKit
+targets:
+  Ledger:
+    type: application
+    platform: iOS
+    sources:
+      - path: Ledger
+    dependencies:
+      - package: LedgerKit
+      - target: LedgerShare
+        embed: true
+        codeSign: true
+    entitlements:
+      path: Ledger/Ledger.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - $(LEDGER_APP_GROUP)
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)$(LEDGER_KEYCHAIN_GROUP)
+    info:
+      path: Ledger/Info.plist
+      properties:
+        CFBundleDisplayName: Ledger
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen:
+          UIColorName: AccentColor
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIApplicationSupportsIndirectInputEvents: true
+        ITSAppUsesNonExemptEncryption: false
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        LedgerSupabaseURL: $(LEDGER_SUPABASE_URL)
+        LedgerSupabaseAnonKey: $(LEDGER_SUPABASE_ANON_KEY)
+        LedgerSentryDSN: $(LEDGER_SENTRY_DSN)
+        LedgerEnvironment: $(LEDGER_ENVIRONMENT)
+        LedgerAppGroup: $(LEDGER_APP_GROUP)
+        LedgerKeychainGroup: $(AppIdentifierPrefix)$(LEDGER_KEYCHAIN_GROUP)
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(LEDGER_BUNDLE_PREFIX)
+        PRODUCT_NAME: Ledger
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        GENERATE_INFOPLIST_FILE: NO
+        SUPPORTS_MACCATALYST: NO
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+  LedgerShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ShareExtension
+    dependencies:
+      - package: LedgerKit
+    entitlements:
+      path: ShareExtension/LedgerShare.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - $(LEDGER_APP_GROUP)
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)$(LEDGER_KEYCHAIN_GROUP)
+    info:
+      path: ShareExtension/Info.plist
+      properties:
+        CFBundleDisplayName: Add to Ledger
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        LedgerSupabaseURL: $(LEDGER_SUPABASE_URL)
+        LedgerSupabaseAnonKey: $(LEDGER_SUPABASE_ANON_KEY)
+        LedgerSentryDSN: $(LEDGER_SENTRY_DSN)
+        LedgerEnvironment: $(LEDGER_ENVIRONMENT)
+        LedgerAppGroup: $(LEDGER_APP_GROUP)
+        LedgerKeychainGroup: $(AppIdentifierPrefix)$(LEDGER_KEYCHAIN_GROUP)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule: >-
+              SUBQUERY (extensionItems, $extensionItem,
+              SUBQUERY ($extensionItem.attachments, $attachment,
+              ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "com.adobe.pdf"
+              ).@count >= 1).@count >= 1
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(LEDGER_BUNDLE_PREFIX).share
+        PRODUCT_NAME: LedgerShare
+        GENERATE_INFOPLIST_FILE: NO
+        APPLICATION_EXTENSION_API_ONLY: YES
+schemes:
+  Ledger:
+    build:
+      targets:
+        Ledger: all
+        LedgerShare: all
+    run:
+      config: Debug
+    archive:
+      config: Release
