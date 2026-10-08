@@ -123,7 +123,7 @@ fx_rates (global)
 | `accounts`, `cards` | Credit-card accounts (kind `credit_card` only) and their cards by `last4`. A replacement card is a new card on the same account: the old card becomes `replaced` and keeps its transactions. It joins the account either by the owner (`add_replacement_card(profile, old card_code, new last4)`) or automatically for a history extract (§4, statement path step 1). |
 | `documents` | One PDF as received: `sha256` unique per profile, `source` scraper/upload/ios/gmail/outlook/legacy, `parse_status` queued/parsing/parsed/failed. Stored at `statements/<profile_code>/<doc_code>.pdf`. |
 | `statements` | `kind` is `statement` or `history_extract` (SIB history exports). Identity is `(account, statement_date)` per kind among active rows. Holds totals, due date, min due and credit limit. `doc_code` is the document that currently evidences it; several documents can evidence one statement (§4). |
-| `statement_lines` | **Immutable evidence.** `line_key` is a sha256 of the raw facts and `occurrence` is the ordinal among identical keys, so two identical coffees are two lines. Only `is_current`, `superseded_at` and `source_doc_codes` change. `source_doc_codes` lists the documents whose parse contains the line; it stays current while any of them does. Carries `fx_rate` and `legacy_fingerprint`. |
+| `statement_lines` | **Immutable evidence.** `line_key` is a sha256 of the raw facts and `occurrence` is the ordinal among identical keys, so two identical coffees are two lines. Only `is_current`, `superseded_at` and `source_doc_codes` change (and the text, when a private merchant mask applies: §5). `source_doc_codes` lists the documents whose parse contains the line; it stays current while any of them does. Carries `fx_rate` and `legacy_fingerprint`. |
 | `sms_templates` | Data-driven regex per bank (sender and body patterns, `field_groups`, `msg_kind`, `priority`, `examples`). A BEFORE trigger rejects a template unless every example parses to its `expect`, `field_groups` are valid, and patterns are bounded (≤ 1000/200 chars, no back-references). Every template has at least one example. Members see only templates for their banks, their messages or their proposals; `examples` is not readable by clients. `scope_profile_code` limits an LLM proposal to the profile it was made for (its sender pattern is built from the bank's `sms_senders`) until an operator runs `promote_sms_template`. |
 | `sms_messages` | Raw SMS (OTPs never arrive), body ≤ 2000 chars. `client_msg_id` is unique per profile. Parsed fields, `parse_status` pending/parsed/ignored/unparsed/failed (`ignore_reason = error:<sqlstate>` when processing raised; declined, debit-card and other alerts are `ignored` with the kind as reason). |
 | `transactions` | The canonical ledger. Derived facts (status pending/posted/void/orphaned, dates, amounts, FX, merchant) come from evidence via `private.refresh_transaction()`. User fields: `manual_category_code`, `notes`, `exclude_from_spend`. |
@@ -430,6 +430,42 @@ Suggestions below 0.5 confidence are dropped and never override a manual merchan
   into a profile once, by `create_profile` / `seed_profile_defaults`.
 
 ---
+
+### Private merchant masks
+
+The database owner can make chosen transactions appear under a generic merchant name in every
+app, for existing and future data. Configuration lives only in `private.merchant_masks`
+(`pattern` a case-insensitive POSIX regex, `replacement_merchant_name`, optional
+`replacement_category_name`, `active`): no RPC, view, policy or UI reads or edits it, client
+roles cannot reach `private`, and RLS without policies keeps even the service role out. The
+repository holds no real pattern (tests use a fake token).
+
+- **At the source.** BEFORE triggers mask `statement_lines` (description_raw, description and the
+  matching strings of `raw`), `sms_messages` (the template's merchant as written in the body,
+  any other matching word, `merchant_raw`, `description`, `parsed_fields.merchant`) and, as a
+  safety net, `transactions.description`. A new `merchants` row whose key or name matches
+  becomes the mask's generic merchant (`merchant_key(replacement)`), so `resolve_merchant` lands
+  there. Transactions derive text and merchant from evidence, so they follow.
+- **Evidence identity is unchanged.** This is the one exception to "statement lines are never
+  edited": only their text is replaced. `line_key` (hashed from the original text at ingest)
+  and SMS `body_hash` stay, so a re-parse of the same statement finds every line unchanged,
+  adds nothing and unmasks nothing; SMS dedup still works.
+- **Existing data.** `private.apply_merchant_masks(p_profile_code default null)` (service role or
+  the owner) re-masks lines and SMS, refreshes their transactions, renames matching global
+  merchant rows and aliases to their own code, and masks insight titles and bodies. An AFTER
+  trigger on `private.merchant_masks` runs it whenever a mask is inserted or changed.
+  Deactivating a mask does not unmask anything.
+- **Originals** are kept for the owner only in `private.masked_originals(table_name, row_code,
+  column_name, profile_code, mask_code, original)`; the first original is never overwritten.
+- **Category.** With `replacement_category_name`, each affected profile gets that category (found
+  by name or created as `spend`) as a merchant-level **manual** choice on the generic merchant
+  (`merchant_profile_category`). It outranks rules and LLM suggestions; a transaction's own
+  manual category still wins, and an owner's later merchant-level choice is kept (only an LLM
+  row is replaced).
+- Every client surface reads the masked rows: `v_transactions` and its search, evidence (lines,
+  SMS), `statement_detail`, `spend_breakdown` and the other analytics, insights, recurring,
+  merchant search and leaderboards, exports, and the LLM inputs. Not rewritten: `sms_templates.examples`
+  (not client-readable) and user-typed `notes`.
 
 ## 6. Analytics and insights
 

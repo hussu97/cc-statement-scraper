@@ -16,6 +16,9 @@
 - **feat** Replacement cards: a SIB history extract for an unknown card joins the bank's only active account (card type matches, first transaction not more than 31 days before the account's last line), the older cards become `replaced` and SMS held for the new number are re-processed; other banks and real statements still create a new account for an unknown card. Owner RPC `add_replacement_card(p_profile_code, p_card_code, p_new_last4)` registers a re-issued number on the old card's account. `ingest_parsed_document` passes the statement kind and first transaction date to the new 11-argument `resolve_statement_account` (the 9-argument form remains and never merges). Migration `20261010000500`
 - **test** pgTAP `23_replacement_cards.test.sql` (second card on the same account, old transactions on 6774-style old card, waiting SMS re-processed, new SMS matched, another product stays separate, owner RPC, refusals); `08_tenant_isolation` (statement_detail, spend_breakdown, document_events, add_replacement_card across profiles)
 
+- **feat** Private merchant masking (keyword-free; configured only in the database): `private.merchant_masks` (validated regex, generic name, optional category) and `private.masked_originals`, unreadable by every client role and the service role, with no RPC, view or policy. BEFORE triggers mask statement lines, SMS (body, merchant fields), transactions and new merchant rows at the source; `private.apply_merchant_masks(p_profile_code)` (also fired by a statement trigger on the masks table) re-masks existing lines, SMS, transactions, global merchants/aliases and insights. `line_key` and `body_hash` are untouched, so re-parses stay idempotent and never unmask. The mask's category is a merchant-level manual choice on the generic merchant (outranks rules and LLM; a transaction's manual category wins), also set for a profile whose first masked transaction arrives later. Migration `20261010000600`
+- **test** pgTAP `21_merchant_masks.test.sql` (fake token only): existing rows, new statement lines, parsed and unparsed SMS, re-parse without duplicates or unmasking, activity and merchant search, `spend_breakdown` / `statement_detail`, category precedence, a second profile, validation, and that anon / authenticated / service_role cannot read the private tables
+
 ### Parser
 
 - **fix** SIB card numbers (the SIB card ending 6774 was replaced by a new number): history exports read the card from `Account no.` / `Card no.` / `Card number` headers through a masked-number pattern (any of `x`, `X`, `*`, `•`, with or without the BIN), each row belongs to the card of the header above it, and each billing cycle's `primary_card_last4` is its majority card. E-statements also accept a lower-case mask. Existing outputs are unchanged
@@ -29,7 +32,7 @@
 
 ### Docs
 
-- ARCHITECTURE §3 (`banks.logo_path`, `bank-logos` bucket, `document_events`), §4 (document timeline), §6 (`statement_detail`, `spend_breakdown` shapes), §7 (Realtime); README Edge and RPC tables; PRODUCTION §2.3 (destructive flag), §2.6 (nightly purge), §11 (uploading the logos)
+- ARCHITECTURE §3 (`banks.logo_path`, `bank-logos` bucket, `document_events`, cards), §4 (document timeline, replacement cards), §5 (private merchant masks), §6 (`statement_detail`, `spend_breakdown` shapes), §7 (Realtime); README Edge, RPC and scraper env tables; PRODUCTION §2.3 (destructive flag), §2.6 (nightly purge), §11 (uploading the logos, merchant masks, the replaced SIB card)
 
 ## Edge Functions and CI backlog (audit P2/P3) — 2026-10-09 (branch `ledger-v2`)
 
