@@ -37,12 +37,15 @@ returns jsonb language sql as $$
       'warnings', '[]'::jsonb, 'metadata', '{}'::jsonb, 'lines', p_lines)))
 $$;
 
-create function pg_temp.ingest(p_payload jsonb) returns jsonb language plpgsql as $$
-declare v_doc text;
+-- A new document per call, or a re-parse of an existing one (p_doc).
+create function pg_temp.ingest(p_payload jsonb, p_doc text default null) returns jsonb language plpgsql as $$
+declare v_doc text := p_doc;
 begin
-  insert into public.documents (profile_code, storage_path, original_filename, sha256, size_bytes, source)
-  values (pg_temp.v('p'), 'x/' || gen_random_uuid(), 'test.pdf', encode(sha256(gen_random_uuid()::text::bytea), 'hex'), 100, 'upload')
-  returning doc_code into v_doc;
+  if v_doc is null then
+    insert into public.documents (profile_code, storage_path, original_filename, sha256, size_bytes, source)
+    values (pg_temp.v('p'), 'x/' || gen_random_uuid(), 'test.pdf', encode(sha256(gen_random_uuid()::text::bytea), 'hex'), 100, 'upload')
+    returning doc_code into v_doc;
+  end if;
   return public.ingest_parsed_document(v_doc, p_payload);
 end $$;
 
@@ -55,12 +58,17 @@ create function pg_temp.txns() returns bigint language sql as $$
   select count(*) from public.transactions where profile_code = pg_temp.v('p') and status <> 'void' $$;
 
 -- ── setup: a user, a profile, an ADCB SMS template ─────────────────────────
+-- The local DB may hold other data: every id, email and profile key here is
+-- unique to this run and every assertion is scoped to this profile.
+select pg_temp.set('uid', gen_random_uuid()::text);
 insert into auth.users (id, instance_id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
-values ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000000', 'authenticated',
-        'authenticated', 'owner@test.dev', '{}', '{}', now(), now());
-select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}', true);
+values (pg_temp.v('uid')::uuid, '00000000-0000-0000-0000-000000000000', 'authenticated',
+        'authenticated', 'owner-' || pg_temp.v('uid') || '@test.dev', '{}', '{}', now(), now());
+create function pg_temp.as_owner() returns text language sql as $$
+  select set_config('request.jwt.claims', json_build_object('sub', pg_temp.v('uid'), 'role', 'authenticated')::text, true) $$;
+select pg_temp.as_owner();
 set local role authenticated;
-select pg_temp.set('p', public.create_profile('owner', 'Owner'));
+select pg_temp.set('p', public.create_profile('t02-' || left(pg_temp.v('uid'), 8), 'Owner'));
 reset role;
 
 select throws_ok($$
@@ -104,7 +112,7 @@ select is(pg_temp.sms('Your Cr.Card XXX3687 was used for USD10.00 on 05/07/2026 
 select is(pg_temp.sms('Your Cr.Card XXX3687 was used for USD10.00 on 05/07/2026 10:00:00 at NETFLIX.COM. Avl Cr. limit is AED 1.00',
                       '2026-07-05 06:01:00+00')->>'status', 'duplicate', 'the same alert delivered twice links as a duplicate');
 select is(pg_temp.sms('Your OTP for purchase is 123456', now())->>'status', 'rejected_otp', 'OTPs are rejected and never stored');
-select is((select count(*)::int from public.sms_messages where body like '%OTP%'), 0, 'no OTP row exists');
+select is((select count(*)::int from public.sms_messages where profile_code = pg_temp.v('p') and body like '%OTP%'), 0, 'no OTP row exists');
 select is(pg_temp.sms('Your Cr.Card XXX9999 was used for AED5.00 on 06/07/2026 10:00:00 at KIOSK. Avl Cr. limit is AED 1.00',
                       '2026-07-06 06:00:00+00')->>'status', 'unknown_card', 'an unknown card is held for review');
 select is(pg_temp.sms('Hello, this is not a bank format', now())->>'status', 'unparsed', 'an unknown format is kept as unparsed');
@@ -121,7 +129,7 @@ select pg_temp.set('july_result', pg_temp.ingest(pg_temp.v('july')::jsonb)::text
 select is(pg_temp.txns(), 5::bigint, 'statement links 3 SMS transactions and adds 1 new one (no double counting)');
 select is((select count(*)::int from public.transactions where profile_code = pg_temp.v('p') and status = 'pending'), 0,
           'nothing is left pending');
-select is((select count(*)::int from public.transaction_evidence where method = 'tie' and is_active), 2,
+select is((select count(*)::int from public.transaction_evidence where profile_code = pg_temp.v('p') and method = 'tie' and is_active), 2,
           'identical coffees pair as interchangeable ties');
 select is((select amount_aed from public.transactions where txn_code = pg_temp.v('netflix_sms')), 37.10::numeric(14,2),
           'statement AED amount replaces the SMS estimate');
@@ -130,19 +138,19 @@ select ok((select txn_at is not null and not amount_aed_is_estimate and status =
 select is((select count(*)::int from public.match_reviews where profile_code = pg_temp.v('p') and status = 'open'
            and reason in ('ambiguous', 'low_score')), 0, 'no ambiguous matches');
 select is((select r.status from public.statement_recon r join public.statements s using (stmt_code)
-           where s.statement_date = '2026-07-31'), 'ok', 'statement totals reconcile');
+           where s.profile_code = pg_temp.v('p') and s.statement_date = '2026-07-31'), 'ok', 'statement totals reconcile');
 
 -- ── 4. re-ingesting the same statement changes nothing ─────────────────────
 create temp table before_codes as select txn_code from public.transactions where profile_code = pg_temp.v('p');
-select pg_temp.ingest(pg_temp.v('july')::jsonb);
+select pg_temp.ingest(pg_temp.v('july')::jsonb, pg_temp.v('july_result')::jsonb->>'doc_code');
 select is(pg_temp.txns(), 5::bigint, 're-ingest creates no transactions');
 select is((select count(*)::int from public.transactions t where profile_code = pg_temp.v('p')
            and not exists (select 1 from before_codes b where b.txn_code = t.txn_code)), 0, 'and keeps every code');
 
 -- ── 5. manual category survives rules, re-ingest and a parser fix ──────────
-select pg_temp.set('carrefour', (select txn_code from public.transactions where description like 'CARREFOUR%'));
+select pg_temp.set('carrefour', (select txn_code from public.transactions where profile_code = pg_temp.v('p') and description like 'CARREFOUR%'));
 select pg_temp.set('travel', (select category_code from public.categories where profile_code = pg_temp.v('p') and name = 'Travel'));
-select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}', true);
+select pg_temp.as_owner();
 set local role authenticated;
 select public.set_transaction_category(pg_temp.v('carrefour'), pg_temp.v('travel'));
 insert into public.category_rules (profile_code, category_code, match_type, pattern, priority)
@@ -155,12 +163,15 @@ select is((select count(*)::int from public.transactions t join public.profile_s
            where t.profile_code = pg_temp.v('p') and t.rules_version <> s.rules_version), 0,
           'a rule change recategorises the whole profile synchronously');
 
+-- the parser fix re-parses the same document
 select pg_temp.ingest(pg_temp.payload('2026-07-31', jsonb_build_array(
   pg_temp.line(1, '2026-07-03', 'STARBUCKS DXB MALL DUBAI AE', 18),
   pg_temp.line(2, '2026-07-03', 'STARBUCKS DXB MALL DUBAI AE', 18),
   pg_temp.line(3, '2026-07-05', 'NETFLIX.COM AMSTERDAM NL', 10, 'USD', 37.10, 3.71),
   pg_temp.line(4, '2026-07-10', 'CARREFOUR CITY CENTRE MOE', 100)
-), 'statement', '{"total_debits":"173.10","total_credits":"0.00"}'));
+), 'statement', '{"total_debits":"173.10","total_credits":"0.00"}'), pg_temp.v('july_result')::jsonb->>'doc_code');
+select is((select count(*)::int from public.match_reviews where profile_code = pg_temp.v('p') and reason = 'orphaned'), 0,
+          'the re-parse leaves no orphaned review behind (DP-06)');
 select is(pg_temp.txns(), 5::bigint, 'a parser fix that changes a description creates no new transaction');
 select is((select status || ':' || description from public.transactions where txn_code = pg_temp.v('carrefour')),
           'posted:CARREFOUR CITY CENTRE MOE', 'the orphaned transaction re-attaches to the corrected line');
@@ -175,7 +186,7 @@ select pg_temp.ingest(pg_temp.payload('2026-07-12', jsonb_build_array(
   pg_temp.line(4, '2026-07-10', 'CARREFOUR CITY CENTRE MOE', 100)
 ), 'history_extract'));
 select is(pg_temp.txns(), 5::bigint, 'history lines attach to the existing transactions');
-select is((select count(*)::int from public.transaction_evidence where evidence_type = 'history_line' and is_active), 4,
+select is((select count(*)::int from public.transaction_evidence where profile_code = pg_temp.v('p') and evidence_type = 'history_line' and is_active), 4,
           'as history evidence');
 
 -- ── 7. reversal pairs with its purchase and both void after the statement ──
@@ -191,21 +202,21 @@ select is((select string_agg(status, ',' order by txn_code) from public.transact
            where txn_code in (pg_temp.v('hotel'), pg_temp.v('hotel_rev'))), 'void,void', 'both sides are void');
 
 -- ── 8. unknown card resolves and processes waiting SMS ─────────────────────
-select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}', true);
+select pg_temp.as_owner();
 set local role authenticated;
 select is((public.resolve_review(
-  (select review_code from public.match_reviews where reason = 'unknown_card' and status = 'open'),
-  jsonb_build_object('card', jsonb_build_object('account_code', (select account_code from public.accounts limit 1)))
+  (select review_code from public.match_reviews where profile_code = pg_temp.v('p') and reason = 'unknown_card' and status = 'open'),
+  jsonb_build_object('card', jsonb_build_object('account_code', (select account_code from public.accounts where profile_code = pg_temp.v('p') limit 1)))
 ))->>'outcome', 'card_registered', 'registering the card resolves the review');
 reset role;
 select is((select count(*)::int from public.transactions t join public.transaction_evidence e using (txn_code)
-           join public.sms_messages s using (sms_code) where s.card_last4 = '9999'), 1, 'the waiting SMS becomes a transaction');
+           join public.sms_messages s using (sms_code) where t.profile_code = pg_temp.v('p') and s.card_last4 = '9999'), 1, 'the waiting SMS becomes a transaction');
 
 -- ── 9. analytics see one spend definition ──────────────────────────────────
 select is((select sum(spend_aed) from public.v_spend where profile_code = pg_temp.v('p')
            and txn_date between '2026-07-01' and '2026-07-31'), 178.10::numeric,
           'July spend = statement debits 173.10 + pending AED 5 on the newly registered card; void hotel pair excluded');
-select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}', true);
+select pg_temp.as_owner();
 set local role authenticated;
 select is((public.overview(pg_temp.v('p'), '2026-07-01'))->>'spend', '178.10', 'overview RPC reports the same number');
 select is((select count(*)::int from public.spend_series(pg_temp.v('p'), '2026-06-01', '2026-08-31', 'month', 'category')) > 0,
@@ -217,7 +228,7 @@ select lives_ok($$ select public.preview_rule(pg_temp.v('p'), 'contains', 'STARB
                    (select category_code from public.categories where name = 'Travel' and profile_code = pg_temp.v('p'))) $$,
                 'preview_rule runs');
 reset role;
-select lives_ok($$ select private.nightly() $$, 'nightly housekeeping runs');
+select lives_ok($$ select private.nightly(pg_temp.v('p')) $$, 'nightly housekeeping runs');
 
 select * from finish();
 rollback;

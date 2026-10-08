@@ -15,7 +15,9 @@ schemas = ["public", "graphql_public"]
 extra_search_path = ["public", "extensions"]
 # The maximum number of rows returns from a view, table, or stored procedure. Limits payload size
 # for accidental or malicious requests.
-max_rows = 1000
+# 2000 = the largest page size the apps offer (CLAUDE.md §4.5). Production is NOT
+# managed by this file: set Dashboard → Project Settings → API → "Max rows" to 2000 too.
+max_rows = 2000
 # Controls whether new tables, views, sequences and functions created in the `public` schema by
 # `postgres` are reachable through the Data API roles (`anon`, `authenticated`, `service_role`)
 # without explicit GRANTs. When unset, new entities are NOT auto-exposed, matching the new cloud
@@ -173,7 +175,12 @@ enable_refresh_token_rotation = true
 # Requires enable_refresh_token_rotation = true.
 refresh_token_reuse_interval = 10
 # Allow/disallow new user signups to your project.
-enable_signup = true
+# Ledger is private: no self-registration (audit DB-04/WEB-04). Members are added
+# by an owner (add_profile_member) and created through Auth's invite / admin API,
+# which works with sign-ups disabled; the pending invite attaches on user creation.
+# Local seed users are inserted directly into auth.users. Production must match:
+# Dashboard → Authentication → Sign In / Providers → turn OFF "Allow new users to sign up".
+enable_signup = false
 # Allow/disallow anonymous sign-ins to your project.
 enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts

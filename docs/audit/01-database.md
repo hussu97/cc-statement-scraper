@@ -564,3 +564,50 @@ The scripts are in the session scratchpad (not committed). Each one runs `\i set
 | E6-legacy | Staged override, then apply-to-merchant, then cron | Category reverts |
 | E13 | Stranger `create_profile('squatme')`, then `import_legacy_metadata` | Adopted |
 | E16 | Fresh user | Counts of global tables visible |
+
+## Fix status
+
+Fixed on `ledger-v2` (uncommitted) by migrations `20261008001500_audit_tenant_integrity.sql`,
+`…1600_audit_ingest_and_review.sql`, `…1700_audit_rule_conditions.sql`,
+`…1800_audit_visibility_and_legacy.sql`, `…1900_web_review_and_search.sql`, plus `supabase/config.toml`.
+Tests: `supabase/tests/08_tenant_isolation`, `09_ingest_robustness`, `10_web_review_and_search` (new),
+`02_ledger` and `03_legacy_import` (made hermetic). `supabase test db` passes (10 files, 503 tests) on the
+shared non-empty DB, and on a fresh throw-away stack (migrations + seed from scratch).
+
+| ID | Status | Where (migration / test) |
+|---|---|---|
+| DB-01 | fixed | `…1600` `resolve_review` card branch (account must be the review's profile and bank); matcher joins on `(profile_code, account_code)`; `08` E2b negative test |
+| DB-02 | fixed | `…1600` supersede target must be an open candidate of the review, same profile/account, not the subject; `08` E3 negative test |
+| DB-03 | fixed | `…1500` `UNIQUE (profile_code, code)` on parents + composite FKs on every child (cards, statements, lines, SMS, transactions incl. related/rule/recurring, evidence, reviews, recon, email); old single-column FKs dropped; `08` structural tests |
+| DB-04 | fixed | `…1800` merchants/aliases readable only when referenced by the caller's profiles; templates only for the caller's banks / messages / proposals; `examples` column not granted to `authenticated`; `config.toml [auth] enable_signup = false`; `08` stranger tests. **Prod:** turn off "Allow new users to sign up" in the dashboard (PRODUCTION.md §2.2 wording still needs updating) |
+| DB-05 | fixed | `…1800` `private.legacy_import_profiles` provenance; import raises 23505 on a key it did not create (backfilled for the rehearsal's imported profiles); `03` squat test |
+| DB-06 | fixed | `…1600` `ingest_parsed_document` phase 2 withdraws the document's evidence from statements it no longer produces; a retired statement is revived with its codes when the same document produces it again; `09` E17 test |
+| DB-07 | fixed | `…1600` `resolve_statement_account`: same document → its account; one active account; explicit reference seen on exactly one account; else permanent 22023 (no account created). A card-less statement without rows is skipped with a document warning; `09` E12 + idempotency tests |
+| DB-08 | fixed | `…1600` `ingest_sms` validates each message (`invalid` + `reason`) and isolates processing errors (`failed`, `ignore_reason = error:<sqlstate>`); `apply_sms_template` treats an impossible date as no match; template reprocess trigger isolates errors too; `09` tests |
+| DB-09 | fixed | `…1700` `private.rule_problem` validates keys/types/ownership (trigger + `preview_rule`, 22023); `recategorize`/`preview_rule` use `private.safe_numeric`; `09` tests |
+| DB-10 | fixed | `…1600` a competitor ≥ 0.3 below the pair on merchant affinity (`similarity`/`word_similarity`) is not a conflict; `09` ENOC/Carrefour test; coffee-tie test in `02` still passes |
+| DB-11 / X-02 / DP-05 | fixed | `…1800` `legacy_parity_report(p_schema)` casts varchar/enum columns and adds `legacy_lines_missing` / `legacy_aed_missing`; `legacy_missing_lines()` lists lost lines; `03` uses a varchar/enum mock schema |
+| DB-12 | fixed | `…1800` `private.legacy_choice_applications`: each transaction evaluated once (applied / agreed / kept_manual), never re-applied after a user edit; `legacy_choices_cron()` unschedules itself when nothing is pending or 30 days after staging; `legacy_unmatched_choices()` reports leftovers; `03` tests |
+| DB-13 | fixed | `…1600`/`…1700` all function-level `statement_timeout` removed (guard in `09`); regex bounded on write (rule pattern ≤ 200, template ≤ 1000/200 chars, no back-references) and SMS bodies ≤ 2000 chars. ARCHITECTURE §4 "120 s statement timeout" sentence still needs removing |
+| DB-14 | fixed | `…1500` composite FK `email_routes(profile_code, mailbox_code)`; `08` E4 test |
+| DB-15 | fixed | `…1600` differing available limits are never a duplicate; `09` E5 test |
+| DB-16 | fixed | `…1600` recon counts null-AED lines at their printed rate and downgrades an explained mismatch to `warn` (`unpriced_lines`); `09` test |
+| DB-17 | partly fixed | `…1600` `missing_from_statement` auto-resolves when the transaction stops being pending (`09` test). Re-processing `unknown_card` SMS when a statement registers the card: deferred |
+| DB-19 | partly fixed | the line's merchant is resolved once per line in the matcher; `resolve_merchant`'s write-on-read: deferred |
+| DB-26 | partly fixed | `field_groups` validated on write (`09` test); examples ≥ 1, sender scoping, per-profile LLM templates: deferred |
+| DB-27 | fixed (no dedicated test) | `…1600` a line displaced by a manual link gets its own transaction; linking onto a confirmed (locked) line is refused |
+| DB-32 | partly fixed | indexes on `transactions.stmt_code/related_txn_code/rule_code`, `statement_lines(profile_code, legacy_fingerprint)` |
+| DB-33 | fixed | with DB-02 (`08` test) |
+| DB-42 / X-08 | fixed | `private.lock_profile` (`pg_advisory_xact_lock(hashtext(profile_code))`) taken first in `ingest_parsed_document`, `ingest_sms`, `resolve_review`; `09` checks the lock is held. True concurrency not exercised in pgTAP |
+| DB-43 | fixed (no dedicated test) | card branch without last4 binds the SMS to the chosen account and matches it |
+| X-07 | fixed locally | `config.toml [api] max_rows = 2000`. **Prod:** Dashboard → API → Max rows = 2000 |
+| WEB-04 | DB side fixed | sign-ups off in `config.toml`; the web's `shouldCreateUser: true` is for the web agent |
+| DP-01 | fixed | `…1600` `statement_lines.source_doc_codes`: a document only withdraws its own evidence; another document of the same statement adds lines, fills null header fields only, never touches the header without rows; `09` tests |
+| DP-02 | fixed | same mechanism: history windows union by `(line_key, occurrence)`; `09` tests |
+| DP-06 | fixed | orphan reviews raised and answered in the same transaction are deleted; after re-parsing the rehearsal's ADCB/SIB documents, open orphaned reviews 150 → 0 |
+| DP-08 | fixed | recon `n/a` for history extracts (CHECK extended), `warn` for an empty statement whose header shows activity or whose lines were all superseded; `09` tests |
+| DB-18, DB-20–DB-25, DB-28 (now addressed by the hermetic suites), DB-29–DB-31, DB-34–DB-41, DB-44, DB-45 | deferred | P2/P3, outside the functions touched here |
+
+Rehearsal re-run (33 hussain ADCB/SIB documents re-parsed through the worker after the fix): legacy-line
+coverage ADCB 80.8 % → 100 %, SIB 53.2 % → 100 % (ENBD 89.4 % unchanged: DP-03 parser), 0 orphaned
+transactions, 7 card-less empty ADCB documents parsed with a "skipped" warning.
