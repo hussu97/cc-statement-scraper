@@ -27,7 +27,7 @@ build/
 .env.*
 !.env.example
 
-# Runtime/output artifacts
+# Runtime/output artifacts (data/ holds private statement PDFs, e.g. the golden-parity sources)
 logs/
 data/
 # …but the Ledger web app's data layer is source code
@@ -38,12 +38,6 @@ data/
 *.sqlite3
 tmp/
 tmp_*.db
-
-# Frontend
-frontend/node_modules/
-frontend/dist/
-frontend/.vite/
-frontend/*.tsbuildinfo
 
 .playwright-mcp/
 

@@ -13,7 +13,7 @@ A personal credit-card ledger for FAB, ADCB, ENBD, EIB, SIB and Mashreq cards:
 
 Docs:
 - [ARCHITECTURE.md](ARCHITECTURE.md): design, data model, matching, auth
-- [PRODUCTION.md](PRODUCTION.md): deployment and cutover runbook
+- [PRODUCTION.md](PRODUCTION.md): deployment, operations and the cutover record
 - [CHANGELOG.md](CHANGELOG.md)
 - [ROADMAP.md](ROADMAP.md)
 - [docs/contracts/parse-v1.md](docs/contracts/parse-v1.md): parser contract (limits, output validation, error codes)
@@ -32,10 +32,9 @@ Docs:
 | `packages/tokens/` | Design tokens → CSS variables, chart palette, `Tokens.swift` | Node |
 | `packages/db-types/` | Generated Supabase TypeScript types (never hand-written) | TS |
 | `scraper/` | Local Playwright scraper CLI `ccs-scraper` ([README](scraper/README.md)) | Python 3.12 |
-| `scripts/` | `migrate_legacy.py` (cutover data move), `cutover/` (production Edge and Vault secret helpers), git `hooks/` + `install-hooks.sh` | Python, sh, SQL |
-| `docs/` | `contracts/` (parse-v1), `audit/` (audit reports + backlog), legacy `operations/` and `security/` notes | Markdown |
+| `scripts/` | `cutover/` (production Edge and Vault secret helpers), git `hooks/` + `install-hooks.sh` | sh, SQL |
+| `docs/` | `contracts/` (parse-v1), `audit/` (audit reports + backlog) | Markdown |
 | `.github/workflows/` | CI (path-filtered) and manual deploy workflows | GitHub Actions |
-| `backend/`, `frontend/`, `deploy/` | **Legacy v1**, frozen until cutover (see below) | FastAPI, React 18 |
 
 ## Prerequisites
 
@@ -45,7 +44,7 @@ Docs:
 | Supabase CLI | ≥ 2.100 | `supabase start / db reset / test db / functions serve / gen types` |
 | Node + pnpm | Node ≥ 20, pnpm 10 (`corepack enable`) | web app, tokens, workspace scripts |
 | Deno | 2.x | Edge Function tests |
-| Python + uv | 3.12, [uv](https://docs.astral.sh/uv/) | parser, scraper, cutover script |
+| Python + uv | 3.12, [uv](https://docs.astral.sh/uv/) | parser, scraper |
 | Xcode + XcodeGen | Xcode with the iOS 18+ SDK, `brew install xcodegen` | iPhone app, `swift test` |
 
 ## Local setup
@@ -187,14 +186,13 @@ Create a service token in web Settings → Sources & health → Tokens, or with
 | Tokens | `pnpm --filter @ledger/tokens check` (fails if the committed `Tokens.swift` drifts from `tokens.json`; the gitignored `dist/` is regenerated in memory only, so it works from a clean clone) |
 | iOS | `cd apps/ios/LedgerKit && swift test` |
 | Scraper | `cd scraper && .venv/bin/pytest -q` |
-| Cutover script | `backend/.venv/bin/python -m pytest -q scripts/tests` |
 
 `scripts/install-hooks.sh` installs the git hooks:
 - **pre-commit:** web lint and tests when `apps/web` files are staged, scraper tests when
-  `scraper/` is staged, and legacy backend syntax/bandit checks while `backend/` exists.
+  `scraper/` is staged.
 - **pre-push:** `deno test`, parser ruff and pytest, tokens check, web lint and tests, DB types
-  drift (only when the local stack is running), scraper tests, plus the legacy suites while
-  `backend/` and `frontend/` exist. Each check skips when its directory or tool is missing.
+  drift (only when the local stack is running) and scraper tests. Each check skips when its
+  directory or tool is missing.
 - **prepare-commit-msg / commit-msg:** enforce the commit author and reject `Co-Authored-By`
   trailers.
 
@@ -264,38 +262,30 @@ Create a service token in web Settings → Sources & health → Tokens, or with
 | `LEDGER_SENTRY_DSN` | Sentry `ledger-apps` DSN (empty disables Sentry) |
 | `LEDGER_ENVIRONMENT` | `local` / `production`. Sentry starts only in Release builds with an environment other than local/development/dev/test |
 
-`apps/ios/scripts/publish-build.sh` also reads these:
+`apps/ios/scripts/testflight.sh` (and `publish-build.sh`, which calls it) also reads these:
 - `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` and `SENTRY_PROJECT` (set `ledger-apps`) for dSYM upload,
   from the environment or else `Secrets.Release.xcconfig`; the token is never printed
-- `ASC_KEY_ID` and `ASC_ISSUER_ID` (with the AuthKey `.p8`) for the TestFlight upload
+- `ASC_KEY_ID` and `ASC_ISSUER_ID` (with the AuthKey `.p8`) for the TestFlight upload and
+  `testflight-distribute.mjs`; both default to the single key in `~/.appstoreconnect/private_keys`
 
 ### Scraper (`scraper/.env`)
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `CCS_SCRAPER_TARGET_URL` | `http://127.0.0.1:8040` | Upload base URL. For v2, the Supabase URL. |
-| `CCS_SCRAPER_UPLOAD_PATH` | `/api/v1/jobs/upload` | For v2: `/functions/v1/statements-upload` |
+| `CCS_SCRAPER_TARGET_URL` | `http://127.0.0.1:8040` | Upload base URL: the Supabase URL. Always set it; the default is the removed legacy backend |
+| `CCS_SCRAPER_UPLOAD_PATH` | `/api/v1/jobs/upload` | Set `/functions/v1/statements-upload`; the default is the removed legacy route |
 | `{PROFILE}_CCS_SCRAPER_API_TOKEN` | — | Per-profile service token (v2 tokens are profile-scoped; scope `statements:upload`). Wins over the global token |
-| `CCS_SCRAPER_API_TOKEN` | — | Global fallback token for profiles without their own (legacy) |
+| `CCS_SCRAPER_API_TOKEN` | — | Global fallback token for profiles without their own |
 | `CCS_SCRAPER_SUPABASE_ANON_KEY` | — | Optional, sent as `apikey` |
 | `CCS_SCRAPER_UPLOAD_MAX_FILES`, `CCS_SCRAPER_UPLOAD_MAX_MB` | `20`, `32` | Upload batching: files and MB of PDF per request, clamped to the server's limits (20 files, 40 MB). A 413 halves the batch; batches that succeeded are recorded, so `upload-pending` retries only the rest |
 | `CCS_SCRAPER_HEADLESS`, `CCS_SCRAPER_DOWNLOAD_DIR`, `CCS_SCRAPER_BROWSER_*` | `true`, `./downloads`, Dubai | Browser settings |
 | `{PROFILE}_{BANK}_*` | — | Bank portal credentials per profile (see `scraper/.env.example`) |
 
-### Cutover script (`scripts/migrate_legacy.py`)
+### Production secret helpers (`scripts/cutover/`)
 
-`--target local|prod` is required and checked against the environment: `local` needs
-`LEDGER_DB_URL` / `SUPABASE_URL` on 127.0.0.1, `prod` needs both to name
-`<project-ref>`. Every step is a dry run unless `--apply`; `--apply` against prod also
-needs `--yes-i-mean-prod <project-ref>` (or the ref typed at the prompt). Tests:
-`backend/.venv/bin/python -m pytest -q scripts/tests`.
+Used for the production Edge Function secrets and Vault entries, and for secret rotation
+(PRODUCTION.md §2.4–2.5, §11):
 
-`LEDGER_DB_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `LEGACY_FERNET_KEY`,
-`LEGACY_STORAGE` (`gcs`|`local`), `LEGACY_GCS_BUCKET`, `GOOGLE_APPLICATION_CREDENTIALS`,
-`LEGACY_LOCAL_ROOT`. They live in the gitignored repo-root `.env.cutover`
-(`set -a; source .env.cutover; set +a`). See [PRODUCTION.md → Cutover](PRODUCTION.md#10-cutover-runbook).
-
-Production secret helpers (`scripts/cutover/`):
 - `set-edge-secrets.sh [--dry-run] [--sentry-release SHA]`: validates
   `supabase/functions/.env.production` (no empty or `<placeholder>` values, required keys
   present, no local-only keys) and pushes exactly its keys with `supabase secrets set`. Prints
@@ -359,13 +349,12 @@ Views: `v_spend` (the single spend definition) and `v_transactions` (the Activit
 Tables are readable by members under RLS. Owners edit categories, rules, budgets, accounts,
 cards and transaction user fields directly.
 
-## Legacy (until cutover)
+## Legacy v1 (removed)
 
-`backend/` (FastAPI + embedded worker on Render, PDFs in GCS), `frontend/` (React admin on
-Vercel), `deploy/` (Dockerfiles, Gmail relay on Cloud Run) and the `email-ingest-microsoft`
-GitHub Actions cron are v1. They are **frozen**: don't extend them. Their tables are in `public`
-of the same Supabase project until the cutover's first migration moves them into the `legacy`
-schema. The legacy workflows run only while the repository variable `LEGACY_DEPLOYS_ENABLED`
-is `true` (PRODUCTION.md §9). Setup notes stay in [`backend/README.md`](backend/README.md)
-and `frontend/`; `docs/operations/` and `docs/security/` describe v1 operations. Everything
-here is removed by the cutover in [PRODUCTION.md](PRODUCTION.md#10-cutover-runbook).
+The v1 stack (FastAPI `backend/` on Render, React `frontend/`, `deploy/` Dockerfiles and the
+Gmail relay, the one-off `scripts/migrate_legacy.py` cutover script) was deleted from the repo
+after the cutover; it lives on in git history only. Its **data** was not touched: the legacy
+tables stay in the `legacy` schema of the production database as the historical record (no
+client role can read them), and the migrations that reference that schema (quarantine, legacy
+import, parity report) are applied history and stay as they are. See
+[PRODUCTION.md §10](PRODUCTION.md#10-cutover-record).

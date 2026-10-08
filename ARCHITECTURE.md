@@ -2,11 +2,11 @@
 
 Ledger is a personal credit-card ledger for two people (and their household). Bank SMS alerts
 feed it in near real time, statement PDFs reconcile it, and categorisation and analytics run
-in the database. This document describes v2. The legacy v1 stack (`backend/`, `frontend/`) is
-summarised at the end. It is frozen and is deleted at cutover.
+in the database. This document describes v2. The legacy v1 stack was removed after the cutover;
+what remains of it (the `legacy` database schema) is summarised at the end.
 
 Related docs: [README.md](README.md) (setup, commands, env vars), [PRODUCTION.md](PRODUCTION.md)
-(deployment and cutover), [docs/contracts/parse-v1.md](docs/contracts/parse-v1.md) (parser ⇄ worker contract).
+(deployment, operations and the cutover record), [docs/contracts/parse-v1.md](docs/contracts/parse-v1.md) (parser ⇄ worker contract).
 
 ---
 
@@ -54,7 +54,6 @@ scales to zero), Vercel Hobby (web) and TestFlight (iOS). The scraper runs only 
 | **Design tokens** | `packages/tokens/` | One `tokens.json` generates CSS variables, a chart palette module and `Tokens.swift`. |
 | **DB types** | `packages/db-types/` | `supabase gen types` output. Never hand-written; CI checks for drift. |
 | **Scraper** | `scraper/` | Local-only Playwright CLI that downloads statements and uploads them to `statements-upload`. Its architecture is frozen. |
-| **Cutover script** | `scripts/migrate_legacy.py` | One-off legacy → v2 data move (metadata, secrets, PDFs, parity report). |
 
 ### Edge Functions
 
@@ -592,13 +591,21 @@ Bank SMS → Shortcuts automation → LogBankSMSIntent (openAppWhenRun = false, 
 
 ---
 
-## Legacy (until cutover)
+## Legacy v1 (removed)
 
-v1 is a FastAPI backend with an embedded worker on Render, PDFs in GCS, a React admin panel
-(`frontend/`) on Vercel, a Gmail relay on Cloud Run (`deploy/Dockerfile.gmail-relay`), and a
-GitHub Actions cron for Microsoft mail (`.github/workflows/email-ingest-microsoft.yml`). It uses
-the same Supabase project, and its tables are moved into the `legacy` schema by the first v2
-migration. `backend/` and `frontend/` are frozen: don't extend them. Their workflows run only
-while the repository variable `LEGACY_DEPLOYS_ENABLED` is `true`, are disabled at cutover and
-are removed with the code after it (PRODUCTION.md §9–10). The v2 deploy workflows are manual
-and run only from `main`.
+v1 was a FastAPI backend with an embedded worker on Render, PDFs in GCS, a React admin panel on
+Vercel, a Gmail relay on Cloud Run and a GitHub Actions cron for Microsoft mail. It shared the
+Supabase project with v2. The first v2 migration moved its tables into the `legacy` schema,
+and `scripts/migrate_legacy.py` (metadata, Vault secrets, PDFs, parity report) moved the data
+into v2 at cutover. After the cutover the v1 code, its deploy files and workflows, and the
+cutover script were deleted from the repo (git history keeps them).
+
+What stays:
+- The **`legacy` schema** in production, untouched, as the historical record. No client role
+  can use it. Dropping it is a separate, explicit decision (take a final `pg_dump` first).
+- The **migrations** that reference it (`…0000_quarantine_legacy`, `…0950_legacy_import`,
+  `…1800_audit_visibility_and_legacy`: import, `legacy_parity_report`, `legacy_missing_lines`
+  and the self-unscheduling `ledger-legacy-choices` cron).
+  They are applied history; migrations are append-only.
+- Provenance data in v2: `documents.source = 'legacy'`, `transaction_evidence.method = 'legacy'`,
+  `statement_lines.legacy_fingerprint` and the parser's `legacy_fingerprint` output.
