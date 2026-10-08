@@ -44,7 +44,7 @@ struct UploadLogTests {
 
     @Test("advice: a wrong password points at the web; unknown codes add nothing")
     func advice() {
-        #expect(UploadAdvice.forCode("PDF_DECRYPT_FAILED") == "Set the password on the web: Settings → Statement passwords. Then share the PDF again.")
+        #expect(UploadAdvice.forCode("PDF_DECRYPT_FAILED") == "Set the password on the web: Settings → Statement passwords. Then upload the PDF again.")
         #expect(UploadAdvice.forCode("INGEST_23514")?.contains("web") == true)
         #expect(UploadAdvice.forCode("SOMETHING_NEW") == nil)
         #expect(UploadAdvice.forCode(nil) == nil)

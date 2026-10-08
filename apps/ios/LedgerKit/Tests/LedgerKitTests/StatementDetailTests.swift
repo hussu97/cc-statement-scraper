@@ -67,8 +67,15 @@ struct StatementDetailTests {
     func lines() throws {
         let d = try LedgerJSON.decode(StatementDetail.self, from: try fixture("statement_detail"))
         let fx = d.debits.lines[0]
+        let held = d.debits.lines[1]
+        let dune = try LedgerJSON.decode(StatementDetail.Line.self, from: Data("""
+            {"line_code": "stl_d", "txn_code": "txn_d", "txn_date": "2026-08-26", "description": "DUNE COFFEE ROASTERS DUBAI AE",
+             "merchant_name": "Dune Coffee Roasters", "amount_aed": "27.28"}
+            """.utf8))
+        #expect(dune.printedDetail == nil)
         #expect(fx.title == "Amazon")
-        #expect(fx.printedDetail == "AMAZON MKTPLACE PMTS SEATTLE")
+        #expect(fx.printedDetail == "AMZN MKTP US*2K4QJ71Z0")
+        #expect(held.title == "CARREFOUR MOE DUBAI")
         #expect(fx.amountLabel(isCredit: false) == "AED 45.32")
         #expect(fx.originalLabel == "USD 12.34")
         #expect(fx.kindLabel == nil)
@@ -76,8 +83,8 @@ struct StatementDetailTests {
         #expect(fx.accessibilityLabel(isCredit: false, categoryName: "Shopping")
                 == "Amazon, 28 Aug, AED 45.32, originally USD 12.34, Shopping")
 
-        let held = d.debits.lines[1]
-        #expect(held.title == "CARREFOUR MOE DUBAI")
+        #expect(held.categoryLabel(nil) == "Not matched yet")
+        #expect(fx.categoryLabel(nil) == "Uncategorised" && fx.categoryLabel("Shopping") == "Shopping")
         #expect(held.printedDetail == nil)
         #expect(held.originalLabel == nil)
         #expect(!held.canOpen)

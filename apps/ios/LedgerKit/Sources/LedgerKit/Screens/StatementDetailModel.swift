@@ -210,10 +210,11 @@ extension StatementDetail.Line {
         return description.isEmpty ? "Statement line" : description
     }
 
-    /// The printed text under a merchant name, when it says something else.
+    /// The printed text under a merchant name, when it says something else
+    /// (not just the merchant again, perhaps followed by its city).
     public var printedDetail: String? {
         guard let merchantName, !merchantName.isEmpty, !description.isEmpty,
-              description.caseInsensitiveCompare(merchantName) != .orderedSame else { return nil }
+              description.range(of: merchantName, options: [.caseInsensitive, .anchored]) == nil else { return nil }
         return description
     }
 

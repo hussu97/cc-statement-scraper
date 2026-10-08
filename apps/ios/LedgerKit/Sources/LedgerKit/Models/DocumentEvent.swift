@@ -102,7 +102,7 @@ public enum UploadAdvice {
         guard let code else { return nil }
         switch code {
         case "PDF_DECRYPT_FAILED":
-            return "Set the password on the web: Settings → Statement passwords. Then share the PDF again."
+            return "Set the password on the web: Settings → Statement passwords. Then upload the PDF again."
         case "BANK_UNDETECTED":
             return "Upload it on the web and choose the bank."
         case "UNSUPPORTED_BANK", "UNSUPPORTED_LAYOUT":

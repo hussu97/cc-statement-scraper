@@ -19,9 +19,10 @@ struct BankLogo: View {
     private var onChip: Bool { BankDirectory.needsLightChip(bankCode: bankCode, darkMode: scheme == .dark) }
 
     var body: some View {
+        // On the chip the mark shrinks so the chip keeps the logo's footprint.
         mark
-            .frame(width: side, height: side)
-            .padding(onChip ? side * 0.12 : 0)
+            .frame(width: onChip ? side * 0.78 : side, height: onChip ? side * 0.78 : side)
+            .padding(onChip ? side * 0.11 : 0)
             .background {
                 // Dark marks (ENBD, SIB, EIB, FAB) sit on a light chip in dark mode.
                 if onChip { RoundedRectangle(cornerRadius: side * 0.22).fill(Color.white) }
