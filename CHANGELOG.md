@@ -18,6 +18,14 @@
 - **test** `member_invite_test.ts` (validation, same-origin redirects, owner/viewer, limits, cooldown); `e2e_local_test.ts` now covers a **viewer** getting 403 on `statements-upload` and `sms-ingest`, `member-invite` end to end (viewer 403, owner invite creates the Auth user and claims the pending row, resend cooldown, foreign redirect 422) and the failed-duplicate requeue
 - **test** SRV-11: `_tests/fake_db.ts` (in-memory supabase-js stand-in and fake fetch); `gmail_push_test.ts` (cursor init, per-page cursor, deadline, 404 reset + backfill, bounded backfill, size skip, revoked grant), `outlook_poll_test.ts` (resume from `nextLink`, 410 restart, deadline, token rotation persisted / save failure tolerated), `ingest_paths_test.ts` (`storeDocument` order, 23505 race, orphan removal, failed-duplicate requeue, `saveSyncState` merge and fallback, worker staleness, checked status writes)
 
+- **chore** SRV-13 (Edge part): `supabase/functions/deno.lock` is committed and frozen (`deno.json` `lock.frozen`); the edge runtime bundles with it (verified locally: a corrupt lock fails to boot). CI, the pre-push hook and the deploy job's test step run `deno check --frozen` / `deno test --frozen`, so a stale lock never ships
+- **chore** X-16r: committed `supabase/functions/.env.example` (names only, grouped required / production-only / local-only / optional); `.gitignore` re-allows `.env.example` after its trailing `.env*` rule; a guard test fails when code reads a key the example doesn't list or the example holds a value
+
+### CI
+
+- **feat** X-26: the `edge` job runs `deno check` (and lint/fmt/test) against the frozen lock; new `ios-build.yml` (weekly, on app changes, manual) regenerates the project with xcodegen and compiles the app and share extension for the simulator unsigned (`CODE_SIGNING_ALLOWED=NO`), no secrets (IOS-11's build half)
+- **chore** `deploy-parser.yml` is WIF-only: the `GCP_SA_KEY` fallback is gone (the repo secret was deleted); missing `GCP_WIF_PROVIDER` / `GCP_DEPLOY_SA` fail the configuration check
+
 ### Parser
 
 - **fix** SRV-18: the Sentry scrubber (`ccs_parser/sentry.py`) also replaces free-text email addresses with `[email]` (`test_scrubber_removes_free_text_emails`)
@@ -27,6 +35,7 @@
 - ARCHITECTURE §10: email scrubbing and per-request tag isolation
 - ARCHITECTURE §2 (`gmail-push`, `statements-upload`, `ops-monitor`, `_shared/provider.ts`), §10 health checks; README env table (`GMAIL_PUSH_BUDGET_MS`, `OPS_PARSE_QUEUE_AGE_S`) and upload response; PRODUCTION §2.5 optional overrides, §5 push responses
 - `member-invite`: README API table, ARCHITECTURE §2, PRODUCTION §2.2 (adding a member) and §2.5 (deploy list)
+- docs/ci-cd.md (edge job, `ios-build.yml`, WIF-only parser deploy, `GCP_SA_KEY` deleted, lock refresh how-to), PRODUCTION §2.5 (`.env.example`) and §9, README tests and local setup
 
 ## Supabase publishable / secret API keys — 2026-10-08 (branch `ledger-v2`)
 
