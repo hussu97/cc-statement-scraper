@@ -5,15 +5,22 @@ extension SupabaseLedgerAPI {
     /// Open reviews, then — in parallel — the SMS (parsed fields only, never
     /// the body), statement lines and candidate transactions they refer to,
     /// and the profile's accounts (for registering an unknown card).
-    public func reviewInbox(profileCode: String) async throws -> ReviewInbox {
-        let reviews = try await read([MatchReview].self) {
-            try await client.from("match_reviews")
-                .select("review_code,account_code,subject_type,subject_code,reason,candidates,created_at")
+    public func reviewInbox(profileCode: String, page: PageRequest) async throws -> ReviewInbox {
+        let reviews: [MatchReview]
+        let total: Int?
+        do {
+            let response = try await client.from("match_reviews")
+                .select("review_code,account_code,subject_type,subject_code,reason,candidates,created_at", count: .exact)
                 .eq("profile_code", value: profileCode)
                 .eq("status", value: "open")
                 .order("created_at", ascending: false)
-                .limit(200)
+                .order("review_code", ascending: false)
+                .range(from: page.offset, to: page.lastIndex)
                 .execute()
+            reviews = try LedgerJSON.decode([MatchReview].self, from: response.data)
+            total = response.count
+        } catch {
+            throw Self.map(error)
         }
         let smsCodes = reviews.filter { $0.subjectType == "sms" }.map(\.subjectCode)
         let lineCodes = reviews.filter { $0.subjectType == "statement_line" }.map(\.subjectCode)
@@ -50,7 +57,8 @@ extension SupabaseLedgerAPI {
             sms: Dictionary(s.map { ($0.smsCode, $0) }, uniquingKeysWith: { a, _ in a }),
             lines: Dictionary(l.map { ($0.lineCode, $0) }, uniquingKeysWith: { a, _ in a }),
             transactions: Dictionary(t.map { ($0.txnCode, $0) }, uniquingKeysWith: { a, _ in a }),
-            accounts: a)
+            accounts: a,
+            total: total)
     }
 
     public func resolveReview(reviewCode: String, action: ReviewAction) async throws -> String {

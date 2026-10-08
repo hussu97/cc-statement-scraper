@@ -65,11 +65,21 @@ public enum ReviewPresentation {
     }
 
     public static func groups(_ inbox: ReviewInbox) -> [ReviewGroup] {
-        let byReason = Dictionary(grouping: inbox.reviews, by: \.reason)
+        groups(items(inbox))
+    }
+
+    /// Every review of a page, described with that page's inbox.
+    public static func items(_ inbox: ReviewInbox) -> [ReviewItem] {
+        inbox.reviews.map { item($0, inbox: inbox) }
+    }
+
+    /// Items (from any number of pages) grouped by reason, in `order`;
+    /// newest first within a group, as loaded.
+    public static func groups(_ items: [ReviewItem]) -> [ReviewGroup] {
+        let byReason = Dictionary(grouping: items, by: \.review.reason)
         func rank(_ r: String) -> Int { order.firstIndex(of: r) ?? order.count }
         return byReason.keys.sorted { (rank($0), $0) < (rank($1), $1) }.map { reason in
-            ReviewGroup(reason: reason, title: title(reason), help: help(reason),
-                        items: byReason[reason]!.map { item($0, inbox: inbox) })
+            ReviewGroup(reason: reason, title: title(reason), help: help(reason), items: byReason[reason]!)
         }
     }
 
@@ -200,22 +210,64 @@ public enum ReviewPresentation {
 @MainActor
 @Observable
 public final class ReviewModel {
-    public private(set) var state: LoadState<[ReviewGroup]> = .idle
+    /// Open reviews, newest first, page after page.
+    public let list = Paginator<ReviewItem>()
     public private(set) var working: String?
     public var message: String?
     private let api: any LedgerAPI
+    private var loadedProfile: String?
 
     public init(api: any LedgerAPI) { self.api = api }
 
-    public var isEmpty: Bool { state.value?.isEmpty ?? false }
+    /// The loaded reviews, grouped by reason.
+    public var state: LoadState<[ReviewGroup]> {
+        switch list.state {
+        case .idle: .idle
+        case .loading(let items): .loading(previous: items.map(ReviewPresentation.groups))
+        case .loaded(let items): .loaded(ReviewPresentation.groups(items))
+        case .failed(let message, let items): .failed(message, previous: items.map(ReviewPresentation.groups))
+        }
+    }
+
+    public var footer: ListFooter { list.footer }
+    public var isEmpty: Bool { list.state.value?.isEmpty ?? false }
+    public var hasLoaded: Bool { loadedProfile != nil }
+
+    /// `"All 140 reviews"` under the last group.
+    public var endMessage: String {
+        ListEnd.message(count: list.items.count, total: list.total, singular: "review", plural: "reviews")
+    }
 
     public func load(profileCode: String) async {
-        state = state.startLoading()
-        do {
-            state = .loaded(ReviewPresentation.groups(try await api.reviewInbox(profileCode: profileCode)))
-        } catch {
-            state = state.fail(error)
+        let same = loadedProfile == profileCode
+        loadedProfile = profileCode
+        let api = self.api
+        await list.reload(keepingRows: same) { page in
+            let inbox = try await api.reviewInbox(profileCode: profileCode, page: page)
+            return ListPage(items: ReviewPresentation.items(inbox), total: inbox.total)
         }
+    }
+
+    /// Opening the screen: a fresh read (answers may have come from the web),
+    /// keeping the rows already shown for this ledger while it loads.
+    public func open(profileCode: String) async {
+        if loadedProfile == profileCode, list.hasLoaded { await list.refreshHead() } else { await load(profileCode: profileCode) }
+    }
+
+    public func footerAppeared() async { await list.footerAppeared() }
+    public func loadMore() async { await list.loadMore() }
+
+    /// Realtime / foreground, when the screen has been opened for this ledger.
+    public func refresh(profileCode: String) async {
+        guard loadedProfile == profileCode else { return }
+        await list.refreshHead()
+    }
+
+    public func reset() {
+        list.reset()
+        loadedProfile = nil
+        working = nil
+        message = nil
     }
 
     public func resolve(_ item: ReviewItem, _ option: ReviewItem.Option, profileCode: String) async {
@@ -224,9 +276,12 @@ public final class ReviewModel {
         do {
             let outcome = try await api.resolveReview(reviewCode: item.review.reviewCode, action: option.action)
             message = ReviewPresentation.outcomeMessage(outcome)
+            list.remove([item.id])   // answered: gone at once, wherever the reader has scrolled to
         } catch {
             message = ReviewPresentation.errorMessage(error)
         }
-        await load(profileCode: profileCode)
+        // An answer can close other reviews too (a registered card frees its
+        // waiting messages): refresh the newest page, keep the scrolled ones.
+        if loadedProfile == profileCode { await list.refreshHead() } else { await load(profileCode: profileCode) }
     }
 }

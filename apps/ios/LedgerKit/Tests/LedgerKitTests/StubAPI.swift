@@ -46,7 +46,12 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
 
     var inbox = ReviewInbox(reviews: [])
     private(set) var resolved: [(String, ReviewAction)] = []
-    func reviewInbox(profileCode: String) async throws -> ReviewInbox { inbox }
+    func reviewInbox(profileCode: String, page: PageRequest) async throws -> ReviewInbox {
+        count("reviewInbox")
+        let slice = Array(inbox.reviews.dropFirst(page.offset).prefix(page.limit))
+        return ReviewInbox(reviews: slice, sms: inbox.sms, lines: inbox.lines, transactions: inbox.transactions,
+                           accounts: inbox.accounts, total: inbox.reviews.count)
+    }
     func resolveReview(reviewCode: String, action: ReviewAction) async throws -> String {
         lock.withLock { resolved.append((reviewCode, action)) }
         if let resolveError { throw resolveError }
@@ -68,23 +73,93 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
     }
     func memberships() async throws -> [ProfileMembership] { [] }
     func createProfile(key: String, name: String) async throws -> String { "prf_x" }
-    func overview(profileCode: String, month: CalendarDay?) async throws -> Overview { throw LedgerAPIError.noProfile }
-    func categoryBreakdown(profileCode: String, from: CalendarDay, to: CalendarDay) async throws -> [CategorySpend] { [] }
+
+    // MARK: Screens (paging, months, refresh fan-out)
+
+    private var _counts: [String: Int] = [:]
+    /// How many times each read was called.
+    func calls(_ name: String) -> Int { lock.withLock { _counts[name, default: 0] } }
+    private func count(_ name: String) { lock.withLock { _counts[name, default: 0] += 1 } }
+
+    /// `v_transactions` per profile, newest first; pages are sliced from it.
+    var transactionRows: [String: [LedgerTransaction]] = [:]
+    private(set) var transactionRequests: [(query: ActivityQuery, page: PageRequest)] = []
+    private(set) var recategorised: [(txn: String, category: String, merchant: Bool)] = []
+    /// `filter_meta.date_range.min`.
+    var firstTransactionDay: CalendarDay?
+    /// Months `overview` was asked for (nil: current).
+    private(set) var overviewMonths: [CalendarDay?] = []
+    var overviewFixture: Overview?
+
+    func overview(profileCode: String, month: CalendarDay?) async throws -> Overview {
+        lock.withLock { overviewMonths.append(month) }
+        count("overview")
+        guard let overviewFixture else { throw LedgerAPIError.noProfile }
+        return overviewFixture
+    }
+    func categoryBreakdown(profileCode: String, from: CalendarDay, to: CalendarDay) async throws -> [CategorySpend] {
+        count("categoryBreakdown")
+        return []
+    }
     func spendSeries(profileCode: String, from: CalendarDay, to: CalendarDay, grain: SpendGrain, group: SpendGroup) async throws -> [SpendPoint] { [] }
     func merchantLeaderboard(profileCode: String, from: CalendarDay, to: CalendarDay, limit: Int) async throws -> [MerchantSpend] { [] }
-    func statementCycles(profileCode: String, limit: Int) async throws -> [StatementCycle] { [] }
-    func budgetStatus(profileCode: String, month: CalendarDay?) async throws -> [BudgetStatus] { [] }
+    func statementCycles(profileCode: String, limit: Int) async throws -> [StatementCycle] {
+        count("statementCycles")
+        return []
+    }
+    private(set) var budgetMonths: [CalendarDay?] = []
+    func budgetStatus(profileCode: String, month: CalendarDay?) async throws -> [BudgetStatus] {
+        lock.withLock { budgetMonths.append(month) }
+        return []
+    }
     func recurringList(profileCode: String) async throws -> [RecurringCharge] { [] }
     func filterMeta(profileCode: String) async throws -> FilterMeta {
-        FilterMeta(accounts: [], cards: [], categories: [], banks: [], dateRange: nil)
+        FilterMeta(accounts: [], cards: [], categories: [], banks: [],
+                   dateRange: FilterMeta.DateRange(min: firstTransactionDay, max: nil))
     }
-    func transactions(profileCode: String, query: ActivityQuery) async throws -> TransactionPage { .init(rows: [], total: 0) }
+    func transactions(profileCode: String, query: ActivityQuery, page: PageRequest) async throws -> TransactionPage {
+        count("transactions")
+        let all = lock.withLock {
+            transactionRequests.append((query, page))
+            return transactionRows[profileCode] ?? []
+        }
+        let matching = all.filter { query.keeps(categoryCode: $0.categoryCode) }
+        return .init(rows: Array(matching.dropFirst(page.offset).prefix(page.limit)), total: matching.count)
+    }
+    func transactions(profileCode: String, codes: [String]) async throws -> [LedgerTransaction] {
+        count("transactionsByCode")
+        let all = lock.withLock { transactionRows[profileCode] ?? [] }
+        return all.filter { codes.contains($0.txnCode) }
+    }
     func insights(profileCode: String) async throws -> [Insight] { [] }
     func dismissInsight(insightCode: String) async throws {}
-    func documents(profileCode: String, limit: Int) async throws -> [DocumentRecord] { [] }
-    func setTransactionCategory(txnCode: String, categoryCode: String, applyToMerchant: Bool) async throws {}
+    var documentRows: [DocumentRecord] = []
+    func documents(profileCode: String, page: PageRequest) async throws -> ListPage<DocumentRecord> {
+        count("documents")
+        return ListPage(items: Array(documentRows.dropFirst(page.offset).prefix(page.limit)), total: documentRows.count)
+    }
+    func setTransactionCategory(txnCode: String, categoryCode: String, applyToMerchant: Bool) async throws {
+        lock.withLock { recategorised.append((txnCode, categoryCode, applyToMerchant)) }
+    }
     func uploadStatements(profileCode: String, files: [UploadFile]) async throws -> UploadResponse { .init(uploads: []) }
-    func changes(profileCode: String) -> AsyncStream<LedgerChange> { AsyncStream { $0.finish() } }
+    /// Realtime: each subscription gets the next scripted change list, then
+    /// ends (a failed or dropped subscription). Past the script it stays open.
+    var changeScript: [[String]] = []
+    private(set) var subscriptions = 0
+    private var openStreams: [AsyncStream<LedgerChange>.Continuation] = []
+    func changes(profileCode: String) -> AsyncStream<LedgerChange> {
+        let script: [String]? = lock.withLock {
+            defer { subscriptions += 1 }
+            return subscriptions < changeScript.count ? changeScript[subscriptions] : nil
+        }
+        guard let script else {   // stays open until the subscriber stops
+            return AsyncStream { continuation in lock.withLock { openStreams.append(continuation) } }
+        }
+        return AsyncStream { continuation in
+            for table in script { continuation.yield(LedgerChange(table: table)) }
+            continuation.finish()
+        }
+    }
 }
 
 /// A clock tests can move.
