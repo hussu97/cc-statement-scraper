@@ -37,36 +37,33 @@ public final class AppModel {
     public let services: LedgerServices
     public let session: SessionStore
     public let profiles: ProfileStore
-    public let overview: OverviewModel
-    public let activity: ActivityModel
-    public let insights: InsightsModel
-    public let statements: StatementsModel
+    /// Overview, Activity, Insights, Statements and Review for the selected ledger.
+    public let screens: LedgerScreens
     public let settings: SettingsModel
-    public let review: ReviewModel
     /// Bank names and logos for every screen (environment object).
     public let banks: BankCatalog
     /// Insights' Monthly spend split (environment object).
     public let spendSplit: SpendSplitModel
 
-    private let live: LiveUpdates
-    private var liveProfile: String?
     private var lastPhase: SessionStore.Phase = .restoring
 
     public init(services: LedgerServices) {
         self.services = services
         session = SessionStore(client: services.client, storage: services.sessionStorage)
         profiles = ProfileStore(api: services.api, selection: services.selection, smsTargets: services.smsTargets)
-        overview = OverviewModel(api: services.api)
-        activity = ActivityModel(api: services.api)
-        insights = InsightsModel(api: services.api)
-        statements = StatementsModel(api: services.api, pendingUploads: services.pendingUploads,
-                                     flushPending: { await services.flushPendingUploads() })
+        screens = LedgerScreens(api: services.api, pendingUploads: services.pendingUploads,
+                                flushPending: { await services.flushPendingUploads() })
         banks = BankCatalog(api: services.api, supabaseURL: services.config.supabaseURL)
         spendSplit = SpendSplitModel(api: services.api)
         settings = SettingsModel(outbox: services.outbox, intake: services.smsIntake(), log: services.captureLog)
-        review = ReviewModel(api: services.api)
-        live = LiveUpdates(api: services.api)
     }
+
+    public var overview: OverviewModel { screens.overview }
+    public var activity: ActivityModel { screens.activity }
+    public var insights: InsightsModel { screens.insights }
+    public var statements: StatementsModel { screens.statements }
+    public var review: ReviewModel { screens.review }
+    public var month: MonthSelection { screens.month }
 
     public var route: AppRoute {
         AppRoute.resolve(phase: session.phase, profiles: profiles.state, selected: profiles.selectedCode,
@@ -91,50 +88,33 @@ public final class AppModel {
             }
             await services.outbox.flush()
         case .signedOut:
-            live.stop()
-            liveProfile = nil
+            screens.stop()
         default:
             break
         }
     }
 
-    /// Loads every tab for the profile and follows Realtime changes.
+    /// Points every tab at the profile (clearing the previous ledger's data
+    /// first) and follows Realtime changes.
     public func profileSelected(_ code: String) async {
-        if liveProfile != code {
-            liveProfile = code
-            live.start(profileCode: code) { [weak self] tables in
-                await self?.refresh(after: tables, profileCode: code)
-            }
-        }
-        async let c: Void = banks.refresh()
-        async let a: Void = overview.load(profileCode: code)
-        async let b: Void = activity.load(profileCode: code)
-        _ = await (a, b, c)
+        async let logos: Void = banks.refresh()
+        await screens.select(code)
+        await logos
     }
 
     /// The app came to the foreground: send anything the intent or the Share
-    /// Extension queued.
+    /// Extension queued, then refresh every tab that has been opened.
     public func becameActive() async {
         await services.outbox.flush()
-        if await services.flushPendingUploads() > 0, case .main(let code) = route {
-            await statements.load(profileCode: code)
-        }
+        _ = await services.flushPendingUploads()
         await settings.refresh()
-        if case .main(let code) = route { await overview.load(profileCode: code) }
+        guard case .main = route else { return }
+        await screens.refreshAll()
     }
 
     public func signOut() async {
-        live.stop()
-        liveProfile = nil
+        screens.stop()
         await session.signOut()
         profiles.reset()
-    }
-
-    func refresh(after tables: Set<String>, profileCode: String) async {
-        if !tables.isDisjoint(with: ["transactions", "sms_messages", "insights"]) {
-            await overview.load(profileCode: profileCode)
-        }
-        if tables.contains("transactions") { await activity.load(profileCode: profileCode) }
-        if tables.contains("documents") { await statements.load(profileCode: profileCode) }
     }
 }

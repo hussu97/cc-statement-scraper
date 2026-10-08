@@ -34,14 +34,6 @@ extension SupabaseLedgerAPI {
         }
     }
 
-    public func transaction(profileCode: String, txnCode: String) async throws -> LedgerTransaction? {
-        try await read([LedgerTransaction].self) {
-            try await client.from("v_transactions").select("*")
-                .eq("profile_code", value: profileCode).eq("txn_code", value: txnCode)
-                .limit(1).execute()
-        }.first
-    }
-
     public func documentEvents(profileCode: String, docCodes: [String]) async throws -> [DocumentEvent] {
         guard !docCodes.isEmpty else { return [] }
         return try await read([DocumentEvent].self) {

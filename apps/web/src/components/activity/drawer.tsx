@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeftRight, ChevronDown, FileText, Lock, MessageSquareText } from "lucide-react";
 import {
@@ -42,10 +42,23 @@ export function TransactionDrawer({ txnCode, onClose, meta }: { txnCode: string 
   const { profile_code } = useActiveProfile();
   const q = useTransaction(profile_code, txnCode ?? null);
   const t = q.data;
+  // The drawer is URL-driven, so Radix never saw a trigger: remember which row
+  // opened it and hand focus back to that row on close (WEB-19).
+  const lastCode = useRef(txnCode);
+  useEffect(() => {
+    if (txnCode) lastCode.current = txnCode;
+  }, [txnCode]);
   return (
     <Sheet
       open={!!txnCode}
       onOpenChange={(o) => !o && onClose()}
+      onCloseAutoFocus={(e) => {
+        const opener = lastCode.current ? document.querySelector<HTMLElement>(`[data-txn-open="${CSS.escape(lastCode.current)}"]`) : null;
+        if (opener) {
+          e.preventDefault();
+          opener.focus({ preventScroll: false });
+        }
+      }}
       title={t ? (t.merchant_name ?? t.description ?? "Transaction") : "Transaction"}
       description={t ? t.description ?? undefined : undefined}
     >
@@ -64,7 +77,7 @@ export function TransactionDrawer({ txnCode, onClose, meta }: { txnCode: string 
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-[120px_1fr] gap-3 py-2 text-[13px]">
+    <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-3 py-2 text-[13px] sm:grid-cols-[120px_minmax(0,1fr)]">
       <dt className="text-subtle">{label}</dt>
       <dd className="min-w-0 text-ink">{children}</dd>
     </div>
@@ -83,7 +96,7 @@ function DrawerBody({ t, meta }: { t: TxnRow; meta: FilterMeta | undefined }) {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <Money value={amount.value} currency={amount.currency} direction={t.direction} className="display-num text-[36px] leading-none" />
+        <Money value={amount.value} currency={amount.currency} direction={t.direction} className="display-num text-[32px] leading-none sm:text-[36px]" />
         {amount.original && <p className="tabular mt-1.5 text-[13px] text-muted">{formatMoney(amount.original.value, { currency: amount.original.currency })}</p>}
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <StatusBadge status={t.status} />
@@ -200,8 +213,8 @@ function RelatedReversal({ t }: { t: TxnRow }) {
         <ArrowLeftRight className="size-3.5" /> {t.related_txn_code ? "Reverses" : "Reversed by"}
       </p>
       {related.map((r) => (
-        <Link key={r.txn_code} to="/activity" search={(s) => ({ ...s, txn: r.txn_code ?? undefined })} className="flex items-center justify-between gap-3 text-[13px] hover:text-accent">
-          <span className="truncate">{r.merchant_name ?? r.description} · {formatDate(r.txn_date, "short")}</span>
+        <Link key={r.txn_code} to="/activity" replace search={(s) => ({ ...s, txn: r.txn_code ?? undefined })} className="flex items-center justify-between gap-3 text-[13px] hover:text-accent">
+          <span className="min-w-0 truncate">{r.merchant_name ?? r.description} · {formatDate(r.txn_date, "short")}</span>
           <TxnAmount t={r} showOriginal={false} />
         </Link>
       ))}
@@ -254,7 +267,7 @@ function EvidenceEntry({ e }: { e: EvidenceItem }) {
       {e.sms_messages && <SmsEvidence sms={e.sms_messages} />}
       {e.statement_lines && (
         <div className="mt-2 rounded-md border border-border bg-bg px-3 py-2 text-[12px]">
-          <p className="font-mono text-[11.5px] break-words text-ink-2">{e.statement_lines.description_raw}</p>
+          <p className="font-mono text-[11.5px] text-ink-2 [overflow-wrap:anywhere]">{e.statement_lines.description_raw}</p>
           <p className="tabular mt-1 text-muted">
             {formatMoney(e.statement_lines.amount_original, { currency: e.statement_lines.currency_original })}
             {e.statement_lines.currency_original !== "AED" && e.statement_lines.amount_aed !== null && ` → ${formatMoney(e.statement_lines.amount_aed)}`}

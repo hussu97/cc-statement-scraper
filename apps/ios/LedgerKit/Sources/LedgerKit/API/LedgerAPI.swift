@@ -26,14 +26,19 @@ public protocol LedgerAPI: SMSIngestAPI {
     func filterMeta(profileCode: String) async throws -> FilterMeta
 
     // Tables / views
-    func transactions(profileCode: String, query: ActivityQuery) async throws -> TransactionPage
+    /// One page of `v_transactions`, newest first, with the exact total.
+    func transactions(profileCode: String, query: ActivityQuery, page: PageRequest) async throws -> TransactionPage
+    /// The given rows of `v_transactions` (any order): re-reads rows after an edit.
+    func transactions(profileCode: String, codes: [String]) async throws -> [LedgerTransaction]
     func insights(profileCode: String) async throws -> [Insight]
     func dismissInsight(insightCode: String) async throws
-    func documents(profileCode: String, limit: Int) async throws -> [DocumentRecord]
+    /// One page of uploads, newest first, with the exact total.
+    func documents(profileCode: String, page: PageRequest) async throws -> ListPage<DocumentRecord>
 
     // Review (match_reviews)
-    /// Open reviews for the profile with what the screen needs to describe them.
-    func reviewInbox(profileCode: String) async throws -> ReviewInbox
+    /// One page of open reviews (newest first) with what the screen needs to
+    /// describe them, and the exact number of open reviews.
+    func reviewInbox(profileCode: String, page: PageRequest) async throws -> ReviewInbox
     /// `rpc('resolve_review')`; returns the server's `outcome`. `.retryWithAI`
     /// goes to `retrySMSFallback` and returns `"retrying"`.
     func resolveReview(reviewCode: String, action: ReviewAction) async throws -> String
@@ -53,8 +58,6 @@ public protocol LedgerAPI: SMSIngestAPI {
                         topN: Int) async throws -> SpendBreakdown
     /// `public.banks` (names, logos, SMS senders).
     func banks() async throws -> [BankInfo]
-    /// One `v_transactions` row, for the transaction sheet; nil when gone.
-    func transaction(profileCode: String, txnCode: String) async throws -> LedgerTransaction?
     /// `public.document_events` of these documents, in server order.
     func documentEvents(profileCode: String, docCodes: [String]) async throws -> [DocumentEvent]
     /// New `document_events` rows of the profile, live (Realtime INSERTs).
@@ -63,6 +66,18 @@ public protocol LedgerAPI: SMSIngestAPI {
     /// Fires whenever a row the screens show changes (transactions, SMS,
     /// documents, insights) for the profile. Ends when the caller stops iterating.
     func changes(profileCode: String) -> AsyncStream<LedgerChange>
+}
+
+extension LedgerAPI {
+    /// The newest uploads, first page only.
+    public func documents(profileCode: String, limit: Int) async throws -> [DocumentRecord] {
+        try await documents(profileCode: profileCode, page: PageRequest(offset: 0, limit: limit)).items
+    }
+
+    /// The first page of open reviews.
+    public func reviewInbox(profileCode: String) async throws -> ReviewInbox {
+        try await reviewInbox(profileCode: profileCode, page: PageRequest(offset: 0, limit: ActivityQuery.defaultPageSize))
+    }
 }
 
 public enum SpendGrain: String, Sendable { case day, week, month }

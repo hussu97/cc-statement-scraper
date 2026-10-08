@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useRouter } from "@tanstack/react-router";
 import { NotebookPen, ReceiptText, X } from "lucide-react";
 import { activityRoute } from "@/router";
 import { listSearch, withFilter, type ActivitySearch } from "@/lib/activity-filters";
@@ -30,6 +30,15 @@ export function ActivityPage() {
   const q = useTransactions(profile_code, list);
   const meta = useFilterMeta(profile_code);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Phones have no checkbox column: "Select" turns it on (WEB-24).
+  const [selecting, setSelecting] = useState(false);
+  const router = useRouter();
+  // True while the open drawer was pushed from this list, so closing it can
+  // pop that entry instead of pushing another (Back no longer reopens it, WEB-43).
+  const pushedDrawer = useRef(false);
+  useEffect(() => {
+    if (!search.txn) pushedDrawer.current = false;
+  }, [search.txn]);
   const toast = useToast();
   const setCat = useSetCategory(profile_code);
   const bulk = useBulkSetCategory(profile_code);
@@ -59,7 +68,27 @@ export function ActivityPage() {
       <PageHeader
         title="Activity"
         description="Every card transaction from SMS alerts and statements, matched into one ledger."
-        actions={q.data ? <span className="tabular text-sm text-muted">{formatCount(q.data.total)} transactions</span> : null}
+        actions={
+          q.data ? (
+            <>
+              <span className="tabular text-sm text-muted">{formatCount(q.data.total)} transactions</span>
+              {isOwner && rows.length > 0 && (
+                <Button
+                  size="sm"
+                  variant={selecting ? "primary" : "secondary"}
+                  className="md:hidden"
+                  aria-pressed={selecting}
+                  onClick={() => {
+                    setSelecting((s) => !s);
+                    setSelected(new Set());
+                  }}
+                >
+                  {selecting ? "Done" : "Select"}
+                </Button>
+              )}
+            </>
+          ) : null
+        }
       />
       <ActivityFilters search={search} patch={patch} meta={meta.data} onClear={() => go({})} />
 
@@ -95,7 +124,7 @@ export function ActivityPage() {
             </div>
             {groups.map((g) => (
               <div key={g.day} role="rowgroup">
-                <div className="sticky top-14 z-[1] border-b border-border bg-surface-2/95 px-4 py-1.5 text-[12px] font-medium text-ink-2 backdrop-blur lg:top-0">
+                <div className="sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-[1] border-b border-border bg-surface-2/95 px-4 py-1.5 text-[12px] font-medium text-ink-2 backdrop-blur lg:top-0">
                   {formatDate(g.day, "day")}
                 </div>
                 {g.rows.map((t) => (
@@ -103,8 +132,12 @@ export function ActivityPage() {
                     key={t.txn_code}
                     t={t}
                     selected={selected.has(t.txn_code!)}
+                    selecting={selecting}
                     onToggle={isOwner ? () => toggle(t.txn_code!) : undefined}
-                    onOpen={() => void navigate({ search: { ...search, txn: t.txn_code! }, replace: false })}
+                    onOpen={() => {
+                      pushedDrawer.current = true;
+                      void navigate({ search: { ...search, txn: t.txn_code! } });
+                    }}
                     categories={meta.data?.categories ?? []}
                     canEdit={isOwner}
                     onCategory={(code, toMerchant) =>
@@ -135,13 +168,24 @@ export function ActivityPage() {
       )}
 
       {selected.size > 0 && (
-        <div className="fixed inset-x-0 bottom-16 z-30 flex justify-center px-4 lg:bottom-6 lg:pl-60">
-          <div role="region" aria-label="Bulk actions" className="flex items-center gap-3 rounded-lg border border-border-strong bg-surface px-4 py-2.5 shadow-[0_16px_40px_-20px_var(--color-ink)] animate-rise">
-            <span className="tabular text-sm text-ink">{selected.size} selected</span>
+        // Sits above the phone tab bar and the home indicator.
+        <div className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 flex justify-center px-4 lg:bottom-6 lg:pl-60">
+          <div
+            role="region"
+            aria-label="Bulk actions"
+            className="flex max-w-full min-w-0 items-center gap-2 rounded-lg border border-border-strong bg-surface py-2 pr-2 pl-4 shadow-[0_16px_40px_-20px_var(--color-ink)] animate-rise sm:gap-3"
+          >
+            <span className="tabular shrink-0 text-sm text-ink">{selected.size} selected</span>
+            {!allSelected && (
+              <Button size="sm" variant="ghost" className="md:hidden" onClick={() => setSelected(new Set(rows.map((r) => r.txn_code!)))}>
+                All
+              </Button>
+            )}
             <CategoryPicker
               categories={meta.data?.categories ?? []}
               value={null}
-              triggerClassName="border-border bg-surface-2 not-italic text-ink"
+              emptyLabel="Categorise…"
+              triggerClassName="h-8 min-w-0 border-border bg-surface-2 not-italic text-ink"
               disabled={bulk.isPending}
               onSelect={(code) =>
                 bulk.mutate(
@@ -163,7 +207,18 @@ export function ActivityPage() {
         </div>
       )}
 
-      <TransactionDrawer txnCode={search.txn} meta={meta.data} onClose={() => void navigate({ search: { ...search, txn: undefined } })} />
+      <TransactionDrawer
+        txnCode={search.txn}
+        meta={meta.data}
+        onClose={() => {
+          if (pushedDrawer.current) {
+            pushedDrawer.current = false;
+            router.history.back();
+          } else {
+            void navigate({ search: { ...search, txn: undefined }, replace: true });
+          }
+        }}
+      />
     </div>
   );
 }
@@ -171,6 +226,7 @@ export function ActivityPage() {
 function TxnLine({
   t,
   selected,
+  selecting,
   onToggle,
   onOpen,
   categories,
@@ -179,38 +235,45 @@ function TxnLine({
 }: {
   t: TxnRow;
   selected: boolean;
+  /** Phone select mode: the checkbox column shows and tapping a row toggles it. */
+  selecting: boolean;
   onToggle?: () => void;
   onOpen: () => void;
   categories: NonNullable<ReturnType<typeof useFilterMeta>["data"]>["categories"];
   canEdit: boolean;
   onCategory: (code: string | null, toMerchant: boolean) => void;
 }) {
+  const picking = selecting && !!onToggle;
   return (
     <div
       role="row"
       className={cn(
-        "group grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 border-b border-border px-4 py-2.5 last:border-b-0 last:rounded-b-lg md:grid-cols-[28px_minmax(0,1fr)_200px_120px_130px]",
+        "group grid items-center gap-x-3 gap-y-1 border-b border-border px-4 py-2.5 last:border-b-0 last:rounded-b-lg md:grid-cols-[28px_minmax(0,1fr)_200px_120px_130px]",
+        picking ? "grid-cols-[20px_minmax(0,1fr)_auto]" : "grid-cols-[minmax(0,1fr)_auto]",
         selected ? "bg-accent-soft/50" : "hover:bg-surface-2/50",
         (t.status === "void" || t.exclude_from_spend) && "text-muted",
       )}
     >
-      <span role="cell" className="hidden md:block">
-        {onToggle && <Checkbox aria-label={`Select ${t.description}`} checked={selected} onCheckedChange={onToggle} />}
+      <span role="cell" className={picking ? "flex" : "hidden md:block"}>
+        {onToggle && <Checkbox aria-label={`Select ${t.merchant_name ?? t.description}`} checked={selected} onCheckedChange={onToggle} />}
       </span>
-      <button role="cell" type="button" onClick={onOpen} className="min-w-0 text-left">
-        <span className={cn("flex items-center gap-1.5 truncate text-sm text-ink", t.status === "void" && "line-through decoration-subtle")}>
-          <span className="truncate">{t.merchant_name ?? t.description}</span>
-          {t.notes && <NotebookPen className="size-3 shrink-0 text-subtle" aria-label="Has a note" />}
-        </span>
-        <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-muted">
-          {t.txn_at && <span className="tabular">{formatTime(t.txn_at)}</span>}
-          <span className="truncate md:hidden">{t.bank_code} •{t.card_last4}</span>
-          <EvidenceBadge kind={evidenceBadge(t)} />
-          <StatusBadge status={t.status} />
-          {t.exclude_from_spend && <span>excluded</span>}
-        </span>
-      </button>
-      <span role="cell" className="order-last col-span-2 -ml-2 min-w-0 md:order-none md:col-span-1">
+      {/* A real button inside the cell keeps button semantics (WEB-20); data-txn-open lets the drawer return focus here (WEB-19). */}
+      <span role="cell" className="min-w-0">
+        <button type="button" data-txn-open={t.txn_code} onClick={picking ? onToggle : onOpen} aria-pressed={picking ? selected : undefined} className="block w-full min-w-0 text-left">
+          <span className={cn("flex items-center gap-1.5 truncate text-sm text-ink", t.status === "void" && "line-through decoration-subtle")}>
+            <span className="truncate">{t.merchant_name ?? t.description}</span>
+            {t.notes && <NotebookPen className="size-3 shrink-0 text-subtle" aria-label="Has a note" />}
+          </span>
+          <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-muted">
+            {t.txn_at && <span className="tabular">{formatTime(t.txn_at)}</span>}
+            <span className="truncate md:hidden">{t.bank_code} •{t.card_last4}</span>
+            <EvidenceBadge kind={evidenceBadge(t)} />
+            <StatusBadge status={t.status} />
+            {t.exclude_from_spend && <span>excluded</span>}
+          </span>
+        </button>
+      </span>
+      <span role="cell" className={cn("order-last col-span-2 -ml-2 min-w-0 md:order-none md:col-span-1 md:col-start-auto", picking && "col-start-2")}>
         <CategoryPicker
           categories={categories}
           value={t.category_code}

@@ -5,6 +5,7 @@ import { displayAmount, formatMoney, formatTxnAmount, type MoneyInput, type TxnA
 import { Popover, PopoverContent, PopoverTrigger, Checkbox, Tooltip } from "./ui/primitives";
 import { Badge, Dot, type Tone } from "./ui/display";
 import { orderCategories } from "@/data/rules";
+import { useMediaQuery } from "@/lib/hooks";
 
 export function Money({ value, currency = "AED", direction, className, signed, compact }: { value: MoneyInput; currency?: string; direction?: string | null; className?: string; signed?: boolean; compact?: boolean }) {
   const text = direction ? formatTxnAmount(value, direction, currency) : formatMoney(value, { currency, signed, compact });
@@ -105,6 +106,7 @@ export function CategoryPicker({
   disabled,
   source,
   triggerClassName,
+  emptyLabel,
 }: {
   categories: PickerCategory[];
   value: string | null | undefined;
@@ -115,10 +117,14 @@ export function CategoryPicker({
   disabled?: boolean;
   source?: string | null;
   triggerClassName?: string;
+  /** Trigger text when there is no value (an action label such as "Categorise…" for bulk). */
+  emptyLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [toMerchant, setToMerchant] = useState(false);
+  // On touch screens the keyboard would cover the list: don't focus the search box.
+  const touch = useMediaQuery("(pointer: coarse)");
   const list = useMemo(() => {
     const active = categories.filter((c) => !c.archived);
     const ordered = orderCategories(active.map((c) => ({ ...c, sort_order: c.sort_order ?? 100 })));
@@ -142,24 +148,25 @@ export function CategoryPicker({
             value ? "text-ink-2" : "text-subtle italic",
             triggerClassName,
           )}
-          aria-label={value ? `Category: ${label}. Change` : "Set category"}
+          aria-label={value ? `Category: ${label}. Change` : (emptyLabel ?? "Set category")}
         >
-          {value ? <Dot token={colorToken} /> : <Tag className="size-3" aria-hidden />}
-          <span className="truncate">{value ? label : "Uncategorised"}</span>
+          {value ? <Dot token={colorToken} /> : <Tag className="size-3 shrink-0" aria-hidden />}
+          {/* pr-0.5: an italic last glyph is clipped by `truncate` otherwise (WEB-30). */}
+          <span className="truncate pr-0.5">{value ? label : (emptyLabel ?? "Uncategorised")}</span>
           {source === "suggested" && <span className="text-[10px] text-subtle not-italic">(suggested)</span>}
           {!disabled && <ChevronDown className="size-3 shrink-0 text-subtle" aria-hidden />}
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-64 p-0">
+      <PopoverContent className="w-64 p-0" onOpenAutoFocus={touch ? (e) => e.preventDefault() : undefined}>
         <div className="flex items-center gap-2 border-b border-border px-3">
-          <Search className="size-3.5 text-subtle" aria-hidden />
+          <Search className="size-3.5 shrink-0 text-subtle" aria-hidden />
           <input
-            autoFocus
+            autoFocus={!touch}
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Find a category"
             aria-label="Find a category"
-            className="h-9 w-full bg-transparent text-[13px] text-ink outline-none placeholder:text-subtle"
+            className="h-10 w-full min-w-0 bg-transparent text-[13px] text-ink outline-none placeholder:text-subtle lg:h-9"
             onKeyDown={(e) => {
               if (e.key === "Enter" && list[0]) pick(list[0].category_code);
             }}
@@ -173,7 +180,7 @@ export function CategoryPicker({
                 role="option"
                 aria-selected={c.category_code === value}
                 onClick={() => pick(c.category_code)}
-                className={cn("flex h-8 w-full items-center gap-2 rounded-sm px-2 text-left text-[13px] text-ink hover:bg-surface-2", c.depth && "pl-6")}
+                className={cn("flex h-10 w-full items-center gap-2 rounded-sm px-2 text-left text-sm text-ink hover:bg-surface-2 lg:h-8 lg:text-[13px]", c.depth && "pl-6")}
               >
                 <Dot token={c.color_token} />
                 <span className="flex-1 truncate">{c.name}</span>
@@ -185,13 +192,13 @@ export function CategoryPicker({
         </ul>
         <div className="flex flex-col gap-2 border-t border-border p-2">
           {allowApplyToMerchant && (
-            <label className="flex cursor-pointer items-center gap-2 px-1 text-[12px] text-ink-2">
+            <label className="flex min-h-10 cursor-pointer items-center gap-2 px-1 text-[12px] text-ink-2 lg:min-h-0">
               <Checkbox checked={toMerchant} onCheckedChange={(v) => setToMerchant(v === true)} />
               Apply to every transaction from this merchant
             </label>
           )}
           {value && (
-            <button type="button" onClick={() => pick(null)} className="h-7 rounded-sm px-1 text-left text-[12px] text-muted hover:text-ink">
+            <button type="button" onClick={() => pick(null)} className="h-10 rounded-sm px-1 text-left text-[12px] text-muted hover:text-ink lg:h-7">
               Clear my choice
             </button>
           )}

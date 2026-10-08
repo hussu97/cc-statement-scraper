@@ -29,6 +29,7 @@ public enum LedgerDates {
     nonisolated(unsafe) private static let dayMonthYear = formatter("d MMM yyyy")
     nonisolated(unsafe) private static let monthYear = formatter("MMMM yyyy")
     nonisolated(unsafe) private static let shortMonth = formatter("MMM")
+    nonisolated(unsafe) private static let fullMonth = formatter("MMMM")
     nonisolated(unsafe) private static let time = formatter("HH:mm")
 
     /// Today's business date.
@@ -53,6 +54,9 @@ public enum LedgerDates {
 
     /// `"October 2026"`.
     public static func monthTitle(_ day: CalendarDay) -> String { monthYear.string(from: day.startDate) }
+
+    /// `"October"`.
+    public static func monthName(_ day: CalendarDay) -> String { fullMonth.string(from: day.startDate) }
 
     /// `"Oct"` — chart axis.
     public static func monthAbbrev(_ day: CalendarDay) -> String { shortMonth.string(from: day.startDate) }

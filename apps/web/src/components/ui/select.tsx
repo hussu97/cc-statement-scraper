@@ -37,11 +37,11 @@ export function Select({
         aria-label={ariaLabel}
         className={cn(
           "inline-flex items-center justify-between gap-2 rounded-md border border-border bg-surface px-3 text-left text-sm text-ink transition-colors hover:border-border-strong focus:border-accent focus:outline-none data-[placeholder]:text-subtle disabled:opacity-60",
-          size === "sm" ? "h-8 text-[13px]" : "h-10",
+          size === "sm" ? "tap h-8 text-[13px]" : "h-10",
           className,
         )}
       >
-        <span className="truncate">
+        <span className="min-w-0 truncate">
           <S.Value placeholder={placeholder} />
         </span>
         <S.Icon>
@@ -52,7 +52,8 @@ export function Select({
         <S.Content
           position="popper"
           sideOffset={4}
-          className="z-50 max-h-[min(360px,var(--radix-select-content-available-height))] min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-md border border-border bg-surface shadow-[0_8px_24px_-12px_var(--color-border-strong)] animate-fade-in"
+          collisionPadding={12}
+          className="z-50 max-h-[min(360px,var(--radix-select-content-available-height))] max-w-[var(--radix-select-content-available-width)] min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-md border border-border bg-surface shadow-[0_8px_24px_-12px_var(--color-border-strong)] animate-fade-in"
         >
           <S.Viewport className="p-1">
             {options.map((o) => (
@@ -60,7 +61,7 @@ export function Select({
                 key={o.value}
                 value={o.value}
                 disabled={o.disabled}
-                className="relative flex h-8 cursor-pointer items-center rounded-sm pr-2 pl-7 text-[13px] text-ink outline-none select-none data-[disabled]:opacity-50 data-[highlighted]:bg-surface-2"
+                className="relative flex h-10 cursor-pointer items-center rounded-sm pr-2 pl-7 text-sm text-ink lg:h-8 lg:text-[13px] outline-none select-none data-[disabled]:opacity-50 data-[highlighted]:bg-surface-2"
               >
                 <S.ItemIndicator className="absolute left-2">
                   <Check className="size-3.5 text-accent" aria-hidden />

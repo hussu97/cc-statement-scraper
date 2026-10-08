@@ -1,5 +1,51 @@
 # Changelog
 
+## Bank logos — 2026-10-08 (branch `ledger-v2`)
+
+### Web
+
+- **feat** `assets/banks/<BANK_CODE>.png` for ADCB, EIB, ENBD, FAB, MASHREQ and SIB: 256×256 transparent PNGs (1–4 KB each) of each bank's mark, built from the banks' own site SVGs or Wikimedia vector files, legible at 24–32 px. `scripts/brand/upload-bank-logos.sh [--dry-run]` upserts them into the public `bank-logos` Storage bucket (`SUPABASE_URL` + `SUPABASE_SECRET_KEY`; the key goes on `apikey` via curl's stdin config, never argv or output)
+
+### Docs
+
+- `assets/banks/README.md`: per-bank source URLs, retrieval date, trademark note, and the dark-mode advice (navy/purple marks go on a light chip)
+
+## Mobile web audit — 2026-10-09 (branch `ledger-v2`)
+
+### Web
+
+- **fix** Drawers and sheets cut off at the left edge on iPhone ("yment Received Thank You", "ED 2,201.00"): iOS Safari zooms the page in when a text field under 16px gets focus and never zooms back out, and the transaction drawer's category picker auto-focused a 13px search box. Every text field is now 16px on phones and touch screens (one unlayered rule in `styles.css` that beats `text-sm` utilities), and the picker no longer auto-focuses its search box on touch screens (the keyboard covered the list)
+- **fix** `Sheet` / `Dialog` (`components/ui/dialog.tsx`): long titles and descriptions wrap (`overflow-wrap: anywhere`) instead of pushing the close button out; the close button is a 40px box with a 44px hit area; the body clips sideways so wide content scrolls inside the sheet; the bottom sheet and its footer clear the home indicator (`env(safe-area-inset-bottom)`); `Dialog` is sized with `%` of the viewport box instead of `100vw`; both accept `onCloseAutoFocus`
+- **fix** Safe areas: the phone header clears the status bar / notch (`viewport-fit=cover`), page content clears the landscape notch and the home indicator, and toasts sit above the tab bar *and* the home indicator. Toasts no longer cover the tab bar on tablets (768–1023px, where the tab bar still shows) and span the width on phones
+- **fix** `body { overflow-x: clip }` so a stray wide element can never make a page pan sideways on a phone; `-webkit-text-size-adjust: 100%` stops iOS inflating text in landscape
+- **fix** Tap targets on phones: menu items, select options and category-picker rows are 40px below `lg` (32px on desktop); the select's small trigger, segmented controls, toast dismiss, brand link and the privacy page's back link get the 44px `tap` hit area. Popovers, menus and selects are capped to the available width (`--radix-*-content-available-width`)
+- **feat** WEB-44: tab strips (Insights' nine tabs, Rules, Settings) fade at the edge where more tabs are hidden and scroll the active tab into view (`useScrollEdges`, pure `scrollEdges` / `revealScrollLeft` in `lib/scroll.ts`)
+- **fix** WEB-30: italic "Uncategorised" no longer loses its last glyph when truncated
+- **fix** WEB-32: the Statements row's status column has a fixed width, so the "Doesn't add up" badge no longer shifts the other columns
+- **fix** WEB-33: Rules and Settings use the same page container as the other screens
+- **fix** Review: a "Possible matches" row no longer squeezes the merchant to "Dun…" with the date stacked one word per line on a phone; the amount and "Same purchase" wrap below instead
+- **fix** Rule editor on phones: "When the description" wrapping to two lines no longer pushes the match-type select below the text field
+- **fix** More phone hit areas: Overview category rows (40px), "All activity", Insights merchant names, Documents file names, the search box's clear button, the ledger switcher and the privacy-policy links
+- **feat** WEB-24 (mobile part): Activity has a **Select** button on phones that shows the checkbox column; in select mode tapping a row toggles it, and the bulk bar offers **All** and a **Categorise…** picker (it used to show a state-like "Uncategorised" pill). The bulk bar sits above the tab bar and the home indicator. Exclude, CSV export and a server-computed total remain open
+- **fix** WEB-20: each Activity row's main action is a real `<button>` inside a `role="cell"` span, not `<button role="cell">`
+- **fix** WEB-19: closing the URL-driven transaction drawer returns focus to the row that opened it
+- **fix** WEB-43: closing a drawer opened from the list pops its history entry (Back no longer reopens it); a deep-linked drawer closes with `replace`, and a "Reverses / Reversed by" link swaps the drawer in place
+- **fix** Transaction drawer on phones: narrower label column, a 32px amount, long raw statement lines wrap anywhere
+- **feat** WEB-15 / WEB-22r: the calendar heatmap stops at today (future days are neither drawn nor counted: "134 days of 161", not "of 184") and sizes its cells to the card (`fitCalendar`); on a phone a long range turns into 7 day columns with a row per week (~34px cells instead of 13px), and tapping a day opens a sheet with that day's transactions and an "Open this day in Activity" link
+- **test** `lib/scroll.test.ts` (`scrollEdges`, `revealScrollLeft`), `components/charts/heat-fit.test.ts` (`fitCalendar`, `calendarEnd`)
+
+## iOS: previous months and infinite scroll — 2026-10-08 (branch `ledger-v2`)
+
+### iOS
+
+- **feat** Month switcher on Overview and Insights (`‹ October 2026 ▾ ›`): chevrons step a month back or forward, the title opens a month picker grouped by year with a "This month" shortcut, and swiping the switcher sideways changes month. You can't go past the current Dubai month or before the ledger's first transaction (`filter_meta.date_range.min`, or 24 months while that is unknown). The two tabs share one `LedgerKit.MonthSelection`. The current month is sent as `p_month = null` and follows the calendar at Dubai midnight on the 1st. VoiceOver: chevrons read "Previous month, September 2026", the title is adjustable (swipe up/down), and every target is 44 pt. Logic lives in `MonthRange` / `MonthSelection` / `LedgerDates.monthScopeLabel` / `monthPhrase`
+- **feat** Overview for a past month: `overview(p_month)` drives the hero, category ring ("Where it went · September 2026") and "N uncategorised in September". The pending strip and "Latest" are about now, so they show only on the current month. A completed month's reference line is the whole previous month ("August AED 9,112", the server's `spend_prev_month`), not "Same day last month". Insights' 3M/6M/12M period now ends with the selected month (captioned "Last 6 months to March 2026"), and budgets use `budget_status(p_month)`
+- **feat** Infinite scroll (`LedgerKit.Paginator`, 100 rows per page) on Activity, statement cycles, uploads and Review. The next page loads as the reader nears the end, with a spinner row, an end-of-list row ("All 1,234 transactions"), and an error row with Try again that doesn't retry by itself. Only one page is in flight at a time, and a page fetched for an older query or ledger is dropped, never appended. Rows already shown are not added twice. Pull-to-refresh starts again from page 1. Realtime and foreground refreshes use `refreshHead`, which updates the first page and keeps the scrolled pages. `LedgerAPI.transactions` / `documents` / `reviewInbox` take a `PageRequest` and return exact counts. `statement_cycles` takes only a limit, so its pages are slices of a growing limit
+- **fix** IOS-15: the Activity filter sheet edits a copy: Apply changes the list, while Cancel or a swipe-down changes nothing. Activity now has a month filter. Paging ignores pages from a superseded query, and recategorising re-reads the affected rows (the merchant's loaded rows when "apply to every" is on) and patches them in place, so it no longer resets to page 1. A row that leaves an "Uncategorised only" or category filter is removed and the next page's offset follows
+- **fix** IOS-14: switching ledger resets every tab (`LedgerScreens.select`) before anything loads, and the tabs render only when they point at the selected ledger, so the previous ledger's numbers never flash. Overview and Insights drop responses superseded by a newer month or ledger (`RequestGate`)
+- **fix** IOS-13: Realtime resubscribes with exponential backoff (1 s … 60 s; resets after 30 s healthy) while the ledger stays selected. A failed channel is removed so the retry builds a fresh one, and each reconnect refreshes every opened tab. The foreground refreshes every opened tab, Insights included, and leaves unopened tabs alone
+- **test** `PaginatorTests` (paging to the end, single in-flight page, stale page dropped, retry row, offset shift dedupe, `refreshHead`, patch/remove offsets, reset), `MonthTests` (range, labels, Dubai rollover, Insights range, switcher bounds and VoiceOver strings), `ScreensTests` (Activity paging / filter copy / in-place recategorise, ledger switch, refresh fan-out, Realtime resubscribe)
+
 ## Statement detail, spend breakdown, bank logos, document timeline, replacement cards, merchant masking — 2026-10-10 (branch `ledger-v2`)
 
 ### Backend (Supabase)
@@ -13,25 +59,26 @@
 - **feat** Edge: `_shared/documents.ts` `logDocumentEvent` (never throws), `uploadEvents`, `formatBytes`; `worker/parse_document.ts` `parsedEvent`. statements-upload already returned `doc_code` per file; documented with the timeline
 - **test** pgTAP `22_document_events.test.sql` (full timeline order, messages and counts, friendly failure text without the raw error, retries, member-only reads, no client writes, cross-profile refusal, 90-day purge); `11_privileges` matrix (`document_events:authenticated:SELECT`); deno `_tests/document_events_test.ts`. Run locally: an upload through `statements-upload` (service token) and its duplicate produced `received → stored → queued` and `received → duplicate`, read back by the member through PostgREST
 
+- **feat** Replacement cards: a SIB history extract for an unknown card joins the bank's only active account (card type matches, first transaction not more than 31 days before the account's last line), the older cards become `replaced` and SMS held for the new number are re-processed; other banks and real statements still create a new account for an unknown card. Owner RPC `add_replacement_card(p_profile_code, p_card_code, p_new_last4)` registers a re-issued number on the old card's account. `ingest_parsed_document` passes the statement kind and first transaction date to the new 11-argument `resolve_statement_account` (the 9-argument form remains and never merges). Migration `20261010000500`
+- **test** pgTAP `23_replacement_cards.test.sql` (second card on the same account, old transactions on 9218-style old card, waiting SMS re-processed, new SMS matched, another product stays separate, owner RPC, refusals); `08_tenant_isolation` (statement_detail, spend_breakdown, document_events, add_replacement_card across profiles)
+
+- **feat** Private merchant masking (keyword-free; configured only in the database): `private.merchant_masks` (validated regex, generic name, optional category) and `private.masked_originals`, unreadable by every client role and the service role, with no RPC, view or policy. BEFORE triggers mask statement lines, SMS (body, merchant fields), transactions and new merchant rows at the source; `private.apply_merchant_masks(p_profile_code)` (also fired by a statement trigger on the masks table) re-masks existing lines, SMS, transactions, global merchants/aliases and insights. `line_key` and `body_hash` are untouched, so re-parses stay idempotent and never unmask. The mask's category is a merchant-level manual choice on the generic merchant (outranks rules and LLM; a transaction's manual category wins), also set for a profile whose first masked transaction arrives later. Migration `20261010000600`
+- **test** pgTAP `21_merchant_masks.test.sql` (fake token only): existing rows, new statement lines, parsed and unparsed SMS, re-parse without duplicates or unmasking, activity and merchant search, `spend_breakdown` / `statement_detail`, category precedence, a second profile, validation, and that anon / authenticated / service_role cannot read the private tables
+
 ### Parser
 
 - **fix** SIB card numbers (the SIB card ending 9218 was replaced by a new number): history exports read the card from `Account no.` / `Card no.` / `Card number` headers through a masked-number pattern (any of `x`, `X`, `*`, `•`, with or without the BIN), each row belongs to the card of the header above it, and each billing cycle's `primary_card_last4` is its majority card. E-statements also accept a lower-case mask. Existing outputs are unchanged
 - **chore** `PARSER_VERSION` / `pyproject.toml` 2026.10.3 (new synthetic case)
 - **test** `test_sib_parser.py` (replacement-card history, two card sections in one export, lower-case masked statement card, mask variants); synthetic golden `sib_history_new_card` (card 3333 on every line and cycle)
 
-### Docs
+### Scraper
 
-- ARCHITECTURE §3 (`banks.logo_path`, `bank-logos` bucket, `document_events`), §4 (document timeline), §6 (`statement_detail`, `spend_breakdown` shapes), §7 (Realtime); README Edge and RPC tables; PRODUCTION §2.3 (destructive flag), §2.6 (nightly purge), §11 (uploading the logos)
-
-## Bank logos — 2026-10-08 (branch `ledger-v2`)
-
-### Web
-
-- **feat** `assets/banks/<BANK_CODE>.png` for ADCB, EIB, ENBD, FAB, MASHREQ and SIB: 256×256 transparent PNGs (1–4 KB each) of each bank's mark, built from the banks' own site SVGs or Wikimedia vector files, legible at 24–32 px. `scripts/brand/upload-bank-logos.sh [--dry-run]` upserts them into the public `bank-logos` Storage bucket (`SUPABASE_URL` + `SUPABASE_SECRET_KEY`; the key goes on `apikey` via curl's stdin config, never argv or output)
+- **fix** SIB: after a card is replaced the portal lists the old card next to the new one, and the adapter clicked the best "credit card" match, i.e. the first (retired) card, so new transactions never arrived (SIB data stopped on 2026-08-10). The adapter now reads the masked card numbers in the Credit Card section (shadow roots included) and exports each card in turn (`SIB_CARD_LAST4S` / `card_last4s` picks them), choosing the card by its masked number in the section and again in the E-statement popup (native `<select>` or the most specific element). No card choice on the page keeps the single-card flow. Every new wait has its `SIB: waiting …` log line; download diagnostics carry `cards` and each entry's `card_last4`
+- **test** `test_sib_cards.py`: masked-number reading, config parsing, one export per card with tagged diagnostics, the single-card fallback, and an AST guard that every SIB `wait_for_timeout` ≥ 700 ms, `expect_download` and `sleep` is preceded by a `logger.info("SIB: waiting …")` (CLAUDE.md §7)
 
 ### Docs
 
-- `assets/banks/README.md`: per-bank source URLs, retrieval date, trademark note, and the dark-mode advice (navy/purple marks go on a light chip)
+- ARCHITECTURE §3 (`banks.logo_path`, `bank-logos` bucket, `document_events`, cards), §4 (document timeline, replacement cards), §5 (private merchant masks), §6 (`statement_detail`, `spend_breakdown` shapes), §7 (Realtime); README Edge, RPC and scraper env tables; PRODUCTION §2.3 (destructive flag), §2.6 (nightly purge), §11 (uploading the logos, merchant masks, the replaced SIB card)
 
 ## Edge Functions and CI backlog (audit P2/P3) — 2026-10-09 (branch `ledger-v2`)
 
