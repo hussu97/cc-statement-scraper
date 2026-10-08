@@ -30,6 +30,7 @@ import { Badge } from "@/components/ui/display";
 import { ErrorState, LoadingRows } from "@/components/ui/states";
 import { useToast } from "@/components/ui/toast";
 import { CategoryPicker, EvidenceBadge, Money, StatusBadge, TxnAmount } from "@/components/ledger";
+import { CardRef } from "@/components/bank-logo";
 
 const SOURCE_LABEL: Record<string, string> = {
   manual: "Your choice",
@@ -112,7 +113,12 @@ function DrawerBody({ t, meta }: { t: TxnRow; meta: FilterMeta | undefined }) {
       <dl className="divide-y divide-border border-y border-border">
         <Row label="Date">{t.txn_at ? formatDateTime(t.txn_at) : formatDate(t.txn_date)}</Row>
         {t.posting_date && <Row label="Posted">{formatDate(t.posting_date)}</Row>}
-        <Row label="Card">{t.bank_code} {t.card_last4 ? `•${t.card_last4}` : ""}{t.account_nickname ? ` · ${t.account_nickname}` : ""}</Row>
+        <Row label="Card">
+          <span className="inline-flex flex-wrap items-center gap-x-1.5">
+            <CardRef bankCode={t.bank_code} last4={t.card_last4} size="sm" />
+            {t.account_nickname && <span className="text-muted">· {t.account_nickname}</span>}
+          </span>
+        </Row>
         <Row label="Category">
           <div className="-ml-2 flex flex-wrap items-center gap-2">
             <CategoryPicker

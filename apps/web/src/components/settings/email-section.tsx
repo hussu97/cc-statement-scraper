@@ -31,6 +31,7 @@ import { Menu, MenuContent, MenuItem, MenuTrigger, Segmented, Switch } from "@/c
 import { EmptyState, QueryView } from "@/components/ui/states";
 import { useToast } from "@/components/ui/toast";
 import { ConfirmDialog } from "@/components/rules/shared";
+import { BankLogo } from "@/components/bank-logo";
 
 type Mailbox = Tables<"email_mailboxes">;
 type Route = Tables<"email_routes">;
@@ -153,7 +154,8 @@ export function EmailSection() {
                           {routes.map((r) => (
                             <li key={r.route_code} className="flex items-start gap-3 px-3 py-2.5">
                               <div className="min-w-0 flex-1">
-                                <p className="text-[13px] font-medium text-ink">
+                                <p className="flex items-center gap-1.5 text-[13px] font-medium text-ink">
+                                  <BankLogo bankCode={r.bank_code} size="sm" decorative />
                                   {bankName(r.bank_code)}
                                   {!r.enabled && <span className="ml-2 font-normal text-subtle">off</span>}
                                 </p>

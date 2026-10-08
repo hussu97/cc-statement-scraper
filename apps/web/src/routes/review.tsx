@@ -19,6 +19,7 @@ import { Select } from "@/components/ui/select";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
 import { useToast } from "@/components/ui/toast";
 import { Money, StatusBadge, TxnAmount } from "@/components/ledger";
+import { BankLogo, CardRef } from "@/components/bank-logo";
 
 export function ReviewPage() {
   const { profile_code } = useActiveProfile();
@@ -135,7 +136,7 @@ function ReviewCard({ review }: { review: Review }) {
                     <div className="min-w-40 flex-1">
                       <p className="truncate text-[13px] text-ink">{c.merchant_name ?? c.description}</p>
                       <p className="text-[12px] text-muted">
-                        {c.txn_at ? formatDateTime(c.txn_at) : formatDate(c.txn_date)} · {c.bank_code} •{c.card_last4} {score !== undefined && `· match ${Math.round(Number(score))}/100`}
+                        {c.txn_at ? formatDateTime(c.txn_at) : formatDate(c.txn_date)} · <CardRef bankCode={c.bank_code} last4={c.card_last4} className="align-middle" /> {score !== undefined && `· match ${Math.round(Number(score))}/100`}
                       </p>
                     </div>
                     <TxnAmount t={c} className="text-[13px]" />
@@ -239,7 +240,7 @@ function TxnSubject({ t }: { t: TxnRow }) {
       title={<Link to="/activity" search={{ txn: t.txn_code ?? undefined }} className="hover:text-accent">{t.merchant_name ?? t.description}</Link>}
       meta={
         <span className="inline-flex flex-wrap items-center gap-2">
-          {t.txn_at ? formatDateTime(t.txn_at) : formatDate(t.txn_date)} · {t.bank_code} •{t.card_last4}
+          {t.txn_at ? formatDateTime(t.txn_at) : formatDate(t.txn_date)} · <CardRef bankCode={t.bank_code} last4={t.card_last4} className="align-middle" />
           {t.category_name && <span className="inline-flex items-center gap-1"><Dot token={t.category_color} />{t.category_name}</span>}
           <StatusBadge status={t.status} />
         </span>
@@ -293,7 +294,7 @@ function TemplateProposal({ review, template }: { review: Review; template: NonN
     <div className="flex flex-col gap-3 rounded-md border border-border bg-bg p-3" data-review={review.review_code}>
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-[13px] font-medium text-ink">Proposed format: {template.name}</p>
-        <Badge tone="info">{template.bank_code}</Badge>
+        <Badge tone="info"><BankLogo bankCode={template.bank_code} size="xs" decorative />{template.bank_code}</Badge>
         <Badge>{template.msg_kind}</Badge>
         {template.source === "llm" && <Badge tone="accent">suggested by AI</Badge>}
       </div>

@@ -18,9 +18,9 @@ import { Dialog } from "@/components/ui/dialog";
 import { Field, Input } from "@/components/ui/input";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
 import { useToast } from "@/components/ui/toast";
-import { BankMark } from "@/components/ledger";
 import { Pagination } from "@/components/pagination";
 import { UploadDropzone } from "@/components/cards/upload";
+import { BankLogo } from "@/components/bank-logo";
 
 const TABS = ["cards", "statements", "upload", "documents"] as const;
 
@@ -68,7 +68,7 @@ function AccountsTab({ profileCode, isOwner }: { profileCode: string; isOwner: b
       {q.data.map((a) => (
         <Card key={a.account_code} className="p-5">
           <div className="flex items-start gap-3">
-            <BankMark bank={a.bank_code} />
+            <BankLogo bankCode={a.bank_code} />
             <div className="min-w-0 flex-1">
               <p className="truncate text-[15px] font-medium text-ink">{accountLabel(a)}</p>
               <p className="text-[12px] text-subtle">{[a.bank_code, a.product_name].filter(Boolean).join(" · ")}</p>
@@ -226,7 +226,7 @@ function StatementRow({ s, onOpenPdf }: { s: StatementCycle; onOpenPdf: () => vo
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-5 py-3.5 md:grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(0,1fr))_8.5rem]">
         <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex min-w-0 items-center gap-3 text-left">
           <ChevronDown className={cn("size-4 shrink-0 text-subtle transition-transform", open && "rotate-180")} aria-hidden />
-          <BankMark bank={s.bank_code} className="size-7" />
+          <BankLogo bankCode={s.bank_code} className="size-7" />
           <span className="min-w-0">
             <span className="block truncate text-sm text-ink">
               {formatDate(s.statement_date)} {s.kind !== "statement" && <span className="text-subtle">· history export</span>}
@@ -332,7 +332,7 @@ function DocumentsTab({ profileCode, isOwner }: { profileCode: string; isOwner: 
                   {d.original_filename}
                 </button>
                 <p className="mt-0.5 flex flex-wrap gap-x-2 text-[12px] text-muted">
-                  <span>{d.bank_code ?? "Bank unknown"}</span>
+                  <span className="inline-flex items-center gap-1">{d.bank_code ? <><BankLogo bankCode={d.bank_code} size="xs" decorative />{d.bank_code}</> : "Bank unknown"}</span>
                   <span>· {d.source}</span>
                   <span>· added {formatRelative(d.created_at)}</span>
                   {d.parsed_at && <span>· parsed {formatRelative(d.parsed_at)}</span>}
