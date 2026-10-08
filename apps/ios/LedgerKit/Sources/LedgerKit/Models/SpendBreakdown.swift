@@ -5,9 +5,10 @@ import Foundation
 /// range is listed and every series row carries every group key, zero-filled.
 /// An empty range has `groups: []` and `values: {}`.
 ///
-/// Group keys are codes (`cat_01…`, `FAB`, `mer_01…`), so this type is decoded
-/// with `SpendBreakdown.decode(_:)`: `LedgerJSON`'s snake-case conversion would
-/// also rewrite the keys of `values` (`cat_01h…` → `cat01h…`).
+/// Group keys are codes (`cat_01…`, `FAB`, `mer_01…`) that must reach the
+/// screen byte for byte, so this type is decoded with `SpendBreakdown.decode(_:)`
+/// (explicit wire keys, no key strategy) rather than trusting every Foundation
+/// release to leave `LedgerJSON`'s snake-case conversion off dictionary keys.
 public struct SpendBreakdown: Decodable, Sendable, Hashable {
     public static let otherKey = "__other__"
     public static let uncategorizedKey = "__uncategorized__"
