@@ -223,7 +223,7 @@ function StatementRow({ s, onOpenPdf }: { s: StatementCycle; onOpenPdf: () => vo
   const note = reconNote(s.recon_status);
   return (
     <li>
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-5 py-3.5 md:grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(0,1fr))_auto]">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-5 py-3.5 md:grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(0,1fr))_8.5rem]">
         <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex min-w-0 items-center gap-3 text-left">
           <ChevronDown className={cn("size-4 shrink-0 text-subtle transition-transform", open && "rotate-180")} aria-hidden />
           <BankMark bank={s.bank_code} className="size-7" />
@@ -328,7 +328,7 @@ function DocumentsTab({ profileCode, isOwner }: { profileCode: string; isOwner: 
           {rows.map((d) => (
             <li key={d.doc_code} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-5 py-3">
               <div className="min-w-0">
-                <button type="button" onClick={() => void openPdf(d.doc_code)} className="block max-w-full truncate text-left text-sm text-ink hover:text-accent">
+                <button type="button" onClick={() => void openPdf(d.doc_code)} className="-my-2.5 block max-w-full truncate py-2.5 text-left text-sm text-ink hover:text-accent lg:my-0 lg:py-0">
                   {d.original_filename}
                 </button>
                 <p className="mt-0.5 flex flex-wrap gap-x-2 text-[12px] text-muted">

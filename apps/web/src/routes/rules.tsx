@@ -10,7 +10,7 @@ export function RulesPage() {
   const [raw, setTab] = useTabParam("/rules");
   const tab = ruleTab(raw);
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <div>
       <PageHeader title="Rules" description="How Bank Ledger decides a category. Your own choices always win over rules and suggestions." />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="mb-6">

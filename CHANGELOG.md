@@ -10,6 +10,30 @@
 
 - `assets/banks/README.md`: per-bank source URLs, retrieval date, trademark note, and the dark-mode advice (navy/purple marks go on a light chip)
 
+## Mobile web audit — 2026-10-09 (branch `ledger-v2`)
+
+### Web
+
+- **fix** Drawers and sheets cut off at the left edge on iPhone ("yment Received Thank You", "ED 2,201.00"): iOS Safari zooms the page in when a text field under 16px gets focus and never zooms back out, and the transaction drawer's category picker auto-focused a 13px search box. Every text field is now 16px on phones and touch screens (one unlayered rule in `styles.css` that beats `text-sm` utilities), and the picker no longer auto-focuses its search box on touch screens (the keyboard covered the list)
+- **fix** `Sheet` / `Dialog` (`components/ui/dialog.tsx`): long titles and descriptions wrap (`overflow-wrap: anywhere`) instead of pushing the close button out; the close button is a 40px box with a 44px hit area; the body clips sideways so wide content scrolls inside the sheet; the bottom sheet and its footer clear the home indicator (`env(safe-area-inset-bottom)`); `Dialog` is sized with `%` of the viewport box instead of `100vw`; both accept `onCloseAutoFocus`
+- **fix** Safe areas: the phone header clears the status bar / notch (`viewport-fit=cover`), page content clears the landscape notch and the home indicator, and toasts sit above the tab bar *and* the home indicator. Toasts no longer cover the tab bar on tablets (768–1023px, where the tab bar still shows) and span the width on phones
+- **fix** `body { overflow-x: clip }` so a stray wide element can never make a page pan sideways on a phone; `-webkit-text-size-adjust: 100%` stops iOS inflating text in landscape
+- **fix** Tap targets on phones: menu items, select options and category-picker rows are 40px below `lg` (32px on desktop); the select's small trigger, segmented controls, toast dismiss, brand link and the privacy page's back link get the 44px `tap` hit area. Popovers, menus and selects are capped to the available width (`--radix-*-content-available-width`)
+- **feat** WEB-44: tab strips (Insights' nine tabs, Rules, Settings) fade at the edge where more tabs are hidden and scroll the active tab into view (`useScrollEdges`, pure `scrollEdges` / `revealScrollLeft` in `lib/scroll.ts`)
+- **fix** WEB-30: italic "Uncategorised" no longer loses its last glyph when truncated
+- **fix** WEB-32: the Statements row's status column has a fixed width, so the "Doesn't add up" badge no longer shifts the other columns
+- **fix** WEB-33: Rules and Settings use the same page container as the other screens
+- **fix** Review: a "Possible matches" row no longer squeezes the merchant to "Dun…" with the date stacked one word per line on a phone; the amount and "Same purchase" wrap below instead
+- **fix** Rule editor on phones: "When the description" wrapping to two lines no longer pushes the match-type select below the text field
+- **fix** More phone hit areas: Overview category rows (40px), "All activity", Insights merchant names, Documents file names, the search box's clear button, the ledger switcher and the privacy-policy links
+- **feat** WEB-24 (mobile part): Activity has a **Select** button on phones that shows the checkbox column; in select mode tapping a row toggles it, and the bulk bar offers **All** and a **Categorise…** picker (it used to show a state-like "Uncategorised" pill). The bulk bar sits above the tab bar and the home indicator. Exclude, CSV export and a server-computed total remain open
+- **fix** WEB-20: each Activity row's main action is a real `<button>` inside a `role="cell"` span, not `<button role="cell">`
+- **fix** WEB-19: closing the URL-driven transaction drawer returns focus to the row that opened it
+- **fix** WEB-43: closing a drawer opened from the list pops its history entry (Back no longer reopens it); a deep-linked drawer closes with `replace`, and a "Reverses / Reversed by" link swaps the drawer in place
+- **fix** Transaction drawer on phones: narrower label column, a 32px amount, long raw statement lines wrap anywhere
+- **feat** WEB-15 / WEB-22r: the calendar heatmap stops at today (future days are neither drawn nor counted: "134 days of 161", not "of 184") and sizes its cells to the card (`fitCalendar`); on a phone a long range turns into 7 day columns with a row per week (~34px cells instead of 13px), and tapping a day opens a sheet with that day's transactions and an "Open this day in Activity" link
+- **test** `lib/scroll.test.ts` (`scrollEdges`, `revealScrollLeft`), `components/charts/heat-fit.test.ts` (`fitCalendar`, `calendarEnd`)
+
 ## Edge Functions and CI backlog (audit P2/P3) — 2026-10-09 (branch `ledger-v2`)
 
 ### Backend (Supabase)

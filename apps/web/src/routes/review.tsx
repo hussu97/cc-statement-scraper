@@ -132,7 +132,7 @@ function ReviewCard({ review }: { review: Review }) {
                 const score = candidatesOf(review).find((x) => x.txn_code === c.txn_code)?.score;
                 return (
                   <div key={c.txn_code} className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-bg px-3 py-2">
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-40 flex-1">
                       <p className="truncate text-[13px] text-ink">{c.merchant_name ?? c.description}</p>
                       <p className="text-[12px] text-muted">
                         {c.txn_at ? formatDateTime(c.txn_at) : formatDate(c.txn_date)} · {c.bank_code} •{c.card_last4} {score !== undefined && `· match ${Math.round(Number(score))}/100`}

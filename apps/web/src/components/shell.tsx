@@ -88,7 +88,7 @@ function ProfileSwitcher({ compact }: { compact?: boolean }) {
           type="button"
           className={cn(
             "flex w-full min-w-0 items-center gap-2.5 rounded-md text-left transition-colors hover:bg-surface-2",
-            compact ? "h-9 px-2" : "px-2 py-2",
+            compact ? "h-10 px-2" : "px-2 py-2",
           )}
           aria-label="Switch ledger"
         >
@@ -172,9 +172,9 @@ function MobileNav({ nav }: { nav: NavItem[] }) {
   const moreActive = rest.some((n) => isActive(n.to));
   return (
     <>
-      <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-3 border-b border-border bg-bg/90 px-4 backdrop-blur lg:hidden">
+      <header className="sticky top-0 z-30 flex h-[calc(3.5rem+env(safe-area-inset-top))] items-center justify-between gap-3 border-b border-border bg-bg/90 pt-[env(safe-area-inset-top)] pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))] backdrop-blur lg:hidden">
         <Wordmark />
-        <div className="w-44">
+        <div className="w-48 min-w-0 shrink">
           <ProfileSwitcher compact />
         </div>
       </header>
@@ -257,7 +257,7 @@ export function AppShell() {
       <Sidebar nav={nav} />
       <div className="min-w-0 flex-1">
         <MobileNav nav={nav} />
-        <main key={profile.profile_code} className="mx-auto w-full max-w-[1240px] px-gutter pt-6 pb-28 md:px-gutter-lg md:pt-10 lg:pb-16">
+        <main key={profile.profile_code} className="mx-auto w-full max-w-[1240px] pt-6 pr-[max(var(--space-gutter),env(safe-area-inset-right))] pb-[calc(7rem+env(safe-area-inset-bottom))] pl-[max(var(--space-gutter),env(safe-area-inset-left))] md:pt-10 md:pr-[max(var(--space-gutter-lg),env(safe-area-inset-right))] md:pl-[max(var(--space-gutter-lg),env(safe-area-inset-left))] lg:pb-16">
           <Outlet />
         </main>
       </div>
