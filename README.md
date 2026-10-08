@@ -20,7 +20,9 @@ Docs:
 - [docs/contracts/parse-v1.md](docs/contracts/parse-v1.md): parser contract (limits, output validation, error codes)
 - [docs/audit/](docs/audit/): pre-cutover audit reports (01 database … 06 cross-cutting) and
   [BACKLOG.md](docs/audit/BACKLOG.md), the list of findings not yet fixed
-- [CLAUDE.md](CLAUDE.md): coding rules
+- [CLAUDE.md](CLAUDE.md): coding and workflow rules (area detail in [supabase/CLAUDE.md](supabase/CLAUDE.md)
+  and [apps/ios/CLAUDE.md](apps/ios/CLAUDE.md); [AGENTS.md](AGENTS.md) points other agents there)
+- [tasks/lessons.md](tasks/lessons.md): lessons learned, read at the start of a session
 
 ## Repository structure
 
@@ -37,6 +39,8 @@ Docs:
 | `scripts/` | `cutover/` (production Edge and Vault secret helpers), `ci/` (migration history check, web smoke test), git `hooks/` + `install-hooks.sh` | sh, SQL |
 | `docs/` | `ci-cd.md`, `contracts/` (parse-v1), `audit/` (audit reports + backlog) | Markdown |
 | `.github/workflows/` | `ci.yml` (path-filtered, `ci-ok` gate), `deploy-supabase`, `deploy-parser`, `web-smoke`, `ios-testflight`, `security` ([docs/ci-cd.md](docs/ci-cd.md)) | GitHub Actions |
+| `.claude/` | Claude Code `settings.json` and `hooks/guard.py` (PreToolUse guard for staging, secrets and production actions; `python3 .claude/hooks/guard_test.py`) | Python |
+| `tasks/` | `lessons.md`, `todo.md` (plans) | Markdown |
 
 ## Prerequisites
 
