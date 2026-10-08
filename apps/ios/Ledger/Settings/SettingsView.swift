@@ -117,7 +117,7 @@ struct SettingsView: View {
         } header: {
             Text("SMS & shared PDFs")
         } footer: {
-            Text("Card alerts and PDFs shared to “Add to Ledger” are filed here, whichever ledger you are viewing. Only ledgers you own are listed.")
+            Text("Card alerts and PDFs shared to “Add to Bank Ledger” are filed here, whichever ledger you are viewing. Only ledgers you own are listed.")
         }
     }
 }

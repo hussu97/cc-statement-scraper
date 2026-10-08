@@ -29,7 +29,7 @@ struct LogBankSMSIntent: AppIntent {
 
     func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog {
         guard let services = AppServices.shared else {
-            return .result(value: "not_configured", dialog: "Ledger isn't configured.")
+            return .result(value: "not_configured", dialog: "Bank Ledger isn't configured.")
         }
         Telemetry.start(target: .intent, config: services.config, isDebugBuild: BuildFlavor.isDebug)
         let (outcome, dialog) = await services.smsIntake().handle(body: message, sender: sender)

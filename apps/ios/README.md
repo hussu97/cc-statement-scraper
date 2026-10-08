@@ -30,7 +30,8 @@ apps/ios/
 │   └── Tests/LedgerKitTests/
 ├── Ledger/                  app target — layout only (+ LogBankSMSIntent, PrivacyInfo.xcprivacy)
 ├── ShareExtension/          "Add to Ledger" (PDFs → statements-upload, + PrivacyInfo.xcprivacy)
-└── scripts/publish-build.sh archive → export → dSYMs → (TestFlight | staged release)
+└── scripts/                testflight.sh (archive → export → dSYMs → upload), publish-build.sh
+                             (stage for CI), testflight-distribute.mjs (external testers)
 ```
 
 Views hold layout only; any rule (what a badge says, which screen to show, when a
@@ -129,14 +130,44 @@ first one you own — never simply the ledger on screen. PDFs shared to "Add to 
 
 ## TestFlight
 
+Same flow as another app (another app's CI notes): build and sign on the Mac, upload over the
+App Store Connect API key (no Apple ID password), release to two groups. The App Store
+Connect / TestFlight name is **Credit Card Ledger**; the home-screen name stays **Ledger**.
+
+| Group | Kind | How a build reaches it |
+|---|---|---|
+| **Ledger Internal** | internal, automatic distribution | as soon as processing finishes |
+| **Friends & Family** | external, public link | `testflight-distribute.mjs` attaches it and submits it for Beta App Review |
+
 ```bash
-apps/ios/scripts/publish-build.sh            # test, archive, export, upload dSYMs if a Sentry token is set
-apps/ios/scripts/publish-build.sh --upload   # + altool upload (ASC_KEY_ID / ASC_ISSUER_ID / AuthKey .p8)
-apps/ios/scripts/publish-build.sh --stage    # + stage IPA on the `ios-ledger-staged` GitHub release
+apps/ios/scripts/testflight.sh                 # test, archive, export, dSYMs → Sentry, upload
+apps/ios/scripts/testflight.sh --no-upload     # … without the upload
+apps/ios/scripts/testflight.sh --keep-build    # reuse the build number after a failed upload
+node apps/ios/scripts/testflight-distribute.mjs [--build N] [--what-to-test "…"] [--no-submit]
+apps/ios/scripts/publish-build.sh [--keep-build]  # testflight.sh --no-upload, stage on the
+                                               # `ios-ledger-staged` release, commit build-number.json
 ```
 
-`SENTRY_AUTH_TOKEN`, `SENTRY_ORG` and `SENTRY_PROJECT` come from the environment or, when
-unset, from `Config/Secrets.Release.xcconfig`; the token is handed to `sentry-cli` through the
-environment and never printed. It refuses to run without `Config/Secrets.Release.xcconfig` (or if that file points at
-127.0.0.1), bumps `build-number.json` (commit it afterwards) and signs with team
-`<apple-team-id>`, as another app does.
+* **Signing**: team `<apple-team-id>`, automatic, `-allowProvisioningUpdates` (needs an Apple
+  Distribution identity in the keychain). Bundle ids `com.example.ledger` and
+  `com.example.ledger.share` are registered with App Groups enabled; Xcode assigns
+  `group.com.example.ledger` to both on the first archive.
+* **API key**: `ASC_KEY_ID` / `ASC_ISSUER_ID` and `~/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8`
+  (CI: `ASC_KEY_P8`). Both scripts default to the single key in that directory and the
+  team's issuer, i.e. the key another app uses.
+* **dSYMs**: `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` (default `ledger-apps`) from the
+  environment or `Config/Secrets.Release.xcconfig`; needs `sentry-cli`. The token is never printed.
+* **Release config**: refuses to run without `Config/Secrets.Release.xcconfig` or if it points
+  at 127.0.0.1.
+* **Build number**: `build-number.json`, bumped on every build. `publish-build.sh` commits it
+  (`--only`, authored as Hussain Abbasi) once the IPA is staged; run `testflight.sh` directly
+  and commit it yourself. `ITSAppUsesNonExemptEncryption = NO`, so uploads never stop on
+  export compliance.
+* **"What to Test"**: `--what-to-test`, else `$LEDGER_WHAT_TO_TEST`, else the last commit
+  subject touching `apps/ios`.
+* **CI contract** (`publish-build.sh` → workflow): release `ios-ledger-staged` holds
+  `Ledger.ipa` + `build-meta.json` (`{build, commit, apps:[{scheme, ipa, bundle_id}]}`). The
+  workflow ships it only if `commit` equals the pushed sha or differs from it **only** by
+  `apps/ios/build-number.json`, uploads with the API key, then runs
+  `node apps/ios/scripts/testflight-distribute.mjs --build <build> --timeout 35` with
+  `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`.
