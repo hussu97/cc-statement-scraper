@@ -593,6 +593,15 @@ parsing time. Steps are in order; nothing is deleted until step 12.
   prod backup (`--target local`, as in docs/audit/02): all migrations from scratch, then
   metadata, secrets, pdfs, drain, the post-import checks and finalize. Sign-off criterion:
   `legacy_lines_missing = 0` for every bank and only the expected monthly deltas (step 8).
+  - **Start every rehearsal from `supabase db reset`** (or a fresh stack), never from a stack
+    that already applied some versions. `supabase migration up` matches migrations by version
+    only, so a migration edited after it was applied is silently skipped and the rehearsal tests
+    stale SQL (docs/audit/07 FV-04). Prod is unaffected as long as no v2 version has been pushed.
+  - To rehearse against production's grants, emulate its legacy default privileges first
+    (`alter default privileges for role postgres in schema public grant all on tables to anon,
+    authenticated`, and the same `on sequences`, as a migration sorted before `…0000`; see
+    docs/audit/07 FV-01) or load the prod schema dump; `supabase test db`
+    must pass there too (`11_privileges` pins the client privilege matrix).
 - Local tools ready (quote the extra in zsh):
   ```bash
   backend/.venv/bin/pip install 'psycopg[binary]' httpx cryptography google-cloud-storage

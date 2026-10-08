@@ -200,6 +200,9 @@ timeout applies.
    same account opens a `period_overlap` review. Nothing is superseded automatically;
    `resolve_review {"supersede": …}` does that, and only for a statement that is one of the
    review's candidates, on the same profile and account, and not the subject itself.
+   When a statement stops being active by any path (supersede, re-parse retirement), a trigger
+   dismisses open reviews about it and any `period_overlap` review left with no active
+   candidate (FV-03).
 6. **Reconciliation.** `reconcile_statement` runs (below).
 
 The worker treats a parser response as permanent only when it is a 422 carrying one of the
@@ -274,6 +277,16 @@ A missing amount or date component rejects the pair.
 amount/currency/date/merchant signature on the other) are interchangeable rather than
 ambiguous. They pair in order (score, date distance, `line_no`, creation time) with
 `method = tie`, so two same-day coffees with two SMS make two transactions and no review.
+
+**Re-parse lineage and date proximity** (FV-02, migration `…2000`):
+- A candidate transaction that was previously evidenced by the same line, by a line with the
+  same identity (`line_key` + `occurrence`), or by a line of the same source document with the
+  same date and amount is that line's own transaction coming back. A re-parse that moves a
+  document's lines to a new statement (a corrected statement date) relinks them. Lineage pairs
+  (score ≥ 75) are matched first, and a rival without lineage does not make them ambiguous.
+- For a same-day pair, a rival one or more days away is not a conflict when that rival has its own
+  same-day partner scoring at least as well. Same-amount purchases on consecutive days each take
+  the transaction on their own date.
 
 **SMS-specific rules** (`match_sms`):
 1. **Duplicate alert.** Same account, kind, amount and currency, and either an identical body
@@ -454,6 +467,12 @@ RLS applies to every change event.
   evaluated once per statement through `(select …)`. Members read; owners write the user-editable
   columns, which are granted column by column. A pgTAP guard (`01_rls.test.sql`) fails if any
   `public` table lacks RLS or a policy.
+- **Client grants are explicit.** The first migration revokes `postgres`'s default privileges on
+  `public` tables and sequences from `anon` and `authenticated` (production was created with
+  Supabase's older `GRANT ALL` defaults, FV-01), and `…2100` re-asserts the exact grants. `anon`
+  holds no table privilege at all; `authenticated` has no TRUNCATE/REFERENCES/TRIGGER and only
+  column-level UPDATE on ledger and identity tables. `11_privileges.test.sql` pins the full
+  privilege matrix: change it together with any client grant.
 - **RPC guards.**
   - User RPCs start with `perform private.assert_member(p_profile_code, need_owner)`.
   - Edge-only RPCs (ingest, queue wrappers, worker context, `ops_health`, `upsert_fx_rates`)
