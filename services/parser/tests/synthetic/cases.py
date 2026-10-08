@@ -171,6 +171,24 @@ _SIB_HISTORY_PAGES: list[list[Line]] = [
     ]
 ]
 
+# The same layout for a re-issued card: a new number ("Card no." header, upper-case mask).
+# Every line and every billing cycle carries the new last4.
+_SIB_HISTORY_NEW_CARD_PAGES: list[list[Line]] = [
+    [
+        "Transaction history",
+        "JANE Q SAMPLE",
+        "Date range 01 Aug 2026 - 30 Sep 2026",
+        "Card no.: 4000 XXXX XXXX 3333",
+        "Account type Sample Islamic Card",
+        "Currency AED",
+        "Date Details Amount",
+        "20 Aug 2026 CORNER GROCERY SHARJAH AED -80.00",
+        "02 Sep 2026 FUEL STATION SHARJAH AED -120.25",
+        "14 Sep 2026 CREDIT CARD PAYMENT AED 300.00",
+        "Sharjah Islamic Bank",
+    ]
+]
+
 
 CASES: dict[str, Case] = {
     "mashreq_statement": Case(_MASHREQ_PAGES),
@@ -197,6 +215,7 @@ CASES: dict[str, Case] = {
     "fab_statement": Case(_FAB_PAGES),
     "adcb_encrypted": Case(_ADCB_PAGES, password=PASSWORD, settings={"ADCB_PDF_PASSWORD": PASSWORD}),
     "sib_history": Case(_SIB_HISTORY_PAGES),
+    "sib_history_new_card": Case(_SIB_HISTORY_NEW_CARD_PAGES),
     # SRV-17: a wrong hint (an ADCB hint on a FAB PDF) is detected and retried once.
     "fab_wrong_hint": Case(_FAB_PAGES, bank_code_hint="ADCB"),
 }

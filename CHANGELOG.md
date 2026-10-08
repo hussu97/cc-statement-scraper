@@ -13,6 +13,12 @@
 - **feat** Edge: `_shared/documents.ts` `logDocumentEvent` (never throws), `uploadEvents`, `formatBytes`; `worker/parse_document.ts` `parsedEvent`. statements-upload already returned `doc_code` per file; documented with the timeline
 - **test** pgTAP `22_document_events.test.sql` (full timeline order, messages and counts, friendly failure text without the raw error, retries, member-only reads, no client writes, cross-profile refusal, 90-day purge); `11_privileges` matrix (`document_events:authenticated:SELECT`); deno `_tests/document_events_test.ts`. Run locally: an upload through `statements-upload` (service token) and its duplicate produced `received → stored → queued` and `received → duplicate`, read back by the member through PostgREST
 
+### Parser
+
+- **fix** SIB card numbers (the SIB card ending 6774 was replaced by a new number): history exports read the card from `Account no.` / `Card no.` / `Card number` headers through a masked-number pattern (any of `x`, `X`, `*`, `•`, with or without the BIN), each row belongs to the card of the header above it, and each billing cycle's `primary_card_last4` is its majority card. E-statements also accept a lower-case mask. Existing outputs are unchanged
+- **chore** `PARSER_VERSION` / `pyproject.toml` 2026.10.3 (new synthetic case)
+- **test** `test_sib_parser.py` (replacement-card history, two card sections in one export, lower-case masked statement card, mask variants); synthetic golden `sib_history_new_card` (card 3333 on every line and cycle)
+
 ### Docs
 
 - ARCHITECTURE §3 (`banks.logo_path`, `bank-logos` bucket, `document_events`), §4 (document timeline), §6 (`statement_detail`, `spend_breakdown` shapes), §7 (Realtime); README Edge and RPC tables; PRODUCTION §2.3 (destructive flag), §2.6 (nightly purge), §11 (uploading the logos)
