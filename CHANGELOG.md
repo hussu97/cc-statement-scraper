@@ -1,5 +1,11 @@
 # Changelog
 
+## SIB push login — 2026-10-08
+
+### Scraper
+
+- **fix** SIB's portal now confirms logins with a push to the SIB app (Face ID / Touch ID) instead of a password step. The adapter detects the prompt and waits for approval (`SIB_BIOMETRIC_WAIT_S`, default 180 s, a log line per 3 s poll), then continues; the password path still works (`tests/test_sib_biometric.py`)
+
 ## Gmail alerts muted — 2026-10-08
 
 ### Backend (Supabase)
