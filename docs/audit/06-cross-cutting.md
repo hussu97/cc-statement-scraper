@@ -333,3 +333,6 @@ fixed by the DB pass; X-06 by the server pass; X-18 by DB-16, X-19 by IOS-01, X-
 multi-document line union (DP-02). X-29 is resolved: the parser deploys to
 `credit-card-scraper-ht` / `me-central1` (repo `ledger`), the workflow's only region. X-25 is fixed
 in parse-v1 except the `country_code` format. Open items: [BACKLOG.md](BACKLOG.md).
+
+**Parser pass (2026-10-08):** X-17 is fixed: the parser's password list and the EIB and Mashreq
+parsers use `EIB_PDF_PASSWORD` / `MASHREQ_PDF_PASSWORD`; the worker already sent them.

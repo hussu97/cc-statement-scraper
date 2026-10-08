@@ -75,3 +75,108 @@ def test_totals_extraction_never_raises(monkeypatch) -> None:
     result = extract_totals("FAB", FAB_LINES)
     assert all(v is None for v in result.values.values())
     assert result.warnings and "RuntimeError" in result.warnings[0]
+
+
+# DP-10: the Payments/Credits column leaves out rewards redemptions and dispute credits.
+FAB_OTHER_CREDIT_LINES = [
+    "Main Card Number Current Balance Minimum Payment Due",
+    "4000 12** **** 2468 1,000.00 100.00",
+    "Previous Balance + Purchases/Debits + Cash Advances + Finance Charges - Payments/Credits Total Payment Due",
+    "1,500.00 1,199.95 0.00 0.05 1,500.00 1,000.00",
+]
+
+
+def test_fab_total_credits_include_credits_outside_the_payments_column() -> None:
+    result = extract_totals("FAB", FAB_OTHER_CREDIT_LINES)
+    assert result.values["total_debits"] == Decimal("1200.00")
+    # 1,500.00 payments + a 200.00 rewards redemption the column doesn't show.
+    assert result.values["total_credits"] == Decimal("1700.00")
+    assert result.values["closing_balance"] == Decimal("1000.00")
+
+
+def test_fab_credit_balance_with_other_credits() -> None:
+    lines = [
+        "Main Card Number Current Balance Minimum Payment Due",
+        "4000 12** **** 2468 1,850.00CR 0.00",
+        "Previous Balance + Purchases/Debits + Cash Advances + Finance Charges - Payments/Credits Total Payment Due",
+        "1,200.00 3,000.00 0.00 5.00 4,555.00 1,850.00CR",
+    ]
+    result = extract_totals("FAB", lines)
+    assert result.values["closing_balance"] == Decimal("-1850.00")
+    assert result.values["total_credits"] == Decimal("6055.00")
+
+
+def test_fab_total_credits_untouched_when_the_row_disagrees_with_current_balance() -> None:
+    lines = [*FAB_OTHER_CREDIT_LINES]
+    lines[1] = "4000 12** **** 2468 1,100.00 100.00"
+    result = extract_totals("FAB", lines)
+    assert result.values["total_credits"] == Decimal("1500.00")
+
+
+def test_fab_row_that_adds_up_is_unchanged() -> None:
+    assert extract_totals("FAB", FAB_LINES).values["total_credits"] == Decimal("7513.43")
+
+
+# DP-12: Mashreq "Summary AED" block (the Arabic labels extract as mojibake after the amount).
+MASHREQ_LINES = [
+    "Card No 4000 XXXX XXXX 1234 ¶zâlD",
+    "Total outstanding balance 1,184.50 yPGZ",
+    "Minimum payment due 59.23 ¶|PGZ",
+    "-Enjoy cashback on purchases Statement date 06/02/2026 ÈâZP",
+    "-No annual fee, FREE for Life! Payment due date 05/03/2026",
+    "Summary AED dS¦©",
+    "Previous balance 2,000.00 yCâZ",
+    "- payments 2,000.00 ÊârwT -",
+    "- other credits 100.00 ìVS -",
+    "+ finance charges 0.00 ¤ƒ +",
+    "+ other charges 0.00 ìVS +",
+    "+ new transactions 1,284.50 ÉTTM +",
+    "+ current balance 1,184.50 Œ¥âP +",
+    "+ cash advance 0.00 ¶x +",
+    "= outstanding balance 1,184.50 yPGZ =",
+    "terms and conditions are subject to change. + Total deal instalments 0.00",
+    "Combined credit limit 20,000.00 ßVGc",
+    "Minimum Payment Due is the minimum payment required to be made",
+]
+
+
+def test_mashreq_summary() -> None:
+    result = extract_totals("MASHREQ", MASHREQ_LINES)
+    assert result.values == {
+        "opening_balance": Decimal("2000.00"),
+        "closing_balance": Decimal("1184.50"),
+        "total_debits": Decimal("1284.50"),
+        "total_credits": Decimal("2100.00"),
+        "min_due": Decimal("59.23"),
+        "credit_limit": Decimal("20000.00"),
+    }
+    assert result.due_date == date(2026, 3, 5)
+    assert result.warnings == []
+
+
+def test_mashreq_summary_that_does_not_add_up_is_left_null() -> None:
+    lines = [ln.replace("+ new transactions 1,284.50", "+ new transactions 1,284.05") for ln in MASHREQ_LINES]
+    result = extract_totals("MASHREQ", lines)
+    assert result.values["opening_balance"] is None
+    assert result.values["total_debits"] is None
+    assert result.values["min_due"] == Decimal("59.23")
+    assert result.warnings == ["MASHREQ: statement summary does not add up; balance totals left null"]
+
+
+def test_mashreq_partial_summary_is_left_null() -> None:
+    lines = [ln for ln in MASHREQ_LINES if not ln.startswith("+ cash advance")]
+    result = extract_totals("MASHREQ", lines)
+    assert result.values["closing_balance"] is None
+    assert result.warnings == ["MASHREQ: statement summary incomplete; balance totals left null"]
+
+
+def test_mashreq_credit_balance() -> None:
+    lines = [
+        ln.replace("+ current balance 1,184.50", "+ current balance 115.50CR").replace(
+            "Previous balance 2,000.00", "Previous balance 700.00"
+        )
+        for ln in MASHREQ_LINES
+    ]
+    result = extract_totals("MASHREQ", lines)
+    assert result.values["opening_balance"] == Decimal("700.00")
+    assert result.values["closing_balance"] == Decimal("-115.50")

@@ -24,13 +24,18 @@ Body (JSON):
     "ADCB_PDF_PASSWORD": "…",
     "ADCB_CID": "…",
     "ENBD_PDF_PASSWORD": "…",
-    "SIB_PDF_PASSWORD": "…"
+    "EIB_PDF_PASSWORD": "…",
+    "SIB_PDF_PASSWORD": "…",
+    "MASHREQ_PDF_PASSWORD": "…"
   }
 }
 ```
 
 - `bank_code_hint` may be null. The parser then detects the bank from the PDF text, trying each password.
-- `settings` uses the same keys as the legacy runtime settings consumed by `parsers/dispatcher.py`.
+- `settings` holds the profile's PDF passwords: the keys `set_profile_secret` accepts
+  (`<BANK>_PDF_PASSWORD` for FAB, ADCB, ENBD, EIB, SIB and MASHREQ, plus `ADCB_CID`). The worker
+  sends every key the profile has stored (`worker_document_context`). Each bank parser uses its own
+  key; detection, page counting and totals try all of them. Unknown keys are ignored.
 
 ## Response 200
 
@@ -94,11 +99,18 @@ Field rules:
 - `document_kind` is `statement_pdf` or `history_pdf`. SIB "transaction history" exports are `history_pdf`.
 - `statements[].kind` is `statement` or `history_extract`. A `history_pdf` produces only `history_extract` statements.
 - `reference_source` is `explicit`, `fallback` or null.
-- `totals` contains every key. A value is null when that parser doesn't extract it yet.
+- `totals` contains every key. A value is null when that parser doesn't extract it. FAB, ENBD/EIB and
+  MASHREQ extract all six; ADCB only the two balances; SIB none. MASHREQ's summary block is used only
+  when all of its lines are present and add up (otherwise the balances stay null and a warning says so).
+  FAB's `total_credits` includes credits that the summary's Payments/Credits column leaves out
+  (rewards redemptions, dispute credits): it is what the row's own Total Payment Due implies.
 - `totals.opening_balance` and `totals.closing_balance` are **signed** decimal strings: positive = amount owed, negative = card in credit (e.g. `"-1579.06"`). All other totals (`total_debits`, `total_credits`, `min_due`, `credit_limit`) are absolute.
 - `lines[].direction` is `debit` or `credit`. Sign normalisation happens in the parser; SIB history is inverted at source.
 - `lines[].kind` is one of `purchase | refund | payment | fee | interest | cash_advance | adjustment`.
-- `amount_aed` is null when the bank does not print the AED amount (e.g. Mashreq foreign rows).
+- `amount_aed` is null when the bank does not print the AED amount (e.g. SIB history foreign rows).
+- MASHREQ foreign rows (`<merchant> <ref> MYR 500.00 @0.9400 470.00`) are split into
+  `currency_original`, `amount_original` and `fx_rate` (the printed rate); `description_raw` is the
+  merchant only. `legacy_fingerprint` is still computed from the unsplit text, as legacy did.
 - `fx_rate` is AED per one unit of `currency_original`, as a decimal string, or null.
 - `legacy_fingerprint` is `domain.parsing.utils.fingerprint_for(...)`, computed exactly as the legacy backend did. It is used to carry legacy category overrides across.
 - `country_code` is free text from the statement (values seen: `AE`, `ARE`, `UAE`, `IRL`, …). It has no defined format yet.

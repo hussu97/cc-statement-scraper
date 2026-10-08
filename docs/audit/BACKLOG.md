@@ -26,12 +26,12 @@ separately):
 |---|---|---|---|---|---|
 | Database (Supabase SQL) | 12 | 20 | – | 2 | 34 |
 | Edge Functions | 5 | 7 | – | – | 12 |
-| Parser | 5 | 3 | – | – | 8 |
+| Parser | 2 | 3 | – | – | 5 |
 | Web | 16 | 26 | 5 | – | 47 |
 | iOS | 14 | 10 | 7 | 3 | 34 |
 | Scraper | – | 2 | – | – | 2 |
 | CI, config and ops | 1 | 6 | – | 1 | 8 |
-| **Total** | **53** | **74** | **12** | **6** | **145** |
+| **Total** | **50** | **74** | **12** | **6** | **142** |
 
 There are no open P0 or P1 findings. The last P1 remainders (WEB-02 statements beyond 500 and
 merchant search, WEB-07 "Retry AI") landed in `98f901c`. What is left of the P1s are the device
@@ -113,10 +113,7 @@ These are actions, not code changes. Most are already steps in [PRODUCTION.md](.
 
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
-| DP-10 | FAB `total_credits` extraction is short by whole payment amounts in 4 statements, giving a false recon `fail` (the balance equation holds) | Not part of the P0/P1 parser fixes | Read the summary block's payment and other-credit lines separately in `totals.py`, plus golden cases | M |
-| DP-11 | Mashreq FX rows aren't recognised: stored as AED with currency, amount and reference left in the description (38 transactions, 36 one-off merchants, invisible to `fx_spend`) | Not part of the P0/P1 parser fixes | Parse the FX sub-line into `currency_original`, `amount_original`, `fx_rate`; golden cases | M |
-| DP-12 | Mashreq totals are never extracted, so all 12 Mashreq statements are `warn` and 42 % of lines have no completeness check | Not part of the P0/P1 parser fixes | Add Mashreq to `totals.py` | M |
-| X-17 | `EIB_PDF_PASSWORD` and `MASHREQ_PDF_PASSWORD` are accepted and stored but never sent to or tried by the parser | Contract and parser change | Wire them into the parser's password map, the worker `settings` and parse-v1, or remove them from the allow-list and Settings | S |
+| NEW-4 | Mashreq `card_last4` / `primary_card_last4` is the card's first four digits (BIN): `_CARD_LAST4_RE` takes the first group of "Card No 4xxx XXXX XXXX 1234". Every Mashreq statement of a profile lands on one card, SMS with the real last 4 can't match it, and the fallback statement reference carries the BIN | Found while building the synthetic golden set; fixing it changes card and account identity | Take the last group of the masked number (keep the BIN-based `legacy_fingerprint`). Decide with DP-20 first: with real last-4s, a replacement card (two in the local corpus) creates a second Mashreq account | S |
 | NEW-2 | `PARSER_VERSION` is still `2026.10.0` although the ENBD-year, FAB-amount and validation fixes change output, so `documents.parser_version` can't tell old parses from new | Found while writing the post-import checks | Bump it (for example `2026.10.1`) and on every output change; a test that a golden delta requires a bump | S |
 
 ### Web

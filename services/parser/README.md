@@ -105,6 +105,14 @@ Implementation notes beyond the contract:
 - `statement_date` never falls back to today: an undeterminable date is `UNSUPPORTED_LAYOUT`.
 - `kind = interest` for debit fee/purchase lines mentioning `INTEREST`, `PROFIT CHARGE`,
   `FINANCE CHARGE` or `MURABAHA PROFIT` (VAT lines excluded). Other kinds are legacy.
+- Mashreq foreign rows are split into currency, original amount and the printed rate (DP-11);
+  legacy kept them as AED with that text in the description. The kind and `legacy_fingerprint`
+  are still computed from the legacy description.
+- Totals (`totals.py`): FAB, ENBD/EIB and Mashreq give all six values, ADCB the two balances, SIB
+  none. FAB's `total_credits` adds the credits its Payments/Credits column omits (DP-10); Mashreq's
+  summary is used only when complete and consistent (DP-12).
+- Every PDF password in `settings` is tried for detection, page counting and totals; each bank
+  parser uses its own key, including `EIB_PDF_PASSWORD` and `MASHREQ_PDF_PASSWORD` (X-17).
 
 ## Environment variables
 
