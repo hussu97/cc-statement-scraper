@@ -55,9 +55,9 @@ export function MerchantsTab() {
   );
   const suggestedCount = useMemo(() => (merchants.data?.rows ?? []).filter((m) => merchantState(m) === "suggested").length, [merchants.data]);
 
-  const assign = (m: MerchantRow, code: string | null, title: string) =>
+  const assign = (m: MerchantRow, code: string | null, title: string, reject = false) =>
     setCategory.mutate(
-      { merchantCode: m.merchant_code, categoryCode: code },
+      { merchantCode: m.merchant_code, categoryCode: code, reject },
       {
         onSuccess: () => toast({ title, tone: "positive" }),
         onError: (e) => toast({ title: "Couldn't update the merchant", description: errorMessage(e), tone: "danger" }),
@@ -135,7 +135,7 @@ export function MerchantsTab() {
             <Button size="sm" variant="secondary" icon={<Check className="size-3.5" />} disabled={setCategory.isPending} onClick={() => assign(m, m.assignment!.category_code, `Accepted ${cat?.name ?? "category"} for ${m.merchant_name}`)}>
               Accept
             </Button>
-            <Button size="sm" variant="ghost" icon={<X className="size-3.5" />} disabled={setCategory.isPending} onClick={() => assign(m, null, `Suggestion rejected for ${m.merchant_name}`)}>
+            <Button size="sm" variant="ghost" icon={<X className="size-3.5" />} disabled={setCategory.isPending} onClick={() => assign(m, null, `Suggestion rejected for ${m.merchant_name}`, true)}>
               Reject
             </Button>
             <Button size="sm" variant="ghost" icon={<Wand2 className="size-3.5" />} loading={making === m.merchant_code} onClick={() => void makeRule(m)}>

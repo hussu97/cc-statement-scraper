@@ -204,7 +204,7 @@ export interface RulePreview {
 
 export function useRulePreview(
   profileCode: string,
-  args: { match_type: string; pattern: string; category_code: string; conditions: Record<string, string>; priority: number } | null,
+  args: { match_type: string; pattern: string; category_code: string; conditions: Record<string, string>; priority: number; rule_code?: string } | null,
 ) {
   return useQuery({
     queryKey: keys.rulePreview(profileCode, args),
@@ -220,6 +220,8 @@ export function useRulePreview(
           p_category_code: args!.category_code,
           p_conditions: args!.conditions as Json,
           p_priority: args!.priority,
+          // Editing: leave the rule's own current effect out of "would change" (DB-31).
+          ...(args!.rule_code ? { p_rule_code: args!.rule_code } : {}),
         }),
       ) as unknown as RulePreview,
   });
@@ -379,7 +381,9 @@ export async function sampleDescription(profileCode: string, merchantCode: strin
 export function useSetMerchantCategory(profileCode: string) {
   const invalidate = useInvalidateCategorisation(profileCode);
   return useMutation({
-    mutationFn: async (v: { merchantCode: string; categoryCode: string | null }) => {
+    mutationFn: async (v: { merchantCode: string; categoryCode: string | null; reject?: boolean }) => {
+      // Rejecting a suggestion records it, so the nightly LLM pass doesn't ask again (WEB-14).
+      if (v.reject) return must(await supabase.rpc("reject_merchant_suggestion", { p_profile_code: profileCode, p_merchant_code: v.merchantCode }));
       if (!v.categoryCode) {
         return must(
           await supabase.from("merchant_profile_category").delete().eq("profile_code", profileCode).eq("merchant_code", v.merchantCode),
@@ -496,6 +500,7 @@ export function previewArgs(d: RuleDraft) {
     category_code: d.category_code,
     conditions: cleanConditions(d.conditions),
     priority: Number.isFinite(d.priority) ? Math.trunc(d.priority) : 100,
+    ...(d.rule_code ? { rule_code: d.rule_code } : {}),
   };
 }
 
