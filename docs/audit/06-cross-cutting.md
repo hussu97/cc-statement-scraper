@@ -335,3 +335,12 @@ multi-document line union (DP-02). X-29 is resolved: the parser deploys to
 in parse-v1 except the `country_code` format. Open items: [BACKLOG.md](BACKLOG.md).
 
 **Later updates (2026-10-09, Edge + CI pass):** X-16 is fixed (`supabase/functions/.env.example`, names only, with a guard test). X-26 is fixed (`deno check --frozen` in the `edge` job; `ios-build.yml` compiles the app and share extension weekly and on app changes; golden parity in CI stays open as SRV-24). X-32 is decided: Vercel Preview deployments are off for `apps/web` (PRODUCTION §4; a dashboard action). `deploy-parser.yml` is WIF-only now that the `GCP_SA_KEY` repo secret is deleted.
+
+**Database P2/P3 pass (2026-10-09):** X-10 decided (leave production's `rls_auto_enable()`;
+PRODUCTION §2.3); X-23 fixed (`legacy.*` table and sequence grants revoked from `anon` /
+`authenticated`, `20261009000500`); X-24 fixed with DP-19; X-33 DB part fixed
+(`transactions.fx_rate` null for AED, a statement rate that rounds to 0 is stored as unknown,
+`…0100`; `amount_drift` stays reserved). Not changed: the `concat_ws` line key, because changing
+`line_key` would re-key every stored line and break re-parse matching of existing evidence (two
+values can only collide if a null shifts a field into a neighbour of a different type). The iOS
+`CodingKeys` nit is for the iOS pass.

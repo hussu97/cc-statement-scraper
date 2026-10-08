@@ -546,6 +546,27 @@ Storage objects are also left behind; that is outside the DB.
 | `private.bump_and_recategorize` | `0600:135`, `1100:4` | `1100` (skips deleted profiles) |
 | `private.apply_sms_template` | `0400:108`, `1000:23` | `1000` (amount only required for transaction kinds) |
 
+**Update 2026-10-09 (P2/P3 pass).** Migrations `20261009000100`–`…0500` (short names `9-100` …
+`9-500` below) redefine these again; the final definitions are:
+
+| Function | Final | Note |
+|---|---|---|
+| `public.overview`, `public.statement_cycles` | `9-100` | DB-18, DB-39, DB-45 |
+| `public.v_transactions` (view) | `9-100` | DB-20 |
+| `public.ingest_parsed_document`, `private.ingest_one_statement`, `private.refresh_transaction` | `9-100` | DP-04r, DB-17r, X-33 |
+| `private.resolve_merchant`, `private.new_transaction_from_line`, `private.new_transaction_from_sms` | `9-100` | DB-19r, DB-44 |
+| `public.anomalies` | `9-100` | DB-32r |
+| `private.process_sms` | `9-300` (first redefined in `9-100`) | DB-34, DB-36, DB-26r scope |
+| `private.seed_profile_defaults`, `private.nightly`, `private.recategorize_stale`, `private.reestimate_pending_fx`, `private.enqueue_llm_categorize`, `private.generate_insights` | `9-200` | DB-24, DB-25, DB-29r, DB-37 |
+| `public.apply_llm_suggestions`, `public.preview_rule` | `9-200` (dropped, a defaulted parameter added) | DB-37, DB-31 |
+| `private.match_sms_template` | `9-300` (dropped, `p_profile_code` added) | DB-26r |
+| `public.propose_sms_template`, `private.trg_sms_templates_reprocess` | `9-300` | DB-26r, DB-22 |
+| `public.ops_health`, `public.fail_document` | `9-400` | SRV-10, DB-38, SRV-22, SRV-20 |
+| `private.trg_audit`, `private.attach_pending_members`, `public.add_profile_member`, `private.apply_legacy_category_choices` | `9-500` | DB-21, DB-23, DP-19 |
+
+DB-41 is closed by decision: every `20261008*` migration is in production, so nothing is squashed
+and the stale file name in `…0000:4` stays (PRODUCTION §2.3 notes it).
+
 ## Appendix B: Experiments
 
 The scripts are in the session scratchpad (not committed). Each one runs `\i setup.sql` (two throw-away users and profiles plus helpers modelled on `02_ledger.test.sql`) inside `BEGIN … ROLLBACK`. To reproduce, start from `supabase/tests/02_ledger.test.sql`'s helpers and add the following:
@@ -611,6 +632,37 @@ shared non-empty DB, and on a fresh throw-away stack (migrations + seed from scr
 Rehearsal re-run (33 hussain ADCB/SIB documents re-parsed through the worker after the fix): legacy-line
 coverage ADCB 80.8 % → 100 %, SIB 53.2 % → 100 % (ENBD 89.4 % unchanged: DP-03 parser), 0 orphaned
 transactions, 7 card-less empty ADCB documents parsed with a "skipped" warning.
+
+**P2/P3 pass (2026-10-09).** Migrations `20261009000100_db_ledger_fixes`, `…0200_db_categorisation_and_jobs`,
+`…0300_db_sms_templates`, `…0400_db_ops_and_worker_rpcs`, `…0500_db_identity_and_legacy`; tests
+`13`–`18`. `supabase test db`: 18 files, 691 tests.
+
+| ID | Status | Where |
+|---|---|---|
+| DB-17 | fixed | `9-100` `private.reprocess_waiting_sms` at the end of `ingest_parsed_document`; `13` test |
+| DB-18 | fixed | `9-100` `public.prev_month_to_date_end`; `13` tests for 30 Mar / 31 Dec |
+| DB-19 | fixed | `9-100` select first, insert only for a new key; `merchant_aliases` kept for manual merges; `13` test |
+| DB-20 | fixed | `9-100` scalar sub-queries on `transaction_evidence_txn_idx`, evaluated for the page only (50-row page: 50 index probes, 2.7 ms vs 7–8 ms); `13` test |
+| DB-21 | fixed | `9-500` `delete_profile`, `storage_cleanup` queue, `trg_audit` skip; `17` test |
+| DB-22 | fixed | `9-300` targeted re-processing (sender, scope, newest first, live pattern changes only). Moving it to a queue: not needed at 500 bounded messages |
+| DB-23 | fixed | `9-500` confirmed-email triggers and `add_profile_member`; `17` tests |
+| DB-24 | fixed | `9-200` whole-word seed rules, guarded update of untouched seed rules; `14` tests |
+| DB-25 | fixed | `9-200` per-profile isolation, `private.job_errors`; `14` test |
+| DB-26 | fixed | `9-300` examples ≥ 1, bank-sender patterns, per-profile LLM templates, `promote_sms_template`; `15` tests |
+| DB-28 | fixed | `18` DB-27 and DB-43 tests. A two-connection concurrency test is not possible in pgTAP; the lock is checked as held (`09`) |
+| DB-29 | fixed | `9-200` `spend_pace`, `new_recurring`, `large_transaction`, `review_backlog`; `14` tests. `amount_drift` stays reserved (decision: `auth_amount` already shows the difference) |
+| DB-31 | fixed | `9-200` `preview_rule(…, p_rule_code)`; `14` tests |
+| DB-32 | fixed | `9-100` `statement_lines_fx_estimate_idx`; `anomalies` with window frames (same output, checked against the old function on the demo profile) |
+| DB-34 | fixed | `9-100` declined → `ignored` (rows migrated). `profiles.timezone` / `base_currency`: decision, kept and documented as reserved (Asia/Dubai is the business rule) |
+| DB-35 | accepted | ~79 random bits per code is plenty |
+| DB-36 | fixed | `9-100`; `13` tests |
+| DB-37 | fixed | `9-200` `merchant_category_skips`; `14` tests |
+| DB-38 | fixed | `9-400` 7-day windows, bounded cron scan; `16` tests |
+| DB-39 | fixed | `9-100`; `13` tests |
+| DB-40 | deferred | Needs an accept step and UI; goes with NEW-1 (in-app invite) |
+| DB-41 | decision | no squash (all migrations are in production); Appendix A updated |
+| DB-44 | fixed | `9-100` new transactions are inserted fully derived, so each is categorised once |
+| DB-45 | fixed | `9-100` `overview.pending_unpriced_count`; `13` test |
 
 **Docs follow-up (2026-10-08, docs pass):** ARCHITECTURE §4 no longer claims a 120 s statement
 timeout or a regex statement timeout (DB-13), §6 lists only the insight kinds actually generated

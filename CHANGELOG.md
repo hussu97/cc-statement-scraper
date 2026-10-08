@@ -39,6 +39,95 @@
 - X-32 decision recorded: Vercel Preview deployments are off for `apps/web` (PRODUCTION §4, docs/ci-cd.md §2.3; the switch itself is a Vercel dashboard action)
 - docs/audit: BACKLOG rows closed (SRV-05/07/10/11r/14/15/18/19/20/22/23, NEW-1, X-16r, X-26, X-32, FV-04) with remainders SRV-10r, SRV-20r, SRV-22r (SQL), NEW-1r (web), SRV-13r (parser); fix-status notes in 03, 06 and 07
 
+## Passkeys and code-only email sign-in — 2026-10-08 (branch `ledger-v2`)
+
+### Backend (Supabase)
+
+- **feat** Auth email templates as code (`supabase/templates/`, `[auth.email.template.*]`): *Magic Link*, *Confirm signup*, *Invite user*, *Change Email Address* and *Reauthentication* carry a one-time code and no sign-in link; the invite tells people to sign in with their email. Pushed to production
+- **feat** `[auth.passkey]` / `[auth.webauthn]` locally (RP ID `localhost`, origin `http://localhost:5173`); production passkeys use RP ID `cc-statement-scraper.vercel.app` (dashboard)
+- **fix** `[remotes.production]` pins every setting that differs from local (site URL, redirect URLs, email confirmations, OTP length 8, TOTP MFA, max rows, vector storage), so a `supabase config push` can't overwrite production with local values again (it did once today and was restored within minutes; see PRODUCTION §2.7)
+
+### Web
+
+- **feat** Sign-in is an emailed code or a passkey (`signInWithPasskey`, with passkey autofill in the email field where the browser supports conditional UI). Password and magic-link sign-in removed; `emailCodeOptions()` sends no redirect link and never creates users; codes of 6–10 digits accepted; "Send a new code"
+- **feat** After a code sign-in, "Add a passkey?" (Add / Not now). "Not now" is remembered per user in this browser (`data/passkeys.ts`)
+- **feat** Settings → Account: signed-in email, sign out, and passkeys (list with created / last used, add, rename, remove)
+- **feat** `/.well-known/apple-app-site-association` (webcredentials for `2F94NY8R3T.com.hussu97.ledger`), served as JSON and excluded from the SPA rewrite
+- **test** `passkeys.test.ts` (offer rule, Not-now storage, support detection, default names, cancel detection, error sentences, code cleaning)
+
+### iOS
+
+- **feat** Sign in with a passkey (`SessionStore.signInWithPasskey`, supabase-swift `@_spi(Experimental)`), plus the post-sign-in offer (`AppRoute.offerPasskey`, `PasskeyOfferView`) and Settings → Account → Passkeys (`PasskeysView`, `LedgerKit.PasskeyStore`: list, add, rename, remove). Associated Domains `webcredentials:$(LEDGER_PASSKEY_DOMAIN)`
+- **fix** The email-code request no longer passes `shouldCreateUser: true`; the Debug password form is gone (the env-driven `DevSignIn` for the local demo user stays, Debug only)
+- **test** `PasskeyTests` (offer rule, Not-now flag, cancellation, error sentences, routing)
+
+### Docs
+
+- PRODUCTION §2.2 (code-only sign-in, passkeys, RP ID warning) and §2.7 (auth config as code, the `config push` warning); ARCHITECTURE §8; README sign-in and local passkey testing
+
+## Claude rules and guard hook — 2026-10-08
+
+### Docs
+
+- **chore** `.claude/settings.json` + `.claude/hooks/guard.py`: a Claude Code PreToolUse guard that denies blanket staging (`git add -A`/`.`/`-u`, `git commit -a`), commits without the exact author or with a co-author trailer, printing secret files / env dumps / tokens (Bash and `Read`), dropping or writing the `legacy` schema, `rm -r` of `backend/` or `data/` and `db reset --linked`; and asks before every production action (push to `main`, `db push`, functions deploy, secrets, Vault, Cloud Run, Vercel, `gh secret`/`workflow run`, TestFlight, prod SQL) and hook bypasses. Tested by `guard_test.py` (`python3 .claude/hooks/guard_test.py`). `.gitignore`: `.claude/worktrees/`, `.claude/settings.local.json`
+- **docs** CLAUDE.md rules reworked after mm-ecommerce/mm-pos (section numbers kept, since code comments cite them): policy cast explained (§1.5), exact client grants (§1.13), Edge API keys (§3.4), no "iPhone" in App Intent text (§5.6), Sentry off locally + real project slugs (§6), env-var inventory (§8), explicit staging, hooks, `gh` account, `git check-ignore` (§9), fresh-reset pgTAP, `uv`, `pnpm check` (§10), §11 "Production, deploys and secrets" (every production action needs a yes; a push to `main` deploys; `legacy` schema and the untracked `backend/`/`data/` are kept; secret files listed and never printed; publishable key only in clients), §12 workflow (plan first, subagents, lessons loop, enforce don't remember) and §13 guard table
+- **docs** Area files `supabase/CLAUDE.md` (migrations, prod shape, policies, Edge keys and secrets) and `apps/ios/CLAUDE.md` (LedgerKit, secrets, App Store/TestFlight rules, verification); `AGENTS.md` pointer; `tasks/lessons.md` seeded with the lessons from this repo's history (incl. `supabase config push`: no dry run, whole file, prod-only values in `[remotes.production]`, code-only email sign-in, passkey `rp_id`) (each with what went wrong, the rule and what enforces it); README links them
+
+## Database audit backlog, P2 and P3 — 2026-10-09
+
+### Backend (Supabase)
+
+- **fix** `20261009000100_db_ledger_fixes.sql`:
+  - An SMS held as `unknown_card` is re-processed when a statement registers its card, and its review resolves itself (`private.reprocess_waiting_sms`, called at the end of `ingest_parsed_document`, which now returns `sms_card_registered`) (DB-17r)
+  - `overview`'s month-to-date base stops at the end of last month on the 29th–31st (`public.prev_month_to_date_end(p_month, p_today)`) (DB-18)
+  - `resolve_merchant` reads before it writes; an existing merchant row is never rewritten (DB-19r)
+  - `v_transactions.has_sms` / `has_statement` are scalar sub-queries on the evidence index, evaluated only for the returned page (DB-20)
+  - `statement_lines (profile_code, currency_original, txn_date desc)` index for `estimate_fx`; `anomalies` uses window frames instead of two laterals per row, same output (DB-32r)
+  - Declined alerts are stored `ignored` (existing rows migrated) (DB-34)
+  - An SMS template date more than 7 days from `received_at` falls back to `received_at` and is kept as `parsed_fields.event_at_rejected` (DB-36)
+  - Utilisation uses `greatest(closing_balance, 0)` in `overview` and `statement_cycles` (DB-39)
+  - New transactions are inserted with their merchant and AED amount, so they are categorised once, not twice (DB-44)
+  - `overview.pending_unpriced_count`: pending transactions with no AED amount yet (DB-45)
+  - Ingest rejects a statement dated more than 31 days ahead with a permanent `22023` (DP-04r)
+  - `transactions.fx_rate` is null for AED (backfilled); a statement `fx_rate` that rounds to 0 is stored as unknown instead of failing the ingest (X-33)
+- **test** `13_db_ledger_fixes.test.sql`; `09` and `12` pin `ledger.test_today` for their fixed future dates
+- **fix** `20261009000200_db_categorisation_and_jobs.sql`:
+  - Seed rules `REST`, `NOON`, `LIME`, `HEALTH`, `BONUS` match whole words (regex), so `INTEREST`, `AFTERNOON`, `SUBLIME` no longer mis-categorise; existing profiles updated where the rule is still exactly as seeded (DB-24)
+  - Cashback seeds `MURABAHA PROFIT` and `BONUS` require `direction = credit`: an Islamic-card finance charge is spend again (DP-09)
+  - `nightly`, `enqueue_llm_categorize`, `recategorize_stale` and `reestimate_pending_fx` catch errors per profile (per transaction for the FX job) and log them to `private.job_errors` (30-day retention) (DB-25)
+  - `generate_insights` produces `spend_pace`, `new_recurring`, `large_transaction` (from `anomalies`) and `review_backlog` (DB-29r)
+  - `preview_rule(…, p_rule_code text default null)`: `would_change` follows `recategorize`'s full tie-break and leaves out the rule being edited (DB-31)
+  - `public.merchant_category_skips` (`declined` / `rejected`): `apply_llm_suggestions(…, p_merchant_codes text[] default null)` records merchants the LLM declined for the current category set; `public.reject_merchant_suggestion(p_profile_code, p_merchant_code)` drops a suggestion for good; `enqueue_llm_categorize` skips both (DB-37, WEB-14 SQL side)
+- **test** `14_db_categorisation_and_jobs.test.sql`; `11_privileges` matrix gains `merchant_category_skips` SELECT
+- **fix** `20261009000300_db_sms_templates.sql`:
+  - A template change re-processes messages only when the template is live and its pattern, priority, scope or activation changed; only messages its sender pattern (and scope) reaches; newest first, 500 at most. Deactivations and renames re-process nothing (two statement triggers with transition tables) (DB-22)
+  - `sms_templates_examples_required`: every template has at least one example (DB-26r)
+  - `sms_templates.scope_profile_code`: `propose_sms_template` scopes an LLM template to the proposing profile and builds its sender pattern from `banks.sms_senders` (a message from another sender is `22023`); `private.match_sms_template(…, p_profile_code)` honours the scope; `public.promote_sms_template(p_template_code)` (service role) makes an approved template global (DB-26r)
+- **test** `15_db_sms_templates.test.sql`; `02_ledger`'s reversal template gains an example
+- **feat** `20261009000400_db_ops_and_worker_rpcs.sql` (SQL side; the Edge Functions wire them up):
+  - `ops_health()` adds `mailboxes_stale` (enabled, unsynced > 2 days), `gmail_watch_expiring` (< 24 h or none), `mailbox_errors` (`sync_state.last_error`), each a list of `{mailbox_code, …}` (SRV-10); `job_errors_24h` (DB-25); `open_reviews_total`, `documents_queued_oldest_age_s`; queue metrics gain `newest_age_s` and `total` so a DLQ alert can fire only when a message arrived since the last run (SRV-22)
+  - `ops_health()` changes: `recon_failed` and `open_reviews` count the last 7 days, `cron_last_success` scans 7 days (DB-38); `documents_stuck` counts only `parsing` for over an hour, not `queued` (SRV-22)
+  - `drain_dlq(p_queue)` and `requeue_dlq(p_queue, p_limit default 100)` (service role; `parse_document` / `llm_categorize` / `sms_fallback`); a re-queued parse message re-opens its failed document (SRV-22)
+  - `save_mailbox_sync_state(p_mailbox_code, p_patch, p_last_synced_at, p_watch_expires_at)`: key-wise jsonb merge under a row lock; `gmail_history_id`, `last_synced_at` and `watch_expires_at` never move back (SRV-15)
+  - `begin_document_parse(p_doc_code, p_attempt)` claims a document for parsing, or returns `{skip: 'parsed'|'failed'}` for a duplicate or stale message; `resubmit_document(p_profile_code, p_doc_code)` re-queues a failed PDF that is uploaded again; `fail_document` never flips a `parsed` document back (SRV-20)
+- **test** `16_db_ops_and_worker_rpcs.test.sql`
+- **feat** `20261009000500_db_identity_and_legacy.sql`:
+  - `public.delete_profile(p_profile_code, p_confirm_key)` (owner; the key must match): deletes the profile's Vault PDF passwords and mailbox tokens, queues its PDFs on the new `storage_cleanup` queue (`{bucket, paths[]}`, 100 per message) and deletes the profile; `trg_audit` skips rows of a vanished profile, so a user-JWT delete no longer fails on the audit FK (DB-21)
+  - Pending invites attach only once the email is confirmed (insert with a confirmed email, or a later confirmation / email change); `add_profile_member` treats an unconfirmed account as not signed up (`invited`) (DB-23)
+  - `legacy.*` keeps no table or sequence grants for `anon` / `authenticated` (X-23)
+  - `private.legacy_category_aliases` (`Entretainment` → `Entertainment`) used by `apply_legacy_category_choices`; `private.legacy_unresolved_category_names()` lists names that still match no category, for the finalize output (DP-19 / X-24)
+- **test** `17_db_identity_and_legacy.test.sql`; `03`, `06`, `07` create confirmed test users
+- **test** `18_review_regressions.test.sql`: a line displaced by a manual link keeps its own transaction (DB-27) and an `unknown_card` SMS without a card number is bound to the chosen account (DB-43) (DB-28r)
+- **decision** DB-35 (code entropy) and DP-21 (legacy fingerprint collisions) accepted; X-10 (prod `rls_auto_enable()`) left in place; DB-41 no squash (every migration is in production); `amount_drift` stays a reserved review reason; `profiles.timezone` / `base_currency` stay reserved. Not done: DB-40 (needs an accept step, goes with NEW-1), DP-20 (account merge is a model decision), the X-33 `concat_ws` line key (changing it would re-key all stored evidence)
+
+### Docs
+
+- docs/audit/BACKLOG.md: the database P2/P3 items moved to "Done: database pass 2026-10-09"; Edge/Web rows note their SQL side; new DB-21e (drain `storage_cleanup`) and X-33r (iOS `CodingKeys`); summary recounted
+- docs/audit/01 Fix status and Appendix A (final definitions after the pass); 02, 03, 04, 06 Fix status notes
+- ARCHITECTURE §3–§7: confirmed-email invites, `delete_profile`, template scope and targeted re-processing, `merchant_category_skips`, `storage_cleanup` and DLQ tools, idempotent parse claims, `save_mailbox_sync_state`, insight kinds, batch-job errors, new `ops_health` keys
+- PRODUCTION §2.3 (X-10, DB-41, `ledger.test_today`), §2.6 (legacy alias report, DP-21), §11 (DLQ tools, job errors, template promotion, profile deletion)
+- README: new RPCs in the RPC table, pgTAP suites 13–18
+
 ## Supabase publishable / secret API keys — 2026-10-08 (branch `ledger-v2`)
 
 ### Backend

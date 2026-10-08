@@ -24,14 +24,14 @@ separately):
 
 | Area | P2 | P3 | UX recs | Verify | Total |
 |---|---|---|---|---|---|
-| Database (Supabase SQL) | 13 | 22 | – | 2 | 37 |
-| Edge Functions | 0 | 0 | – | – | 0 |
+| Database (Supabase SQL) | 0 | 2 | – | 2 | 4 |
+| Edge Functions | 5 | 8 | – | – | 13 |
 | Parser | 5 | 3 | – | – | 8 |
-| Web | 17 | 26 | 5 | – | 48 |
-| iOS | 14 | 10 | 7 | 3 | 34 |
+| Web | 16 | 26 | 5 | – | 47 |
+| iOS | 14 | 11 | 7 | 3 | 35 |
 | Scraper | – | 2 | – | – | 2 |
-| CI, config and ops | 0 | 3 | – | 1 | 4 |
-| **Total** | **49** | **66** | **12** | **6** | **133** |
+| CI, config and ops | 1 | 6 | – | 1 | 8 |
+| **Total** | **41** | **58** | **12** | **6** | **117** |
 
 There are no open P0 or P1 findings. The last P1 remainders (WEB-02 statements beyond 500 and
 merchant search, WEB-07 "Retry AI") landed in `98f901c`. What is left of the P1s are the device
@@ -51,7 +51,7 @@ These are actions, not code changes. Most are already steps in [PRODUCTION.md](.
    URL and redirects at step 9. While there, check Auth → *Confirm email* (V-DB-23).
 3. **Members with sign-ups off.** After `--step metadata`, invite both emails through Dashboard →
    Authentication → Users → *Invite user*; the pending invites attach on user creation
-   (PRODUCTION §2.2), or with the new `member-invite` Edge Function (NEW-1; the web button is NEW-1r).
+   (PRODUCTION §2.2). There is no in-app invite yet (NEW-1).
 4. **Repo and CI.** `gh variable set LEGACY_DEPLOYS_ENABLED --body true` **before** merging
    `ledger-v2` into `main`; create the `production` environment with its secrets and a `main`-only
    branch policy (V-X-12).
@@ -72,11 +72,11 @@ These are actions, not code changes. Most are already steps in [PRODUCTION.md](.
    "Card"* automation, including whether "contains" is case-insensitive (V-IOS-06), and the first
    TestFlight upload with the privacy manifests (V-IOS-08).
 10. **Manual data decisions:** the encrypted staging PDF in the legacy bucket that neither legacy
-    nor v2 ever ingested (DP-18); legacy typo categories reported by
-    `private.legacy_unmatched_choices()` at finalize (DP-19/X-24); leave or drop prod's
-    `public.rls_auto_enable()` (X-10).
-11. **Vercel previews** talk to production (X-32). Decision (2026-10-09): previews are **off** for the
-    `apps/web` project; turn them off in the Vercel dashboard (PRODUCTION §4).
+    nor v2 ever ingested (DP-18); any legacy category name still listed by
+    `private.legacy_unresolved_category_names()` at finalize (add an alias row; `Entretainment`
+    is built in, DP-19/X-24). Prod's `public.rls_auto_enable()` stays (X-10, decided).
+11. **Vercel previews** talk to production (X-32): turn previews off for the `apps/web` project, or
+    accept it knowingly.
 
 ---
 
@@ -84,26 +84,18 @@ These are actions, not code changes. Most are already steps in [PRODUCTION.md](.
 
 ### Database (Supabase SQL)
 
-| ID | Summary | Why deferred / dependency | Suggested fix | Effort |
-|---|---|---|---|---|
-| DB-17r | An `unknown_card` SMS is re-processed only when its review is resolved, not when a later statement registers the same card | Outside the functions touched in the P1 pass | After `ensure_card` inserts a card, re-process `sms_messages` with `account_code is null` and the same bank and last4, and auto-resolve their reviews | S |
-| DB-18 | `overview`'s month-to-date base overruns into the current month on the 29th–31st, so `change_vs_prev_month_to_date` is wrong those days | Deferred P2 | `least(v_prev + v_day, v_month)` plus a pgTAP case for 30 Mar and 31 Dec | S |
-| DB-19r | `resolve_merchant` still writes a global `merchants` row on every lookup (write-on-read, row lock) | Only the per-candidate call was removed | Select first, then `insert … on conflict do nothing` and re-select; populate or drop `merchant_aliases` | S |
-| DB-20 | `v_transactions.has_sms` / `has_statement` hash the whole evidence table on every Activity page | Perf; about 8 ms today, grows with total evidence | `LATERAL (select bool_or(…) where e.txn_code = t.txn_code and e.is_active)`, or maintain the flags in `refresh_transaction` | S |
-| DB-21 | Deleting a profile leaves its Vault PDF passwords and mailbox tokens and Storage objects; a user-JWT delete fails on `trg_audit`'s FK | No profile deletion in the UI yet | `delete_profile` routine that purges `vault.secrets` by name prefix, enqueues Storage cleanup, and makes `trg_audit` skip a vanished profile | M |
-| DB-22 | Template re-processing always takes the oldest 500 unparsed SMS across all profiles, synchronously, even on deactivation | Deferred P2 (errors are isolated now, DB-08) | Re-process only messages from the template's bank senders, newest first or by cursor; skip when only `active=false` or non-pattern columns change; move to the queue | M |
-| DB-23 | Pending-invite claim and `add_profile_member` trust `auth.users.email` without `email_confirmed_at` | Low risk with sign-ups off and invite-only users; still matters if password sign-ups with confirmations off are ever enabled | Attach on `after update of email_confirmed_at` (and on insert when already confirmed); same check in `add_profile_member` | S |
-| DB-24 | Short `contains` seed rules mis-categorise: `REST` (INTEREST → Dining), `NOON` (AFTERNOON), `LIME`, `BONUS`, `HEALTH` | Seed content change needs a guarded content migration | Word-boundary regex (`\mREST\M`) or `prefix`; seed regression test with known descriptions | S |
-| DB-25 | Cron batch jobs (`nightly`, `enqueue_llm_categorize`, `recategorize_stale`, `reestimate_pending_fx`) have no per-profile error isolation | Deferred P2 | Per-profile `begin … exception` that logs to a `job_errors` table (or `raise warning`) and continues | S |
-| DB-26r | SMS templates: a template with no `examples` is never validated; LLM proposals default to sender `.*` and go live for every profile when approved | `field_groups` validation was done; the rest changes the proposal flow | CHECK `jsonb_array_length(examples) >= 1`; sender must match the bank's `sms_senders`; scope LLM templates to the proposing profile until promoted | M |
-| DP-09 | Seed rule `MURABAHA PROFIT` → Cashback (income), so an Islamic-card finance charge is dropped from spend (744 AED in the rehearsal) | Seed content change | Map it to a fee/charges spend category, or add `direction = credit` to the rule (guarded content migration) | S |
-| X-10 | Prod `public.rls_auto_enable()` (and probably Supabase's `ensure_rls` event trigger) isn't quarantined, so prod drifts from local and CI | Needs a decision; harmless functionally | Decide at cutover: leave it and note it in PRODUCTION §2.3, or drop it in a migration | S |
-| SRV-10r | The mailbox and DLQ checks `ops-monitor` now evaluates need their SQL: `mailboxes_stale` (enabled, no sync > 2 days), `gmail_watch_expiring` (< 24 h or expired), `mailbox_errors` (`sync_state ? 'last_error'` and not null) in `ops_health()`, plus `newest_age_s` per queue (pgmq `newest_msg_age_sec`) | Edge side done (`evaluateHealth` accepts a count, rows with `mailbox_code`, or `{count, mailbox_codes}`); SQL owned by the DB pass | Add the keys to `ops_health()`; until then the checks are skipped | S |
+None open. All twelve were done or decided on 2026-10-09: see
+[Done: database pass 2026-10-09](#done-database-pass-2026-10-09).
 
 ### Edge Functions
 
-None open. SRV-05, SRV-07, SRV-10 (Edge side), SRV-11r and NEW-1 (backend) landed on 2026-10-09
-(see [03 Fix status](03-server.md#fix-status)). Remainders: SRV-10r under Database, NEW-1r under Web.
+| ID | Summary | Why deferred / dependency | Suggested fix | Effort |
+|---|---|---|---|---|
+| SRV-05 | `gmail-push` has no time budget or incremental cursor, so a large backlog never finishes; a 404 cursor reset silently skips mail | Needs its own design and tests | Deadline like `outlook-poll`; save the cursor after each page; `labelId` filter on `history.list`; `captureMessage` on a 404 reset; optional bounded `messages.list` backfill | M |
+| SRV-07 | Base64 attachment decoding costs about 1 s of CPU per 20 MB against the 2 s Edge CPU limit | Needs a decoder swap and tests | `Uint8Array.fromBase64` / `@std/encoding` `decodeBase64Url`; skip attachments over 25 MB before downloading | S |
+| SRV-10 | Nothing alerts on stale mailboxes, expiring Gmail watches, mailbox `last_error` or parse-queue age | **SQL side done** (`20261009000400`: `ops_health` returns `mailboxes_stale`, `gmail_watch_expiring`, `mailbox_errors`); `evaluateHealth` still to do | Add `mailboxes_stale` (> 2 days), `gmail_watch_expiring` (< 24 h), `mailbox_errors` to `ops_health()` and `evaluateHealth` | M |
+| SRV-11r | Gmail push, Outlook resume, `ingestAttachment`/`storeDocument` races, token rotation and a viewer e2e (403 on upload and SMS) are untested | `worker_test.ts` covered the worker only | Fake `Db` and `fetch`, table-driven tests per path; e2e viewer case | M |
+| NEW-1 | No in-app invite: with sign-ups off, a new member needs a dashboard *Invite user* after `add_profile_member` | Found while documenting sign-ups off | An owner-only Edge Function that calls `auth.admin.inviteUserByEmail` when `add_profile_member` returns `invited` (rate-limited, same-origin redirect); a "Resend invite" action in web Settings → Members (and iOS later) | M |
 
 ### Parser
 
@@ -119,13 +111,12 @@ None open. SRV-05, SRV-07, SRV-10 (Edge side), SRV-11r and NEW-1 (backend) lande
 
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
-| NEW-1r | Settings → Members still calls `add_profile_member` directly, so a new member gets no email | The `member-invite` Edge Function (owner-only, rate-limited, same-origin redirect) landed; the UI is a follow-up | Members: "Invite" calls `member-invite` (`action: invite`) and shows `invite_sent` / `invite_error`; a "Resend invite" action on pending or never-confirmed members (`action: resend`, handle `INVITE_COOLDOWN` / `ALREADY_ACTIVE`). iOS later | S |
 | WEB-09 | Realtime channel topic reused while the old channel is still leaving can silently kill live updates (verified in source, not reproduced) | Out of the P1 pass | Unique topic per effect run (`ledger:${code}:${uuid}`) | S |
 | WEB-10r | Each review card runs 1–3 context queries, and every `transactions` event invalidates all review contexts | The badge part is fixed (head count) | One `review_context` RPC per list; invalidate only `["p", code, "reviews", "open"]` on txn events | M |
 | WEB-11 | First load is 1.16 MB JS (≈ 365 kB gz): Sentry with Replay, supabase-js and Radix preloaded on every route | Perf | Lazy-load Replay and Sentry after first paint, keep `/signin` free of chart and Radix chunks, drop `chunkSizeWarningLimit: 1200`, budget ~200 kB gz | M |
 | WEB-12 | "Apply to merchant" stays ticked after a pick, so the next change silently rewrites the whole merchant | Out of the P1 pass | Reset `toMerchant` on pick and on popover close | S |
 | WEB-13 | Rule regex validated with JS `RegExp` but run as Postgres ARE; Save stays enabled when the preview errors | Server now validates on write (DB-09/13), the client still lets you try | Block Save on `preview.isError`, show the server's 22023 message | S |
-| WEB-14 | Rejecting a merchant suggestion deletes the row, so the nightly LLM pass re-suggests it | Needs a DB marker | Store `source = 'rejected'` and skip it in `enqueue_llm_categorize` (pairs with DB-37) | S |
+| WEB-14 | Rejecting a merchant suggestion deletes the row, so the nightly LLM pass re-suggests it | **SQL side done**: `reject_merchant_suggestion` + `merchant_category_skips` (`20261009000200`); the Merchants tab must call it | Store `source = 'rejected'` and skip it in `enqueue_llm_categorize` (pairs with DB-37) | S |
 | WEB-15 | Calendar counts and draws future days ("135 days of 184"); heatmap uses ~35 % of the card on desktop | Out of the P1 pass | Clamp `to` at `todayDubai()` for display and counts; scale cells to the container | S |
 | WEB-16 | Anomalies show raw uppercase descriptions as separate rows, flag "Large first purchase" on a charge below usual, and use jargon | Partly server-side (`anomalies`) | Return `merchant_name`, require first purchase **and** above threshold, phrase as "about 4× your usual Shopping purchase", add a "this is fine" action | M |
 | WEB-17r | 18 categories over 12 hues still share colours (Medicine/Insurance, Forex Charge/Fines, Apple/Subscription/Cashback, Donation/Transport) | `…1900` moved the worst pairs; a full fix needs more hues or a policy | Extend the palette to ~16, or reserve unique hues for `kind = spend` categories; keep ΔE ≥ 15 | S |
@@ -142,7 +133,7 @@ None open. SRV-05, SRV-07, SRV-10 (Edge side), SRV-11r and NEW-1 (backend) lande
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
 | IOS-10 | OTP false negatives pass the filter ("Use 482913 as the code…", "authentication code", Arabic "رمز التحقق"); the server mirrors the same regex | Out of the P1 pass | Add `auth(entication)? code`, `secure code`, `3-?d ?secure`, code-near-digits patterns, `do not share`, `رمز`, `كلمة المرور`; one generated source or a parity test with the SQL regex | S |
-| IOS-11 | Filter tests use invented bodies, not the template examples; CI never compiles the app or extension targets | Out of the P1 pass (outbox failure tests were added) | Export `sms_templates` examples to a fixture with a drift check (the app and extension build landed: `ios-build.yml`, 2026-10-09) | M |
+| IOS-11 | Filter tests use invented bodies, not the template examples; CI never compiles the app or extension targets | Out of the P1 pass (outbox failure tests were added) | Export `sms_templates` examples to a fixture with a drift check; CI `xcodebuild build … CODE_SIGNING_ALLOWED=NO` (with X-26) | M |
 | IOS-12r | `noProfile` still discards the SMS; the outbox isn't cleared on sign-out; nothing outside Settings shows a stuck outbox | Honest queued reasons and "Not sent" were done | Enqueue with a pending profile; confirm-and-clear outbox and pending PDFs on sign-out; Settings badge and an Overview strip when the outbox is older than 1 h | S |
 | IOS-13 | A failed Realtime subscribe ends the stream with no retry; foreground reloads only Overview; Insights never refreshes | Out of the P1 pass | Restart with backoff while the profile is selected; reload or mark stale every loaded tab on foreground; include Insights in the fan-out | M |
 | IOS-14 | Switching ledger briefly shows the previous ledger's numbers | Out of the P1 pass | Reset screen models to `.idle` on profile change, or key `previous` by profile code | S |
@@ -158,7 +149,9 @@ None open. SRV-05, SRV-07, SRV-10 (Edge side), SRV-11r and NEW-1 (backend) lande
 
 ### CI, config and ops
 
-None open. X-16r landed on 2026-10-09: `supabase/functions/.env.example` (names only) plus a guard test.
+| ID | Summary | Why deferred / dependency | Suggested fix | Effort |
+|---|---|---|---|---|
+| X-16r | No committed `supabase/functions/.env.example`; the PRODUCTION §2.5 table is the only full inventory of function secrets | Functions directory wasn't owned by the docs pass | Commit an example grouped as required / prod-only / local-only / optional | S |
 
 ---
 
@@ -168,33 +161,21 @@ None open. X-16r landed on 2026-10-09: `supabase/functions/.env.example` (names 
 
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
-| DP-04r | Ingest doesn't reject a statement dated more than a month in the future (the parser now validates periods and due dates) | Defence in depth only | Reject `statement_date > today + 31` with a permanent 22023 | S |
-| DB-28r | DB-27 (displaced line) and DB-43 (unknown card without last4) have no dedicated pgTAP tests; the per-profile lock is checked as held, not under real concurrency | pgTAP is single-session | Add the two tests; a two-connection concurrency test in a script or CI step | S |
-| DB-29r | `spend_pace`, `new_recurring`, `review_backlog`, `large_transaction` insight kinds and the `amount_drift` review reason are allowed by CHECKs but never produced (ARCHITECTURE now says so) | Product decision | Implement them (WEB-25 already routes each kind) or drop them from the CHECKs | M |
-| DB-31 | `preview_rule`'s `would_change` ignores the equal-priority tie-break and counts the rule being edited | Out of the P1 pass | Mirror `recategorize`'s full ORDER BY; accept `p_rule_code` to exclude it | S |
-| DB-32r | No index for `estimate_fx`'s `(profile_code, currency_original, txn_date desc)` scan; `anomalies` is O(n²) | Three FK indexes were added | Add the index; rewrite `anomalies` with window functions | S |
-| DB-34 | `declined` SMS are stored `parsed` (docs say ignored); `Asia/Dubai` is hard-coded while `profiles.timezone`/`base_currency` are unused | Out of the P1 pass | Store `ignored`; use or drop the profile columns | S |
-| DB-35 | `gen_code` UUIDv4 nibble leaves ~79 random bits instead of 80 | Negligible | Accept (or derive from 16 random bytes) | S |
-| DB-36 | No sanity bound on a template date vs `received_at`: a DD/MM vs MM/DD mistake moves transactions by months | Out of the P1 pass | Fall back to `received_at` when the parsed date is more than 7 days away, with a warning | S |
-| DB-37 | Merchants the LLM declines (< 0.5) are re-enqueued every night | Out of the P1 pass | Store a "declined" marker with `category_set_hash` (pairs with WEB-14) | S |
-| DB-38 | `ops_health` counts (`recon_failed`, `open_reviews`) are all-time, so their Sentry issues never clear; it still scans `cron.job_run_details` unbounded (X-11 remainder; the purge keeps it to 7 days) | Out of the P1 pass | Window the counts (for example 7 days) and the cron scan | S |
-| DB-39 | Utilisation goes negative when the card is in credit | Out of the P1 pass | `greatest(closing_balance, 0) / limit` | S |
-| DB-40 | `add_profile_member` reveals whether an email has an account (`invited` vs `added`) and adds existing users without consent | Low risk for a two-person app | Return one status; optional accept step (with NEW-1) | M |
-| DB-41 | Eight functions are redefined across migrations; one stale filename reference in `…0000` | Squashing touches every migration | Squash before the first production push if still possible, or keep Appendix A current; fix the reference | M |
-| DB-44 | Per-row trigger overhead: two `recategorize` runs per new statement line | Perf | Batch inserts in `match_statement_lines`, or one `recategorize` per ingest | M |
-| DB-45 | Pending foreign SMS with no FX rate (`amount_aed` null) vanish from spend, budgets and `pending_amount` | Out of the P1 pass | Surface an "unpriced pending" count in `overview` (the web already shows "awaiting FX" per row) | S |
-| DP-19 / X-24 | Choices on a legacy typo category (`Entretainment`, 9 lines) never apply | Data quirk | Add an alias at import, or report unresolved category names in the finalize output | S |
+| DB-40 | `add_profile_member` reveals whether an email has an account (`invited` vs `added`) and adds existing users without consent | Low risk for a two-person app; needs an accept step and UI, so it goes with NEW-1 | Return one status; optional accept step (with NEW-1) | M |
 | DP-20 | A FAB card replacement creates a second FAB account, splitting `statement_cycles` and utilisation history | Model change | Treat a new primary card on the same bank and holder as a replacement on the existing account, or offer "merge accounts" | M |
-| DP-21 | Legacy fingerprints collide for genuine same-day repeat purchases, so fingerprint-keyed choices can cross-apply | Legacy data; v2 keeps every row | Accept; note it in the finalize output | S |
-| X-23 | `legacy.*` keeps 294 grants to `anon`/`authenticated` (blocked by revoked schema USAGE) | Defence in depth | `revoke all on all tables in schema legacy from anon, authenticated` | S |
-| X-33 | Contract nits: `fx_rate` is 1 or null for AED by bank; the `concat_ws` dedup key drops nulls; a sub-1e-8 rate rounds to 0; iOS relies on Foundation's `spendAvg3M` key mapping | Minor | Normalise `fx_rate` for AED, use `format('%s|%s', …)` for the key, explicit `CodingKeys` on iOS | S |
-| SRV-20r | `requeue_documents` is the only re-parse path for a failed duplicate (the Edge upload now calls it); `documents_stuck` still counts `queued` documents during a draining backlog | Edge side done: duplicates of failed documents are requeued and the worker skips stale messages for `parsed`/`failed` documents unless `requeue: true` | Base `documents_stuck` on `parsing` older than 1 h (or queue age); keep `requeue_documents` setting `queued` before it enqueues (the worker relies on it) | S |
-| SRV-22r | No service RPC to drain or requeue a DLQ, so clearing one still needs SQL | Edge side done: a DLQ alerts on new arrivals, then once a day (needs `newest_age_s`, SRV-10r) | `drain_dlq(queue)` / `requeue_dlq(queue)` service-role RPCs | S |
 
 ### Edge Functions
 
-None open. SRV-14, SRV-15, SRV-18 (Edge and parser scrubbers), SRV-19, SRV-20 (Edge side), SRV-22
-(Edge side) and SRV-23 landed on 2026-10-09. Remainders: SRV-20r and SRV-22r under Database.
+| ID | Summary | Why deferred / dependency | Suggested fix | Effort |
+|---|---|---|---|---|
+| SRV-14 | A failed save of a rotated Microsoft refresh token is ignored; `gmail-push` never records `sync_state.last_error` | Out of the P1 pass | Check the RPC error and capture a warning; record `last_error` in gmail-push and gmail-watch-renew | S |
+| SRV-15 | `saveSyncState` writes back a whole stale snapshot, so concurrent writers can regress the cursor | **SQL side done**: `save_mailbox_sync_state` (`20261009000400`); `saveSyncState` must call it | jsonb merge in SQL; keep the max cursor in an RPC | S |
+| SRV-18 | The Edge and parser scrubbers don't regex-strip free-text emails; `pgErrorToHttp` returns raw PG messages (constraint names) to clients; `withScope` isolation across concurrent requests unverified | Out of the P1 pass | Email regex in both scrubbers; fixed messages for 23505/23503; an interleaving test | S |
+| SRV-19 | Permanent `gmail-push` errors (bad envelope, `invalid_grant`, missing config) are nacked and redelivered for up to 7 days | Out of the P1 pass | Ack permanent errors (with `last_error`); dead-letter topic on the subscription | S |
+| SRV-20 | Re-uploading a failed PDF says `duplicate` and never re-parses; a duplicate queue message flips a parsed document back to `parsing`/`failed` | **SQL side done**: `begin_document_parse`, `resubmit_document`, guarded `fail_document` (`20261009000400`); the worker and `storeDocument` must call them | Return `parse_status` with `duplicate` and requeue failed ones; skip messages for already-parsed documents unless requeued | S |
+| SRV-22 | DLQ and `documents_stuck` alerts repeat every 15 min until a manual purge, including during the bulk import | **SQL side done**: `drain_dlq`, `requeue_dlq`, `documents_stuck` = `parsing` > 1 h, queue `newest_age_s` (`20261009000400`); alert-on-increase in `ops-monitor` still to do | Alert on depth increase; `drain_dlq`/`requeue_dlq` RPC; base "stuck" on `parsing` older than 1 h | S |
+| SRV-23 | Duplicated helpers, double `validatePdf`, `ProviderHttpError` in `gmail.ts`, long `processParseMessage`, unchecked `failDocument`/status results | Readability | `_shared/provider.ts`, `storeDocument` owns validation, split fetch/classify/apply | M |
+| DB-21e | `delete_profile` queues a deleted profile's PDFs on `storage_cleanup` (`{bucket, paths[]}`), but nothing drains that queue yet | New queue from the 2026-10-09 database pass | Worker: read `storage_cleanup`, `storage.from(bucket).remove(paths)`, delete the message; DLQ like the other queues (and add it to `private.assert_known_queue` for `drain_dlq`/`requeue_dlq`) | S |
 
 ### Parser
 
@@ -249,6 +230,7 @@ None open. SRV-14, SRV-15, SRV-18 (Edge and parser scrubbers), SRV-19, SRV-20 (E
 | IOS-29 | Small presentation decisions in views (`prefix(4)`, `prefix(10)`, fallbacks) | Readability | Move into LedgerKit presentation extensions with tests | S |
 | IOS-30 | Sentry failed-request capture can carry Activity search text in the PostgREST URL; `NSAllowsLocalNetworking` ships in Release | Hygiene | Strip query strings in `beforeSend`; set the ATS key in Debug only | S |
 | IOS-31 | Filter edges: a merchant named "OTP …" is dropped; "payment received … via transfer from account" is sent (server classifies it) | Accepted | Document both in the tests | S |
+| X-33r | iOS relies on Foundation's `spend_avg_3m` → `spendAvg3M` key mapping (the DB parts of X-33 were fixed on 2026-10-09) | Minor | Explicit `CodingKeys` on the overview model | S |
 
 ### Scraper
 
@@ -261,15 +243,54 @@ None open. SRV-14, SRV-15, SRV-18 (Edge and parser scrubbers), SRV-19, SRV-20 (E
 
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
-| SRV-13r | Supply chain, parser side: no pip hashes, base image by tag, `uvicorn[standard]` extras | The Edge part landed (frozen `deno.lock`, checked with `--frozen` in CI, pre-push and before deploy) | `uv pip compile --generate-hashes` + `--require-hashes`; pin the base image digest; plain `uvicorn` | S |
+| SRV-13 | Supply chain: `deno.json` `lock: false`, no pip hashes, base image by tag, `uvicorn[standard]` extras | Out of the P1 pass | Commit `deno.lock` and deploy `--frozen`; `uv pip compile --generate-hashes`; pin the base image digest; plain `uvicorn` | M |
 | SRV-24 | Golden parity never runs in CI (the corpus is private) | Needs a redacted corpus or protected storage | A small synthetic/redacted golden set per layout, or a protected CI job with encrypted corpus | M |
+| X-26 | CI runs no `deno lint`/`check`/`fmt` (fmt fails on 18 files) and never builds the iOS app or extension targets | Out of the P1 pass | Add lint and check (fix or drop fmt); a weekly `xcodegen && xcodebuild build` job (with IOS-11) | S |
+| X-32 | Vercel previews use the production Supabase project and CSP; their auth redirects aren't allow-listed | Decision | Disable previews, or point them at a non-prod project | S |
 | DP-22 | A rehearsal on the shared local stack also categorises the demo profiles' merchants and drains their `sms_fallback` queue (demo SMS sent to Claude) | Local ops only | Rehearse on a stack without seed data, or scope `enqueue_llm_categorize` by profile when run by hand | S |
+| FV-04 | `supabase migration up` matches migrations by version only, so a migration edited after a stack applied it is silently skipped (the shared local stack ran stale bodies of 4 migrations; 07 FV-04). Prod is safe only while no v2 version has been pushed | Process; no tooling yet | CI guard: fail a PR that modifies (`git diff --diff-filter=MDR`) an existing file under `supabase/migrations/` once that version is on `main` (or, after cutover, listed by `supabase migration list --linked`), with an explicit override label for pre-cutover edits. Optionally record a sha256 per applied migration in a local table and warn on mismatch | S |
 
-Closed on 2026-10-09: X-26 (`deno check` in CI; `ios-build.yml` compiles the app and extension),
-X-32 (decision: Vercel previews off, PRODUCTION §4), and FV-04, which
-`scripts/ci/check-migrations.sh` already covers (`diff` fails a PR or push that edits, deletes or
-renames a migration on the base; `remote local` reports migrations edited after the local stack
-applied them).
+---
+
+## Done: database pass 2026-10-09
+
+Migrations `20261009000100_db_ledger_fixes` (`23d9480`), `…0200_db_categorisation_and_jobs`
+(`9c77e7c`), `…0300_db_sms_templates` (`398f391`), `…0400_db_ops_and_worker_rpcs` (`9f2003a`),
+`…0500_db_identity_and_legacy` (`46fd89c`), tests `13`–`18` (`a843808` adds `18`). Details in
+[01 Fix status](01-database.md#fix-status) and CHANGELOG.
+
+| ID | Outcome |
+|---|---|
+| DB-17r | Done: `reprocess_waiting_sms` at the end of `ingest_parsed_document` |
+| DB-18 | Done: `prev_month_to_date_end` |
+| DB-19r | Done: select first; `merchant_aliases` kept for manual merges |
+| DB-20 | Done: scalar sub-queries on the evidence index, page rows only |
+| DB-21 | Done: `delete_profile`, `storage_cleanup` queue, `trg_audit` skip (the worker must drain `storage_cleanup`) |
+| DB-22 | Done: sender/scope-targeted, newest first, live pattern changes only (stays synchronous, bounded at 500) |
+| DB-23 | Done: confirmed-email triggers and `add_profile_member` |
+| DB-24 | Done: whole-word seed rules, guarded update of untouched seed rules |
+| DB-25 | Done: per-profile isolation, `private.job_errors`, `ops_health.job_errors_24h` |
+| DB-26r | Done: examples ≥ 1, bank-sender patterns, per-profile LLM templates, `promote_sms_template` |
+| DP-09 | Done: Cashback `MURABAHA PROFIT` / `BONUS` need `direction = credit` |
+| X-10 | Decided: leave prod's `rls_auto_enable()` (PRODUCTION §2.3) |
+| DP-04r | Done: statement more than 31 days ahead → `22023` |
+| DB-28r | Done: `18_review_regressions` (DB-27, DB-43). Real two-connection concurrency is out of pgTAP's reach |
+| DB-29r | Done: the four insight kinds are generated; `amount_drift` stays reserved (decision) |
+| DB-31 | Done: `preview_rule(…, p_rule_code)` |
+| DB-32r | Done: FX index; `anomalies` with window frames |
+| DB-34 | Done: declined → `ignored`; `profiles.timezone` / `base_currency` documented as reserved (decision) |
+| DB-35 | Accepted: ~79 random bits |
+| DB-36 | Done: > 7 days from `received_at` falls back |
+| DB-37 | Done: `merchant_category_skips` (`declined` per category-set hash) |
+| DB-38 | Done: 7-day windows, bounded cron scan |
+| DB-39 | Done |
+| DB-41 | Decided: no squash, every migration is in production; Appendix A updated; stale name noted in PRODUCTION §2.3 |
+| DB-44 | Done: new transactions are inserted fully derived (one categorisation each) |
+| DB-45 | Done: `overview.pending_unpriced_count` (the web/iOS can show it) |
+| DP-19 / X-24 | Done: `legacy_category_aliases`, `legacy_unresolved_category_names()` |
+| DP-21 | Accepted: noted in PRODUCTION §2.6 |
+| X-23 | Done |
+| X-33 | DB part done (AED `fx_rate`, sub-1e-8 rate); the `concat_ws` line key is kept on purpose (changing it would re-key all evidence); iOS part is X-33r above |
 
 ---
 

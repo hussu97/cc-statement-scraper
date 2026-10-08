@@ -37,6 +37,10 @@ targets:
           - $(LEDGER_APP_GROUP)
         keychain-access-groups:
           - $(AppIdentifierPrefix)$(LEDGER_KEYCHAIN_GROUP)
+        # Passkeys: the Supabase WebAuthn relying party is the web app's host,
+        # which serves /.well-known/apple-app-site-association (apps/web/public).
+        com.apple.developer.associated-domains:
+          - webcredentials:$(LEDGER_PASSKEY_DOMAIN)
     info:
       path: Ledger/Info.plist
       properties:
@@ -56,6 +60,7 @@ targets:
         LedgerEnvironment: $(LEDGER_ENVIRONMENT)
         LedgerAppGroup: $(LEDGER_APP_GROUP)
         LedgerKeychainGroup: $(AppIdentifierPrefix)$(LEDGER_KEYCHAIN_GROUP)
+        LedgerPasskeyDomain: $(LEDGER_PASSKEY_DOMAIN)
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(LEDGER_BUNDLE_PREFIX)

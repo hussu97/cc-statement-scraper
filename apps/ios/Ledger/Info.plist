@@ -28,6 +28,8 @@
 	<string>$(LEDGER_ENVIRONMENT)</string>
 	<key>LedgerKeychainGroup</key>
 	<string>$(AppIdentifierPrefix)$(LEDGER_KEYCHAIN_GROUP)</string>
+	<key>LedgerPasskeyDomain</key>
+	<string>$(LEDGER_PASSKEY_DOMAIN)</string>
 	<key>LedgerSentryDSN</key>
 	<string>$(LEDGER_SENTRY_DSN)</string>
 	<key>LedgerSupabasePublishableKey</key>

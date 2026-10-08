@@ -20,7 +20,9 @@ Docs:
 - [docs/contracts/parse-v1.md](docs/contracts/parse-v1.md): parser contract (limits, output validation, error codes)
 - [docs/audit/](docs/audit/): pre-cutover audit reports (01 database … 06 cross-cutting) and
   [BACKLOG.md](docs/audit/BACKLOG.md), the list of findings not yet fixed
-- [CLAUDE.md](CLAUDE.md): coding rules
+- [CLAUDE.md](CLAUDE.md): coding and workflow rules (area detail in [supabase/CLAUDE.md](supabase/CLAUDE.md)
+  and [apps/ios/CLAUDE.md](apps/ios/CLAUDE.md); [AGENTS.md](AGENTS.md) points other agents there)
+- [tasks/lessons.md](tasks/lessons.md): lessons learned, read at the start of a session
 
 ## Repository structure
 
@@ -37,6 +39,8 @@ Docs:
 | `scripts/` | `cutover/` (production Edge and Vault secret helpers), `ci/` (migration history check, web smoke test), git `hooks/` + `install-hooks.sh` | sh, SQL |
 | `docs/` | `ci-cd.md`, `contracts/` (parse-v1), `audit/` (audit reports + backlog) | Markdown |
 | `.github/workflows/` | `ci.yml` (path-filtered, `ci-ok` gate), `deploy-supabase`, `deploy-parser`, `web-smoke`, `ios-testflight`, `security` ([docs/ci-cd.md](docs/ci-cd.md)) | GitHub Actions |
+| `.claude/` | Claude Code `settings.json` and `hooks/guard.py` (PreToolUse guard for staging, secrets and production actions; `python3 .claude/hooks/guard_test.py`) | Python |
+| `tasks/` | `lessons.md`, `todo.md` (plans) | Markdown |
 
 ## Prerequisites
 
@@ -148,7 +152,9 @@ cp apps/web/.env.example apps/web/.env.local   # VITE_SUPABASE_PUBLISHABLE_KEY =
 pnpm web:dev                                   # http://127.0.0.1:5173
 ```
 
-Sign in with the demo password, or request an email code and read it in Inbucket.
+Request an email code for `demo@ledger.local` and read it in Inbucket
+(http://127.0.0.1:54324). To try passkeys locally open http://localhost:5173 (the local RP ID is
+`localhost`; browsers refuse an IP address as an RP ID).
 
 ### 5. iPhone app
 
@@ -180,7 +186,7 @@ Create a service token in web Settings → Sources & health → Tokens, or with
 
 | Component | Command |
 |---|---|
-| Database (pgTAP: RLS guards, matching, categorisation, recon, analytics, SMS templates, FX, legacy import, cross-profile isolation, ingest robustness, review actions, client privilege matrix, re-parse relink; hermetic, so they also pass on a non-empty local DB) | `supabase db reset && supabase test db` |
+| Database (pgTAP: RLS guards, matching, categorisation, recon, analytics, SMS templates, FX, legacy import, cross-profile isolation, ingest robustness, review actions, client privilege matrix, re-parse relink, the 2026-10-09 P2/P3 fixes (`13`–`18`); hermetic, so they also pass on a non-empty local DB) | `supabase db reset && supabase test db` |
 | DB types drift | `pnpm db:types:check` (regenerate with `pnpm db:types`) |
 | Edge Functions | `cd supabase/functions && deno lint && deno fmt --check && deno check . && deno test -A .` (the lock `deno.lock` is frozen; the local e2e runs only with `LEDGER_E2E=1` and a served stack) |
 | Parser | `cd services/parser && .venv/bin/ruff check . && .venv/bin/pytest -q` (golden parity needs private PDFs; skipped otherwise) |
@@ -316,7 +322,7 @@ Used for the production Edge Function secrets and Vault entries, and for secret 
 
 | Route | Screen |
 |---|---|
-| `/signin`, `/welcome` | Sign-in (email code, magic link or password; existing users only) and first-profile setup |
+| `/signin`, `/welcome` | Sign-in (emailed one-time code or passkey; existing users only; offers to add a passkey after a code sign-in) and first-profile setup |
 | `/` | **Overview**: month hero with pace rule, live pending SMS, category ring, cards and dues, utilisation, insights |
 | `/activity` | **Activity**: unified ledger with URL-synced filters, evidence badges, drawer with evidence timeline, inline, bulk and "apply to merchant" categorisation, notes |
 | `/insights` | **Insights**: trends, categories, merchants, subscriptions, FX, calendar heatmap, time of day, YoY, anomalies |
@@ -324,13 +330,13 @@ Used for the production Edge Function secrets and Vault entries, and for secret 
 | `/cards` | **Cards & Statements**: accounts, cards, statements with recon status, upload, documents |
 | `/review` | **Review inbox**: match reviews, unknown cards, unparsed SMS ("not a card transaction") and LLM template proposals. On mobile it is a bottom tab with a count |
 | `/rules` | **Rules**: categories, merchants, rules with live impact preview |
-| `/settings` | **Settings**: ledger, members (and invites), sources and health (queues, DLQ, mailboxes, tokens, PDF passwords), iPhone SMS setup guide (step-by-step Shortcuts automation with copy buttons, *Open Shortcuts* on iPhone, a QR code to open it on the phone from a desktop, optional TestFlight button) |
+| `/settings` | **Settings**: ledger, members (and invites), account (sign-out, passkeys: add, rename, remove), sources and health (queues, DLQ, mailboxes, tokens, PDF passwords), iPhone SMS setup guide (step-by-step Shortcuts automation with copy buttons, *Open Shortcuts* on iPhone, a QR code to open it on the phone from a desktop, optional TestFlight button) |
 
 **iPhone** (`apps/ios/Ledger`)
 
 | Screen | Contents |
 |---|---|
-| Sign in / Profile picker | Email one-time code (Sign in with Apple stubbed), choose a ledger |
+| Sign in / Profile picker | Email one-time code or passkey, then an offer to add a passkey; choose a ledger. Settings → Passkeys manages them |
 | Overview | Month spend posted so far (server comparisons), pending SMS, categories, dues ("Was due …"), Needs attention (reviews, uncategorised) (Realtime refresh) |
 | Activity | Ledger list, filters, transaction detail and categorisation |
 | Insights | Swift Charts views over the same RPCs |
@@ -356,12 +362,12 @@ Used for the production Edge Function secrets and Vault entries, and for secret 
 
 | Group | RPCs (callable by signed-in members; owner-only marked *) |
 |---|---|
-| Profiles and members | `create_profile`, `add_profile_member`*, `list_profile_members`, `remove_profile_member`*, `cancel_profile_invite`* |
+| Profiles and members | `create_profile`, `add_profile_member`*, `list_profile_members`, `remove_profile_member`*, `cancel_profile_invite`*, `delete_profile`* (with the profile key as confirmation) |
 | Tokens and secrets | `create_service_token`*, `revoke_service_token`*, `set_profile_secret`*, `list_profile_secrets`, `set_mailbox_secret`* |
 | Ingest and review | `ingest_sms`* (per-message statuses), `resolve_review`* (`link`, `create_new`, `dismiss`, `card`, `supersede`, `not_a_transaction`), `retry_sms_fallback`*, `requeue_documents`*, `set_sms_template_active`* |
-| Categorisation | `set_transaction_category`*, `set_transactions_category`*, `preview_rule`, `merchant_search` |
+| Categorisation | `set_transaction_category`*, `set_transactions_category`*, `preview_rule` (optional `p_rule_code` when editing), `merchant_search`, `reject_merchant_suggestion`* |
 | Analytics | `overview`, `spend_series`, `category_breakdown`, `merchant_leaderboard`, `daily_spend`, `hour_weekday_pattern`, `fx_spend`, `statement_cycles`, `yoy_compare`, `anomalies`, `filter_meta`, `budget_status`, `recurring_list` |
-| Service-role only (Edge Functions) | `authenticate_service_token`, `ingest_parsed_document`, `fail_document`, `queue_read`, `queue_delete`, `queue_send`, `queue_to_dlq`, `worker_document_context`, `worker_llm_context`, `worker_sms_context`, `worker_mailbox_secret`, `apply_llm_suggestions`, `propose_sms_template`, `ops_health`, `upsert_fx_rates`, `merge_mailbox_sync_state` |
+| Service-role only (Edge Functions) | `authenticate_service_token`, `ingest_parsed_document`, `fail_document`, `queue_read`, `queue_delete`, `queue_send`, `queue_to_dlq`, `worker_document_context`, `worker_llm_context`, `worker_sms_context`, `worker_mailbox_secret`, `apply_llm_suggestions`, `propose_sms_template`, `promote_sms_template`, `ops_health`, `upsert_fx_rates`, `begin_document_parse`, `resubmit_document`, `save_mailbox_sync_state`, `drain_dlq`, `requeue_dlq` |
 
 Views: `v_spend` (the single spend definition) and `v_transactions` (the Activity read model).
 Tables are readable by members under RLS. Owners edit categories, rules, budgets, accounts,

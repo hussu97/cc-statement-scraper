@@ -117,26 +117,29 @@ fx_rates (global)
 | Table | Notes |
 |---|---|
 | `profiles` | A ledger (`key` is the legacy `X-Profile-Key`, e.g. `hussain`). |
-| `profile_members` | `(profile_code, user_id)`, role `owner` or `viewer`. Pending invites live in `private.pending_members` and are claimed by an `auth.users` insert trigger when the user is created. Self sign-up is disabled (§8), so that user is created by an Auth invite. |
+| `profile_members` | `(profile_code, user_id)`, role `owner` or `viewer`. Pending invites live in `private.pending_members` and are claimed by `auth.users` triggers once the user's email is **confirmed** (on insert when already confirmed, or on the confirmation / email change); `add_profile_member` also treats an unconfirmed account as not signed up. Self sign-up is disabled (§8), so that user is created by an Auth invite. An owner deletes a whole profile with `delete_profile(p_profile_code, p_confirm_key)`: its Vault secrets go with it and its PDFs are queued on `storage_cleanup`. |
 | `service_tokens` | `ccs_<hex>` tokens. Only the sha256 is stored. Scopes are `statements:upload` and `sms:ingest`, each tied to one profile. |
 | `banks` | FAB, ADCB, ENBD, EIB, SIB, MASHREQ, plus their SMS sender ids. |
 | `accounts`, `cards` | Credit-card accounts (kind `credit_card` only) and their cards by `last4`. A replacement card is a new card on the same account. |
 | `documents` | One PDF as received: `sha256` unique per profile, `source` scraper/upload/ios/gmail/outlook/legacy, `parse_status` queued/parsing/parsed/failed. Stored at `statements/<profile_code>/<doc_code>.pdf`. |
 | `statements` | `kind` is `statement` or `history_extract` (SIB history exports). Identity is `(account, statement_date)` per kind among active rows. Holds totals, due date, min due and credit limit. `doc_code` is the document that currently evidences it; several documents can evidence one statement (§4). |
 | `statement_lines` | **Immutable evidence.** `line_key` is a sha256 of the raw facts and `occurrence` is the ordinal among identical keys, so two identical coffees are two lines. Only `is_current`, `superseded_at` and `source_doc_codes` change. `source_doc_codes` lists the documents whose parse contains the line; it stays current while any of them does. Carries `fx_rate` and `legacy_fingerprint`. |
-| `sms_templates` | Data-driven regex per bank (sender and body patterns, `field_groups`, `msg_kind`, `priority`, `examples`). A BEFORE trigger rejects a template unless every example parses to its `expect`, `field_groups` are valid, and patterns are bounded (≤ 1000/200 chars, no back-references). Members see only templates for their banks, their messages or their proposals; `examples` is not readable by clients. |
-| `sms_messages` | Raw SMS (OTPs never arrive), body ≤ 2000 chars. `client_msg_id` is unique per profile. Parsed fields, `parse_status` pending/parsed/ignored/unparsed/failed (`ignore_reason = error:<sqlstate>` when processing raised). |
+| `sms_templates` | Data-driven regex per bank (sender and body patterns, `field_groups`, `msg_kind`, `priority`, `examples`). A BEFORE trigger rejects a template unless every example parses to its `expect`, `field_groups` are valid, and patterns are bounded (≤ 1000/200 chars, no back-references). Every template has at least one example. Members see only templates for their banks, their messages or their proposals; `examples` is not readable by clients. `scope_profile_code` limits an LLM proposal to the profile it was made for (its sender pattern is built from the bank's `sms_senders`) until an operator runs `promote_sms_template`. |
+| `sms_messages` | Raw SMS (OTPs never arrive), body ≤ 2000 chars. `client_msg_id` is unique per profile. Parsed fields, `parse_status` pending/parsed/ignored/unparsed/failed (`ignore_reason = error:<sqlstate>` when processing raised; declined, debit-card and other alerts are `ignored` with the kind as reason). |
 | `transactions` | The canonical ledger. Derived facts (status pending/posted/void/orphaned, dates, amounts, FX, merchant) come from evidence via `private.refresh_transaction()`. User fields: `manual_category_code`, `notes`, `exclude_from_spend`. |
 | `transaction_evidence` | Links a transaction to a statement line, history line or SMS. `role` primary/auth/post/reversal/duplicate, `method` new/exact/scored/tie/manual/legacy, `is_active`, `is_locked`. A line or SMS has at most one active link, and a transaction has at most one active statement line and one active history line. |
-| `match_reviews` | Human decisions: ambiguous, low_score, orphaned, missing_from_statement, period_overlap, unknown_card, unparsed_sms. (`amount_drift` is allowed by the CHECK but nothing raises it yet.) |
+| `match_reviews` | Human decisions: ambiguous, low_score, orphaned, missing_from_statement, period_overlap, unknown_card, unparsed_sms. (`amount_drift` is allowed by the CHECK but reserved: an auth/post difference shows as `auth_amount` instead.) |
 | `statement_recon` | Per-statement checks and an ok/warn/fail/n/a status (§4). |
 | `merchants`, `merchant_aliases` | Global rows, but a member reads only merchants referenced by their profiles' transactions, merchant choices or recurring series. `merchant_key()` strips payment-wallet prefixes, cities/countries and trailing digits. |
-| `categories`, `category_rules`, `merchant_profile_category` | Per profile. Categories are archived, never deleted. Rules are exact/prefix/contains/regex with optional conditions, validated on write (known keys and types, own `card_code`, pattern ≤ 200 chars, no back-references). Merchant categories come from a user's manual choice or an LLM suggestion. |
+| `categories`, `category_rules`, `merchant_profile_category` | Per profile. Categories are archived, never deleted. Rules are exact/prefix/contains/regex with optional conditions, validated on write (known keys and types, own `card_code`, pattern ≤ 200 chars, no back-references). Merchant categories come from a user's manual choice or an LLM suggestion. `merchant_category_skips` remembers merchants the LLM declined (per category-set hash) and suggestions an owner rejected (`reject_merchant_suggestion`), so neither is re-asked. |
 | `budgets`, `recurring_series`, `insights`, `audit_events` | Monthly budgets (total or per category), detected subscriptions, the nightly insight feed, and an audit trail of user edits. |
 | `email_mailboxes`, `email_routes`, `email_events` | Mailbox (gmail/outlook, `sync_state` cursor), per-bank routing rules, and per-attachment idempotency log. |
 | `fx_rates` | Global AED-per-unit market rates (fallback estimate only). |
 
-Queues (pgmq): `parse_document`, `llm_categorize`, `sms_fallback`, each with a `_dlq`.
+Queues (pgmq): `parse_document`, `llm_categorize`, `sms_fallback`, each with a `_dlq`, and
+`storage_cleanup` (`{bucket, paths[]}` from `delete_profile`; Storage objects can only be removed
+through the Storage API). `drain_dlq(queue)` and `requeue_dlq(queue, limit)` are the service-role
+DLQ tools.
 Storage: private bucket `statements` (25 MB limit, `application/pdf`). Members can read their
 profile's folder. Only Edge Functions write to it.
 
@@ -215,6 +218,12 @@ and an ingest error as permanent for SQLSTATE class 22, `23502` and `23514`.
 [parse-v1](docs/contracts/parse-v1.md#worker-classification). Owners can call
 `requeue_documents` after a parser fix.
 
+Ingest rejects a statement dated more than 31 days ahead (`22023`, a misread year). Parse claims
+are idempotent: `begin_document_parse` marks a `queued`/`parsing` document `parsing` and returns
+its context, but answers `{skip: 'parsed'|'failed'}` for a duplicate or stale queue message;
+`fail_document` never flips a `parsed` document back; `resubmit_document` re-queues a failed PDF
+that is uploaded again (otherwise the upload is a plain duplicate).
+
 ### SMS path
 
 `ingest_sms(profile, [{client_msg_id, received_at, sender, body}])` validates, stores and
@@ -234,14 +243,19 @@ or `failed` with `reason = error:<sqlstate>` when processing raised (the message
      logins and debit-card or account alerts are seeded at priority 900+ so they never reach
      the LLM.
    - **`declined`:** stored and ignored.
-2. The template's date and time give `event_at`, otherwise `received_at`. The card is resolved
-   by bank + last4. When there is no last4, the bank's single active account is used.
+2. The template's date and time give `event_at`, otherwise `received_at`; a template date more
+   than 7 days from `received_at` is a DD/MM misread and falls back to `received_at`
+   (`parsed_fields.event_at_rejected`). The card is resolved by bank + last4. When there is no
+   last4, the bank's single active account is used.
    - **Unknown card:** an `unknown_card` review opens. Resolving it registers the card and
-     re-processes every message waiting on it.
+     re-processes every message waiting on it. A statement that registers the card does the
+     same at the end of `ingest_parsed_document` (`private.reprocess_waiting_sms`).
 3. `match_sms` runs for purchase, preauth, refund, reversal and payment messages.
 
-Adding or changing a template re-runs every `unparsed` message (`trg_sms_templates_reprocess`),
-so a new bank format needs an INSERT, not a deploy.
+Adding a live template, activating one, or changing an active one's pattern, priority or scope
+re-runs the unparsed/failed messages its sender pattern (and scope) reaches, newest first, 500 at
+most (`trg_sms_templates_reprocess`). A rename or deactivation re-runs nothing. A new bank format
+needs an INSERT, not a deploy.
 
 ### Matcher
 
@@ -366,7 +380,9 @@ set-based `UPDATE … WHERE … IS DISTINCT FROM` applies the results.
 **Cron:**
 - `ledger-recategorize-sweep` (every 3 h at :17) recomputes rows whose `rules_version` is stale.
 - `ledger-llm-enqueue` (22:30 UTC nightly) batches uncovered merchants in groups of 25 into
-  `llm_categorize`, re-asking only when the category set hash changes.
+  `llm_categorize`, re-asking only when the category set hash changes. Merchants in
+  `merchant_category_skips` are left out: `declined` until the category set changes,
+  `rejected` for good.
 
 **LLM.** Claude Haiku (`LLM_MODEL`, default `claude-haiku-5-5`) receives only merchant names, up to
 3 example descriptions per merchant and the category list. It never sees amounts or PDFs.
@@ -374,7 +390,11 @@ Suggestions below 0.5 confidence are dropped and never override a manual merchan
 `ANTHROPIC_API_KEY` is unset, the worker leaves the LLM queues alone and warns once.
 
 **Other pieces:**
-- **Rule preview.** `preview_rule` reports "this rule would change N transactions" without saving.
+- **Rule preview.** `preview_rule` reports "this rule would change N transactions" without saving,
+  using `recategorize`'s full tie-break; `p_rule_code` leaves out the rule being edited.
+- **Batch jobs** (`nightly`, `enqueue_llm_categorize`, `recategorize_stale`,
+  `reestimate_pending_fx`) catch errors per profile (per transaction for FX) and log them to
+  `private.job_errors` (30 days); `ops_health.job_errors_24h` counts them.
 - **Seeding.** Default categories and rules (from the legacy `category_rules.yaml`) are copied
   into a profile once, by `create_profile` / `seed_profile_defaults`.
 
@@ -399,16 +419,23 @@ Analytics RPCs (all security invoker, so RLS applies):
 | Budgets and recurring | `budget_status`, `recurring_list` |
 
 `v_transactions` is the Activity read model. It carries category source, evidence flags
-(`has_sms`, `has_statement`), bank and last4.
+(`has_sms`, `has_statement`; scalar sub-queries on the evidence index, evaluated only for the
+rows a page returns), bank and last4.
+
+`overview` compares month-to-date with the same days of last month, never past its last day
+(`prev_month_to_date_end`), reports `pending_unpriced_count` (pending foreign charges with no
+rate yet, which spend cannot include), and computes utilisation from `greatest(closing_balance, 0)`.
+Business dates stay `Asia/Dubai`: `profiles.timezone` and `base_currency` are reserved, not used.
 
 The nightly job `private.nightly()` (22:00 UTC = 02:00 Dubai) runs three steps:
 1. Voids released authorisations.
 2. Detects recurring charges: ≥ 3 charges (≥ 2 for yearly) at a weekly, monthly or yearly
    cadence with amount CV below 10%.
-3. Generates the deterministic, deduplicated insight feed. Today it emits five kinds:
-   `category_spike`, `budget_risk`, `price_change`, `statement_due` and `uncategorized`. The
-   CHECK also allows `spend_pace`, `new_recurring`, `review_backlog` and `large_transaction`,
-   which are reserved: nothing generates them yet (docs/audit/BACKLOG.md, DB-29).
+3. Generates the deterministic, deduplicated insight feed: `category_spike`, `budget_risk`,
+   `price_change`, `statement_due`, `uncategorized`, `spend_pace` (month-to-date total ≥ 25%
+   and AED 500 above the 3-month same-day average, from day 5), `new_recurring` (a series
+   detected in the last 7 days), `large_transaction` (`anomalies` over the last 3 days,
+   `data.txn_code`) and `review_backlog` (≥ 10 open reviews).
 
 ---
 
@@ -442,7 +469,12 @@ Other Vault entries are named by convention:
 - `mailbox:<mailbox_code>:refresh_token`: OAuth refresh tokens, via `set_mailbox_secret`.
 
 Clients can set and list secrets but never read values back. Only the worker reads them, via
-`worker_document_context` and `worker_mailbox_secret`.
+`worker_document_context` / `begin_document_parse` and `worker_mailbox_secret`.
+`delete_profile` removes both kinds with the profile.
+
+`email_mailboxes.sync_state` is written through `save_mailbox_sync_state`: a key-wise jsonb merge
+under a row lock, so concurrent writers keep each other's keys, and `gmail_history_id`,
+`last_synced_at` and `watch_expires_at` never move back.
 
 Realtime publishes `transactions`, `sms_messages`, `documents`, `match_reviews` and `insights`.
 RLS applies to every change event.
@@ -451,11 +483,15 @@ RLS applies to every change event.
 
 ## 8. Auth and RLS
 
-- **Users** sign in with Supabase Auth: email one-time code or magic link, and a password for
-  the seeded demo user. Sign in with Apple is stubbed on iOS. Membership in `profile_members`
+- **Users** sign in with Supabase Auth: an emailed one-time code or a **passkey** (WebAuthn,
+  relying party `cc-statement-scraper.vercel.app`; the iOS app shares it through Associated
+  Domains and the web host's `apple-app-site-association`). There are no passwords and no
+  sign-in links in emails (only the seeded local demo user has a password, used by the Debug
+  iOS `DevSignIn`). After a code sign-in, web and iOS offer to add a passkey; "Not now" is
+  remembered per user on the device, and Settings manages passkeys. Membership in `profile_members`
   grants access, and a profile can have several owners and viewers.
 - **No self sign-up.** Bank Ledger is private: `[auth] enable_signup = false` locally, and the same
-  dashboard setting in production. The web's magic link uses `shouldCreateUser: false`, so an
+  dashboard setting in production. The email-code request uses `shouldCreateUser: false` (web and iOS), so an
   unknown email gets "Ask the ledger's owner to invite you". A member is added by an owner with
   `add_profile_member` (an existing user is added at once; otherwise a pending invite is
   stored), and the person's Auth user is created by an Auth invite (Dashboard → Authentication
@@ -563,15 +599,15 @@ Bank SMS → Shortcuts automation → LogBankSMSIntent (openAppWhenRun = false, 
 - **Database health.** The DB can't run the SDK, so `ops-monitor` turns `ops_health()` into
   issues every 15 min:
   - cron failures
-  - DLQ messages: an error when new ones arrived since the last check, then a daily reminder
-  - `parse_document` oldest message older than `OPS_PARSE_QUEUE_AGE_S` (3 h)
-  - documents stuck over 1 h
+  - DLQ depth > 0 (`queues.*.newest_age_s` tells whether a message arrived since the last run)
+  - documents `parsing` for over 1 h (`queued` ones are a backlog, `documents_queued_oldest_age_s`)
   - failed parses
   - unparsed SMS above `OPS_SMS_UNPARSED_THRESHOLD`
-  - recon failures
-  - review backlog above `OPS_OPEN_REVIEWS_THRESHOLD`
-  - mailboxes failing to sync (`last_error`), not synced for 2 days, or with a Gmail watch
-    expiring within 24 h (keys skipped when `ops_health()` doesn't return them)
+  - recon failures (last 7 days)
+  - review backlog above `OPS_OPEN_REVIEWS_THRESHOLD` (reviews opened in the last 7 days;
+    `open_reviews_total` is all-time)
+  - `job_errors_24h`, and per mailbox `mailboxes_stale` (no sync for 2 days),
+    `gmail_watch_expiring` (< 24 h) and `mailbox_errors` (`sync_state.last_error`)
 
   It then sends the **`ops-heartbeat` cron check-in**, so a paused project or dead pg_cron alerts
   by missing it.

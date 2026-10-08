@@ -11,9 +11,10 @@ create function pg_temp.v(p text) returns text language sql as $$ select v from 
 create function pg_temp.set(p text, val text) returns text language sql as $$
   insert into k values (p, val) on conflict (name) do update set v = excluded.v returning v $$;
 create function pg_temp.new_user(p_key text, p_email text) returns text language sql as $$
-  insert into auth.users (id, instance_id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+  insert into auth.users (id, instance_id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+                        email_confirmed_at)
   values (gen_random_uuid(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', p_email,
-          '{}', '{}', now(), now());
+          '{}', '{}', now(), now(), now());
   select pg_temp.set(p_key, (select id::text from auth.users where email = p_email));
 $$;
 create function pg_temp.as_user(p_key text) returns text language sql as $$

@@ -555,3 +555,9 @@ local behaviour; CHANGELOG has an "Audit fixes (pre-cutover)" section. Open item
 [BACKLOG.md](BACKLOG.md).
 
 **Later updates (2026-10-09, Edge + CI pass; commits `24ec851`, `0b6b2cc`, `31e8cd6`, `a9f49c2`):** SRV-05 (gmail-push budget, per-page cursor, label filter, reported 404 reset with a bounded backfill), SRV-07 (native/`@std` base64, >25 MB attachments skipped before download), SRV-10 Edge side (`evaluateHealth` mailbox checks; SQL keys: BACKLOG SRV-10r), SRV-11 (fake Db/fetch tests for gmail-push, outlook-poll, `storeDocument`/`ingestAttachment`, token rotation; e2e viewer 403 on upload and SMS), SRV-13 Edge part (frozen `deno.lock`; parser part: SRV-13r), SRV-14, SRV-15 (`merge_mailbox_sync_state`), SRV-18 (email regex in both scrubbers, fixed 23505/23503/23514 messages; the interleaving test showed tags **did** leak across concurrent requests, fixed with an AsyncLocalStorage), SRV-19, SRV-20 Edge side (failed duplicates requeued, stale worker messages skipped; SQL rest: SRV-20r), SRV-22 Edge side (DLQ alerts on arrivals, then daily; drain RPC: SRV-22r) and SRV-23 are fixed. NEW-1: the `member-invite` Edge Function landed; the web/iOS buttons are NEW-1r.
+
+**SQL side for the Edge pass (2026-10-09, `20261009000400_db_ops_and_worker_rpcs.sql`):** SRV-10
+(`ops_health` `mailboxes_stale`, `gmail_watch_expiring`, `mailbox_errors`), SRV-15
+(`save_mailbox_sync_state`), SRV-20 (`begin_document_parse`, `resubmit_document`, `fail_document`
+never un-parses) and SRV-22 (`drain_dlq`, `requeue_dlq`, `documents_stuck` = `parsing` > 1 h,
+queue `newest_age_s` for alert-on-increase). The Edge Functions still have to call them.
