@@ -7,7 +7,7 @@
 // Uploading a build only makes it appear in App Store Connect; external
 // testers see nothing until it is attached to their group AND cleared by Beta
 // App Review. `hasAccessToAllBuilds` only works for *internal* groups (on an
-// external group it is silently ignored), which is why "Ledger Internal" needs
+// external group it is silently ignored), which is why "Bank Ledger Internal" needs
 // nothing here and "Friends & Family" needs all of this.
 //
 // Pure Node, no Xcode: runs on a Linux runner at 1x billing.
@@ -33,7 +33,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const APP = { scheme: 'Ledger', bundleId: 'com.hussu97.ledger', label: 'Credit Card Ledger (iPhone)' };
+const APP = { scheme: 'Ledger', bundleId: 'com.hussu97.ledger', label: 'Bank Ledger (iPhone)' };
 const DEFAULT_GROUP = 'Friends & Family';
 const DEFAULT_ISSUER = 'c43e9dbf-d873-4aa3-b89d-b5ef25d6accd';
 

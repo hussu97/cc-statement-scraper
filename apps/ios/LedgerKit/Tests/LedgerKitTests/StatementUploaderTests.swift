@@ -47,7 +47,7 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
 @Suite("statements-upload client", .serialized)
 struct StatementUploaderTests {
     let uploader = StatementUploader(functionsURL: URL(string: "http://127.0.0.1:54321/functions/v1")!,
-                                     anonKey: "anon-key", session: StubURLProtocol.session())
+                                     apiKey: "sb_publishable_test", session: StubURLProtocol.session())
     let pdf = UploadFile(filename: "FAB \"Sept\".pdf", data: Data("%PDF-1.7\n...".utf8))
 
     @Test("multipart request: user JWT, apikey, profile_code, source=ios, files[]")
@@ -56,7 +56,7 @@ struct StatementUploaderTests {
         #expect(req.url?.absoluteString == "http://127.0.0.1:54321/functions/v1/statements-upload")
         #expect(req.httpMethod == "POST")
         #expect(req.value(forHTTPHeaderField: "Authorization") == "Bearer jwt")
-        #expect(req.value(forHTTPHeaderField: "apikey") == "anon-key")
+        #expect(req.value(forHTTPHeaderField: "apikey") == "sb_publishable_test")
         let contentType = try #require(req.value(forHTTPHeaderField: "Content-Type"))
         #expect(contentType.hasPrefix("multipart/form-data; boundary=ledger-"))
         let body = String(decoding: try #require(req.httpBody), as: UTF8.self)

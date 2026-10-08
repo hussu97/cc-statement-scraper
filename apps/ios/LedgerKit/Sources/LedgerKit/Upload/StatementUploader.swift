@@ -48,12 +48,12 @@ public struct StatementUploader: Sendable {
     public static let maxBytes = 25 * 1024 * 1024
 
     let functionsURL: URL
-    let anonKey: String
+    let apiKey: String
     let session: URLSession
 
-    public init(functionsURL: URL, anonKey: String, session: URLSession = .shared) {
+    public init(functionsURL: URL, apiKey: String, session: URLSession = .shared) {
         self.functionsURL = functionsURL
-        self.anonKey = anonKey
+        self.apiKey = apiKey
         self.session = session
     }
 
@@ -69,7 +69,7 @@ public struct StatementUploader: Sendable {
         request.timeoutInterval = 120
         request.setValue(form.contentType, forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue(anonKey, forHTTPHeaderField: "apikey")
+        request.setValue(apiKey, forHTTPHeaderField: "apikey")
         request.httpBody = form.finalized()
         return request
     }

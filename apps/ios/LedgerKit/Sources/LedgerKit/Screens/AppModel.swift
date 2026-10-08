@@ -74,6 +74,10 @@ public final class AppModel {
         case .signedIn:
             if case .signedIn = lastPhase { return }
             await profiles.load()
+            if profiles.sessionRejected {
+                await session.signOut()
+                return
+            }
             await services.outbox.flush()
         case .signedOut:
             live.stop()

@@ -23,7 +23,7 @@ TARGETED_DEVICE_FAMILY = 1
 // Defaults; Secrets.xcconfig overrides. `//` starts a comment in xcconfig, so
 // URLs are written with `$()` between the slashes: http:/$()/127.0.0.1:54321
 LEDGER_SUPABASE_URL = http:/$()/127.0.0.1:54321
-LEDGER_SUPABASE_ANON_KEY =
+LEDGER_SUPABASE_PUBLISHABLE_KEY =
 LEDGER_SENTRY_DSN =
 LEDGER_ENVIRONMENT = local
 

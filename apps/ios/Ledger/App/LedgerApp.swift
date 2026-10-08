@@ -61,7 +61,7 @@ struct ConfigErrorView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Ledger isn't configured").font(Typography.display)
+            Text("Bank Ledger isn't configured").font(Typography.display)
             Text(message).font(Typography.body).foregroundStyle(Palette.muted)
             Text("See apps/ios/README.md → Secrets.").font(Typography.caption).foregroundStyle(Palette.subtle)
         }

@@ -1,8 +1,8 @@
-# Ledger for iPhone
+# Bank Ledger for iPhone
 
 SwiftUI app (iOS 18+) for Ledger v2: Overview (with Needs attention → Review), Activity,
 Insights, Statements and Settings
-on top of the Supabase backend, plus the **Log Bank SMS** App Intent and the **Add to Ledger**
+on top of the Supabase backend, plus the **Log Bank SMS** App Intent and the **Add to Bank Ledger**
 share extension.
 
 ## Layout
@@ -29,7 +29,7 @@ apps/ios/
 │   │   └── Upload/          statements-upload client, share-extension offline queue
 │   └── Tests/LedgerKitTests/
 ├── Ledger/                  app target — layout only (+ LogBankSMSIntent, PrivacyInfo.xcprivacy)
-├── ShareExtension/          "Add to Ledger" (PDFs → statements-upload, + PrivacyInfo.xcprivacy)
+├── ShareExtension/          "Add to Bank Ledger" (PDFs → statements-upload, + PrivacyInfo.xcprivacy)
 └── scripts/                testflight.sh (archive → export → dSYMs → upload), publish-build.sh
                              (stage for CI), testflight-distribute.mjs (external testers)
 ```
@@ -55,7 +55,7 @@ developer portal (automatic signing does it on first archive).
 brew install xcodegen
 supabase start                                 # from the repo root
 cp apps/ios/Config/Secrets.example.xcconfig apps/ios/Config/Secrets.xcconfig
-supabase status -o json | jq -r .ANON_KEY      # paste into LEDGER_SUPABASE_ANON_KEY
+supabase status -o json | jq -r .PUBLISHABLE_KEY # paste into LEDGER_SUPABASE_PUBLISHABLE_KEY
 cd apps/ios && xcodegen generate && open Ledger.xcodeproj
 ```
 
@@ -64,7 +64,7 @@ cd apps/ios && xcodegen generate && open Ledger.xcodeproj
 | Key | Local | Production (`Config/Secrets.Release.xcconfig`) |
 |---|---|---|
 | `LEDGER_SUPABASE_URL` | `http:/$()/127.0.0.1:54321` | `https:/$()/<ref>.supabase.co` |
-| `LEDGER_SUPABASE_ANON_KEY` | `supabase status` → `ANON_KEY` | dashboard → API keys |
+| `LEDGER_SUPABASE_PUBLISHABLE_KEY` | `supabase status` → `PUBLISHABLE_KEY` | dashboard → API Keys → publishable (`sb_publishable_…`; the app refuses `sb_secret_…`) |
 | `LEDGER_SENTRY_DSN` | empty (Sentry off) | Sentry project `ledger-apps` DSN (shared with web; events tagged `app=ios`) |
 | `LEDGER_ENVIRONMENT` | `local` | `production` (set by Release.xcconfig) |
 
@@ -114,7 +114,7 @@ capture* walks through it, shows **Last captured** and has **Send test** (the in
 with a synthetic non-transaction message, dropped on the phone, plus an outbox flush).
 
 Messages go to the **SMS go to** ledger (Settings): owned ledgers only, defaulting to the
-first one you own — never simply the ledger on screen. PDFs shared to "Add to Ledger" go there too.
+first one you own — never simply the ledger on screen. PDFs shared to "Add to Bank Ledger" go there too.
 
 `LogBankSMSIntent` (`openAppWhenRun = false`) runs `SMSIntake`:
 1. `SMSCapture.classify` drops OTPs, debit-card/account alerts and messages with no amount — on the phone.
@@ -132,11 +132,12 @@ first one you own — never simply the ledger on screen. PDFs shared to "Add to 
 
 Same flow as mm-pos (`mm-pos/ci/README.md`): build and sign on the Mac, upload over the
 App Store Connect API key (no Apple ID password), release to two groups. The App Store
-Connect / TestFlight name is **Credit Card Ledger**; the home-screen name stays **Ledger**.
+Connect / TestFlight name and the home-screen name are both **Bank Ledger** (share extension:
+**Add to Bank Ledger**).
 
 | Group | Kind | How a build reaches it |
 |---|---|---|
-| **Ledger Internal** | internal, automatic distribution | as soon as processing finishes |
+| **Bank Ledger Internal** | internal, automatic distribution | as soon as processing finishes |
 | **Friends & Family** | external, public link | `testflight-distribute.mjs` attaches it and submits it for Beta App Review |
 
 ```bash

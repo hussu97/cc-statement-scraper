@@ -14,9 +14,9 @@
 #
 # Needs:
 #   * An "Apple Distribution" identity in the keychain (Xcode → Settings → Accounts).
-#   * Config/Secrets.Release.xcconfig with the production Supabase URL/anon key and
+#   * Config/Secrets.Release.xcconfig with the production Supabase URL/publishable key and
 #     Sentry DSN (a Release build never falls back to the local 127.0.0.1 config).
-#   * dSYMs: SENTRY_AUTH_TOKEN, SENTRY_ORG, SENTRY_PROJECT (default ledger-apps), from
+#   * dSYMs: SENTRY_AUTH_TOKEN, SENTRY_ORG, SENTRY_PROJECT (default: the DSN's project id), from
 #     the environment or, when unset there, Config/Secrets.Release.xcconfig; and
 #     sentry-cli (brew install getsentry/tools/sentry-cli). The token reaches
 #     sentry-cli through the environment and is never printed.
@@ -188,6 +188,11 @@ if [[ -z "${SENTRY_AUTH_TOKEN:-}" ]]; then
 fi
 SENTRY_ORG="${SENTRY_ORG:-$(release_setting SENTRY_ORG)}"
 SENTRY_PROJECT="${SENTRY_PROJECT:-$(release_setting SENTRY_PROJECT)}"
+# Unset: the project id at the end of the DSN. The slug `ledger-apps` is not
+# what Sentry calls it ("Project not found"), and the id cannot drift from the DSN.
+if [[ -z "${SENTRY_PROJECT:-}" ]]; then
+  SENTRY_PROJECT="$(release_setting LEDGER_SENTRY_DSN | sed -n 's|.*/\([0-9][0-9]*\)$|\1|p')"
+fi
 export SENTRY_AUTH_TOKEN
 if [[ -n "${SENTRY_AUTH_TOKEN:-}" ]]; then
   echo "==> Sentry token from $SENTRY_TOKEN_SOURCE"
@@ -237,7 +242,7 @@ cat <<DONE
 Uploaded Ledger build $BUILD.
 
 Apple processes it in roughly 5-15 minutes, then it is offered to the
-"Ledger Internal" group automatically.
+"Bank Ledger Internal" group automatically.
 
 External testers are not automatic. To release it to them as well:
 

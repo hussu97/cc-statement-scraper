@@ -5,7 +5,7 @@ import Foundation
 /// so the app, the App Intent and the Share Extension all see the same ones.
 public struct LedgerConfig: Sendable, Equatable {
     public let supabaseURL: URL
-    public let supabaseAnonKey: String
+    public let supabasePublishableKey: String
     public let sentryDSN: String?
     public let environment: String
     /// `group.<prefix>` — the outbox file and the selected profile live here.
@@ -15,14 +15,14 @@ public struct LedgerConfig: Sendable, Equatable {
 
     public init(
         supabaseURL: URL,
-        supabaseAnonKey: String,
+        supabasePublishableKey: String,
         sentryDSN: String? = nil,
         environment: String = "local",
         appGroup: String,
         keychainGroup: String? = nil
     ) {
         self.supabaseURL = supabaseURL
-        self.supabaseAnonKey = supabaseAnonKey
+        self.supabasePublishableKey = supabasePublishableKey
         self.sentryDSN = sentryDSN
         self.environment = environment
         self.appGroup = appGroup
@@ -31,10 +31,14 @@ public struct LedgerConfig: Sendable, Equatable {
 
     public enum ConfigError: Error, CustomStringConvertible {
         case missing(String)
+        /// A server-only key (`sb_secret_…` or a service_role JWT) was configured.
+        case secretKey(String)
         public var description: String {
             switch self {
             case .missing(let key):
                 "Info.plist key \(key) is empty. Copy Config/Secrets.example.xcconfig to Config/Secrets.xcconfig."
+            case .secretKey(let key):
+                "Info.plist key \(key) holds a secret key. The app takes the publishable (sb_publishable_…) key only."
             }
         }
     }
@@ -54,12 +58,14 @@ public struct LedgerConfig: Sendable, Equatable {
         guard let urlString = value("LedgerSupabaseURL"), let url = URL(string: urlString) else {
             throw ConfigError.missing("LedgerSupabaseURL")
         }
-        guard let anon = value("LedgerSupabaseAnonKey") else { throw ConfigError.missing("LedgerSupabaseAnonKey") }
+        guard let publishable = value("LedgerSupabasePublishableKey") else { throw ConfigError.missing("LedgerSupabasePublishableKey") }
+        // Never ship a key that bypasses RLS: refuse to start rather than run with it.
+        guard !publishable.hasPrefix("sb_secret_") else { throw ConfigError.secretKey("LedgerSupabasePublishableKey") }
         guard let group = value("LedgerAppGroup") else { throw ConfigError.missing("LedgerAppGroup") }
         let keychain = value("LedgerKeychainGroup").map { $0.hasPrefix(".") ? String($0.dropFirst()) : $0 }
         return LedgerConfig(
             supabaseURL: url,
-            supabaseAnonKey: anon,
+            supabasePublishableKey: publishable,
             sentryDSN: value("LedgerSentryDSN"),
             environment: value("LedgerEnvironment") ?? "local",
             appGroup: group,
