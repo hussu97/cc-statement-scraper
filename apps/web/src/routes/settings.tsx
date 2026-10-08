@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { PageHeader } from "@/components/ui/display";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/primitives";
 import { settingsTab } from "@/data/settings";
@@ -15,7 +16,7 @@ export function SettingsPage() {
   const tab = settingsTab(raw);
   return (
     <div className="mx-auto w-full max-w-5xl">
-      <PageHeader title="Settings" description="Where your data comes from, who can see it, and how Ledger looks." />
+      <PageHeader title="Settings" description="Where your data comes from, who can see it, and how Bank Ledger looks." />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="mb-6">
           <TabsTrigger value="sources">Sources & health</TabsTrigger>
@@ -43,6 +44,11 @@ export function SettingsPage() {
           <LedgerTab />
         </TabsContent>
       </Tabs>
+      <footer className="mt-10 border-t border-border pt-4 text-[12px] text-subtle">
+        <Link to="/privacy" className="underline underline-offset-2 hover:text-ink">
+          Privacy policy
+        </Link>
+      </footer>
     </div>
   );
 }

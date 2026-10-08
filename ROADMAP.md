@@ -1,4 +1,4 @@
-# Roadmap — Ledger v2
+# Roadmap — Bank Ledger (v2)
 
 ## Done (branch `ledger-v2`)
 
@@ -9,9 +9,9 @@
 | Parser | Stateless Cloud Run `/parse` (contract parse-v1) reusing the legacy parsers, with totals, `fx_rate`, legacy fingerprints and golden parity tests. |
 | SMS | 25 real templates (ADCB, FAB, ENBD, SIB) including known non-transaction alerts; daily FX fallback for pending foreign-currency SMS. |
 | Web | New `apps/web`: Overview, Activity, Insights, Budgets, Cards & Statements, Review, Rules, Settings; tokens-driven earthy theme; Realtime; Sentry. |
-| iOS | SwiftUI app + LedgerKit: Overview, Activity, Insights, Statements, Settings; `LogBankSMSIntent` with App Group outbox; "Add to Ledger" share extension; TestFlight script. |
+| iOS | SwiftUI app + LedgerKit: Overview, Activity, Insights, Statements, Settings; `LogBankSMSIntent` with App Group outbox; "Add to Bank Ledger" share extension; TestFlight script. |
 | Scraper | Configurable upload target and path, per-bank failure isolation, `upload-pending`. |
-| Cutover tooling | `private.import_legacy_metadata`, legacy category choices, parity report, `scripts/migrate_legacy.py`, pending invites. |
+| Cutover tooling | `private.import_legacy_metadata`, legacy category choices, parity report, the one-off `scripts/migrate_legacy.py` (removed after the cutover), pending invites. |
 | CI/CD | Path-filtered CI (supabase, edge, parser, web, ios, scraper) and manual deploy workflows for Supabase and the parser. |
 | Pre-cutover audit | Six audits (`docs/audit/01`–`06`) and their P0/P1 fixes: structural tenant integrity (composite FKs), per-profile ingest lock, multi-document line union (no data loss from companion PDFs or history windows), per-message SMS ingest, sign-ups off, parser resource limits and output validation, ENBD year and FAB amount fixes, code-based worker retry classification, scraper upload batching, cutover target guard, iOS outbox that can't wedge, "SMS go to" ledger, iOS Review, AA contrast tokens. Everything not yet fixed is in [docs/audit/BACKLOG.md](docs/audit/BACKLOG.md). |
 
@@ -19,8 +19,8 @@
 
 ### 1. Cutover (blocking)
 - [x] Add `apps/web/vercel.json` (SPA rewrite, asset caching, CSP and security headers).
-- [x] Map legacy OAuth settings to the names the functions read in
-      `scripts/migrate_legacy.py --step secrets`. In practice the legacy DB holds only the **MS**
+- [x] Map legacy OAuth settings to the names the functions read in the cutover script's
+      secrets step. In practice the legacy DB holds only the **MS**
       client (`MS_OAUTH_CLIENT_*`); the Gmail client was never in `runtime_settings`.
 - [ ] Copy the Gmail OAuth client from Render (`CCS_PLATFORM_EMAIL_GMAIL_CLIENT_ID/SECRET`) into
       `GMAIL_OAUTH_CLIENT_ID/SECRET` before Render is deleted. It must be the same client that
@@ -44,9 +44,12 @@
 - [ ] Upgrade Supabase Postgres off 17.6.1.104 and re-test the `REVOKE EXECUTE` segfault.
 - [ ] Run the cutover runbook (PRODUCTION.md §10), sign off parity, run old and new side by
       side.
-- [ ] After 30 days: decommission Render, GCS, the Cloud Run Gmail relay and its scheduler, the
-      MS GitHub Actions cron and the legacy Vercel project; delete `backend/`, `frontend/`,
-      legacy Dockerfiles, workflows and docs. (`ledger-legacy-choices` unschedules itself.)
+- [x] Remove the legacy code from the repo: `backend/`, `frontend/`, `deploy/`, legacy
+      workflows, CI jobs and hook steps, `docs/operations/`, `docs/security/` and
+      `scripts/migrate_legacy.py`. The `legacy` schema and its migrations stay.
+- [ ] After 30 days: decommission Render, GCS, the Cloud Run Gmail relay and its scheduler and
+      the legacy Vercel project; delete the `LEGACY_DEPLOYS_ENABLED` variable (PRODUCTION.md
+      §10 step 12). (`ledger-legacy-choices` unschedules itself.)
 
 ### 2. Observability follow-ups
 - [x] Set the agreed Sentry tags (`service=edge|parser`, `app=web|ios`) and default the web

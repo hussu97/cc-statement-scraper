@@ -1,6 +1,6 @@
 import Foundation
 
-/// The ledger SMS (and PDFs shared to "Add to Ledger") are filed in. It is an
+/// The ledger SMS (and PDFs shared to "Add to Bank Ledger") are filed in. It is an
 /// explicit setting, separate from the ledger the app happens to show, so
 /// browsing a shared ledger never redirects your own card alerts there. Only a
 /// ledger the user owns can be chosen: `ingest_sms` and `statements-upload`

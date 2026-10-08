@@ -19,6 +19,22 @@ struct AppRouteTests {
         #expect(AppRoute.resolve(phase: signedIn, profiles: .loading(previous: [p]), selected: "prf_a") == .main(profileCode: "prf_a"))
     }
 
+    @Test("a stored session the server rejects is flagged so the app signs out, not stuck on the picker")
+    @MainActor func rejectedSession() async {
+        let api = StubAPI()
+        let defaults = UserDefaults(suiteName: "ledger-route-\(UUID().uuidString)")!
+        let store = ProfileStore(api: api, selection: ProfileSelection(defaults: defaults))
+        api.profilesError = .notSignedIn
+        await store.load()
+        #expect(store.sessionRejected)
+        api.profilesError = .network("offline")
+        await store.load()
+        #expect(!store.sessionRejected)
+        api.profilesError = nil
+        await store.load()
+        #expect(!store.sessionRejected)
+    }
+
     @Test("queued PDFs survive until uploaded, keep their names, and stop at the first failure")
     func pendingUploads() async throws {
         let container = FileManager.default.temporaryDirectory.appendingPathComponent("ledger-pending-\(UUID().uuidString)")

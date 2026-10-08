@@ -216,7 +216,7 @@ def _make_client(cfg) -> "ScraperClient":
         api_token=cfg.api_token,
         profile_key=cfg.profile_key,
         upload_path=cfg.upload_path,
-        anon_key=cfg.supabase_anon_key,
+        publishable_key=cfg.supabase_publishable_key,
     )
 
 

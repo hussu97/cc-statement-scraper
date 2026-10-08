@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -20,6 +21,24 @@ _ENV_FILE = _ROOT / ".env"
 if _ENV_FILE.exists():
     load_dotenv(_ENV_FILE, override=False)
 
+# Deprecated name for CCS_SCRAPER_SUPABASE_PUBLISHABLE_KEY (legacy anon JWT era).
+_DEPRECATED_ANON_KEY_ENV = "CCS_SCRAPER_SUPABASE_ANON_KEY"
+
+
+def _publishable_key_from_env() -> str | None:
+    """Supabase publishable key (``sb_publishable_…``); falls back to the deprecated anon name."""
+    key = os.environ.get("CCS_SCRAPER_SUPABASE_PUBLISHABLE_KEY") or None
+    if key:
+        return key
+    legacy = os.environ.get(_DEPRECATED_ANON_KEY_ENV) or None
+    if legacy:
+        warnings.warn(
+            f"{_DEPRECATED_ANON_KEY_ENV} is deprecated; set CCS_SCRAPER_SUPABASE_PUBLISHABLE_KEY instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+    return legacy
+
 
 @dataclass
 class ScraperConfig:
@@ -27,8 +46,8 @@ class ScraperConfig:
     target_url: str = field(default_factory=lambda: os.environ.get("CCS_SCRAPER_TARGET_URL") or DEFAULT_TARGET_URL)
     upload_path: str = field(default_factory=lambda: os.environ.get("CCS_SCRAPER_UPLOAD_PATH") or DEFAULT_UPLOAD_PATH)
     api_token: str = field(default_factory=lambda: os.environ.get("CCS_SCRAPER_API_TOKEN", ""))
-    # Optional Supabase anon/publishable key, sent as the ``apikey`` header when set.
-    supabase_anon_key: str | None = field(default_factory=lambda: os.environ.get("CCS_SCRAPER_SUPABASE_ANON_KEY") or None)
+    # Optional Supabase publishable key (sb_publishable_…), sent as the ``apikey`` header when set.
+    supabase_publishable_key: str | None = field(default_factory=_publishable_key_from_env)
     profile_key: str = field(default="")
 
     # Browser settings

@@ -1,5 +1,98 @@
 # Changelog
 
+## Supabase publishable / secret API keys — 2026-10-08 (branch `ledger-v2`)
+
+### Backend
+
+- **feat** Edge Functions prefer the new API keys: `_shared/supabase.ts` resolves the secret key from the runtime-injected `SUPABASE_SECRET_KEYS` (JSON, `default`), then the custom secret `SB_SECRET_KEY`, then the legacy `SUPABASE_SERVICE_ROLE_KEY`; the publishable key likewise (`SUPABASE_PUBLISHABLE_KEYS` → `SB_PUBLISHABLE_KEY` → `SUPABASE_ANON_KEY`). User clients still forward the caller's JWT. The service client logs its key source (name only). Prod and local both resolve to `SUPABASE_SECRET_KEYS`, so no custom secrets were added
+- **test** `api_keys_test.ts` (resolution order, malformed JSON, no values in errors); `e2e_local_test.ts` uses `PUBLISHABLE_KEY` / `SECRET_KEY` from `supabase status`
+
+### Web
+
+- **feat** `VITE_SUPABASE_ANON_KEY` → `VITE_SUPABASE_PUBLISHABLE_KEY` (`lib/supabase.ts`, setup error, `.env.example`); `lib/supabase-key.ts` refuses an `sb_secret_` key so it can never ship to the browser (`supabase-key.test.ts`). supabase-js 2.117.3 (latest) already supports the new keys; Realtime authenticates with the user's JWT
+- **chore** Vercel env: `VITE_SUPABASE_PUBLISHABLE_KEY` (production + preview) added, `VITE_SUPABASE_ANON_KEY` removed
+
+### Scraper
+
+- **feat** `CCS_SCRAPER_SUPABASE_ANON_KEY` → `CCS_SCRAPER_SUPABASE_PUBLISHABLE_KEY` (`ScraperConfig.supabase_publishable_key`, `ScraperClient(publishable_key=)`); the old name is a deprecated fallback with a `DeprecationWarning`
+
+### Docs
+
+- PRODUCTION §2.8 (key map and the checklist for disabling the legacy JWT keys), §2.5/§2.7/§4/§10 key names; README env tables and setup; ARCHITECTURE §8 API keys; scraper README
+
+## Bank Ledger iOS on TestFlight — 2026-10-08 (branch `ledger-v2`)
+
+### Frontend (mobile)
+
+- **fix** App Intent description no longer says "iPhone" (App Store processing rejected build 2 with ITMS-90626)
+- **fix** A stored session the server rejects (`notSignedIn` while loading ledgers) now signs out locally instead of leaving a signed-in "Couldn't load — You are signed out" screen (`ProfileStore.sessionRejected`, test in `AppRouteTests`)
+- **feat** Supabase publishable key: `LEDGER_SUPABASE_ANON_KEY` / `LedgerSupabaseAnonKey` → `LEDGER_SUPABASE_PUBLISHABLE_KEY` / `LedgerSupabasePublishableKey` (xcconfigs, Info.plists, `LedgerConfig.supabasePublishableKey`, `StatementUploader(apiKey:)`); `LedgerConfig` refuses an `sb_secret_` key. supabase-swift 2.55.3 (already validates the new key format)
+- **feat** Brand icon (`assets/brand/ios/AppIcon-1024.png`) and "Bank Ledger" in the remaining product strings (unconfigured screen, share extension, Settings SMS copy)
+- **chore** `testflight.sh` uploads dSYMs to the DSN's Sentry project id when `SENTRY_PROJECT` is unset (the `ledger-apps` slug returned "Project not found"); `ASC_SIGN_WITH_KEY=1` optionally signs with the API key
+- **chore** App Store Connect: app "Bank Ledger" (6820524042), groups "Bank Ledger Internal" (automatic) and "Friends & Family" (public link), Test Information and review contact set
+
+### Docs
+
+- apps/ios/README.md, README.md, PRODUCTION.md: publishable key, Bank Ledger naming, TestFlight groups
+
+## Bank Ledger rebrand and SMS setup guide — 2026-10-08 (branch `ledger-v2`)
+
+### Web
+
+- **feat** Brand mark (a ledger column closed by a double rule) drawn from tokens: `BrandMark` / `BrandLockup` in the sidebar, mobile header, splash, sign-in and privacy page; product copy says "Bank Ledger" everywhere (the *ledger* entity keeps its name)
+- **feat** Favicons (SVG, dark-mode aware; 16/32 PNG), `apple-touch-icon.png`, maskable `icon-192/512.png` and `site.webmanifest` (name, theme/background colours from tokens), wired in `index.html` with description, app-name and per-scheme `theme-color` meta; CSP unchanged (all `'self'`)
+- **feat** Settings → iPhone SMS rewritten as a step-by-step guide for the one "Log Bank SMS" automation: prerequisites, 10 steps with mock-ups of the exact field values, copy buttons for `Card` and `Log Bank SMS`, *Open Shortcuts app* (iOS only), a client-side QR code to open the guide on the phone (desktop), optional TestFlight button (`VITE_TESTFLIGHT_URL`), how to test, banner meanings, troubleshooting and the privacy note
+- **test** `brand.test.ts` (mark geometry = source SVG, favicon/manifest/index.html colours = tokens, linked icons exist), `sms-guide.test.ts` (UA detection incl. iPadOS, TestFlight URL validation, step integrity, keyword and action name pinned to the Swift sources), `qr.test.ts`
+- **chore** dependency `uqr` (QR encoding, no runtime deps)
+
+### Docs
+
+- README, ARCHITECTURE, PRODUCTION, CLAUDE.md say "Bank Ledger"; `VITE_TESTFLIGHT_URL` documented (README env table, PRODUCTION §4, `.env.example`); PRODUCTION §2.7 lists the dashboard settings that still say the old name (Auth email templates, SMTP sender name, Google/Microsoft consent screens, App Store Connect name)
+- **chore** `assets/brand/bank-ledger-mark.svg` + `scripts/brand/generate-icons.mjs` (`pnpm brand:icons[:check]`, root devDependency `@resvg/resvg-js`) render every icon, including the opaque `assets/brand/ios/AppIcon-1024.png` staged for the iOS asset catalog
+
+## CI/CD follow-ups — 2026-10-08 (branch `ledger-v2`)
+
+### Backend (Supabase)
+
+- **style** `deno fmt` on `supabase/functions` (19 files, formatting only; lint and 91 tests unchanged); `deno fmt --check` is now blocking in `ci.yml` (`edge`) and the pre-push hook (the unused advisory helper is gone)
+
+### Docs
+
+- PRODUCTION.md §9 and README hooks/CI section point to docs/ci-cd.md and describe `ci.yml` + `ci-ok`, `deploy-supabase`, `deploy-parser`, `web-smoke`, `ios-testflight`, pre-commit (fast) / pre-push (full) and `SKIP_PRE_PUSH` / `SKIP_RELEASE`; `LEGACY_DEPLOYS_ENABLED` noted as deletable
+
+## Legacy v1 removed — 2026-10-08 (branch `ledger-v2`)
+
+The cutover is complete, so the legacy v1 code is deleted (it stays in git history). The
+`legacy` database schema and the migrations that reference it are untouched.
+
+### Backend (Supabase)
+
+- **chore** Removed `backend/` (FastAPI + embedded worker, Alembic, Gmail/MS ingest scripts; 189 files), `deploy/` (legacy Dockerfiles, compose, Caddyfile, nginx, network policy) and the root `.dockerignore` (only legacy images built from the repo root; the parser has its own)
+- **chore** Removed the one-off cutover script `scripts/migrate_legacy.py` and `scripts/tests/`; `scripts/cutover/` (Edge and Vault secret helpers) stays for rotations
+
+### Parser
+
+- **chore** Removed `scripts/build_golden.py` and `scripts/_legacy_runner.py`, which ran the legacy parser from `backend/.venv`. The local golden fixtures are now a frozen legacy snapshot (not regenerated from the current parser); `test_golden_parity.py` still runs against them with the same allowed deltas
+
+### Web
+
+- **chore** Removed the legacy React admin `frontend/` (66 files) and its `.gitignore` entries
+
+### Docs
+
+- README, ARCHITECTURE, CLAUDE.md layout: legacy rows and sections replaced by a short "Legacy v1 (removed)" note; PRODUCTION.md §10 is now a cutover record with the remaining out-of-repo decommission checklist (Render, legacy Vercel project, Gmail relay, GCS, `LEGACY_DEPLOYS_ENABLED`), §9 without legacy workflows and a merge-timing warning (legacy Git-connected builds must be off before `main` loses `backend/`/`frontend/`), and the post-import statement-date check moved to §11 Operations; removed the legacy `docs/operations/` and `docs/security/`; parser README documents the frozen golden fixtures; BACKLOG drops the findings that only concerned the removed cutover script (SRV-09r, DP-17); ROADMAP marks the code removal done
+
+## Ledger iOS TestFlight pipeline — 2026-10-08 (branch `ledger-v2`)
+
+### Frontend (mobile)
+
+- **feat** TestFlight release flow mirroring another app: `apps/ios/scripts/testflight.sh` (test, archive, export, dSYMs → Sentry, altool upload with the App Store Connect API key, `--no-upload`, `--keep-build`), `publish-build.sh` now stages the IPA + `build-meta.json` on the `ios-ledger-staged` release and commits the spent build number, and `testflight-distribute.mjs` waits for processing, sets "What to Test", attaches the build to "Friends & Family" and submits it for Beta App Review
+- **chore** Registered bundle ids `com.example.ledger` and `com.example.ledger.share` in the developer portal with App Groups enabled
+
+### Docs
+
+- apps/ios/README.md: TestFlight groups, scripts, credentials and the staged-build contract for CI
+
 ## Final-verification fixes — 2026-10-08 (branch `ledger-v2`)
 
 Fixes for [docs/audit/07-final-verification.md](docs/audit/07-final-verification.md) FV-01…FV-04.

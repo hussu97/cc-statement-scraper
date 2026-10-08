@@ -63,7 +63,13 @@ export async function mailboxAccessToken(
   if (!refresh) throw new HttpError(409, "MAILBOX_NOT_CONNECTED", `mailbox ${mailboxCode} has no refresh token`);
 
   const { id, secret } = clientCredentials(provider);
-  const req = buildRefreshRequest(provider, id, secret, String(refresh), Deno.env.get("MS_OAUTH_TENANT") || "consumers");
+  const req = buildRefreshRequest(
+    provider,
+    id,
+    secret,
+    String(refresh),
+    Deno.env.get("MS_OAUTH_TENANT") || "consumers",
+  );
   const res = await fetchFn(req.url, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -73,11 +79,19 @@ export async function mailboxAccessToken(
   const doc = await res.json().catch(() => ({}));
   if (!res.ok || !doc.access_token) {
     // Provider error codes only (e.g. invalid_grant) — never the response body as a whole.
-    throw new HttpError(502, "TOKEN_REFRESH_FAILED", `${provider} token refresh failed: HTTP ${res.status} ${doc.error ?? ""}`);
+    throw new HttpError(
+      502,
+      "TOKEN_REFRESH_FAILED",
+      `${provider} token refresh failed: HTTP ${res.status} ${doc.error ?? ""}`,
+    );
   }
   // Microsoft rotates refresh tokens; keep the newest one.
   if (doc.refresh_token && doc.refresh_token !== refresh) {
-    await svc.rpc("set_mailbox_secret", { p_mailbox_code: mailboxCode, p_key: "refresh_token", p_value: doc.refresh_token });
+    await svc.rpc("set_mailbox_secret", {
+      p_mailbox_code: mailboxCode,
+      p_key: "refresh_token",
+      p_value: doc.refresh_token,
+    });
   }
   return { accessToken: String(doc.access_token), expiresIn: Number(doc.expires_in ?? 3600) };
 }

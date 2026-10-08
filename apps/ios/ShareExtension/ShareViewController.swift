@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
-/// "Add to Ledger": share statement PDFs from Mail, Files or a bank app.
+/// "Add to Bank Ledger": share statement PDFs from Mail, Files or a bank app.
 /// Uses the app's session from the shared keychain; when offline or signed
 /// out the PDFs are kept in the App Group and the app sends them later.
 @objc(ShareViewController)
@@ -33,7 +33,7 @@ final class ShareViewController: UIViewController {
 
         Task { @MainActor in
             guard let services else {
-                state.finish(.failed("Ledger isn't configured."))
+                state.finish(.failed("Bank Ledger isn't configured."))
                 return
             }
             // Shared PDFs go to the same ledger as SMS ("SMS go to", owned only),
@@ -90,7 +90,7 @@ struct ShareView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Add to Ledger").font(.system(.title, design: .serif))
+            Text("Add to Bank Ledger").font(.system(.title, design: .serif))
             if let name = state.ledgerName {
                 Label("Uploading to \(name)", systemImage: "tray.and.arrow.down")
                     .font(Typography.rowMeta).foregroundStyle(Palette.muted)

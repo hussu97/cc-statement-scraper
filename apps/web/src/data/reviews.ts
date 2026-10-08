@@ -20,11 +20,11 @@ export const REVIEW_REASONS: Record<string, { title: string; help: string }> = {
   amount_drift: { title: "Amount changed", help: "The posted amount differs from the alert." },
   unknown_card: {
     title: "Unknown cards",
-    help: "An SMS mentions a card Ledger doesn't know. Tell it which account the card belongs to.",
+    help: "An SMS mentions a card Bank Ledger doesn't know. Tell it which account the card belongs to.",
   },
   unparsed_sms: {
     title: "New SMS formats",
-    help: "A bank message didn't match any format. Ledger proposed a template; accept it to parse similar messages.",
+    help: "A bank message didn't match any format. Bank Ledger proposed a template; accept it to parse similar messages.",
   },
   orphaned: {
     title: "Orphaned transactions",
@@ -260,7 +260,7 @@ export function reviewActionError(e: { code?: string; message?: string } | null 
     if (/already part of a transaction/i.test(msg)) return "This message is already part of a transaction, so it can't be marked as not a card transaction.";
     if (/already has a confirmed/i.test(msg)) return "That transaction already has its own statement line or SMS, so it can't take this one.";
     if (/not an open unparsed_sms review/i.test(msg)) return "Only an open unrecognised-SMS review can be sent to the AI again.";
-    if (/no account or amount/i.test(msg)) return "Ledger doesn't know this message's card or amount yet. Add the card first.";
+    if (/no account or amount/i.test(msg)) return "Bank Ledger doesn't know this message's card or amount yet. Add the card first.";
     return "That answer doesn't fit this review. The list has been refreshed.";
   }
   return msg || "Something went wrong.";

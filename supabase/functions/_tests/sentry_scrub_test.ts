@@ -31,7 +31,13 @@ function smsIngestEvent() {
     breadcrumbs: [
       { message: `GET https://api/x?access_token=zzz`, data: { url: "https://h/p?sig=1", body: SMS, method: "GET" } },
     ],
-    exception: { values: [{ type: "Error", value: `HTTP 500 for Bearer ${TOKEN}`, stacktrace: { frames: [{ vars: { body: SMS } }] } }] },
+    exception: {
+      values: [{
+        type: "Error",
+        value: `HTTP 500 for Bearer ${TOKEN}`,
+        stacktrace: { frames: [{ vars: { body: SMS } }] },
+      }],
+    },
     tags: { function: "sms-ingest", token: "t" },
   };
 }
@@ -83,7 +89,9 @@ Deno.test("scrubString filters bearer tokens, service tokens, JWTs and URL queri
 
 Deno.test("scrubBreadcrumb strips data payloads and URL queries", () => {
   // deno-lint-ignore no-explicit-any
-  const b: any = scrubBreadcrumb({ category: "fetch", data: { url: "https://p/parse?x=1", password_candidates: ["a"] } } as any);
+  const b: any = scrubBreadcrumb(
+    { category: "fetch", data: { url: "https://p/parse?x=1", password_candidates: ["a"] } } as any,
+  );
   assertEquals(b.data.url, "https://p/parse");
   assertEquals(b.data.password_candidates, "[Filtered]");
 });

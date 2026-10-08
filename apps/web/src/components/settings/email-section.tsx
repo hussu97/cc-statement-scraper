@@ -72,7 +72,7 @@ export function EmailSection() {
         }
       />
       <p className="-mt-1 px-5 pb-3 text-[13px] text-muted">
-        Ledger reads statement PDFs from bank emails. Each mailbox has routes that say which bank's emails to pick up.
+        Bank Ledger reads statement PDFs from bank emails. Each mailbox has routes that say which bank's emails to pick up.
       </p>
       <QueryView
         query={mail}
@@ -247,7 +247,7 @@ export function EmailSection() {
         }}
       >
         {deleting?.kind === "mailbox"
-          ? `Ledger will stop reading ${deleting.item.mailbox_email}. Statements already imported stay.`
+          ? `Bank Ledger will stop reading ${deleting.item.mailbox_email}. Statements already imported stay.`
           : deleting
             ? `Emails from ${bankName(deleting.item.bank_code)} will no longer be picked up. Statements already imported stay.`
             : null}
@@ -271,7 +271,7 @@ function AddMailboxDialog({ onClose }: { onClose: () => void }) {
       { provider, email },
       {
         onSuccess: () => {
-          toast({ title: "Mailbox added", description: "Set its refresh token so Ledger can read it.", tone: "positive" });
+          toast({ title: "Mailbox added", description: "Set its refresh token so Bank Ledger can read it.", tone: "positive" });
           onClose();
         },
       },

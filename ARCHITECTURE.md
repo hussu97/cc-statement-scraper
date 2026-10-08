@@ -1,12 +1,12 @@
-# Architecture — Ledger v2
+# Architecture — Bank Ledger (v2)
 
-Ledger is a personal credit-card ledger for two people (and their household). Bank SMS alerts
+Bank Ledger is a personal credit-card ledger for two people (and their household). Bank SMS alerts
 feed it in near real time, statement PDFs reconcile it, and categorisation and analytics run
-in the database. This document describes v2. The legacy v1 stack (`backend/`, `frontend/`) is
-summarised at the end. It is frozen and is deleted at cutover.
+in the database. This document describes v2. The legacy v1 stack was removed after the cutover;
+what remains of it (the `legacy` database schema) is summarised at the end.
 
 Related docs: [README.md](README.md) (setup, commands, env vars), [PRODUCTION.md](PRODUCTION.md)
-(deployment and cutover), [docs/contracts/parse-v1.md](docs/contracts/parse-v1.md) (parser ⇄ worker contract).
+(deployment, operations and the cutover record), [docs/contracts/parse-v1.md](docs/contracts/parse-v1.md) (parser ⇄ worker contract).
 
 ---
 
@@ -16,7 +16,7 @@ Related docs: [README.md](README.md) (setup, commands, env vars), [PRODUCTION.md
  iPhone (SwiftUI, apps/ios)                 Scraper CLI (local Playwright, scraper/)
   • Shortcuts automation → LogBankSMSIntent    • multipart upload, service token ccs_…
       → App Group outbox → rpc ingest_sms ─┐            │
-  • Statements upload / "Add to Ledger"     │            │       Gmail ──Pub/Sub push (OIDC)──┐
+  • Statements upload / "Add to Bank Ledger"│            │       Gmail ──Pub/Sub push (OIDC)──┐
     share extension ───────────────────────┤            │       Outlook ◀─Graph delta poll──┐ │
                                            │            │                                   │ │
  Web (Vite + React, apps/web, Vercel)      │            ▼                                   │ │
@@ -34,7 +34,7 @@ Related docs: [README.md](README.md) (setup, commands, env vars), [PRODUCTION.md
                                               │ pg_cron → pg_net → Edge Functions (x-cron-secret)
                               Supabase Storage bucket `statements` (PDFs as received)
 
- Sentry: `ledger-backend` (Edge Functions + parser) · `ledger-apps` (web + iOS)
+ Sentry: `credit-card-ledger-backend` (Edge Functions + parser) · `credit-card-ledger-apps` (web + iOS)
 ```
 
 Hosting is free-tier: Supabase (DB, Auth, Storage, Edge Functions, Realtime), Cloud Run (parser,
@@ -50,11 +50,10 @@ scales to zero), Vercel Hobby (web) and TestFlight (iOS). The scraper runs only 
 | **Edge Functions** | `supabase/functions/` | HTTP ingress and I/O. They authenticate callers, store PDFs, call the parser and Claude, poll mailboxes and report health. They hold no business rules beyond input validation. |
 | **Parser** | `services/parser/` | Stateless `POST /parse`. Downloads a PDF from a signed URL, decrypts it with candidate passwords, detects the bank (scoring legal-name and brand markers outside transaction rows, so a merchant naming another bank doesn't win) and returns normalised statements (contract parse-v1). Each parse runs in a resource-limited child process (15 MB, 30 pages, 32 MB inflated, 30 s CPU, 60 s wall), and the output is validated against the DB's constraints before it is returned. It never touches the DB. |
 | **Web app** | `apps/web/` | Vite + React 19 + TanStack Router/Query + supabase-js, Tailwind v4 on `@ledger/tokens`. Renders RPC results. It never computes money. |
-| **iPhone app** | `apps/ios/` | SwiftUI app, `LedgerKit` package, `LogBankSMSIntent` App Intent, "Add to Ledger" share extension. |
+| **iPhone app** | `apps/ios/` | SwiftUI app, `LedgerKit` package, `LogBankSMSIntent` App Intent, "Add to Bank Ledger" share extension. |
 | **Design tokens** | `packages/tokens/` | One `tokens.json` generates CSS variables, a chart palette module and `Tokens.swift`. |
 | **DB types** | `packages/db-types/` | `supabase gen types` output. Never hand-written; CI checks for drift. |
 | **Scraper** | `scraper/` | Local-only Playwright CLI that downloads statements and uploads them to `statements-upload`. Its architecture is frozen. |
-| **Cutover script** | `scripts/migrate_legacy.py` | One-off legacy → v2 data move (metadata, secrets, PDFs, parity report). |
 
 ### Edge Functions
 
@@ -454,7 +453,7 @@ RLS applies to every change event.
 - **Users** sign in with Supabase Auth: email one-time code or magic link, and a password for
   the seeded demo user. Sign in with Apple is stubbed on iOS. Membership in `profile_members`
   grants access, and a profile can have several owners and viewers.
-- **No self sign-up.** Ledger is private: `[auth] enable_signup = false` locally, and the same
+- **No self sign-up.** Bank Ledger is private: `[auth] enable_signup = false` locally, and the same
   dashboard setting in production. The web's magic link uses `shouldCreateUser: false`, so an
   unknown email gets "Ask the ledger's owner to invite you". A member is added by an owner with
   `add_profile_member` (an existing user is added at once; otherwise a pending invite is
@@ -462,6 +461,13 @@ RLS applies to every change event.
   → Users → Invite user, or the admin API), which works with sign-ups off. The insert trigger
   then claims the pending invite. The legacy import refuses to adopt a profile key it did not
   create (`private.legacy_import_profiles`), so a squatted key can't capture migrated data.
+- **API keys.** Clients (web, iOS, scraper `apikey`) ship only the publishable key
+  (`sb_publishable_…`); RLS applies and the signed-in user's JWT carries identity (Realtime
+  included). Edge Functions use the secret key (`sb_secret_…`, maps to `service_role`) from the
+  runtime-injected `SUPABASE_SECRET_KEYS`, falling back to `SB_SECRET_KEY` and then the legacy
+  `service_role` JWT; their user clients pair the publishable key with the caller's JWT. pg_cron
+  calls carry only `x-cron-secret`. The legacy anon/service_role JWT keys can be disabled once
+  PRODUCTION.md §2.8 passes.
 - **RLS on every table.** Policies call `authz.my_profile_codes()` or
   `authz.my_owned_profile_codes()`. These are SECURITY DEFINER functions in the `authz` schema,
   evaluated once per statement through `(select …)`. Members read; owners write the user-editable
@@ -535,8 +541,8 @@ Bank SMS → Shortcuts automation → LogBankSMSIntent (openAppWhenRun = false, 
 
 | Project | Runtimes | Distinguishing tag |
 |---|---|---|
-| `ledger-backend` | Supabase Edge Functions and the Cloud Run parser | `service` = `edge` \| `parser` (plus `function` on Edge events) |
-| `ledger-apps` | Web app and iPhone app (app, intent and share extension) | `app` = `web` \| `ios` (plus `target` on iOS) |
+| `credit-card-ledger-backend` | Supabase Edge Functions and the Cloud Run parser | `service` = `edge` \| `parser` (plus `function` on Edge events) |
+| `credit-card-ledger-apps` | Web app and iPhone app (app, intent and share extension) | `app` = `web` \| `ios` (plus `target` on iOS) |
 
 - `release` is the git SHA and `environment` is `local | preview | production` everywhere.
 - **Local never reports.** Every runtime refuses to start Sentry when the environment is unset,
@@ -569,7 +575,7 @@ Bank SMS → Shortcuts automation → LogBankSMSIntent (openAppWhenRun = false, 
   - new issue in production (both projects)
   - missed `ops-heartbeat`
   - `dlq:*` issues
-  - iOS crash-free sessions below 99%, filtered `app:ios` in `ledger-apps`
+  - iOS crash-free sessions below 99%, filtered `app:ios` in `credit-card-ledger-apps`
 
 - **Tags at init.** Each runtime's Sentry helper sets its tag on every event:
   `_shared/sentry.ts` (`service=edge`), `ccs_parser/sentry.py` (`service=parser`),
@@ -592,13 +598,21 @@ Bank SMS → Shortcuts automation → LogBankSMSIntent (openAppWhenRun = false, 
 
 ---
 
-## Legacy (until cutover)
+## Legacy v1 (removed)
 
-v1 is a FastAPI backend with an embedded worker on Render, PDFs in GCS, a React admin panel
-(`frontend/`) on Vercel, a Gmail relay on Cloud Run (`deploy/Dockerfile.gmail-relay`), and a
-GitHub Actions cron for Microsoft mail (`.github/workflows/email-ingest-microsoft.yml`). It uses
-the same Supabase project, and its tables are moved into the `legacy` schema by the first v2
-migration. `backend/` and `frontend/` are frozen: don't extend them. Their workflows run only
-while the repository variable `LEGACY_DEPLOYS_ENABLED` is `true`, are disabled at cutover and
-are removed with the code after it (PRODUCTION.md §9–10). The v2 deploy workflows are manual
-and run only from `main`.
+v1 was a FastAPI backend with an embedded worker on Render, PDFs in GCS, a React admin panel on
+Vercel, a Gmail relay on Cloud Run and a GitHub Actions cron for Microsoft mail. It shared the
+Supabase project with v2. The first v2 migration moved its tables into the `legacy` schema,
+and `scripts/migrate_legacy.py` (metadata, Vault secrets, PDFs, parity report) moved the data
+into v2 at cutover. After the cutover the v1 code, its deploy files and workflows, and the
+cutover script were deleted from the repo (git history keeps them).
+
+What stays:
+- The **`legacy` schema** in production, untouched, as the historical record. No client role
+  can use it. Dropping it is a separate, explicit decision (take a final `pg_dump` first).
+- The **migrations** that reference it (`…0000_quarantine_legacy`, `…0950_legacy_import`,
+  `…1800_audit_visibility_and_legacy`: import, `legacy_parity_report`, `legacy_missing_lines`
+  and the self-unscheduling `ledger-legacy-choices` cron).
+  They are applied history; migrations are append-only.
+- Provenance data in v2: `documents.source = 'legacy'`, `transaction_evidence.method = 'legacy'`,
+  `statement_lines.legacy_fingerprint` and the parser's `legacy_fingerprint` output.

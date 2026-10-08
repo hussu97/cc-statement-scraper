@@ -16,7 +16,7 @@ struct SignInView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Ledger").font(.system(size: 44, weight: .regular, design: .serif))
+                    Text("Bank Ledger").font(.system(size: 44, weight: .regular, design: .serif))
                     Text("Every card, every dirham — from SMS and statements, reconciled.")
                         .font(Typography.body)
                         .foregroundStyle(Palette.muted)

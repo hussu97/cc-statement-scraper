@@ -32,7 +32,7 @@ export function ReviewPage() {
     <div>
       <PageHeader
         title="Review"
-        description="Things Ledger couldn't decide on its own. Each answer also teaches the matcher for next time."
+        description="Things Bank Ledger couldn't decide on its own. Each answer also teaches the matcher for next time."
         actions={q.data ? <span className="tabular text-sm text-muted">{formatCount(total)} open</span> : null}
       />
       {q.isLoading ? (
@@ -155,7 +155,7 @@ function ReviewCard({ review }: { review: Review }) {
           {review.reason === "unparsed_sms" && ctx.data.template && <TemplateProposal review={review} template={ctx.data.template} />}
           {review.reason === "unparsed_sms" && !ctx.data.template && (
             <p className="text-[13px] text-muted">
-              Ledger couldn't propose a format for this message. Ask the AI to try again, mark it as not a card transaction, or dismiss it and add the format later.
+              Bank Ledger couldn't propose a format for this message. Ask the AI to try again, mark it as not a card transaction, or dismiss it and add the format later.
             </p>
           )}
 

@@ -11,7 +11,7 @@ export function RulesPage() {
   const tab = ruleTab(raw);
   return (
     <div className="mx-auto w-full max-w-5xl">
-      <PageHeader title="Rules" description="How Ledger decides a category. Your own choices always win over rules and suggestions." />
+      <PageHeader title="Rules" description="How Bank Ledger decides a category. Your own choices always win over rules and suggestions." />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="mb-6">
           <TabsTrigger value="categories">Categories</TabsTrigger>

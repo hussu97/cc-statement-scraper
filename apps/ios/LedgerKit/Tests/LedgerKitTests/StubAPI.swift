@@ -60,7 +60,12 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
 
     // MARK: Unused by these tests
 
-    func profiles() async throws -> [LedgerProfile] { [] }
+    /// Thrown by `profiles()` when set (a session the server no longer accepts).
+    var profilesError: LedgerAPIError?
+    func profiles() async throws -> [LedgerProfile] {
+        if let profilesError { throw profilesError }
+        return []
+    }
     func memberships() async throws -> [ProfileMembership] { [] }
     func createProfile(key: String, name: String) async throws -> String { "prf_x" }
     func overview(profileCode: String, month: CalendarDay?) async throws -> Overview { throw LedgerAPIError.noProfile }

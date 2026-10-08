@@ -308,7 +308,7 @@ export function addMemberError(e: unknown): string {
   const err = e as { code?: string; message?: string } | null;
   // Older backends refused unknown emails instead of saving an invite.
   if (err?.code === "P0002" || /no user with that email/i.test(err?.message ?? "")) {
-    return "There's no Ledger account with that email. They need to sign in to Ledger once first.";
+    return "There's no Bank Ledger account with that email. They need to sign in to Bank Ledger once first.";
   }
   if (err?.code === "42501") return "Only owners can add people to this ledger.";
   if (err?.code === "22023") return "Choose Owner or Viewer.";

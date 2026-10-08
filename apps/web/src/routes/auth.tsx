@@ -8,15 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/input";
 import { Segmented } from "@/components/ui/primitives";
 import { Splash, ThemeToggle } from "@/components/shell";
+import { BrandLockup } from "@/components/brand/brand";
 
 function AuthFrame({ children, footer }: { children: ReactNode; footer?: ReactNode }) {
   return (
     <div className="flex min-h-dvh flex-col bg-bg">
       <div className="flex items-center justify-between px-gutter py-4 md:px-gutter-lg">
-        <span className="flex items-baseline gap-1.5">
-          <span className="font-display text-[22px] tracking-[-0.02em] text-ink">Ledger</span>
-          <span className="size-1.5 translate-y-[-2px] rounded-pill bg-accent" aria-hidden />
-        </span>
+        <BrandLockup />
         <ThemeToggle />
       </div>
       <main className="flex flex-1 items-start justify-center px-gutter pt-[8vh] pb-16">
@@ -66,7 +64,15 @@ export function SignInPage() {
   };
 
   return (
-    <AuthFrame>
+    <AuthFrame
+      footer={
+        <footer className="px-gutter pb-6 text-center text-[12px] text-subtle">
+          <Link to="/privacy" className="underline underline-offset-2 hover:text-ink">
+            Privacy policy
+          </Link>
+        </footer>
+      }
+    >
       <p className="mb-2 text-[11px] font-medium tracking-[0.1em] text-subtle uppercase">Your card ledger</p>
       <h1 className="font-display text-[34px] leading-[1.1] tracking-[-0.015em] text-ink">Sign in</h1>
       <p className="mt-2 text-sm text-muted">Every purchase from your bank SMS, reconciled against your statements.</p>

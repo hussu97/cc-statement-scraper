@@ -142,7 +142,7 @@ def init_sentry() -> bool:
         before_breadcrumb=_before_breadcrumb,
         integrations=[StarletteIntegration(), FastApiIntegration()],
     )
-    # ledger-backend is shared with the Edge Functions (service=edge).
+    # credit-card-ledger-backend is shared with the Edge Functions (service=edge).
     sentry_sdk.set_tag("service", "parser")
     sentry_sdk.set_tag("parser_version", PARSER_VERSION)
     logger.info("Sentry initialised | environment=%s traces_sample_rate=%s", environment, traces_sample_rate)

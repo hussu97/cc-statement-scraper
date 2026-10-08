@@ -1,6 +1,0 @@
-{
-  "rewrites": [
-    { "source": "/api/:path*", "destination": "https://<legacy-api-host>/api/:path*" },
-    { "source": "/(.*)", "destination": "/index.html" }
-  ]
-}

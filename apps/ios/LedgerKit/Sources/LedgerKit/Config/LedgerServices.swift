@@ -38,7 +38,7 @@ public final class LedgerServices: Sendable {
         sessionStorage = storage
         client = SupabaseClient(
             supabaseURL: config.supabaseURL,
-            supabaseKey: config.supabaseAnonKey,
+            supabaseKey: config.supabasePublishableKey,
             options: SupabaseClientOptions(
                 db: .init(decoder: LedgerJSON.makeDecoder()),
                 auth: .init(storage: storage, storageKey: "ledger.auth", emitLocalSessionAsInitialSession: true),

@@ -1,0 +1,81 @@
+name: Web smoke (Vercel)
+
+# The web app is deployed by Vercel's Git integration (project
+# cc-statement-scraper, root apps/web): every push to main builds Production,
+# every PR gets a Preview. This workflow does NOT deploy; adding a CLI deploy
+# here would double-deploy. It verifies what Vercel shipped.
+#
+# Vercel reports each deployment back to GitHub as a Deployment; when a
+# Production one succeeds, this probes the production URL with
+# scripts/ci/web-smoke.sh: 200 + <title>Bank Ledger</title>, CSP and security
+# headers, an SPA deep link, a hashed asset (immutable) and a missing asset
+# (404). It also runs daily, so a broken alias or expired domain is noticed
+# without a deploy. Rollback: Vercel dashboard → Deployments → previous
+# Production deployment → "Instant Rollback" (docs/ci-cd.md).
+
+on:
+  deployment_status:
+  schedule:
+    - cron: "17 5 * * *" # daily, 09:17 Dubai
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Base URL to test"
+        type: string
+        default: https://<web-host>
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-smoke
+  cancel-in-progress: true
+
+env:
+  PRODUCTION_URL: https://<web-host>
+
+jobs:
+  smoke:
+    name: Smoke test production web
+    # deployment_status fires for every state of every deployment (Preview too).
+    # Vercel names the environment "Production" (or "Production – <project>"
+    # when several Vercel projects share the repo).
+    if: >-
+      github.event_name != 'deployment_status' ||
+      (github.event.deployment_status.state == 'success' &&
+       startsWith(github.event.deployment.environment, 'Production'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/ci
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Smoke test
+        env:
+          URL: ${{ inputs.url || env.PRODUCTION_URL }}
+        run: bash scripts/ci/web-smoke.sh "$URL"
+
+      - name: Summary
+        if: always()
+        env:
+          OUTCOME: ${{ job.status }}
+          URL: ${{ inputs.url || env.PRODUCTION_URL }}
+          DEPLOY_SHA: ${{ github.event.deployment.sha }}
+          DEPLOY_URL: ${{ github.event.deployment_status.environment_url }}
+        run: |
+          {
+            echo "### Web smoke: $OUTCOME"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Trigger | $GITHUB_EVENT_NAME |"
+            echo "| Tested | $URL |"
+            [ -n "$DEPLOY_SHA" ] && echo "| Deployed commit | \`${DEPLOY_SHA::7}\` |"
+            [ -n "$DEPLOY_URL" ] && echo "| Vercel deployment | $DEPLOY_URL |"
+            echo ""
+            if [ "$OUTCOME" != "success" ]; then
+              echo "Roll back: Vercel → cc-statement-scraper → Deployments → last good Production → Instant Rollback."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

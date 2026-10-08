@@ -69,7 +69,10 @@ Deno.test("route matches only when every filter passes", () => {
 });
 
 Deno.test("pickRoute picks the first matching route by bank_code", () => {
-  const routes = [route({ bank_code: "SIB", route_code: "rte_sib" }), route({ bank_code: "ADCB", route_code: "rte_adcb" })];
+  const routes = [
+    route({ bank_code: "SIB", route_code: "rte_sib" }),
+    route({ bank_code: "ADCB", route_code: "rte_adcb" }),
+  ];
   assertEquals(pickRoute(routes, { sender: "a", subject: "b", filename: "c.pdf", labels: [] })?.route_code, "rte_adcb");
   const none = [route({ subject_keywords: ["nope"] })];
   assertEquals(pickRoute(none, { sender: "a", subject: "b", filename: "c.pdf", labels: [] }), null);

@@ -1,30 +1,39 @@
-name: Deploy Parser (Cloud Run)
+name: Deploy Parser
 
-# Manual only, from main only (guard job), with a typed confirmation. Builds services/parser, pushes it to Artifact Registry and deploys
-# the `ccs-parser` Cloud Run service (scale to zero). Same GCP auth pattern as the
-# legacy deploy-gmail-relay workflow.
+# Builds services/parser, pushes it to Artifact Registry and rolls it out to the
+# `ccs-parser` Cloud Run service (project <gcp-project>, me-central1).
 #
-# Secrets:
-#   GCP_SA_KEY            deployer service-account JSON (run.admin, artifactregistry.writer,
-#                         iam.serviceAccountUser on ccs-parser@)
-#   GCP_PROJECT_ID        GCP project
-#   SUPABASE_PROJECT_REF  used for PARSER_ALLOWED_HOSTS (<ref>.supabase.co)
-# One-time setup (PRODUCTION.md §3): Secret Manager secrets `parser-secret` and
-# `parser-sentry-dsn`, and the runtime service account `ccs-parser@<project>`.
+#   test     ruff + pytest. No secrets.
+#   deploy   `production` environment. The new revision is deployed with
+#            --no-traffic under a tag, its /health is smoke-tested on the tag
+#            URL (status ok + the parser_version from pyproject.toml), and only
+#            then does it receive 100% of traffic. A failed smoke test leaves
+#            production on the previous revision: nothing to roll back.
+#
+# Triggers: a push to main that changes services/parser/**, or manual dispatch
+# from main with "deploy" typed as confirmation. The repository variable
+# AUTO_DEPLOY=false turns push runs off (manual still works).
+#
+# GCP auth: Workload Identity Federation when the repository variables
+# GCP_WIF_PROVIDER and GCP_DEPLOY_SA are set (preferred; no key to leak),
+# otherwise the GCP_SA_KEY secret. One-time setup in docs/ci-cd.md.
+# Secret SUPABASE_PROJECT_REF feeds PARSER_ALLOWED_HOSTS. Runtime secrets live
+# in Secret Manager (parser-secret, parser-sentry-dsn; PRODUCTION.md §3).
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/parser/**'
+      - '!services/parser/**/*.md'
+      - '!services/parser/tests/**'
+      - '.github/workflows/deploy-parser.yml'
   workflow_dispatch:
     inputs:
       confirm:
         description: "Type 'deploy' to deploy the parser to production"
         required: true
         type: string
-      region:
-        description: "Cloud Run / Artifact Registry region"
-        type: choice
-        default: me-central1
-        options:
-          - me-central1
 
 permissions:
   contents: read
@@ -33,74 +42,139 @@ concurrency:
   group: deploy-parser
   cancel-in-progress: false
 
+env:
+  SERVICE: ccs-parser
+  REGION: me-central1
+  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID || '<gcp-project>' }}
+
 jobs:
-  # Refuse to deploy anything that isn't main. Runs before the `production`
-  # environment gate so a wrong-branch dispatch fails loudly instead of asking
-  # for approval. Pair with a deployment-branch policy (main only) on the
-  # `production` environment (PRODUCTION.md §9).
-  guard:
+  test:
+    name: Test (ruff, pytest)
+    # A push only deploys when AUTO_DEPLOY isn't 'false'; manual runs always do.
+    if: github.event_name == 'workflow_dispatch' || vars.AUTO_DEPLOY != 'false'
     runs-on: ubuntu-latest
-    permissions: {}
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: services/parser
     steps:
-      - name: Require main
+      - name: Require main and confirmation
+        working-directory: .
         env:
           REF: ${{ github.ref }}
+          EVENT: ${{ github.event_name }}
+          CONFIRM: ${{ inputs.confirm }}
         run: |
           if [ "$REF" != "refs/heads/main" ]; then
             echo "::error::Production deploys run only from main (got $REF); nothing deployed."
             exit 1
           fi
-
-  deploy:
-    needs: guard
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    environment: production
-    timeout-minutes: 20
-    env:
-      SERVICE: ccs-parser
-      REGION: ${{ inputs.region }}
-      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-      PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
-    steps:
-      - name: Confirm
-        env:
-          CONFIRM: ${{ inputs.confirm }}
-        run: |
-          if [ "$CONFIRM" != "deploy" ]; then
+          if [ "$EVENT" = "workflow_dispatch" ] && [ "$CONFIRM" != "deploy" ]; then
             echo "::error::Type 'deploy' to confirm; nothing deployed."
             exit 1
           fi
-          if [ -z "$GCP_PROJECT_ID" ] || [ -z "$PROJECT_REF" ]; then
-            echo "::error::GCP_PROJECT_ID and SUPABASE_PROJECT_REF must be set"
-            exit 1
+
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            services/parser/requirements.txt
+            services/parser/pyproject.toml
+
+      - name: Install
+        run: |
+          uv venv --python 3.12 .venv
+          uv pip sync --python .venv/bin/python requirements.txt
+          uv pip install --python .venv/bin/python --no-deps -e .
+          uv pip install --python .venv/bin/python pytest ruff
+
+      - name: ruff
+        run: .venv/bin/ruff check --output-format=github .
+
+      - name: pytest
+        run: .venv/bin/pytest -q
+
+  deploy:
+    name: Deploy to Cloud Run
+    needs: test
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ steps.promote.outputs.url }}
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      id-token: write # Workload Identity Federation
+    env:
+      PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
+      DEPLOY_SA: ${{ vars.GCP_DEPLOY_SA }}
+      HAS_SA_KEY: ${{ secrets.GCP_SA_KEY != '' }}
+    steps:
+      - name: Verify configuration
+        run: |
+          if [ -z "$PROJECT_REF" ]; then
+            echo "::error::Secret SUPABASE_PROJECT_REF is not set on the production environment (docs/ci-cd.md)"; exit 1
+          fi
+          if [ -z "$WIF_PROVIDER" ] && [ "$HAS_SA_KEY" != "true" ]; then
+            echo "::error::Set GCP_WIF_PROVIDER + GCP_DEPLOY_SA (variables) or GCP_SA_KEY (secret); see docs/ci-cd.md"; exit 1
           fi
 
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Authenticate to GCP
+      - name: Authenticate to GCP (Workload Identity Federation)
+        if: env.WIF_PROVIDER != ''
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOY_SA }}
+
+      - name: Authenticate to GCP (service-account key fallback)
+        if: env.WIF_PROVIDER == ''
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@v2
 
-      - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Image name
+        run: |
+          gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+          SHA="${GITHUB_SHA::7}"
+          VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' services/parser/pyproject.toml | head -1)
+          {
+            echo "SHA=$SHA"
+            echo "TAG=sha-$SHA"
+            echo "IMAGE=${REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/ledger/${SERVICE}:${SHA}"
+            echo "PARSER_VERSION=$VERSION"
+          } >> "$GITHUB_ENV"
 
       - name: Build and push image
-        run: |
-          SHA=$(git rev-parse --short HEAD)
-          IMAGE="${REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/ledger/${SERVICE}:${SHA}"
-          docker build --platform linux/amd64 -t "$IMAGE" services/parser
-          docker push "$IMAGE"
-          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
-          echo "SHA=$SHA" >> "$GITHUB_ENV"
+        uses: docker/build-push-action@v6
+        with:
+          context: services/parser
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.IMAGE }}
+          cache-from: type=gha,scope=parser
+          cache-to: type=gha,mode=max,scope=parser
 
-      - name: Deploy to Cloud Run
+      - name: Record the serving revision
         run: |
+          PREVIOUS=$(gcloud run services describe "$SERVICE" --project "$GCP_PROJECT_ID" --region "$REGION" \
+            --format='value(status.traffic[0].revisionName)' 2>/dev/null || true)
+          echo "PREVIOUS=$PREVIOUS" >> "$GITHUB_ENV"
+          echo "Currently serving: ${PREVIOUS:-<service does not exist yet>}"
+
+      - name: Deploy new revision (no traffic)
+        run: |
+          # --no-traffic needs an existing service; a first deploy takes traffic directly.
+          TRAFFIC_FLAGS=(--no-traffic --tag "$TAG")
+          [ -n "$PREVIOUS" ] || TRAFFIC_FLAGS=()
           gcloud run deploy "$SERVICE" \
             --image="$IMAGE" \
             --project="$GCP_PROJECT_ID" \
@@ -116,9 +190,54 @@ jobs:
             --timeout=120 \
             --set-secrets="PARSER_SECRET=parser-secret:latest,SENTRY_DSN=parser-sentry-dsn:latest" \
             --set-env-vars="SENTRY_ENVIRONMENT=production,SENTRY_RELEASE=${SHA},PARSER_ALLOWED_HOSTS=${PROJECT_REF}.supabase.co" \
+            "${TRAFFIC_FLAGS[@]}" \
             --quiet
 
-      - name: Health check
+      - name: Smoke test the new revision
         run: |
-          URL=$(gcloud run services describe "$SERVICE" --project="$GCP_PROJECT_ID" --region="$REGION" --format='value(status.url)')
-          curl -fsS "$URL/health"
+          if [ -n "$PREVIOUS" ]; then
+            URL=$(gcloud run services describe "$SERVICE" --project "$GCP_PROJECT_ID" --region "$REGION" --format=json \
+              | jq -r --arg t "$TAG" '.status.traffic[] | select(.tag == $t) | .url')
+          else
+            URL=$(gcloud run services describe "$SERVICE" --project "$GCP_PROJECT_ID" --region "$REGION" --format='value(status.url)')
+          fi
+          [ -n "$URL" ] || { echo "::error::could not resolve the URL of tag $TAG"; exit 1; }
+          echo "Probing $URL/health (cold start allowed)"
+          for attempt in 1 2 3 4 5; do
+            if BODY=$(curl -fsS --max-time 30 "$URL/health"); then break; fi
+            BODY=""; echo "attempt $attempt failed; retrying"; sleep $((attempt * 5))
+          done
+          echo "$BODY"
+          [ "$(jq -r .status <<<"$BODY")" = "ok" ] || { echo "::error::/health did not return status ok"; exit 1; }
+          GOT=$(jq -r .parser_version <<<"$BODY")
+          [ "$GOT" = "$PARSER_VERSION" ] || { echo "::error::/health parser_version $GOT != pyproject $PARSER_VERSION"; exit 1; }
+
+      - name: Promote to 100% traffic
+        id: promote
+        run: |
+          if [ -n "$PREVIOUS" ]; then
+            gcloud run services update-traffic "$SERVICE" --project "$GCP_PROJECT_ID" --region "$REGION" --to-latest --quiet
+            gcloud run services update-traffic "$SERVICE" --project "$GCP_PROJECT_ID" --region "$REGION" --remove-tags "$TAG" --quiet
+          fi
+          URL=$(gcloud run services describe "$SERVICE" --project "$GCP_PROJECT_ID" --region "$REGION" --format='value(status.url)')
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          curl -fsS --retry 3 --retry-delay 5 --max-time 30 "$URL/health"
+
+      - name: Summary
+        if: always()
+        env:
+          OUTCOME: ${{ job.status }}
+          URL: ${{ steps.promote.outputs.url }}
+        run: |
+          {
+            echo "### Parser deploy: $OUTCOME"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Image | \`${IMAGE:-not built}\` |"
+            echo "| parser_version | ${PARSER_VERSION:-?} |"
+            echo "| Previous revision | ${PREVIOUS:-none} |"
+            echo "| URL | ${URL:-not promoted} |"
+            echo ""
+            echo "Roll back: \`gcloud run services update-traffic $SERVICE --region $REGION --project $GCP_PROJECT_ID --to-revisions ${PREVIOUS:-<revision>}=100\`"
+          } >> "$GITHUB_STEP_SUMMARY"

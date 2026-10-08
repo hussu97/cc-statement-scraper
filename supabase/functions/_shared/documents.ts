@@ -16,7 +16,10 @@ export type DocumentSource = (typeof DOCUMENT_SOURCES)[number];
 export function isPdf(bytes: Uint8Array): boolean {
   const n = Math.min(bytes.length, 1024);
   for (let i = 0; i + 4 < n; i++) {
-    if (bytes[i] === 0x25 && bytes[i + 1] === 0x50 && bytes[i + 2] === 0x44 && bytes[i + 3] === 0x46 && bytes[i + 4] === 0x2d) {
+    if (
+      bytes[i] === 0x25 && bytes[i + 1] === 0x50 && bytes[i + 2] === 0x44 && bytes[i + 3] === 0x46 &&
+      bytes[i + 4] === 0x2d
+    ) {
       return true;
     }
   }
