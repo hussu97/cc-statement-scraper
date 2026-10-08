@@ -14,6 +14,7 @@
 - **feat** After a code sign-in, "Add a passkey?" (Add / Not now). "Not now" is remembered per user in this browser (`data/passkeys.ts`)
 - **feat** Settings → Account: signed-in email, sign out, and passkeys (list with created / last used, add, rename, remove)
 - **feat** `/.well-known/apple-app-site-association` (webcredentials for `2F94NY8R3T.com.hussu97.ledger`), served as JSON and excluded from the SPA rewrite
+- **fix** Rejecting a merchant suggestion calls `reject_merchant_suggestion`, so the nightly LLM pass stops re-suggesting it (WEB-14); the rule preview passes `p_rule_code` when editing, so a rule's own effect isn't counted as a change (DB-31)
 - **test** `passkeys.test.ts` (offer rule, Not-now storage, support detection, default names, cancel detection, error sentences, code cleaning)
 
 ### iOS

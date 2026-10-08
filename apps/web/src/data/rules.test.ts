@@ -108,6 +108,7 @@ describe("drafts and preview args", () => {
       conditions: { currency: "EUR" },
       priority: 100,
     });
+    expect(previewArgs({ ...emptyRuleDraft({ pattern: "tea", category_code: "cat_a" }), rule_code: "rul_x" })?.rule_code).toBe("rul_x");
   });
 
   it("validates amounts as decimal strings", () => {
