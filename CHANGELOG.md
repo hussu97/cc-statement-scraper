@@ -44,6 +44,7 @@
   - `legacy.*` keeps no table or sequence grants for `anon` / `authenticated` (X-23)
   - `private.legacy_category_aliases` (`Entretainment` → `Entertainment`) used by `apply_legacy_category_choices`; `private.legacy_unresolved_category_names()` lists names that still match no category, for the finalize output (DP-19 / X-24)
 - **test** `17_db_identity_and_legacy.test.sql`; `03`, `06`, `07` create confirmed test users
+- **test** `18_review_regressions.test.sql`: a line displaced by a manual link keeps its own transaction (DB-27) and an `unknown_card` SMS without a card number is bound to the chosen account (DB-43) (DB-28r)
 
 ## Supabase publishable / secret API keys — 2026-10-08 (branch `ledger-v2`)
 
