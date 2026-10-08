@@ -19,13 +19,13 @@ separately):
 
 | Area | P2 | P3 | UX recs | Verify | Total |
 |---|---|---|---|---|---|
-| Database (Supabase SQL) | 12 | 21 | – | 2 | 35 |
+| Database (Supabase SQL) | 12 | 20 | – | 2 | 34 |
 | Edge Functions | 5 | 7 | – | – | 12 |
 | Parser | 5 | 3 | – | – | 8 |
 | Web | 16 | 26 | 5 | – | 47 |
 | iOS | 14 | 10 | 7 | 3 | 34 |
 | Scraper and cutover script | – | 4 | – | – | 4 |
-| CI, config and ops | 1 | 5 | – | 1 | 7 |
+| CI, config and ops | 1 | 6 | – | 1 | 8 |
 | **Total** | **53** | **76** | **12** | **6** | **147** |
 
 There are no open P0 or P1 findings. The last P1 remainders (WEB-02 statements beyond 500 and
@@ -171,7 +171,6 @@ These are actions, not code changes. Most are already steps in [PRODUCTION.md](.
 | DP-04r | Ingest doesn't reject a statement dated more than a month in the future (the parser now validates periods and due dates) | Defence in depth only | Reject `statement_date > today + 31` with a permanent 22023 | S |
 | DB-28r | DB-27 (displaced line) and DB-43 (unknown card without last4) have no dedicated pgTAP tests; the per-profile lock is checked as held, not under real concurrency | pgTAP is single-session | Add the two tests; a two-connection concurrency test in a script or CI step | S |
 | DB-29r | `spend_pace`, `new_recurring`, `review_backlog`, `large_transaction` insight kinds and the `amount_drift` review reason are allowed by CHECKs but never produced (ARCHITECTURE now says so) | Product decision | Implement them (WEB-25 already routes each kind) or drop them from the CHECKs | M |
-| DB-30 | `anon`/`authenticated` hold TRUNCATE, TRIGGER, REFERENCES and MAINTAIN on every `public` table (TRUNCATE bypasses RLS; not reachable through PostgREST) | Defence in depth | Revoke them and alter the default privileges | S |
 | DB-31 | `preview_rule`'s `would_change` ignores the equal-priority tie-break and counts the rule being edited | Out of the P1 pass | Mirror `recategorize`'s full ORDER BY; accept `p_rule_code` to exclude it | S |
 | DB-32r | No index for `estimate_fx`'s `(profile_code, currency_original, txn_date desc)` scan; `anomalies` is O(n²) | Three FK indexes were added | Add the index; rewrite `anomalies` with window functions | S |
 | DB-34 | `declined` SMS are stored `parsed` (docs say ignored); `Asia/Dubai` is hard-coded while `profiles.timezone`/`base_currency` are unused | Out of the P1 pass | Store `ignored`; use or drop the profile columns | S |
@@ -274,6 +273,7 @@ These are actions, not code changes. Most are already steps in [PRODUCTION.md](.
 | X-26 | CI runs no `deno lint`/`check`/`fmt` (fmt fails on 18 files) and never builds the iOS app or extension targets | Out of the P1 pass | Add lint and check (fix or drop fmt); a weekly `xcodegen && xcodebuild build` job (with IOS-11) | S |
 | X-32 | Vercel previews use the production Supabase project and CSP; their auth redirects aren't allow-listed | Decision | Disable previews, or point them at a non-prod project | S |
 | DP-22 | A rehearsal on the shared local stack also categorises the demo profiles' merchants and drains their `sms_fallback` queue (demo SMS sent to Claude) | Local ops only | Rehearse on a stack without seed data, or scope `enqueue_llm_categorize` by profile when run by hand | S |
+| FV-04 | `supabase migration up` matches migrations by version only, so a migration edited after a stack applied it is silently skipped (the shared local stack ran stale bodies of 4 migrations; 07 FV-04). Prod is safe only while no v2 version has been pushed | Process; no tooling yet | CI guard: fail a PR that modifies (`git diff --diff-filter=MDR`) an existing file under `supabase/migrations/` once that version is on `main` (or, after cutover, listed by `supabase migration list --linked`), with an explicit override label for pre-cutover edits. Optionally record a sha256 per applied migration in a local table and warn on mismatch | S |
 
 ---
 

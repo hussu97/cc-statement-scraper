@@ -2,7 +2,18 @@
 -- At cutover, every legacy table/type in `public` moves into a `legacy` schema.
 -- The v2 schema then owns `public`, and data is migrated in-DB by SQL
 -- (see 20261008000900_legacy_import.sql).
--- On a fresh database (local dev, CI) this migration does nothing.
+-- On a fresh database (local dev, CI) this migration only resets default privileges.
+
+-- FV-01: production was created with Supabase's older defaults, which grant ALL
+-- on every new `public` table/sequence to anon and authenticated. The v2
+-- migrations grant clients only what they need (often per column) and never
+-- revoke table-level privileges, so those defaults must be gone BEFORE any v2
+-- table is created. `all` also covers MAINTAIN (PG 17). service_role keeps its
+-- defaults. 20261008002100_reassert_client_grants.sql re-asserts the result.
+alter default privileges for role postgres in schema public
+  revoke all on tables from anon, authenticated;
+alter default privileges for role postgres in schema public
+  revoke all on sequences from anon, authenticated;
 
 create schema if not exists legacy;
 revoke all on schema legacy from public, anon, authenticated;

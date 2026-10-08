@@ -1,5 +1,20 @@
 # Changelog
 
+## Final-verification fixes — 2026-10-08 (branch `ledger-v2`)
+
+Fixes for [docs/audit/07-final-verification.md](docs/audit/07-final-verification.md) FV-01…FV-04.
+
+### Backend (Supabase)
+
+- **fix** Client grants no longer depend on the database's default privileges (FV-01, blocking): `…0000` now starts by revoking `postgres`'s default privileges on `public` tables and sequences from `anon`/`authenticated` (production still has Supabase's older `GRANT ALL` defaults), and the new final migration `…2100_reassert_client_grants` revokes everything from both roles on `public` and replays the intended grants. On prod defaults `anon` would otherwise get full table rights, `authenticated` table-wide INSERT/UPDATE/DELETE (bypassing the column-level UPDATE limits) and `service_tokens.token_hash` would be readable. Also closes DB-30 (TRUNCATE/REFERENCES/TRIGGER/MAINTAIN revoked)
+- **fix** Re-parse relink (FV-02, `…2000`): `match_statement_lines` prefers a line's own previous transaction (same line, same `line_key`+`occurrence`, or same source document with the same date and amount) and resolves same-amount purchases on consecutive days by date proximity, so a corrected statement date no longer holds them as `ambiguous`
+- **fix** Stale reviews (FV-03, `…2000`): a trigger on `statements` dismisses open reviews about a statement that stops being active and any `period_overlap` review left with no active candidate; existing stale reviews are dismissed once
+- **test** pgTAP `11_privileges` (default privileges, no `anon` rights, column-limited `authenticated` UPDATE, `token_hash`, exact client privilege matrix) and `12_final_verification` (FV-02/FV-03 regressions). 12 files, 533 assertions; also passes on a stack emulating production's default privileges
+
+### Docs
+
+- PRODUCTION.md: rehearsals start from `supabase db reset`, and how to rehearse against prod's grants (FV-04); ARCHITECTURE.md: explicit client grants, re-parse lineage, stale review dismissal; BACKLOG.md: FV-04 CI guard added, DB-30 removed
+
 ## Audit fixes (pre-cutover) — 2026-10-08 (branch `ledger-v2`)
 
 Fixes for the P0 and P1 findings of the six pre-cutover audits in `docs/audit/` (01 database,
