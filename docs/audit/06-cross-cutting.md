@@ -333,3 +333,5 @@ fixed by the DB pass; X-06 by the server pass; X-18 by DB-16, X-19 by IOS-01, X-
 multi-document line union (DP-02). X-29 is resolved: the parser deploys to
 `credit-card-scraper-ht` / `me-central1` (repo `ledger`), the workflow's only region. X-25 is fixed
 in parse-v1 except the `country_code` format. Open items: [BACKLOG.md](BACKLOG.md).
+
+**Later updates (2026-10-09, Edge + CI pass):** X-16 is fixed (`supabase/functions/.env.example`, names only, with a guard test). X-26 is fixed (`deno check --frozen` in the `edge` job; `ios-build.yml` compiles the app and share extension weekly and on app changes; golden parity in CI stays open as SRV-24). X-32 is decided: Vercel Preview deployments are off for `apps/web` (PRODUCTION §4; a dashboard action). `deploy-parser.yml` is WIF-only now that the `GCP_SA_KEY` repo secret is deleted.

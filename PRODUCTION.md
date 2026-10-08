@@ -406,6 +406,16 @@ one at a time. `SENTRY_AUTH_TOKEN` must be a Vercel env var: `vite.config.ts` re
 The **legacy** project (rooted at the removed `frontend/`) must stay disconnected from Git until
 it is deleted (§10 step 12); a build of `main` would fail.
 
+**Preview deployments: off (decision, audit X-32, 2026-10-09).** A preview build gets the same
+env as production (only `VITE_SENTRY_ENVIRONMENT` differs), so it would run unreviewed branch
+code against the production Supabase project and its real data, under the production CSP,
+and its magic-link redirects aren't in the Auth allow-list anyway. There is no non-production
+Supabase project to point previews at, and PR checks don't need them (`ci.yml` → `web` lints,
+type-checks, tests and builds every PR). To apply: Vercel → `cc-statement-scraper` → Settings →
+Git → **Ignored Build Step** → "Only build production" (or the custom command
+`[ "$VERCEL_ENV" != "production" ]`, which skips every non-production build). Revisit only
+together with a separate staging Supabase project whose URL the Preview env and CSP use.
+
 **`apps/web/vercel.json`** (picked up from the Root Directory):
 - **SPA rewrite.** TanStack Router uses browser history (`/activity`, `/settings`, …), so every
   path except `/assets/*` falls back to `/index.html`. A missing hashed asset stays a 404

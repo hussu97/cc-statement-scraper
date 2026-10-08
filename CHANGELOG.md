@@ -36,6 +36,8 @@
 - ARCHITECTURE §2 (`gmail-push`, `statements-upload`, `ops-monitor`, `_shared/provider.ts`), §10 health checks; README env table (`GMAIL_PUSH_BUDGET_MS`, `OPS_PARSE_QUEUE_AGE_S`) and upload response; PRODUCTION §2.5 optional overrides, §5 push responses
 - `member-invite`: README API table, ARCHITECTURE §2, PRODUCTION §2.2 (adding a member) and §2.5 (deploy list)
 - docs/ci-cd.md (edge job, `ios-build.yml`, WIF-only parser deploy, `GCP_SA_KEY` deleted, lock refresh how-to), PRODUCTION §2.5 (`.env.example`) and §9, README tests and local setup
+- X-32 decision recorded: Vercel Preview deployments are off for `apps/web` (PRODUCTION §4, docs/ci-cd.md §2.3; the switch itself is a Vercel dashboard action)
+- docs/audit: BACKLOG rows closed (SRV-05/07/10/11r/14/15/18/19/20/22/23, NEW-1, X-16r, X-26, X-32, FV-04) with remainders SRV-10r, SRV-20r, SRV-22r (SQL), NEW-1r (web), SRV-13r (parser); fix-status notes in 03, 06 and 07
 
 ## Supabase publishable / secret API keys — 2026-10-08 (branch `ledger-v2`)
 
