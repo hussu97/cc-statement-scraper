@@ -4,141 +4,92 @@
 // Auth (verify_jwt=false): the Google-signed OIDC token Pub/Sub attaches
 // (audience GMAIL_PUSH_AUDIENCE, service account GMAIL_PUSH_SA_EMAIL).
 //
-// Flow per enabled gmail mailbox matching the notification's emailAddress:
+// Flow per enabled gmail mailbox matching the notification's emailAddress
+// (gmail-push/process.ts):
 //   * no stored cursor  → store the pushed historyId and stop (first push after watch);
-//   * history.list(messageAdded) from the stored cursor (404 → reset to pushed id);
+//   * history.list(messageAdded, the watch label) from the stored cursor; the cursor
+//     advances after every page, so a backlog makes progress across deliveries;
+//   * 404 (cursor older than Gmail's history) → Sentry error, bounded backfill, reset;
 //   * PDF attachments of each new message are matched against the mailbox's routes
-//     and stored as documents (source 'gmail'), deduped by email_events + sha256;
-//   * the cursor only advances after every page succeeded. Any failure returns 500
-//     so Pub/Sub redelivers; redelivery is idempotent.
+//     and stored as documents (source 'gmail'), deduped by email_events + sha256.
+//
+// Responses (Pub/Sub acks only 2xx):
+//   200  done, nothing to do, or only permanent failures (bad envelope, revoked grant,
+//        missing OAuth config): recorded in sync_state.last_error and acked (SRV-19);
+//   503  the time budget ran out: redelivery continues from the saved cursor;
+//   500  a transient failure: redelivery retries (idempotent). After 10 deliveries the
+//        subscription dead-letters the message (PRODUCTION.md §5).
 
-import { captureException, withSentry } from "../_shared/sentry.ts";
+import { captureException, captureMessage, withSentry } from "../_shared/sentry.ts";
 import { bearerToken } from "../_shared/auth.ts";
-import { json, readJson, requireMethod } from "../_shared/http.ts";
-import { type Db, serviceClient } from "../_shared/supabase.ts";
-import { mailboxAccessToken } from "../_shared/oauth.ts";
-import { pickRoute, senderFromFromHeader } from "../_shared/email_routes.ts";
+import { HttpError, json, readJson, requireMethod } from "../_shared/http.ts";
+import { serviceClient } from "../_shared/supabase.ts";
+import { enabledMailboxes, mailboxErrorCode, recordMailboxError } from "../_shared/email_ingest.ts";
+import { decodePubSubEnvelope, type PushNotification, verifyPushToken } from "../_shared/gmail.ts";
 import {
-  enabledMailboxes,
-  ingestAttachment,
-  type Mailbox,
-  mailboxRoutes,
-  saveSyncState,
-} from "../_shared/email_ingest.ts";
-import {
-  decodePubSubEnvelope,
-  GmailClient,
-  headerMap,
-  historyMessageIds,
-  pdfAttachmentStubs,
-  ProviderHttpError,
-  verifyPushToken,
-} from "../_shared/gmail.ts";
-
-function laterHistoryId(a: string | null | undefined, b: string | null | undefined): string | null {
-  const x = a ? BigInt(a) : null;
-  const y = b ? BigInt(b) : null;
-  if (x === null) return y === null ? null : String(y);
-  if (y === null) return String(x);
-  return String(x > y ? x : y);
-}
-
-async function processMailbox(svc: Db, mb: Mailbox, pushedHistoryId: string | null) {
-  const now = new Date().toISOString();
-  const start = String(mb.sync_state?.gmail_history_id ?? "").trim();
-  const routes = await mailboxRoutes(svc, mb.mailbox_code);
-
-  if (!start || routes.length === 0) {
-    if (pushedHistoryId) {
-      await saveSyncState(svc, mb, { gmail_history_id: pushedHistoryId, provider: "gmail" }, { last_synced_at: now });
-    }
-    return { mailbox_code: mb.mailbox_code, status: start ? "no_routes" : "cursor_initialised" };
-  }
-
-  const { accessToken } = await mailboxAccessToken(svc, "gmail", mb.mailbox_code);
-  const gmail = new GmailClient(accessToken);
-  const counts = { messages: 0, ingested: 0, duplicate: 0, ignored: 0, seen: 0 };
-  let latest: string | null = start;
-  let pageToken: string | undefined;
-
-  do {
-    let page;
-    try {
-      page = await gmail.historyPage(start, pageToken);
-    } catch (e) {
-      if (e instanceof ProviderHttpError && e.status === 404) {
-        // startHistoryId too old: Gmail only keeps about a week of history.
-        await saveSyncState(svc, mb, { gmail_history_id: pushedHistoryId, provider: "gmail" }, { last_synced_at: now });
-        return { mailbox_code: mb.mailbox_code, status: "cursor_reset" };
-      }
-      throw e;
-    }
-    for (const id of historyMessageIds(page)) {
-      let msg;
-      try {
-        msg = await gmail.getMessage(id);
-      } catch (e) {
-        if (e instanceof ProviderHttpError && e.status === 404) continue; // deleted since
-        throw e;
-      }
-      counts.messages++;
-      const headers = headerMap(msg);
-      const sender = senderFromFromHeader(headers.from ?? "");
-      const subject = headers.subject ?? "";
-      const labels = (msg.labelIds ?? []).map(String);
-      for (const stub of pdfAttachmentStubs(msg)) {
-        const route = pickRoute(routes, { sender, subject, filename: stub.filename, labels });
-        if (!route) continue;
-        const outcome = await ingestAttachment(svc, {
-          mailbox: mb,
-          route,
-          messageId: id,
-          attachmentKey: stub.key,
-          filename: stub.filename,
-          download: () => gmail.getAttachment(id, stub.attachmentId),
-        });
-        counts[outcome]++;
-      }
-    }
-    latest = laterHistoryId(latest, page.historyId);
-    pageToken = page.nextPageToken || undefined;
-  } while (pageToken);
-
-  await saveSyncState(
-    svc,
-    mb,
-    { gmail_history_id: laterHistoryId(latest, pushedHistoryId), provider: "gmail" },
-    { last_synced_at: now },
-  );
-  return { mailbox_code: mb.mailbox_code, status: "ok", ...counts };
-}
+  DEFAULT_GMAIL_PUSH_BUDGET_MS,
+  isPermanentMailboxError,
+  type MailboxResult,
+  processMailbox,
+} from "./process.ts";
 
 async function handler(req: Request): Promise<Response> {
+  const startedAt = Date.now();
   requireMethod(req, "POST");
   await verifyPushToken(bearerToken(req), {
     audience: Deno.env.get("GMAIL_PUSH_AUDIENCE") ?? "",
     email: Deno.env.get("GMAIL_PUSH_SA_EMAIL") ?? "",
   });
-  const note = decodePubSubEnvelope(await readJson(req));
+
+  let note: PushNotification;
+  try {
+    note = decodePubSubEnvelope(await readJson(req));
+  } catch (e) {
+    // An authenticated but malformed envelope never gets better on redelivery: ack it.
+    if (e instanceof HttpError && e.status === 400) {
+      captureMessage("gmail-push: malformed Pub/Sub envelope acked", {
+        level: "warning",
+        tags: { function: "gmail-push", error_code: e.code },
+        fingerprint: ["gmail-push", "invalid_envelope"],
+      });
+      return json({ status: "ignored", detail: e.code }, 200, req);
+    }
+    throw e;
+  }
+
   const svc = serviceClient();
   const mailboxes = await enabledMailboxes(svc, "gmail", note.emailAddress);
   if (mailboxes.length === 0) return json({ status: "ignored", detail: "no enabled mailbox" }, 200, req);
 
-  const results = [];
-  let failed = 0;
+  const budget = Number(Deno.env.get("GMAIL_PUSH_BUDGET_MS") ?? DEFAULT_GMAIL_PUSH_BUDGET_MS);
+  const deadline = startedAt + (Number.isFinite(budget) && budget > 0 ? budget : DEFAULT_GMAIL_PUSH_BUDGET_MS);
+  const results: (MailboxResult | { mailbox_code: string; status: "failed"; error: string; permanent: boolean })[] = [];
+  let transient = 0;
   for (const mb of mailboxes) {
     try {
-      results.push(await processMailbox(svc, mb, note.historyId));
+      results.push(await processMailbox(svc, mb, note.historyId, { deadline }));
     } catch (e) {
-      failed++;
-      captureException(e, {
-        tags: { function: "gmail-push", mailbox_code: mb.mailbox_code, profile_code: mb.profile_code },
-      });
-      results.push({ mailbox_code: mb.mailbox_code, status: "failed" });
+      const code = mailboxErrorCode(e, "gmail");
+      const permanent = isPermanentMailboxError(e);
+      const tags = { function: "gmail-push", mailbox_code: mb.mailbox_code, profile_code: mb.profile_code };
+      await recordMailboxError(svc, mb, code);
+      if (permanent) {
+        captureMessage(`gmail-push: mailbox needs attention (${code})`, {
+          level: "warning",
+          tags: { ...tags, error_code: code },
+          fingerprint: ["gmail-push", "permanent", code],
+        });
+      } else {
+        transient++;
+        captureException(e, { tags });
+      }
+      results.push({ mailbox_code: mb.mailbox_code, status: "failed", error: code, permanent });
     }
   }
-  // 500 makes Pub/Sub redeliver; processing is idempotent and the cursor didn't move.
-  return json({ status: failed ? "partial_failure" : "ok", results }, failed ? 500 : 200, req);
+  const exhausted = results.some((r) => r.status === "budget_exhausted");
+  const status = transient ? 500 : exhausted ? 503 : 200;
+  const summary = transient ? "partial_failure" : exhausted ? "budget_exhausted" : "ok";
+  return json({ status: summary, results }, status, req);
 }
 
 Deno.serve(withSentry("gmail-push", handler));

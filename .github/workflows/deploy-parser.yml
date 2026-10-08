@@ -14,9 +14,9 @@ name: Deploy Parser
 # from main with "deploy" typed as confirmation. The repository variable
 # AUTO_DEPLOY=false turns push runs off (manual still works).
 #
-# GCP auth: Workload Identity Federation when the repository variables
-# GCP_WIF_PROVIDER and GCP_DEPLOY_SA are set (preferred; no key to leak),
-# otherwise the GCP_SA_KEY secret. One-time setup in docs/ci-cd.md.
+# GCP auth: Workload Identity Federation only (repository variables
+# GCP_WIF_PROVIDER and GCP_DEPLOY_SA; no service-account key exists anywhere).
+# One-time setup in docs/ci-cd.md §5.
 # Secret SUPABASE_PROJECT_REF feeds PARSER_ALLOWED_HOSTS. Runtime secrets live
 # in Secret Manager (parser-secret, parser-sentry-dsn; PRODUCTION.md §3).
 
@@ -111,31 +111,23 @@ jobs:
       PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
       WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
       DEPLOY_SA: ${{ vars.GCP_DEPLOY_SA }}
-      HAS_SA_KEY: ${{ secrets.GCP_SA_KEY != '' }}
     steps:
       - name: Verify configuration
         run: |
           if [ -z "$PROJECT_REF" ]; then
             echo "::error::Secret SUPABASE_PROJECT_REF is not set on the production environment (docs/ci-cd.md)"; exit 1
           fi
-          if [ -z "$WIF_PROVIDER" ] && [ "$HAS_SA_KEY" != "true" ]; then
-            echo "::error::Set GCP_WIF_PROVIDER + GCP_DEPLOY_SA (variables) or GCP_SA_KEY (secret); see docs/ci-cd.md"; exit 1
+          if [ -z "$WIF_PROVIDER" ] || [ -z "$DEPLOY_SA" ]; then
+            echo "::error::Set the repository variables GCP_WIF_PROVIDER and GCP_DEPLOY_SA (docs/ci-cd.md §5)"; exit 1
           fi
 
       - uses: actions/checkout@v4
 
       - name: Authenticate to GCP (Workload Identity Federation)
-        if: env.WIF_PROVIDER != ''
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ env.WIF_PROVIDER }}
           service_account: ${{ env.DEPLOY_SA }}
-
-      - name: Authenticate to GCP (service-account key fallback)
-        if: env.WIF_PROVIDER == ''
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
 
       - uses: google-github-actions/setup-gcloud@v2
 

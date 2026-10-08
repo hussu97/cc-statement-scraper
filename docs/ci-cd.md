@@ -31,6 +31,7 @@ TestFlight by a Linux runner).
 | `web-smoke.yml` | Vercel's Production `deployment_status` = success; daily 05:17 UTC; manual (any URL) | `scripts/ci/web-smoke.sh` against https://<web-host>. Does not deploy. |
 | `ios-testflight.yml` | push to `main` touching `apps/ios/**` except `build-number.json` / `*.md`; manual | Linux only: verify the staged IPA matches this source → upload to App Store Connect → `testflight-distribute.mjs` to "Friends & Family". |
 | `security.yml` | Mondays 03:00 UTC; manual | pip-audit + bandit on the parser. |
+| `ios-build.yml` | Mondays 04:23 UTC; PRs and pushes to `main` touching `apps/ios/**` (not docs or `build-number.json`) or `packages/tokens/**`; manual | `xcodegen generate` → `xcodebuild build` of the app and share extension for the simulator, unsigned (`CODE_SIGNING_ALLOWED=NO`), no secrets. macOS (10x), hence not per push. Not part of `ci-ok`. |
 
 Deleted with the legacy code: `deploy-backend.yml`, `deploy-frontend.yml`,
 `deploy-gmail-relay.yml`, `email-ingest-microsoft.yml`, and the legacy jobs in `ci.yml` and
@@ -43,7 +44,7 @@ Deleted with the legacy code: `deploy-backend.yml`, `deploy-frontend.yml`,
 |---|---|---|---|
 | `tooling` | `.github/workflows/**`, `scripts/hooks/**`, `scripts/ci/**`, `scripts/install-hooks.sh`, `scripts/cutover/*.sh`, `apps/ios/scripts/*.sh` | actionlint (incl. shellcheck of `run:` blocks), shellcheck | Linux |
 | `supabase` | `supabase/migrations|tests/**`, `seed.sql`, `config.toml`, `packages/db-types/**`, `check-migrations.sh` | append-only check vs PR base / previous `main` (only if migrations changed) → `supabase start` → `db reset` → `test db` (pgTAP) → types drift vs `packages/db-types` | Linux |
-| `edge` | `supabase/functions/**`, `config.toml` | `deno lint` → `deno fmt --check` → `deno test -A` | Linux |
+| `edge` | `supabase/functions/**`, `config.toml` | `deno lint` → `deno fmt --check` → `deno check --frozen` → `deno test --frozen -A` (the frozen `deno.lock` must match the sources) | Linux |
 | `parser` | `services/parser/**`, `docs/contracts/**` | uv venv → `ruff check` → `pytest` | Linux |
 | `web` | `apps/web/**`, `packages/**`, root `package.json`, lockfile, workspace | tokens check → lint → typecheck → test → build | Linux |
 | `scraper` | `scraper/**` | uv venv → `pytest` | Linux |
@@ -54,12 +55,13 @@ Editing `ci.yml` itself re-runs every Linux job. A manual run runs every Linux j
 when asked.
 
 **Caching:** pnpm store (`setup-node cache: pnpm`), uv (`setup-uv enable-cache`, keyed on the
-requirements/pyproject), Deno (`setup-deno cache: true`, keyed on the function sources), SwiftPM
+requirements/pyproject), Deno (`setup-deno cache: true`, keyed on `deno.lock`), SwiftPM
 (`.build` + `~/Library/Caches/org.swift.swiftpm`, keyed on `Package.resolved`), Docker layers
 for the parser image (`type=gha`).
 
 **Cost:** everything is Linux except the `ios` job, which only runs when LedgerKit or tokens
-change. The pre-push hook already ran the same `swift test` locally for free.
+change, and `ios-build.yml` (app + extension compile), which runs weekly and on app changes.
+The pre-push hook already ran the same `swift test` locally for free.
 
 ---
 
@@ -78,7 +80,7 @@ still deploys.
 1. Merge/push to `main` with a change under `supabase/`.
 2. `plan` decides: migrations changed → `db push`; function sources/config changed →
    `functions deploy`. (A change to only the workflow file plans a migrations dry run.)
-3. `test`: fresh local stack, migrations from scratch, pgTAP; `deno lint` + `deno test`.
+3. `test`: fresh local stack, migrations from scratch, pgTAP; `deno lint` + `deno check --frozen` + `deno test --frozen` (a lock that no longer matches stops the deploy).
 4. `deploy` waits for approval on `production`, then:
    - `supabase link`
    - **History check** (`scripts/ci/check-migrations.sh remote linked`): fails if a migration
@@ -113,7 +115,7 @@ in pre-push (against `origin/main`) and in pre-commit (staged edits to files on 
 
 1. Push to `main` with a change under `services/parser/` (or dispatch with `deploy`).
 2. `test`: ruff + pytest.
-3. `deploy` (approval on `production`): auth (WIF or key), build + push
+3. `deploy` (approval on `production`): auth (Workload Identity Federation only), build + push
    `me-central1-docker.pkg.dev/<gcp-project>/ledger/ccs-parser:<sha7>`, then
    `gcloud run deploy --no-traffic --tag sha-<sha7>` with the same flags as PRODUCTION.md §3.
 4. Smoke the **tag URL** `/health`: `status == ok` and `parser_version` equals
@@ -133,10 +135,13 @@ gcloud run services update-traffic ccs-parser --project <gcp-project> \
 **Decision: keep Vercel's Git integration; add a post-deploy smoke test, not a CLI deploy.**
 
 - Vercel already builds Production from every `main` push (project `cc-statement-scraper`,
-  root `apps/web`) and a Preview for every PR. A CLI deploy workflow on top would
-  double-deploy; replacing the integration would cost the free PR previews, add a
-  `VERCEL_TOKEN` with account-wide scope to GitHub, and duplicate the build environment
-  (`VITE_*`, `SENTRY_*`) that already lives in Vercel.
+  root `apps/web`). A CLI deploy workflow on top would double-deploy; replacing the
+  integration would add a `VERCEL_TOKEN` with account-wide scope to GitHub and duplicate the
+  build environment (`VITE_*`, `SENTRY_*`) that already lives in Vercel.
+- **Preview deployments are off** (decision, audit X-32): a preview would run unreviewed
+  branch code against the production Supabase project with the production CSP, and its auth
+  redirects aren't allow-listed. Set in Vercel → Settings → Git → Ignored Build Step ("Only
+  build production"); PRODUCTION.md §4 has the rationale. PRs are checked by `ci.yml` → `web`.
 - What the integration lacks is a check that what it shipped works. Vercel reports each
   deployment back to GitHub as a Deployment; `web-smoke.yml` runs on the Production one's
   `success` and checks the production URL: `/` is 200 with `<title>Bank Ledger</title>`, the CSP
@@ -233,7 +238,6 @@ Repository: `hussu97/cc-statement-scraper`. Names only; values never go in the r
 | `SUPABASE_PROJECT_REF` | secret | env `production` | deploy-supabase, deploy-parser | `<project-ref>` |
 | `GCP_WIF_PROVIDER` | variable | repo | deploy-parser | `projects/<number>/locations/global/workloadIdentityPools/github/providers/github-oidc` (§5) |
 | `GCP_DEPLOY_SA` | variable | repo | deploy-parser | `github-deployer@<gcp-project>.iam.gserviceaccount.com` (§5) |
-| `GCP_SA_KEY` | secret | env `production` | deploy-parser | **fallback only**, when WIF isn't set up: deployer SA JSON key |
 | `GCP_PROJECT_ID` | variable | repo | deploy-parser | optional; defaults to `<gcp-project>` |
 | `ASC_KEY_ID` | secret | repo or env `testflight` | ios-testflight | App Store Connect → Users and Access → Integrations → key id (same key as another app) |
 | `ASC_ISSUER_ID` | secret | repo or env `testflight` | ios-testflight | issuer id on the same page |
@@ -260,8 +264,6 @@ gh secret set SUPABASE_PROJECT_REF  -R $R --env production --body <project-ref>
 # GCP via WIF (after §5)
 gh variable set GCP_WIF_PROVIDER -R $R --body "projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/github/providers/github-oidc"
 gh variable set GCP_DEPLOY_SA    -R $R --body "github-deployer@<gcp-project>.iam.gserviceaccount.com"
-# …or the fallback key:
-# gh secret set GCP_SA_KEY -R $R --env production < deployer-key.json && rm deployer-key.json
 
 # App Store Connect (same key as another app)
 gh secret set ASC_KEY_ID    -R $R --body '<key id>'
@@ -292,7 +294,7 @@ protection are not available.
 | `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8` | env `testflight` | set (same key as another app) |
 | `GCP_WIF_PROVIDER`, `GCP_DEPLOY_SA`, `GCP_PROJECT_ID`, `AUTO_DEPLOY` (`true`) | repo variables | set |
 | `LEGACY_DEPLOYS_ENABLED` | repo variable | absent |
-| Legacy repo secrets (`CCS_*`, `GCP_PROJECT_ID`, `GCP_SA_KEY`, `RENDER_DEPLOY_HOOK`, `VERCEL_DEPLOY_HOOK`) | repo | still present; unused by v2 (WIF wins over `GCP_SA_KEY`) |
+| Legacy repo secrets (`CCS_*`, `GCP_PROJECT_ID`, `RENDER_DEPLOY_HOOK`, `VERCEL_DEPLOY_HOOK`) | repo | still present; unused by v2. `GCP_SA_KEY` was **deleted** (2026-10-09): `deploy-parser` authenticates with WIF only |
 | WIF pool `github`, provider `github-oidc` | GCP | created; condition: this repo and environment `production` or `Production` (the claim may carry the stored capitalisation) |
 | `github-deployer@` SA, no keys | GCP | `run.admin` on service `ccs-parser`, `artifactregistry.writer` on repo `ledger`, `iam.serviceAccountUser` on `ccs-parser@`, `workloadIdentityUser` for the repo principalSet |
 | Artifact Registry repo `ledger` (me-central1) | GCP | created |
@@ -338,8 +340,8 @@ echo "GCP_WIF_PROVIDER=projects/$PROJECT_NUMBER/locations/global/workloadIdentit
 echo "GCP_DEPLOY_SA=$SA"
 ```
 
-Then set the two variables (§4) and delete `GCP_SA_KEY` if it exists (and the key itself:
-`gcloud iam service-accounts keys list/delete`). The Artifact Registry repo `ledger` and the
+Then set the two variables (§4). There is no service-account key: `deploy-parser` is WIF-only and
+the repo secret `GCP_SA_KEY` has been deleted (check `gcloud iam service-accounts keys list --iam-account $SA` shows only system-managed keys). The Artifact Registry repo `ledger` and the
 runtime SA `ccs-parser@` come from PRODUCTION.md §3.
 
 ---
@@ -382,3 +384,8 @@ the gates.
 - `supabase/config.toml` changes (auth settings etc.) are not pushed by any workflow; apply
   them in the dashboard or with `supabase config push` deliberately.
 - The scraper is not deployed (it runs on a laptop); CI only tests it.
+- **Edge dependency lock.** `supabase/functions/deno.json` freezes `deno.lock`, and the edge runtime
+  bundles with it. After changing an import in `_shared/deps.ts` (or a test import), refresh the lock
+  in the same commit: `cd supabase/functions && deno check --frozen=false . && deno test --frozen=false -A .`.
+  CI, pre-push and the deploy job fail on a stale lock. `supabase functions deploy` has no
+  `--frozen` flag, so the deploy job's frozen `deno check` is the gate.

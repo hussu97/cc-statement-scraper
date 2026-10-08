@@ -4,8 +4,12 @@
 // Ordering matters: the documents INSERT trigger enqueues `parse_document`, so the
 // object must already be in Storage when the row appears. We therefore reserve a
 // doc_code with gen_code('doc'), upload to <profile_code>/<doc_code>.pdf, then insert.
+//
+// Validation happens once, in prepareDocument (SRV-23); storeDocument only accepts a
+// PreparedDocument, so nothing can be stored unvalidated.
 
 import { HttpError, pgErrorToHttp } from "./http.ts";
+import { captureMessage } from "./sentry.ts";
 import type { Db } from "./supabase.ts";
 
 export const MAX_PDF_BYTES = 25 * 1024 * 1024; // matches the `statements` bucket limit
@@ -48,47 +52,102 @@ export function validatePdf(bytes: Uint8Array, filename: string): void {
   if (!isPdf(bytes)) throw new HttpError(422, "NOT_A_PDF", `${filename} is not a PDF`);
 }
 
+/** A validated, hashed PDF ready to store. */
+export interface PreparedDocument {
+  filename: string;
+  bytes: Uint8Array;
+  sha256: string;
+}
+
+/** Sanitise the name, validate the bytes (413/422 HttpErrors) and hash them. */
+export async function prepareDocument(
+  bytes: Uint8Array,
+  name: string | null | undefined,
+): Promise<PreparedDocument> {
+  const filename = sanitizeFilename(name);
+  validatePdf(bytes, filename);
+  return { filename, bytes, sha256: await sha256Hex(bytes) };
+}
+
 export interface StoreInput {
   profileCode: string;
-  bytes: Uint8Array;
-  filename: string;
+  document: PreparedDocument;
   source: DocumentSource;
   sourceRef?: string | null;
   bankCodeHint?: string | null;
 }
 
+export type ParseStatus = "queued" | "parsing" | "parsed" | "failed";
+
 export interface StoreResult {
   status: "queued" | "duplicate";
   doc_code: string;
   sha256: string;
+  /** The document's parse status after this call (a requeued duplicate is `queued`). */
+  parse_status: ParseStatus;
+  /** True when a duplicate of a failed document was queued for parsing again (SRV-20). */
+  requeued?: boolean;
 }
 
-async function findBySha(svc: Db, profileCode: string, sha: string): Promise<string | null> {
+interface ExistingDoc {
+  doc_code: string;
+  parse_status: ParseStatus;
+}
+
+async function findBySha(svc: Db, profileCode: string, sha: string): Promise<ExistingDoc | null> {
   const { data, error } = await svc
     .from("documents")
-    .select("doc_code")
+    .select("doc_code, parse_status")
     .eq("profile_code", profileCode)
     .eq("sha256", sha)
     .maybeSingle();
   if (error) throw pgErrorToHttp(error, "document lookup failed");
-  return data?.doc_code ?? null;
+  return data ? { doc_code: String(data.doc_code), parse_status: data.parse_status as ParseStatus } : null;
 }
 
-/** Validate, dedupe and store one PDF. Uses the service-role client (caller already authorised). */
+/**
+ * SRV-20: re-sending a PDF whose parse failed (for example before its password was set)
+ * queues it again (`resubmit_document`) instead of answering a bare `duplicate`. A
+ * failed resubmit is reported, not thrown: the upload itself succeeded, and the owner
+ * can still requeue by hand.
+ */
+async function duplicateResult(svc: Db, profileCode: string, doc: ExistingDoc, sha: string): Promise<StoreResult> {
+  const base: StoreResult = {
+    status: "duplicate",
+    doc_code: doc.doc_code,
+    sha256: sha,
+    parse_status: doc.parse_status,
+  };
+  if (doc.parse_status !== "failed") return base;
+  const { data, error } = await svc.rpc("resubmit_document", {
+    p_profile_code: profileCode,
+    p_doc_code: doc.doc_code,
+  });
+  const r = (data ?? {}) as { parse_status?: unknown; requeued?: unknown };
+  if (error || typeof r.parse_status !== "string") {
+    captureMessage("could not resubmit a re-sent failed document", {
+      level: "warning",
+      tags: { profile_code: profileCode, doc_code: doc.doc_code, sqlstate: error?.code },
+      fingerprint: ["documents", "resubmit_failed_duplicate"],
+    });
+    return base;
+  }
+  return { ...base, parse_status: r.parse_status as ParseStatus, ...(r.requeued === true ? { requeued: true } : {}) };
+}
+
+/** Dedupe and store one prepared PDF. Uses the service-role client (caller already authorised). */
 export async function storeDocument(svc: Db, input: StoreInput): Promise<StoreResult> {
-  const filename = sanitizeFilename(input.filename);
-  validatePdf(input.bytes, filename);
-  const sha = await sha256Hex(input.bytes);
+  const { filename, bytes, sha256: sha } = input.document;
 
   const existing = await findBySha(svc, input.profileCode, sha);
-  if (existing) return { status: "duplicate", doc_code: existing, sha256: sha };
+  if (existing) return await duplicateResult(svc, input.profileCode, existing, sha);
 
   const { data: docCode, error: codeErr } = await svc.rpc("gen_code", { prefix: "doc" });
   if (codeErr || typeof docCode !== "string") throw pgErrorToHttp(codeErr, "could not allocate doc_code");
   const path = `${input.profileCode}/${docCode}.pdf`;
 
   const bucket = svc.storage.from("statements");
-  const up = await bucket.upload(path, input.bytes, { contentType: "application/pdf", upsert: false });
+  const up = await bucket.upload(path, bytes, { contentType: "application/pdf", upsert: false });
   if (up.error) throw new HttpError(502, "STORAGE_UPLOAD_FAILED", "could not store the PDF");
 
   const { error: insErr } = await svc.from("documents").insert({
@@ -98,7 +157,7 @@ export async function storeDocument(svc: Db, input: StoreInput): Promise<StoreRe
     storage_path: path,
     original_filename: filename,
     sha256: sha,
-    size_bytes: input.bytes.length,
+    size_bytes: bytes.length,
     source: input.source,
     source_ref: input.sourceRef ?? null,
   });
@@ -107,11 +166,11 @@ export async function storeDocument(svc: Db, input: StoreInput): Promise<StoreRe
     if (insErr.code === "23505") {
       // Lost a race with a concurrent upload of the same file.
       const winner = await findBySha(svc, input.profileCode, sha);
-      if (winner) return { status: "duplicate", doc_code: winner, sha256: sha };
+      if (winner) return await duplicateResult(svc, input.profileCode, winner, sha);
     }
     throw pgErrorToHttp(insErr, "could not record the document");
   }
-  return { status: "queued", doc_code: docCode, sha256: sha };
+  return { status: "queued", doc_code: docCode, sha256: sha, parse_status: "queued" };
 }
 
 /** Normalise a bank hint and check it exists in `banks`. Returns null for empty hints. */

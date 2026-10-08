@@ -176,7 +176,9 @@ jobs:
         run: supabase stop --no-backup
 
   # ------------------------------------------------------------------
-  # Edge Functions: deno lint + deno fmt --check + unit tests (type-checked)
+  # Edge Functions: deno lint + deno fmt --check + deno check + unit tests.
+  # deno.json sets the lock to frozen, so every step also fails if
+  # supabase/functions/deno.lock doesn't match the dependency graph.
   # ------------------------------------------------------------------
   edge:
     name: Edge Functions (deno)
@@ -194,7 +196,7 @@ jobs:
         with:
           deno-version: v2.x
           cache: true
-          cache-hash: ${{ hashFiles('supabase/functions/**/*.ts', 'supabase/functions/deno.json') }}
+          cache-hash: ${{ hashFiles('supabase/functions/deno.lock', 'supabase/functions/deno.json') }}
 
       - name: deno lint
         run: deno lint
@@ -202,8 +204,11 @@ jobs:
       - name: deno fmt --check
         run: deno fmt --check
 
+      - name: deno check (frozen lock)
+        run: deno check --frozen .
+
       - name: deno test
-        run: deno test -A .
+        run: deno test --frozen -A .
 
   # ------------------------------------------------------------------
   # Parser: ruff + pytest (golden parity skips without the private PDFs)

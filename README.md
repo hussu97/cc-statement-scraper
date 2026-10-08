@@ -117,7 +117,7 @@ Docker Desktop forwards `host.docker.internal` to the Mac's loopback. On Linux, 
 
 ### 3. Edge Functions
 
-Create `supabase/functions/.env` (gitignored):
+Create `supabase/functions/.env` (gitignored; `supabase/functions/.env.example` lists every key, names only):
 
 ```dotenv
 CRON_SECRET=<random string, same as the edge_cron_secret Vault value>
@@ -186,13 +186,13 @@ Create a service token in web Settings → Sources & health → Tokens, or with
 
 | Component | Command |
 |---|---|
-| Database (pgTAP: RLS guards, matching, categorisation, recon, analytics, SMS templates, FX, legacy import, cross-profile isolation, ingest robustness, review actions, client privilege matrix, re-parse relink, the 2026-10-09 P2/P3 fixes (`13`–`18`); hermetic, so they also pass on a non-empty local DB) | `supabase db reset && supabase test db` |
+| Database (pgTAP: RLS guards, matching, categorisation, recon, analytics, SMS templates, FX, legacy import, cross-profile isolation, ingest robustness, review actions, client privilege matrix, re-parse relink, the 2026-10-09 P2/P3 fixes (`13`–`19`); hermetic, so they also pass on a non-empty local DB) | `supabase db reset && supabase test db` |
 | DB types drift | `pnpm db:types:check` (regenerate with `pnpm db:types`) |
-| Edge Functions | `cd supabase/functions && deno test -A .` (the local e2e runs only with `LEDGER_E2E=1` and a served stack) |
+| Edge Functions | `cd supabase/functions && deno lint && deno fmt --check && deno check . && deno test -A .` (the lock `deno.lock` is frozen; the local e2e runs only with `LEDGER_E2E=1` and a served stack) |
 | Parser | `cd services/parser && .venv/bin/ruff check . && .venv/bin/pytest -q` (golden parity needs private PDFs; skipped otherwise) |
 | Web | `pnpm web:test`, `pnpm --filter @ledger/web lint`, `pnpm web:build` |
 | Tokens | `pnpm --filter @ledger/tokens check` (fails if the committed `Tokens.swift` drifts from `tokens.json`; the gitignored `dist/` is regenerated in memory only, so it works from a clean clone) |
-| iOS | `cd apps/ios/LedgerKit && swift test` |
+| iOS | `cd apps/ios/LedgerKit && swift test`; app + share extension compile: `cd apps/ios && xcodegen generate && xcodebuild build -project Ledger.xcodeproj -scheme Ledger -destination "generic/platform=iOS Simulator" CODE_SIGNING_ALLOWED=NO` (CI: `ios-build.yml`, weekly and on app changes) |
 | Scraper | `cd scraper && .venv/bin/pytest -q` |
 
 `bash scripts/install-hooks.sh` (or `pnpm hooks:install`) installs the git hooks; details in
@@ -201,7 +201,7 @@ Create a service token in web Settings → Sources & health → Tokens, or with
   profiles), append-only migrations, eslint / `deno lint` / ruff / shellcheck / actionlint on
   the staged files.
 - **pre-push (full CI mirror for the changed areas):** the same lint, typecheck, test and build
-  steps as `ci.yml` (incl. `deno fmt --check`; pgTAP only when the local stack runs), then on a
+  steps as `ci.yml` (incl. `deno fmt --check` and `deno check`; pgTAP only when the local stack runs), then on a
   `main` push that changes the iOS app it builds and stages the TestFlight IPA.
   `SKIP_PRE_PUSH=1 git push` skips it; `SKIP_RELEASE=1 git push` skips only the iOS release.
   By hand: `pnpm check`, `pnpm check:all`, `pnpm check:plan`.
@@ -253,8 +253,10 @@ JWTs. The service client logs which source it used (never the value).
 | `MS_OAUTH_TENANT` | outlook-poll | `consumers` | Azure tenant |
 | `OUTLOOK_LOOKBACK_DAYS` | outlook-poll | `90` | First delta window |
 | `OUTLOOK_BUDGET_MS` | outlook-poll | `100000` | Time budget per run (resumes next run) |
+| `GMAIL_PUSH_BUDGET_MS` | gmail-push | `100000` | Time budget per push; the rest continues on the redelivery (503) |
 | `OPS_SMS_UNPARSED_THRESHOLD` | ops-monitor | `5` | Unparsed SMS per 24 h before an issue |
 | `OPS_OPEN_REVIEWS_THRESHOLD` | ops-monitor | `50` | Open reviews before an issue |
+| `OPS_QUEUED_DOCUMENT_AGE_S` | ops-monitor | `10800` | Age (s) of the oldest `queued` document before a backlog warning |
 | `ALLOWED_ORIGINS` | all (CORS) | any | Comma-separated allowed origins |
 | `SENTRY_DSN` | all | — | Sentry `credit-card-ledger-backend` DSN (empty disables Sentry) |
 | `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE` | all | `local`, — | Sentry environment and release. Unset, `local`, `development` and `test` disable Sentry even with a DSN; production sets `production` |
@@ -350,9 +352,10 @@ Used for the production Edge Function secrets and Vault entries, and for secret 
 
 | Function | Method | Auth | Purpose |
 |---|---|---|---|
-| `statements-upload` | POST multipart (`files`, `bank_code_hint`, `profile_code`); ≤ 20 files and ≤ 40 MB per request | Service token `statements:upload` (+ `X-Profile-Key`) or user JWT (owner) | Store PDFs, dedup, queue parsing |
+| `statements-upload` | POST multipart (`files`, `bank_code_hint`, `profile_code`); ≤ 20 files and ≤ 40 MB per request | Service token `statements:upload` (+ `X-Profile-Key`) or user JWT (owner) | Store PDFs, dedup, queue parsing. Each result has `status` (`queued`/`duplicate`), `parse_status` and, when a failed duplicate was queued again, `requeued: true` |
 | `sms-ingest` | POST JSON `{profile_code?, messages[≤200]}` | User JWT or service token `sms:ingest` | Batch SMS ingest (idempotent on `client_msg_id`) |
-| `gmail-push` | POST (Pub/Sub envelope) | Google OIDC token | Gmail notifications → documents |
+| `gmail-push` | POST (Pub/Sub envelope) | Google OIDC token | Gmail notifications → documents (200 done or permanent failure acked, 503 budget used up, 500 transient: Pub/Sub redelivers) |
+| `member-invite` | POST JSON `{profile_code, email, role?, action?, redirect_to?}` (`action`: `invite` or `resend`) | User JWT (owner) | Add a member and send the Auth invite email (sign-ups are off), or resend it. `redirect_to` must be on the caller's own origin |
 | `worker`, `gmail-watch-renew`, `outlook-poll`, `ops-monitor`, `fx-rates` | POST | `x-cron-secret` | pg_cron-driven jobs |
 
 ### RPCs (`supabase.rpc(...)`, PostgREST)

@@ -112,6 +112,9 @@ export async function processLlmCategorize(svc: Db, msg: QueueMessage): Promise<
       p_suggestions: suggestions,
       p_model: llmModel(),
       p_category_set_hash: ctx.category_set_hash,
+      // The batch asked about: merchants the model declined are recorded per category set
+      // (merchant_category_skips) and not re-enqueued every night (DB-37).
+      p_merchant_codes: merchantCodes,
     });
     if (applyErr) throw new Error(`apply_llm_suggestions failed (${applyErr.code})`);
     await queueDelete(svc, LLM_QUEUE, msg.msg_id);
@@ -175,7 +178,9 @@ export async function processSmsFallback(svc: Db, msg: QueueMessage): Promise<Jo
   const { error: propErr } = await svc.rpc("propose_sms_template", { p_sms_code: smsCode, p_template: proposal });
   if (propErr) {
     // The DB validates the template against this very message; its error text quotes
-    // the SMS, so only the SQLSTATE is ever recorded.
+    // the SMS, so only the SQLSTATE is ever recorded. 22023 includes "the sender is not
+    // one of the bank's senders" (the DB ignores the model's sender regex): retrying the
+    // same message can never succeed, so these dead-letter once.
     const code = `PROPOSE_${propErr.code ?? "ERROR"}`;
     const reason = `propose_sms_template sqlstate ${propErr.code ?? "unknown"}`;
     if (["22023", "23503", "23514", "2201B", "22P02"].includes(propErr.code ?? "")) {

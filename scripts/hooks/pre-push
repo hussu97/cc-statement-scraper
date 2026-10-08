@@ -187,6 +187,7 @@ if want edge; then
   if have deno; then
     run_check "deno lint" bash -c 'cd supabase/functions && deno lint -q'
     run_check "deno fmt --check" bash -c 'cd supabase/functions && deno fmt --check -q'
+    run_check "deno check" bash -c 'cd supabase/functions && deno check --frozen -q .'
     run_check "deno test" bash -c 'cd supabase/functions && deno test -A -q .'
   else
     skip "Edge Functions" "deno not found (brew install deno)"

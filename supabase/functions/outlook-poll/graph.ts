@@ -1,6 +1,6 @@
 // Microsoft Graph helpers for outlook-poll (port of backend/scripts/email_ingest_microsoft.py).
 
-import { ProviderHttpError } from "../_shared/gmail.ts";
+import { decodeBase64Any, ProviderHttpError } from "../_shared/provider.ts";
 import { isPdfAttachment } from "../_shared/email_routes.ts";
 
 export const GRAPH = "https://graph.microsoft.com/v1.0";
@@ -21,6 +21,7 @@ export interface GraphAttachment {
   contentType?: string;
   isInline?: boolean;
   contentBytes?: string;
+  size?: number;
 }
 
 /** sync_state key for a folder's delta cursor (same keys as the legacy script). */
@@ -95,9 +96,6 @@ export class GraphClient {
     const doc = await this.get(
       `${GRAPH}/me/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`,
     );
-    const b64 = String(doc.contentBytes ?? "");
-    if (!b64) return new Uint8Array();
-    const bin = atob(b64);
-    return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+    return decodeBase64Any(String(doc.contentBytes ?? ""));
   }
 }
