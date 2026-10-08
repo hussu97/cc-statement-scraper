@@ -19,6 +19,11 @@
 - **chore** `PARSER_VERSION` / `pyproject.toml` 2026.10.3 (new synthetic case)
 - **test** `test_sib_parser.py` (replacement-card history, two card sections in one export, lower-case masked statement card, mask variants); synthetic golden `sib_history_new_card` (card 3333 on every line and cycle)
 
+### Scraper
+
+- **fix** SIB: after a card is replaced the portal lists the old card next to the new one, and the adapter clicked the best "credit card" match, i.e. the first (retired) card, so new transactions never arrived (SIB data stopped on 2026-08-10). The adapter now reads the masked card numbers in the Credit Card section (shadow roots included) and exports each card in turn (`SIB_CARD_LAST4S` / `card_last4s` picks them), choosing the card by its masked number in the section and again in the E-statement popup (native `<select>` or the most specific element). No card choice on the page keeps the single-card flow. Every new wait has its `SIB: waiting …` log line; download diagnostics carry `cards` and each entry's `card_last4`
+- **test** `test_sib_cards.py`: masked-number reading, config parsing, one export per card with tagged diagnostics, the single-card fallback, and an AST guard that every SIB `wait_for_timeout` ≥ 700 ms, `expect_download` and `sleep` is preceded by a `logger.info("SIB: waiting …")` (CLAUDE.md §7)
+
 ### Docs
 
 - ARCHITECTURE §3 (`banks.logo_path`, `bank-logos` bucket, `document_events`), §4 (document timeline), §6 (`statement_detail`, `spend_breakdown` shapes), §7 (Realtime); README Edge and RPC tables; PRODUCTION §2.3 (destructive flag), §2.6 (nightly purge), §11 (uploading the logos)

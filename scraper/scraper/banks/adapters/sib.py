@@ -86,6 +86,141 @@ def _latest_new_pdf(before: dict[Path, int], directory: Path) -> Path | None:
     return max(candidates, key=lambda p: p.stat().st_mtime_ns)
 
 
+# ── cards ────────────────────────────────────────────────────────────────────
+# A replaced card stays listed in the portal next to its successor, and the old flow
+# clicked the best "credit card" match: the first card, i.e. the retired one. The portal
+# shows card numbers masked ("5290 xxxx xxxx 9218"); we read the last four from that text,
+# export each wanted card in turn, and the parser reads the card from the PDF itself.
+
+_MASKED_CARD_RE = re.compile(
+    r"(?<!\d)(?:\d{4}[\s-]*)?(?:\d{2}[xX*•]{2}|[xX*•]{4})[\s-]*[xX*•]{4}[\s-]*(\d{4})(?!\d)"
+)
+
+
+def card_last4s_in_text(text: str) -> list[str]:
+    """The last four digits of every masked card number in ``text``, in order, de-duplicated."""
+    seen: list[str] = []
+    for match in _MASKED_CARD_RE.finditer(text or ""):
+        if match.group(1) not in seen:
+            seen.append(match.group(1))
+    return seen
+
+
+def parse_card_last4s(value: Any) -> list[str]:
+    """``SIB_CARD_LAST4S`` / ``card_last4s`` config: "4821,9218", ["4821"], 4821 → ["4821", ...]."""
+    if value is None:
+        return []
+    items = value if isinstance(value, list) else re.split(r"[\s,;]+", str(value))
+    out: list[str] = []
+    for item in items:
+        token = str(item or "").strip()
+        if re.fullmatch(r"\d{4}", token) and token not in out:
+            out.append(token)
+    return out
+
+
+def wanted_card_last4s(discovered: list[str], configured: list[str]) -> list[str]:
+    """Which cards to export. Configured cards (in their order) when set, else every card the
+    portal lists. An empty result means the page offers no card choice: the single-card flow."""
+    if configured:
+        return list(configured)
+    return list(discovered)
+
+
+def _configured_card_last4s(bank_cfg: dict) -> list[str]:
+    return parse_card_last4s(bank_cfg.get("card_last4s") or os.environ.get("SIB_CARD_LAST4S"))
+
+
+def _page_text_with_shadow(page: Any) -> str:
+    """Body text plus the text of every open shadow root (the portal is built from web components)."""
+    try:
+        return str(
+            page.evaluate(
+                """
+                () => {
+                  const parts = [document.body ? document.body.innerText : ''];
+                  const walk = (root) => {
+                    for (const el of root.querySelectorAll('*')) {
+                      if (el.shadowRoot) {
+                        parts.push(el.shadowRoot.textContent || '');
+                        walk(el.shadowRoot);
+                      }
+                    }
+                  };
+                  walk(document);
+                  return parts.join('\\n');
+                }
+                """
+            )
+            or ""
+        )
+    except Exception:  # noqa: BLE001
+        return text_snapshot(page)
+
+
+def _discover_card_last4s(page: Any, logger: logging.Logger) -> list[str]:
+    """The credit cards listed in the Credit Card section (not the dashboard, which may also
+    show debit cards). None found keeps the single-card flow."""
+    found: list[str] = []
+    if _click_shadow_best_match(page, ["credit card"], logger, action_name="Credit Card"):
+        logger.info("SIB: waiting 800ms — Credit Card section clicked; reading the listed cards")
+        page.wait_for_timeout(800)
+        found = card_last4s_in_text(_page_text_with_shadow(page))
+    logger.info("SIB: credit cards listed in the portal: %s", ", ".join(found) if found else "none shown")
+    return found
+
+
+def _select_card(page: Any, last4: str, logger: logging.Logger) -> bool:
+    """Pick the card ending ``last4``: a native <select> option, else the most specific visible
+    element (shortest text) showing that masked number. Walks open shadow roots."""
+    result = page.evaluate(
+        """
+        (last4) => {
+          const masked = new RegExp('(?:\\\\d{2}[xX*•]{2}|[xX*•]{4})[\\\\s-]*[xX*•]{4}[\\\\s-]*' + last4 + '(?!\\\\d)');
+          const norm = (value) => (value || '').toString().replace(/\\s+/g, ' ').trim();
+          const isVisible = (el) => {
+            if (!el || !el.getBoundingClientRect) return false;
+            const style = getComputedStyle(el);
+            if (style.display === 'none' || style.visibility === 'hidden') return false;
+            const rect = el.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0;
+          };
+          const all = [];
+          const walk = (root) => {
+            for (const el of root.querySelectorAll('*')) {
+              all.push(el);
+              if (el.shadowRoot) walk(el.shadowRoot);
+            }
+          };
+          walk(document);
+          for (const select of all.filter((el) => (el.tagName || '').toLowerCase() === 'select' && isVisible(el))) {
+            const option = Array.from(select.options || []).find((opt) => masked.test(norm(opt.textContent)));
+            if (option) {
+              select.value = option.value;
+              select.dispatchEvent(new Event('input', { bubbles: true }));
+              select.dispatchEvent(new Event('change', { bubbles: true }));
+              return 'select';
+            }
+          }
+          let best = null;
+          for (const el of all) {
+            if (!isVisible(el)) continue;
+            const text = norm(el.innerText || el.textContent);
+            if (!text || text.length > 400 || !masked.test(text)) continue;
+            if (!best || text.length < best.len) best = { el, len: text.length };
+          }
+          if (!best) return '';
+          best.el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, composed: true }));
+          return 'click';
+        }
+        """,
+        last4,
+    )
+    if result:
+        logger.info("SIB: selected card ending %s via %s", last4, result)
+    return bool(result)
+
+
 def _click_first_visible(
     page: Any,
     selectors: list[str],
@@ -633,8 +768,11 @@ def _popup_has_download_controls(page: Any) -> bool:
     return "download statement" in low
 
 
-def _open_estatement_popup(page: Any, logger: logging.Logger) -> bool:
+def _open_estatement_popup(page: Any, logger: logging.Logger, card_last4: str | None = None) -> bool:
     if _popup_has_download_controls(page):
+        if card_last4 and _select_card(page, card_last4, logger):
+            logger.info("SIB: waiting 800ms — card ending %s chosen in the E-statement popup", card_last4)
+            page.wait_for_timeout(800)
         return True
 
     for _ in range(10):
@@ -642,6 +780,10 @@ def _open_estatement_popup(page: Any, logger: logging.Logger) -> bool:
         _click_shadow_best_match(page, ["credit card"], logger, action_name="Credit Card")
         logger.info("SIB: waiting 800ms — Credit Card section clicked; allowing E-statement to appear")
         page.wait_for_timeout(800)
+        if card_last4 and _select_card(page, card_last4, logger):
+            # The section lists every card (a replaced one too): open the wanted card first.
+            logger.info("SIB: waiting 800ms — card ending %s chosen; allowing its E-statement to appear", card_last4)
+            page.wait_for_timeout(800)
         clicked_estatement = _click_first_visible(
             page,
             selectors=[
@@ -673,6 +815,9 @@ def _open_estatement_popup(page: Any, logger: logging.Logger) -> bool:
         page.wait_for_timeout(1000)
         if _popup_has_download_controls(page):
             logger.info("SIB: E-statement popup detected")
+            if card_last4 and _select_card(page, card_last4, logger):
+                logger.info("SIB: waiting 800ms — card ending %s chosen in the E-statement popup", card_last4)
+                page.wait_for_timeout(800)
             return True
 
         page.mouse.wheel(0, 450)
@@ -927,6 +1072,7 @@ def _download_requested_months(
     incoming_dir: Path,
     logger: logging.Logger,
     requested_months: list[str],
+    card_last4: str | None = None,
 ) -> tuple[int, dict[str, Any]]:
     diagnostics: dict[str, Any] = {
         "requested_months": requested_months,
@@ -942,7 +1088,7 @@ def _download_requested_months(
             diagnostics["failed"].append({"month": month_token, "reason": "invalid_month_token"})
             continue
 
-        if not _open_estatement_popup(page, logger):
+        if not _open_estatement_popup(page, logger, card_last4):
             diagnostics["failed"].append({"month": month_token, "reason": "estatement_popup_not_opened"})
             continue
 
@@ -983,39 +1129,63 @@ def download_latest_statement(
     if not requested_months and requested_month:
         requested_months = [requested_month]
 
-    if requested_months:
-        downloaded, diagnostics = _download_requested_months(page, incoming_dir, logger, requested_months)
-        bank_cfg["download_diagnostics"] = diagnostics
-        return downloaded
+    # Every card the portal lists (or the configured SIB_CARD_LAST4S / card_last4s), one
+    # export each; no card choice on the page keeps the single-card flow.
+    cards = wanted_card_last4s(_discover_card_last4s(page, logger), _configured_card_last4s(bank_cfg))
+    if cards:
+        logger.info("SIB: exporting cards ending %s", ", ".join(cards))
 
-    if not _open_estatement_popup(page, logger):
-        bank_cfg["download_diagnostics"] = {
+    total = 0
+    merged: dict[str, Any] = {
+        "requested_months": requested_months or ["latest"],
+        "cards": cards,
+        "downloaded": [],
+        "skipped_unavailable": [],
+        "failed": [],
+    }
+    for card_last4 in cards or [None]:
+        count, diagnostics = _download_for_card(page, incoming_dir, logger, requested_months, card_last4)
+        total += count
+        for key in ("downloaded", "skipped_unavailable", "failed"):
+            for entry in diagnostics.get(key, []):
+                merged[key].append({**entry, **({"card_last4": card_last4} if card_last4 else {})})
+    bank_cfg["download_diagnostics"] = merged
+    return total
+
+
+def _download_for_card(
+    page: Any,
+    incoming_dir: Path,
+    logger: logging.Logger,
+    requested_months: list[str],
+    card_last4: str | None,
+) -> tuple[int, dict[str, Any]]:
+    if requested_months:
+        return _download_requested_months(page, incoming_dir, logger, requested_months, card_last4)
+
+    if not _open_estatement_popup(page, logger, card_last4):
+        return 0, {
             "requested_months": ["latest"],
             "downloaded": [],
             "skipped_unavailable": [{"month": "latest", "reason": "estatement_popup_not_opened"}],
             "failed": [],
         }
-        return 0
 
     path = _download_statement(page, incoming_dir, logger)
+    _close_estatement_popup(page, logger)
     if path is not None:
-        bank_cfg["download_diagnostics"] = {
+        return 1, {
             "requested_months": ["latest"],
             "downloaded": [{"month": "latest", "path": str(path)}],
             "skipped_unavailable": [],
             "failed": [],
         }
-        _close_estatement_popup(page, logger)
-        return 1
-
-    bank_cfg["download_diagnostics"] = {
+    return 0, {
         "requested_months": ["latest"],
         "downloaded": [],
         "skipped_unavailable": [],
         "failed": [{"month": "latest", "reason": "download_control_not_found_or_failed"}],
     }
-    _close_estatement_popup(page, logger)
-    return 0
 
 
 from scraper.banks.base import BankAdapter
