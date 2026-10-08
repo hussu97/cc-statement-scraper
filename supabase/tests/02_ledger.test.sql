@@ -85,7 +85,8 @@ values
   '[{"sender":"ADCBAlert","body":"Your Cr.Card XXX9208 was used for AED52.25 on 03/07/2026 14:22:11 at CARREFOUR,DUBAI. Avl Cr. limit is AED 100.00","expect":{"amount":"52.25","currency":"AED","last4":"9208","merchant":"CARREFOUR,DUBAI","date":"2026-07-03"}}]'),
  ('ADCB', 'reversal', '^ADCB',
   'Reversal of ([A-Z]{3}) ?([0-9,]+\.[0-9]{2}) on Cr\.Card XXX([0-9]{4}) at (.*?) on ([0-9]{2}/[0-9]{2}/[0-9]{4})',
-  '{"currency":1,"amount":2,"last4":3,"merchant":4,"date":5}', 'DD/MM/YYYY', 'reversal', '[]');
+  '{"currency":1,"amount":2,"last4":3,"merchant":4,"date":5}', 'DD/MM/YYYY', 'reversal',
+  '[{"sender":"ADCBAlert","body":"Reversal of AED52.25 on Cr.Card XXX9208 at CARREFOUR on 04/07/2026","expect":{"amount":"52.25","last4":"9208"}}]');
 
 -- ── 1. first statement creates the account + card ──────────────────────────
 select pg_temp.ingest(pg_temp.payload('2026-06-30', jsonb_build_array(pg_temp.line(1, '2026-06-10', 'STARBUCKS DXB MALL', 21))));
