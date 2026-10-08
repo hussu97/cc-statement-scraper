@@ -157,6 +157,7 @@ field paths instead of a failed ingest:
 | money | decimal strings within `numeric(14,2)` (≤ 12 integer digits); only `opening_balance` / `closing_balance` may be negative |
 | `fx_rate` | within `numeric(18,8)` and **> 0**, or null |
 | `currency_original` | `^[A-Z]{3}$` |
+| `country_code` | `^[A-Z]{2}$` (ISO 3166-1 alpha-2) or null; the parser normalises it before validation |
 | `legacy_fingerprint` | 64 lowercase hex characters |
 | `statements` | at least one; unknown keys are rejected everywhere |
 

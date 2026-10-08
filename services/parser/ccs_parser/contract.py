@@ -47,6 +47,7 @@ FxRate = Annotated[str, StringConstraints(pattern=r"^\d{1,10}(\.\d+)?$"), AfterV
 IsoDate = Annotated[str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}$"), AfterValidator(_real_date)]
 IsoTime = Annotated[str, StringConstraints(pattern=r"^\d{2}:\d{2}(:\d{2}(\.\d+)?)?$"), AfterValidator(_real_time)]
 Last4 = Annotated[str, StringConstraints(pattern=r"^[0-9]{4}$")]
+CountryCode = Annotated[str, StringConstraints(pattern=r"^[A-Z]{2}$")]  # ISO 3166-1 alpha-2 (X-25r)
 
 DocumentKind = Literal["statement_pdf", "history_pdf"]
 StatementKind = Literal["statement", "history_extract"]
@@ -102,7 +103,7 @@ class Line(_Strict):
     fx_rate: FxRate | None
     direction: Direction
     kind: LineKind
-    country_code: str | None
+    country_code: CountryCode | None
     card_last4: Last4 | None
     card_holder: str | None
     legacy_fingerprint: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]

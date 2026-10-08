@@ -151,6 +151,8 @@ def test_valid_response_passes() -> None:
         (("lines", 0, "amount_aed"), "1234567890123.00"),  # numeric(14,2) overflow
         (("lines", 0, "fx_rate"), "0"),  # fx_rate > 0
         (("lines", 0, "kind"), "transfer"),
+        (("lines", 0, "country_code"), "ARE"),  # ISO alpha-2 only (X-25r)
+        (("lines", 0, "country_code"), "ae"),
     ],
 )
 def test_contract_rejects_what_the_db_rejects(path, value) -> None:
