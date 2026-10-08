@@ -8,6 +8,8 @@ import {
   categorizeUserPrompt,
   isTransientLlmError,
   type LlmCategory,
+  llmErrorReason,
+  LlmNotApplicable,
   type LlmMerchant,
   llmModel,
   SMS_SYSTEM,
@@ -29,14 +31,46 @@ export interface JobResult {
   applied?: number;
 }
 
-async function retryOrDlq(svc: Db, queue: string, msg: QueueMessage, code: string, tags: Record<string, string | number>) {
+async function retryOrDlq(
+  svc: Db,
+  queue: string,
+  msg: QueueMessage,
+  code: string,
+  tags: Record<string, string | number>,
+  reason: string,
+) {
   if (msg.read_ct >= MAX_READS) {
-    await toDlq(svc, queue, msg, code);
-    captureMessage(`${queue} moved to DLQ`, { level: "error", tags: { ...tags, error_code: code }, fingerprint: ["worker", "dlq", queue] });
+    await toDlq(svc, queue, msg, `${code}: ${reason}`);
+    captureMessage(`${queue} moved to DLQ: ${code} (${reason})`, {
+      level: "error",
+      tags: { ...tags, error_code: code, reason },
+      fingerprint: ["worker", "dlq", queue, code],
+    });
     return "dlq" as const;
   }
-  captureMessage(`${queue} attempt failed`, { level: "warning", tags: { ...tags, error_code: code }, fingerprint: ["worker", `${queue}_transient`] });
+  captureMessage(`${queue} attempt failed: ${code} (${reason})`, {
+    level: "warning",
+    tags: { ...tags, error_code: code, reason },
+    fingerprint: ["worker", `${queue}_transient`, code],
+  });
   return "retry" as const;
+}
+
+/** Deterministic failure: dead-letter once, with the reason, and never retry. */
+async function dlqOnce(
+  svc: Db,
+  queue: string,
+  msg: QueueMessage,
+  code: string,
+  tags: Record<string, string | number>,
+  reason: string,
+) {
+  await toDlq(svc, queue, msg, `${code}: ${reason}`);
+  captureMessage(`${queue} moved to DLQ: ${code} (${reason})`, {
+    level: "warning",
+    tags: { ...tags, error_code: code, reason },
+    fingerprint: ["worker", "dlq", queue, code, reason],
+  });
 }
 
 function errCode(e: unknown): string {
@@ -84,12 +118,12 @@ export async function processLlmCategorize(svc: Db, msg: QueueMessage): Promise<
     return { queue: LLM_QUEUE, outcome: "done", applied: Number(applied ?? 0) };
   } catch (e) {
     const code = errCode(e);
+    const reason = llmErrorReason(e);
     if (!isTransientLlmError(e)) {
-      await toDlq(svc, LLM_QUEUE, msg, code);
-      captureMessage(`${LLM_QUEUE} moved to DLQ`, { level: "error", tags: { ...tags, error_code: code }, fingerprint: ["worker", "dlq", LLM_QUEUE] });
+      await dlqOnce(svc, LLM_QUEUE, msg, code, tags, reason);
       return { queue: LLM_QUEUE, outcome: "dlq", code };
     }
-    return { queue: LLM_QUEUE, outcome: await retryOrDlq(svc, LLM_QUEUE, msg, code, tags), code };
+    return { queue: LLM_QUEUE, outcome: await retryOrDlq(svc, LLM_QUEUE, msg, code, tags, reason), code };
   }
 }
 
@@ -109,6 +143,11 @@ export async function processSmsFallback(svc: Db, msg: QueueMessage): Promise<Jo
   }
   const banks = ((ctx.banks ?? []) as { bank_code: string; senders: string[] }[]);
   const bankCodes = banks.map((b) => b.bank_code);
+  if (bankCodes.length === 0) {
+    // An empty enum is an invalid schema (Anthropic 400): don't call the model at all.
+    await dlqOnce(svc, SMS_QUEUE, msg, "NO_BANKS", tags, "no banks configured");
+    return { queue: SMS_QUEUE, outcome: "dlq", code: "NO_BANKS" };
+  }
   let proposal;
   try {
     const raw = await structuredCall({
@@ -118,13 +157,19 @@ export async function processSmsFallback(svc: Db, msg: QueueMessage): Promise<Jo
     });
     proposal = validateTemplateProposal(raw, bankCodes);
   } catch (e) {
+    if (e instanceof LlmNotApplicable) {
+      // Not a card transaction (OTP, promotion, the e2e probe): nothing to learn. The SMS
+      // stays 'unparsed' for the review UI; no DLQ, no alert.
+      await queueDelete(svc, SMS_QUEUE, msg.msg_id);
+      return { queue: SMS_QUEUE, outcome: "skipped", code: "NOT_A_TRANSACTION" };
+    }
     const code = errCode(e);
+    const reason = llmErrorReason(e);
     if (!isTransientLlmError(e)) {
-      await toDlq(svc, SMS_QUEUE, msg, code);
-      captureMessage(`${SMS_QUEUE} moved to DLQ`, { level: "warning", tags: { ...tags, error_code: code }, fingerprint: ["worker", "dlq", SMS_QUEUE] });
+      await dlqOnce(svc, SMS_QUEUE, msg, code, tags, reason);
       return { queue: SMS_QUEUE, outcome: "dlq", code };
     }
-    return { queue: SMS_QUEUE, outcome: await retryOrDlq(svc, SMS_QUEUE, msg, code, tags), code };
+    return { queue: SMS_QUEUE, outcome: await retryOrDlq(svc, SMS_QUEUE, msg, code, tags, reason), code };
   }
 
   const { error: propErr } = await svc.rpc("propose_sms_template", { p_sms_code: smsCode, p_template: proposal });
@@ -132,11 +177,12 @@ export async function processSmsFallback(svc: Db, msg: QueueMessage): Promise<Jo
     // The DB validates the template against this very message; its error text quotes
     // the SMS, so only the SQLSTATE is ever recorded.
     const code = `PROPOSE_${propErr.code ?? "ERROR"}`;
+    const reason = `propose_sms_template sqlstate ${propErr.code ?? "unknown"}`;
     if (["22023", "23503", "23514", "2201B", "22P02"].includes(propErr.code ?? "")) {
-      await toDlq(svc, SMS_QUEUE, msg, code);
+      await dlqOnce(svc, SMS_QUEUE, msg, code, tags, reason);
       return { queue: SMS_QUEUE, outcome: "dlq", code };
     }
-    return { queue: SMS_QUEUE, outcome: await retryOrDlq(svc, SMS_QUEUE, msg, code, tags), code };
+    return { queue: SMS_QUEUE, outcome: await retryOrDlq(svc, SMS_QUEUE, msg, code, tags, reason), code };
   }
   await queueDelete(svc, SMS_QUEUE, msg.msg_id);
   return { queue: SMS_QUEUE, outcome: "done" };

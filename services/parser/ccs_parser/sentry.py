@@ -94,10 +94,27 @@ def _before_breadcrumb(crumb: dict[str, Any], hint: dict[str, Any] | None = None
     return _scrub(crumb)
 
 
+# Environments that never report to Sentry, even when a DSN is configured (local
+# replays and test runs must not page anyone). Unset means "local".
+LOCAL_ENVIRONMENTS = frozenset({"", "local", "development", "test"})
+
+
+def sentry_environment() -> str:
+    return (os.environ.get("SENTRY_ENVIRONMENT") or "").strip() or "local"
+
+
+def sentry_active(environment: str | None, dsn: str | None) -> bool:
+    """True when events should be sent: a DSN is set and the environment is not local."""
+    return bool((dsn or "").strip()) and (environment or "").strip().lower() not in LOCAL_ENVIRONMENTS
+
+
 def init_sentry() -> bool:
     """Initialise Sentry from env. Returns True when enabled."""
     dsn = (os.environ.get("SENTRY_DSN") or "").strip()
-    if not dsn:
+    environment = sentry_environment()
+    if not sentry_active(environment, dsn):
+        if dsn:
+            logger.info("Sentry disabled for local environment %r", environment)
         return False
     try:
         import sentry_sdk  # noqa: PLC0415
@@ -107,7 +124,6 @@ def init_sentry() -> bool:
         logger.warning("sentry-sdk is not installed; Sentry is disabled")
         return False
 
-    environment = (os.environ.get("SENTRY_ENVIRONMENT") or "development").strip()
     try:
         traces_sample_rate = float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE") or 0.2)
     except ValueError:

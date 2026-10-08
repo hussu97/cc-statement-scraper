@@ -18,11 +18,17 @@ Only counts are printed — never secret values, statement contents or amounts
 beyond per-month aggregates.
 
 Usage (from repo root, using the legacy backend venv which has every dependency):
-  backend/.venv/bin/python scripts/migrate_legacy.py --step metadata \
+  backend/.venv/bin/python scripts/migrate_legacy.py --target local --step metadata \
       --members '{"alice":"h_abbasi97@hotmail.com","bob":"bob@example.com"}' [--apply]
-  backend/.venv/bin/python scripts/migrate_legacy.py --step secrets [--apply] [--functions-env-out supabase/functions/.env.production]
-  backend/.venv/bin/python scripts/migrate_legacy.py --step pdfs [--apply] [--limit N]
-  backend/.venv/bin/python scripts/migrate_legacy.py --step finalize [--apply]
+  backend/.venv/bin/python scripts/migrate_legacy.py --target local --step secrets [--apply] [--functions-env-out F]
+  backend/.venv/bin/python scripts/migrate_legacy.py --target local --step pdfs [--apply] [--limit N]
+  backend/.venv/bin/python scripts/migrate_legacy.py --target local --step finalize [--apply]
+
+Target guard (audit DP-13): `--target local|prod` is required and must match the
+environment. `local` requires LEDGER_DB_URL (and SUPABASE_URL when used) on
+127.0.0.1/localhost; `prod` requires both to name the production project ref
+(PROD_REF below). `--apply` against prod also needs `--yes-i-mean-prod <ref>`, or
+typing the ref at the prompt. Dry-run stays the default.
 
 Environment:
   LEDGER_DB_URL                 postgres URL of the v2 project (session pooler, port 5432)
@@ -49,6 +55,10 @@ import httpx
 import psycopg
 
 ENC_PREFIX = "enc:v1:"
+# Production Supabase project (PRODUCTION.md). The only remote target this script accepts.
+PROD_REF = "<project-ref>"
+LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
+SUPPORTED_BANKS = {"FAB", "ADCB", "ENBD", "EIB", "SIB", "MASHREQ"}
 PDF_SECRET_KEY = re.compile(r"^(FAB|ADCB|ENBD|EIB|SIB|MASHREQ)_PDF_PASSWORD$|^ADCB_CID$")
 MAILBOX_SECRET_KEY = re.compile(r"^EMAIL_(GMAIL|MS)_REFRESH_TOKEN_MAILBOX_(\d+)$")
 # Legacy runtime setting -> Edge Function secret name. The targets must match exactly what
@@ -66,6 +76,64 @@ def env(name: str, required: bool = True) -> str:
     if required and not value:
         sys.exit(f"missing env {name}")
     return value
+
+
+# ── target guard (DP-13) ─────────────────────────────────────────────────────
+def _host(url: str) -> str:
+    from urllib.parse import urlsplit
+
+    try:
+        return (urlsplit(url).hostname or "").lower()
+    except ValueError:
+        return ""
+
+
+def _db_names_ref(db_url: str, ref: str) -> bool:
+    """Direct host db.<ref>.supabase.co, or the pooler's user postgres.<ref>."""
+    from urllib.parse import unquote, urlsplit
+
+    parts = urlsplit(db_url)
+    return _host(db_url) == f"db.{ref}.supabase.co" or unquote(parts.username or "").endswith(f".{ref}")
+
+
+def check_target(target: str, db_url: str, supabase_url: str | None) -> list[str]:
+    """Problems that make the environment disagree with --target (empty = OK)."""
+    problems: list[str] = []
+    if target == "local":
+        if _host(db_url) not in LOCAL_HOSTS:
+            problems.append(f"LEDGER_DB_URL host {_host(db_url) or '?'} is not local")
+        if supabase_url and _host(supabase_url) not in LOCAL_HOSTS:
+            problems.append(f"SUPABASE_URL host {_host(supabase_url) or '?'} is not local")
+    elif target == "prod":
+        if not _db_names_ref(db_url, PROD_REF):
+            problems.append(f"LEDGER_DB_URL does not point at project {PROD_REF}")
+        if supabase_url and _host(supabase_url) != f"{PROD_REF}.supabase.co":
+            problems.append(f"SUPABASE_URL is not https://{PROD_REF}.supabase.co")
+    else:
+        problems.append(f"unknown target {target!r}")
+    return problems
+
+
+def confirm_prod_write(confirmation: str | None, *, interactive: bool, prompt=input) -> bool:
+    """A prod --apply needs the project ref, from --yes-i-mean-prod or typed at the prompt."""
+    if confirmation is not None:
+        return confirmation.strip() == PROD_REF
+    if not interactive:
+        return False
+    typed = prompt(f"This WRITES to production project {PROD_REF}. Type the project ref to continue: ")
+    return typed.strip() == PROD_REF
+
+
+def guard_target(args: argparse.Namespace) -> None:
+    db_url = env("LEDGER_DB_URL")
+    supabase_url = os.environ.get("SUPABASE_URL", "").strip() or None
+    problems = check_target(args.target, db_url, supabase_url)
+    if problems:
+        sys.exit(f"refusing to run with --target {args.target}: " + "; ".join(problems))
+    if args.target == "prod" and args.apply:
+        if not confirm_prod_write(args.yes_i_mean_prod, interactive=sys.stdin.isatty()):
+            sys.exit(f"refusing to write to production: pass --yes-i-mean-prod {PROD_REF} or type it at the prompt")
+    print(f"target: {args.target} ({'APPLY' if args.apply else 'dry-run'})")
 
 
 def connect() -> psycopg.Connection:
@@ -136,7 +204,11 @@ def step_secrets(conn: psycopg.Connection, apply: bool, functions_env_out: str |
                 cur.execute("select private.vault_upsert(%s, %s)", (f"mailbox:{mbx[0]}:refresh_token", value))
                 counts["mailbox_tokens"] += 1
             elif key in APP_SECRET_KEYS:
-                app_secrets[APP_SECRET_KEYS[key]] = value
+                name = APP_SECRET_KEYS[key]
+                if name in app_secrets and app_secrets[name] != value:
+                    # Values are never printed; the last profile's value wins.
+                    print(f"WARNING: {name} differs between legacy profiles; using the value from {profile_key!r}")
+                app_secrets[name] = value
                 counts["app_secrets"] += 1
             else:
                 counts["skipped"] += 1
@@ -168,18 +240,30 @@ def legacy_reader():
     return lambda key: bucket.blob(key).download_as_bytes()
 
 
+def legacy_bank_hint(bank_codes: list[str | None]) -> str | None:
+    """The legacy bank for a PDF when all its statements agree on a supported bank (SRV-09)."""
+    codes = {(c or "").strip().upper() for c in bank_codes if c}
+    if len(codes) != 1:
+        return None
+    code = codes.pop()
+    return code if code in SUPPORTED_BANKS else None
+
+
 def step_pdfs(conn: psycopg.Connection, apply: bool, limit: int | None) -> None:
     read = legacy_reader()
     base = env("SUPABASE_URL").rstrip("/")
     key = env("SUPABASE_SERVICE_ROLE_KEY")
     http = httpx.Client(timeout=60, headers={"Authorization": f"Bearer {key}", "apikey": key})
-    counts = {"candidates": 0, "already_present": 0, "uploaded": 0, "missing_in_storage": 0}
+    counts = {"candidates": 0, "already_present": 0, "uploaded": 0, "missing_in_storage": 0, "with_bank_hint": 0,
+              "orphans_removed": 0}
+    profile_codes: dict[str, str] = {}
     with conn.cursor() as cur:
         # Real statements first (oldest first), SIB history extracts last.
         cur.execute(
             """select f.id, p.key, f.storage_key, coalesce(f.original_filename, 'legacy.pdf'),
                       min(s.statement_date) as first_date,
-                      bool_or(coalesce(s.statement_reference, '') like 'AUTO-SIB-%%') as is_history
+                      bool_or(coalesce(s.statement_reference, '') like 'AUTO-SIB-%%') as is_history,
+                      array_remove(array_agg(distinct s.bank_code), null) as bank_codes
                from legacy.pdf_files f
                join legacy.profiles p on p.id = f.profile_id
                left join legacy.statements s on s.pdf_file_id = f.id
@@ -189,8 +273,14 @@ def step_pdfs(conn: psycopg.Connection, apply: bool, limit: int | None) -> None:
         rows = cur.fetchall()
         if limit:
             rows = rows[:limit]
+        for profile_key in sorted({r[1] for r in rows}):
+            cur.execute("select profile_code from public.profiles where key = %s", (profile_key,))
+            row = cur.fetchone()
+            if row is None:
+                sys.exit(f"profile {profile_key!r} is not in public.profiles; run --step metadata --apply first")
+            profile_codes[profile_key] = row[0]
         seen: set[tuple[str, str]] = set()
-        for _fid, profile_key, storage_key, filename, _first, _hist in rows:
+        for _fid, profile_key, storage_key, filename, _first, _hist, bank_codes in rows:
             counts["candidates"] += 1
             try:
                 data = read(storage_key)
@@ -198,8 +288,7 @@ def step_pdfs(conn: psycopg.Connection, apply: bool, limit: int | None) -> None:
                 counts["missing_in_storage"] += 1
                 continue
             digest = hashlib.sha256(data).hexdigest()
-            cur.execute("select profile_code from public.profiles where key = %s", (profile_key,))
-            profile_code = cur.fetchone()[0]
+            profile_code = profile_codes[profile_key]
             if (profile_code, digest) in seen:
                 counts["already_present"] += 1
                 continue
@@ -208,27 +297,52 @@ def step_pdfs(conn: psycopg.Connection, apply: bool, limit: int | None) -> None:
             if cur.fetchone():
                 counts["already_present"] += 1
                 continue
+            # Legacy parsed this PDF as a known bank: pass it as the hint, as legacy scraper
+            # uploads were, instead of relying on content detection (SRV-08/09).
+            bank_code = legacy_bank_hint(list(bank_codes or []))
+            if bank_code:
+                counts["with_bank_hint"] += 1
             if not apply:
                 counts["uploaded"] += 1
                 continue
             cur.execute("select public.gen_code('doc')")
             doc_code = cur.fetchone()[0]
             path = f"{profile_code}/{doc_code}.pdf"
-            resp = http.post(f"{base}/storage/v1/object/statements/{path}", content=data,
-                             headers={"Content-Type": "application/pdf", "x-upsert": "true"})
+            object_url = f"{base}/storage/v1/object/statements/{path}"
+            # Upload first: the INSERT trigger enqueues the parse, so the object must exist.
+            resp = http.post(object_url, content=data, headers={"Content-Type": "application/pdf", "x-upsert": "true"})
             resp.raise_for_status()
-            # The INSERT trigger enqueues the document for parsing.
-            cur.execute(
-                """insert into public.documents (doc_code, profile_code, storage_path, original_filename, sha256,
-                     size_bytes, source)
-                   values (%s, %s, %s, %s, %s, %s, 'legacy')
-                   on conflict (profile_code, sha256) do nothing""",
-                (doc_code, profile_code, path, filename, digest, len(data)),
-            )
-            conn.commit()
+            try:
+                cur.execute(
+                    """insert into public.documents (doc_code, profile_code, storage_path, original_filename, sha256,
+                         size_bytes, source, bank_code)
+                       values (%s, %s, %s, %s, %s, %s, 'legacy', %s)
+                       on conflict (profile_code, sha256) do nothing
+                       returning doc_code""",
+                    (doc_code, profile_code, path, filename, digest, len(data), bank_code),
+                )
+                inserted = cur.fetchone() is not None
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                _remove_object(http, base, path, counts)
+                raise
+            if not inserted:
+                # Another run stored the same PDF meanwhile: don't leave our copy behind.
+                _remove_object(http, base, path, counts)
+                counts["already_present"] += 1
+                continue
             counts["uploaded"] += 1
     conn.rollback()
     print(json.dumps(counts), "APPLIED" if apply else "dry-run")
+
+
+def _remove_object(http: httpx.Client, base: str, path: str, counts: dict[str, int]) -> None:
+    try:
+        http.request("DELETE", f"{base}/storage/v1/object/statements", json={"prefixes": [path]}).raise_for_status()
+        counts["orphans_removed"] += 1
+    except httpx.HTTPError as exc:
+        print(f"WARNING: could not remove orphan storage object {path}: {type(exc).__name__}")
 
 
 # ── 4. finalize ─────────────────────────────────────────────────────────────
@@ -241,10 +355,12 @@ def step_finalize(conn: psycopg.Connection, apply: bool) -> None:
         cur.execute(
             """select profile_key, bank_code, count(*) as months,
                       sum(legacy_lines), sum(v2_lines), sum(legacy_aed), sum(v2_aed),
-                      count(*) filter (where abs(delta_aed) > 0.01)
+                      count(*) filter (where abs(delta_aed) > 0.01),
+                      sum(legacy_lines_missing), sum(legacy_aed_missing)
                from private.legacy_parity_report() group by 1, 2 order by 1, 2"""
         )
-        print("parity (profile, bank, months, legacy_lines, v2_lines, legacy_aed, v2_aed, months_with_delta):")
+        print("parity (profile, bank, months, legacy_lines, v2_lines, legacy_aed, v2_aed, months_with_delta,"
+              " legacy_lines_missing, legacy_aed_missing):")
         for row in cur.fetchall():
             print("  ", row)
     conn.commit() if apply else conn.rollback()
@@ -253,12 +369,17 @@ def step_finalize(conn: psycopg.Connection, apply: bool) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--target", required=True, choices=["local", "prod"],
+                    help="which Supabase project the environment must point at (checked)")
+    ap.add_argument("--yes-i-mean-prod", default=None, metavar="REF",
+                    help="confirm --apply against prod by repeating the project ref")
     ap.add_argument("--step", required=True, choices=["metadata", "secrets", "pdfs", "finalize"])
     ap.add_argument("--apply", action="store_true", help="write changes (default is a dry run)")
     ap.add_argument("--members", default="{}", help='JSON {"<legacy profile key>": "<owner email>"}')
     ap.add_argument("--functions-env-out", default=None)
     ap.add_argument("--limit", type=int, default=None)
     args = ap.parse_args()
+    guard_target(args)
 
     with connect() as conn:
         if args.step == "metadata":

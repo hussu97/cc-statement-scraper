@@ -72,9 +72,13 @@ def pdf_file(tmp_path: Path) -> Path:
 
 def pytest_terminal_summary(terminalreporter) -> None:
     try:
-        from tests.test_golden_parity import KIND_FEE_TO_PURCHASE
+        from tests.test_golden_parity import ALLOWED_DELTAS, KIND_FEE_TO_PURCHASE, RECOVERED_LINES
     except Exception:  # noqa: BLE001
         return
+    for label, stems in ALLOWED_DELTAS.items():
+        if stems:
+            extra = f" ({sum(RECOVERED_LINES.get(s, 0) for s in stems)} lines)" if "DP-07" in label else ""
+            terminalreporter.write_line(f"golden parity allowed delta: {label}: {len(stems)} PDFs{extra}")
     if KIND_FEE_TO_PURCHASE:
         terminalreporter.write_line(
             f"golden parity: {sum(KIND_FEE_TO_PURCHASE.values())} lines in {len(KIND_FEE_TO_PURCHASE)} PDFs "

@@ -12,6 +12,10 @@ _ROOT = Path(__file__).resolve().parents[1]
 # ``/functions/v1/statements-upload`` with CCS_SCRAPER_TARGET_URL=<SUPABASE_URL>.
 DEFAULT_TARGET_URL = "http://127.0.0.1:8040"
 DEFAULT_UPLOAD_PATH = "/api/v1/jobs/upload"
+# Ledger v2 statements-upload accepts at most 20 files (form.ts MAX_FILES) and 40 MB
+# (MAX_REQUEST_BYTES) per request; the client splits bigger uploads (audit SRV-02).
+UPLOAD_MAX_FILES_PER_REQUEST = 20
+UPLOAD_MAX_BYTES_PER_REQUEST = 32 * 1024 * 1024
 _ENV_FILE = _ROOT / ".env"
 if _ENV_FILE.exists():
     load_dotenv(_ENV_FILE, override=False)
@@ -91,3 +95,25 @@ def get_config(profile: str) -> ScraperConfig:
             "(or the global CCS_SCRAPER_API_TOKEN) in scraper/.env or export it before running."
         )
     return cfg
+
+
+def _positive_int_env(name: str) -> int | None:
+    raw = (os.environ.get(name) or "").strip()
+    try:
+        value = int(float(raw))
+    except ValueError:
+        return None
+    return value if value > 0 else None
+
+
+def upload_max_files() -> int:
+    """Files per upload request: ``CCS_SCRAPER_UPLOAD_MAX_FILES`` (never above the server's 20)."""
+    value = _positive_int_env("CCS_SCRAPER_UPLOAD_MAX_FILES") or UPLOAD_MAX_FILES_PER_REQUEST
+    return min(value, UPLOAD_MAX_FILES_PER_REQUEST)
+
+
+def upload_max_bytes() -> int:
+    """Bytes of PDF per upload request: ``CCS_SCRAPER_UPLOAD_MAX_MB`` (never above 32 MB)."""
+    mb = _positive_int_env("CCS_SCRAPER_UPLOAD_MAX_MB")
+    value = mb * 1024 * 1024 if mb else UPLOAD_MAX_BYTES_PER_REQUEST
+    return min(value, UPLOAD_MAX_BYTES_PER_REQUEST)

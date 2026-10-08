@@ -262,11 +262,21 @@ def _upload_groups(client, groups: dict[str | None, list[Path]], uploaded_state)
 
     Returns a list of ``(bank_code, files, error)`` for the groups that failed.
     """
+    from scraper.client import UploadBatchError
+
     failures: list[tuple[str | None, list[Path], str]] = []
     for code, group in groups.items():
         typer.echo(f"Uploading {len(group)} PDF(s) for bank {code or '(unknown)'} ...")
         try:
             result = client.upload_pdfs(group, bank_code=code)
+        except UploadBatchError as exc:
+            # Some batches made it: record them so upload-pending only retries the rest.
+            typer.echo(f"  Upload PARTIALLY FAILED for bank {code or '(unknown)'}: {exc}", err=True)
+            if exc.uploaded_files:
+                typer.echo(f"  {_format_result(exc.result)}")
+                _record_uploaded(uploaded_state, exc.uploaded_files, exc.result, code)
+            failures.append((code, exc.failed_files, str(exc)))
+            continue
         except Exception as exc:  # noqa: BLE001 — report and continue with remaining groups
             typer.echo(f"  Upload FAILED for bank {code or '(unknown)'}: {exc}", err=True)
             failures.append((code, group, str(exc)))

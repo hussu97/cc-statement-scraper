@@ -321,3 +321,104 @@ def test_single_http_client_reused_across_retries(tmp_path: Path) -> None:
     with patch("scraper.client.httpx.Client", side_effect=real_client) as spy:
         _client(handler).upload_pdfs([_pdf(tmp_path)])
     assert spy.call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# SRV-02: batching to the server's per-request limits, 413 splitting
+# ---------------------------------------------------------------------------
+
+from scraper.client import UploadBatchError, chunk_payload, merge_results  # noqa: E402
+from scraper.config import UPLOAD_MAX_FILES_PER_REQUEST, upload_max_bytes, upload_max_files  # noqa: E402
+
+
+def _filenames(request: httpx.Request) -> list[str]:
+    import re
+
+    return re.findall(rb'name="files"; filename="([^"]+)"', request.read())
+
+
+def _echo(request: httpx.Request) -> httpx.Response:
+    return httpx.Response(
+        200,
+        json={"uploads": [{"filename": n.decode(), "doc_code": "doc", "status": "queued"} for n in _filenames(request)]},
+    )
+
+
+def test_chunk_payload_by_count_and_bytes() -> None:
+    items = [(f"{i}.pdf", b"x" * 10) for i in range(45)]
+    assert [len(b) for b in chunk_payload(items, 20, 10_000)] == [20, 20, 5]
+    assert [len(b) for b in chunk_payload(items, 20, 35)] == [3] * 15
+    big = [("big.pdf", b"x" * 100), ("a.pdf", b"x")]
+    assert [len(b) for b in chunk_payload(big, 20, 50)] == [1, 1]
+
+
+def test_upload_limits_default_and_clamped(monkeypatch) -> None:
+    assert UPLOAD_MAX_FILES_PER_REQUEST == 20
+    monkeypatch.setenv("CCS_SCRAPER_UPLOAD_MAX_FILES", "5")
+    assert upload_max_files() == 5
+    monkeypatch.setenv("CCS_SCRAPER_UPLOAD_MAX_FILES", "500")
+    assert upload_max_files() == 20
+    monkeypatch.setenv("CCS_SCRAPER_UPLOAD_MAX_MB", "999")
+    assert upload_max_bytes() == 32 * 1024 * 1024
+
+
+def test_45_files_go_in_three_requests_of_at_most_20(tmp_path: Path) -> None:
+    seen: list[list[bytes]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(_filenames(request))
+        return _echo(request)
+
+    files = [_pdf(tmp_path, f"s{i:02}.pdf") for i in range(45)]
+    result = _client(handler).upload_pdfs(files, bank_code="FAB")
+    assert [len(names) for names in seen] == [20, 20, 5]
+    assert len(result["uploads"]) == 45
+    assert [u["filename"] for u in result["uploads"]] == [f.name for f in files]
+
+
+def test_413_splits_the_batch_and_retries(tmp_path: Path) -> None:
+    sizes: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        names = _filenames(request)
+        sizes.append(len(names))
+        if len(names) > 3:
+            return httpx.Response(413, json={"error": {"code": "TOO_MANY_FILES"}})
+        return _echo(request)
+
+    files = [_pdf(tmp_path, f"s{i}.pdf") for i in range(8)]
+    result = _client(handler).upload_pdfs(files)
+    assert sizes == [8, 4, 2, 2, 4, 2, 2]
+    assert len(result["uploads"]) == 8
+
+
+def test_413_for_a_single_file_fails_without_retry(tmp_path: Path) -> None:
+    calls: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        return httpx.Response(413, json={"error": {"code": "FILE_TOO_LARGE"}})
+
+    with pytest.raises(RuntimeError, match="413"):
+        _client(handler).upload_pdfs([_pdf(tmp_path)])
+    assert calls == [1]
+
+
+def test_partial_failure_reports_uploaded_and_failed_files(tmp_path: Path) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if b"s20.pdf" in _filenames(request):
+            return httpx.Response(422, json={"error": {"code": "NOT_A_PDF"}})
+        return _echo(request)
+
+    files = [_pdf(tmp_path, f"s{i:02}.pdf") for i in range(25)]
+    with pytest.raises(UploadBatchError) as err:
+        _client(handler).upload_pdfs(files)
+    assert [f.name for f in err.value.uploaded_files] == [f.name for f in files[:20]]
+    assert [f.name for f in err.value.failed_files] == [f.name for f in files[20:]]
+    assert len(err.value.result["uploads"]) == 20
+
+
+def test_merge_results_legacy_and_v2() -> None:
+    assert merge_results([{"job_id": 1}]) == {"job_id": 1}
+    assert merge_results([{"uploads": [1]}, {"uploads": [2]}]) == {"uploads": [1, 2]}
+    assert merge_results([{"job_id": 1}, {"job_id": 2}]) == {"batches": [{"job_id": 1}, {"job_id": 2}]}

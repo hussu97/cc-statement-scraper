@@ -27,6 +27,8 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
+from ccs_parser.limits import max_pages
+
 logger = logging.getLogger(__name__)
 
 TOTAL_KEYS: tuple[str, ...] = (
@@ -238,7 +240,7 @@ def read_text_lines(pdf_path: Path, passwords: list[str | None]) -> list[str] | 
             kwargs = {"password": password} if password else {}
             with pdfplumber.open(str(pdf_path), **kwargs) as pdf:
                 out: list[str] = []
-                for page in pdf.pages:
+                for page in pdf.pages[: max_pages()]:
                     out.extend((page.extract_text() or "").splitlines())
                 return out
         except Exception:  # noqa: BLE001

@@ -210,3 +210,25 @@ def test_upload_pending_command_exits_non_zero_on_failure(tmp_path: Path, monkey
     # ADCB was still uploaded even though FAB failed.
     assert ("ADCB", ["adcb.PDF"]) in client.calls
     assert UploadedState(tmp_path / "state").is_uploaded(sha256_file(tmp_path / "incoming" / "adcb.PDF"))
+
+
+def test_upload_groups_records_the_batches_that_succeeded(tmp_path: Path) -> None:
+    from scraper.client import UploadBatchError
+
+    ok = [_pdf(tmp_path, f"ok{i}.pdf") for i in range(2)]
+    bad = [_pdf(tmp_path, "bad.pdf")]
+
+    class PartialClient(FakeClient):
+        def upload_pdfs(self, files, bank_code=None):
+            raise UploadBatchError(
+                "1 of 3 file(s) failed to upload: Upload failed 500: boom",
+                result={"uploads": [{"filename": f.name, "doc_code": "doc", "status": "queued"} for f in ok]},
+                uploaded_files=ok,
+                failed_files=bad,
+            )
+
+    state = UploadedState(tmp_path / "state")
+    failures = cli._upload_groups(PartialClient(), {"FAB": ok + bad}, state)
+    assert [(code, [f.name for f in files]) for code, files, _ in failures] == [("FAB", ["bad.pdf"])]
+    assert state.is_uploaded(sha256_file(ok[0])) and state.is_uploaded(sha256_file(ok[1]))
+    assert not state.is_uploaded(sha256_file(bad[0]))

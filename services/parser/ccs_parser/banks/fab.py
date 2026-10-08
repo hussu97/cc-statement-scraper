@@ -22,6 +22,25 @@ BANK_NAME = "First Abu Dhabi Bank"
 
 _DATE_RE = re.compile(r"^\d{2}-\d{2}-\d{4}$")
 _AMOUNT_RE = re.compile(r"^[\d,]+\.\d{2}$")
+# Original-currency amounts are printed in that currency's format (audit DP-07: such
+# rows were skipped, so the statement's own debit total exceeded the parsed debits):
+#   three decimals for KWD/BHD/OMR ("KWD 18.750"), or a decimal comma ("EUR 108,99").
+# The AED Debit/Credit column always uses _AMOUNT_RE.
+_THREE_DP_AMOUNT_RE = re.compile(r"^[\d,]+\.\d{3}$")
+_DECIMAL_COMMA_AMOUNT_RE = re.compile(r"^\d{1,3}(?:\.\d{3})*,\d{2}$")
+
+
+def _is_amount(token: str) -> bool:
+    return bool(
+        _AMOUNT_RE.match(token) or _THREE_DP_AMOUNT_RE.match(token) or _DECIMAL_COMMA_AMOUNT_RE.match(token)
+    )
+
+
+def _normalize_amount(token: str) -> str:
+    """"1.234,56" -> "1234.56"; dot-decimal amounts (2 or 3 places) are returned unchanged."""
+    if _DECIMAL_COMMA_AMOUNT_RE.match(token):
+        return token.replace(".", "").replace(",", ".")
+    return token
 _CURRENCIES = frozenset(
     "AED USD EUR GBP EGP KES SAR INR JPY CHF CAD AUD QAR BHD KWD OMR"
     " SGD HKD MYR THB ZAR TRY MXN BRL CNY SEK NOK DKK PLN CZK HUF ILS".split()
@@ -150,8 +169,11 @@ def _parse_txn_row(
         return None
 
     # Locate all amount-shaped tokens
-    amount_indices = [i for i, t in enumerate(texts) if _AMOUNT_RE.match(t)]
+    amount_indices = [i for i, t in enumerate(texts) if _is_amount(t)]
     if len(amount_indices) < 2:
+        return None
+    # The AED (Debit/Credit column) amount is always dot-decimal.
+    if not _AMOUNT_RE.match(texts[amount_indices[-1]]):
         return None
 
     # The currency token sits immediately before the first amount
@@ -161,7 +183,7 @@ def _parse_txn_row(
         return None
 
     currency = texts[currency_idx]
-    amount_original_str = texts[first_amt_idx]
+    amount_original_str = _normalize_amount(texts[first_amt_idx])
     # Last amount on the row is in either the Debit or Credit column
     last_amt_idx = amount_indices[-1]
     amount_aed_str = texts[last_amt_idx]
