@@ -110,3 +110,19 @@ Deno.test("dlqIssue alerts when the DLQ grew, then once a day (SRV-22)", () => {
   }
   assertEquals(fired, [[86_400, "warning"]]);
 });
+
+Deno.test("Gmail mailbox and watch issues are skipped while Gmail alerts are off", () => {
+  const h: OpsHealth = {
+    mailbox_errors: [
+      { mailbox_code: "mbx_g", provider: "gmail", code: "TOKEN_REFRESH_FAILED:invalid_grant" },
+      { mailbox_code: "mbx_o", provider: "outlook", code: "HTTP_401" },
+    ],
+    mailboxes_stale: [{ mailbox_code: "mbx_g", provider: "gmail" }],
+    gmail_watch_expiring: [{ mailbox_code: "mbx_g", provider: "gmail" }],
+  };
+  const off = evaluateHealth(h, { ...DEFAULT_THRESHOLDS, gmailAlerts: false });
+  assertEquals(off.map((i) => i.issue), ["mailbox_errors"]);
+  assertEquals((off[0].extra as { count: number }).count, 1);
+  const on = evaluateHealth(h, { ...DEFAULT_THRESHOLDS, gmailAlerts: true });
+  assertEquals(on.map((i) => i.issue).sort(), ["gmail_watch_expiring", "mailbox_errors", "mailboxes_stale"]);
+});

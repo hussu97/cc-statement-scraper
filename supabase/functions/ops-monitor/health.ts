@@ -1,6 +1,8 @@
 // Pure evaluation of public.ops_health() (migration 20261009000400) into Sentry issues,
 // one fingerprint per issue type.
 
+import { gmailAlertsEnabled } from "../_shared/sentry.ts";
+
 export interface QueueMetrics {
   depth: number;
   oldest_age_s: number | null;
@@ -50,6 +52,8 @@ export interface Thresholds {
   queuedDocumentAgeS: number;
   /** ops-monitor's own schedule (s): a DLQ message younger than this arrived since the last check. */
   checkIntervalS: number;
+  /** Gmail isn't set up yet: skip Gmail mailbox and watch issues unless GMAIL_SENTRY_ALERTS=on. */
+  gmailAlerts?: boolean;
 }
 
 export const DEFAULT_THRESHOLDS: Thresholds = {
@@ -184,7 +188,8 @@ export function evaluateHealth(h: OpsHealth, t: Thresholds = DEFAULT_THRESHOLDS)
   }
 
   // ── SRV-10: mailbox ingestion health ──
-  const errors = rows(h.mailbox_errors);
+  const keep = (r: MailboxRow) => t.gmailAlerts !== false || r.provider !== "gmail";
+  const errors = rows(h.mailbox_errors).filter(keep);
   if (errors.length > 0) {
     issues.push({
       issue: "mailbox_errors",
@@ -200,7 +205,7 @@ export function evaluateHealth(h: OpsHealth, t: Thresholds = DEFAULT_THRESHOLDS)
       },
     });
   }
-  const stale = rows(h.mailboxes_stale);
+  const stale = rows(h.mailboxes_stale).filter(keep);
   if (stale.length > 0) {
     issues.push({
       issue: "mailboxes_stale",
@@ -209,7 +214,7 @@ export function evaluateHealth(h: OpsHealth, t: Thresholds = DEFAULT_THRESHOLDS)
       extra: { count: stale.length, mailbox_codes: stale.slice(0, MAX_CODES).map((r) => r.mailbox_code) },
     });
   }
-  const watches = rows(h.gmail_watch_expiring);
+  const watches = t.gmailAlerts === false ? [] : rows(h.gmail_watch_expiring);
   if (watches.length > 0) {
     issues.push({
       issue: "gmail_watch_expiring",
@@ -233,5 +238,6 @@ export function thresholdsFromEnv(): Thresholds {
     openReviews: envNumber("OPS_OPEN_REVIEWS_THRESHOLD", DEFAULT_THRESHOLDS.openReviews),
     queuedDocumentAgeS: envNumber("OPS_QUEUED_DOCUMENT_AGE_S", DEFAULT_THRESHOLDS.queuedDocumentAgeS),
     checkIntervalS: DEFAULT_THRESHOLDS.checkIntervalS,
+    gmailAlerts: gmailAlertsEnabled(),
   };
 }

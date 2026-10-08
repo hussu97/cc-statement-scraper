@@ -1,5 +1,11 @@
 # Changelog
 
+## Gmail alerts muted — 2026-10-08
+
+### Backend (Supabase)
+
+- **chore** Gmail isn't configured yet, so nothing from `gmail-push` / `gmail-watch-renew` (or tagged as Gmail) reaches Sentry, and ops-monitor skips Gmail mailbox and watch issues, until `GMAIL_SENTRY_ALERTS=on` (`_shared/sentry.ts` `isGmailEvent`, `ops-monitor/health.ts`; tests in `ops_monitor_test.ts`, `sentry_scrub_test.ts`)
+
 ## Bank logos — 2026-10-08 (branch `ledger-v2`)
 
 ### Web

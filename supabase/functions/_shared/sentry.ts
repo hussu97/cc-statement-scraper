@@ -160,6 +160,23 @@ export function sentryActive(environment: string | undefined, dsn: string | unde
   return Boolean((dsn ?? "").trim()) && !LOCAL_ENVIRONMENTS.has((environment ?? "").trim().toLowerCase());
 }
 
+/**
+ * Gmail ingestion isn't configured yet, so its errors are muted: nothing from a
+ * `gmail-*` function, or tagged/labelled as Gmail, reaches Sentry until
+ * GMAIL_SENTRY_ALERTS=on is set (PRODUCTION §2.5). Pure, so it is unit-tested.
+ */
+export function gmailAlertsEnabled(value = Deno.env.get("GMAIL_SENTRY_ALERTS")): boolean {
+  return /^(on|true|1|yes)$/i.test((value ?? "").trim());
+}
+
+// deno-lint-ignore no-explicit-any
+export function isGmailEvent(event: any): boolean {
+  const tags = event?.tags ?? {};
+  if (String(tags.function ?? "").startsWith("gmail-") || String(tags.provider ?? "") === "gmail") return true;
+  const text = String(event?.message ?? event?.logentry?.message ?? "");
+  return /^gmail[\s-]/i.test(text);
+}
+
 function ensureInit(): boolean {
   if (initialised) return enabled;
   initialised = true;
@@ -176,7 +193,7 @@ function ensureInit(): boolean {
     integrations: [Sentry.dedupeIntegration()],
     tracesSampleRate: Number(Deno.env.get("SENTRY_TRACES_SAMPLE_RATE") ?? "0.1"),
     // deno-lint-ignore no-explicit-any
-    beforeSend: (event: any) => scrubEvent(event),
+    beforeSend: (event: any) => (!gmailAlertsEnabled() && isGmailEvent(event) ? null : scrubEvent(event)),
     // deno-lint-ignore no-explicit-any
     beforeSendTransaction: (event: any) => scrubEvent(event),
     // deno-lint-ignore no-explicit-any

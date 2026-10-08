@@ -95,3 +95,17 @@ Deno.test("scrubBreadcrumb strips data payloads and URL queries", () => {
   assertEquals(b.data.url, "https://p/parse");
   assertEquals(b.data.password_candidates, "[Filtered]");
 });
+
+Deno.test("Gmail events are recognised and muted unless GMAIL_SENTRY_ALERTS is on", async () => {
+  const { gmailAlertsEnabled, isGmailEvent } = await import("../_shared/sentry.ts");
+  assert(isGmailEvent({ tags: { function: "gmail-push" } }));
+  assert(isGmailEvent({ tags: { function: "gmail-watch-renew" } }));
+  assert(isGmailEvent({ tags: { provider: "gmail" } }));
+  assert(isGmailEvent({ message: "gmail history cursor expired; resetting it" }));
+  assert(isGmailEvent({ message: "gmail-push: mailbox needs attention (X)" }));
+  assert(!isGmailEvent({ tags: { function: "outlook-poll" }, message: "outlook token refresh failed" }));
+  assertEquals(gmailAlertsEnabled(undefined), false);
+  assertEquals(gmailAlertsEnabled(""), false);
+  assertEquals(gmailAlertsEnabled("on"), true);
+  assertEquals(gmailAlertsEnabled("TRUE"), true);
+});
