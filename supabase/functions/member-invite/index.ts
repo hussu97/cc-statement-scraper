@@ -3,7 +3,7 @@
 // Auth (verify_jwt=false; checked here): a user JWT. Owner-only: add_profile_member runs
 // through the caller's own client (assert_member(owner) applies) and "resend" checks
 // ownership first. The service-role client is used only afterwards, for
-// auth.admin.inviteUserByEmail / getUserById. Logic and limits: invite.ts.
+// auth.admin.inviteUserByEmail / listUsers. Logic and limits: invite.ts.
 //
 // Body: {profile_code, email, role?: "viewer"|"owner", action?: "invite"|"resend", redirect_to?}
 // Response 200: {status: "added"|"invited"|"resent", invite_sent: boolean, invite_error?: code}

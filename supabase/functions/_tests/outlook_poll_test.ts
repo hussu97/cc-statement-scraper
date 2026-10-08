@@ -6,7 +6,7 @@ import { assert, assertEquals } from "jsr:@std/assert@1.0.13";
 import { pollMailbox } from "../outlook-poll/poll.ts";
 import { deltaKey, GRAPH } from "../outlook-poll/graph.ts";
 import type { Mailbox } from "../_shared/email_ingest.ts";
-import { FakeDb, fakeFetch, type FetchRoute, mergeSyncStateRpc, PDF_BYTES } from "./fake_db.ts";
+import { FakeDb, fakeFetch, type FetchRoute, PDF_BYTES, saveSyncStateRpc } from "./fake_db.ts";
 
 Deno.env.delete("SENTRY_DSN");
 Deno.env.set("MS_OAUTH_CLIENT_ID", "cid");
@@ -49,7 +49,7 @@ function setup(syncState: Record<string, unknown>, opts: { rotateTo?: string; sa
       worker_mailbox_secret: () => ({ data: "old-refresh", error: null }),
       set_mailbox_secret: () =>
         opts.saveFails ? { data: null, error: { code: "42501", message: "denied" } } : { data: null, error: null },
-      merge_mailbox_sync_state: mergeSyncStateRpc,
+      save_mailbox_sync_state: saveSyncStateRpc,
     },
   });
   const tokenBody = {

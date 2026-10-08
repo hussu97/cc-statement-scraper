@@ -42,21 +42,13 @@ export interface SyncColumns {
   watch_expires_at?: string | null;
 }
 
-/** PostgREST "function not found" (PGRST202) or Postgres undefined_function (42883). */
-function rpcMissing(code: string | undefined): boolean {
-  return code === "PGRST202" || code === "42883";
-}
-
-let warnedNoMergeRpc = false;
-
 /**
- * Merge `patch` into the mailbox's sync_state (SRV-15). The database does the merge
- * (`merge_mailbox_sync_state`): keys not in the patch are kept and the Gmail cursor
- * only moves forward, so concurrent writers can't regress each other. `columns` sets
- * last_synced_at / watch_expires_at (null or absent = keep).
- *
- * If the RPC isn't deployed yet, falls back to the old snapshot write (one warning
- * per isolate) so a function deployed before its migration keeps working.
+ * Merge `patch` into the mailbox's sync_state (SRV-15) with the service-role RPC
+ * `save_mailbox_sync_state`: the merge happens in SQL under a row lock, keys not in the
+ * patch are kept, and the Gmail cursor and both timestamps never move backwards, so
+ * concurrent writers can't regress each other. `columns` sets last_synced_at /
+ * watch_expires_at (null or absent = keep). A `gmail_history_id` that isn't a numeric
+ * id is dropped from the patch, so a missing cursor never clears the stored one.
  */
 export async function saveSyncState(
   svc: Db,
@@ -64,32 +56,18 @@ export async function saveSyncState(
   patch: Record<string, unknown>,
   columns: SyncColumns = {},
 ): Promise<void> {
-  const { data, error } = await svc.rpc("merge_mailbox_sync_state", {
+  const clean = { ...patch };
+  if ("gmail_history_id" in clean && !/^\d{1,30}$/.test(String(clean.gmail_history_id ?? ""))) {
+    delete clean.gmail_history_id;
+  }
+  const { data, error } = await svc.rpc("save_mailbox_sync_state", {
     p_mailbox_code: mailbox.mailbox_code,
-    p_patch: patch,
+    p_patch: clean,
     p_last_synced_at: columns.last_synced_at ?? null,
     p_watch_expires_at: columns.watch_expires_at ?? null,
   });
-  if (!error) {
-    if (data && typeof data === "object" && !Array.isArray(data)) mailbox.sync_state = data as Record<string, unknown>;
-    return;
-  }
-  if (!rpcMissing(error.code)) throw pgErrorToHttp(error, "could not save mailbox sync state");
-
-  if (!warnedNoMergeRpc) {
-    console.warn("email_ingest: merge_mailbox_sync_state missing; falling back to a snapshot write");
-    warnedNoMergeRpc = true;
-  }
-  const next = { ...(mailbox.sync_state ?? {}), ...patch, updated_at: new Date().toISOString() };
-  const extra: Record<string, unknown> = {};
-  if (columns.last_synced_at) extra.last_synced_at = columns.last_synced_at;
-  if (columns.watch_expires_at) extra.watch_expires_at = columns.watch_expires_at;
-  const { error: upErr } = await svc.from("email_mailboxes").update({ sync_state: next, ...extra }).eq(
-    "mailbox_code",
-    mailbox.mailbox_code,
-  );
-  if (upErr) throw pgErrorToHttp(upErr, "could not save mailbox sync state");
-  mailbox.sync_state = next;
+  if (error) throw pgErrorToHttp(error, "could not save mailbox sync state");
+  if (data && typeof data === "object" && !Array.isArray(data)) mailbox.sync_state = data as Record<string, unknown>;
 }
 
 /**

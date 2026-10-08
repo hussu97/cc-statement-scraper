@@ -65,8 +65,8 @@ a `deno test` guard enforces this.
 |---|---|---|
 | `statements-upload` | Scraper: `Bearer ccs_…` service token with scope `statements:upload`, optional `X-Profile-Key`. Web/iOS: user JWT plus `profile_code` (owner only). | Accepts multipart `files` (PDF only, ≤ 20 files and ≤ 40 MB per request, enforced while streaming, before form parsing), dedups on sha256 per profile, writes the object to Storage **before** the `documents` row. The insert trigger then enqueues `parse_document`. Returns `{uploads:[{filename, doc_code, status: queued|duplicate, parse_status, requeued?}]}`; a duplicate of a document whose parse failed is requeued. |
 | `sms-ingest` | User JWT plus `profile_code`, or a service token with scope `sms:ingest` | Batch of ≤200 messages → `ingest_sms`. Idempotent on `client_msg_id`. For automations and tools; the iOS app calls the `ingest_sms` RPC directly. |
-| `worker` | pg_cron (`x-cron-secret`) | pgmq consumer. `parse_document` → parser → `ingest_parsed_document`; `llm_categorize` → Claude → `apply_llm_suggestions`; `sms_fallback` → Claude → `propose_sms_template`. Only contract errors are permanent; everything else retries with backoff and dead-letters after 5 attempts (§4). A round starts only if it can finish inside the Edge wall clock (`EDGE_WALL_CLOCK_MS`, 150 s: a parse round needs `PARSER_TIMEOUT_MS` + 20 s, an LLM round 65 s). Returns 202 and works in the background (pg_net times out at 5 s). |
-| `gmail-push` | Google-signed OIDC token from Pub/Sub (audience `GMAIL_PUSH_AUDIENCE`, SA `GMAIL_PUSH_SA_EMAIL`) | `history.list` (filtered to the watch label) from the stored cursor, matches PDF attachments to the mailbox's routes and stores them (`source = gmail`). The cursor advances after every page, through `merge_mailbox_sync_state` (it never moves backwards). Within `GMAIL_PUSH_BUDGET_MS`; when it runs out it answers 503 and the redelivery continues. A cursor older than Gmail's history (404) is reported and followed by a bounded `messages.list` backfill. Transient failures return 500 (redelivery is idempotent); permanent ones (bad envelope, revoked grant, missing config) are recorded in `sync_state.last_error` and acked. |
+| `worker` | pg_cron (`x-cron-secret`) | pgmq consumer. `parse_document` → parser → `ingest_parsed_document`; `llm_categorize` → Claude → `apply_llm_suggestions`; `sms_fallback` → Claude → `propose_sms_template`; `storage_cleanup` → Storage `remove` (a deleted profile's PDFs, `statements` bucket and profile-prefixed paths only). A parse starts with `begin_document_parse`, which skips stale messages for `parsed`/`failed` documents. Only contract errors are permanent; everything else retries with backoff and dead-letters after 5 attempts (§4). A round starts only if it can finish inside the Edge wall clock (`EDGE_WALL_CLOCK_MS`, 150 s: a parse round needs `PARSER_TIMEOUT_MS` + 20 s, an LLM round 65 s). Returns 202 and works in the background (pg_net times out at 5 s). |
+| `gmail-push` | Google-signed OIDC token from Pub/Sub (audience `GMAIL_PUSH_AUDIENCE`, SA `GMAIL_PUSH_SA_EMAIL`) | `history.list` (filtered to the watch label) from the stored cursor, matches PDF attachments to the mailbox's routes and stores them (`source = gmail`). The cursor advances after every page, through `save_mailbox_sync_state` (it never moves backwards). Within `GMAIL_PUSH_BUDGET_MS`; when it runs out it answers 503 and the redelivery continues. A cursor older than Gmail's history (404) is reported and followed by a bounded `messages.list` backfill. Transient failures return 500 (redelivery is idempotent); permanent ones (bad envelope, revoked grant, missing config) are recorded in `sync_state.last_error` and acked. |
 | `gmail-watch-renew` | pg_cron daily | Renews `users.watch` (watches expire after 7 days) on `GMAIL_PUBSUB_TOPIC`. |
 | `outlook-poll` | pg_cron hourly | Microsoft Graph delta over Inbox, DeletedItems and Archive. Resumable within `OUTLOOK_BUDGET_MS`. Replaces the legacy GitHub Actions cron. |
 | `ops-monitor` | pg_cron every 15 min | Reads `ops_health()` and raises one Sentry issue per problem type, then sends the `ops-heartbeat` cron check-in. |
@@ -136,9 +136,9 @@ fx_rates (global)
 | `email_mailboxes`, `email_routes`, `email_events` | Mailbox (gmail/outlook, `sync_state` cursor), per-bank routing rules, and per-attachment idempotency log. |
 | `fx_rates` | Global AED-per-unit market rates (fallback estimate only). |
 
-Queues (pgmq): `parse_document`, `llm_categorize`, `sms_fallback`, each with a `_dlq`, and
-`storage_cleanup` (`{bucket, paths[]}` from `delete_profile`; Storage objects can only be removed
-through the Storage API). `drain_dlq(queue)` and `requeue_dlq(queue, limit)` are the service-role
+Queues (pgmq): `parse_document`, `llm_categorize`, `sms_fallback` and `storage_cleanup`, each with a `_dlq`;
+`storage_cleanup` carries `{bucket, paths[]}` from `delete_profile` (Storage objects can only be removed
+through the Storage API, so the worker removes them). `drain_dlq(queue)` and `requeue_dlq(queue, limit)` are the service-role
 DLQ tools.
 Storage: private bucket `statements` (25 MB limit, `application/pdf`). Members can read their
 profile's folder. Only Edge Functions write to it.
@@ -599,8 +599,10 @@ Bank SMS → Shortcuts automation → LogBankSMSIntent (openAppWhenRun = false, 
 - **Database health.** The DB can't run the SDK, so `ops-monitor` turns `ops_health()` into
   issues every 15 min:
   - cron failures
-  - DLQ depth > 0 (`queues.*.newest_age_s` tells whether a message arrived since the last run)
-  - documents `parsing` for over 1 h (`queued` ones are a backlog, `documents_queued_oldest_age_s`)
+  - DLQ messages: an error when the DLQ grew since the last run (`newest_age_s < 900`), then a
+    daily reminder until `drain_dlq` / `requeue_dlq`
+  - documents `parsing` for over 1 h, and the oldest `queued` document older than
+    `OPS_QUEUED_DOCUMENT_AGE_S` (3 h; `documents_queued_oldest_age_s`)
   - failed parses
   - unparsed SMS above `OPS_SMS_UNPARSED_THRESHOLD`
   - recon failures (last 7 days)

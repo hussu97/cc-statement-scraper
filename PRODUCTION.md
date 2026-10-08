@@ -84,23 +84,23 @@ Dashboard → Authentication:
   (`shouldCreateUser: false` on web and iOS); an unknown email is told to ask a ledger owner for an invite.
 - **Adding a member** (sign-ups stay off):
   1. An owner adds the email. The Edge Function **`member-invite`** (`{profile_code, email,
-     role}`) runs `add_profile_member` as the owner and, when the email has no Auth user yet
-     (`invited`), sends the Auth invite email itself (`auth.admin.inviteUserByEmail`; invites
-     work with sign-ups disabled). `{"action": "resend"}` re-sends it to a member who never
-     confirmed (not within 10 min of the last invite). The web Settings → Members screen still
-     calls `add_profile_member` directly; its "Invite" / "Resend invite" buttons calling
-     `member-invite` are a follow-up, so until then use the function (or step 2).
-  2. Fallback: Dashboard → Authentication → Users → **Invite user** with that email. The
-     `auth.users` insert trigger claims the pending invite, so the person lands in the ledger
-     with the stored role.
+     role}`) runs `add_profile_member` as the owner and, when the email has no confirmed Auth
+     user (`invited`), sends the Auth invite email itself (`auth.admin.inviteUserByEmail`;
+     invites work with sign-ups disabled). `{"action": "resend"}` re-sends it to a pending
+     member; neither sends to an address invited in the last 10 min. The web Settings → Members
+     screen still calls `add_profile_member` directly; its "Invite" / "Resend invite" buttons
+     calling `member-invite` are a follow-up (NEW-1r), so until then use the function (or step 2).
+  2. Fallback: Dashboard → Authentication → Users → **Invite user** with that email.
   3. The invite email tells them to open Bank Ledger and sign in with that address; the code
-     they request confirms the account (the *Confirm signup* template also sends a code).
+     they request confirms the account (the *Confirm signup* template also sends a code). The
+     pending invite attaches only then, once the address is **confirmed** (DB-23), so the
+     member shows as pending until their first sign-in.
 
-  If the email already has an Auth user, step 1 adds them directly (`added`) and nothing is
-  sent. The invite link goes to the caller's own web origin (`ALLOWED_ORIGINS` when set), so
-  that origin must also be in the Auth redirect allow-list (URL Configuration above); without
-  an Origin (iOS) it goes to the Site URL. Invites count against Auth's email rate limit
-  (SMTP below).
+  If the email already has a confirmed account, step 1 adds them directly (`added`) and nothing
+  is sent. The invite's redirect is the caller's own web origin (`ALLOWED_ORIGINS` when set; it
+  must be in the Auth redirect allow-list), or the Site URL without an Origin (iOS); the
+  code-only templates don't link to it. Invites count against Auth's email rate limit (SMTP
+  below).
 - **SMTP.** The built-in sender is heavily rate-limited (a few emails an hour). That is fine for
   two people. Configure custom SMTP if OTP emails go missing.
 
@@ -117,8 +117,8 @@ supabase db push                    # applies supabase/migrations/* in order
 - The migrations also:
   - enable the extensions `pg_trgm`, `pgmq`, `pg_cron` and `pg_net`
   - create the private Storage bucket **`statements`** (25 MB, `application/pdf`)
-  - create the pgmq queues (`parse_document`, `llm_categorize`, `sms_fallback`, each with a
-    `_dlq`, and `storage_cleanup` for PDFs of a deleted profile)
+  - create the pgmq queues (`parse_document`, `llm_categorize`, `sms_fallback` and
+    `storage_cleanup` for PDFs of a deleted profile, each with a `_dlq`)
   - schedule the pg_cron jobs (§2.6)
   - add the Realtime publication
 - `supabase/seed.sql` is **local only**. `db push` never runs it.
@@ -216,7 +216,7 @@ supabase secrets list --project-ref <project-ref>      # names and digests only
   `PARSER_DOCUMENT_BASE_URL` or `LEDGER_E2E` (local only).
 - Optional overrides: `MS_OAUTH_TENANT` (`consumers`), `OUTLOOK_LOOKBACK_DAYS`,
   `OUTLOOK_BUDGET_MS`, `GMAIL_PUSH_BUDGET_MS`, `WORKER_BUDGET_MS`, `PARSER_TIMEOUT_MS`, `EDGE_WALL_CLOCK_MS`,
-  `OPS_SMS_UNPARSED_THRESHOLD`, `OPS_OPEN_REVIEWS_THRESHOLD`, `OPS_PARSE_QUEUE_AGE_S` and `SENTRY_TRACES_SAMPLE_RATE`
+  `OPS_SMS_UNPARSED_THRESHOLD`, `OPS_OPEN_REVIEWS_THRESHOLD`, `OPS_QUEUED_DOCUMENT_AGE_S` and `SENTRY_TRACES_SAMPLE_RATE`
   (see README). Add them to the same file.
 - **Worker timing.** Leave `PARSER_TIMEOUT_MS` at its default **75000** (set it explicitly only
   to document it): it must stay above the parser's own 60 s kill (§3) and below Cloud Run's
@@ -809,7 +809,7 @@ history):
     count; for `parse_document` it also re-opens the failed documents. (`requeue_documents`
     still works per profile.)
   - `select public.drain_dlq('<queue>');` deletes them instead.
-  - `<queue>` is `parse_document`, `llm_categorize` or `sms_fallback`.
+  - `<queue>` is `parse_document`, `llm_categorize`, `sms_fallback` or `storage_cleanup`.
 - **Batch job errors:** `select * from private.job_errors order by created_at desc limit 50;`
   (per-profile failures of `nightly`, `enqueue_llm_categorize`, `recategorize_stale`,
   `reestimate_pending_fx`; kept 30 days, counted in `ops_health.job_errors_24h`).
@@ -817,12 +817,13 @@ history):
   To make it global: `select public.promote_sms_template('<tpl_…>');`.
 - **Delete a profile:** an owner calls `select public.delete_profile('<prf_…>', '<profile key>');`.
   Vault secrets go with it; its PDFs are queued on `storage_cleanup` (`{bucket, paths[]}`) for
-  the worker to remove through the Storage API.
+  the worker to remove through the Storage API (on its next run; `kick_worker` wakes it for
+  them). A batch that keeps failing lands in `storage_cleanup_dlq` and raises a `dlq:` issue.
 - **New SMS format:** add a template row in a guarded content migration (CLAUDE.md §1.9) with
   at least one `examples` entry (required). The validation trigger proves it parses, and the
   unparsed messages from its senders re-run automatically. Or approve an LLM proposal in the Review inbox.
-- **Add a member:** owner adds the email in Settings → Members, then Dashboard → Authentication
-  → Users → Invite user (§2.2). Sign-ups stay off.
+- **Add a member:** owner calls the `member-invite` Edge Function (or adds the email in Settings → Members, then Dashboard → Authentication
+  → Users → Invite user; §2.2). Sign-ups stay off.
 - **Secret rotation:**
   - `CRON_SECRET`: replace the line in `supabase/functions/.env.production`, then run
     `scripts/cutover/set-edge-secrets.sh` and `scripts/cutover/set-vault-secrets.sql` (§2.4)

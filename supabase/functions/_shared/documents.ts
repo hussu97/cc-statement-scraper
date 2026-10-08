@@ -107,8 +107,9 @@ async function findBySha(svc: Db, profileCode: string, sha: string): Promise<Exi
 
 /**
  * SRV-20: re-sending a PDF whose parse failed (for example before its password was set)
- * queues it again instead of answering a bare `duplicate`. A failed requeue is reported,
- * not thrown: the upload itself succeeded, and the owner can still requeue by hand.
+ * queues it again (`resubmit_document`) instead of answering a bare `duplicate`. A
+ * failed resubmit is reported, not thrown: the upload itself succeeded, and the owner
+ * can still requeue by hand.
  */
 async function duplicateResult(svc: Db, profileCode: string, doc: ExistingDoc, sha: string): Promise<StoreResult> {
   const base: StoreResult = {
@@ -118,19 +119,20 @@ async function duplicateResult(svc: Db, profileCode: string, doc: ExistingDoc, s
     parse_status: doc.parse_status,
   };
   if (doc.parse_status !== "failed") return base;
-  const { data, error } = await svc.rpc("requeue_documents", {
+  const { data, error } = await svc.rpc("resubmit_document", {
     p_profile_code: profileCode,
-    p_doc_codes: [doc.doc_code],
+    p_doc_code: doc.doc_code,
   });
-  if (error || Number(data ?? 0) < 1) {
-    captureMessage("could not requeue a re-sent failed document", {
+  const r = (data ?? {}) as { parse_status?: unknown; requeued?: unknown };
+  if (error || typeof r.parse_status !== "string") {
+    captureMessage("could not resubmit a re-sent failed document", {
       level: "warning",
       tags: { profile_code: profileCode, doc_code: doc.doc_code, sqlstate: error?.code },
-      fingerprint: ["documents", "requeue_failed_duplicate"],
+      fingerprint: ["documents", "resubmit_failed_duplicate"],
     });
     return base;
   }
-  return { ...base, parse_status: "queued", requeued: true };
+  return { ...base, parse_status: r.parse_status as ParseStatus, ...(r.requeued === true ? { requeued: true } : {}) };
 }
 
 /** Dedupe and store one prepared PDF. Uses the service-role client (caller already authorised). */

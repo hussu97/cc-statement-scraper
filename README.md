@@ -186,7 +186,7 @@ Create a service token in web Settings → Sources & health → Tokens, or with
 
 | Component | Command |
 |---|---|
-| Database (pgTAP: RLS guards, matching, categorisation, recon, analytics, SMS templates, FX, legacy import, cross-profile isolation, ingest robustness, review actions, client privilege matrix, re-parse relink, the 2026-10-09 P2/P3 fixes (`13`–`18`); hermetic, so they also pass on a non-empty local DB) | `supabase db reset && supabase test db` |
+| Database (pgTAP: RLS guards, matching, categorisation, recon, analytics, SMS templates, FX, legacy import, cross-profile isolation, ingest robustness, review actions, client privilege matrix, re-parse relink, the 2026-10-09 P2/P3 fixes (`13`–`19`); hermetic, so they also pass on a non-empty local DB) | `supabase db reset && supabase test db` |
 | DB types drift | `pnpm db:types:check` (regenerate with `pnpm db:types`) |
 | Edge Functions | `cd supabase/functions && deno lint && deno fmt --check && deno check . && deno test -A .` (the lock `deno.lock` is frozen; the local e2e runs only with `LEDGER_E2E=1` and a served stack) |
 | Parser | `cd services/parser && .venv/bin/ruff check . && .venv/bin/pytest -q` (golden parity needs private PDFs; skipped otherwise) |
@@ -256,7 +256,7 @@ JWTs. The service client logs which source it used (never the value).
 | `GMAIL_PUSH_BUDGET_MS` | gmail-push | `100000` | Time budget per push; the rest continues on the redelivery (503) |
 | `OPS_SMS_UNPARSED_THRESHOLD` | ops-monitor | `5` | Unparsed SMS per 24 h before an issue |
 | `OPS_OPEN_REVIEWS_THRESHOLD` | ops-monitor | `50` | Open reviews before an issue |
-| `OPS_PARSE_QUEUE_AGE_S` | ops-monitor | `10800` | Oldest `parse_document` message age (s) before a backlog warning |
+| `OPS_QUEUED_DOCUMENT_AGE_S` | ops-monitor | `10800` | Age (s) of the oldest `queued` document before a backlog warning |
 | `ALLOWED_ORIGINS` | all (CORS) | any | Comma-separated allowed origins |
 | `SENTRY_DSN` | all | — | Sentry `credit-card-ledger-backend` DSN (empty disables Sentry) |
 | `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE` | all | `local`, — | Sentry environment and release. Unset, `local`, `development` and `test` disable Sentry even with a DSN; production sets `production` |

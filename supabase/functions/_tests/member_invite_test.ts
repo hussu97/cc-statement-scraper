@@ -69,9 +69,11 @@ function fakes(opts: {
   addError?: { code: string; message: string };
   role?: string;
   members?: { user_id: string | null; email: string; role: string; pending: boolean }[];
+  /** An existing Auth user for new@example.com. */
   user?: User;
   inviteError?: { status?: number; code?: string };
   limit?: number;
+  usersPages?: number;
 }) {
   const db = new FakeDb({
     tables: { profile_members: opts.role ? [{ profile_code: PRF, user_id: OWNER, role: opts.role }] : [] },
@@ -82,12 +84,25 @@ function fakes(opts: {
     },
   });
   const sent: { email: string; redirectTo?: string }[] = [];
+  const pages: number[] = [];
   const admin: AuthAdmin = {
     inviteUserByEmail: (email, o) => {
       sent.push({ email, redirectTo: o?.redirectTo });
       return Promise.resolve({ data: null, error: opts.inviteError ?? null });
     },
-    getUserById: () => Promise.resolve({ data: { user: opts.user ?? {} }, error: null }),
+    listUsers: ({ page, perPage }) => {
+      pages.push(page);
+      const last = opts.usersPages ?? 1;
+      // Full pages of other users, then the last page holds the match (if any).
+      const others = Array.from({ length: page < last ? perPage : 3 }, (_, i) => ({
+        id: `u${page}-${i}`,
+        email: `other${page}-${i}@example.com`,
+      }));
+      const users = page === last && opts.user
+        ? [...others, { id: "u-new", email: "New@Example.com", ...opts.user }]
+        : others;
+      return Promise.resolve({ data: { users }, error: null });
+    },
   };
   const deps = {
     user: db.asDb(),
@@ -97,7 +112,7 @@ function fakes(opts: {
     redirectTo: "https://app.example/",
     now: () => Date.parse("2026-10-09T12:00:00Z"),
   };
-  return { db, sent, deps };
+  return { db, sent, deps, pages };
 }
 
 const req = (over: Partial<InviteRequest> = {}): InviteRequest => ({
@@ -140,6 +155,19 @@ Deno.test("invite: a failed email still adds the member and reports the code", a
   });
 });
 
+Deno.test("invite: an address invited minutes ago (still unconfirmed, DB-23) isn't emailed again", async () => {
+  const f = fakes({ user: { invited_at: "2026-10-09T11:55:00Z" }, usersPages: 3 });
+  assertEquals(await runInvite(req(), f.deps), {
+    status: "invited",
+    invite_sent: false,
+    invite_error: "INVITE_COOLDOWN",
+  });
+  assertEquals(f.sent.length, 0);
+  assertEquals(f.pages, [1, 2, 3], "listUsers is paged until the address is found");
+  const later = fakes({ user: { invited_at: "2026-10-09T11:00:00Z" } });
+  assertEquals((await runInvite(req(), later.deps)).invite_sent, true);
+});
+
 Deno.test("invite: the per-caller limit applies before the member is added", async () => {
   const f = fakes({ limit: 1 });
   await runInvite(req(), f.deps);
@@ -148,8 +176,9 @@ Deno.test("invite: the per-caller limit applies before the member is added", asy
   assertEquals(f.db.rpcCalls("add_profile_member").length, 1);
 });
 
-Deno.test("resend: owners only, members only, never to confirmed users, with a cooldown", async () => {
-  const member = {
+Deno.test("resend: owners only, pending members only, never to confirmed users, with a cooldown", async () => {
+  const pending = { user_id: null, email: "new@example.com", role: "viewer", pending: true };
+  const active = {
     user_id: "00000000-0000-0000-0000-00000000000b",
     email: "new@example.com",
     role: "viewer",
@@ -158,22 +187,24 @@ Deno.test("resend: owners only, members only, never to confirmed users, with a c
   const code = async (f: ReturnType<typeof fakes>) =>
     (await assertRejects(() => runInvite(req({ action: "resend" }), f.deps), HttpError)).code;
 
-  assertEquals(await code(fakes({ role: "viewer", members: [member] })), "FORBIDDEN");
+  assertEquals(await code(fakes({ role: "viewer", members: [pending] })), "FORBIDDEN");
   assertEquals(await code(fakes({ role: "owner", members: [] })), "NOT_A_MEMBER");
+  assertEquals(await code(fakes({ role: "owner", members: [active] })), "ALREADY_ACTIVE");
   assertEquals(
-    await code(fakes({ role: "owner", members: [member], user: { email_confirmed_at: "2026-10-01T00:00:00Z" } })),
+    await code(fakes({ role: "owner", members: [pending], user: { email_confirmed_at: "2026-10-01T00:00:00Z" } })),
     "ALREADY_ACTIVE",
   );
   assertEquals(
-    await code(fakes({ role: "owner", members: [member], user: { invited_at: "2026-10-09T11:55:00Z" } })),
+    await code(fakes({ role: "owner", members: [pending], user: { invited_at: "2026-10-09T11:55:00Z" } })),
     "INVITE_COOLDOWN",
   );
 
-  const ok = fakes({ role: "owner", members: [member], user: { invited_at: "2026-10-09T11:00:00Z" } });
+  const ok = fakes({ role: "owner", members: [pending], user: { invited_at: "2026-10-09T11:00:00Z" } });
   assertEquals(await runInvite(req({ action: "resend" }), ok.deps), { status: "resent", invite_sent: true });
   assertEquals(ok.sent.length, 1);
 
-  const pending = fakes({ role: "owner", members: [{ ...member, user_id: null, pending: true }] });
-  assertEquals(await runInvite(req({ action: "resend" }), pending.deps), { status: "resent", invite_sent: true });
+  // Never invited (the first email failed): no Auth user yet, so it goes out.
+  const fresh = fakes({ role: "owner", members: [pending] });
+  assertEquals(await runInvite(req({ action: "resend" }), fresh.deps), { status: "resent", invite_sent: true });
   assertEquals(RESEND_COOLDOWN_MS, 600_000);
 });

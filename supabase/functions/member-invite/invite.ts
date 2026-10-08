@@ -5,11 +5,14 @@
 //
 //   action "invite" (default): add_profile_member through the caller's own client (its
 //     owner check applies), then auth.admin.inviteUserByEmail when it returns `invited`.
-//   action "resend": owner-only; re-sends the invite to a member of the profile (pending,
-//     or an Auth user that has never confirmed). Refused for confirmed users.
+//   action "resend": owner-only; re-sends the invite to a pending member of the profile.
+//     Refused for active members and confirmed accounts.
+//
+// A pending invite attaches only when the address is confirmed (DB-23), so an invited
+// person stays `pending` (with an unconfirmed Auth user) until they sign in.
 //
 // Abuse limits: per caller, at most INVITES_PER_HOUR sends per isolate (best effort);
-// per address, no resend within RESEND_COOLDOWN_MS of the last invite (durable: Auth's
+// per address, no invite within RESEND_COOLDOWN_MS of the last one (durable: Auth's
 // own `invited_at`); and Auth's email rate limit on top. The invite link redirects only
 // to the caller's own web origin (same-origin and, when set, in ALLOWED_ORIGINS); Auth's
 // redirect allow-list is the final check.
@@ -99,16 +102,23 @@ export class RateLimiter {
   }
 }
 
+/** An Auth user as auth.admin returns it (only the fields used here). */
+export interface AuthUser {
+  id: string;
+  email?: string | null;
+  email_confirmed_at?: string | null;
+  invited_at?: string | null;
+  last_sign_in_at?: string | null;
+}
+
 /** The slice of supabase-js `auth.admin` this function uses. */
 export interface AuthAdmin {
   inviteUserByEmail(
     email: string,
     opts?: { redirectTo?: string },
   ): Promise<{ data: unknown; error: { status?: number; code?: string; message?: string } | null }>;
-  getUserById(id: string): Promise<{
-    data: {
-      user: { email_confirmed_at?: string | null; invited_at?: string | null; last_sign_in_at?: string | null } | null;
-    };
+  listUsers(params: { page: number; perPage: number }): Promise<{
+    data: { users: AuthUser[] } | null;
     error: { status?: number; code?: string } | null;
   }>;
 }
@@ -139,6 +149,43 @@ export function inviteError(err: { status?: number; code?: string; message?: str
   return new HttpError(502, "INVITE_FAILED", "the invite email could not be sent");
 }
 
+const USERS_PER_PAGE = 200;
+const MAX_USER_PAGES = 25;
+
+/**
+ * The Auth user with this email, if any. supabase-js has no lookup by email, so this
+ * pages through auth.admin.listUsers (a household app has a handful of users).
+ */
+export async function findAuthUser(admin: AuthAdmin, email: string): Promise<AuthUser | null> {
+  for (let page = 1; page <= MAX_USER_PAGES; page++) {
+    const { data, error } = await admin.listUsers({ page, perPage: USERS_PER_PAGE });
+    if (error) throw new HttpError(502, "INVITE_FAILED", "could not look up the account");
+    const users = data?.users ?? [];
+    const hit = users.find((u) => (u.email ?? "").toLowerCase() === email);
+    if (hit) return hit;
+    if (users.length < USERS_PER_PAGE) return null;
+  }
+  return null;
+}
+
+/**
+ * Why an invite to this address must not be sent now, or null. Sign-ups are off and a
+ * pending invite only attaches once the address is confirmed (DB-23), so an unconfirmed
+ * Auth user is "invited, not accepted yet": it may get the invite again, but not within
+ * RESEND_COOLDOWN_MS of the last one (Auth's own `invited_at`, so the limit is durable).
+ */
+export function inviteBlock(user: AuthUser | null, now: number): HttpError | null {
+  if (!user) return null;
+  if (user.email_confirmed_at) {
+    return new HttpError(409, "ALREADY_ACTIVE", "this person already has an active account");
+  }
+  const last = Date.parse(user.invited_at ?? "");
+  if (Number.isFinite(last) && now - last < RESEND_COOLDOWN_MS) {
+    return new HttpError(429, "INVITE_COOLDOWN", "an invite was sent recently; try again in a few minutes");
+  }
+  return null;
+}
+
 function takeToken(deps: InviteDeps): void {
   if (!deps.limiter.take(deps.userId, (deps.now ?? Date.now)())) {
     throw new HttpError(429, "RATE_LIMITED", "too many invites; try again later");
@@ -158,6 +205,7 @@ interface MemberRow {
 }
 
 export async function runInvite(req: InviteRequest, deps: InviteDeps): Promise<InviteOutcome> {
+  const now = (deps.now ?? Date.now)();
   if (req.action === "invite") {
     takeToken(deps); // before the add, so the limit also caps new pending members
     const { data, error } = await deps.user.rpc("add_profile_member", {
@@ -167,12 +215,11 @@ export async function runInvite(req: InviteRequest, deps: InviteDeps): Promise<I
     });
     if (error) throw pgErrorToHttp(error, "could not add the member");
     if (data !== "invited") return { status: "added", invite_sent: false };
-    const failed = await send(deps, req.email);
-    // The member is added either way; the owner can resend later.
-    return failed ? { status: "invited", invite_sent: false, invite_error: failed.code } : {
-      status: "invited",
-      invite_sent: true,
-    };
+    // The member is pending either way; the owner can resend later.
+    const failed = inviteBlock(await findAuthUser(deps.admin, req.email), now) ?? await send(deps, req.email);
+    return failed
+      ? { status: "invited", invite_sent: false, invite_error: failed.code }
+      : { status: "invited", invite_sent: true };
   }
 
   // resend: owner only, and only to someone who is (or is pending as) a member.
@@ -185,19 +232,10 @@ export async function runInvite(req: InviteRequest, deps: InviteDeps): Promise<I
   if (error) throw pgErrorToHttp(error, "could not list members");
   const member = ((rows ?? []) as MemberRow[]).find((m) => (m.email ?? "").toLowerCase() === req.email);
   if (!member) throw new HttpError(404, "NOT_A_MEMBER", "this email is not a member of the profile");
+  if (!member.pending) throw new HttpError(409, "ALREADY_ACTIVE", "this person already has an active account");
 
-  if (!member.pending && member.user_id) {
-    const { data, error: getErr } = await deps.admin.getUserById(member.user_id);
-    if (getErr || !data?.user) throw new HttpError(502, "INVITE_FAILED", "could not look up the member");
-    const u = data.user;
-    if (u.email_confirmed_at || u.last_sign_in_at) {
-      throw new HttpError(409, "ALREADY_ACTIVE", "this person already has an active account");
-    }
-    const last = Date.parse(u.invited_at ?? "");
-    if (Number.isFinite(last) && (deps.now ?? Date.now)() - last < RESEND_COOLDOWN_MS) {
-      throw new HttpError(429, "INVITE_COOLDOWN", "an invite was sent recently; try again in a few minutes");
-    }
-  }
+  const blocked = inviteBlock(await findAuthUser(deps.admin, req.email), now);
+  if (blocked) throw blocked;
   takeToken(deps);
   const failed = await send(deps, req.email);
   if (failed) throw failed;

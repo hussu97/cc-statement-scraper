@@ -6,8 +6,8 @@ import { prepareDocument, storeDocument } from "../_shared/documents.ts";
 import { ingestAttachment, type Mailbox, saveSyncState } from "../_shared/email_ingest.ts";
 import { HttpError, pgErrorToHttp } from "../_shared/http.ts";
 import { scrubEvent, scrubString } from "../_shared/sentry.ts";
-import { processParseMessage, staleMessageCode } from "../worker/parse_document.ts";
-import { FakeDb, mergeSyncStateRpc, PDF_BYTES } from "./fake_db.ts";
+import { processParseMessage } from "../worker/parse_document.ts";
+import { FakeDb, PDF_BYTES, saveSyncStateRpc } from "./fake_db.ts";
 
 Deno.env.delete("SENTRY_DSN");
 
@@ -79,7 +79,7 @@ Deno.test("storeDocument: any other insert failure removes the object and throws
   assertEquals(up.tables.documents.length, 0);
 });
 
-Deno.test("storeDocument: re-sending a failed document requeues it (SRV-20)", async () => {
+Deno.test("storeDocument: re-sending a failed document resubmits it (SRV-20)", async () => {
   const document = await prepared();
   const failedDoc = () => ({
     doc_code: "doc_failed",
@@ -87,19 +87,33 @@ Deno.test("storeDocument: re-sending a failed document requeues it (SRV-20)", as
     sha256: document.sha256,
     parse_status: "failed",
   });
+  const resubmit = { doc_code: "doc_failed", parse_status: "queued", requeued: true };
 
   const db = new FakeDb({
     tables: { documents: [failedDoc()] },
-    rpcs: { requeue_documents: () => ({ data: 1, error: null }) },
+    rpcs: { resubmit_document: () => ({ data: resubmit, error: null }) },
   });
   const r = await storeDocument(db.asDb(), { profileCode: PRF, document, source: "scraper" });
   assertEquals([r.status, r.parse_status, r.requeued], ["duplicate", "queued", true]);
-  assertEquals(db.rpcCalls("requeue_documents"), [{ p_profile_code: PRF, p_doc_codes: ["doc_failed"] }]);
+  assertEquals(db.rpcCalls("resubmit_document"), [{ p_profile_code: PRF, p_doc_code: "doc_failed" }]);
 
-  // A failed requeue still answers duplicate (the upload itself is fine).
+  // The RPC found it no longer failed (a concurrent requeue): plain duplicate, its status.
+  const raced = new FakeDb({
+    tables: { documents: [failedDoc()] },
+    rpcs: {
+      resubmit_document: () => ({
+        data: { doc_code: "doc_failed", parse_status: "parsing", requeued: false },
+        error: null,
+      }),
+    },
+  });
+  const r1 = await storeDocument(raced.asDb(), { profileCode: PRF, document, source: "scraper" });
+  assertEquals([r1.status, r1.parse_status, r1.requeued], ["duplicate", "parsing", undefined]);
+
+  // A failed resubmit still answers duplicate (the upload itself is fine).
   const broken = new FakeDb({
     tables: { documents: [failedDoc()] },
-    rpcs: { requeue_documents: () => ({ data: null, error: { code: "42501", message: "x" } }) },
+    rpcs: { resubmit_document: () => ({ data: null, error: { code: "P0002", message: "x" } }) },
   });
   const r2 = await storeDocument(broken.asDb(), { profileCode: PRF, document, source: "scraper" });
   assertEquals([r2.status, r2.parse_status, r2.requeued], ["duplicate", "failed", undefined]);
@@ -107,7 +121,7 @@ Deno.test("storeDocument: re-sending a failed document requeues it (SRV-20)", as
   // Parsed duplicates are left alone.
   const parsed = new FakeDb({ tables: { documents: [{ ...failedDoc(), parse_status: "parsed" }] } });
   await storeDocument(parsed.asDb(), { profileCode: PRF, document, source: "scraper" });
-  assertEquals(parsed.rpcCalls("requeue_documents").length, 0);
+  assertEquals(parsed.rpcCalls("resubmit_document").length, 0);
 });
 
 const mailbox = (): Mailbox => ({
@@ -145,60 +159,54 @@ Deno.test("ingestAttachment: non-PDF content is recorded as ignored, never store
   assertEquals(db.tables.documents.length, 0);
 });
 
-Deno.test("saveSyncState merges in SQL, and falls back to a snapshot write without the RPC (SRV-15)", async () => {
+Deno.test("saveSyncState merges through save_mailbox_sync_state (SRV-15)", async () => {
   const mb = mailbox();
   const db = new FakeDb({
-    tables: { email_mailboxes: [{ ...mb }] },
-    rpcs: { merge_mailbox_sync_state: mergeSyncStateRpc },
+    tables: { email_mailboxes: [{ ...mb, last_synced_at: "2026-10-09T10:00:00Z" }] },
+    rpcs: { save_mailbox_sync_state: saveSyncStateRpc },
   });
-  // A stale writer (older cursor) can't move the cursor back, and keeps other keys.
-  await saveSyncState(db.asDb(), mb, { gmail_history_id: "400", last_error: null }, { last_synced_at: "t1" });
+  // A stale writer (older cursor, older timestamp) can't move either back, and keeps other keys.
+  await saveSyncState(db.asDb(), mb, { gmail_history_id: "400", last_error: null }, {
+    last_synced_at: "2026-10-09T09:00:00Z",
+  });
   const s = db.tables.email_mailboxes[0].sync_state as Record<string, unknown>;
   assertEquals([s.gmail_history_id, s.keep, s.last_error], ["500", 1, null]);
-  assertEquals(db.tables.email_mailboxes[0].last_synced_at, "t1");
+  assertEquals(db.tables.email_mailboxes[0].last_synced_at, "2026-10-09T10:00:00Z");
   assertEquals(mb.sync_state, s, "the in-memory mailbox follows the stored state");
 
-  const old = new FakeDb({ tables: { email_mailboxes: [{ ...mailbox() }] } }); // RPC missing → PGRST202
-  const mb2 = mailbox();
-  await saveSyncState(old.asDb(), mb2, { provider: "gmail" }, { watch_expires_at: "t2" });
-  const upd = old.calls.find((c) => c.kind === "update")!.args as { set: Record<string, unknown> };
-  assertEquals(upd.set.watch_expires_at, "t2");
-  assertEquals((upd.set.sync_state as Record<string, unknown>).gmail_history_id, "500");
+  // A missing cursor is dropped from the patch, so it can never clear the stored one.
+  await saveSyncState(db.asDb(), mb, { gmail_history_id: null, provider: "gmail" });
+  const patch = db.rpcCalls("save_mailbox_sync_state").at(-1)!.p_patch as Record<string, unknown>;
+  assertEquals(patch, { provider: "gmail" });
+  assertEquals((db.tables.email_mailboxes[0].sync_state as Record<string, unknown>).gmail_history_id, "500");
 
+  // No fallback: a missing or failing RPC is an error.
+  await assertRejects(() => saveSyncState(new FakeDb().asDb(), mailbox(), {}), HttpError);
   const failing = new FakeDb({
-    rpcs: { merge_mailbox_sync_state: () => ({ data: null, error: { code: "P0002", message: "unknown mailbox" } }) },
+    rpcs: { save_mailbox_sync_state: () => ({ data: null, error: { code: "P0002", message: "unknown mailbox" } }) },
   });
   await assertRejects(() => saveSyncState(failing.asDb(), mailbox(), {}), HttpError);
 });
 
-Deno.test("worker skips stale messages for parsed or failed documents unless requeued (SRV-20)", async () => {
-  assertEquals(staleMessageCode({ parse_status: "parsed" }, {}), "ALREADY_PARSED");
-  assertEquals(staleMessageCode({ parse_status: "failed" }, {}), "ALREADY_FAILED");
-  assertEquals(staleMessageCode({ parse_status: "parsed" }, { requeue: true }), null);
-  for (const s of ["queued", "parsing", undefined]) assertEquals(staleMessageCode({ parse_status: s }, {}), null);
-
+Deno.test("worker skips stale messages through begin_document_parse (SRV-20)", async () => {
   const DOC = "doc_01k4dffqf0fz41nq50eaa1sqh2";
-  const db = new FakeDb({
-    rpcs: {
-      worker_document_context: () => ({
-        data: {
-          doc: {
-            storage_path: "p",
-            original_filename: "x.pdf",
-            bank_code: null,
-            profile_code: PRF,
-            parse_status: "parsed",
-          },
-        },
-        error: null,
-      }),
-      queue_delete: () => ({ data: true, error: null }),
-    },
-  });
-  const r = await processParseMessage(db.asDb(), { msg_id: 3, read_ct: 1, message: { doc_code: DOC } });
-  assertEquals(r, { doc_code: DOC, outcome: "skipped", code: "ALREADY_PARSED" });
-  assertEquals(db.calls.filter((c) => c.kind === "update").length, 0, "status never flipped back to parsing");
-  assertEquals(db.rpcCalls("queue_delete"), [{ p_queue: "parse_document", p_msg_id: 3 }]);
+  const run = async (data: unknown) => {
+    const db = new FakeDb({
+      rpcs: {
+        begin_document_parse: () => ({ data, error: null }),
+        queue_delete: () => ({ data: true, error: null }),
+      },
+    });
+    const r = await processParseMessage(db.asDb(), { msg_id: 3, read_ct: 2, message: { doc_code: DOC } });
+    return { r, db };
+  };
+  const parsed = await run({ skip: "parsed", doc_code: DOC });
+  assertEquals(parsed.r, { doc_code: DOC, outcome: "skipped", code: "ALREADY_PARSED" });
+  assertEquals(parsed.db.rpcCalls("begin_document_parse"), [{ p_doc_code: DOC, p_attempt: 2 }]);
+  assertEquals(parsed.db.rpcCalls("queue_delete"), [{ p_queue: "parse_document", p_msg_id: 3 }]);
+  assertEquals(parsed.db.rpcCalls("fail_document").length, 0, "a stale message never touches the document");
+  assertEquals((await run({ skip: "failed", doc_code: DOC })).r.code, "ALREADY_FAILED");
+  assertEquals((await run(null)).r, { doc_code: DOC, outcome: "skipped" }, "deleted document");
 });
 
 Deno.test("worker: a failed status write is not swallowed (SRV-23)", async () => {

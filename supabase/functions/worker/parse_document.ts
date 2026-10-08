@@ -134,15 +134,6 @@ async function failDocument(svc: Db, docCode: string, code: string, message: str
   if (error) throw new Error(`fail_document failed (${error.code})`);
 }
 
-async function markParsing(svc: Db, docCode: string, attempt: number) {
-  const { error } = await svc.from("documents").update({
-    parse_status: "parsing",
-    parse_attempts: Math.min(attempt, 32767),
-  })
-    .eq("doc_code", docCode);
-  if (error) throw new Error(`could not mark ${docCode} as parsing (${error.code})`);
-}
-
 interface TransientDetail {
   http_status?: number;
   sqlstate?: string;
@@ -162,21 +153,33 @@ interface WorkerDoc {
   original_filename: string;
   bank_code: string | null;
   profile_code: string;
-  parse_status?: string;
 }
 
+export type ParseClaim =
+  | { kind: "deleted" }
+  | { kind: "skip"; status: "parsed" | "failed" }
+  | { kind: "claimed"; doc: WorkerDoc; settings: Record<string, unknown> };
+
 /**
- * SRV-20: a message for a document that is already `parsed` (or permanently `failed`) is
- * stale: a duplicate delivery, or a redelivery after a lost delete. Processing it would
- * flip a parsed document back to `parsing` and possibly `failed`. requeue_documents sets
- * the status to `queued` before it enqueues, so a real requeue is never skipped; a message
- * may also force a re-parse with `{"requeue": true}`.
+ * SRV-20: `begin_document_parse` claims the document (status `parsing`, attempt count)
+ * and returns its context in one call. A message for a document that is already
+ * `parsed` or `failed` is stale (a duplicate delivery, or a redelivery after a lost
+ * delete) and is skipped without touching the document; requeue_documents,
+ * resubmit_document and requeue_dlq put a document back to `queued` before they enqueue,
+ * so a real re-parse is never skipped. A deleted document returns null.
  */
-export function staleMessageCode(doc: { parse_status?: unknown }, message: Record<string, unknown>): string | null {
-  if (message.requeue === true || message.force === true) return null;
-  if (doc.parse_status === "parsed") return "ALREADY_PARSED";
-  if (doc.parse_status === "failed") return "ALREADY_FAILED";
-  return null;
+export async function beginParse(svc: Db, docCode: string, attempt: number): Promise<ParseClaim> {
+  const { data, error } = await svc.rpc("begin_document_parse", { p_doc_code: docCode, p_attempt: attempt });
+  if (error) throw new Error(`begin_document_parse failed (${error.code})`);
+  if (!data) return { kind: "deleted" };
+  const r = data as { skip?: unknown; doc?: unknown; settings?: unknown };
+  if (r.skip === "parsed" || r.skip === "failed") return { kind: "skip", status: r.skip };
+  if (!r.doc || typeof r.doc !== "object") throw new Error("begin_document_parse returned no document");
+  return {
+    kind: "claimed",
+    doc: r.doc as WorkerDoc,
+    settings: (r.settings && typeof r.settings === "object" ? r.settings : {}) as Record<string, unknown>,
+  };
 }
 
 // ── fetch: the parser call ──────────────────────────────────────────────────
@@ -238,20 +241,13 @@ export async function processParseMessage(svc: Db, msg: QueueMessage): Promise<P
     return { doc_code: docCode, outcome: "dlq", code: "MAX_ATTEMPTS" };
   }
 
-  const { data: ctx, error: ctxErr } = await svc.rpc("worker_document_context", { p_doc_code: docCode });
-  if (ctxErr) throw new Error(`worker_document_context failed (${ctxErr.code})`);
-  if (!ctx || !ctx.doc) {
-    await queueDelete(svc, PARSE_QUEUE, msg.msg_id); // document was deleted
-    return { doc_code: docCode, outcome: "skipped" };
-  }
-  const doc = ctx.doc as WorkerDoc;
-  const stale = staleMessageCode(doc, msg.message);
-  if (stale) {
+  const claim = await beginParse(svc, docCode, Math.min(attempt, 32767));
+  if (claim.kind !== "claimed") {
     await queueDelete(svc, PARSE_QUEUE, msg.msg_id);
-    return { doc_code: docCode, outcome: "skipped", code: stale };
+    const code = claim.kind === "skip" ? (claim.status === "parsed" ? "ALREADY_PARSED" : "ALREADY_FAILED") : undefined;
+    return { doc_code: docCode, outcome: "skipped", ...(code ? { code } : {}) };
   }
-
-  await markParsing(svc, docCode, attempt);
+  const { doc, settings } = claim;
 
   const handleTransient = async (
     code: string,
@@ -315,7 +311,7 @@ export async function processParseMessage(svc: Db, msg: QueueMessage): Promise<P
   const documentUrl = rewriteOrigin(signed.data.signedUrl, Deno.env.get("PARSER_DOCUMENT_BASE_URL") || undefined);
 
   // fetch → classify → apply
-  const call = await callParser(doc, ctx.settings, documentUrl);
+  const call = await callParser(doc, settings, documentUrl);
   if (call.kind === "error") return await handleTransient(call.code, call.message, { extra: call.extra });
 
   const outcome = classifyParserResponse(call.status, call.body);
