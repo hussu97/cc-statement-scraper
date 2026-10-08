@@ -46,3 +46,13 @@ frontend/*.tsbuildinfo
 .playwright-mcp/
 
 downloads/
+# Ledger v2
+node_modules/
+apps/web/dist/
+apps/web/.vite/
+*.tsbuildinfo
+apps/ios/**/.build/
+apps/ios/**/xcuserdata/
+apps/ios/**/DerivedData/
+apps/ios/Config/Secrets.xcconfig
+supabase/functions/.env

@@ -1,0 +1,15 @@
+{
+  "name": "ledger",
+  "private": true,
+  "packageManager": "pnpm@10.30.3",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "tokens": "pnpm --filter @ledger/tokens build",
+    "db:types": "supabase gen types typescript --local > packages/db-types/src/database.ts",
+    "db:types:check": "supabase gen types typescript --local | diff -q - packages/db-types/src/database.ts",
+    "db:test": "supabase test db",
+    "web:dev": "pnpm --filter @ledger/web dev",
+    "web:test": "pnpm --filter @ledger/web test",
+    "web:build": "pnpm --filter @ledger/web build"
+  }
+}

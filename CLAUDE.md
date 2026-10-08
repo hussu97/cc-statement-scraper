@@ -1,136 +1,101 @@
-# Project Rules
+# Project Rules — Ledger
 
-## 1. Architecture Review
-When implementing functionality that changes how the system is built or deployed (new services, databases, auth strategies, API versioning, monorepo layout, etc.), review and update **ARCHITECTURE.md** so it stays accurate.
+Ledger is a personal credit-card finance system: a Supabase backend (Postgres + Edge Functions), a Python statement parser on Cloud Run, a React web app, a SwiftUI iPhone app, and a local Playwright scraper.
 
-## 2. Changelog Updates
-After every feature, fix, or notable change, add an entry to **CHANGELOG.md**. Organize by **Backend**, **Frontend (web)**, **Frontend (mobile)**, and **Docs** as applicable. Keep entries concise but descriptive.
+Every rule below exists because the codebase once had several coexisting variants of a convention and the wrong one got copied. Copy THESE patterns, not a neighbouring file's. When you touch code that predates a rule, migrate it opportunistically.
 
-## 3. Production Plan Maintenance
-Keep **PRODUCTION.md** up to date with three deployment plans:
-1. **Free online services** – Render (backend), Vercel (frontend), free Postgres/storage
-2. **GCP** – Cloud Run, App Engine, Cloud SQL, Storage, etc.
+## 0. Layout
 
-Update the relevant plan(s) when adding new env vars, services, DB migrations, or build commands.
+| Path | What | Run / test |
+|---|---|---|
+| `supabase/migrations/` | Schema + all business logic (SQL functions, triggers, RLS, pg_cron, pgmq) | `supabase db reset` → `supabase test db` |
+| `supabase/functions/` | Deno Edge Functions (HTTP ingress, queue worker, LLM, email) | `deno test -A supabase/functions` |
+| `services/parser/` | Stateless Python `/parse` on Cloud Run (contract: `docs/contracts/parse-v1.md`) | `cd services/parser && .venv/bin/pytest -q` |
+| `apps/web/` | React web app (Vite) | `pnpm web:test`, `pnpm web:build` |
+| `apps/ios/` | SwiftUI iPhone app + `LedgerKit` Swift package | `cd apps/ios/LedgerKit && swift test` |
+| `packages/tokens/` | Design tokens → CSS + Swift | `pnpm tokens` |
+| `packages/db-types/` | Generated DB types | `pnpm db:types` |
+| `scraper/` | Local-only bank scraper CLI (architecture frozen) | `cd scraper && .venv/bin/pytest -q` |
+| `backend/`, `frontend/` | **Legacy** FastAPI + React. Frozen; deleted at cutover. Do not extend. | — |
 
-## 4. Git Commit After Feature Changes
-After any feature change (or coherent set of changes), commit the work with a clear, descriptive message. One logical change per commit where practical. Do not leave implemented work uncommitted.
+## 1. Database (Supabase Postgres)
 
-Every commit **must** be authored by exactly:
-```
-Hussain Abbasi <h_abbasi97@hotmail.com>
-```
-Always pass `--author` explicitly:
+1. **Identifiers are codes.** Every PK is `<x>_code text default public.gen_code('<x>')` (prefix + 26-char ULID) with a CHECK on its shape. FKs reference codes. Never numeric ids. Natural codes only for reference data (`bank_code = 'FAB'`, currencies). Treat codes as opaque strings everywhere.
+2. **Statuses are `text` + `CHECK (col in (...))`.** No native enums: Postgres can't drop enum values.
+3. **Money is `numeric(14,2)`; FX rates are `numeric(18,8)`.** Never float, in SQL, TypeScript or Swift. Money crosses the wire as a decimal string.
+4. **Time is `timestamptz`.** Business dates are calendar dates in `Asia/Dubai` (`public.dubai_date()`).
+5. **RLS on every table**, with policies built on `authz.my_profile_codes()` / `authz.my_owned_profile_codes()` written as `profile_code = any ((select authz.my_profile_codes())::text[])`. Every table carries `profile_code`, even child tables. A pgTAP guard (`supabase/tests/01_rls.test.sql`) fails the build otherwise.
+6. **Never `REVOKE EXECUTE` on a function.** On Supabase Postgres 17.6.1.104, calling a function you lack EXECUTE on segfaults the server. Guard in the body instead: `perform private.assert_service_role();` (Edge Function–only RPCs) or `perform private.assert_member(p_profile_code, need_owner);` (user RPCs). Internals live in the `private` schema, which client roles cannot use at all. This is enforced by a pgTAP guard.
+7. **Every `SECURITY DEFINER` function sets `search_path = ''`** and fully qualifies names. Views are `security_invoker = true`. Both are enforced by guards.
+8. **Migrations are append-only**: `supabase migration new <name>`. Verify with `supabase db reset && supabase test db` before committing. Never edit a migration that has reached production.
+9. **Content migrations are guarded** so they cannot fight user edits: insert only when absent, update only rows still holding the exact old value.
+10. **Evidence is immutable.** Statement lines and SMS are never updated in place beyond `is_current`/`superseded_at`/parse fields. Transaction facts are *derived* from evidence by `private.refresh_transaction()`. Only user fields (`manual_category_code`, `notes`, `exclude_from_spend`) are edited directly.
+11. **Categorisation precedence is structural**: `effective_category_code` is a generated column (manual > merchant manual > rule > LLM). Background recompute writes only `rule_*` / `merchant_*` columns.
+12. **One definition of spend**: `public.v_spend`. Analytics RPCs build on it and never re-derive spend.
+
+## 2. Contracts
+
+1. **Types are generated, never hand-written.** After any schema change run `pnpm db:types` in the same commit. CI fails on drift (`pnpm db:types:check`).
+2. **Money and analytics are computed server-side** (SQL RPCs). Clients render what the API returns. A client-side formula mirroring a server one is a bug.
+3. The parser ⇄ worker JSON is versioned (`docs/contracts/parse-v1.md`). Change the doc, the pydantic model and the SQL ingest together.
+
+## 3. Edge Functions
+
+1. Every function's `index.ts` wraps its handler with `withSentry(name, handler)` from `_shared/sentry.ts`. A `deno test` guard enforces it.
+2. Callers are authenticated inside the function: a user JWT (`_shared/auth.ts`), a profile service token (`authenticate_service_token` RPC), or `x-cron-secret` for pg_cron. Functions that accept non-JWT callers set `verify_jwt = false` in `config.toml`.
+3. Use the service-role client only after authenticating the caller. Pass `profile_code` explicitly to RPCs.
+
+## 4. Web (`apps/web`)
+
+1. **One data layer**: supabase-js + TanStack Query hooks in `src/data/`. No raw `fetch` to the backend in components.
+2. **Tokens are the only source of colour.** Use Tailwind classes or `var(--color-*)` / `var(--chart-*)`. No hex literals in components; a vitest guard enforces it.
+3. Every list and chart has loading, empty and failed states. An empty state is a claim, so make it only when the data proves it.
+4. Category colours come from `category.color_token`, so a category looks the same on every chart.
+5. Pagination: one default page size of 100, with options 100/200/500/1000/2000. Never hard-code a page size elsewhere.
+6. Every frontend change ships with tests for its pure logic (formatters, query-param codecs, transforms). Don't test rendering unless needed.
+
+## 5. iOS (`apps/ios`)
+
+1. Decisions live in `LedgerKit` (pure, `swift test`-able). Views hold layout only. If you are writing an `if` about business rules in a View, move it into LedgerKit.
+2. Files are ≤ ~350 lines, one screen or concern each.
+3. Money is `Decimal` parsed from strings; never `Double`. Date formatters pin `en_US_POSIX` and `Asia/Dubai`.
+4. `Theme/Tokens.swift` is generated from `packages/tokens`. Don't edit it by hand.
+5. The SMS App Intent drops OTPs and non-credit-card messages on the device. Never log SMS bodies.
+
+## 6. Observability (Sentry)
+
+Every runtime initialises Sentry through its shared helper: Edge `_shared/sentry.ts`, parser `ccs_parser/sentry.py`, web `src/lib/sentry.ts`, iOS `LedgerKit/Telemetry`. `sendDefaultPii` is off. Scrub SMS bodies, passwords, tokens, `Authorization` and `X-Profile-Key` headers. Tag only opaque codes. Each scrubber has a unit test.
+
+## 7. Scraper
+
+The scraper architecture stays as it is (local-only Playwright). Every system-initiated wait in a bank adapter **must** have a `logger.info(...)` immediately before it, in the form `"{BANK}: waiting {X}ms — {reason}"`:
+- `time.sleep`, `page.expect_download`, `page.wait_for_event("download")`: always.
+- `page.wait_for_timeout`: when ≥ 700ms, and always inside auth-polling loops.
+- `locator.wait_for(timeout=…)`: when ≥ 4000ms.
+
+## 8. Docs
+
+After any feature, fix or notable change, update in the same commit:
+- **CHANGELOG.md**: entries under **Backend (Supabase)**, **Parser**, **Web**, **iOS**, **Scraper**, **Docs** as applicable.
+- **ARCHITECTURE.md**: when services, schemas, auth, queues or deployment change.
+- **PRODUCTION.md**: when env vars, secrets, Vault entries, cron jobs, functions or build/deploy steps change.
+- **README.md**: when setup, structure, commands, env vars, endpoints or screens change.
+
+## 9. Git
+
+Commit after every coherent change, one logical change per commit. Every commit is authored exactly:
 ```
 git commit --author="Hussain Abbasi <h_abbasi97@hotmail.com>" -m "..."
 ```
-No variations (`h-abbasi`, `hussain`, other emails). No `Co-Authored-By` trailer of any kind.
+No variations and no `Co-Authored-By` trailer of any kind.
 
-## 5. README Maintenance
-Keep the following READMEs accurate and up to date. After any change that affects setup, structure, endpoints, env vars, or screens, update the relevant README(s) **before committing**.
+## 10. Testing and verification
 
-- **README.md** – Monorepo overview, structure (all services), prerequisites, local setup, env vars, docs links
+- Backend: `supabase db reset && supabase test db`. Add a pgTAP case for every ingest, matching, categorisation or RLS change.
+- Use `127.0.0.1`, not `localhost`, when curling local services (e.g. `curl -s http://127.0.0.1:54321/functions/v1/...`).
+- Python: activate the service's `.venv` and install its `requirements.txt` first.
+- Never call a change done on the strength of tests alone when it can be run. Run it and look at it.
 
-**Triggers — update READMEs when you:**
-- Add, rename, or remove an API endpoint
-- Add, rename, or remove a screen/page
-- Add a new env var
-- Change the directory structure of a service
-- Add or change test commands
-- Add a new service or major dependency
+## 11. Production data
 
-## 8. Datetime Columns
-
-All datetime model fields **must** use the `_UTCAwareDateTime` TypeDecorator defined in `soulstep-catalog-api/app/db/models.py` via the `_TSTZ()` helper, **not** plain `DateTime` or `Field(default_factory=...)` alone.
-
-```python
-# ✅ Correct — always add sa_column=_TSTZ(...)
-created_at: datetime = Field(
-    default_factory=lambda: datetime.now(UTC),
-    sa_column=_TSTZ(nullable=False),
-)
-expires_at: datetime = Field(sa_column=_TSTZ(nullable=False))
-read_at: datetime | None = Field(default=None, sa_column=_TSTZ(nullable=True))
-
-# ❌ Wrong — plain DateTime returns naive datetimes from SQLite
-created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-```
-
-**Why:** `_UTCAwareDateTime` maps to `TIMESTAMPTZ` in PostgreSQL (stores and returns aware datetimes) and re-attaches UTC on read from SQLite's string storage. Every value coming out of the DB has `tzinfo=UTC`, so business logic can always compare directly with `datetime.now(UTC)` without hacks like `.replace(tzinfo=None)`.
-
-**Runtime writes:** Always use `datetime.now(UTC)` (timezone-aware). Never use `datetime.utcnow()` (deprecated in Python 3.12, removed in 3.14).
-
-**Migrations:** When adding a new datetime column, generate an Alembic migration with `sa.DateTime(timezone=True)` as the column type.
-
-## 9. Schema and API: Code-Based Identifiers
-All entities use a stable, autogenerated **code** (e.g. `user_code`, `place_code`, `group_code`), never numeric IDs, across:
-- **DB schema** – `*_code` as primary and foreign keys
-- **API** – paths, params, and request/response bodies use codes (e.g. `GET /api/v1/places/:placeCode`)
-- **Frontend types and API client** – use code fields in types and API calls
-
-Codes may have a prefix/suffix (e.g. `usr_abc12`) for readability — treat them as opaque strings in business logic. See ARCHITECTURE.md (sections 4 & 5) for the full data model and API outline.
-
-## 10. Testing and Verification
-When testing or verifying changes to backend services:
-- **Follow the README:** Use the exact setup and run commands from the respective `README.md` file
-- **Virtual environment:** Always activate the virtual environment (`.venv`) before running or testing
-- **Install dependencies:** Ensure all `requirements.txt` modules are installed via `pip install -r requirements.txt`
-- **Use 127.0.0.1:** When testing endpoints with curl or requests, use `127.0.0.1` instead of `localhost` for consistency
-- **Example:** `curl -s http://127.0.0.1:3000/health` (not `localhost:3000`)
-
-## 11. Frontend Tests (Vitest + Jest)
-Every frontend change **must** include corresponding test coverage.
-
-**Rules:**
-- When adding or modifying a utility, hook, or pure function, add or update the relevant test file.
-- Run web tests before committing
-- Test scope: focus on pure logic (utilities, transformers, helpers). Do not test React component rendering unless specifically needed; avoid mocking the entire component tree.
-
-## 12. Admin Pagination Standard
-All paginated tables in the web app must use the following page size options, in this exact order:
-
-| Option | Value |
-|--------|-------|
-| Default | **100 / page** |
-| — | 200 / page |
-| — | 500 / page |
-| — | 1000 / page |
-| — | 2000 / page |
-
-**Rules:**
-- The shared `Pagination` component (`src/components/shared/Pagination.tsx`) already enforces this as the default `pageSizeOptions`.
-- The `usePagination` hook defaults to `50`.
-- All new paginated tables must use `usePagination(50)` and pass `onPageSizeChange={setPageSize}` to `<Pagination>`.
-- Backend list endpoints must accept `page_size` up to `2000` (`le=2000`) with a default of `100`.
-- Never hardcode a `PAGE_SIZE` constant — always use `usePagination`.
-
-## 13. Timeout Logging in Bank Scrapers
-
-Every system-initiated wait in a bank scraper adapter **must** have a `logger.info(...)` call immediately before it, using the existing `{BANK}: ...` message format.
-
-**Applies to:**
-- `time.sleep(s)` — always log with duration in ms and reason
-- `page.wait_for_timeout(ms)` — log for all waits **≥ 700ms**; log all waits in auth-polling loops regardless of duration
-- `page.expect_download(timeout=ms)` — always log ("waiting for download event (up to Xms)")
-- `page.wait_for_event("download", timeout=ms)` — always log
-- `locator.wait_for(state=..., timeout=ms)` — log for timeouts **≥ 4000ms**
-
-**Format:** `logger.info("{BANK}: waiting {X}ms — {reason}")`
-
-**Examples:**
-```python
-# Before time.sleep
-logger.info("FAB: waiting 2000ms — re-login submitted; pausing before next auth poll")
-time.sleep(2)
-
-# Before page.wait_for_timeout
-logger.info("ADCB: waiting 3000ms — allowing 'Refer & Earn' popup time to appear before dismissal")
-page.wait_for_timeout(3000)
-
-# Before expect_download
-logger.info("MASHREQ: waiting for download event for month=%s (up to 20000ms)", month_token)
-with page.expect_download(timeout=20000) as download_info:
-    ...
-```
-
-**Why:** This makes it easy to distinguish a stuck scraper (no log for a long time) from one that is actively working (regular log entries showing each deliberate pause).
+The production project is Supabase `cc-statement-scraper` (ref `nkmylznisjcnmqbxosey`). Never push migrations, deploy functions or run writes against it without explicit confirmation in chat. Historical data must never be lost: the legacy schema is kept until v2 parity is signed off.
