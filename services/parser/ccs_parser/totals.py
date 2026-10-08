@@ -9,13 +9,15 @@ warnings.
 Verified layouts (against real statements):
   * FAB  -- "Current Balance / Minimum Payment Due" header row, the
             "Previous Balance + Purchases ... Total Payment Due" summary row and
-            the "Total Credit Limit / Available Credit Limit" row.
+            the "Total Credit Limit / Available Credit Limit" row. The row's
+            Payments/Credits column omits rewards redemptions (DP-10).
   * ENBD -- "Credit Limit / Available Credit Limit / Statement Date / Payment
             Due Date / Minimum Payment Due" row and the "STATEMENT SUMMARY" row.
+  * MASHREQ -- the "Summary AED" block, one labelled amount per line (DP-12).
 Unverified (no decryptable samples were available):
   * EIB  -- same statement template family as ENBD; the ENBD rules are applied.
   * ADCB -- "PREVIOUS/NEW BALANCE OUTSTANDING <amount>" lines.
-  * MASHREQ -- not implemented (all null).
+SIB statements have no extractor (all null).
 """
 
 from __future__ import annotations
@@ -112,6 +114,7 @@ _FAB_BALANCE_ROW_RE = re.compile(
 
 def _extract_fab(lines: list[str], result: TotalsResult) -> None:
     v = result.values
+    summary_due: Decimal | None = None
     for idx, line in enumerate(lines):
         upper = line.upper()
         if "CURRENT BALANCE" in upper and "MINIMUM PAYMENT DUE" in upper and v["closing_balance"] is None:
@@ -132,8 +135,7 @@ def _extract_fab(lines: list[str], result: TotalsResult) -> None:
                     v["opening_balance"] = prev
                     v["total_debits"] = purchases + cash + finance
                     v["total_credits"] = credits
-                    if v["closing_balance"] is None:
-                        v["closing_balance"] = total_due
+                    summary_due = total_due
                     break
         elif "TOTAL CREDIT LIMIT" in upper and "AVAILABLE CREDIT LIMIT" in upper and v["credit_limit"] is None:
             for nxt in _following(lines, idx):
@@ -141,6 +143,33 @@ def _extract_fab(lines: list[str], result: TotalsResult) -> None:
                 if row and len(row) == 2:
                     v["credit_limit"] = row[0]
                     break
+    if summary_due is None:
+        return
+    if v["closing_balance"] is None:
+        v["closing_balance"] = summary_due
+    _add_fab_other_credits(v, summary_due)
+
+
+def _add_fab_other_credits(v: dict[str, Decimal | None], total_due: Decimal) -> None:
+    """DP-10: FAB's "Payments/Credits" column leaves out other credits.
+
+    Rewards redemptions ("FAB REWARDS REDEMPTION - CASHBACK") and dispute credits are not
+    in that column, but "Total Payment Due" (= the Current Balance) already reflects them,
+    so the printed row doesn't add up by exactly those amounts. The statement's real credit
+    total is what its own row implies: previous + debits - total due. Taken only when the
+    row's total due agrees with the Current Balance header and the gap is a missing credit.
+    """
+    opening, debits, credits, closing = (
+        v["opening_balance"],
+        v["total_debits"],
+        v["total_credits"],
+        v["closing_balance"],
+    )
+    if opening is None or debits is None or credits is None or closing is None or closing != total_due:
+        return
+    implied = opening + debits - total_due
+    if implied > credits:
+        v["total_credits"] = implied
 
 
 # ---------------------------------------------------------------- ENBD / EIB
@@ -205,11 +234,94 @@ def _extract_adcb(lines: list[str], result: TotalsResult) -> None:
             v[key] = amount
 
 
+# ------------------------------------------------------------------ MASHREQ
+
+# The "Summary AED" block prints one labelled amount per line, followed by the Arabic
+# label (which pdfplumber extracts as mojibake), e.g. "- other credits 363.00 <arabic> -".
+_MASHREQ_AMOUNT = rf"(?P<amount>{_DECIMAL_AMOUNT_RE})(?P<cr>\s*CR)?(?=\s|$)"
+_MASHREQ_SUMMARY: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
+    (key, re.compile(rf"^{label}\s+{_MASHREQ_AMOUNT}", re.IGNORECASE))
+    for key, label in (
+        ("previous", r"previous balance"),
+        ("payments", r"-\s*payments"),
+        ("other_credits", r"-\s*other credits"),
+        ("finance_charges", r"\+\s*finance charges"),
+        ("other_charges", r"\+\s*other charges"),
+        ("new_transactions", r"\+\s*new transactions"),
+        ("cash_advance", r"\+\s*cash advance"),
+        ("current", r"[+=]\s*current balance"),
+        ("min_due", r"minimum payment due"),
+    )
+)
+# Two-column header lines: the label can follow other text on the same line.
+_MASHREQ_LIMIT_RE = re.compile(rf"\bcombined credit limit\s+{_MASHREQ_AMOUNT}", re.IGNORECASE)
+_MASHREQ_DUE_DATE_RE = re.compile(r"\bpayment due date\s+(?P<date>\d{2}/\d{2}/\d{4})\b", re.IGNORECASE)
+
+
+def _mashreq_amount(match: re.Match[str]) -> Decimal | None:
+    amount = _to_decimal(match.group("amount"))
+    if amount is not None and match.group("cr"):
+        amount = -abs(amount)
+    return amount
+
+
+def _extract_mashreq(lines: list[str], result: TotalsResult) -> None:
+    """DP-12: Mashreq's "Summary AED" block.
+
+    previous - payments - other credits + finance charges + other charges + new transactions
+    + cash advance = current balance. Only taken when every line of the block is present
+    and the block adds up, so a partial or mis-read summary leaves the totals null.
+    """
+    found: dict[str, Decimal | None] = {}
+    for line in lines:
+        for key, pattern in _MASHREQ_SUMMARY:
+            if key in found:
+                continue
+            m = pattern.match(line)
+            if m:
+                found[key] = _mashreq_amount(m)
+        if "credit_limit" not in found and (m := _MASHREQ_LIMIT_RE.search(line)):
+            found["credit_limit"] = _mashreq_amount(m)
+        if result.due_date is None and (m := _MASHREQ_DUE_DATE_RE.search(line)):
+            result.due_date = _parse_dmy(m.group("date"))
+
+    v = result.values
+    v["min_due"] = found.get("min_due")
+    v["credit_limit"] = found.get("credit_limit")
+    block = (
+        "previous",
+        "payments",
+        "other_credits",
+        "finance_charges",
+        "other_charges",
+        "new_transactions",
+        "cash_advance",
+        "current",
+    )
+    if any(found.get(key) is None for key in block):
+        if any(key in found for key in block):
+            result.warnings.append("MASHREQ: statement summary incomplete; balance totals left null")
+        return
+    amounts = {key: found[key] for key in block}
+    credits = amounts["payments"] + amounts["other_credits"]  # type: ignore[operator]
+    debits = (
+        amounts["finance_charges"] + amounts["other_charges"] + amounts["new_transactions"] + amounts["cash_advance"]  # type: ignore[operator]
+    )
+    if amounts["previous"] - credits + debits != amounts["current"]:  # type: ignore[operator]
+        result.warnings.append("MASHREQ: statement summary does not add up; balance totals left null")
+        return
+    v["opening_balance"] = amounts["previous"]
+    v["closing_balance"] = amounts["current"]
+    v["total_debits"] = debits
+    v["total_credits"] = credits
+
+
 _EXTRACTORS = {
     "FAB": _extract_fab,
     "ENBD": _extract_enbd,
     "EIB": _extract_enbd,
     "ADCB": _extract_adcb,
+    "MASHREQ": _extract_mashreq,
 }
 
 

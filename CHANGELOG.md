@@ -1,5 +1,21 @@
 # Changelog
 
+## Parser P2/P3 audit fixes — 2026-10-08 (branch `ledger-v2`)
+
+### Parser
+
+- **chore** `PARSER_VERSION` and the `pyproject.toml` version 2026.10.2: the fixes below change parser output (NEW-2)
+- **fix** FAB `total_credits` includes the credits the summary's Payments/Credits column leaves out (rewards redemptions, dispute credits), taken from the row's own Total Payment Due when it equals the Current Balance. The four FAB statements with a false recon `fail` now reconcile (DP-10)
+- **feat** Mashreq totals from the "Summary AED" block (all six values and the due date), used only when the block is complete and adds up. All 20 local Mashreq PDFs reconcile debits, credits and balance (DP-12)
+- **fix** Mashreq foreign rows (`<ref> MYR 500.00 @0.9400 470.00`) report `currency_original`, `amount_original` and the printed `fx_rate`, and the description is the merchant only: 38 lines in the local corpus. Kind and `legacy_fingerprint` are unchanged (DP-11)
+- **fix** `EIB_PDF_PASSWORD` and `MASHREQ_PDF_PASSWORD` reach their parsers and the password list used by detection, page counting and totals. The worker already sends every stored key, so no worker or SQL change (X-17)
+- **fix** Mashreq `country_code` comes only from an upper-case trailing token, like the other banks (legacy upper-cased any last word)
+- **test** `tests/synthetic_pdf.py` (dependency-free PDF writer) and fictional statements in `tests/synthetic/cases.py`; `test_pdf_passwords.py`, `test_mashreq_fx.py`, totals cases
+
+### Docs
+
+- parse-v1: password keys, totals per bank, Mashreq foreign rows; parser README; BACKLOG (DP-10, DP-11, DP-12, X-17 done; NEW-4 Mashreq `card_last4` is the card's BIN); 02 and 06 fix status
+
 ## Supabase publishable / secret API keys — 2026-10-08 (branch `ledger-v2`)
 
 ### Backend

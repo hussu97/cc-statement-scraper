@@ -41,7 +41,8 @@ def parse_statement_for_bank(
 
     if code == "EIB":
         from ccs_parser.banks.eib import parse_eib_statement  # noqa: PLC0415
-        return parse_eib_statement(pdf_path)
+        # Optional, like FAB/ENBD: emailed statements are encrypted (audit X-17).
+        return parse_eib_statement(pdf_path, _s.get("EIB_PDF_PASSWORD") or None)
 
     if code == "SIB":
         pdf_password = _s.get("SIB_PDF_PASSWORD")
@@ -72,6 +73,6 @@ def parse_statement_for_bank(
 
     if code == "MASHREQ":
         from ccs_parser.banks.mashreq import parse_mashreq_statement  # noqa: PLC0415
-        return parse_mashreq_statement(pdf_path)
+        return parse_mashreq_statement(pdf_path, _s.get("MASHREQ_PDF_PASSWORD") or None)
 
     raise ParserError("UNSUPPORTED_BANK", f"Unsupported bank code: {bank_code}")
