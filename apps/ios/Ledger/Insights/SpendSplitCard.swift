@@ -1,0 +1,212 @@
+import Charts
+import LedgerKit
+import SwiftUI
+
+/// Insights' Monthly spend: plain bars (`spend_series`) or stacked by
+/// category, bank or merchant (`spend_breakdown`, top 10 + Others), with a
+/// legend, a selection callout and each group's total and share for the range.
+struct SpendSplitCard: View {
+    let trend: [SpendPoint]
+    let from: CalendarDay
+    let to: CalendarDay
+    let profileCode: String
+    @Environment(SpendSplitModel.self) private var split
+
+    var body: some View {
+        @Bindable var split = split
+        Card {
+            SectionHeader(title: "Monthly spend")
+            Picker("Split by", selection: $split.grouping) {
+                ForEach(SpendSplitGrouping.allCases) { Text($0.label).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            if split.grouping == .none {
+                TrendBars(points: trend)
+            } else {
+                BreakdownBody(split: split, retry: { Task { await load(force: true) } })
+            }
+        }
+        .task(id: Key(grouping: split.grouping, from: from, to: to, profile: profileCode)) { await load(force: false) }
+    }
+
+    private struct Key: Hashable {
+        let grouping: SpendSplitGrouping
+        let from: CalendarDay
+        let to: CalendarDay
+        let profile: String
+    }
+
+    private func load(force: Bool) async {
+        await split.load(profileCode: profileCode, from: from, to: to, force: force)
+    }
+}
+
+/// The unsplit bars.
+private struct TrendBars: View {
+    let points: [SpendPoint]
+
+    var body: some View {
+        if points.isEmpty {
+            Text("No spending in this period.").font(Typography.rowMeta).foregroundStyle(Palette.muted)
+        } else {
+            Chart(points) { point in
+                BarMark(x: .value("Month", point.monthLabel), y: .value("AED", point.amount.chartValue))
+                    .foregroundStyle(Palette.accent)
+                    .cornerRadius(3)
+            }
+            .chartYAxis { aedAxis }
+            .frame(height: 180)
+            .chartAccessibility(.monthlyTrend(points))
+        }
+    }
+}
+
+private struct BreakdownBody: View {
+    @Bindable var split: SpendSplitModel
+    let retry: () -> Void
+
+    var body: some View {
+        if let b = split.state.value {
+            if b.isEmpty {
+                Text("No spending in this period.").font(Typography.rowMeta).foregroundStyle(Palette.muted)
+            } else {
+                if let callout = split.callout { CalloutBox(callout: callout) }
+                StackedChart(breakdown: b, selected: $split.selectedMonth)
+                    .opacity(split.state.isLoading ? 0.5 : 1)
+                Legend(breakdown: b)
+                GroupList(breakdown: b)
+            }
+        } else if let error = split.state.errorMessage {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(error).font(Typography.rowMeta).foregroundStyle(Palette.danger)
+                Button("Try again", action: retry).buttonStyle(.bordered).tint(Palette.accent)
+            }
+        } else {
+            HStack(spacing: 10) {
+                ProgressView()
+                Text("Loading…").font(Typography.rowMeta).foregroundStyle(Palette.muted)
+            }
+            .frame(height: 180)
+        }
+    }
+}
+
+private struct StackedChart: View {
+    let breakdown: SpendBreakdown
+    @Binding var selected: String?
+
+    var body: some View {
+        Chart {
+            ForEach(breakdown.segments) { seg in
+                BarMark(x: .value("Month", seg.monthLabel), y: .value("AED", seg.amount.chartValue))
+                    .foregroundStyle(by: .value("Group", seg.groupKey))
+            }
+            if let selected {
+                RuleMark(x: .value("Month", selected))
+                    .foregroundStyle(Palette.borderStrong.opacity(0.35))
+                    .lineStyle(StrokeStyle(lineWidth: 16))
+                    .zIndex(-1)
+            }
+        }
+        .chartForegroundStyleScale(domain: breakdown.groups.map(\.key),
+                                   range: breakdown.groups.map { ChartPalette.color(for: breakdown.colorToken(for: $0)) })
+        .chartXScale(domain: breakdown.monthLabels)
+        .chartLegend(.hidden)
+        .chartYAxis { aedAxis }
+        .chartXSelection(value: $selected)
+        .frame(height: 200)
+        .chartAccessibility(.breakdown(breakdown, grouping: SpendSplitGrouping(rawValue: breakdown.groupBy) ?? .category))
+    }
+}
+
+/// The selected month: total, then each group's AED and share of the month.
+private struct CalloutBox: View {
+    let callout: SpendCallout
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(callout.title).font(Typography.rowTitle)
+                Spacer()
+                Text(callout.total).font(Typography.amount).moneyLine()
+            }
+            if callout.rows.isEmpty {
+                Text("No spending this month.").font(Typography.caption).foregroundStyle(Palette.muted)
+            }
+            ForEach(callout.rows) { row in
+                HStack(spacing: 8) {
+                    CategoryDot(token: row.colorToken)
+                    Text(row.label).font(Typography.caption).lineLimit(1)
+                    Spacer(minLength: 6)
+                    Text(row.amount).font(Typography.caption).monospacedDigit()
+                    if let share = row.share {
+                        Text(share).font(Typography.caption).monospacedDigit().foregroundStyle(Palette.muted)
+                            .frame(minWidth: 36, alignment: .trailing)
+                    }
+                }
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .padding(10)
+        .background(Palette.surface2, in: RoundedRectangle(cornerRadius: Metrics.radiusMd))
+        .accessibilityElement(children: .contain)
+    }
+}
+
+private struct Legend: View {
+    let breakdown: SpendBreakdown
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 8, alignment: .leading)], alignment: .leading, spacing: 6) {
+            ForEach(breakdown.groups) { group in
+                HStack(spacing: 6) {
+                    CategoryDot(token: breakdown.colorToken(for: group))
+                    Text(group.label).font(Typography.caption).foregroundStyle(Palette.ink2).lineLimit(1)
+                }
+            }
+        }
+        .accessibilityHidden(true)   // the list below says the same, with figures
+    }
+}
+
+/// Each group's total and share over the whole range.
+private struct GroupList: View {
+    let breakdown: SpendBreakdown
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Divider().overlay(Palette.border)
+            ForEach(breakdown.groups) { group in
+                HStack(spacing: 10) {
+                    if breakdown.showsBankLogos && !group.isOther {
+                        BankLogo(bankCode: group.key, size: 20)
+                    } else {
+                        CategoryDot(token: breakdown.colorToken(for: group), size: 10).frame(width: 20)
+                    }
+                    Text(group.label).font(Typography.rowMeta).foregroundStyle(Palette.ink).lineLimit(2)
+                    Spacer(minLength: 8)
+                    Text(MoneyFormat.aed(group.total, fractionDigits: 0)).font(Typography.rowMeta).moneyLine()
+                    Text(SpendBreakdown.shareLabel(group.share)).font(Typography.caption).monospacedDigit()
+                        .foregroundStyle(Palette.muted).frame(minWidth: 40, alignment: .trailing)
+                }
+                .overlay(alignment: .leading) {
+                    if breakdown.showsBankLogos && !group.isOther {
+                        // The colour that bank has in the chart.
+                        Circle().fill(ChartPalette.color(for: breakdown.colorToken(for: group)))
+                            .frame(width: 6, height: 6).offset(x: 17, y: 8)
+                    }
+                }
+                .accessibilityElement(children: .combine)
+            }
+        }
+    }
+}
+
+@AxisContentBuilder private var aedAxis: some AxisContent {
+    AxisMarks { value in
+        AxisGridLine().foregroundStyle(ChartPalette.grid)
+        AxisValueLabel {
+            if let v = value.as(Double.self) { Text(MoneyFormat.compact(Decimal(Int(v)))) }
+        }
+    }
+}

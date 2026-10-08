@@ -245,6 +245,11 @@ extension StatementDetail.Line {
 
     public var canOpen: Bool { txnCode != nil }
 
+    /// The category name; a held or unmatched line has no transaction to categorise.
+    public func categoryLabel(_ categoryName: String?) -> String {
+        categoryName ?? (txnCode == nil ? "Not matched yet" : "Uncategorised")
+    }
+
     /// One VoiceOver sentence for the row.
     public func accessibilityLabel(isCredit: Bool, categoryName: String?) -> String {
         var parts = [title, dateLabel, amountLabel(isCredit: isCredit)]
