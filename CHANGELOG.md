@@ -1,5 +1,15 @@
 # Changelog
 
+## Bank logos — 2026-10-08 (branch `ledger-v2`)
+
+### Web
+
+- **feat** `assets/banks/<BANK_CODE>.png` for ADCB, EIB, ENBD, FAB, MASHREQ and SIB: 256×256 transparent PNGs (1–4 KB each) of each bank's mark, built from the banks' own site SVGs or Wikimedia vector files, legible at 24–32 px. `scripts/brand/upload-bank-logos.sh [--dry-run]` upserts them into the public `bank-logos` Storage bucket (`SUPABASE_URL` + `SUPABASE_SECRET_KEY`; the key goes on `apikey` via curl's stdin config, never argv or output)
+
+### Docs
+
+- `assets/banks/README.md`: per-bank source URLs, retrieval date, trademark note, and the dark-mode advice (navy/purple marks go on a light chip)
+
 ## Edge Functions and CI backlog (audit P2/P3) — 2026-10-09 (branch `ledger-v2`)
 
 ### Backend (Supabase)
