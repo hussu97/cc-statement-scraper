@@ -127,14 +127,14 @@ function Totals({ chart, split, groupBy, range, total }: { chart: SplitChart; sp
           {[...chart.rows].reverse().map((r) => (
             <tr key={r.month}>
               <th scope="row" className="px-2 py-1.5 text-left font-normal text-ink">{formatMonth(monthDate(r.month))}</th>
-              <td className="tabular px-2 py-1.5 text-right text-ink">{formatMoney(r.monthTotal)}</td>
+              <td className="tabular px-2 py-1.5 text-right whitespace-nowrap text-ink">{formatMoney(r.monthTotal)}</td>
             </tr>
           ))}
         </tbody>
         <tfoot>
           <tr>
             <th scope="row" className="px-2 py-1.5 text-left font-medium text-ink">Total</th>
-            <td className="tabular px-2 py-1.5 text-right font-medium text-ink">{formatMoney(total)}</td>
+            <td className="tabular px-2 py-1.5 text-right whitespace-nowrap font-medium text-ink">{formatMoney(total)}</td>
           </tr>
         </tfoot>
       </table>
@@ -146,7 +146,7 @@ function Totals({ chart, split, groupBy, range, total }: { chart: SplitChart; sp
       <thead>
         <tr className="text-[11px] tracking-wide text-subtle uppercase">
           <th scope="col" className="px-2 py-1.5 text-left font-medium">{SPLIT_LABEL[split]}</th>
-          <th scope="col" className="w-[6.75rem] px-2 py-1.5 text-right font-medium md:w-36">Total</th>
+          <th scope="col" className="w-[7.5rem] px-2 py-1.5 text-right font-medium md:w-36">Total</th>
           <th scope="col" className="w-14 px-2 py-1.5 text-right font-medium">Share</th>
         </tr>
       </thead>
@@ -171,8 +171,8 @@ function Totals({ chart, split, groupBy, range, total }: { chart: SplitChart; sp
                   name
                 )}
               </th>
-              <td className="tabular px-2 py-1.5 text-right text-ink">{formatMoney(s.total)}</td>
-              <td className="tabular px-2 py-1.5 text-right text-muted">{formatPercent(s.share)}</td>
+              <td className="tabular px-2 py-1.5 text-right whitespace-nowrap text-ink">{formatMoney(s.total)}</td>
+              <td className="tabular px-2 py-1.5 text-right whitespace-nowrap text-muted">{formatPercent(s.share)}</td>
             </tr>
           );
         })}
@@ -180,7 +180,7 @@ function Totals({ chart, split, groupBy, range, total }: { chart: SplitChart; sp
       <tfoot>
         <tr>
           <th scope="row" className="px-2 py-1.5 text-left font-medium text-ink">Total</th>
-          <td className="tabular px-2 py-1.5 text-right font-medium text-ink">{formatMoney(total)}</td>
+          <td className="tabular px-2 py-1.5 text-right whitespace-nowrap font-medium text-ink">{formatMoney(total)}</td>
           <td />
         </tr>
       </tfoot>
