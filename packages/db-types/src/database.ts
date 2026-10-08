@@ -2136,6 +2136,10 @@ export type Database = {
           txn_count: number
         }[]
       }
+      delete_profile: {
+        Args: { p_confirm_key: string; p_profile_code: string }
+        Returns: Json
+      }
       drain_dlq: { Args: { p_queue: string }; Returns: number }
       dubai_date: { Args: { ts: string }; Returns: string }
       fail_document: {

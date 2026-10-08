@@ -38,6 +38,12 @@
   - `save_mailbox_sync_state(p_mailbox_code, p_patch, p_last_synced_at, p_watch_expires_at)`: key-wise jsonb merge under a row lock; `gmail_history_id`, `last_synced_at` and `watch_expires_at` never move back (SRV-15)
   - `begin_document_parse(p_doc_code, p_attempt)` claims a document for parsing, or returns `{skip: 'parsed'|'failed'}` for a duplicate or stale message; `resubmit_document(p_profile_code, p_doc_code)` re-queues a failed PDF that is uploaded again; `fail_document` never flips a `parsed` document back (SRV-20)
 - **test** `16_db_ops_and_worker_rpcs.test.sql`
+- **feat** `20261009000500_db_identity_and_legacy.sql`:
+  - `public.delete_profile(p_profile_code, p_confirm_key)` (owner; the key must match): deletes the profile's Vault PDF passwords and mailbox tokens, queues its PDFs on the new `storage_cleanup` queue (`{bucket, paths[]}`, 100 per message) and deletes the profile; `trg_audit` skips rows of a vanished profile, so a user-JWT delete no longer fails on the audit FK (DB-21)
+  - Pending invites attach only once the email is confirmed (insert with a confirmed email, or a later confirmation / email change); `add_profile_member` treats an unconfirmed account as not signed up (`invited`) (DB-23)
+  - `legacy.*` keeps no table or sequence grants for `anon` / `authenticated` (X-23)
+  - `private.legacy_category_aliases` (`Entretainment` → `Entertainment`) used by `apply_legacy_category_choices`; `private.legacy_unresolved_category_names()` lists names that still match no category, for the finalize output (DP-19 / X-24)
+- **test** `17_db_identity_and_legacy.test.sql`; `03`, `06`, `07` create confirmed test users
 
 ## Supabase publishable / secret API keys — 2026-10-08 (branch `ledger-v2`)
 
