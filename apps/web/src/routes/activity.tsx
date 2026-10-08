@@ -4,13 +4,14 @@ import { NotebookPen, ReceiptText, X } from "lucide-react";
 import { activityRoute } from "@/router";
 import { listSearch, withFilter, type ActivitySearch } from "@/lib/activity-filters";
 import { DEFAULT_PAGE_SIZE, pageCount } from "@/lib/pagination";
-import { useClampPage } from "@/lib/hooks";
+import { useClampPage, useMediaQuery } from "@/lib/hooks";
+import { INFINITE_QUERY } from "@/lib/infinite";
 import { formatDate, formatTime } from "@/lib/dates";
 import { formatCount } from "@/lib/money";
 import { cn } from "@/lib/cn";
 import { useActiveProfile } from "@/data/profile";
 import { useFilterMeta } from "@/data/overview";
-import { evidenceBadge, groupByDay, useBulkSetCategory, useSetCategory, useTransactions, type TxnRow } from "@/data/transactions";
+import { evidenceBadge, groupByDay, useBulkSetCategory, useInfiniteTransactions, useSetCategory, useTransactions, type TxnRow } from "@/data/transactions";
 import { errorMessage } from "@/data/api";
 import { PageHeader, Card } from "@/components/ui/display";
 import { Checkbox } from "@/components/ui/primitives";
@@ -19,15 +20,23 @@ import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
 import { useToast } from "@/components/ui/toast";
 import { CategoryPicker, EvidenceBadge, StatusBadge, TxnAmount } from "@/components/ledger";
 import { Pagination } from "@/components/pagination";
+import { InfiniteFooter } from "@/components/infinite-footer";
 import { ActivityFilters } from "@/components/activity/filters";
 import { TransactionDrawer } from "@/components/activity/drawer";
+import { CardRef } from "@/components/bank-logo";
 
 export function ActivityPage() {
   const { profile_code, isOwner } = useActiveProfile();
   const search = activityRoute.useSearch();
   const navigate = useNavigate({ from: "/activity" });
   const list = useMemo(() => listSearch(search), [search]);
-  const q = useTransactions(profile_code, list);
+  // Phones scroll forever (100 at a time); wider screens keep numbered pages in the URL.
+  const phone = useMediaQuery(INFINITE_QUERY);
+  const paged = useTransactions(profile_code, list, !phone);
+  const infinite = useInfiniteTransactions(profile_code, list, phone);
+  const q = phone
+    ? { ...infinite, data: infinite.data ? { rows: infinite.items, total: infinite.total ?? infinite.items.length } : undefined, isError: infinite.isError && !infinite.isFetchNextPageError }
+    : paged;
   const meta = useFilterMeta(profile_code);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   // Phones have no checkbox column: "Select" turns it on (WEB-24).
@@ -50,8 +59,8 @@ export function ActivityPage() {
   const patch = (p: Partial<ActivitySearch>) => go(withFilter(search, p));
   const size = search.size ?? DEFAULT_PAGE_SIZE;
   // A page past the end (stale URL, or a bulk action that emptied the last page) moves to the last page.
-  useClampPage(search.page ?? 1, size, q.data?.total, (p) => go({ ...search, page: p > 1 ? p : undefined }));
-  const outOfRange = !!q.data && (search.page ?? 1) > pageCount(q.data.total, size);
+  useClampPage(search.page ?? 1, size, phone ? undefined : q.data?.total, (p) => go({ ...search, page: p > 1 ? p : undefined }));
+  const outOfRange = !phone && !!q.data && (search.page ?? 1) > pageCount(q.data.total, size);
   const rows = useMemo(() => q.data?.rows ?? [], [q.data]);
   const groups = useMemo(() => groupByDay(rows), [rows]);
   const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.txn_code!));
@@ -111,7 +120,7 @@ export function ActivityPage() {
               <span role="columnheader">
                 {isOwner && (
                   <Checkbox
-                    aria-label="Select all on this page"
+                    aria-label={phone ? "Select all loaded" : "Select all on this page"}
                     checked={allSelected ? true : selected.size ? "indeterminate" : false}
                     onCheckedChange={() => setSelected(allSelected ? new Set() : new Set(rows.map((r) => r.txn_code!)))}
                   />
@@ -153,11 +162,22 @@ export function ActivityPage() {
                 ))}
               </div>
             ))}
+            {phone && (
+              <InfiniteFooter
+                hasNextPage={infinite.hasNextPage}
+                isFetchingNextPage={infinite.isFetchingNextPage}
+                isFetchNextPageError={infinite.isFetchNextPageError}
+                error={infinite.error}
+                fetchNextPage={infinite.fetchNextPage}
+                loaded={rows.length}
+                noun="transactions"
+              />
+            )}
           </div>
         )}
       </Card>
 
-      {q.data && q.data.total > 0 && (
+      {!phone && q.data && q.data.total > 0 && (
         <Pagination
           page={search.page ?? 1}
           size={size}
@@ -266,7 +286,7 @@ function TxnLine({
           </span>
           <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-muted">
             {t.txn_at && <span className="tabular">{formatTime(t.txn_at)}</span>}
-            <span className="truncate md:hidden">{t.bank_code} •{t.card_last4}</span>
+            <CardRef bankCode={t.bank_code} last4={t.card_last4} className="md:hidden" />
             <EvidenceBadge kind={evidenceBadge(t)} />
             <StatusBadge status={t.status} />
             {t.exclude_from_spend && <span>excluded</span>}
@@ -286,7 +306,7 @@ function TxnLine({
         />
       </span>
       <span role="cell" className="hidden truncate text-[12px] text-muted md:block">
-        {t.bank_code} •{t.card_last4 ?? "—"}
+        <CardRef bankCode={t.bank_code} last4={t.card_last4} size="sm" />
       </span>
       <span role="cell" className="text-right">
         <TxnAmount t={t} className="text-sm" />

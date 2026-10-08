@@ -23,7 +23,7 @@ export function SecretsSection() {
   const [clearing, setClearing] = useState<SecretKey | null>(null);
 
   return (
-    <Card>
+    <Card id="statement-passwords" className="scroll-mt-20">
       <CardHeader
         title={
           <span className="flex items-center gap-2">

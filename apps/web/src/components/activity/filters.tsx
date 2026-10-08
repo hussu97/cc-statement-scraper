@@ -10,6 +10,7 @@ import { ANY, Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/primitives";
+import { BankLogo } from "@/components/bank-logo";
 
 type Patch = (p: Partial<ActivitySearch>) => void;
 
@@ -98,14 +99,30 @@ function FilterFields({ search, patch, meta }: { search: ActivitySearch; patch: 
       ariaLabel="Account"
       value={v(search.account)}
       onValueChange={(x) => patch({ account: u(x), card: undefined })}
-      options={[{ value: ANY, label: "All accounts" }, ...(meta?.accounts ?? []).map((a) => ({ value: a.account_code, label: accountLabel(a) }))]}
+      options={[{ value: ANY, label: "All accounts" }, ...(meta?.accounts ?? []).map((a) => ({
+          value: a.account_code,
+          label: (
+            <span className="inline-flex min-w-0 items-center gap-1.5">
+              <BankLogo bankCode={a.bank_code} size="xs" decorative />
+              <span className="truncate">{accountLabel(a)}</span>
+            </span>
+          ),
+        }))]}
     />,
     <Select
       key="card"
       ariaLabel="Card"
       value={v(search.card)}
       onValueChange={(x) => patch({ card: u(x) })}
-      options={[{ value: ANY, label: "All cards" }, ...cards.map((c) => ({ value: c.card_code, label: `${c.bank_code} •${c.last4}${c.is_supplementary ? " (supp.)" : ""}` }))]}
+      options={[{ value: ANY, label: "All cards" }, ...cards.map((c) => ({
+          value: c.card_code,
+          label: (
+            <span className="inline-flex min-w-0 items-center gap-1.5">
+              <BankLogo bankCode={c.bank_code} size="xs" decorative />
+              <span className="truncate">{`${c.bank_code} •${c.last4}${c.is_supplementary ? " (supp.)" : ""}`}</span>
+            </span>
+          ),
+        }))]}
     />,
     <Select
       key="category"

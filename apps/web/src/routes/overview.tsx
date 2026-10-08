@@ -10,9 +10,11 @@ import { cn } from "@/lib/cn";
 import { Card, CardHeader, Badge, Dot, Meter, Skeleton } from "@/components/ui/display";
 import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
-import { BankMark, EvidenceBadge, HeroAmount, StatusBadge, TxnAmount } from "@/components/ledger";
+import { EvidenceBadge, HeroAmount, StatusBadge, TxnAmount } from "@/components/ledger";
 import { PaceRule } from "@/components/overview/pace-rule";
 import { CategoryRing } from "@/components/overview/category-ring";
+import { MonthlySpendCard } from "@/components/overview/monthly-spend";
+import { BankLogo, CardRef } from "@/components/bank-logo";
 
 export function OverviewPage() {
   const { profile_code } = useActiveProfile();
@@ -73,6 +75,8 @@ export function OverviewPage() {
         </Card>
         <InsightsPanel profileCode={profile_code} />
       </div>
+
+      <MonthlySpendCard profileCode={profile_code} month={month} />
 
       <AccountsPanel overview={q.data} loading={q.isLoading} error={q.isError ? q.error : null} retry={() => void q.refetch()} />
 
@@ -225,7 +229,7 @@ function PendingStrip({ profileCode, overview }: { profileCode: string; overview
                   )}
                 >
                   <span className="flex items-center justify-between text-[11px] text-subtle">
-                    <span className="inline-flex items-center gap-1"><MessageSquareText className="size-3" />{t.bank_code} •{t.card_last4}</span>
+                    <span className="inline-flex min-w-0 items-center gap-1"><MessageSquareText className="size-3 shrink-0" /><CardRef bankCode={t.bank_code} last4={t.card_last4} /></span>
                     <span>{t.txn_at ? `${formatDate(t.txn_date, "short")} ${formatTime(t.txn_at)}` : formatDate(t.txn_date, "short")}</span>
                   </span>
                   <span className="truncate text-[13px] text-ink">{t.merchant_name ?? t.description}</span>
@@ -340,7 +344,7 @@ function AccountCard({ account: a }: { account: OverviewAccount }) {
   return (
     <Card className="flex flex-col gap-4 p-5">
       <div className="flex items-start gap-3">
-        <BankMark bank={a.bank_code} />
+        <BankLogo bankCode={a.bank_code} />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-ink">{accountLabel(a)}</p>
           <p className="text-[12px] text-subtle">{a.last4 ? a.last4.split(",").map((l) => `•${l}`).join("  ") : "No card yet"}</p>
@@ -350,7 +354,15 @@ function AccountCard({ account: a }: { account: OverviewAccount }) {
       <dl className="grid grid-cols-3 gap-3 text-[12px]">
         <div>
           <dt className="text-subtle">Statement</dt>
-          <dd className="tabular mt-0.5 text-sm text-ink">{st ? formatMoney(st.closing_balance, { whole: true }) : "—"}</dd>
+          <dd className="tabular mt-0.5 text-sm text-ink">
+            {st ? (
+              <Link to="/statements/$stmtCode" params={{ stmtCode: st.stmt_code }} className="tap hover:text-accent hover:underline" aria-label={`Statement of ${formatDate(st.statement_date)}: ${formatMoney(st.closing_balance, { whole: true })}`}>
+                {formatMoney(st.closing_balance, { whole: true })}
+              </Link>
+            ) : (
+              "—"
+            )}
+          </dd>
         </div>
         <div>
           <dt className="text-subtle">Due</dt>

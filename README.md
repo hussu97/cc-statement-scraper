@@ -324,12 +324,13 @@ Used for the production Edge Function secrets and Vault entries, and for secret 
 | Route | Screen |
 |---|---|
 | `/signin`, `/welcome` | Sign-in (emailed one-time code or passkey; existing users only; offers to add a passkey after a code sign-in) and first-profile setup |
-| `/` | **Overview**: month hero with pace rule, live pending SMS, category ring, cards and dues, utilisation, insights |
-| `/activity` | **Activity**: unified ledger with URL-synced filters, evidence badges, drawer with evidence timeline, inline, bulk and "apply to merchant" categorisation, notes |
-| `/insights` | **Insights**: trends, categories, merchants, subscriptions, FX, calendar heatmap, time of day, YoY, anomalies |
+| `/` | **Overview**: month hero with pace rule, live pending SMS, category ring, monthly spend bars (split by category / bank / merchant, with totals), cards and dues with bank logos, utilisation, insights |
+| `/activity` | **Activity**: unified ledger with URL-synced filters, evidence badges, drawer with evidence timeline, inline, bulk and "apply to merchant" categorisation, notes. Numbered pages (100–2000, in the URL) on wide screens; infinite scroll below 768 px |
+| `/insights` | **Insights**: trends (monthly bars split by category / bank / merchant, top 10 + Others, with a totals table), categories, merchants, subscriptions, FX, calendar heatmap, time of day, YoY, anomalies |
 | `/budgets` | **Budgets**: total and per category, with progress |
-| `/cards` | **Cards & Statements**: accounts, cards, statements with recon status, upload, documents |
-| `/review` | **Review inbox**: match reviews, unknown cards, unparsed SMS ("not a card transaction") and LLM template proposals. On mobile it is a bottom tab with a count |
+| `/cards` | **Cards & Statements**: accounts, cards, statements with recon status, upload with a live per-file processing log, documents (each with its processing log) |
+| `/statements/$stmtCode` | **Statement**: header (bank, cards, period, dates), balance / debit / credit / min-due / utilisation tiles, Debits and Credits with every line (opens the transaction drawer), reconciliation checks, PDF, processing log |
+| `/review` | **Review inbox**: match reviews, unknown cards, unparsed SMS ("not a card transaction") and LLM template proposals. On mobile it is a bottom tab with a count and scrolls forever |
 | `/rules` | **Rules**: categories, merchants, rules with live impact preview |
 | `/settings` | **Settings**: ledger, members (and invites), account (sign-out, passkeys: add, rename, remove), sources and health (queues, DLQ, mailboxes, tokens, PDF passwords), iPhone SMS setup guide (step-by-step Shortcuts automation with copy buttons, *Open Shortcuts* on iPhone, a QR code to open it on the phone from a desktop, optional TestFlight button) |
 

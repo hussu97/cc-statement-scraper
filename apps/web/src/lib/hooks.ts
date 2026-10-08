@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { clampPage, DEFAULT_PAGE_SIZE, type PageSize } from "./pagination";
+import { clampPage } from "./pagination";
 import { revealScrollLeft, scrollEdges } from "./scroll";
 
 export function useDebouncedValue<T>(value: T, ms = 350): T {
@@ -71,28 +71,6 @@ export function useElementWidth<T extends HTMLElement>(): [(el: T | null) => (()
     return () => ro.disconnect();
   }, []);
   return [ref, width];
-}
-
-export interface PageState {
-  page: number;
-  size: PageSize;
-  setPage: (p: number) => void;
-  setSize: (s: PageSize) => void;
-}
-
-/** Local page state for a server-paginated list (standard sizes, default 100). */
-export function usePageState(): PageState {
-  const [page, setPage] = useState(1);
-  const [size, setSizeState] = useState<PageSize>(DEFAULT_PAGE_SIZE);
-  return {
-    page,
-    size,
-    setPage,
-    setSize: (s: PageSize) => {
-      setSizeState(s);
-      setPage(1);
-    },
-  };
 }
 
 /**

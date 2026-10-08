@@ -3,7 +3,8 @@ import { supabase, type Views } from "@/lib/supabase";
 import { ilikePattern, UNCATEGORIZED, type ActivitySearch } from "@/lib/activity-filters";
 import { DEFAULT_PAGE_SIZE, pageRange } from "@/lib/pagination";
 import { keys, LEDGER_DOMAINS } from "./keys";
-import { fetchPage, must, mustList } from "./api";
+import { fetchPage, must, mustList, type Page } from "./api";
+import { useInfiniteList } from "./infinite";
 
 export type TxnRow = Views<"v_transactions">;
 
@@ -33,24 +34,49 @@ export function applyActivityFilters<B extends FilterBuilder<B>>(query: B, s: Ac
   return q;
 }
 
-export function useTransactions(profileCode: string, search: ActivitySearch) {
+/** Rows [from, to] of v_transactions for the filters, newest first, with the exact total. */
+export function fetchTransactions(profileCode: string, search: ActivitySearch, from: number, to: number): Promise<Page<TxnRow>> {
+  // An out-of-range page returns { rows: [], total } and the screen clamps (WEB-01).
+  return fetchPage<TxnRow>(
+    () =>
+      applyActivityFilters(supabase.from("v_transactions").select("*", { count: "exact" }).eq("profile_code", profileCode), search)
+        .order("txn_date", { ascending: false })
+        .order("txn_at", { ascending: false, nullsFirst: false })
+        .order("txn_code", { ascending: false })
+        .range(from, to),
+    () => applyActivityFilters(supabase.from("v_transactions").select("txn_code", { count: "exact", head: true }).eq("profile_code", profileCode), search),
+  );
+}
+
+/** One numbered page (desktop, and any caller that wants a fixed page). */
+export function useTransactions(profileCode: string, search: ActivitySearch, enabled = true) {
   return useQuery({
     queryKey: keys.transactions(profileCode, search),
+    enabled,
     placeholderData: keepPreviousData,
     queryFn: async () => {
       const size = search.size ?? DEFAULT_PAGE_SIZE;
       const { from, to } = pageRange(search.page ?? 1, size);
-      // An out-of-range page returns { rows: [], total } and the screen clamps (WEB-01).
-      return fetchPage<TxnRow>(
-        () =>
-          applyActivityFilters(supabase.from("v_transactions").select("*", { count: "exact" }).eq("profile_code", profileCode), search)
-            .order("txn_date", { ascending: false })
-            .order("txn_at", { ascending: false, nullsFirst: false })
-            .order("txn_code", { ascending: false })
-            .range(from, to),
-        () => applyActivityFilters(supabase.from("v_transactions").select("txn_code", { count: "exact", head: true }).eq("profile_code", profileCode), search),
-      );
+      return fetchTransactions(profileCode, search, from, to);
     },
+  });
+}
+
+/** The filters that define a list, without paging (an infinite list's identity). Pure. */
+export function listFilters(search: ActivitySearch): ActivitySearch {
+  const { page: _page, size: _size, txn: _txn, ...filters } = search;
+  return filters;
+}
+
+const txnId = (t: TxnRow) => t.txn_code;
+/** Phones: every matching transaction, 100 at a time; a filter change starts again from the top. */
+export function useInfiniteTransactions(profileCode: string, search: ActivitySearch, enabled = true) {
+  const filters = listFilters(search);
+  return useInfiniteList<TxnRow>({
+    queryKey: [...keys.domain(profileCode, "transactions"), "infinite", filters],
+    enabled,
+    fetch: (from, to) => fetchTransactions(profileCode, filters, from, to),
+    idOf: txnId,
   });
 }
 
