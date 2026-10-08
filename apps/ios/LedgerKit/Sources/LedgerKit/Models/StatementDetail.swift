@@ -29,7 +29,9 @@ public struct StatementDetail: Decodable, Sendable, Hashable {
         public let reconChecks: ReconChecks?
 
         enum CodingKeys: String, CodingKey {
-            case stmtCode, kind, bankCode, accountCode, cardLast4s, statementDate, periodStart, periodEnd, dueDate
+            case stmtCode, kind, bankCode, accountCode, statementDate, periodStart, periodEnd, dueDate
+            // `.convertFromSnakeCase` capitalises after the digit: `card_last4s` → `cardLast4S`.
+            case cardLast4s = "cardLast4S"
             case openingBalance, closingBalance, totalDebits, totalCredits, minDue, creditLimit, docCode
             case reconStatus, reconChecks
         }
