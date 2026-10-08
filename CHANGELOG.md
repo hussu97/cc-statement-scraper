@@ -13,11 +13,13 @@
 - **feat** `country_code` is ISO 3166-1 alpha-2 or null (`ccs_parser/countries.py`): alpha-3 codes, `UAE` and FAB's emirate codes (`DXB`, `AUH`, `SHJ`, …) map to alpha-2; `YOU`, `FEE`, `VAT` and other non-codes are null (X-25r)
 - **fix** `fx_rate` is `"1"` on every AED line, and null instead of a contract failure for a rate below 1e-8 (X-33, parser part)
 - **feat** Wrong bank hint: when the hinted parse fails (layout, decryption, output) or finds no lines and detection names another bank, the parser retries once as that bank and warns; a hinted parse with lines keeps the hint and warns when detection disagrees (SRV-17)
+- **test** Synthetic golden set that runs in CI (`tests/test_synthetic_golden.py`): eight fictional statements (FAB, ENBD Dec/Jan year, EIB and Mashreq encrypted, ADCB, SIB history, a wrong hint) built as PDFs at test time and compared with committed snapshots (SRV-24)
+- **test** `tests/synthetic/versions.json` records the snapshot digest per `PARSER_VERSION`: changed output under a recorded version fails the suite, and `python -m tests.synthetic.update` refuses to record it (NEW-2). A test pins `pyproject.toml`'s version to `PARSER_VERSION`
 - **test** `tests/synthetic_pdf.py` (dependency-free PDF writer) and fictional statements in `tests/synthetic/cases.py`; `test_pdf_passwords.py`, `test_mashreq_fx.py`, totals cases
 
 ### Docs
 
-- parse-v1: password keys, totals per bank, Mashreq foreign rows, bank-hint retry, `fx_rate`, `country_code`; parser README; BACKLOG (DP-10, DP-11, DP-12, X-17, SRV-17, X-25r done; X-33 parser part done; NEW-4 Mashreq `card_last4` is the card's BIN); 02, 03 and 06 fix status
+- parse-v1: password keys, totals per bank, Mashreq foreign rows, bank-hint retry, `fx_rate`, `country_code`, versioning; parser README; BACKLOG (DP-10, DP-11, DP-12, X-17, SRV-17, X-25r, SRV-24, NEW-2 done; X-33 parser part done; NEW-4 Mashreq `card_last4` is the card's BIN); 02, 03 and 06 fix status
 
 ## Supabase publishable / secret API keys — 2026-10-08 (branch `ledger-v2`)
 

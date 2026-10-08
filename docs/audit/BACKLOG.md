@@ -26,12 +26,12 @@ separately):
 |---|---|---|---|---|---|
 | Database (Supabase SQL) | 12 | 20 | – | 2 | 34 |
 | Edge Functions | 5 | 7 | – | – | 12 |
-| Parser | 2 | 1 | – | – | 3 |
+| Parser | 1 | 1 | – | – | 2 |
 | Web | 16 | 26 | 5 | – | 47 |
 | iOS | 14 | 10 | 7 | 3 | 34 |
 | Scraper | – | 2 | – | – | 2 |
-| CI, config and ops | 1 | 6 | – | 1 | 8 |
-| **Total** | **50** | **72** | **12** | **6** | **140** |
+| CI, config and ops | 1 | 5 | – | 1 | 7 |
+| **Total** | **49** | **71** | **12** | **6** | **138** |
 
 There are no open P0 or P1 findings. The last P1 remainders (WEB-02 statements beyond 500 and
 merchant search, WEB-07 "Retry AI") landed in `98f901c`. What is left of the P1s are the device
@@ -55,8 +55,10 @@ These are actions, not code changes. Most are already steps in [PRODUCTION.md](.
 4. **Repo and CI.** `gh variable set LEGACY_DEPLOYS_ENABLED --body true` **before** merging
    `ledger-v2` into `main`; create the `production` environment with its secrets and a `main`-only
    branch policy (V-X-12).
-5. **Parser.** Bump `PARSER_VERSION` (NEW-2), deploy to `<gcp-project>` / `me-central1`,
-   put the URL in `PARSER_URL`, and check `/health`.
+5. **Parser.** Deploy `PARSER_VERSION` 2026.10.2 (NEW-2 done) to `<gcp-project>` /
+   `me-central1`, put the URL in `PARSER_URL`, and check `/health`. Requeue documents parsed by an
+   older version (`documents.parser_version`), at least FAB and Mashreq, whose totals and foreign
+   rows changed.
 6. **Gmail OAuth client** from Render into `GMAIL_OAUTH_CLIENT_ID/SECRET` before Render is
    deleted (X-03).
 7. **Full rehearsal with the final code** on the local stack loaded from a fresh prod backup:
@@ -114,7 +116,6 @@ These are actions, not code changes. Most are already steps in [PRODUCTION.md](.
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
 | NEW-4 | Mashreq `card_last4` / `primary_card_last4` is the card's first four digits (BIN): `_CARD_LAST4_RE` takes the first group of "Card No 4xxx XXXX XXXX 1234". Every Mashreq statement of a profile lands on one card, SMS with the real last 4 can't match it, and the fallback statement reference carries the BIN | Found while building the synthetic golden set; fixing it changes card and account identity | Take the last group of the masked number (keep the BIN-based `legacy_fingerprint`). Decide with DP-20 first: with real last-4s, a replacement card (two in the local corpus) creates a second Mashreq account | S |
-| NEW-2 | `PARSER_VERSION` is still `2026.10.0` although the ENBD-year, FAB-amount and validation fixes change output, so `documents.parser_version` can't tell old parses from new | Found while writing the post-import checks | Bump it (for example `2026.10.1`) and on every output change; a test that a golden delta requires a bump | S |
 
 ### Web
 
@@ -267,7 +268,6 @@ These are actions, not code changes. Most are already steps in [PRODUCTION.md](.
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
 | SRV-13 | Supply chain: `deno.json` `lock: false`, no pip hashes, base image by tag, `uvicorn[standard]` extras | Out of the P1 pass | Commit `deno.lock` and deploy `--frozen`; `uv pip compile --generate-hashes`; pin the base image digest; plain `uvicorn` | M |
-| SRV-24 | Golden parity never runs in CI (the corpus is private) | Needs a redacted corpus or protected storage | A small synthetic/redacted golden set per layout, or a protected CI job with encrypted corpus | M |
 | X-26 | CI runs no `deno lint`/`check`/`fmt` (fmt fails on 18 files) and never builds the iOS app or extension targets | Out of the P1 pass | Add lint and check (fix or drop fmt); a weekly `xcodegen && xcodebuild build` job (with IOS-11) | S |
 | X-32 | Vercel previews use the production Supabase project and CSP; their auth redirects aren't allow-listed | Decision | Disable previews, or point them at a non-prod project | S |
 | DP-22 | A rehearsal on the shared local stack also categorises the demo profiles' merchants and drains their `sms_fallback` queue (demo SMS sent to Claude) | Local ops only | Rehearse on a stack without seed data, or scope `enqueue_llm_categorize` by profile when run by hand | S |

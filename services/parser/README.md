@@ -157,6 +157,26 @@ pytest -q
 `tests/test_parsers.py` (ported) needs sample PDFs in `~/Downloads` and
 `ADCB_SAMPLE_PASSWORD`; it is skipped otherwise.
 
+### Synthetic golden set (runs in CI)
+
+`tests/test_synthetic_golden.py` parses eight fictional statements (`tests/synthetic/cases.py`:
+FAB, ENBD with the Dec/Jan year fix, EIB and Mashreq encrypted, ADCB, SIB history, a wrong bank
+hint). Each is written as a PDF at test time by `tests/synthetic_pdf.py` (plain text placed like the
+bank's layout; no real data) and compared with `tests/synthetic/expected/<case>.json`.
+
+When parser output changes on purpose:
+
+```bash
+# 1. bump PARSER_VERSION in ccs_parser/__init__.py and version in pyproject.toml (they must match)
+# 2. regenerate the snapshots and review the JSON diff
+PARSER_ISOLATION=inline .venv/bin/python -m tests.synthetic.update
+```
+
+`tests/synthetic/versions.json` records the snapshot digest of every `PARSER_VERSION`. Changed
+output under a version that is already recorded fails `test_snapshot_digest_matches_parser_version`,
+and `update` refuses to record it, so `documents.parser_version` always tells old output from new
+(NEW-2). New layouts get a case here.
+
 ### Golden parity
 
 `tests/test_golden_parity.py` compares the service with the **legacy v1 parser's output**
@@ -178,8 +198,9 @@ pytest -q tests/test_golden_parity.py
   whole-word fee classifier.
 - A case whose source PDF has moved is skipped; the suite is skipped when `tests/golden/`
   is empty (fresh clones, CI).
-- New layouts and banks are covered by unit tests (`test_*.py`) rather than new golden
-  files. To rebuild the fixtures from scratch, use a checkout of a commit that still has
+- New layouts and banks are covered by the synthetic set and unit tests (`test_*.py`) rather
+  than new golden files. The real corpus does not compare totals, `country_code` or `fx_rate`.
+  To rebuild the fixtures from scratch, use a checkout of a commit that still has
   `backend/` and `scripts/build_golden.py` (e.g. `cdd77b1`, or the parent of
   `git log --diff-filter=D -1 -- services/parser/scripts/build_golden.py`).
 

@@ -52,7 +52,7 @@ All money values are **decimal strings, absolute (non-negative)**, except `total
 ```json
 {
   "contract_version": 1,
-  "parser_version": "2026.10.0",
+  "parser_version": "2026.10.2",
   "bank_code": "ADCB",
   "document_kind": "statement_pdf",
   "statements": [
@@ -104,6 +104,7 @@ All money values are **decimal strings, absolute (non-negative)**, except `total
 ```
 
 Field rules:
+- `parser_version` changes whenever the output for the same PDF changes (see [Versioning](#versioning)).
 - `document_kind` is `statement_pdf` or `history_pdf`. SIB "transaction history" exports are `history_pdf`.
 - `statements[].kind` is `statement` or `history_extract`. A `history_pdf` produces only `history_extract` statements.
 - `reference_source` is `explicit`, `fallback` or null.
@@ -130,6 +131,15 @@ Field rules:
   codes that are also common words (`VAT`, `CAN`, `AND`, …). Best effort: the token is read from
   free text.
 - A `history_extract` is a **window**, not a complete record of its cycle. Ingest unions the lines of every document of a statement by `(line_key, occurrence)`, so a later, shorter export never removes lines an earlier one contributed (ARCHITECTURE §4).
+
+### Versioning
+
+`parser_version` (`ccs_parser.PARSER_VERSION`, equal to the `pyproject.toml` version that the
+deploy smoke test checks against `/health`) is bumped whenever the output for the same PDF changes,
+so `documents.parser_version` tells old parses from new ones and `requeue_documents` can target
+them. `services/parser/tests/test_synthetic_golden.py` enforces it: the synthetic golden snapshots
+are recorded per version in `tests/synthetic/versions.json`, and a snapshot change under an already
+recorded version fails the suite.
 
 ### Output validation
 

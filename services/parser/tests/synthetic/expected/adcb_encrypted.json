@@ -1,0 +1,94 @@
+{
+  "bank_code": "ADCB",
+  "contract_version": 1,
+  "document_kind": "statement_pdf",
+  "statements": [
+    {
+      "bank_code": "ADCB",
+      "card_holder": "JANE Q SAMPLE",
+      "card_type": "Credit Card",
+      "due_date": null,
+      "kind": "statement",
+      "lines": [
+        {
+          "amount_aed": "400.00",
+          "amount_original": "100.00",
+          "card_holder": "JANE Q SAMPLE",
+          "card_last4": "9876",
+          "country_code": "FR",
+          "currency_original": "EUR",
+          "description_raw": "HOTEL SAMPLE PARIS",
+          "direction": "debit",
+          "fx_rate": "4",
+          "kind": "purchase",
+          "legacy_fingerprint": "4d49ac6e100e69992c0645d13d5e9f85c4b3a75c88c3d1ded0ffc157fd742303",
+          "line_no": 1,
+          "merchant_normalized": "HOTEL SAMPLE PARIS",
+          "posting_date": "2026-01-10",
+          "txn_date": "2026-01-10",
+          "txn_time": null
+        },
+        {
+          "amount_aed": "1000.00",
+          "amount_original": "1000.00",
+          "card_holder": "JANE Q SAMPLE",
+          "card_last4": "9876",
+          "country_code": null,
+          "currency_original": "AED",
+          "description_raw": "PAYMENT THANK YOU",
+          "direction": "credit",
+          "fx_rate": "1",
+          "kind": "payment",
+          "legacy_fingerprint": "0634a5fa67befe4b3b5680051eea5d27afe2e584c02172b400ffd5b74c44598b",
+          "line_no": 2,
+          "merchant_normalized": "PAYMENT THANK YOU",
+          "posting_date": "2026-01-12",
+          "txn_date": "2026-01-12",
+          "txn_time": null
+        },
+        {
+          "amount_aed": "925.00",
+          "amount_original": "925.00",
+          "card_holder": "JANE Q SAMPLE",
+          "card_last4": "9876",
+          "country_code": null,
+          "currency_original": "AED",
+          "description_raw": "CORNER GROCERY ABU DHABI",
+          "direction": "debit",
+          "fx_rate": "1",
+          "kind": "purchase",
+          "legacy_fingerprint": "0de915b69ff1359015ad44bfdaccaa6d85f15efa4a9570247cd92cb646970f50",
+          "line_no": 3,
+          "merchant_normalized": "CORNER GROCERY ABU DHABI",
+          "posting_date": "2026-01-15",
+          "txn_date": "2026-01-15",
+          "txn_time": null
+        }
+      ],
+      "metadata": {
+        "card_holder": "JANE Q SAMPLE",
+        "card_last4": "9876",
+        "pdf_sha256": "<pdf_sha256>",
+        "statement_date": "2026-02-05",
+        "statement_month": "2026-02",
+        "statement_period_end": "2026-02-05",
+        "statement_reference": null
+      },
+      "period_end": "2026-02-05",
+      "period_start": null,
+      "primary_card_last4": "9876",
+      "reference_source": "fallback",
+      "statement_date": "2026-02-05",
+      "statement_reference": "AUTO-ADCB-2026-02-05-9876",
+      "totals": {
+        "closing_balance": "1325.00",
+        "credit_limit": null,
+        "min_due": null,
+        "opening_balance": "1000.00",
+        "total_credits": null,
+        "total_debits": null
+      },
+      "warnings": []
+    }
+  ]
+}
