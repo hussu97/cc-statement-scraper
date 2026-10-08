@@ -327,3 +327,9 @@ README.md, ARCHITECTURE.md, ROADMAP.md, `.github/workflows/**`, `scripts/hooks/*
 | X-29 | deferred | `me-central1` option kept in `deploy-parser.yml`; PRODUCTION §3 states the parser region is `europe-west1` (note `.env.cutover` has `GCP_REGION=me-central1`). |
 | X-30 | **fixed** | README Legacy wording, hooks description and `scripts/cutover/` documented. |
 | X-17–X-20, X-23–X-26, X-28, X-31–X-33 | not in this pass | Contract/server/iOS/web/DB items or P3 left for their owners. |
+
+**Later updates (2026-10-08):** X-02, X-07 (local), X-08 and X-11 (`ledger-cron-history-purge`) were
+fixed by the DB pass; X-06 by the server pass; X-18 by DB-16, X-19 by IOS-01, X-20 by the
+multi-document line union (DP-02). X-29 is resolved: the parser deploys to
+`credit-card-scraper-ht` / `me-central1` (repo `ledger`), the workflow's only region. X-25 is fixed
+in parse-v1 except the `country_code` format. Open items: [BACKLOG.md](BACKLOG.md).

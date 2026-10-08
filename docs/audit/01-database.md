@@ -611,3 +611,8 @@ shared non-empty DB, and on a fresh throw-away stack (migrations + seed from scr
 Rehearsal re-run (33 hussain ADCB/SIB documents re-parsed through the worker after the fix): legacy-line
 coverage ADCB 80.8 % → 100 %, SIB 53.2 % → 100 % (ENBD 89.4 % unchanged: DP-03 parser), 0 orphaned
 transactions, 7 card-less empty ADCB documents parsed with a "skipped" warning.
+
+**Docs follow-up (2026-10-08, docs pass):** ARCHITECTURE §4 no longer claims a 120 s statement
+timeout or a regex statement timeout (DB-13), §6 lists only the insight kinds actually generated
+(DB-29, partly), and PRODUCTION §2.2 no longer says "RLS isolates any stray account" (DB-04): sign-ups
+are off and members are invited. Everything still open is in [BACKLOG.md](BACKLOG.md).

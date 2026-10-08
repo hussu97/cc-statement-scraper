@@ -13,6 +13,7 @@
 | Scraper | Configurable upload target and path, per-bank failure isolation, `upload-pending`. |
 | Cutover tooling | `private.import_legacy_metadata`, legacy category choices, parity report, `scripts/migrate_legacy.py`, pending invites. |
 | CI/CD | Path-filtered CI (supabase, edge, parser, web, ios, scraper) and manual deploy workflows for Supabase and the parser. |
+| Pre-cutover audit | Six audits (`docs/audit/01`–`06`) and their P0/P1 fixes: structural tenant integrity (composite FKs), per-profile ingest lock, multi-document line union (no data loss from companion PDFs or history windows), per-message SMS ingest, sign-ups off, parser resource limits and output validation, ENBD year and FAB amount fixes, code-based worker retry classification, scraper upload batching, cutover target guard, iOS outbox that can't wedge, "SMS go to" ledger, iOS Review, AA contrast tokens. Everything not yet fixed is in [docs/audit/BACKLOG.md](docs/audit/BACKLOG.md). |
 
 ## Next
 
@@ -31,14 +32,21 @@
       workflows to `main`; cutover disable list in PRODUCTION.md §10 step 1.
 - [ ] Merge `ledger-v2` into `main` before the cutover day (after setting
       `LEGACY_DEPLOYS_ENABLED=true`), so the manual deploy workflows can be dispatched.
-- [ ] Dashboard settings at cutover (PRODUCTION.md §2.7): API max rows 2000, sign-ups off.
-- [ ] Purge `cron.job_run_details` older than 7 days with a daily pg_cron job (migration).
+- [ ] Dashboard settings (PRODUCTION.md §2.7): sign-ups off before the day, API max rows 2000
+      at step 4.
+- [x] Purge `cron.job_run_details` older than 7 days with a daily pg_cron job
+      (`ledger-cron-history-purge`, migration `20261008001800`).
+- [ ] Rotate the Anthropic API key and the Sentry org auth token that were exposed in chat
+      transcripts and logs (PRODUCTION.md §10, Before the day).
+- [ ] Re-run the full legacy rehearsal with the final code on a fresh prod backup and reach
+      `legacy_lines_missing = 0` for every bank (PRODUCTION.md §10).
+- [ ] Invite both members through Supabase Auth after the metadata step (sign-ups stay off).
 - [ ] Upgrade Supabase Postgres off 17.6.1.104 and re-test the `REVOKE EXECUTE` segfault.
 - [ ] Run the cutover runbook (PRODUCTION.md §10), sign off parity, run old and new side by
       side.
 - [ ] After 30 days: decommission Render, GCS, the Cloud Run Gmail relay and its scheduler, the
       MS GitHub Actions cron and the legacy Vercel project; delete `backend/`, `frontend/`,
-      legacy Dockerfiles, workflows and docs; unschedule `ledger-legacy-choices`.
+      legacy Dockerfiles, workflows and docs. (`ledger-legacy-choices` unschedules itself.)
 
 ### 2. Observability follow-ups
 - [x] Set the agreed Sentry tags (`service=edge|parser`, `app=web|ios`) and default the web
@@ -51,8 +59,9 @@
 - [ ] Promote accepted LLM suggestions to exact rules from the Review inbox.
 
 ### 4. SMS capture
-- [ ] Verify the Shortcuts "Message contains …" automation on real devices: locked phone,
-      alphanumeric senders, duplicate fires, and how sender and body reach the intent.
+- [ ] Verify the single *Message contains "Card"* automation on real devices: locked phone,
+      alphanumeric senders, how sender and body reach the intent, and whether "contains" is
+      case-insensitive (the ENBD refund says "card").
 - [ ] SIB declined-transaction template from a real sample (the current one is inferred).
 - [ ] Templates for EIB and Mashreq once real alerts are captured.
 
@@ -65,7 +74,11 @@
       global `CCS_SCRAPER_API_TOKEN`.
 - [ ] Backlog: dedupe adapter helpers into `shared.py` (fixed sleeps, broad excepts).
 
-### 7. Later
+### 7. Audit backlog
+- [ ] Work through [docs/audit/BACKLOG.md](docs/audit/BACKLOG.md): deferred P2/P3 findings and
+      UX recommendations from the six audits, grouped by priority and area.
+
+### 8. Later
 - [ ] Current-account and debit-card statements (today only credit cards; debit SMS is stored
       as `ignored`).
 - [ ] Supabase log drains (Pro plan) if DB-side observability needs more than `ops-monitor`.

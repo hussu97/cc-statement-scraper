@@ -545,3 +545,11 @@ scraper `pytest` 135 passed; `scripts/tests` 12 passed (run with `backend/.venv`
 - `CHANGELOG.md` entry.
 - Already-ingested ENBD rows: requeue the three affected documents. One is stored as 2026-12-28 and must be superseded, and its 8 `period_overlap` reviews dismissed.
 - Already-ingested FAB rows: requeue the two FAB documents so the six recovered lines are ingested.
+
+**Docs follow-ups done (2026-10-08, docs pass):** parse-v1 documents the new codes, limits,
+output validation and code-based worker classification (completes SRV-21); PRODUCTION §10 step 7
+uses `--target prod` with `--yes-i-mean-prod nkmylznisjcnmqbxosey`, §3 keeps `--timeout 120`
+and documents the limits, step 8 has the ENBD/FAB post-import checks; README has
+`PARSER_TIMEOUT_MS` 75000, `EDGE_WALL_CLOCK_MS`, the scraper batching variables and the Sentry
+local behaviour; CHANGELOG has an "Audit fixes (pre-cutover)" section. Open items:
+[BACKLOG.md](BACKLOG.md).

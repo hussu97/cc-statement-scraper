@@ -319,3 +319,8 @@ Fixed on `ledger-v2` (uncommitted), 2026-10-08. Verified with `pnpm --filter @le
 | WEB-25 | fixed | `insightTarget` maps each kind to its screen. Cards are links ("See budgets", …). |
 | WEB-45 | fixed | Insights are filtered by `valid_until`. |
 | Others | deferred | The other P2/P3 items are out of this pass's scope. Server totals and projections (WEB-26, WEB-37, Activity sum) need RPCs. |
+
+**Later (`98f901c`):** WEB-02 is fixed (Merchants search and paging through `merchant_search`;
+Statements up to 5000 cycles) and WEB-07 is fixed ("Retry AI" via `retry_sms_fallback`; "Not a card
+transaction" now sends exactly `{not_a_transaction: true}`). Everything still open, including the
+deferred P2/P3 items and the "Missing analytics" recommendations, is in [BACKLOG.md](BACKLOG.md).

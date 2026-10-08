@@ -438,3 +438,25 @@ reference number and the original amount), so each such merchant is categorised 
 5. Re-run this rehearsal end to end: `delete` the two local profiles, then repeat steps 2–4. The target is FAB
    and Mashreq parity, which already holds, plus ADCB, ENBD and SIB lost lines = 0. After that, the only
    expected deltas are the ENBD phantom (−5,083 AED, correct), refund netting, DP-09 and the new SIB lines.
+
+## Fix status
+
+Collected 2026-10-08 from the fixes recorded in [01](01-database.md#fix-status) (database) and
+[03](03-server.md#fix-status) (parser, script). Open items are in [BACKLOG.md](BACKLOG.md).
+
+| ID | Status | Where |
+|---|---|---|
+| DP-01, DP-02 | fixed | `…1600`: lines carry `source_doc_codes`; only a re-parse of the same document withdraws lines; a card-less statement without rows is skipped. Re-run on the 33 hussain ADCB/SIB documents: ADCB 80.8 % → 100 %, SIB 53.2 % → 100 % |
+| DP-03, DP-04 | fixed | parser `period_years.py` and contract validation: the three ENBD PDFs give Jan-2025, Jan-2026 and Dec-2025 (2025-12-28); 38 lines recovered. Ingest-side future-date guard: BACKLOG DP-04r |
+| DP-05 | fixed | `legacy_parity_report(p_schema)` casts and reports `legacy_lines_missing` / `legacy_aed_missing`; `legacy_missing_lines()` |
+| DP-06 | fixed | orphan reviews 150 → 0 after the re-parse |
+| DP-07 | fixed | cause was the FAB original-amount format (`EUR 108,99`, `KWD 18.750`), not a second section; both statements reconcile |
+| DP-08 | fixed | recon `n/a` for history extracts; `warn` for an empty statement whose header shows activity |
+| DP-13 | fixed | `migrate_legacy.py --target local\|prod`, `--yes-i-mean-prod <ref>` for prod writes |
+| DP-14 | fixed (docs) | X-03: Gmail OAuth client copied from Render (PRODUCTION §5.4) |
+| DP-15 | fixed | X-08 per-profile advisory lock on ingest |
+| DP-16 | fixed | ingest is order-independent (DP-01/02), so upload order no longer matters |
+| DP-09–DP-12, DP-17–DP-22 | open | BACKLOG (DP-18 is a cutover decision) |
+
+A full end-to-end re-run of this rehearsal with all fixes (including the ENBD and FAB parser
+changes) is still to do; it is in BACKLOG "Do before / at cutover".

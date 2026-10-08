@@ -531,3 +531,7 @@ Fixed on `ledger-v2` (uncommitted), 2026-10-08. `swift test`: 103 tests in 19 su
 | IOS-09 | fixed | `SharedKeychainStorage` records the write failure, which supabase-swift otherwise swallows. `SessionStore.phase(signedInAs:persistence:)` turns an unsaved session into signed-out with "Couldn't save your sign-in …" and a Sentry capture. Debug builds keep the session in memory instead, flagged in Settings → Debug. The no-access-group retry is now Debug-only. PostgREST 42501 and PGRST codes get friendly `LoadState` text. |
 | Release tooling | fixed | `publish-build.sh` reads `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` from the environment, or else from `Config/Secrets.Release.xcconfig`. It exports the token to `sentry-cli`, logs only where the token came from, and never prints the value. The rest of IOS-21 (Release including local `Secrets.xcconfig`, plist assertions, Sentry releases) is deferred. |
 | IOS-10…31 | deferred | P2/P3, out of scope for this pass. These were touched along the way: IOS-12 (honest queued reasons; outbox still not cleared on sign-out), IOS-16 (PDFs follow the SMS ledger; a rejected PDF still blocks the queue), IOS-20 (filter and dismiss labels, 44 pt dismiss, combined rows), IOS-25 (serialised flush; the two compiler warnings remain). |
+
+Everything still open, including the UX and iOS-native recommendations and the device checks
+(Shortcuts case sensitivity, TestFlight privacy manifest, Release keychain), is in
+[BACKLOG.md](BACKLOG.md).

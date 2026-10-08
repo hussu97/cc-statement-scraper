@@ -63,11 +63,24 @@ Dashboard → Authentication:
 - **URL Configuration.** Site URL is the Vercel production URL. Add redirect URLs for the
   Vercel domain(s) and `http://127.0.0.1:5173` if you want to test magic links against prod.
 - **Providers → Email** enabled (email OTP or magic link). Sign in with Apple isn't used yet.
-- **Sign-ups.** Members must be able to sign up to claim their invite: `add_profile_member`
-  stores pending invites by email, and sign-up attaches them. Leave email sign-ups on until both
-  members have signed in to v2 (§10 step 9), then **turn them off**: Authentication → Sign In /
-  Providers → *Allow new users to sign up* = off. RLS isolates any stray account anyway, but
-  there is no reason to accept strangers. Turn it back on briefly to add a new member.
+- **Sign-ups: off, always.** Authentication → Sign In / Providers → *Allow new users to sign
+  up* = **off** (local `supabase/config.toml` has `[auth] enable_signup = false` to match). A
+  signed-up stranger could create ledgers and use storage, LLM and queue capacity, so Ledger
+  never accepts self-registration. The web's magic link no longer creates users
+  (`shouldCreateUser: false`); an unknown email is told to ask a ledger owner for an invite.
+- **Adding a member** (sign-ups stay off):
+  1. An owner adds the email: web Settings → Members (`add_profile_member`). If the email has
+     no Auth user yet this stores a **pending invite**. At cutover, `migrate_legacy.py --step
+     metadata` stores the two owners' invites the same way.
+  2. Create the Auth user: Dashboard → Authentication → Users → **Invite user** with that email
+     (or the admin API `auth.admin.inviteUserByEmail`). Invites work with sign-ups disabled. The
+     `auth.users` insert trigger claims the pending invite, so the person lands in the ledger
+     with the stored role.
+  3. They open the invite email (or request an email code) and sign in.
+
+  If the email already has an Auth user, step 1 adds them directly (`added`) and step 2 is
+  skipped. An in-app invite that sends the email itself is on the backlog
+  ([docs/audit/BACKLOG.md](docs/audit/BACKLOG.md)).
 - **SMTP.** The built-in sender is heavily rate-limited (a few emails an hour). That is fine for
   two people. Configure custom SMTP if OTP emails go missing.
 
@@ -166,9 +179,15 @@ supabase secrets list --project-ref nkmylznisjcnmqbxosey      # names and digest
   `PARSER_URL` isn't `https://` or points at a local host, or if the file contains
   `PARSER_DOCUMENT_BASE_URL` or `LEDGER_E2E` (local only).
 - Optional overrides: `MS_OAUTH_TENANT` (`consumers`), `OUTLOOK_LOOKBACK_DAYS`,
-  `OUTLOOK_BUDGET_MS`, `WORKER_BUDGET_MS`, `PARSER_TIMEOUT_MS`,
+  `OUTLOOK_BUDGET_MS`, `WORKER_BUDGET_MS`, `PARSER_TIMEOUT_MS`, `EDGE_WALL_CLOCK_MS`,
   `OPS_SMS_UNPARSED_THRESHOLD`, `OPS_OPEN_REVIEWS_THRESHOLD` and `SENTRY_TRACES_SAMPLE_RATE`
   (see README). Add them to the same file.
+- **Worker timing.** Leave `PARSER_TIMEOUT_MS` at its default **75000** (set it explicitly only
+  to document it): it must stay above the parser's own 60 s kill (§3) and below Cloud Run's
+  120 s request timeout. `EDGE_WALL_CLOCK_MS` is 150000 on the free plan (400000 on paid); the
+  worker starts a parse round only if `PARSER_TIMEOUT_MS` + 20 s still fits before it.
+- **`SENTRY_ENVIRONMENT` must be `production`.** Unset, `local`, `development` and `test`
+  disable Sentry even with a DSN (§8).
 - **Never set `PARSER_DOCUMENT_BASE_URL` in production.** It exists for local Docker only.
 
 Deploy every function. Each one's `verify_jwt = false` comes from `supabase/config.toml`:
@@ -196,28 +215,21 @@ curl -s -X POST https://nkmylznisjcnmqbxosey.supabase.co/functions/v1/worker \
 | `ledger-fx-rates` | `0 21 * * *` | `fx-rates` function |
 | `ledger-nightly` | `0 22 * * *` (02:00 Dubai) | void released authorisations, recurring detection, insights |
 | `ledger-llm-enqueue` | `30 22 * * *` | queue uncategorised merchants for the LLM |
-| `ledger-legacy-choices` | `45 22 * * *` | re-apply staged legacy category choices (cutover helper; idempotent) |
+| `ledger-legacy-choices` | `45 22 * * *` | apply staged legacy category choices once per transaction (cutover helper); unschedules itself when nothing is pending or 30 days after staging |
 | `ledger-ops-monitor` | `*/15 * * * *` | `ops-monitor` → Sentry plus the `ops-heartbeat` check-in |
 | `ledger-gmail-watch-renew` | `0 3 * * *` | `gmail-watch-renew` |
 | `ledger-outlook-poll` | `5 * * * *` | `outlook-poll` |
+| `ledger-cron-history-purge` | `50 23 * * *` | delete `cron.job_run_details` older than 7 days |
 
 Check job health with `select jobname, schedule, active from cron.job;` and
-`select * from cron.job_run_details order by start_time desc limit 20;`. Once v2 parity is
-signed off and every staged choice has applied, unschedule the legacy helper with
-`select cron.unschedule('ledger-legacy-choices')`. Do this in a new migration.
+`select * from cron.job_run_details order by start_time desc limit 20;`.
+`ledger-legacy-choices` removes itself (above); `select * from private.legacy_unmatched_choices();`
+lists staged choices that never met a v2 line.
 
-**Run-history growth.** pg_cron logs every run in `cron.job_run_details` and never purges it:
-about 1.6k rows a day (the every-minute worker kick alone is 1,440), against the 500 MB free
-tier, and `ops_health()` scans the table. A daily purge keeping 7 days belongs in a migration
-(owned by the DB work, audit X-11):
-
-```sql
-select cron.schedule('ledger-cron-history-purge', '50 23 * * *',
-  $$delete from cron.job_run_details where coalesce(end_time, start_time) < now() - interval '7 days'$$);
-```
-
-Until that migration lands, run the `delete` by hand monthly. Keep the window ≥ 2 days so
-`ops_health`'s `cron_last_success` still sees each daily job.
+**Run-history growth.** pg_cron logs every run in `cron.job_run_details` (about 1.6k rows a day;
+the every-minute worker kick alone is 1,440). `ledger-cron-history-purge` (migration
+`20261008001800`) keeps 7 days, which is enough for `ops_health`'s `cron_last_success` to see
+each daily job.
 
 ### 2.7 Dashboard settings to change at cutover
 
@@ -227,7 +239,7 @@ Until that migration lands, run the `delete` by hand monthly. Keep the window �
 |---|---|---|---|
 | Postgres version | Project Settings → Infrastructure → Upgrade | latest 17.x (off **17.6.1.104**, which segfaults when a caller lacks EXECUTE, §2.1) | step 3, after the backup |
 | API max rows | Project Settings → Data API → *Max rows* | **2000** (the web's largest page size; the default 1000 silently truncates 2000/page). Local `supabase/config.toml` `[api] max_rows` must match | step 4 |
-| New user sign-ups | Authentication → Sign In / Providers → *Allow new users to sign up* | **off**, once both members have signed in | step 9 |
+| New user sign-ups | Authentication → Sign In / Providers → *Allow new users to sign up* | **off** (members are invited, §2.2) | before the day (no later than step 4) |
 | Site URL and redirect URLs | Authentication → URL Configuration | the Vercel production URL (§2.2) | step 9 |
 
 ---
@@ -267,6 +279,16 @@ echo "$PARSER_URL"; curl -s "$PARSER_URL/health"      # the URL is not a secret
 
 - `--allow-unauthenticated` is required. The worker authenticates with `X-Parser-Secret`, not a
   Google identity token. `PARSER_ALLOWED_HOSTS` limits downloads to the project's Storage.
+- **Resource limits are on by default; no env vars needed.** Each parse runs in a killable
+  child process: 15 MB / 30 pages / 32 MB inflated streams, 30 s CPU, 60 s wall clock, 768 MB
+  address space ([parse-v1 → Resource limits](docs/contracts/parse-v1.md#resource-limits)).
+  Breaches are the permanent 422s `PDF_TOO_LARGE` / `PARSE_TIMEOUT`. Override only with the
+  `PARSER_*` variables in `services/parser/.env.example`.
+- **Timeouts nest:** parser kill 60 s < worker `PARSER_TIMEOUT_MS` 75 s < Cloud Run
+  `--timeout 120`. Keep `--timeout 120`.
+- `--concurrency 4` with `--memory 1Gi`: real statements use far less than the 768 MB child
+  cap, but four pathological PDFs at once could exhaust the instance. If parses ever die with
+  out-of-memory, drop to `--concurrency 2` (more instances instead; BACKLOG SRV-12).
 - After deploying, copy the printed service URL into the `PARSER_URL=` line of
   `supabase/functions/.env.production` (replacing the placeholder) and push it with
   `scripts/cutover/set-edge-secrets.sh` (§2.5). `PARSER_SECRET` there must equal the
@@ -420,7 +442,8 @@ the production domain moves.
    does it on first archive).
 3. Release:
    ```bash
-   export SENTRY_AUTH_TOKEN=… SENTRY_ORG=… SENTRY_PROJECT=ledger-apps   # dSYMs → ledger-apps
+   # dSYMs → ledger-apps: SENTRY_AUTH_TOKEN / SENTRY_ORG / SENTRY_PROJECT from the environment,
+   # or (when unset) from Config/Secrets.Release.xcconfig; the token is never printed.
    export ASC_KEY_ID=… ASC_ISSUER_ID=…                                 # + AuthKey_<id>.p8
    apps/ios/scripts/publish-build.sh --upload
    git add apps/ios/build-number.json && git commit …                   # the script bumps it
@@ -430,10 +453,16 @@ the production domain moves.
    - `--stage` stages the IPA on the `ios-ledger-staged` GitHub release instead.
 4. On each phone, after installing from TestFlight:
    - Sign in.
-   - Settings → *Set up SMS capture*: create the "Message contains …" automations with **Run
-     Immediately**.
-   - Send yourself a test bank-format SMS and confirm a pending transaction appears on the web
-     app.
+   - Settings → *SMS go to*: pick the ledger SMS and shared PDFs are filed to (owned ledgers
+     only).
+   - Settings → *Set up SMS capture*: create **one** automation, *Message contains "Card"*,
+     with **Run Immediately** and **Notify When Run on** (results such as "unknown card" or
+     "not sent" are only visible that way). Don't add "AED" or "ending" automations; each extra
+     keyword fires the intent again for the same alert.
+   - Tap **Send test** in Settings and check "Last captured" updates.
+   - On a real card alert, confirm a pending transaction appears on the web app. Also check
+     once that an alert with lowercase "card" (the ENBD refund wording) triggers the
+     automation: Shortcuts' case sensitivity is not yet verified (BACKLOG).
 
 ---
 
@@ -450,6 +479,12 @@ Every event carries the tag `service` (edge | parser) in `ledger-backend` and `a
 in `ledger-apps`, set at SDK init by each runtime. Edge events also carry `function`, parser
 events `parser_version`, and iOS events `target` (app | intent | share_extension).
 
+**Local, development and test never report**, in every runtime, even with a DSN set: Edge and
+parser skip init when `SENTRY_ENVIRONMENT` is unset, `local`, `development` or `test`; the web
+when `VITE_SENTRY_ENVIRONMENT` is empty, one of those, or Vite runs in dev mode; iOS when
+`LEDGER_ENVIRONMENT` is one of those (or `dev`) or the build is Debug. Production must set the
+environment to `production` (Vercel Preview: `preview`).
+
 **Alerts:**
 
 | Alert | Project | Rule |
@@ -459,10 +494,11 @@ events `parser_version`, and iOS events `target` (app | intent | share_extension
 | DLQ > 0 | `ledger-backend` | Issue alert: event tag `ops_issue` starts with `dlq:` (from `ops-monitor`), plus worker DLQ error events, any frequency |
 | iOS crash-free < 99% | `ledger-apps` | Metric alert: crash-free session rate < 99% over 24 h, filtered `app:ios` (if session alerts can't filter on the tag, filter on the iOS release package `com.hussu97.ledger`) |
 
-Non-production debug triggers to verify delivery:
+Non-production debug triggers to verify delivery (they need a reporting environment such as
+`preview` or `ci`, since local never reports):
 - Edge: the `?debug_sentry=1` flag.
 - Parser: `GET /debug-sentry`, with `X-Parser-Secret`.
-- iOS: the Settings → Debug section.
+- iOS: the Settings → Debug section (Release builds only).
 - Web: no trigger yet (ROADMAP).
 
 ---
@@ -544,8 +580,19 @@ parsing time. Steps are in order; nothing is deleted until step 12.
 - New Vercel project building `apps/web` with the env vars from `apps/web/.env.production.local`
   (§4).
 - Sentry projects created (§8).
+- **Rotate the secrets that were exposed** in chat transcripts or logs during development: the
+  Anthropic API key (Anthropic console → new key → `ANTHROPIC_API_KEY=` in
+  `supabase/functions/.env.production`, revoke the old one) and the Sentry org auth token
+  (Sentry → Settings → Auth Tokens → new token → Vercel `SENTRY_AUTH_TOKEN` and your shell for
+  `publish-build.sh`, revoke the old one).
+- Dashboard: **sign-ups off** (§2.2, §2.7).
 - Both members' emails confirmed: **`h_abbasi97@hotmail.com`** owns profile `hussain` and
-  **`tejasvie.vemuri@gmail.com`** owns profile `tejasvie`.
+  **`tejasvie.vemuri@gmail.com`** owns profile `tejasvie`. With sign-ups off they get in by
+  Auth invite after step 7 (§2.2).
+- **Rehearse steps 4–8 end to end with the final code** on the local stack loaded from a fresh
+  prod backup (`--target local`, as in docs/audit/02): all migrations from scratch, then
+  metadata, secrets, pdfs, drain, the post-import checks and finalize. Sign-off criterion:
+  `legacy_lines_missing = 0` for every bank and only the expected monthly deltas (step 8).
 - Local tools ready (quote the extra in zsh):
   ```bash
   backend/.venv/bin/pip install 'psycopg[binary]' httpx cryptography google-cloud-storage
@@ -561,7 +608,7 @@ history):**
 | `supabase/functions/.env.production` | `CRON_SECRET`, `PARSER_SECRET`, `ANTHROPIC_API_KEY`, `LLM_MODEL`, `SENTRY_DSN`, `SENTRY_ENVIRONMENT`; **placeholders** `PARSER_URL`, `SENTRY_RELEASE` | single source for function secrets and Vault `edge_cron_secret` (§2.4, §2.5; steps 5–7) |
 | `services/parser/.env.production` | `PARSER_SECRET` (same value as above), `PARSER_ALLOWED_HOSTS`, `SENTRY_DSN`, `SENTRY_ENVIRONMENT` | Secret Manager `parser-secret` / `parser-sentry-dsn` (§3). Never uploaded (`.gcloudignore`) |
 | `apps/web/.env.production.local` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_SENTRY_DSN`, `VITE_SENTRY_ENVIRONMENT`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` | Vercel env (§4) |
-| `apps/ios/Config/Secrets.Release.xcconfig` | `LEDGER_SUPABASE_URL`, `LEDGER_SUPABASE_ANON_KEY`, `LEDGER_SENTRY_DSN`, `LEDGER_ENVIRONMENT` (its `SENTRY_AUTH_TOKEN`/`SENTRY_ORG` are unused: `publish-build.sh` reads them from the shell) | TestFlight builds (§7) |
+| `apps/ios/Config/Secrets.Release.xcconfig` | `LEDGER_SUPABASE_URL`, `LEDGER_SUPABASE_ANON_KEY`, `LEDGER_SENTRY_DSN`, `LEDGER_ENVIRONMENT`; optionally `SENTRY_AUTH_TOKEN`/`SENTRY_ORG`/`SENTRY_PROJECT`, which `publish-build.sh` uses for dSYMs when the shell doesn't set them (prefer the shell: in the xcconfig the token is also an Xcode build setting, BACKLOG IOS-21) | TestFlight builds (§7) |
 | `.env.cutover` (repo root) | `LEGACY_FERNET_KEY`, `LEGACY_STORAGE`, `LEGACY_GCS_BUCKET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, Sentry org token and DSNs, `GCP_PROJECT=credit-card-scraper-ht`, `GCP_REGION=me-central1` (not the parser's region); **placeholder** `LEDGER_DB_URL` | steps 2 and 7. Fill `LEDGER_DB_URL` (session pooler, port 5432, Dashboard → Connect) before the day |
 
 At the start of the session:
@@ -628,18 +675,25 @@ export CRON_SECRET="$(grep '^CRON_SECRET=' supabase/functions/.env.production | 
      (expected Sentry noise), then starts ingesting before step 11. Dedup makes that safe.
    - `ledger-gmail-watch-renew` (03:00 UTC) renews the watch on the same topic; the push
      subscription still targets the relay until step 11.
-7. **Migrate data** with `scripts/migrate_legacy.py`. Run each step dry first, then `--apply`.
+7. **Migrate data** with `scripts/migrate_legacy.py`. Every call names its target:
+   `--target prod` checks that `LEDGER_DB_URL` and `SUPABASE_URL` both name
+   `nkmylznisjcnmqbxosey` (pooler user or `db.<ref>` host) and refuses otherwise. A dry run is
+   the default. A prod write also needs `--yes-i-mean-prod nkmylznisjcnmqbxosey` (or typing the
+   ref at the prompt). Run each step **dry first**, read the output, then apply.
    ```bash
    export GOOGLE_APPLICATION_CREDENTIALS=/path/to/legacy-reader.json   # the rest came from .env.cutover
    M='{"hussain":"h_abbasi97@hotmail.com","tejasvie":"tejasvie.vemuri@gmail.com"}'
+   ml() { backend/.venv/bin/python scripts/migrate_legacy.py --target prod "$@"; }   # works in zsh and bash
+   YES=nkmylznisjcnmqbxosey
 
-   backend/.venv/bin/python scripts/migrate_legacy.py --step metadata --members "$M"            # dry run
-   backend/.venv/bin/python scripts/migrate_legacy.py --step metadata --members "$M" --apply
-   backend/.venv/bin/python scripts/migrate_legacy.py --step secrets                           # dry run
-   backend/.venv/bin/python scripts/migrate_legacy.py --step secrets --apply --functions-env-out supabase/functions/.env.production
-   scripts/cutover/set-edge-secrets.sh --sentry-release "$(git rev-parse --short HEAD)"       # push MS_OAUTH_*
-   backend/.venv/bin/python scripts/migrate_legacy.py --step pdfs --limit 3 --apply             # canary: watch them parse
-   backend/.venv/bin/python scripts/migrate_legacy.py --step pdfs --apply
+   ml --step metadata --members "$M"                                   # dry run
+   ml --step metadata --members "$M" --apply --yes-i-mean-prod "$YES"
+   ml --step secrets                                                   # dry run
+   ml --step secrets --apply --yes-i-mean-prod "$YES" --functions-env-out supabase/functions/.env.production
+   scripts/cutover/set-edge-secrets.sh --sentry-release "$(git rev-parse --short HEAD)"   # push MS_OAUTH_*
+   ml --step pdfs --limit 3                                            # dry run (downloads to hash; slow, read-only)
+   ml --step pdfs --limit 3 --apply --yes-i-mean-prod "$YES"           # canary: watch them parse
+   ml --step pdfs --apply --yes-i-mean-prod "$YES"
    ```
    - **metadata** imports profiles, legacy-only categories, user rules, staged category choices
      and email mailboxes and routes. Members who haven't signed up are stored as pending
@@ -650,9 +704,15 @@ export CRON_SECRET="$(grep '^CRON_SECRET=' supabase/functions/.env.production | 
      `set-edge-secrets.sh` as above, **not** the `supabase secrets set --env-file` hint the
      script prints, and keep the file (it is the source of truth until step 12). The Gmail
      client is not in the DB; it came from Render before the day (§5.4).
-   - **pdfs** uploads every legacy PDF into Storage as `documents(source='legacy')`. Real
-     statements go first, oldest first, and SIB history extracts last. The worker re-parses
-     them through the v2 pipeline.
+   - **pdfs** uploads every legacy PDF into Storage as `documents(source='legacy')`, with
+     `bank_code` set from legacy when all of a PDF's legacy statements agree (so parsing doesn't
+     rely on bank detection). The worker re-parses them through the v2 pipeline. Upload order no
+     longer matters: ingest serialises per profile and unions lines across documents
+     (ARCHITECTURE §4), so a card-less ADCB companion PDF or a shorter SIB history window can't
+     drop lines whichever finishes last. An insert conflict deletes the just-uploaded object.
+   - **Invite the members** once metadata has stored their pending invites: Dashboard →
+     Authentication → Users → **Invite user** for each email (§2.2). They can sign in from
+     step 9.
 8. **Wait for the worker to drain.**
    ```sql
    select parse_status, count(*) from public.documents group by 1;   -- until no queued/parsing
@@ -663,18 +723,85 @@ export CRON_SECRET="$(grep '^CRON_SECRET=' supabase/functions/.env.production | 
    - Investigate `failed` documents (`parse_error_code`). Fix the password in Settings, then
      `select requeue_documents('<prf_…>', array['doc_…'])` as an owner, or update and requeue
      via SQL.
+   - **Post-import checks (ENBD and FAB).** The parser now re-derives ENBD/EIB years at the
+     Dec/Jan boundary and reads FAB rows with `EUR 108,99` / `KWD 18.750` amounts. A document
+     parsed by an older parser revision (for example a canary before the parser redeploy) keeps
+     the old result until it is re-parsed. In a clean run the parser is deployed before the day,
+     so these checks should come back empty. Check, as `postgres` in psql:
+     ```sql
+     -- 1. Statements with an impossible date (expect 0 rows): a future statement date,
+     --    a period over 100 days, or a due date before the statement date.
+     select a.profile_code, a.bank_code, s.stmt_code, s.doc_code, s.statement_date,
+            s.period_start, s.period_end, s.due_date, d.parser_version
+     from public.statements s
+     join public.accounts a on a.profile_code = s.profile_code and a.account_code = s.account_code
+     left join public.documents d on d.profile_code = s.profile_code and d.doc_code = s.doc_code
+     where s.status = 'active' and s.kind = 'statement'
+       and (s.statement_date > current_date + 31
+            or s.period_end - s.period_start > 100
+            or s.due_date < s.statement_date);
+
+     -- 2. ENBD/EIB/FAB documents parsed before the current parser revision went live
+     --    (PARSER_VERSION was not bumped for these fixes, so compare parsed_at with the
+     --    time of the last parser deploy), and any failed ones.
+     select profile_code, bank_code, parse_status, parse_error_code,
+            count(*) filter (where parsed_at < '<last parser deploy, UTC>') as parsed_before_deploy,
+            count(*) as total
+     from public.documents
+     where bank_code in ('ENBD', 'EIB', 'FAB')
+     group by 1, 2, 3, 4 order by 1, 2;
+
+     -- 3. FAB statements that still don't reconcile (expect none from DP-07; FAB credit-total
+     --    extraction can still give a few false 'fail's, BACKLOG DP-10).
+     select r.status, count(*) from public.statement_recon r
+     join public.statements s on s.stmt_code = r.stmt_code
+     join public.accounts a on a.profile_code = s.profile_code and a.account_code = s.account_code
+     where a.bank_code = 'FAB' and s.status = 'active' group by 1;
+     ```
+     If (1) or (2) finds anything, re-parse those documents. `requeue_documents` runs as
+     `postgres` (the RPC guard lets non-JWT sessions through):
+     ```sql
+     select public.requeue_documents(profile_code, array_agg(doc_code))
+     from public.documents
+     where bank_code in ('ENBD', 'EIB', 'FAB') and parsed_at < '<last parser deploy, UTC>'
+     group by profile_code;
+     ```
+     A re-parse that now produces `2025-12-28` instead of `2026-12-28` withdraws its evidence
+     from the bad-year statement, which is retired automatically (`superseded`, ARCHITECTURE
+     §4). If a bad-year statement is still `active` afterwards (it came from a different
+     document), supersede it through one of the `period_overlap` reviews that names it, then
+     dismiss the remaining overlap reviews it caused:
+     ```sql
+     -- find the reviews that list the stale statement as a candidate
+     select review_code, subject_code from public.match_reviews
+     where status = 'open' and reason = 'period_overlap'
+       and candidates @> jsonb_build_array(jsonb_build_object('stmt_code', '<stm_stale>'));
+     select public.resolve_review('<rev_one_of_them>', jsonb_build_object('supersede', '<stm_stale>'));
+     select public.resolve_review('<rev_each_other>', '{"dismiss": true}'::jsonb);
+     ```
+     Re-run query (1) until it is empty, and wait for the worker to drain again.
    - Then finalize:
      ```bash
-     backend/.venv/bin/python scripts/migrate_legacy.py --step finalize           # read the parity report
-     backend/.venv/bin/python scripts/migrate_legacy.py --step finalize --apply   # apply staged legacy category choices
+     ml --step finalize                                    # dry run: read the parity report
+     ml --step finalize --apply --yes-i-mean-prod "$YES"   # apply staged legacy category choices
      ```
-   - **Parity sign-off.** Per profile and bank, `months_with_delta` should be explained only by
-     the expected deltas: SIB history duplicates that legacy double-counted now disappear, and
-     Mashreq FX rows gain AED estimates. Anything else blocks the rest of the cutover.
+   - **Parity sign-off.** The report prints, per profile and bank, `months_with_delta`,
+     `legacy_lines_missing` and `legacy_aed_missing`.
+     - `legacy_lines_missing` must be **0** for every bank. Otherwise list the lines with
+       `select * from private.legacy_missing_lines();` and stop.
+     - Monthly AED deltas must be explained only by known differences (docs/audit/02): the
+       legacy phantom copy of the ENBD Dec-2025 statement (v2 keeps one copy); refunds netted
+       against spend; debits in income/transfer categories excluded from spend (e.g.
+       `MURABAHA PROFIT` → Cashback, BACKLOG DP-09); lines legacy never had (SIB history PDFs it
+       never parsed, the recovered FAB EUR/KWD rows); and AED estimates on null-AED FX lines.
+     - `select * from private.legacy_unmatched_choices();` lists staged category choices that
+       met no line (expected: the phantom ENBD lines and a few legacy typo categories).
+
+     Anything else blocks the rest of the cutover.
 9. **Switch the web app.** Promote the `apps/web` Vercel project to the production domain and
    remove the domain from the legacy project. Update Auth → URL Configuration (§2.2). Sign in
-   as both members and check Overview, Activity and Cards & Statements against legacy numbers.
-   Once both have signed in, **turn off new user sign-ups** (§2.7).
+   as both members (from the step 7 invites) and check Overview, Activity and Cards & Statements
+   against legacy numbers. Sign-ups stay off (§2.7).
 10. **Point the scraper at v2** (in `scraper/.env`):
     ```dotenv
     CCS_SCRAPER_TARGET_URL=https://nkmylznisjcnmqbxosey.supabase.co
@@ -748,6 +875,8 @@ cut over again. sha256 and `client_msg_id` dedup make re-sending them safe.
 - **New SMS format:** add a template row in a guarded content migration (CLAUDE.md §1.9) with
   `examples`. The validation trigger proves it parses, and unparsed messages re-run
   automatically. Or approve an LLM proposal in the Review inbox.
+- **Add a member:** owner adds the email in Settings → Members, then Dashboard → Authentication
+  → Users → Invite user (§2.2). Sign-ups stay off.
 - **Secret rotation:**
   - `CRON_SECRET`: replace the line in `supabase/functions/.env.production`, then run
     `scripts/cutover/set-edge-secrets.sh` and `scripts/cutover/set-vault-secrets.sql` (§2.4)

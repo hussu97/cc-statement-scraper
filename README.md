@@ -16,7 +16,9 @@ Docs:
 - [PRODUCTION.md](PRODUCTION.md): deployment and cutover runbook
 - [CHANGELOG.md](CHANGELOG.md)
 - [ROADMAP.md](ROADMAP.md)
-- [docs/contracts/parse-v1.md](docs/contracts/parse-v1.md): parser contract
+- [docs/contracts/parse-v1.md](docs/contracts/parse-v1.md): parser contract (limits, output validation, error codes)
+- [docs/audit/](docs/audit/): pre-cutover audit reports (01 database … 06 cross-cutting) and
+  [BACKLOG.md](docs/audit/BACKLOG.md), the list of findings not yet fixed
 - [CLAUDE.md](CLAUDE.md): coding rules
 
 ## Repository structure
@@ -31,7 +33,7 @@ Docs:
 | `packages/db-types/` | Generated Supabase TypeScript types (never hand-written) | TS |
 | `scraper/` | Local Playwright scraper CLI `ccs-scraper` ([README](scraper/README.md)) | Python 3.12 |
 | `scripts/` | `migrate_legacy.py` (cutover data move), `cutover/` (production Edge and Vault secret helpers), git `hooks/` + `install-hooks.sh` | Python, sh, SQL |
-| `docs/` | `contracts/` (parse-v1), legacy `operations/` and `security/` notes | Markdown |
+| `docs/` | `contracts/` (parse-v1), `audit/` (audit reports + backlog), legacy `operations/` and `security/` notes | Markdown |
 | `.github/workflows/` | CI (path-filtered) and manual deploy workflows | GitHub Actions |
 | `backend/`, `frontend/`, `deploy/` | **Legacy v1**, frozen until cutover (see below) | FastAPI, React 18 |
 
@@ -73,6 +75,10 @@ insights:
 |---|---|---|
 | `demo@ledger.local` | `ledger-demo-pass` | Owner of "Demo ledger" and "Household" |
 | `viewer@ledger.local` | `ledger-demo-pass` | Viewer of "Demo ledger" |
+
+Self sign-up is off (`[auth] enable_signup = false`), as in production. To add a local user,
+add the email as a member in web Settings → Members (a pending invite), then create the user
+from Studio → Authentication → Invite user (the invite email lands in Inbucket).
 
 pg_cron reaches Edge Functions through two Vault secrets, which you set once after every
 `db reset`. Without them, cron calls are skipped with a notice. The secret must match
@@ -116,7 +122,7 @@ PARSER_SECRET=<same as services/parser/.env>
 # This rewrites their origin so the parser on the host can fetch them.
 PARSER_DOCUMENT_BASE_URL=http://127.0.0.1:54321
 SENTRY_DSN=
-SENTRY_ENVIRONMENT=local
+SENTRY_ENVIRONMENT=local          # local/development/test never report, even with a DSN
 # Optional: ANTHROPIC_API_KEY=… enables LLM categorisation and the SMS fallback
 ```
 
@@ -173,7 +179,7 @@ Create a service token in web Settings → Sources & health → Tokens, or with
 
 | Component | Command |
 |---|---|
-| Database (pgTAP: RLS guards, matching, categorisation, recon, analytics, SMS templates, FX, legacy import) | `supabase db reset && supabase test db` |
+| Database (pgTAP: RLS guards, matching, categorisation, recon, analytics, SMS templates, FX, legacy import, cross-profile isolation, ingest robustness, review actions; hermetic, so they also pass on a non-empty local DB) | `supabase db reset && supabase test db` |
 | DB types drift | `pnpm db:types:check` (regenerate with `pnpm db:types`) |
 | Edge Functions | `cd supabase/functions && deno test -A .` (the local e2e runs only with `LEDGER_E2E=1` and a served stack) |
 | Parser | `cd services/parser && .venv/bin/ruff check . && .venv/bin/pytest -q` (golden parity needs private PDFs; skipped otherwise) |
@@ -181,6 +187,7 @@ Create a service token in web Settings → Sources & health → Tokens, or with
 | Tokens | `pnpm --filter @ledger/tokens check` (fails if the committed `Tokens.swift` drifts from `tokens.json`; the gitignored `dist/` is regenerated in memory only, so it works from a clean clone) |
 | iOS | `cd apps/ios/LedgerKit && swift test` |
 | Scraper | `cd scraper && .venv/bin/pytest -q` |
+| Cutover script | `backend/.venv/bin/python -m pytest -q scripts/tests` |
 
 `scripts/install-hooks.sh` installs the git hooks:
 - **pre-commit:** web lint and tests when `apps/web` files are staged, scraper tests when
@@ -200,7 +207,7 @@ Create a service token in web Settings → Sources & health → Tokens, or with
 | `VITE_SUPABASE_URL` | Supabase API URL (`http://127.0.0.1:54321` locally) |
 | `VITE_SUPABASE_ANON_KEY` | Anon/publishable key |
 | `VITE_SENTRY_DSN` | Sentry `ledger-apps` DSN (empty disables Sentry) |
-| `VITE_SENTRY_ENVIRONMENT` | `local` / `preview` / `production` |
+| `VITE_SENTRY_ENVIRONMENT` | `local` / `preview` / `production`. Empty, `local`, `development`, `test` or `vite dev` never report, even with a DSN |
 | `VITE_SENTRY_RELEASE` | Release name (defaults to `VERCEL_GIT_COMMIT_SHA` for source maps) |
 | `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` | Build-time only: uploads source maps when the token is set. `SENTRY_PROJECT` defaults to `ledger-apps`. |
 
@@ -214,8 +221,9 @@ Create a service token in web Settings → Sources & health → Tokens, or with
 | `PARSER_URL` | worker | required | Cloud Run parser base URL |
 | `PARSER_SECRET` | worker | required | Sent as `X-Parser-Secret` |
 | `PARSER_DOCUMENT_BASE_URL` | worker | — | Rewrites the signed Storage URL origin (local only) |
-| `PARSER_TIMEOUT_MS` | worker | `100000` | Parser call timeout |
-| `WORKER_BUDGET_MS` | worker | `50000` | Time budget per worker run |
+| `PARSER_TIMEOUT_MS` | worker | `75000` | Parser call timeout. Keep above the parser's 60 s kill and below Cloud Run's 120 s timeout |
+| `WORKER_BUDGET_MS` | worker | `50000` | Stop starting new rounds after this long |
+| `EDGE_WALL_CLOCK_MS` | worker | `150000` | Edge Function wall clock (free plan; 400000 on paid). A round starts only if it can finish before it (parse: `PARSER_TIMEOUT_MS` + 20 s; LLM: 65 s) |
 | `ANTHROPIC_API_KEY` | worker | — | Enables LLM categorisation and the SMS fallback (queues wait while unset) |
 | `LLM_MODEL` | worker | `claude-haiku-5-5` | Claude model id |
 | `GMAIL_PUSH_AUDIENCE` | gmail-push | required | Expected OIDC audience of Pub/Sub push tokens |
@@ -230,7 +238,7 @@ Create a service token in web Settings → Sources & health → Tokens, or with
 | `OPS_OPEN_REVIEWS_THRESHOLD` | ops-monitor | `50` | Open reviews before an issue |
 | `ALLOWED_ORIGINS` | all (CORS) | any | Comma-separated allowed origins |
 | `SENTRY_DSN` | all | — | Sentry `ledger-backend` DSN (empty disables Sentry) |
-| `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE` | all | `local`, — | Sentry environment and release |
+| `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE` | all | `local`, — | Sentry environment and release. Unset, `local`, `development` and `test` disable Sentry even with a DSN; production sets `production` |
 | `SENTRY_TRACES_SAMPLE_RATE` | all | `0.1` | Trace sampling |
 
 ### Parser (`services/parser/.env`; Cloud Run)
@@ -240,8 +248,11 @@ Create a service token in web Settings → Sources & health → Tokens, or with
 | `PARSER_SECRET` | required | Shared secret expected in `X-Parser-Secret` (fails closed) |
 | `PARSER_ALLOWED_HOSTS` | any | Allowed `document_url` hostnames, e.g. `<ref>.supabase.co` (`127.0.0.1` locally) |
 | `PARSER_ALLOW_HTTP` | `false` | Allow `http://` document URLs (local only) |
-| `PARSER_MAX_DOWNLOAD_MB` | `25` | Max PDF size |
-| `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE`, `SENTRY_TRACES_SAMPLE_RATE` | —, `development`, —, `0.2` | Sentry `ledger-backend` (`production` also disables `/debug-sentry` and the OpenAPI docs) |
+| `PARSER_MAX_DOWNLOAD_MB` | `25` | Max download size |
+| `PARSER_MAX_PDF_MB`, `PARSER_MAX_PAGES`, `PARSER_MAX_INFLATE_MB` | `15`, `30`, `32` | Rejected before extraction / while inflating: `PDF_TOO_LARGE` |
+| `PARSER_CPU_LIMIT_SECONDS`, `PARSER_PARSE_TIMEOUT_SECONDS`, `PARSER_MEMORY_LIMIT_MB` | `30`, `60`, `768` | Per-parse child process limits: `PARSE_TIMEOUT` / `PDF_TOO_LARGE` (memory cap Linux only) |
+| `PARSER_ISOLATION` | `process` | `inline` parses in-process (tests and debugging only; CPU, wall and memory limits off) |
+| `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE`, `SENTRY_TRACES_SAMPLE_RATE` | —, `local`, —, `0.2` | Sentry `ledger-backend`. Unset, `local`, `development` and `test` never report; `production` also disables `/debug-sentry` and the OpenAPI docs |
 | `LOG_LEVEL`, `PORT` | `INFO`, `8080` | Logging and listen port (Cloud Run sets `PORT`) |
 
 ### iOS (`apps/ios/Config/Secrets.xcconfig`; `Secrets.Release.xcconfig` for TestFlight; both gitignored)
@@ -251,10 +262,11 @@ Create a service token in web Settings → Sources & health → Tokens, or with
 | `LEDGER_SUPABASE_URL` | `http:/$()/127.0.0.1:54321` locally, `https:/$()/<ref>.supabase.co` in release |
 | `LEDGER_SUPABASE_ANON_KEY` | Anon/publishable key |
 | `LEDGER_SENTRY_DSN` | Sentry `ledger-apps` DSN (empty disables Sentry) |
-| `LEDGER_ENVIRONMENT` | `local` / `production` |
+| `LEDGER_ENVIRONMENT` | `local` / `production`. Sentry starts only in Release builds with an environment other than local/development/dev/test |
 
 `apps/ios/scripts/publish-build.sh` also reads these:
-- `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` and `SENTRY_PROJECT` (set `ledger-apps`) for dSYM upload
+- `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` and `SENTRY_PROJECT` (set `ledger-apps`) for dSYM upload,
+  from the environment or else `Secrets.Release.xcconfig`; the token is never printed
 - `ASC_KEY_ID` and `ASC_ISSUER_ID` (with the AuthKey `.p8`) for the TestFlight upload
 
 ### Scraper (`scraper/.env`)
@@ -266,10 +278,17 @@ Create a service token in web Settings → Sources & health → Tokens, or with
 | `{PROFILE}_CCS_SCRAPER_API_TOKEN` | — | Per-profile service token (v2 tokens are profile-scoped; scope `statements:upload`). Wins over the global token |
 | `CCS_SCRAPER_API_TOKEN` | — | Global fallback token for profiles without their own (legacy) |
 | `CCS_SCRAPER_SUPABASE_ANON_KEY` | — | Optional, sent as `apikey` |
+| `CCS_SCRAPER_UPLOAD_MAX_FILES`, `CCS_SCRAPER_UPLOAD_MAX_MB` | `20`, `32` | Upload batching: files and MB of PDF per request, clamped to the server's limits (20 files, 40 MB). A 413 halves the batch; batches that succeeded are recorded, so `upload-pending` retries only the rest |
 | `CCS_SCRAPER_HEADLESS`, `CCS_SCRAPER_DOWNLOAD_DIR`, `CCS_SCRAPER_BROWSER_*` | `true`, `./downloads`, Dubai | Browser settings |
 | `{PROFILE}_{BANK}_*` | — | Bank portal credentials per profile (see `scraper/.env.example`) |
 
 ### Cutover script (`scripts/migrate_legacy.py`)
+
+`--target local|prod` is required and checked against the environment: `local` needs
+`LEDGER_DB_URL` / `SUPABASE_URL` on 127.0.0.1, `prod` needs both to name
+`nkmylznisjcnmqbxosey`. Every step is a dry run unless `--apply`; `--apply` against prod also
+needs `--yes-i-mean-prod nkmylznisjcnmqbxosey` (or the ref typed at the prompt). Tests:
+`backend/.venv/bin/python -m pytest -q scripts/tests`.
 
 `LEDGER_DB_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `LEGACY_FERNET_KEY`,
 `LEGACY_STORAGE` (`gcs`|`local`), `LEGACY_GCS_BUCKET`, `GOOGLE_APPLICATION_CREDENTIALS`,
@@ -290,13 +309,13 @@ Production secret helpers (`scripts/cutover/`):
 
 | Route | Screen |
 |---|---|
-| `/signin`, `/welcome` | Sign-in (email code, magic link or password) and first-profile setup |
+| `/signin`, `/welcome` | Sign-in (email code, magic link or password; existing users only) and first-profile setup |
 | `/` | **Overview**: month hero with pace rule, live pending SMS, category ring, cards and dues, utilisation, insights |
 | `/activity` | **Activity**: unified ledger with URL-synced filters, evidence badges, drawer with evidence timeline, inline, bulk and "apply to merchant" categorisation, notes |
 | `/insights` | **Insights**: trends, categories, merchants, subscriptions, FX, calendar heatmap, time of day, YoY, anomalies |
 | `/budgets` | **Budgets**: total and per category, with progress |
 | `/cards` | **Cards & Statements**: accounts, cards, statements with recon status, upload, documents |
-| `/review` | **Review inbox**: match reviews, unknown cards, unparsed SMS and LLM template proposals |
+| `/review` | **Review inbox**: match reviews, unknown cards, unparsed SMS ("not a card transaction") and LLM template proposals. On mobile it is a bottom tab with a count |
 | `/rules` | **Rules**: categories, merchants, rules with live impact preview |
 | `/settings` | **Settings**: ledger, members (and invites), sources and health (queues, DLQ, mailboxes, tokens, PDF passwords), SMS setup guide |
 
@@ -305,11 +324,12 @@ Production secret helpers (`scripts/cutover/`):
 | Screen | Contents |
 |---|---|
 | Sign in / Profile picker | Email one-time code (Sign in with Apple stubbed), choose a ledger |
-| Overview | Month spend, pending SMS, categories, dues (Realtime refresh) |
+| Overview | Month spend posted so far (server comparisons), pending SMS, categories, dues ("Was due …"), Needs attention (reviews, uncategorised) (Realtime refresh) |
 | Activity | Ledger list, filters, transaction detail and categorisation |
 | Insights | Swift Charts views over the same RPCs |
 | Statements | Statements, recon, PDF upload (document picker) |
-| Settings | SMS capture setup guide, outbox status, profile |
+| Review | Open match reviews: link, keep as new, dismiss, register an unknown card (read-only for viewers) |
+| Settings | "SMS go to" ledger, SMS capture guide (one "Card" automation, Last captured, Send test), "Not sent" outbox list (Retry / Delete), profile |
 | **Log Bank SMS** (App Intent) | Called by the Shortcuts automation, with no UI |
 | **Add to Ledger** (share extension) | Sends shared PDFs to `statements-upload` |
 
@@ -319,7 +339,7 @@ Production secret helpers (`scripts/cutover/`):
 
 | Function | Method | Auth | Purpose |
 |---|---|---|---|
-| `statements-upload` | POST multipart (`files`, `bank_code_hint`, `profile_code`) | Service token `statements:upload` (+ `X-Profile-Key`) or user JWT (owner) | Store PDFs, dedup, queue parsing |
+| `statements-upload` | POST multipart (`files`, `bank_code_hint`, `profile_code`); ≤ 20 files and ≤ 40 MB per request | Service token `statements:upload` (+ `X-Profile-Key`) or user JWT (owner) | Store PDFs, dedup, queue parsing |
 | `sms-ingest` | POST JSON `{profile_code?, messages[≤200]}` | User JWT or service token `sms:ingest` | Batch SMS ingest (idempotent on `client_msg_id`) |
 | `gmail-push` | POST (Pub/Sub envelope) | Google OIDC token | Gmail notifications → documents |
 | `worker`, `gmail-watch-renew`, `outlook-poll`, `ops-monitor`, `fx-rates` | POST | `x-cron-secret` | pg_cron-driven jobs |
@@ -330,8 +350,8 @@ Production secret helpers (`scripts/cutover/`):
 |---|---|
 | Profiles and members | `create_profile`, `add_profile_member`*, `list_profile_members`, `remove_profile_member`*, `cancel_profile_invite`* |
 | Tokens and secrets | `create_service_token`*, `revoke_service_token`*, `set_profile_secret`*, `list_profile_secrets`, `set_mailbox_secret`* |
-| Ingest and review | `ingest_sms`*, `resolve_review`*, `requeue_documents`*, `set_sms_template_active`* |
-| Categorisation | `set_transaction_category`*, `set_transactions_category`*, `preview_rule` |
+| Ingest and review | `ingest_sms`* (per-message statuses), `resolve_review`* (`link`, `create_new`, `dismiss`, `card`, `supersede`, `not_a_transaction`), `retry_sms_fallback`*, `requeue_documents`*, `set_sms_template_active`* |
+| Categorisation | `set_transaction_category`*, `set_transactions_category`*, `preview_rule`, `merchant_search` |
 | Analytics | `overview`, `spend_series`, `category_breakdown`, `merchant_leaderboard`, `daily_spend`, `hour_weekday_pattern`, `fx_spend`, `statement_cycles`, `yoy_compare`, `anomalies`, `filter_meta`, `budget_status`, `recurring_list` |
 | Service-role only (Edge Functions) | `authenticate_service_token`, `ingest_parsed_document`, `fail_document`, `queue_read`, `queue_delete`, `queue_send`, `queue_to_dlq`, `worker_document_context`, `worker_llm_context`, `worker_sms_context`, `worker_mailbox_secret`, `apply_llm_suggestions`, `propose_sms_template`, `ops_health`, `upsert_fx_rates` |
 
