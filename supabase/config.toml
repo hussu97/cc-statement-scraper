@@ -484,7 +484,7 @@ verify_jwt = false
 project_id = "<project-ref>"
 
 [remotes.production.api]
-max_rows = 1000
+max_rows = 2000
 
 [remotes.production.storage.vector]
 enabled = false

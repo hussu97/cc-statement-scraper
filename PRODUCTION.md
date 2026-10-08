@@ -279,7 +279,7 @@ each daily job.
 | Setting | Where | Value | When |
 |---|---|---|---|
 | Postgres version | Project Settings → Infrastructure → Upgrade | latest 17.x (off **17.6.1.104**, which segfaults when a caller lacks EXECUTE, §2.1) | step 3, after the backup |
-| API max rows | Project Settings → Data API → *Max rows* | **2000** (the web's largest page size; the default 1000 silently truncates 2000/page). Local `supabase/config.toml` `[api] max_rows` must match | step 4 |
+| API max rows | Project Settings → Data API → *Max rows* | **2000** (set 2026-10-08 via `[remotes.production.api]`) (the web's largest page size; the default 1000 silently truncates 2000/page). Local `supabase/config.toml` `[api] max_rows` must match | step 4 |
 | New user sign-ups | Authentication → Sign In / Providers → *Allow new users to sign up* | **off** (members are invited, §2.2) | before the day (no later than step 4) |
 | Site URL and redirect URLs | Authentication → URL Configuration | the Vercel production URL (§2.2) | step 9 |
 | Legacy API keys | Project Settings → API Keys → *Legacy API keys* | **disabled**, only after the §2.8 checklist passes | after cutover (§2.8) |
