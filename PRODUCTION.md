@@ -19,7 +19,7 @@ cutover from legacy v1 (§10). Read [ARCHITECTURE.md](ARCHITECTURE.md) first.
 | iPhone app | TestFlight | bundle `com.example.ledger`, team `<apple-team-id>` |
 | Gmail push | GCP Pub/Sub | topic `ccs-gmail-push`, push subscription → `gmail-push` function |
 | Outlook | Azure app registration (personal accounts) | polled by `outlook-poll` |
-| Error tracking | Sentry (free) | projects `ledger-backend`, `ledger-apps` |
+| Error tracking | Sentry (free) | projects `credit-card-ledger-backend`, `credit-card-ledger-apps` |
 | LLM | Anthropic API | `ANTHROPIC_API_KEY` (optional; costs a few cents a month) |
 | Scraper | Local laptop | `scraper/` CLI |
 
@@ -154,7 +154,7 @@ secrets inline and never push a file that still holds placeholders.
 | `PARSER_SECRET` | the Secret Manager `parser-secret` value (identical to `services/parser/.env.production`) | yes |
 | `PARSER_URL` | the URL printed by the parser deploy (§3), **only after it has deployed** | placeholder |
 | `ANTHROPIC_API_KEY`, `LLM_MODEL` | Anthropic console | yes |
-| `SENTRY_DSN`, `SENTRY_ENVIRONMENT` | Sentry `ledger-backend` DSN; `production` | yes |
+| `SENTRY_DSN`, `SENTRY_ENVIRONMENT` | Sentry `credit-card-ledger-backend` DSN; `production` | yes |
 | `SENTRY_RELEASE` | the commit being deployed: pass `--sentry-release "$(git rev-parse --short HEAD)"` (the Deploy Supabase workflow also sets it) | placeholder |
 | `GMAIL_OAUTH_CLIENT_ID`, `GMAIL_OAUTH_CLIENT_SECRET` | the Google OAuth client (§5) | missing |
 | `MS_OAUTH_CLIENT_ID`, `MS_OAUTH_CLIENT_SECRET` | the Azure app registration (§6); moved from the legacy DB at cutover | missing |
@@ -380,10 +380,10 @@ echo "$PARSER_URL"; curl -s "$PARSER_URL/health"      # the URL is not a secret
 |---|---|
 | `VITE_SUPABASE_URL` | `https://<project-ref>.supabase.co` |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | Dashboard → API Keys → publishable (`sb_publishable_…`; never the secret key) |
-| `VITE_SENTRY_DSN` | `ledger-apps` DSN |
+| `VITE_SENTRY_DSN` | `credit-card-ledger-apps` DSN |
 | `VITE_SENTRY_ENVIRONMENT` | `production` |
 | `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` | source-map upload (build only) |
-| `SENTRY_PROJECT` | `ledger-apps` (also the `vite.config.ts` default) |
+| `SENTRY_PROJECT` | `credit-card-ledger-apps` (also the `vite.config.ts` default) |
 | `VITE_TESTFLIGHT_URL` | optional: the Friends & Family public TestFlight link (§7). Shows the TestFlight button in Settings → iPhone SMS; leave unset to hide it |
 
 The production values are in the gitignored `apps/web/.env.production.local`, which holds
@@ -530,7 +530,7 @@ it. `PROJECT=<gcp-project>`, `URL=https://<project-ref>.supabase.co/functions/v1
    ```
    LEDGER_SUPABASE_URL = https:/$()/<project-ref>.supabase.co
    LEDGER_SUPABASE_PUBLISHABLE_KEY = <sb_publishable_… key>
-   LEDGER_SENTRY_DSN = <ledger-apps DSN>
+   LEDGER_SENTRY_DSN = <credit-card-ledger-apps DSN>
    ```
 2. One-time App Store Connect setup (bundle ids `com.example.ledger` + `.share` are already
    registered with App Groups; Xcode assigns `group.com.example.ledger` on the first archive):
@@ -541,7 +541,7 @@ it. `PROJECT=<gcp-project>`, `URL=https://<project-ref>.supabase.co/functions/v1
    feedback email, privacy policy URL, review contact incl. phone).
 3. Release (same flow as another app; the API key is the one in `~/.appstoreconnect/private_keys`):
    ```bash
-   # dSYMs → ledger-apps: SENTRY_AUTH_TOKEN / SENTRY_ORG / SENTRY_PROJECT from the environment,
+   # dSYMs → credit-card-ledger-apps: SENTRY_AUTH_TOKEN / SENTRY_ORG / SENTRY_PROJECT from the environment,
    # or (when unset) from Config/Secrets.Release.xcconfig; the token is never printed.
    apps/ios/scripts/testflight.sh                       # test, archive, export, dSYMs, upload
    node apps/ios/scripts/testflight-distribute.mjs      # Friends & Family + Beta App Review
@@ -572,11 +572,11 @@ Two projects (see ARCHITECTURE.md §10):
 
 | Project | Platform | DSN goes to |
 |---|---|---|
-| `ledger-backend` | Deno / Python | `supabase secrets set SENTRY_DSN=…`, Secret Manager `parser-sentry-dsn` |
-| `ledger-apps` | React / Apple | Vercel `VITE_SENTRY_DSN` (+ `SENTRY_PROJECT=ledger-apps` for source maps), iOS `LEDGER_SENTRY_DSN` (+ `SENTRY_PROJECT=ledger-apps` for dSYMs) |
+| `credit-card-ledger-backend` | Deno / Python | `supabase secrets set SENTRY_DSN=…`, Secret Manager `parser-sentry-dsn` |
+| `credit-card-ledger-apps` | React / Apple | Vercel `VITE_SENTRY_DSN` (+ `SENTRY_PROJECT=credit-card-ledger-apps` for source maps), iOS `LEDGER_SENTRY_DSN` (+ `SENTRY_PROJECT=credit-card-ledger-apps` for dSYMs) |
 
-Every event carries the tag `service` (edge | parser) in `ledger-backend` and `app` (web | ios)
-in `ledger-apps`, set at SDK init by each runtime. Edge events also carry `function`, parser
+Every event carries the tag `service` (edge | parser) in `credit-card-ledger-backend` and `app` (web | ios)
+in `credit-card-ledger-apps`, set at SDK init by each runtime. Edge events also carry `function`, parser
 events `parser_version`, and iOS events `target` (app | intent | share_extension).
 
 **Local, development and test never report**, in every runtime, even with a DSN set: Edge and
@@ -590,9 +590,9 @@ environment to `production` (Vercel Preview: `preview`).
 | Alert | Project | Rule |
 |---|---|---|
 | New issue | both | Issue alert: "A new issue is created", `environment:production`, notify by email |
-| Ops heartbeat | `ledger-backend` | Cron monitor `ops-heartbeat`, auto-created by the first check-in (`*/15 * * * *`, 5 min margin), alert on missed or failed check-in |
-| DLQ > 0 | `ledger-backend` | Issue alert: event tag `ops_issue` starts with `dlq:` (from `ops-monitor`), plus worker DLQ error events, any frequency |
-| iOS crash-free < 99% | `ledger-apps` | Metric alert: crash-free session rate < 99% over 24 h, filtered `app:ios` (if session alerts can't filter on the tag, filter on the iOS release package `com.example.ledger`) |
+| Ops heartbeat | `credit-card-ledger-backend` | Cron monitor `ops-heartbeat`, auto-created by the first check-in (`*/15 * * * *`, 5 min margin), alert on missed or failed check-in |
+| DLQ > 0 | `credit-card-ledger-backend` | Issue alert: event tag `ops_issue` starts with `dlq:` (from `ops-monitor`), plus worker DLQ error events, any frequency |
+| iOS crash-free < 99% | `credit-card-ledger-apps` | Metric alert: crash-free session rate < 99% over 24 h, filtered `app:ios` (if session alerts can't filter on the tag, filter on the iOS release package `com.example.ledger`) |
 
 Non-production debug triggers to verify delivery (they need a reporting environment such as
 `preview` or `ci`, since local never reports):

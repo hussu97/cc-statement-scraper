@@ -34,7 +34,7 @@ Related docs: [README.md](README.md) (setup, commands, env vars), [PRODUCTION.md
                                               │ pg_cron → pg_net → Edge Functions (x-cron-secret)
                               Supabase Storage bucket `statements` (PDFs as received)
 
- Sentry: `ledger-backend` (Edge Functions + parser) · `ledger-apps` (web + iOS)
+ Sentry: `credit-card-ledger-backend` (Edge Functions + parser) · `credit-card-ledger-apps` (web + iOS)
 ```
 
 Hosting is free-tier: Supabase (DB, Auth, Storage, Edge Functions, Realtime), Cloud Run (parser,
@@ -541,8 +541,8 @@ Bank SMS → Shortcuts automation → LogBankSMSIntent (openAppWhenRun = false, 
 
 | Project | Runtimes | Distinguishing tag |
 |---|---|---|
-| `ledger-backend` | Supabase Edge Functions and the Cloud Run parser | `service` = `edge` \| `parser` (plus `function` on Edge events) |
-| `ledger-apps` | Web app and iPhone app (app, intent and share extension) | `app` = `web` \| `ios` (plus `target` on iOS) |
+| `credit-card-ledger-backend` | Supabase Edge Functions and the Cloud Run parser | `service` = `edge` \| `parser` (plus `function` on Edge events) |
+| `credit-card-ledger-apps` | Web app and iPhone app (app, intent and share extension) | `app` = `web` \| `ios` (plus `target` on iOS) |
 
 - `release` is the git SHA and `environment` is `local | preview | production` everywhere.
 - **Local never reports.** Every runtime refuses to start Sentry when the environment is unset,
@@ -575,7 +575,7 @@ Bank SMS → Shortcuts automation → LogBankSMSIntent (openAppWhenRun = false, 
   - new issue in production (both projects)
   - missed `ops-heartbeat`
   - `dlq:*` issues
-  - iOS crash-free sessions below 99%, filtered `app:ios` in `ledger-apps`
+  - iOS crash-free sessions below 99%, filtered `app:ios` in `credit-card-ledger-apps`
 
 - **Tags at init.** Each runtime's Sentry helper sets its tag on every event:
   `_shared/sentry.ts` (`service=edge`), `ccs_parser/sentry.py` (`service=parser`),

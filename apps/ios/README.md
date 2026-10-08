@@ -65,7 +65,7 @@ cd apps/ios && xcodegen generate && open Ledger.xcodeproj
 |---|---|---|
 | `LEDGER_SUPABASE_URL` | `http:/$()/127.0.0.1:54321` | `https:/$()/<ref>.supabase.co` |
 | `LEDGER_SUPABASE_PUBLISHABLE_KEY` | `supabase status` → `PUBLISHABLE_KEY` | dashboard → API Keys → publishable (`sb_publishable_…`; the app refuses `sb_secret_…`) |
-| `LEDGER_SENTRY_DSN` | empty (Sentry off) | Sentry project `ledger-apps` DSN (shared with web; events tagged `app=ios`) |
+| `LEDGER_SENTRY_DSN` | empty (Sentry off) | Sentry project `credit-card-ledger-apps` DSN (shared with web; events tagged `app=ios`) |
 | `LEDGER_ENVIRONMENT` | `local` | `production` (set by Release.xcconfig) |
 
 Sentry starts only in a Release build with a DSN and an environment other than
@@ -156,7 +156,7 @@ apps/ios/scripts/publish-build.sh [--keep-build]  # testflight.sh --no-upload, s
 * **API key**: `ASC_KEY_ID` / `ASC_ISSUER_ID` and `~/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8`
   (CI: `ASC_KEY_P8`). Both scripts default to the single key in that directory and the
   team's issuer, i.e. the key another app uses.
-* **dSYMs**: `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` (default `ledger-apps`) from the
+* **dSYMs**: `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` (default `credit-card-ledger-apps`) from the
   environment or `Config/Secrets.Release.xcconfig`; needs `sentry-cli`. The token is never printed.
 * **Release config**: refuses to run without `Config/Secrets.Release.xcconfig` or if it points
   at 127.0.0.1.
