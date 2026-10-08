@@ -65,6 +65,9 @@
 
 @layer base {
   html {
+    /* iOS inflates text in landscape without this. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
     background: var(--color-bg);
     color: var(--color-ink);
     font-family: var(--font-sans);
@@ -75,6 +78,9 @@
   body {
     min-height: 100dvh;
     background: var(--color-bg);
+    /* Safety net: a stray wide element must never make the whole page pan
+       sideways on a phone (clip, unlike hidden, keeps position: sticky working). */
+    overflow-x: clip;
   }
   ::selection {
     background: var(--color-accent-soft);
@@ -113,6 +119,43 @@
       height: max(100%, var(--space-tap-min));
       transform: translate(-50%, -50%);
     }
+  }
+}
+
+/*
+ * iOS input zoom (mobile audit): Safari zooms the page in when a text field
+ * under 16px is focused and does not zoom back out, which left sheets and
+ * drawers cut off at the left edge ("yment Received…"). On phones and touch
+ * screens every text control is at least 16px. Unlayered on purpose: it must
+ * beat `text-sm`-style utilities, which live in Tailwind's utilities layer.
+ */
+@media (max-width: 767px), (pointer: coarse) {
+  input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+/* Bottom padding that clears the iPhone home indicator. */
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/*
+ * Horizontal scroller with an edge fade where more content is hidden
+ * (WEB-44). `useScrollEdges` sets data-fade-start / data-fade-end.
+ */
+@utility scroll-fade {
+  --fade: 28px;
+  &[data-fade-end]:not([data-fade-start]) {
+    mask-image: linear-gradient(to right, black calc(100% - var(--fade)), transparent);
+  }
+  &[data-fade-start]:not([data-fade-end]) {
+    mask-image: linear-gradient(to left, black calc(100% - var(--fade)), transparent);
+  }
+  &[data-fade-start][data-fade-end] {
+    mask-image: linear-gradient(to right, transparent, black var(--fade), black calc(100% - var(--fade)), transparent);
   }
 }
 

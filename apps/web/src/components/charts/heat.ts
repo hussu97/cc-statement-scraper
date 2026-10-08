@@ -101,3 +101,51 @@ export function hourMatrix<T extends { dow: number; hour: number }>(rows: T[]): 
   }
   return m;
 }
+
+/** Last day a calendar should draw and count: the range end, or today when the range runs on into the future (WEB-15). */
+export function calendarEnd(to: ISODate, today: ISODate): ISODate {
+  return to > today ? today : to;
+}
+
+export interface CalendarFit {
+  /** horizontal: one column per week (GitHub style). vertical: one row per week, 7 day columns (phones). */
+  orientation: "horizontal" | "vertical";
+  /** Cell edge in px. */
+  size: number;
+  gap: number;
+}
+
+/** Weekday label column ("Mon") in the horizontal layout, px. */
+export const DAY_LABEL_W = 30;
+/** Month label column ("Oct") in the vertical layout, px. */
+export const MONTH_LABEL_W = 34;
+const H_MIN = 11;
+const H_MAX = 30;
+const V_MAX = 44;
+/** Below this a horizontal cell is too small to read or tap on a phone. */
+const H_COMFORT = 14;
+/** Container width under which a grid may turn vertical (phones). */
+const PHONE_W = 640;
+
+/**
+ * Size the calendar heatmap to its container (WEB-15): cells grow to fill the
+ * card on desktop, and on a phone a long range turns into 7 day columns with
+ * one row per week so cells stay big enough to tap (WEB-22r).
+ */
+export function fitCalendar(width: number, weeks: number): CalendarFit {
+  const w = Math.max(0, width);
+  const n = Math.max(1, weeks);
+  const fitH = (gap: number) => Math.floor((w - DAY_LABEL_W - gap * n) / n);
+  let gap = 4;
+  let size = fitH(gap);
+  if (size < 20) {
+    gap = 3;
+    size = fitH(gap);
+  }
+  if (size < H_COMFORT && w < PHONE_W) {
+    const vGap = 4;
+    const v = Math.floor((w - MONTH_LABEL_W - vGap * 7) / 7);
+    return { orientation: "vertical", size: Math.max(16, Math.min(V_MAX, v)), gap: vGap };
+  }
+  return { orientation: "horizontal", size: Math.max(H_MIN, Math.min(H_MAX, size)), gap };
+}
