@@ -15,13 +15,24 @@ struct StatementsView: View {
                     .font(Typography.rowMeta).foregroundStyle(Palette.muted).padding(.top, 8)
             }
 
-            StateContainer(state: model.state, retry: reload) { content in
-                CyclesCard(cycles: content.cycles, latest: content.latestStatementCodes)
-                DocumentsCard(documents: content.documents)
+            StateContainer(state: model.cycles.state, retry: reload) { cycles in
+                CyclesCard(cycles: cycles, latest: model.latestStatementCodes,
+                           footer: PagingFooter(footer: model.cycles.footer,
+                                                endMessage: ListEnd.message(count: cycles.count, singular: "statement",
+                                                                            plural: "statements"),
+                                                loadMore: { await model.cycles.loadMore() }))
+            }
+            StateContainer(state: model.documents.state, retry: reload) { documents in
+                DocumentsCard(documents: documents,
+                              footer: PagingFooter(footer: model.documents.footer,
+                                                   endMessage: ListEnd.message(count: documents.count,
+                                                                               total: model.documents.total,
+                                                                               singular: "upload", plural: "uploads"),
+                                                   loadMore: { await model.documents.loadMore() }))
             }
         }
         .ledgerNavigation("Statements")
-        .task { await model.load(profileCode: profileCode) }
+        .task { await model.loadIfNeeded(profileCode: profileCode) }
         .refreshable { await model.load(profileCode: profileCode) }
         .fileImporter(isPresented: $picking, allowedContentTypes: [.pdf], allowsMultipleSelection: true) { result in
             guard case .success(let urls) = result, !urls.isEmpty else { return }
@@ -55,6 +66,7 @@ struct StatementsView: View {
 private struct CyclesCard: View {
     let cycles: [StatementCycle]
     let latest: Set<String>
+    let footer: PagingFooter
 
     var body: some View {
         Card {
@@ -89,12 +101,14 @@ private struct CyclesCard: View {
                 }
                 if cycle.id != cycles.last?.id { Divider().overlay(Palette.border) }
             }
+            if !cycles.isEmpty { footer }
         }
     }
 }
 
 private struct DocumentsCard: View {
     let documents: [DocumentRecord]
+    let footer: PagingFooter
 
     var body: some View {
         Card {
@@ -116,6 +130,7 @@ private struct DocumentsCard: View {
                     Chip(label: doc.statusLabel, tone: doc.tone)
                 }
             }
+            if !documents.isEmpty { footer }
         }
     }
 }

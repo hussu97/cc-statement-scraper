@@ -2104,6 +2104,14 @@ export type Database = {
         Args: { p_email: string; p_profile_code: string; p_role?: string }
         Returns: string
       }
+      add_replacement_card: {
+        Args: {
+          p_card_code: string
+          p_new_last4: string
+          p_profile_code: string
+        }
+        Returns: Json
+      }
       anomalies: {
         Args: { p_from: string; p_profile_code: string; p_to: string }
         Returns: {

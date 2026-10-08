@@ -9,7 +9,8 @@ public struct ActivityQuery: Sendable, Hashable {
         public var label: String { rawValue.capitalized }
     }
 
-    /// The one page size (CLAUDE.md §4.5): 100, options up to 2000.
+    /// The one page size (CLAUDE.md §4.5): 100, options up to 2000. Paging
+    /// itself is `Paginator`'s (`PageRequest`); the query is only the filters.
     public static let defaultPageSize = 100
     public static let pageSizeOptions = [100, 200, 500, 1000, 2000]
 
@@ -20,8 +21,6 @@ public struct ActivityQuery: Sendable, Hashable {
     public var status: StatusFilter = .all
     public var from: CalendarDay?
     public var to: CalendarDay?
-    public var page = 0
-    public var pageSize = ActivityQuery.defaultPageSize
 
     public init() {}
 
@@ -36,8 +35,26 @@ public struct ActivityQuery: Sendable, Hashable {
         self.search = search
     }
 
-    public var rangeStart: Int { page * pageSize }
-    public var rangeEnd: Int { rangeStart + pageSize - 1 }
+    /// A whole-month date filter: `from` the 1st `to` the last day. Reads nil
+    /// for no date filter or a range that is not exactly one month.
+    public var month: CalendarDay? {
+        get {
+            guard let from, let to, from.day == 1, to == from.endOfMonth else { return nil }
+            return from
+        }
+        set {
+            from = newValue?.startOfMonth
+            to = newValue?.endOfMonth
+        }
+    }
+
+    /// Whether a row still belongs under the category filters after the
+    /// reader recategorised it (the list drops it otherwise).
+    public func keeps(categoryCode rowCategory: String?) -> Bool {
+        if uncategorizedOnly { return rowCategory == nil }
+        if let categoryCode { return rowCategory == categoryCode }
+        return true
+    }
 
     /// The PostgREST `or=(…)` body for a free-text search over description and
     /// merchant name, or nil when the search is blank.

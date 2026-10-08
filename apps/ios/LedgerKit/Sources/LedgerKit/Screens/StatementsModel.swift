@@ -11,32 +11,70 @@ public final class StatementsModel {
 
         /// The newest statement (not history extract) of each account; every
         /// other cycle has been superseded by a newer statement.
-        public var latestStatementCodes: Set<String> {
-            var newest: [String: StatementCycle] = [:]
-            for cycle in cycles where cycle.kind == "statement" {
-                if let current = newest[cycle.accountCode], current.statementDate >= cycle.statementDate { continue }
-                newest[cycle.accountCode] = cycle
-            }
-            return Set(newest.values.map(\.stmtCode))
-        }
+        public var latestStatementCodes: Set<String> { StatementsModel.latestStatementCodes(cycles) }
     }
 
-    public private(set) var state: LoadState<Content> = .idle
+    /// Statement cycles, newest first, page after page.
+    public let cycles = Paginator<StatementCycle>()
+    /// Uploads, newest first, page after page.
+    public let documents = Paginator<DocumentRecord>()
     public private(set) var isUploading = false
     public var uploadMessage: String?
     private let api: any LedgerAPI
+    private var loadedProfile: String?
 
     public init(api: any LedgerAPI) { self.api = api }
 
+    public var hasLoaded: Bool { loadedProfile != nil }
+
+    /// The newest statement of each account among the loaded cycles (they load
+    /// newest first, so page 1 already holds every account's newest).
+    public var latestStatementCodes: Set<String> { Self.latestStatementCodes(cycles.items) }
+
     public func load(profileCode: String) async {
-        state = state.startLoading()
-        do {
-            async let cycles = api.statementCycles(profileCode: profileCode, limit: 48)
-            async let docs = api.documents(profileCode: profileCode, limit: 30)
-            state = .loaded(try await Content(cycles: cycles, documents: docs))
-        } catch {
-            state = state.fail(error)
+        let same = loadedProfile == profileCode
+        loadedProfile = profileCode
+        let api = self.api
+        async let a: Void = cycles.reload(keepingRows: same) { page in
+            // `statement_cycles` takes a limit only: ask for everything up to
+            // this page's end and keep the page's slice.
+            let rows = try await api.statementCycles(profileCode: profileCode, limit: page.offset + page.limit)
+            return ListPage(items: Array(rows.dropFirst(page.offset)), total: nil)
         }
+        async let b: Void = documents.reload(keepingRows: same) { page in
+            try await api.documents(profileCode: profileCode, page: page)
+        }
+        _ = await (a, b)
+    }
+
+    /// First visit of the tab for this ledger.
+    public func loadIfNeeded(profileCode: String) async {
+        guard loadedProfile != profileCode else { return }
+        await load(profileCode: profileCode)
+    }
+
+    /// Realtime / foreground: the newest pages again, scrolled pages kept.
+    public func refresh(profileCode: String) async {
+        guard loadedProfile == profileCode else { return }
+        async let a: Void = cycles.refreshHead()
+        async let b: Void = documents.refreshHead()
+        _ = await (a, b)
+    }
+
+    public func reset() {
+        cycles.reset()
+        documents.reset()
+        loadedProfile = nil
+        uploadMessage = nil
+    }
+
+    public nonisolated static func latestStatementCodes(_ cycles: [StatementCycle]) -> Set<String> {
+        var newest: [String: StatementCycle] = [:]
+        for cycle in cycles where cycle.kind == "statement" {
+            if let current = newest[cycle.accountCode], current.statementDate >= cycle.statementDate { continue }
+            newest[cycle.accountCode] = cycle
+        }
+        return Set(newest.values.map(\.stmtCode))
     }
 
     /// Reads the picked files (security-scoped URLs from the document picker)

@@ -4,30 +4,42 @@ import SwiftUI
 
 struct InsightsView: View {
     @Bindable var model: InsightsModel
+    let month: MonthSelection
     let profileCode: String
 
     var body: some View {
         Page {
-            Picker("Period", selection: $model.period) {
-                ForEach(InsightsModel.Period.allCases) { Text($0.rawValue).tag($0) }
+            MonthSwitcher(month: month).padding(.top, 8)
+            VStack(alignment: .leading, spacing: 6) {
+                Picker("Period", selection: $model.period) {
+                    ForEach(InsightsModel.Period.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                Text(InsightsModel.periodCaption(model.period, month: month.requestMonth))
+                    .font(Typography.caption).foregroundStyle(Palette.muted)
             }
-            .pickerStyle(.segmented)
-            .padding(.top, 8)
 
             StateContainer(state: model.state, retry: reload) { content in
                 TrendCard(points: content.trend)
-                if !content.budgets.isEmpty { BudgetsCard(budgets: content.budgets) }
+                if !content.budgets.isEmpty { BudgetsCard(budgets: content.budgets, scope: model.budgetsScope()) }
                 CategoriesCard(categories: content.categories)
                 MerchantsCard(merchants: content.merchants)
                 RecurringCard(recurring: content.activeRecurring, annualTotal: content.recurringAnnualTotal)
             }
         }
         .ledgerNavigation("Insights")
-        .task(id: model.period) { await model.load(profileCode: profileCode) }
-        .refreshable { await model.load(profileCode: profileCode) }
+        .task(id: Key(period: model.period, month: month.requestMonth)) {
+            await model.loadIfNeeded(profileCode: profileCode, month: month.requestMonth)
+        }
+        .refreshable { await model.load(profileCode: profileCode, month: month.requestMonth) }
     }
 
-    private func reload() { Task { await model.load(profileCode: profileCode) } }
+    private struct Key: Hashable {
+        let period: InsightsModel.Period
+        let month: CalendarDay?
+    }
+
+    private func reload() { Task { await model.load(profileCode: profileCode, month: month.requestMonth) } }
 }
 
 private struct TrendCard: View {
@@ -146,10 +158,11 @@ private struct RecurringCard: View {
 
 private struct BudgetsCard: View {
     let budgets: [BudgetStatus]
+    let scope: String
 
     var body: some View {
         Card {
-            SectionHeader(title: "Budgets", trailing: "This month")
+            SectionHeader(title: "Budgets", trailing: scope)
             ForEach(budgets) { budget in
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
