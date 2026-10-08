@@ -1,5 +1,6 @@
 // parse_document queue consumer: signed URL → parser /parse → ingest_parsed_document.
 
+import { type DocumentEvent, logDocumentEvent } from "../_shared/documents.ts";
 import { captureMessage, traceHeaders } from "../_shared/sentry.ts";
 import type { Db } from "../_shared/supabase.ts";
 import { attemptOf, MAX_READS, queueDelete, type QueueMessage, retryLater, toDlq } from "./queue.ts";
@@ -333,6 +334,7 @@ export async function processParseMessage(svc: Db, msg: QueueMessage): Promise<P
     return { doc_code: docCode, outcome: "failed", code: outcome.code };
   }
 
+  await logDocumentEvent(svc, doc.profile_code, docCode, parsedEvent(outcome.payload));
   const ing = await svc.rpc("ingest_parsed_document", { p_doc_code: docCode, p_payload: outcome.payload });
   if (ing.error) {
     const sqlstate = String(ing.error.code ?? "");
@@ -366,6 +368,43 @@ export async function processParseMessage(svc: Db, msg: QueueMessage): Promise<P
     console.log(`worker: ${docCode} ingested with ${warnings.length} warning(s):`, warnings.slice(0, 5));
   }
   return { doc_code: docCode, outcome: "parsed", ...(warnings.length ? { warnings: warnings.length } : {}) };
+}
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/**
+ * The `parsed` timeline event for a parse-v1 payload: bank, statement and line counts and
+ * the parser's warnings (generic notes such as "Statement date not found; …", never line
+ * text). Pure, for tests.
+ */
+export function parsedEvent(payload: Record<string, unknown>): DocumentEvent {
+  const statements = Array.isArray(payload.statements) ? payload.statements as Record<string, unknown>[] : [];
+  const lines = statements.reduce((n, s) => n + (Array.isArray(s?.lines) ? (s.lines as unknown[]).length : 0), 0);
+  const warnings = statements
+    .flatMap((s) => (Array.isArray(s?.warnings) ? s.warnings as unknown[] : []))
+    .filter((w): w is string => typeof w === "string")
+    .map((w) => w.slice(0, 200));
+  const bank = typeof payload.bank_code === "string" && /^[A-Z]{2,10}$/.test(payload.bank_code)
+    ? payload.bank_code
+    : null;
+  const kind = payload.document_kind === "history_pdf" ? "transaction history" : "statement";
+  let message = `Read the ${bank ? `${bank} ` : ""}${kind}: ${plural(statements.length, "statement", "statements")}, ${
+    plural(lines, "line", "lines")
+  }.`;
+  if (warnings.length) message += ` ${plural(warnings.length, "warning", "warnings")}.`;
+  return {
+    stage: "parsed",
+    level: warnings.length ? "warn" : "info",
+    message,
+    detail: {
+      bank_code: bank,
+      document_kind: typeof payload.document_kind === "string" ? payload.document_kind : null,
+      statements: statements.length,
+      lines,
+      warnings: warnings.slice(0, 10),
+      parser_version: typeof payload.parser_version === "string" ? payload.parser_version.slice(0, 40) : null,
+    },
+  };
 }
 
 /** The `warnings` array of ingest_parsed_document's result (strings only, capped). */
