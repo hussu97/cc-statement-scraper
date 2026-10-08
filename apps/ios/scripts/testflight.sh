@@ -67,9 +67,10 @@ if grep -Eq '127\.0\.0\.1|localhost' Config/Secrets.Release.xcconfig; then
 fi
 
 # ── App Store Connect key (checked before the slow part, not after it) ─────
-# Used for the upload and, when present, for signing too: with an API key
-# `-allowProvisioningUpdates` can register the App Group and mint profiles even
-# when Xcode has no Apple ID signed in (otherwise: "No Accounts").
+# Used for the upload. Signing uses the Apple ID signed in to Xcode (Settings →
+# Accounts), as mm-pos does; with none, archive fails with "No Accounts".
+# ASC_SIGN_WITH_KEY=1 hands the API key to xcodebuild instead (needs an Admin
+# key; with Xcode 27 and this key it failed with "Authentication failed").
 KEY_DIR="$HOME/.appstoreconnect/private_keys"
 if [[ -z "${ASC_KEY_ID:-}" ]]; then
   shopt -s nullglob; keys=("$KEY_DIR"/AuthKey_*.p8); shopt -u nullglob
@@ -82,7 +83,7 @@ KEY_FILE="$KEY_DIR/AuthKey_${ASC_KEY_ID:-none}.p8"
 SIGN_AUTH=()
 if [[ -n "${ASC_KEY_ID:-}" && -f "$KEY_FILE" ]]; then
   export ASC_KEY_ID ASC_ISSUER_ID
-  SIGN_AUTH=(-authenticationKeyPath "$KEY_FILE" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
+  [[ "${ASC_SIGN_WITH_KEY:-0}" == 1 ]] && SIGN_AUTH=(-authenticationKeyPath "$KEY_FILE" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
 elif [[ $UPLOAD -eq 1 ]]; then
   cat >&2 <<MSG
 error: no App Store Connect API key.

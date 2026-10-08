@@ -43,7 +43,7 @@ select = ["E", "F", "W", "I", "B", "UP"]
 ignore = ["E501", "B904"]
 
 [tool.ruff.lint.per-file-ignores]
-# Legacy parsers are copied verbatim from backend/ccs_platform for golden parity;
+# Legacy parsers are copied verbatim from the (removed) v1 backend for golden parity;
 # keep their style untouched rather than reformatting them.
 "ccs_parser/banks/*.py" = ["I", "UP", "B", "E", "W", "F841"]
 "ccs_parser/domain/**/*.py" = ["I", "UP", "B"]

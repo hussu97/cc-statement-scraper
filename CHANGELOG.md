@@ -1,5 +1,38 @@
 # Changelog
 
+## Legacy v1 removed — 2026-10-08 (branch `ledger-v2`)
+
+The cutover is complete, so the legacy v1 code is deleted (it stays in git history). The
+`legacy` database schema and the migrations that reference it are untouched.
+
+### Backend (Supabase)
+
+- **chore** Removed `backend/` (FastAPI + embedded worker, Alembic, Gmail/MS ingest scripts; 189 files), `deploy/` (legacy Dockerfiles, compose, Caddyfile, nginx, network policy) and the root `.dockerignore` (only legacy images built from the repo root; the parser has its own)
+- **chore** Removed the one-off cutover script `scripts/migrate_legacy.py` and `scripts/tests/`; `scripts/cutover/` (Edge and Vault secret helpers) stays for rotations
+
+### Parser
+
+- **chore** Removed `scripts/build_golden.py` and `scripts/_legacy_runner.py`, which ran the legacy parser from `backend/.venv`. The local golden fixtures are now a frozen legacy snapshot (not regenerated from the current parser); `test_golden_parity.py` still runs against them with the same allowed deltas
+
+### Web
+
+- **chore** Removed the legacy React admin `frontend/` (66 files) and its `.gitignore` entries
+
+### Docs
+
+- README, ARCHITECTURE, CLAUDE.md layout: legacy rows and sections replaced by a short "Legacy v1 (removed)" note; PRODUCTION.md §10 is now a cutover record with the remaining out-of-repo decommission checklist (Render, legacy Vercel project, Gmail relay, GCS, `LEGACY_DEPLOYS_ENABLED`), §9 without legacy workflows and a merge-timing warning (legacy Git-connected builds must be off before `main` loses `backend/`/`frontend/`), and the post-import statement-date check moved to §11 Operations; removed the legacy `docs/operations/` and `docs/security/`; parser README documents the frozen golden fixtures; BACKLOG drops the findings that only concerned the removed cutover script (SRV-09r, DP-17); ROADMAP marks the code removal done
+
+## Ledger iOS TestFlight pipeline — 2026-10-08 (branch `ledger-v2`)
+
+### Frontend (mobile)
+
+- **feat** TestFlight release flow mirroring mm-pos: `apps/ios/scripts/testflight.sh` (test, archive, export, dSYMs → Sentry, altool upload with the App Store Connect API key, `--no-upload`, `--keep-build`), `publish-build.sh` now stages the IPA + `build-meta.json` on the `ios-ledger-staged` release and commits the spent build number, and `testflight-distribute.mjs` waits for processing, sets "What to Test", attaches the build to "Friends & Family" and submits it for Beta App Review
+- **chore** Registered bundle ids `com.hussu97.ledger` and `com.hussu97.ledger.share` in the developer portal with App Groups enabled
+
+### Docs
+
+- apps/ios/README.md: TestFlight groups, scripts, credentials and the staged-build contract for CI
+
 ## Final-verification fixes — 2026-10-08 (branch `ledger-v2`)
 
 Fixes for [docs/audit/07-final-verification.md](docs/audit/07-final-verification.md) FV-01…FV-04.

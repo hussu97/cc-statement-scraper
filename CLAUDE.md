@@ -16,7 +16,6 @@ Every rule below exists because the codebase once had several coexisting variant
 | `packages/tokens/` | Design tokens → CSS + Swift | `pnpm tokens` |
 | `packages/db-types/` | Generated DB types | `pnpm db:types` |
 | `scraper/` | Local-only bank scraper CLI (architecture frozen) | `cd scraper && .venv/bin/pytest -q` |
-| `backend/`, `frontend/` | **Legacy** FastAPI + React. Frozen; deleted at cutover. Do not extend. | — |
 
 ## 1. Database (Supabase Postgres)
 

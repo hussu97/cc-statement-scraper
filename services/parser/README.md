@@ -6,9 +6,9 @@ never touches a database, and exposes one endpoint that implements
 `worker` Edge Function calls it and hands the JSON response to
 `public.ingest_parsed_document`.
 
-The bank parsers (FAB, ADCB, ENBD, EIB, SIB, Mashreq) are **copies** of the legacy
-`backend/ccs_platform` parsers, kept behaviourally identical and verified with a
-golden parity suite. The service adds: decimal-string money with `direction`,
+The bank parsers (FAB, ADCB, ENBD, EIB, SIB, Mashreq) are **copies** of the legacy v1
+backend parsers (removed from the repo after the cutover; see git history), kept
+behaviourally identical and verified with a golden parity suite. The service adds: decimal-string money with `direction`,
 contract kinds (`interest`), `fx_rate`, `legacy_fingerprint`, document/statement
 kinds, statement identity, and best-effort `totals`.
 
@@ -28,9 +28,6 @@ services/parser/
 │   ├── parser_adapter.py   # legacy parser_adapter (no date.today() fallback)
 │   ├── banks/              # legacy bank parsers + dispatcher (copied)
 │   └── domain/             # legacy parsing/statement models, utils, identity (copied)
-├── scripts/
-│   ├── build_golden.py     # builds golden fixtures by running the LEGACY parser
-│   └── _legacy_runner.py   # executed with backend/.venv (imports ccs_platform)
 ├── tests/                  # unit tests, ported legacy tests, golden parity
 ├── Dockerfile
 ├── pyproject.toml
@@ -151,21 +148,29 @@ pytest -q
 
 ### Golden parity
 
-`tests/test_golden_parity.py` compares the new service with the legacy backend parser
-on real statements. Golden files live in `tests/golden/` (gitignored — they contain
-private statement data). Build them with the legacy backend's virtualenv present
-(`backend/.venv`):
+`tests/test_golden_parity.py` compares the service with the **legacy v1 parser's output**
+on real statements. The golden files in `tests/golden/` (gitignored: they contain private
+statement data and point at the local source PDFs under `data/archive/`) were built by
+running the legacy parser before it was removed. They are **frozen**: the legacy code is
+gone, so they can no longer be rebuilt or extended from this tree, and nothing regenerates them from the
+current parser (that would turn the parity check into a self-comparison).
 
 ```bash
-.venv/bin/python scripts/build_golden.py                      # default: ../../data/archive
-.venv/bin/python scripts/build_golden.py --pdf-dir /path/to/pdfs
 pytest -q tests/test_golden_parity.py
 ```
 
-The builder de-duplicates PDFs by SHA-256 and records PDFs the legacy parser cannot
-handle (e.g. still-encrypted copies); for those the test only asserts that the new
-service fails with a classified 4xx error code. The parity test is skipped when the
-golden directory is empty.
+- PDFs the legacy parser could not handle (e.g. still-encrypted copies) only assert that
+  the service fails with a classified 4xx error code.
+- The only allowed differences from legacy are listed in the test and reported in the
+  terminal summary: ENBD/EIB years corrected at the Dec/Jan boundary (DP-03/04), FAB
+  `EUR 108,99` / `KWD 18.750` rows legacy skipped (DP-07), and `fee` → `purchase` from the
+  whole-word fee classifier.
+- A case whose source PDF has moved is skipped; the suite is skipped when `tests/golden/`
+  is empty (fresh clones, CI).
+- New layouts and banks are covered by unit tests (`test_*.py`) rather than new golden
+  files. To rebuild the fixtures from scratch, use a checkout of a commit that still has
+  `backend/` and `scripts/build_golden.py` (e.g. `cdd77b1`, or the parent of
+  `git log --diff-filter=D -1 -- services/parser/scripts/build_golden.py`).
 
 ## Deploy to Cloud Run
 
