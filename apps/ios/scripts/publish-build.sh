@@ -1,221 +1,124 @@
 #!/usr/bin/env bash
 #
-# Build and sign Ledger (app + "Add to Ledger" share extension) on this Mac,
-# upload its dSYMs to Sentry, and optionally ship it to TestFlight or stage the
-# IPA on GitHub for a workflow to upload. Modeled on mm-pos/scripts/publish-build.sh.
+# Build and sign Ledger on this Mac, then stage it on GitHub for the TestFlight
+# workflow to pick up. Mirrors mm-pos/scripts/publish-build.sh, for one app.
 #
-# Why local: a GitHub-hosted macOS runner bills at a 10x multiplier and the
-# archive is the expensive part. Signing also happens here, so the distribution
-# certificate never has to live in GitHub.
+# Why this split: a GitHub-hosted macOS runner bills at a 10x multiplier. The
+# archive is the expensive part and your Mac does it for free, so it happens
+# here and the runner is left with only the upload (a Linux job, App Store
+# Connect API, no Xcode) and the distribution to testers.
 #
-# Usage (from anywhere):
-#   apps/ios/scripts/publish-build.sh               # test, archive, export, dSYMs → Sentry
-#   apps/ios/scripts/publish-build.sh --upload      # … and upload the IPA to TestFlight
-#   apps/ios/scripts/publish-build.sh --stage       # … and stage the IPA on the `ios-staged` GitHub release
-#   apps/ios/scripts/publish-build.sh --keep-build  # reuse the current build number
+# Signing also happens here, so the distribution certificate does not need to
+# exist in GitHub for this path at all. Only the API key does.
 #
-# Needs:
-#   * An "Apple Distribution" identity in the keychain (Xcode → Settings → Accounts).
-#   * Config/Secrets.Release.xcconfig with the production Supabase URL/anon key and
-#     Sentry DSN (Release builds never fall back to the local 127.0.0.1 config).
-#   * Optional dSYM upload: SENTRY_AUTH_TOKEN, SENTRY_ORG, SENTRY_PROJECT (default ledger-apps),
-#     from the environment or, when unset there, from Config/Secrets.Release.xcconfig;
-#     and `sentry-cli` on PATH (brew install getsentry/tools/sentry-cli). The token is
-#     passed to sentry-cli through the environment and never printed.
-#   * --upload: ASC_KEY_ID, ASC_ISSUER_ID and ~/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8
-#   * --stage: the gh CLI, authenticated.
+# Normally invoked by the repo's pre-push hook for main pushes that change the
+# iOS app; run it directly to stage a build without pushing:
+#
+#   apps/ios/scripts/publish-build.sh              # test, build, sign, dSYMs, stage
+#   apps/ios/scripts/publish-build.sh --keep-build # reuse the current build number
+#
+# To build AND upload straight from this Mac (no GitHub involved):
+#
+#   apps/ios/scripts/testflight.sh && node apps/ios/scripts/testflight-distribute.mjs
+#
+# The artifacts live on a single rolling prerelease rather than a per-commit
+# tag, because a pre-push hook runs before the commit exists on the remote and
+# GitHub cannot tag a commit it has not received yet.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-ROOT="$PWD"
-BUILD_DIR="$ROOT/build/testflight"
-PROJECT="Ledger.xcodeproj"
-SCHEME="Ledger"
-RELEASE_TAG="ios-ledger-staged"
 
-UPLOAD=0
-STAGE=0
-BUMP=1
+# Not mm-pos's `ios-staged`: this repository also ships web and backend, so the
+# tag names the app it carries.
+RELEASE_TAG="ios-ledger-staged"
+PASSTHRU=()
 for arg in "$@"; do
   case "$arg" in
-    --upload) UPLOAD=1 ;;
-    --stage) STAGE=1 ;;
-    --keep-build) BUMP=0 ;;
+    --keep-build) PASSTHRU+=("$arg") ;;
     *) echo "unknown option: $arg" >&2; exit 2 ;;
   esac
 done
 
-# ── preflight ──────────────────────────────────────────────────────────────
-# The Team ID is the certificate's OU field, not the ten characters in its
-# common name ("Apple Distribution: Name (XXXXXXXXXX)" names the certificate).
-APPLE_TEAM_ID="${APPLE_TEAM_ID:-$(sed -n 's/^DEVELOPMENT_TEAM *= *//p' Config/Base.xcconfig)}"
-BUNDLE_PREFIX="$(sed -n 's/^LEDGER_BUNDLE_PREFIX *= *//p' Config/Base.xcconfig)"
-echo "==> Team $APPLE_TEAM_ID, bundle $BUNDLE_PREFIX"
+command -v gh >/dev/null || { echo "error: gh CLI not installed" >&2; exit 1; }
+gh auth status >/dev/null 2>&1 || { echo "error: run 'gh auth login' first" >&2; exit 1; }
 
-if ! security find-identity -p codesigning -v | grep -q "Apple Distribution"; then
-  echo "error: no Apple Distribution identity in your keychain." >&2
-  echo "       Xcode → Settings → Accounts → Manage Certificates → + Apple Distribution." >&2
-  exit 1
-fi
+# Build and sign, but do not upload to Apple from here — the runner does that,
+# so the push is what ships, not the hook.
+./scripts/testflight.sh --no-upload ${PASSTHRU[@]+"${PASSTHRU[@]}"}
 
-if [[ ! -f Config/Secrets.Release.xcconfig ]]; then
-  echo "error: Config/Secrets.Release.xcconfig is missing — a Release build would point at" >&2
-  echo "       the local Supabase. Copy Config/Secrets.example.xcconfig and fill in production values." >&2
-  exit 1
-fi
-if grep -Eq '127\.0\.0\.1|localhost' Config/Secrets.Release.xcconfig; then
-  echo "error: Config/Secrets.Release.xcconfig points at a local Supabase." >&2
-  exit 1
-fi
+BUILD=$(python3 -c "import json; print(json.load(open('build-number.json'))['ios'])")
+COMMIT=$(git rev-parse HEAD)
+BUNDLE_ID="$(sed -n 's/^LEDGER_BUNDLE_PREFIX *= *//p' Config/Base.xcconfig)"
 
-if [[ $STAGE -eq 1 ]]; then
-  command -v gh >/dev/null || { echo "error: gh CLI not installed" >&2; exit 1; }
-  gh auth status >/dev/null 2>&1 || { echo "error: run 'gh auth login' first" >&2; exit 1; }
-fi
+IPA=$(find build/testflight/export -name '*.ipa' | head -1)
+[[ -n "$IPA" ]] || { echo "error: no .ipa for Ledger" >&2; exit 1; }
+[[ "$(basename "$IPA")" == "Ledger.ipa" ]] || { echo "error: expected Ledger.ipa, got $(basename "$IPA")" >&2; exit 1; }
 
-# ── build number ───────────────────────────────────────────────────────────
-# App Store Connect rejects a build number it has already accepted.
-if [[ $BUMP -eq 1 ]]; then
-  BUILD=$(python3 - <<'PY'
-import json
-p = 'build-number.json'
-d = json.load(open(p))
-d['ios'] = int(d['ios']) + 1
-with open(p, 'w') as f:
-    json.dump(d, f, indent=2)
-    f.write('\n')
-print(d['ios'])
-PY
-)
-else
-  BUILD=$(python3 -c "import json; print(json.load(open('build-number.json'))['ios'])")
-fi
-echo "==> Build number $BUILD"
-
-# ── project + kit ──────────────────────────────────────────────────────────
-if command -v xcodegen >/dev/null; then
-  echo "==> xcodegen generate"
-  xcodegen generate --quiet
-fi
-
-echo "==> swift test (LedgerKit)"
-(cd LedgerKit && swift test)
-
-# ── archive + export ───────────────────────────────────────────────────────
-write_export_options() {
-  cat > "$BUILD_DIR/ExportOptions.plist" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>method</key><string>$1</string>
-  <key>teamID</key><string>$APPLE_TEAM_ID</string>
-  <key>signingStyle</key><string>automatic</string>
-  <key>destination</key><string>export</string>
-  <key>uploadSymbols</key><true/>
-</dict>
-</plist>
-PLIST
-}
-
-rm -rf "$BUILD_DIR/export"
-mkdir -p "$BUILD_DIR"
-ARCHIVE="$BUILD_DIR/$SCHEME.xcarchive"
-rm -rf "$ARCHIVE"
-
-echo "==> Archiving"
-xcodebuild archive \
-  -project "$PROJECT" \
-  -scheme "$SCHEME" \
-  -configuration Release \
-  -destination 'generic/platform=iOS' \
-  -archivePath "$ARCHIVE" \
-  -allowProvisioningUpdates \
-  DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-  CURRENT_PROJECT_VERSION="$BUILD"
-
-echo "==> Exporting"
-# Xcode 15.4 renamed the App Store export method; fall back for older Xcode.
-write_export_options "app-store-connect"
-if ! xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportOptionsPlist "$BUILD_DIR/ExportOptions.plist" \
-      -exportPath "$BUILD_DIR/export" -allowProvisioningUpdates; then
-  echo "==> Retrying export with the legacy 'app-store' method"
-  write_export_options "app-store"
-  xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportOptionsPlist "$BUILD_DIR/ExportOptions.plist" \
-    -exportPath "$BUILD_DIR/export" -allowProvisioningUpdates
-fi
-
-IPA=$(find "$BUILD_DIR/export" -name '*.ipa' | head -1)
-[[ -n "$IPA" ]] || { echo "error: no .ipa produced" >&2; exit 1; }
-echo "==> Built $IPA"
-
-# ── dSYMs → Sentry ─────────────────────────────────────────────────────────
-# Crash reports from the app, the intent and the share extension are only
-# readable with these. Skipped (loudly) when not configured.
-# `KEY = value` from the release xcconfig (last assignment wins); prints nothing else.
-release_setting() {
-  sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" Config/Secrets.Release.xcconfig | tail -1 | sed 's/[[:space:]]*$//'
-}
-SENTRY_TOKEN_SOURCE="environment"
-if [[ -z "${SENTRY_AUTH_TOKEN:-}" ]]; then
-  SENTRY_AUTH_TOKEN="$(release_setting SENTRY_AUTH_TOKEN)"
-  SENTRY_TOKEN_SOURCE="Config/Secrets.Release.xcconfig"
-fi
-SENTRY_ORG="${SENTRY_ORG:-$(release_setting SENTRY_ORG)}"
-SENTRY_PROJECT="${SENTRY_PROJECT:-$(release_setting SENTRY_PROJECT)}"
-export SENTRY_AUTH_TOKEN
-if [[ -n "${SENTRY_AUTH_TOKEN:-}" ]]; then
-  echo "==> Sentry token from $SENTRY_TOKEN_SOURCE"
-  command -v sentry-cli >/dev/null || { echo "error: SENTRY_AUTH_TOKEN set but sentry-cli not installed" >&2; exit 1; }
-  : "${SENTRY_ORG:?set SENTRY_ORG}"
-  echo "==> Uploading dSYMs to Sentry ($SENTRY_ORG/${SENTRY_PROJECT:-ledger-apps})"
-  sentry-cli debug-files upload --include-sources \
-    --org "$SENTRY_ORG" --project "${SENTRY_PROJECT:-ledger-apps}" \
-    "$ARCHIVE/dSYMs"
-else
-  echo "==> SENTRY_AUTH_TOKEN not set — dSYMs NOT uploaded; crashes from build $BUILD will be unsymbolicated."
-fi
-
-# ── TestFlight upload (optional) ───────────────────────────────────────────
-if [[ $UPLOAD -eq 1 ]]; then
-  KEY_FILE="$HOME/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID:-none}.p8"
-  if [[ -z "${ASC_KEY_ID:-}" || -z "${ASC_ISSUER_ID:-}" || ! -f "$KEY_FILE" ]]; then
-    echo "error: --upload needs ASC_KEY_ID, ASC_ISSUER_ID and $KEY_FILE" >&2
-    exit 1
-  fi
-  # altool prints "Failed to upload package" and still exits 0; judge it by its output.
-  for action in validate-app upload-app; do
-    LOG="$BUILD_DIR/altool-$action.log"
-    echo "==> altool --$action"
-    xcrun altool "--$action" --type ios --file "$IPA" \
-      --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tee "$LOG"
-    if grep -qE 'Failed to (upload|validate) package|VERIFY FAILED|ERROR: \[altool' "$LOG"; then
-      echo "error: altool --$action reported failure" >&2
-      exit 1
-    fi
-  done
-fi
-
-# ── stage on GitHub (optional) ─────────────────────────────────────────────
-if [[ $STAGE -eq 1 ]]; then
-  COMMIT=$(git rev-parse HEAD)
-  META="$BUILD_DIR/build-meta.json"
-  python3 - "$META" "$BUILD" "$COMMIT" "$BUNDLE_PREFIX" <<'PY'
+# The workflow refuses to ship artifacts that do not belong to the commit that
+# triggered it. Without this, a push made from a machine that did not build
+# would silently re-ship whatever was staged last.
+META=build/testflight/build-meta.json
+python3 - "$META" "$BUILD" "$COMMIT" "$BUNDLE_ID" <<'PY'
 import json, sys
 path, build, commit, bundle = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4]
-json.dump({"build": build, "commit": commit,
-           "apps": [{"scheme": "Ledger", "ipa": "Ledger.ipa", "bundle_id": bundle}]},
-          open(path, "w"), indent=2)
+json.dump({
+    "build": build,
+    "commit": commit,
+    "apps": [
+        {"scheme": "Ledger", "ipa": "Ledger.ipa", "bundle_id": bundle},
+    ],
+}, open(path, "w"), indent=2)
 PY
-  gh release view "$RELEASE_TAG" >/dev/null 2>&1 || \
-    gh release create "$RELEASE_TAG" --title "Staged Ledger iOS build" --prerelease \
-      --notes "Rolling artifact for the TestFlight upload. Replaced on every release build."
-  gh release upload "$RELEASE_TAG" "$IPA" "$META" --clobber
+
+echo
+echo "==> Staging Ledger build $BUILD ($COMMIT) on release $RELEASE_TAG"
+gh release view "$RELEASE_TAG" >/dev/null 2>&1 || \
+  gh release create "$RELEASE_TAG" \
+    --title "Staged Ledger iOS build" \
+    --notes "Rolling artifacts consumed by the Ledger TestFlight workflow. Replaced on every release build; not a version history." \
+    --prerelease
+
+gh release upload "$RELEASE_TAG" "$IPA" "$META" --clobber
+
+# ── record the number that was just spent ──────────────────────────────────
+#
+# App Store Connect rejects a build number it has already accepted, so the
+# counter has to survive this machine. Committed here, and only once the
+# artifacts are actually staged: a build that failed spent no number, and
+# reusing it next time is correct.
+#
+# Do not rely on which push this commit rides. Current git re-resolves the ref
+# after the pre-push hook returns, so it usually goes out with the push that
+# created it — and the workflow then runs for the counter commit, not for the
+# commit these artifacts name. The workflow must therefore accept staged
+# artifacts whose commit differs from the pushed one ONLY by
+# apps/ios/build-number.json (a file nothing compiles), and that file must be in
+# its paths-ignore and out of the pre-push filter, so on its own it ships
+# nothing and builds nothing. mm-pos lost several releases to this.
+if [[ -n "$(git status --porcelain -- build-number.json)" ]]; then
+  # `--only`, so a tree with other work in progress does not get swept in.
+  if git commit --only build-number.json --quiet \
+      --author="Hussain Abbasi <h_abbasi97@hotmail.com>" \
+      -m "Ledger iOS build $BUILD — staged for TestFlight
+
+Bumped by apps/ios/scripts/publish-build.sh. Committed so the number is not
+spent twice: App Store Connect rejects one it has already accepted." 2>/dev/null; then
+    COUNTER_NOTE="Recorded build $BUILD in a commit."
+  else
+    COUNTER_NOTE="WARNING: could not commit apps/ios/build-number.json. Commit it by hand,
+or the next clone of this repo will try to reuse build $BUILD."
+  fi
+else
+  COUNTER_NOTE="Build number unchanged (--keep-build), nothing to record."
 fi
 
 cat <<DONE
 
-Ledger build $BUILD is at $IPA.
-build-number.json now says $BUILD — commit it so the number is never reused:
-  git commit --only apps/ios/build-number.json --author="Hussain Abbasi <h_abbasi97@hotmail.com>" -m "Ledger iOS build $BUILD"
+Staged Ledger build $BUILD for commit ${COMMIT:0:8}.
+
+The push to main triggers the TestFlight workflow, which downloads it from the
+$RELEASE_TAG release, uploads it to App Store Connect, and runs
+apps/ios/scripts/testflight-distribute.mjs to release it to "Friends & Family".
+
+$COUNTER_NOTE
 DONE
