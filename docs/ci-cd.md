@@ -290,7 +290,7 @@ protection are not available.
 | `production` environment | repo | exists (merged with Vercel's `Production`; names are case-insensitive); branch policy **`main` only**; required reviewer **not set** (plan) |
 | `testflight` environment | repo | exists, no rules |
 | `SUPABASE_PROJECT_REF`, `SUPABASE_DB_PASSWORD` | env `production` | set |
-| `SUPABASE_ACCESS_TOKEN` | env `production` | **missing**: create at supabase.com → Account → Access Tokens, then `gh secret set SUPABASE_ACCESS_TOKEN -R hussu97/cc-statement-scraper --env production` (prompts) |
+| `SUPABASE_ACCESS_TOKEN` | env `production` | set 2026-10-08 (token `github-actions-<project>-prod`). `supabase link` needs read access to secret API keys and the Auth / PostgREST / network config as well as Edge Functions + secrets write; see PRODUCTION §10.1 |
 | `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8` | env `testflight` | set (same key as another app) |
 | `GCP_WIF_PROVIDER`, `GCP_DEPLOY_SA`, `GCP_PROJECT_ID`, `AUTO_DEPLOY` (`true`) | repo variables | set |
 | `LEGACY_DEPLOYS_ENABLED` | repo variable | absent |
