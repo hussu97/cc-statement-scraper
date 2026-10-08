@@ -68,7 +68,7 @@ def test_pyproject_version_is_parser_version() -> None:
 
 # "4000" is the synthetic BIN: the Mashreq parser reports the first four digits of
 # "4000 XXXX XXXX 1234" (legacy behaviour, BACKLOG NEW-4).
-SYNTHETIC_LAST4 = {"1234", "1357", "2222", "2468", "4000", "5678", "8765", "9876"}
+SYNTHETIC_LAST4 = {"1234", "1357", "2222", "2468", "3333", "4000", "5678", "8765", "9876"}
 
 
 def test_snapshots_hold_only_synthetic_cards(expected: dict[str, dict]) -> None:

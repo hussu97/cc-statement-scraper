@@ -1,0 +1,133 @@
+{
+  "bank_code": "SIB",
+  "contract_version": 1,
+  "document_kind": "history_pdf",
+  "statements": [
+    {
+      "bank_code": "SIB",
+      "card_holder": "JANE Q SAMPLE",
+      "card_type": "Sample Islamic Card",
+      "due_date": null,
+      "kind": "history_extract",
+      "lines": [
+        {
+          "amount_aed": "80.00",
+          "amount_original": "80.00",
+          "card_holder": "JANE Q SAMPLE",
+          "card_last4": "3333",
+          "country_code": null,
+          "currency_original": "AED",
+          "description_raw": "CORNER GROCERY SHARJAH",
+          "direction": "debit",
+          "fx_rate": "1",
+          "kind": "purchase",
+          "legacy_fingerprint": "39bbf92c1221ab3f63b93f99fbbbee98451e1448a8b0f3086d606fbc15bafae6",
+          "line_no": 1,
+          "merchant_normalized": "CORNER GROCERY SHARJAH",
+          "posting_date": "2026-08-20",
+          "txn_date": "2026-08-20",
+          "txn_time": null
+        },
+        {
+          "amount_aed": "120.25",
+          "amount_original": "120.25",
+          "card_holder": "JANE Q SAMPLE",
+          "card_last4": "3333",
+          "country_code": null,
+          "currency_original": "AED",
+          "description_raw": "FUEL STATION SHARJAH",
+          "direction": "debit",
+          "fx_rate": "1",
+          "kind": "purchase",
+          "legacy_fingerprint": "8417242a349cb67db9afbea55747a47a8b92c74a0fe8837eff3820b4960a2ef4",
+          "line_no": 2,
+          "merchant_normalized": "FUEL STATION SHARJAH",
+          "posting_date": "2026-09-02",
+          "txn_date": "2026-09-02",
+          "txn_time": null
+        }
+      ],
+      "metadata": {
+        "card_holder": "JANE Q SAMPLE",
+        "card_last4": "3333",
+        "card_type": "Sample Islamic Card",
+        "pdf_sha256": "c9c47b35e1399be0aa745e2b69b77c17c5e91e3907431e4fe32e185460cb1f00",
+        "pdf_type": "transaction_history",
+        "statement_date": "2026-09-12",
+        "statement_month": "2026-09",
+        "statement_period_end": "2026-09-12",
+        "statement_period_start": "2026-08-13",
+        "statement_reference": null
+      },
+      "period_end": "2026-09-12",
+      "period_start": "2026-08-13",
+      "primary_card_last4": "3333",
+      "reference_source": "fallback",
+      "statement_date": "2026-09-12",
+      "statement_reference": "AUTO-SIB-2026-09-12-3333",
+      "totals": {
+        "closing_balance": null,
+        "credit_limit": null,
+        "min_due": null,
+        "opening_balance": null,
+        "total_credits": null,
+        "total_debits": null
+      },
+      "warnings": []
+    },
+    {
+      "bank_code": "SIB",
+      "card_holder": "JANE Q SAMPLE",
+      "card_type": "Sample Islamic Card",
+      "due_date": null,
+      "kind": "history_extract",
+      "lines": [
+        {
+          "amount_aed": "300.00",
+          "amount_original": "300.00",
+          "card_holder": "JANE Q SAMPLE",
+          "card_last4": "3333",
+          "country_code": null,
+          "currency_original": "AED",
+          "description_raw": "CREDIT CARD PAYMENT",
+          "direction": "credit",
+          "fx_rate": "1",
+          "kind": "payment",
+          "legacy_fingerprint": "1d07213cfbbad07bd9738209ac24ae37056b1b8d261d453de0ca97d805d9016d",
+          "line_no": 1,
+          "merchant_normalized": "CREDIT CARD PAYMENT",
+          "posting_date": "2026-09-14",
+          "txn_date": "2026-09-14",
+          "txn_time": null
+        }
+      ],
+      "metadata": {
+        "card_holder": "JANE Q SAMPLE",
+        "card_last4": "3333",
+        "card_type": "Sample Islamic Card",
+        "pdf_sha256": "c9c47b35e1399be0aa745e2b69b77c17c5e91e3907431e4fe32e185460cb1f00",
+        "pdf_type": "transaction_history",
+        "statement_date": "2026-10-12",
+        "statement_month": "2026-10",
+        "statement_period_end": "2026-10-12",
+        "statement_period_start": "2026-09-13",
+        "statement_reference": null
+      },
+      "period_end": "2026-10-12",
+      "period_start": "2026-09-13",
+      "primary_card_last4": "3333",
+      "reference_source": "fallback",
+      "statement_date": "2026-10-12",
+      "statement_reference": "AUTO-SIB-2026-10-12-3333",
+      "totals": {
+        "closing_balance": null,
+        "credit_limit": null,
+        "min_due": null,
+        "opening_balance": null,
+        "total_credits": null,
+        "total_debits": null
+      },
+      "warnings": []
+    }
+  ]
+}
