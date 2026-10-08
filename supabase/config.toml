@@ -447,3 +447,6 @@ verify_jwt = false
 
 [functions.fx-rates]
 verify_jwt = false
+
+[functions.member-invite]
+verify_jwt = false
