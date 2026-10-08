@@ -553,9 +553,9 @@ Bank SMS → Shortcuts automation → LogBankSMSIntent (openAppWhenRun = false, 
   which continue the trace and forward it to `/parse`. An upload becomes one trace across
   client → Edge → parser.
 - **PII.** `sendDefaultPii` is off. A per-runtime scrubber (each with unit tests) strips SMS
-  bodies, PDF passwords, tokens, `Authorization` and `X-Profile-Key` headers, email fields and
-  signed URL query strings. (Free-text email addresses are not yet regex-scrubbed in the Edge
-  and parser scrubbers: BACKLOG SRV-18.) The web scrubs spans too (`beforeSendSpan`), because
+  bodies, PDF passwords, tokens, `Authorization` and `X-Profile-Key` headers, email fields,
+  free-text email addresses and signed URL query strings. Edge Functions return fixed messages
+  for constraint violations (23505/23503/23514), never constraint names. The web scrubs spans too (`beforeSendSpan`), because
   Sentry v11 streams spans past `beforeSendTransaction`, and its Supabase integration no longer
   re-reports failed requests. Tags carry only opaque codes. Ingest rejections carry the SQLSTATE
   and the constraint name, with literal values filtered from the PG message.
@@ -577,6 +577,10 @@ Bank SMS → Shortcuts automation → LogBankSMSIntent (openAppWhenRun = false, 
   - `dlq:*` issues
   - iOS crash-free sessions below 99%, filtered `app:ios` in `credit-card-ledger-apps`
 
+- **Per-request tags on Edge.** The Deno SDK has no async context strategy, so Sentry scopes
+  are shared by concurrent requests in one isolate. `withSentry` keeps `function`,
+  `execution_id` and any `setRequestTag(...)` in an `AsyncLocalStorage` that an event processor
+  applies; handlers never call `Sentry.getCurrentScope().setTag` (`_tests/sentry_scope_test.ts`).
 - **Tags at init.** Each runtime's Sentry helper sets its tag on every event:
   `_shared/sentry.ts` (`service=edge`), `ccs_parser/sentry.py` (`service=parser`),
   `apps/web/src/lib/sentry.ts` (`app=web`, via `initialScope`) and LedgerKit `Telemetry`
