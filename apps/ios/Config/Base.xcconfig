@@ -6,6 +6,8 @@
 LEDGER_BUNDLE_PREFIX = com.hussu97.ledger
 LEDGER_APP_GROUP = group.$(LEDGER_BUNDLE_PREFIX)
 LEDGER_KEYCHAIN_GROUP = $(LEDGER_BUNDLE_PREFIX).shared
+// Passkey relying party (= Supabase [auth.webauthn] rp_id = the web app host).
+LEDGER_PASSKEY_DOMAIN = cc-statement-scraper.vercel.app
 
 // Same Apple team as mm-pos. The Team ID is the certificate's OU, not the
 // ten characters in its common name.

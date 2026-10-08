@@ -1,16 +1,11 @@
 import LedgerKit
 import SwiftUI
 
-/// Email one-time code sign-in. Sign in with Apple appears once
-/// `SessionStore.appleSignInEnabled` is turned on.
+/// Sign in with an emailed one-time code or a passkey. No password, no link.
 struct SignInView: View {
     let session: SessionStore
     @State private var email = ""
     @State private var code = ""
-    #if DEBUG
-    @State private var password = ""
-    @State private var showPassword = false
-    #endif
 
     var body: some View {
         ScrollView {
@@ -28,21 +23,12 @@ struct SignInView: View {
                     codeForm(address)
                 default:
                     emailForm
+                    passkeyButton
                 }
 
                 if let error = session.errorMessage {
                     Text(error).font(Typography.rowMeta).foregroundStyle(Palette.danger)
                 }
-
-                if SessionStore.appleSignInEnabled {
-                    Button {} label: { Label("Sign in with Apple", systemImage: "apple.logo") }
-                        .buttonStyle(.bordered)
-                        .disabled(true)
-                }
-
-                #if DEBUG
-                devPasswordForm
-                #endif
             }
             .padding(Metrics.gutter)
         }
@@ -52,11 +38,14 @@ struct SignInView: View {
     private var emailForm: some View {
         Card {
             Text("Sign in with your email").font(Typography.cardTitle)
+            Text("We'll email you a one-time code.").font(Typography.rowMeta).foregroundStyle(Palette.muted)
             TextField("you@example.com", text: $email)
-                .textContentType(.emailAddress)
+                .textContentType(.username)
                 .keyboardType(.emailAddress)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
+                .submitLabel(.send)
+                .onSubmit { Task { await session.sendCode(to: email) } }
                 .padding(12)
                 .background(Palette.surface2, in: RoundedRectangle(cornerRadius: Metrics.radiusMd))
             Button {
@@ -69,9 +58,22 @@ struct SignInView: View {
         }
     }
 
+    private var passkeyButton: some View {
+        Button {
+            guard let anchor = PresentationAnchor.current else { return }
+            Task { await session.signInWithPasskey(anchor: anchor) }
+        } label: {
+            Label("Sign in with a passkey", systemImage: "person.badge.key")
+                .frame(maxWidth: .infinity, minHeight: Metrics.tapMin)
+        }
+        .buttonStyle(.bordered)
+        .disabled(session.isWorking)
+    }
+
     private func codeForm(_ address: String) -> some View {
         Card {
             Text("Enter the code sent to \(address)").font(Typography.cardTitle)
+            Text("It expires in an hour.").font(Typography.rowMeta).foregroundStyle(Palette.muted)
             TextField("123456", text: $code)
                 .textContentType(.oneTimeCode)
                 .keyboardType(.numberPad)
@@ -84,27 +86,69 @@ struct SignInView: View {
                 Text(session.isWorking ? "Checking…" : "Sign in").frame(maxWidth: .infinity, minHeight: Metrics.tapMin)
             }
             .buttonStyle(.borderedProminent)
-            .disabled(session.isWorking || code.isEmpty)
-            Button("Use a different email") { session.cancelCode() }
-                .font(Typography.rowMeta)
-        }
-    }
-
-    #if DEBUG
-    private var devPasswordForm: some View {
-        DisclosureGroup("Developer: password sign-in", isExpanded: $showPassword) {
-            VStack(spacing: 8) {
-                TextField("email", text: $email)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                SecureField("password", text: $password)
-                Button("Sign in") { Task { await session.signIn(email: email, password: password) } }
-                    .buttonStyle(.bordered)
+            .disabled(session.isWorking || code.filter(\.isNumber).count < 6)
+            HStack {
+                Button("Use a different email") {
+                    code = ""
+                    session.cancelCode()
+                }
+                Spacer()
+                Button("Send a new code") { Task { await session.sendCode(to: address) } }
+                    .disabled(session.isWorking)
             }
-            .padding(.top, 8)
+            .font(Typography.rowMeta)
         }
-        .font(Typography.caption)
-        .foregroundStyle(Palette.muted)
     }
-    #endif
+}
+
+/// Shown right after an email-code sign-in when the account has no passkey.
+struct PasskeyOfferView: View {
+    let session: SessionStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            if case .offering = session.passkeyOffer {
+                Image(systemName: "person.badge.key.fill")
+                    .font(.system(size: 40))
+                    .foregroundStyle(Palette.accent)
+                    .accessibilityHidden(true)
+                Text("Add a passkey?").font(.system(size: 34, weight: .regular, design: .serif))
+                Text("Next time, sign in with Face ID instead of waiting for an email code. The passkey is saved in your iCloud Keychain, so it also works on your other Apple devices and on the Bank Ledger website.")
+                    .font(Typography.body)
+                    .foregroundStyle(Palette.muted)
+                if let error = session.passkeys.errorMessage {
+                    Text(error).font(Typography.rowMeta).foregroundStyle(Palette.danger)
+                }
+                Button {
+                    guard let anchor = PresentationAnchor.current else { return }
+                    Task { await session.acceptPasskeyOffer(anchor: anchor) }
+                } label: {
+                    Text(session.passkeys.isWorking ? "Adding…" : "Add a passkey").frame(maxWidth: .infinity, minHeight: Metrics.tapMin)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(session.passkeys.isWorking)
+                Button("Not now") { session.declinePasskeyOffer() }
+                    .frame(maxWidth: .infinity)
+                    .disabled(session.passkeys.isWorking)
+                Text("You can add or remove passkeys any time in Settings.")
+                    .font(Typography.caption)
+                    .foregroundStyle(Palette.muted)
+            } else {
+                ProgressView().frame(maxWidth: .infinity)
+            }
+        }
+        .padding(Metrics.gutter)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Palette.bg)
+    }
+}
+
+/// The key window, for the native passkey sheet.
+enum PresentationAnchor {
+    @MainActor static var current: UIWindow? {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)
+    }
 }
