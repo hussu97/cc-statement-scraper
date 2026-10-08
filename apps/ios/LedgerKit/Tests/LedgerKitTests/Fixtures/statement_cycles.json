@@ -1,0 +1,16 @@
+[
+  {"stmt_code": "stm_01hzy3k8w9m2n4p6q8r0s2t4v6", "account_code": "acc_01hzy3k8w9m2n4p6q8r0s2t4v6",
+   "bank_code": "FAB", "card_last4": "1234", "kind": "statement", "statement_date": "2026-09-25",
+   "period_start": "2026-08-26", "period_end": "2026-09-25", "due_date": "2026-10-20",
+   "closing_balance": 4210.55, "min_due": 210.53, "credit_limit": 30000.00, "utilisation": 0.1404,
+   "line_count": 42, "debits": 5120.10, "credits": 909.55, "recon_status": "warn",
+   "recon_checks": {"line_count": 42, "sum_debits": "5120.10", "sum_credits": "909.55", "held_lines": 0,
+                    "sms_coverage": 0.875, "debits_match": true, "credits_match": true,
+                    "balance_equation": true, "expected_closing": "4210.55", "unmatched_sms": 2},
+   "doc_code": "doc_01hzy3k8w9m2n4p6q8r0s2t4v6"},
+  {"stmt_code": "stm_01hzy3k8w9m2n4p6q8r0s2t4v7", "account_code": "acc_01hzy3k8w9m2n4p6q8r0s2t4v7",
+   "bank_code": "SIB", "card_last4": null, "kind": "history_extract", "statement_date": "2026-09-01",
+   "period_start": null, "period_end": null, "due_date": null, "closing_balance": null, "min_due": null,
+   "credit_limit": null, "utilisation": null, "line_count": 0, "debits": 0, "credits": 0,
+   "recon_status": null, "recon_checks": null, "doc_code": null}
+]
