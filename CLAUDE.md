@@ -9,7 +9,7 @@ Every rule below exists because the codebase once had several coexisting variant
 | Path | What | Run / test |
 |---|---|---|
 | `supabase/migrations/` | Schema + all business logic (SQL functions, triggers, RLS, pg_cron, pgmq) | `supabase db reset` → `supabase test db` |
-| `supabase/functions/` | Deno Edge Functions (HTTP ingress, queue worker, LLM, email) | `deno test -A supabase/functions` |
+| `supabase/functions/` | Deno Edge Functions (HTTP ingress, queue worker, LLM, email) | `cd supabase/functions && deno test -A .` |
 | `services/parser/` | Stateless Python `/parse` on Cloud Run (contract: `docs/contracts/parse-v1.md`) | `cd services/parser && .venv/bin/pytest -q` |
 | `apps/web/` | React web app (Vite) | `pnpm web:test`, `pnpm web:build` |
 | `apps/ios/` | SwiftUI iPhone app + `LedgerKit` Swift package | `cd apps/ios/LedgerKit && swift test` |
