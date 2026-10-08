@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compareEvents, docState, eventAdvice, eventTone, eventsByDoc, mergeEvents, normalizeDocCodes, stageLabel, type DocumentEvent } from "./document-events";
+import { compareEvents, docState, eventAdvice, eventTone, eventsByDoc, mergeEvents, normalizeDocCodes, stageLabel, uploadStatus, type DocumentEvent } from "./document-events";
 
 const DOC_A = "doc_01k4ea5xbab549jj8c98dtcj6v";
 const DOC_B = "doc_01k4ea5xc2rph4za264wqq8cj2";
@@ -58,6 +58,22 @@ describe("docState", () => {
   });
 });
 
+describe("uploadStatus", () => {
+  it("uses the upload response until events arrive", () => {
+    expect(uploadStatus("queued", [])).toEqual({ state: "waiting", label: "Queued" });
+    expect(uploadStatus("duplicate", [])).toEqual({ state: "duplicate", label: "Already uploaded" });
+  });
+
+  it("then follows the timeline", () => {
+    expect(uploadStatus("queued", [ev("received", "01"), ev("stored", "02"), ev("queued", "03")]).label).toBe("Queued");
+    expect(uploadStatus("queued", [ev("queued", "03"), ev("parsing", "04")])).toEqual({ state: "working", label: "Reading…" });
+    expect(uploadStatus("queued", [ev("parsed", "05")]).label).toBe("Read…");
+    expect(uploadStatus("queued", [ev("ingested", "06")])).toEqual({ state: "done", label: "Imported" });
+    expect(uploadStatus("queued", [ev("failed", "06")])).toEqual({ state: "failed", label: "Failed" });
+    expect(uploadStatus("duplicate", [ev("received", "01"), ev("duplicate", "02")]).state).toBe("duplicate");
+  });
+});
+
 describe("labels and tones", () => {
   it("names every stage and passes unknown ones through", () => {
     expect(stageLabel("parsing")).toBe("Reading");
@@ -92,8 +108,9 @@ describe("eventAdvice", () => {
     expect(eventAdvice(failed())?.kind).toBe("retry");
   });
 
-  it("offers nothing for unsupported statements", () => {
-    expect(eventAdvice(failed("UNSUPPORTED_BANK"))?.kind).toBe("none");
+  it("offers nothing for unsupported statements, and a hint for big files", () => {
+    expect(eventAdvice(failed("UNSUPPORTED_BANK"))).toEqual({ kind: "none" });
+    expect(eventAdvice(failed("PDF_TOO_LARGE"))?.text).toMatch(/smaller PDF/);
   });
 
   it("is silent for normal steps", () => {

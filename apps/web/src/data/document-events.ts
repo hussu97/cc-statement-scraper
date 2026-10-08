@@ -64,6 +64,35 @@ export function docState(events: readonly DocumentEvent[]): DocState {
   }
 }
 
+export interface UploadStatus {
+  state: DocState | "uploading";
+  label: string;
+}
+
+/**
+ * One uploaded file's headline: from its events when they have arrived,
+ * else from the upload response ("queued" / "duplicate"). Pure, unit-tested.
+ */
+export function uploadStatus(responseStatus: string, events: readonly DocumentEvent[]): UploadStatus {
+  const state = docState(events);
+  switch (state) {
+    case "done":
+      return { state, label: "Imported" };
+    case "duplicate":
+      return { state, label: "Already uploaded" };
+    case "failed":
+      return { state, label: "Failed" };
+    case "retrying":
+      return { state, label: "Retrying" };
+    case "working": {
+      const last = [...events].sort(compareEvents)[events.length - 1]!;
+      return { state, label: last.stage === "queued" || last.stage === "received" || last.stage === "stored" ? "Queued" : `${stageLabel(last.stage)}…` };
+    }
+    default:
+      return responseStatus === "duplicate" ? { state: "duplicate", label: "Already uploaded" } : { state: "waiting", label: "Queued" };
+  }
+}
+
 export const STAGE_LABEL: Record<DocumentStage, string> = {
   received: "Received",
   stored: "Saved",
@@ -91,33 +120,33 @@ export function eventTone(e: Pick<DocumentEvent, "stage" | "level">): EventTone 
   return "neutral";
 }
 
-export type EventAdvice =
-  | { kind: "passwords"; text: string }
-  | { kind: "reupload"; text: string }
-  | { kind: "retry"; text: string }
-  | { kind: "none"; text: string };
+/**
+ * The action that goes with a failure. The event's own message (written by
+ * the server per error code) already says what went wrong and usually what to
+ * do; `text` only adds what it lacks.
+ */
+export type EventAdvice = { kind: "passwords" | "reupload" | "retry" | "none"; text?: string };
 
 /**
  * What to do next after a failure, from detail.error_code (parse-v1 codes,
- * worker codes, INGEST_<sqlstate>). The event's own message says what went
- * wrong; this is the action. Null for events that need nothing. Pure, unit-tested.
+ * worker codes, INGEST_<sqlstate>). Null for events that need nothing.
+ * Pure, unit-tested.
  */
 export function eventAdvice(e: Pick<DocumentEvent, "stage" | "level" | "detail">): EventAdvice | null {
   if (e.stage !== "failed" && e.level !== "error") return null;
   const code = typeof e.detail?.error_code === "string" ? e.detail.error_code : "";
   switch (true) {
     case code === "PDF_DECRYPT_FAILED":
-      return { kind: "passwords", text: "Add or fix this bank's statement password, then upload the PDF again." };
+      return { kind: "passwords" };
     case code === "BANK_UNDETECTED" || code === "DOWNLOAD_FAILED" || code === "DOCUMENT_MISSING":
-      return { kind: "reupload", text: "Upload the PDF again." };
+      return { kind: "reupload" };
     case code === "UNSUPPORTED_BANK" || code === "UNSUPPORTED_LAYOUT":
-      return { kind: "none", text: "Nothing to do for now: this statement can't be imported yet." };
+      return { kind: "none" };
     case code === "PDF_TOO_LARGE":
       return { kind: "none", text: "Try a smaller PDF, such as one statement per file." };
-    case code === "PARSE_TIMEOUT" || code === "MAX_ATTEMPTS" || code === "INTERNAL_ERROR" || code.startsWith("INGEST_") || code === "PARSE_OUTPUT_INVALID":
-      return { kind: "retry", text: "Try reading it again. If it fails again, the statement may need a parser update." };
     default:
-      return { kind: "retry", text: "Try reading it again." };
+      // Timeouts, attempts exhausted, ingest checks, unknown codes: a re-read may work.
+      return { kind: "retry" };
   }
 }
 

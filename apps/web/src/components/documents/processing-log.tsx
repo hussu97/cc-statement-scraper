@@ -86,19 +86,21 @@ export function ProcessingLog({
 }
 
 function Advice({ advice, onRetry, retrying }: { advice: NonNullable<ReturnType<typeof eventAdvice>>; onRetry?: () => void; retrying?: boolean }) {
+  const action =
+    advice.kind === "passwords" ? (
+      <Link to="/settings" search={{ tab: "sources" }} hash="statement-passwords" className="tap font-medium text-accent hover:underline">
+        Open Settings → Statement passwords
+      </Link>
+    ) : advice.kind === "retry" && onRetry ? (
+      <Button size="sm" variant="secondary" icon={<RotateCw className="size-3.5" />} loading={retrying} onClick={onRetry}>
+        Read again
+      </Button>
+    ) : null;
+  if (!advice.text && !action) return null;
   return (
-    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-      <span className="text-ink-2">{advice.text}</span>
-      {advice.kind === "passwords" && (
-        <Link to="/settings" search={{ tab: "sources" }} hash="statement-passwords" className="tap font-medium text-accent hover:underline">
-          Settings → Statement passwords
-        </Link>
-      )}
-      {advice.kind === "retry" && onRetry && (
-        <Button size="sm" variant="secondary" icon={<RotateCw className="size-3.5" />} loading={retrying} onClick={onRetry}>
-          Read again
-        </Button>
-      )}
+    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+      {advice.text && <span className="text-ink-2">{advice.text}</span>}
+      {action}
     </div>
   );
 }
