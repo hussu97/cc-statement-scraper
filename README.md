@@ -247,8 +247,10 @@ JWTs. The service client logs which source it used (never the value).
 | `MS_OAUTH_TENANT` | outlook-poll | `consumers` | Azure tenant |
 | `OUTLOOK_LOOKBACK_DAYS` | outlook-poll | `90` | First delta window |
 | `OUTLOOK_BUDGET_MS` | outlook-poll | `100000` | Time budget per run (resumes next run) |
+| `GMAIL_PUSH_BUDGET_MS` | gmail-push | `100000` | Time budget per push; the rest continues on the redelivery (503) |
 | `OPS_SMS_UNPARSED_THRESHOLD` | ops-monitor | `5` | Unparsed SMS per 24 h before an issue |
 | `OPS_OPEN_REVIEWS_THRESHOLD` | ops-monitor | `50` | Open reviews before an issue |
+| `OPS_PARSE_QUEUE_AGE_S` | ops-monitor | `10800` | Oldest `parse_document` message age (s) before a backlog warning |
 | `ALLOWED_ORIGINS` | all (CORS) | any | Comma-separated allowed origins |
 | `SENTRY_DSN` | all | — | Sentry `credit-card-ledger-backend` DSN (empty disables Sentry) |
 | `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE` | all | `local`, — | Sentry environment and release. Unset, `local`, `development` and `test` disable Sentry even with a DSN; production sets `production` |
@@ -344,9 +346,9 @@ Used for the production Edge Function secrets and Vault entries, and for secret 
 
 | Function | Method | Auth | Purpose |
 |---|---|---|---|
-| `statements-upload` | POST multipart (`files`, `bank_code_hint`, `profile_code`); ≤ 20 files and ≤ 40 MB per request | Service token `statements:upload` (+ `X-Profile-Key`) or user JWT (owner) | Store PDFs, dedup, queue parsing |
+| `statements-upload` | POST multipart (`files`, `bank_code_hint`, `profile_code`); ≤ 20 files and ≤ 40 MB per request | Service token `statements:upload` (+ `X-Profile-Key`) or user JWT (owner) | Store PDFs, dedup, queue parsing. Each result has `status` (`queued`/`duplicate`), `parse_status` and, when a failed duplicate was queued again, `requeued: true` |
 | `sms-ingest` | POST JSON `{profile_code?, messages[≤200]}` | User JWT or service token `sms:ingest` | Batch SMS ingest (idempotent on `client_msg_id`) |
-| `gmail-push` | POST (Pub/Sub envelope) | Google OIDC token | Gmail notifications → documents |
+| `gmail-push` | POST (Pub/Sub envelope) | Google OIDC token | Gmail notifications → documents (200 done or permanent failure acked, 503 budget used up, 500 transient: Pub/Sub redelivers) |
 | `worker`, `gmail-watch-renew`, `outlook-poll`, `ops-monitor`, `fx-rates` | POST | `x-cron-secret` | pg_cron-driven jobs |
 
 ### RPCs (`supabase.rpc(...)`, PostgREST)
@@ -358,7 +360,7 @@ Used for the production Edge Function secrets and Vault entries, and for secret 
 | Ingest and review | `ingest_sms`* (per-message statuses), `resolve_review`* (`link`, `create_new`, `dismiss`, `card`, `supersede`, `not_a_transaction`), `retry_sms_fallback`*, `requeue_documents`*, `set_sms_template_active`* |
 | Categorisation | `set_transaction_category`*, `set_transactions_category`*, `preview_rule`, `merchant_search` |
 | Analytics | `overview`, `spend_series`, `category_breakdown`, `merchant_leaderboard`, `daily_spend`, `hour_weekday_pattern`, `fx_spend`, `statement_cycles`, `yoy_compare`, `anomalies`, `filter_meta`, `budget_status`, `recurring_list` |
-| Service-role only (Edge Functions) | `authenticate_service_token`, `ingest_parsed_document`, `fail_document`, `queue_read`, `queue_delete`, `queue_send`, `queue_to_dlq`, `worker_document_context`, `worker_llm_context`, `worker_sms_context`, `worker_mailbox_secret`, `apply_llm_suggestions`, `propose_sms_template`, `ops_health`, `upsert_fx_rates` |
+| Service-role only (Edge Functions) | `authenticate_service_token`, `ingest_parsed_document`, `fail_document`, `queue_read`, `queue_delete`, `queue_send`, `queue_to_dlq`, `worker_document_context`, `worker_llm_context`, `worker_sms_context`, `worker_mailbox_secret`, `apply_llm_suggestions`, `propose_sms_template`, `ops_health`, `upsert_fx_rates`, `merge_mailbox_sync_state` |
 
 Views: `v_spend` (the single spend definition) and `v_transactions` (the Activity read model).
 Tables are readable by members under RLS. Owners edit categories, rules, budgets, accounts,

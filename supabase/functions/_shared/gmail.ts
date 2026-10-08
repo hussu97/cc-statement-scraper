@@ -3,16 +3,10 @@
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from "./deps.ts";
 import { HttpError } from "./http.ts";
 import { isPdfAttachment } from "./email_routes.ts";
+import { decodeBase64Any, ProviderHttpError } from "./provider.ts";
 
 export const GMAIL_API = "https://gmail.googleapis.com/gmail/v1/users/me";
 const GOOGLE_ISSUERS = ["https://accounts.google.com", "accounts.google.com"];
-
-export class ProviderHttpError extends Error {
-  constructor(public status: number, message: string) {
-    super(message);
-    this.name = "ProviderHttpError";
-  }
-}
 
 // ── Pub/Sub push authentication ─────────────────────────────────────────────
 
@@ -62,8 +56,7 @@ export function decodePubSubEnvelope(envelope: unknown): PushNotification {
   let payload: Record<string, unknown> = {};
   if (typeof msg.data === "string" && msg.data) {
     try {
-      const bin = atob(msg.data.replace(/-/g, "+").replace(/_/g, "/"));
-      const parsed = JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))));
+      const parsed = JSON.parse(new TextDecoder().decode(decodeBase64Any(msg.data)));
       if (parsed && typeof parsed === "object") payload = parsed;
     } catch {
       throw new HttpError(400, "INVALID_ENVELOPE", "Pub/Sub data is not base64 JSON");
@@ -72,7 +65,7 @@ export function decodePubSubEnvelope(envelope: unknown): PushNotification {
   const email = String(payload.emailAddress ?? msg.attributes?.emailAddress ?? "").trim();
   if (!email) throw new HttpError(400, "INVALID_ENVELOPE", "emailAddress missing");
   const hid = String(payload.historyId ?? "").trim();
-  return { emailAddress: email, historyId: hid || null };
+  return { emailAddress: email, historyId: /^\d{1,30}$/.test(hid) ? hid : null };
 }
 
 // ── message structure helpers ───────────────────────────────────────────────
@@ -107,6 +100,8 @@ export interface AttachmentStub {
   /** Stable per message (Gmail attachmentIds change between fetches; partIds don't). */
   key: string;
   filename: string;
+  /** Decoded size in bytes as reported by Gmail, when known. */
+  size: number | null;
 }
 
 export function pdfAttachmentStubs(message: GmailMessage): AttachmentStub[] {
@@ -116,10 +111,12 @@ export function pdfAttachmentStubs(message: GmailMessage): AttachmentStub[] {
     const filename = String(p.filename ?? "").trim();
     const attachmentId = String(p.body?.attachmentId ?? "").trim();
     if (attachmentId && isPdfAttachment(filename, String(p.mimeType ?? ""))) {
+      const size = Number(p.body?.size);
       out.push({
         attachmentId,
         key: p.partId ? `part:${p.partId}` : `att:${attachmentId.slice(0, 200)}`,
         filename: filename || "statement.pdf",
+        size: Number.isFinite(size) && size >= 0 ? size : null,
       });
     }
     for (const c of p.parts ?? []) walk(c);
@@ -128,13 +125,13 @@ export function pdfAttachmentStubs(message: GmailMessage): AttachmentStub[] {
   return out;
 }
 
-export function base64UrlToBytes(data: string): Uint8Array {
-  const b64 = data.replace(/-/g, "+").replace(/_/g, "/");
-  const bin = atob(b64 + "===".slice((b64.length + 3) % 4));
-  return Uint8Array.from(bin, (c) => c.charCodeAt(0));
-}
-
 // ── API client ──────────────────────────────────────────────────────────────
+
+export interface HistoryPage {
+  history?: { id?: string; messagesAdded?: { message?: { id?: string } }[] }[];
+  historyId?: string;
+  nextPageToken?: string;
+}
 
 export class GmailClient {
   constructor(private accessToken: string, private fetchFn: typeof fetch = fetch) {}
@@ -156,15 +153,27 @@ export class GmailClient {
     return await res.json();
   }
 
-  /** One page of history (messageAdded). */
-  historyPage(startHistoryId: string, pageToken?: string) {
+  /** One page of history (messageAdded), optionally limited to one label (SRV-05). */
+  historyPage(startHistoryId: string, opts: { pageToken?: string; labelId?: string | null } = {}) {
     const q = new URLSearchParams({ startHistoryId, historyTypes: "messageAdded", maxResults: "100" });
-    if (pageToken) q.set("pageToken", pageToken);
-    return this.request(`/history?${q}`) as Promise<{
-      history?: { messagesAdded?: { message?: { id?: string } }[] }[];
-      historyId?: string;
-      nextPageToken?: string;
-    }>;
+    if (opts.labelId) q.set("labelId", opts.labelId);
+    if (opts.pageToken) q.set("pageToken", opts.pageToken);
+    return this.request(`/history?${q}`) as Promise<HistoryPage>;
+  }
+
+  /** One page of message ids matching a Gmail search (used for the bounded backfill). */
+  listMessages(query: string, opts: { pageToken?: string; labelIds?: string[] } = {}) {
+    const q = new URLSearchParams({ q: query, maxResults: "100" });
+    for (const l of opts.labelIds ?? []) q.append("labelIds", l);
+    if (opts.pageToken) q.set("pageToken", opts.pageToken);
+    return this.request(`/messages?${q}`) as Promise<{ messages?: { id?: string }[]; nextPageToken?: string }>;
+  }
+
+  /** The mailbox's current history id (a fresh cursor when the pushed one is missing). */
+  async currentHistoryId(): Promise<string | null> {
+    const doc = await this.request("/profile");
+    const id = String(doc.historyId ?? "");
+    return /^\d+$/.test(id) ? id : null;
   }
 
   getMessage(id: string): Promise<GmailMessage> {
@@ -175,8 +184,7 @@ export class GmailClient {
     const doc = await this.request(
       `/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`,
     );
-    const data = String(doc.data ?? "");
-    return data ? base64UrlToBytes(data) : new Uint8Array();
+    return decodeBase64Any(String(doc.data ?? ""));
   }
 
   watch(topicName: string, labelIds: string[]) {
@@ -188,7 +196,7 @@ export class GmailClient {
 }
 
 /** Message ids added in a history page (deduped, order preserved). */
-export function historyMessageIds(page: { history?: { messagesAdded?: { message?: { id?: string } }[] }[] }): string[] {
+export function historyMessageIds(page: HistoryPage): string[] {
   const seen = new Set<string>();
   for (const h of page.history ?? []) {
     for (const a of h.messagesAdded ?? []) {
@@ -197,4 +205,33 @@ export function historyMessageIds(page: { history?: { messagesAdded?: { message?
     }
   }
   return [...seen];
+}
+
+/** Largest history record id in a page: every change up to it has been seen once the page is processed. */
+export function pageMaxHistoryId(page: HistoryPage): string | null {
+  let max: bigint | null = null;
+  for (const h of page.history ?? []) {
+    const id = String(h?.id ?? "");
+    if (!/^\d{1,30}$/.test(id)) continue;
+    const v = BigInt(id);
+    if (max === null || v > max) max = v;
+  }
+  return max === null ? null : String(max);
+}
+
+/** The later of two numeric history ids (either may be missing). */
+export function laterHistoryId(a: string | null | undefined, b: string | null | undefined): string | null {
+  const ok = (s: string | null | undefined) => (s && /^\d{1,30}$/.test(s) ? BigInt(s) : null);
+  const x = ok(a);
+  const y = ok(b);
+  if (x === null) return y === null ? null : String(y);
+  if (y === null) return String(x);
+  return String(x > y ? x : y);
+}
+
+/** The watch's labels (sync_state.watch_label_ids, default INBOX). */
+export function watchLabels(syncState: Record<string, unknown> | null | undefined): string[] {
+  const raw = syncState?.watch_label_ids;
+  const labels = Array.isArray(raw) ? raw.map((x) => String(x).trim()).filter(Boolean) : [];
+  return labels.length ? labels : ["INBOX"];
 }

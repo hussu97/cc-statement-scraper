@@ -179,8 +179,8 @@ supabase secrets list --project-ref <project-ref>      # names and digests only
   `PARSER_URL` isn't `https://` or points at a local host, or if the file contains
   `PARSER_DOCUMENT_BASE_URL` or `LEDGER_E2E` (local only).
 - Optional overrides: `MS_OAUTH_TENANT` (`consumers`), `OUTLOOK_LOOKBACK_DAYS`,
-  `OUTLOOK_BUDGET_MS`, `WORKER_BUDGET_MS`, `PARSER_TIMEOUT_MS`, `EDGE_WALL_CLOCK_MS`,
-  `OPS_SMS_UNPARSED_THRESHOLD`, `OPS_OPEN_REVIEWS_THRESHOLD` and `SENTRY_TRACES_SAMPLE_RATE`
+  `OUTLOOK_BUDGET_MS`, `GMAIL_PUSH_BUDGET_MS`, `WORKER_BUDGET_MS`, `PARSER_TIMEOUT_MS`, `EDGE_WALL_CLOCK_MS`,
+  `OPS_SMS_UNPARSED_THRESHOLD`, `OPS_OPEN_REVIEWS_THRESHOLD`, `OPS_PARSE_QUEUE_AGE_S` and `SENTRY_TRACES_SAMPLE_RATE`
   (see README). Add them to the same file.
 - **Worker timing.** Leave `PARSER_TIMEOUT_MS` at its default **75000** (set it explicitly only
   to document it): it must stay above the parser's own 60 s kill (§3) and below Cloud Run's
@@ -443,7 +443,7 @@ it. `PROJECT=<gcp-project>`, `URL=https://<project-ref>.supabase.co/functions/v1
 4. **Push subscription** `gmail-statements-push` → `gmail-push`. The OIDC audience is the function
    URL (= `GMAIL_PUSH_AUDIENCE`). `gmail-push` checks the Google signature, the audience, and
    `email == GMAIL_PUSH_SA_EMAIL`. The ack deadline is 180 s (it must be **≥ 120 s**: a push with
-   several PDFs is slow, and a 500 triggers redelivery). Retry backoff is 10 s → 600 s. After 10
+   several PDFs is slow; `gmail-push` answers 503 when its `GMAIL_PUSH_BUDGET_MS` runs out and 500 on a transient failure, both redelivered from the saved cursor, and acks permanent failures with 200 after recording `sync_state.last_error`). Retry backoff is 10 s → 600 s. After 10
    failed deliveries a message goes to the dead-letter topic `gmail-statements-dlq`, which is held
    by pull subscription `gmail-statements-dlq-hold` (7-day retention) for inspection. The Pub/Sub
    service agent has publisher on the DLQ topic and subscriber on the push subscription.

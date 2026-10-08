@@ -63,10 +63,10 @@ a `deno test` guard enforces this.
 
 | Function | Caller and auth | What it does |
 |---|---|---|
-| `statements-upload` | Scraper: `Bearer ccs_…` service token with scope `statements:upload`, optional `X-Profile-Key`. Web/iOS: user JWT plus `profile_code` (owner only). | Accepts multipart `files` (PDF only, ≤ 20 files and ≤ 40 MB per request, enforced while streaming, before form parsing), dedups on sha256 per profile, writes the object to Storage **before** the `documents` row. The insert trigger then enqueues `parse_document`. Returns `{uploads:[{filename, doc_code, status: queued|duplicate}]}`. |
+| `statements-upload` | Scraper: `Bearer ccs_…` service token with scope `statements:upload`, optional `X-Profile-Key`. Web/iOS: user JWT plus `profile_code` (owner only). | Accepts multipart `files` (PDF only, ≤ 20 files and ≤ 40 MB per request, enforced while streaming, before form parsing), dedups on sha256 per profile, writes the object to Storage **before** the `documents` row. The insert trigger then enqueues `parse_document`. Returns `{uploads:[{filename, doc_code, status: queued|duplicate, parse_status, requeued?}]}`; a duplicate of a document whose parse failed is requeued. |
 | `sms-ingest` | User JWT plus `profile_code`, or a service token with scope `sms:ingest` | Batch of ≤200 messages → `ingest_sms`. Idempotent on `client_msg_id`. For automations and tools; the iOS app calls the `ingest_sms` RPC directly. |
 | `worker` | pg_cron (`x-cron-secret`) | pgmq consumer. `parse_document` → parser → `ingest_parsed_document`; `llm_categorize` → Claude → `apply_llm_suggestions`; `sms_fallback` → Claude → `propose_sms_template`. Only contract errors are permanent; everything else retries with backoff and dead-letters after 5 attempts (§4). A round starts only if it can finish inside the Edge wall clock (`EDGE_WALL_CLOCK_MS`, 150 s: a parse round needs `PARSER_TIMEOUT_MS` + 20 s, an LLM round 65 s). Returns 202 and works in the background (pg_net times out at 5 s). |
-| `gmail-push` | Google-signed OIDC token from Pub/Sub (audience `GMAIL_PUSH_AUDIENCE`, SA `GMAIL_PUSH_SA_EMAIL`) | `history.list` from the stored cursor, matches PDF attachments to the mailbox's routes and stores them (`source = gmail`). Returns 500 to make Pub/Sub redeliver; redelivery is idempotent. |
+| `gmail-push` | Google-signed OIDC token from Pub/Sub (audience `GMAIL_PUSH_AUDIENCE`, SA `GMAIL_PUSH_SA_EMAIL`) | `history.list` (filtered to the watch label) from the stored cursor, matches PDF attachments to the mailbox's routes and stores them (`source = gmail`). The cursor advances after every page, through `merge_mailbox_sync_state` (it never moves backwards). Within `GMAIL_PUSH_BUDGET_MS`; when it runs out it answers 503 and the redelivery continues. A cursor older than Gmail's history (404) is reported and followed by a bounded `messages.list` backfill. Transient failures return 500 (redelivery is idempotent); permanent ones (bad envelope, revoked grant, missing config) are recorded in `sync_state.last_error` and acked. |
 | `gmail-watch-renew` | pg_cron daily | Renews `users.watch` (watches expire after 7 days) on `GMAIL_PUBSUB_TOPIC`. |
 | `outlook-poll` | pg_cron hourly | Microsoft Graph delta over Inbox, DeletedItems and Archive. Resumable within `OUTLOOK_BUDGET_MS`. Replaces the legacy GitHub Actions cron. |
 | `ops-monitor` | pg_cron every 15 min | Reads `ops_health()` and raises one Sentry issue per problem type, then sends the `ops-heartbeat` cron check-in. |
@@ -75,7 +75,7 @@ a `deno test` guard enforces this.
 Shared code in `_shared/`: `auth.ts` (JWT, service token and cron secret), `sentry.ts`
 (per-request scope, trace continuation, PII scrubber), `documents.ts` (PDF validation and
 storage), `email_ingest.ts` and `email_routes.ts` (route matching ported from legacy),
-`gmail.ts`, `oauth.ts`, `llm.ts` (Anthropic structured outputs, validated in code), `cors.ts`
+`gmail.ts`, `provider.ts` (provider HTTP errors, fast base64, attachment size limit), `oauth.ts`, `llm.ts` (Anthropic structured outputs, validated in code), `cors.ts`
 and `deps.ts` (pinned imports).
 
 ---
@@ -562,12 +562,15 @@ Bank SMS → Shortcuts automation → LogBankSMSIntent (openAppWhenRun = false, 
 - **Database health.** The DB can't run the SDK, so `ops-monitor` turns `ops_health()` into
   issues every 15 min:
   - cron failures
-  - DLQ depth > 0
+  - DLQ messages: an error when new ones arrived since the last check, then a daily reminder
+  - `parse_document` oldest message older than `OPS_PARSE_QUEUE_AGE_S` (3 h)
   - documents stuck over 1 h
   - failed parses
   - unparsed SMS above `OPS_SMS_UNPARSED_THRESHOLD`
   - recon failures
   - review backlog above `OPS_OPEN_REVIEWS_THRESHOLD`
+  - mailboxes failing to sync (`last_error`), not synced for 2 days, or with a Gmail watch
+    expiring within 24 h (keys skipped when `ops_health()` doesn't return them)
 
   It then sends the **`ops-heartbeat` cron check-in**, so a paused project or dead pg_cron alerts
   by missing it.

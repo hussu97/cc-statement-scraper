@@ -121,13 +121,26 @@ export function rewriteOrigin(signedUrl: string, base: string | undefined): stri
   return u.toString();
 }
 
+// ── status writes (SRV-23: results are checked; a failed write throws, so the message
+// is not deleted and comes back after its visibility timeout) ────────────────────────
+
 async function failDocument(svc: Db, docCode: string, code: string, message: string, permanent: boolean) {
-  await svc.rpc("fail_document", {
+  const { error } = await svc.rpc("fail_document", {
     p_doc_code: docCode,
     p_error_code: code,
     p_error: message,
     p_permanent: permanent,
   });
+  if (error) throw new Error(`fail_document failed (${error.code})`);
+}
+
+async function markParsing(svc: Db, docCode: string, attempt: number) {
+  const { error } = await svc.from("documents").update({
+    parse_status: "parsing",
+    parse_attempts: Math.min(attempt, 32767),
+  })
+    .eq("doc_code", docCode);
+  if (error) throw new Error(`could not mark ${docCode} as parsing (${error.code})`);
 }
 
 interface TransientDetail {
@@ -143,6 +156,67 @@ export interface ParseResult {
   code?: string;
   warnings?: number;
 }
+
+interface WorkerDoc {
+  storage_path: string;
+  original_filename: string;
+  bank_code: string | null;
+  profile_code: string;
+  parse_status?: string;
+}
+
+/**
+ * SRV-20: a message for a document that is already `parsed` (or permanently `failed`) is
+ * stale: a duplicate delivery, or a redelivery after a lost delete. Processing it would
+ * flip a parsed document back to `parsing` and possibly `failed`. requeue_documents sets
+ * the status to `queued` before it enqueues, so a real requeue is never skipped; a message
+ * may also force a re-parse with `{"requeue": true}`.
+ */
+export function staleMessageCode(doc: { parse_status?: unknown }, message: Record<string, unknown>): string | null {
+  if (message.requeue === true || message.force === true) return null;
+  if (doc.parse_status === "parsed") return "ALREADY_PARSED";
+  if (doc.parse_status === "failed") return "ALREADY_FAILED";
+  return null;
+}
+
+// ── fetch: the parser call ──────────────────────────────────────────────────
+
+type ParserCall =
+  | { kind: "response"; status: number; body: unknown }
+  | { kind: "error"; code: string; message: string; extra: Record<string, unknown> };
+
+async function callParser(doc: WorkerDoc, settings: unknown, documentUrl: string): Promise<ParserCall> {
+  const parserUrl = (Deno.env.get("PARSER_URL") ?? "").replace(/\/+$/, "");
+  const parserSecret = Deno.env.get("PARSER_SECRET") ?? "";
+  if (!parserUrl || !parserSecret) {
+    return { kind: "error", code: "PARSER_NOT_CONFIGURED", message: "PARSER_URL / PARSER_SECRET not set", extra: {} };
+  }
+  try {
+    const res = await fetch(`${parserUrl}/parse`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "X-Parser-Secret": parserSecret, ...traceHeaders() },
+      body: JSON.stringify({
+        document_url: documentUrl,
+        filename: doc.original_filename,
+        bank_code_hint: doc.bank_code,
+        settings: settings ?? {},
+      }),
+      signal: AbortSignal.timeout(parserTimeoutMs()),
+    });
+    return { kind: "response", status: res.status, body: await res.json().catch(() => null) };
+  } catch (e) {
+    const timedOut = e instanceof DOMException && e.name === "TimeoutError";
+    const reason = timedOut ? `no response within ${parserTimeoutMs()} ms` : `${(e as Error)?.name ?? "Error"}`;
+    return {
+      kind: "error",
+      code: timedOut ? "PARSER_TIMEOUT" : "PARSER_UNREACHABLE",
+      message: `parser request failed: ${reason}`,
+      extra: { parser_host: hostOf(parserUrl) },
+    };
+  }
+}
+
+// ── apply ───────────────────────────────────────────────────────────────────
 
 export async function processParseMessage(svc: Db, msg: QueueMessage): Promise<ParseResult> {
   const docCode = String((msg.message as { doc_code?: unknown }).doc_code ?? "");
@@ -170,15 +244,14 @@ export async function processParseMessage(svc: Db, msg: QueueMessage): Promise<P
     await queueDelete(svc, PARSE_QUEUE, msg.msg_id); // document was deleted
     return { doc_code: docCode, outcome: "skipped" };
   }
-  const doc = ctx.doc as {
-    storage_path: string;
-    original_filename: string;
-    bank_code: string | null;
-    profile_code: string;
-  };
+  const doc = ctx.doc as WorkerDoc;
+  const stale = staleMessageCode(doc, msg.message);
+  if (stale) {
+    await queueDelete(svc, PARSE_QUEUE, msg.msg_id);
+    return { doc_code: docCode, outcome: "skipped", code: stale };
+  }
 
-  await svc.from("documents").update({ parse_status: "parsing", parse_attempts: Math.min(attempt, 32767) })
-    .eq("doc_code", docCode);
+  await markParsing(svc, docCode, attempt);
 
   const handleTransient = async (
     code: string,
@@ -241,37 +314,11 @@ export async function processParseMessage(svc: Db, msg: QueueMessage): Promise<P
   }
   const documentUrl = rewriteOrigin(signed.data.signedUrl, Deno.env.get("PARSER_DOCUMENT_BASE_URL") || undefined);
 
-  const parserUrl = (Deno.env.get("PARSER_URL") ?? "").replace(/\/+$/, "");
-  const parserSecret = Deno.env.get("PARSER_SECRET") ?? "";
-  if (!parserUrl || !parserSecret) {
-    return await handleTransient("PARSER_NOT_CONFIGURED", "PARSER_URL / PARSER_SECRET not set");
-  }
+  // fetch → classify → apply
+  const call = await callParser(doc, ctx.settings, documentUrl);
+  if (call.kind === "error") return await handleTransient(call.code, call.message, { extra: call.extra });
 
-  let res: Response;
-  let body: unknown = null;
-  try {
-    res = await fetch(`${parserUrl}/parse`, {
-      method: "POST",
-      headers: { "content-type": "application/json", "X-Parser-Secret": parserSecret, ...traceHeaders() },
-      body: JSON.stringify({
-        document_url: documentUrl,
-        filename: doc.original_filename,
-        bank_code_hint: doc.bank_code,
-        settings: ctx.settings ?? {},
-      }),
-      signal: AbortSignal.timeout(parserTimeoutMs()),
-    });
-    body = await res.json().catch(() => null);
-  } catch (e) {
-    const timedOut = e instanceof DOMException && e.name === "TimeoutError";
-    const code = timedOut ? "PARSER_TIMEOUT" : "PARSER_UNREACHABLE";
-    const reason = timedOut ? `no response within ${parserTimeoutMs()} ms` : `${(e as Error)?.name ?? "Error"}`;
-    return await handleTransient(code, `parser request failed: ${reason}`, {
-      extra: { parser_host: hostOf(parserUrl) },
-    });
-  }
-
-  const outcome = classifyParserResponse(res.status, body);
+  const outcome = classifyParserResponse(call.status, call.body);
   if (outcome.action === "transient") {
     return await handleTransient(outcome.code, outcome.message, {
       http_status: outcome.status,
