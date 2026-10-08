@@ -351,7 +351,15 @@ function AccountCard({ account: a }: { account: OverviewAccount }) {
       <dl className="grid grid-cols-3 gap-3 text-[12px]">
         <div>
           <dt className="text-subtle">Statement</dt>
-          <dd className="tabular mt-0.5 text-sm text-ink">{st ? formatMoney(st.closing_balance, { whole: true }) : "—"}</dd>
+          <dd className="tabular mt-0.5 text-sm text-ink">
+            {st ? (
+              <Link to="/statements/$stmtCode" params={{ stmtCode: st.stmt_code }} className="tap hover:text-accent hover:underline" aria-label={`Statement of ${formatDate(st.statement_date)}: ${formatMoney(st.closing_balance, { whole: true })}`}>
+                {formatMoney(st.closing_balance, { whole: true })}
+              </Link>
+            ) : (
+              "—"
+            )}
+          </dd>
         </div>
         <div>
           <dt className="text-subtle">Due</dt>

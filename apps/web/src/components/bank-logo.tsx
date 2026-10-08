@@ -31,7 +31,7 @@ export function BankLogo({ bankCode, size = "md", decorative, className }: { ban
       )}
     >
       {showImage ? (
-        <img src={logoUrl} alt="" loading="lazy" decoding="async" draggable={false} onError={() => setFailed(logoUrl)} className="size-full object-contain" />
+        <img src={logoUrl} alt="" decoding="async" draggable={false} onError={() => setFailed(logoUrl)} className="size-full object-contain" />
       ) : (
         <span className={cn("font-semibold tracking-wide text-ink-2 leading-none", TEXT[size])}>{bankFallbackText(bankCode)}</span>
       )}

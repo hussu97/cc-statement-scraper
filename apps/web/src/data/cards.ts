@@ -2,6 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { FunctionsHttpError } from "@supabase/supabase-js";
 import { supabase, type RpcReturn } from "@/lib/supabase";
 import { keys } from "./keys";
+import { useInfiniteList } from "./infinite";
 import { ApiError, fetchPage, must, mustList, toApiError, type Page } from "./api";
 import { pageRange } from "@/lib/pagination";
 
@@ -47,37 +48,71 @@ export function useUpdateAccount(profileCode: string) {
 export const STATEMENT_CYCLES_MAX = 5000;
 
 /** One page of statements, newest first, with the exact total (up to STATEMENT_CYCLES_MAX). */
-export function useStatementCycles(profileCode: string, page: number, size: number) {
+/** Rows [from, to] of statement_cycles, newest first, with the exact total. */
+export function fetchStatementCycles(profileCode: string, from: number, to: number): Promise<Page<StatementCycle>> {
+  const args = { p_profile_code: profileCode, p_limit: STATEMENT_CYCLES_MAX };
+  return fetchPage<StatementCycle>(
+    () => supabase.rpc("statement_cycles", args, { count: "exact" }).range(from, to),
+    () => supabase.rpc("statement_cycles", args, { count: "exact", head: true }),
+  );
+}
+
+export function useStatementCycles(profileCode: string, page: number, size: number, enabled = true) {
   return useQuery({
     queryKey: [...keys.cycles(profileCode), page, size],
+    enabled,
     placeholderData: keepPreviousData,
     queryFn: async (): Promise<Page<StatementCycle>> => {
       const { from, to } = pageRange(page, size);
-      const args = { p_profile_code: profileCode, p_limit: STATEMENT_CYCLES_MAX };
-      return fetchPage<StatementCycle>(
-        () => supabase.rpc("statement_cycles", args, { count: "exact" }).range(from, to),
-        () => supabase.rpc("statement_cycles", args, { count: "exact", head: true }),
-      );
+      return fetchStatementCycles(profileCode, from, to);
     },
+  });
+}
+
+const cycleId = (s: StatementCycle) => s.stmt_code;
+/** Phones: every statement, a page of 100 at a time. */
+export function useInfiniteStatementCycles(profileCode: string, enabled = true) {
+  return useInfiniteList<StatementCycle>({
+    queryKey: [...keys.cycles(profileCode), "infinite"],
+    enabled,
+    fetch: (from, to) => fetchStatementCycles(profileCode, from, to),
+    idOf: cycleId,
   });
 }
 
 const DOC_COLUMNS =
   "doc_code, kind, bank_code, storage_path, original_filename, size_bytes, source, parse_status, parse_attempts, parser_version, parse_error_code, parse_error, parse_warnings, parsed_at, created_at, updated_at";
 
+/** Rows [from, to] of documents, newest first, with the exact total. */
+export function fetchDocuments(profileCode: string, from: number, to: number): Promise<Page<DocumentRow>> {
+  const base = () => supabase.from("documents").select(DOC_COLUMNS, { count: "exact" }).eq("profile_code", profileCode);
+  return fetchPage<DocumentRow>(
+    () => base().order("created_at", { ascending: false }).order("doc_code", { ascending: false }).range(from, to),
+    () => supabase.from("documents").select("doc_code", { count: "exact", head: true }).eq("profile_code", profileCode),
+  );
+}
+
 /** One page of documents, newest first, with the exact total. */
-export function useDocuments(profileCode: string, page: number, size: number) {
+export function useDocuments(profileCode: string, page: number, size: number, enabled = true) {
   return useQuery({
     queryKey: [...keys.documents(profileCode), "page", page, size],
+    enabled,
     placeholderData: keepPreviousData,
     queryFn: async () => {
       const { from, to } = pageRange(page, size);
-      const base = () => supabase.from("documents").select(DOC_COLUMNS, { count: "exact" }).eq("profile_code", profileCode);
-      return fetchPage<DocumentRow>(
-        () => base().order("created_at", { ascending: false }).order("doc_code", { ascending: false }).range(from, to),
-        () => supabase.from("documents").select("doc_code", { count: "exact", head: true }).eq("profile_code", profileCode),
-      );
+      return fetchDocuments(profileCode, from, to);
     },
+  });
+}
+
+const docId = (d: DocumentRow) => d.doc_code;
+/** Phones: every document, a page of 100 at a time. */
+export function useInfiniteDocuments(profileCode: string, enabled = true) {
+  return useInfiniteList<DocumentRow>({
+    queryKey: [...keys.documents(profileCode), "infinite"],
+    enabled,
+    fetch: (from, to) => fetchDocuments(profileCode, from, to),
+    idOf: docId,
   });
 }
 

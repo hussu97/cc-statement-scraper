@@ -277,7 +277,14 @@ function EvidenceEntry({ e }: { e: EvidenceItem }) {
           <p className="tabular mt-1 text-muted">
             {formatMoney(e.statement_lines.amount_original, { currency: e.statement_lines.currency_original })}
             {e.statement_lines.currency_original !== "AED" && e.statement_lines.amount_aed !== null && ` → ${formatMoney(e.statement_lines.amount_aed)}`}
-            {e.statement_lines.statements && ` · ${e.statement_lines.statements.kind === "statement" ? "statement" : "history export"} of ${formatDate(e.statement_lines.statements.statement_date)}`}
+            {e.statement_lines.statements && (
+              <>
+                {" · "}
+                <Link to="/statements/$stmtCode" params={{ stmtCode: e.statement_lines.stmt_code }} className="text-accent hover:underline">
+                  {e.statement_lines.statements.kind === "statement" ? "statement" : "history export"} of {formatDate(e.statement_lines.statements.statement_date)}
+                </Link>
+              </>
+            )}
           </p>
         </div>
       )}
