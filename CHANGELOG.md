@@ -31,6 +31,13 @@
   - `sms_templates_examples_required`: every template has at least one example (DB-26r)
   - `sms_templates.scope_profile_code`: `propose_sms_template` scopes an LLM template to the proposing profile and builds its sender pattern from `banks.sms_senders` (a message from another sender is `22023`); `private.match_sms_template(…, p_profile_code)` honours the scope; `public.promote_sms_template(p_template_code)` (service role) makes an approved template global (DB-26r)
 - **test** `15_db_sms_templates.test.sql`; `02_ledger`'s reversal template gains an example
+- **feat** `20261009000400_db_ops_and_worker_rpcs.sql` (SQL side; the Edge Functions wire them up):
+  - `ops_health()` adds `mailboxes_stale` (enabled, unsynced > 2 days), `gmail_watch_expiring` (< 24 h or none), `mailbox_errors` (`sync_state.last_error`), each a list of `{mailbox_code, …}` (SRV-10); `job_errors_24h` (DB-25); `open_reviews_total`, `documents_queued_oldest_age_s`; queue metrics gain `newest_age_s` and `total` so a DLQ alert can fire only when a message arrived since the last run (SRV-22)
+  - `ops_health()` changes: `recon_failed` and `open_reviews` count the last 7 days, `cron_last_success` scans 7 days (DB-38); `documents_stuck` counts only `parsing` for over an hour, not `queued` (SRV-22)
+  - `drain_dlq(p_queue)` and `requeue_dlq(p_queue, p_limit default 100)` (service role; `parse_document` / `llm_categorize` / `sms_fallback`); a re-queued parse message re-opens its failed document (SRV-22)
+  - `save_mailbox_sync_state(p_mailbox_code, p_patch, p_last_synced_at, p_watch_expires_at)`: key-wise jsonb merge under a row lock; `gmail_history_id`, `last_synced_at` and `watch_expires_at` never move back (SRV-15)
+  - `begin_document_parse(p_doc_code, p_attempt)` claims a document for parsing, or returns `{skip: 'parsed'|'failed'}` for a duplicate or stale message; `resubmit_document(p_profile_code, p_doc_code)` re-queues a failed PDF that is uploaded again; `fail_document` never flips a `parsed` document back (SRV-20)
+- **test** `16_db_ops_and_worker_rpcs.test.sql`
 
 ## Supabase publishable / secret API keys — 2026-10-08 (branch `ledger-v2`)
 

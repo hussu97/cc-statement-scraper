@@ -2086,6 +2086,10 @@ export type Database = {
         Args: { p_profile_key?: string; p_scope: string; p_token: string }
         Returns: string
       }
+      begin_document_parse: {
+        Args: { p_attempt?: number; p_doc_code: string }
+        Returns: Json
+      }
       budget_status: {
         Args: { p_month?: string; p_profile_code: string }
         Returns: {
@@ -2132,6 +2136,7 @@ export type Database = {
           txn_count: number
         }[]
       }
+      drain_dlq: { Args: { p_queue: string }; Returns: number }
       dubai_date: { Args: { ts: string }; Returns: string }
       fail_document: {
         Args: {
@@ -2304,12 +2309,20 @@ export type Database = {
         Args: { p_profile_code: string; p_user_id: string }
         Returns: undefined
       }
+      requeue_dlq: {
+        Args: { p_limit?: number; p_queue: string }
+        Returns: number
+      }
       requeue_documents: {
         Args: { p_doc_codes?: string[]; p_profile_code: string }
         Returns: number
       }
       resolve_review: {
         Args: { p_action: Json; p_review_code: string }
+        Returns: Json
+      }
+      resubmit_document: {
+        Args: { p_doc_code: string; p_profile_code: string }
         Returns: Json
       }
       retry_sms_fallback: {
@@ -2319,6 +2332,15 @@ export type Database = {
       revoke_service_token: {
         Args: { p_token_code: string }
         Returns: undefined
+      }
+      save_mailbox_sync_state: {
+        Args: {
+          p_last_synced_at?: string
+          p_mailbox_code: string
+          p_patch: Json
+          p_watch_expires_at?: string
+        }
+        Returns: Json
       }
       set_mailbox_secret: {
         Args: { p_key: string; p_mailbox_code: string; p_value: string }
