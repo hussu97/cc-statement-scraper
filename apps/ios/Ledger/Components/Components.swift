@@ -39,10 +39,48 @@ struct Chip: View {
     var body: some View {
         Text(label)
             .font(Typography.chip)
+            // Wraps between words when a long chip (the hero comparison) meets
+            // a narrow screen; short status chips get their own row at large
+            // sizes (AdaptiveRow), so they are never squeezed mid-word.
+            .fixedSize(horizontal: false, vertical: true)
+            .dynamicTypeSize(...DynamicTypeSize.accessibility2)
             .foregroundStyle(tone.color)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
             .background(tone.softColor, in: Capsule())
+    }
+}
+
+/// A title block beside a trailing block (amount, chip) — side by side at
+/// regular sizes, stacked from xxxLarge up so neither truncates.
+struct AdaptiveRow<Leading: View, Trailing: View>: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
+    var alignment: VerticalAlignment = .top
+    @ViewBuilder var leading: Leading
+    @ViewBuilder var trailing: Trailing
+
+    var body: some View {
+        if typeSize.prefersStackedRows {
+            VStack(alignment: .leading, spacing: 6) {
+                leading
+                trailing
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            HStack(alignment: alignment, spacing: 12) {
+                leading
+                Spacer(minLength: 8)
+                trailing
+            }
+        }
+    }
+}
+
+extension View {
+    /// Money never wraps mid-number: one line, tabular digits, shrinks a
+    /// little before it would truncate, and wins space over labels.
+    func moneyLine() -> some View {
+        monospacedDigit().lineLimit(1).minimumScaleFactor(0.6).layoutPriority(1)
     }
 }
 

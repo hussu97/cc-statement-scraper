@@ -4,7 +4,9 @@ import SwiftUI
 
 struct OverviewView: View {
     let model: OverviewModel
+    let review: ReviewModel
     let profileCode: String
+    let canResolve: Bool
 
     var body: some View {
         Page {
@@ -12,6 +14,10 @@ struct OverviewView: View {
                 HeroCard(overview: content.overview)
                 if let pending = content.overview.pendingSummary {
                     PendingStrip(summary: pending, lastSMS: content.overview.lastSMSLabel())
+                }
+                if !content.overview.attention.isEmpty {
+                    AttentionCard(items: content.overview.attention, review: review, profileCode: profileCode,
+                                  canResolve: canResolve)
                 }
                 CategoryRingCard(categories: content.overview.ringCategories, total: content.overview.spend)
                 AccountsCard(accounts: content.accounts)
@@ -32,21 +38,36 @@ struct OverviewView: View {
 
 private struct HeroCard: View {
     let overview: Overview
+    @ScaledMetric(relativeTo: .largeTitle) private var heroSize = Typography.heroBaseSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(overview.monthTitle.uppercased())
+            Text(overview.heroEyebrow().uppercased())
                 .font(Typography.caption).tracking(1.2).foregroundStyle(Palette.muted)
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text("AED").font(Typography.heroUnit).foregroundStyle(Palette.muted)
-                Text(overview.heroAmount).font(Typography.hero).foregroundStyle(Palette.ink)
-                    .minimumScaleFactor(0.5).lineLimit(1)
+            // Side by side while it fits; the unit goes above the number at
+            // large sizes rather than the number shrinking below the unit.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) { unit; amount }
+                VStack(alignment: .leading, spacing: 0) { unit; amount }
             }
-            let comparison = overview.comparison
-            Chip(label: comparison.text, tone: comparison.tone)
-            Text(overview.paceText).font(Typography.rowMeta).foregroundStyle(Palette.muted)
+            .accessibilityElement(children: .combine)
+            if let comparison = overview.comparison() {
+                Chip(label: comparison.text, tone: comparison.tone)
+            }
+            ForEach(overview.referenceLines, id: \.self) { line in
+                Text(line).font(Typography.rowMeta).foregroundStyle(Palette.muted).monospacedDigit()
+            }
         }
         .padding(.top, 8)
+    }
+
+    private var unit: some View {
+        Text("AED").font(Typography.heroUnit).foregroundStyle(Palette.muted)
+    }
+
+    private var amount: some View {
+        Text(overview.heroAmount).font(Typography.hero(size: heroSize)).foregroundStyle(Palette.ink)
+            .lineLimit(1).minimumScaleFactor(0.4)
     }
 }
 
@@ -55,51 +76,126 @@ private struct PendingStrip: View {
     let lastSMS: String?
 
     var body: some View {
-        HStack(spacing: 10) {
-            Circle().fill(Palette.warn).frame(width: 8, height: 8)
-            Text(summary).font(Typography.rowTitle).monospacedDigit().foregroundStyle(Palette.ink)
-            Spacer()
-            if let lastSMS { Text(lastSMS).font(Typography.caption).foregroundStyle(Palette.muted) }
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                dot
+                summaryText
+                Spacer()
+                if let lastSMS { lastText(lastSMS) }
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) { dot; summaryText }
+                if let lastSMS { lastText(lastSMS) }
+            }
         }
         .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Palette.warnSoft, in: RoundedRectangle(cornerRadius: Metrics.radiusMd))
+    }
+
+    private var dot: some View { Circle().fill(Palette.warn).frame(width: 8, height: 8) }
+    private var summaryText: some View {
+        Text(summary).font(Typography.rowTitle).monospacedDigit().foregroundStyle(Palette.ink)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+    private func lastText(_ text: String) -> some View {
+        Text(text).font(Typography.caption).foregroundStyle(Palette.muted)
+    }
+}
+
+/// Open reviews and uncategorised spend; reviews open the Review screen.
+private struct AttentionCard: View {
+    let items: [AttentionItem]
+    let review: ReviewModel
+    let profileCode: String
+    let canResolve: Bool
+
+    var body: some View {
+        Card {
+            SectionHeader(title: "Needs attention")
+            ForEach(items) { item in
+                if item.kind == .reviews {
+                    NavigationLink {
+                        ReviewView(model: review, profileCode: profileCode, canResolve: canResolve)
+                    } label: {
+                        row(item, systemImage: "exclamationmark.bubble")
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    row(item, systemImage: "tag")
+                }
+            }
+        }
+    }
+
+    private func row(_ item: AttentionItem, systemImage: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: systemImage).foregroundStyle(Palette.warn)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title).font(Typography.rowTitle).foregroundStyle(Palette.ink)
+                Text(item.detail).font(Typography.caption).foregroundStyle(Palette.muted)
+            }
+            Spacer(minLength: 8)
+            if item.kind == .reviews {
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(Palette.muted)
+            }
+        }
+        .contentShape(Rectangle())
     }
 }
 
 private struct CategoryRingCard: View {
     let categories: [Overview.TopCategory]
     let total: Decimal
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         Card {
             SectionHeader(title: "Where it went", trailing: "This month")
             if categories.isEmpty {
                 Text("No spending this month yet.").font(Typography.rowMeta).foregroundStyle(Palette.muted)
+            } else if typeSize.prefersStackedRows {
+                VStack(alignment: .leading, spacing: 16) {
+                    ring.frame(maxWidth: .infinity)
+                    legend
+                }
             } else {
                 HStack(alignment: .center, spacing: 16) {
-                    Chart(categories) { category in
-                        SectorMark(angle: .value("Amount", category.amount.chartValue),
-                                   innerRadius: .ratio(0.62), angularInset: 1.5)
-                            .foregroundStyle(ChartPalette.color(for: category.colorToken))
-                    }
-                    .frame(width: 128, height: 128)
-                    .chartBackground { _ in
-                        VStack(spacing: 0) {
-                            Text(MoneyFormat.compact(total)).font(Typography.amountLarge)
-                            Text("AED").font(Typography.caption).foregroundStyle(Palette.muted)
-                        }
-                    }
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(categories) { category in
-                            HStack(spacing: 8) {
-                                CategoryDot(token: category.colorToken)
-                                Text(category.displayName).font(Typography.rowMeta).lineLimit(1)
-                                Spacer(minLength: 4)
-                                Text(MoneyFormat.compact(category.amount)).font(Typography.rowMeta).monospacedDigit()
-                                    .foregroundStyle(Palette.muted)
-                            }
-                        }
-                    }
+                    ring
+                    legend
+                }
+            }
+        }
+    }
+
+    private var ring: some View {
+        Chart(categories) { category in
+            SectorMark(angle: .value("Amount", category.amount.chartValue),
+                       innerRadius: .ratio(0.62), angularInset: 1.5)
+                .foregroundStyle(ChartPalette.color(for: category.colorToken))
+        }
+        .frame(width: 128, height: 128)
+        .chartBackground { _ in
+            VStack(spacing: 0) {
+                Text(MoneyFormat.compact(total)).font(Typography.amountLarge).moneyLine()
+                Text("AED").font(Typography.caption).foregroundStyle(Palette.muted)
+            }
+            .padding(.horizontal, 22)
+            .dynamicTypeSize(...DynamicTypeSize.xxLarge)
+        }
+        .accessibilityLabel("Spending by category")
+    }
+
+    private var legend: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(categories) { category in
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    CategoryDot(token: category.colorToken)
+                    Text(category.displayName).font(Typography.rowMeta)
+                        .lineLimit(typeSize.prefersStackedRows ? 2 : 1)
+                    Spacer(minLength: 4)
+                    Text(MoneyFormat.compact(category.amount)).font(Typography.rowMeta).moneyLine()
+                        .foregroundStyle(Palette.muted)
                 }
             }
         }
@@ -117,20 +213,20 @@ private struct AccountsCard: View {
             }
             ForEach(accounts) { summary in
                 VStack(alignment: .leading, spacing: 6) {
-                    HStack {
+                    AdaptiveRow(alignment: .firstTextBaseline) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(summary.account.title).font(Typography.rowTitle)
                             if let cards = summary.account.cardsLabel {
                                 Text("\(summary.account.bankCode) \(cards)").font(Typography.caption).foregroundStyle(Palette.muted)
                             }
                         }
-                        Spacer()
+                    } trailing: {
                         VStack(alignment: .trailing, spacing: 2) {
                             if let balance = summary.account.latestStatement?.closingBalance {
-                                Text(MoneyFormat.aed(balance)).font(Typography.amount)
+                                Text(MoneyFormat.aed(balance)).font(Typography.amount).moneyLine()
                             }
-                            if let due = summary.dueLabel() {
-                                Text(due).font(Typography.caption).foregroundStyle(summary.dueTone().color)
+                            if let due = summary.due() {
+                                Text(due.text).font(Typography.caption).foregroundStyle(due.tone.color)
                             }
                         }
                     }
@@ -162,8 +258,11 @@ private struct InsightsCard: View {
                         Text(insight.body).font(Typography.rowMeta).foregroundStyle(Palette.muted)
                     }
                     Spacer()
-                    Button { dismiss(insight) } label: { Image(systemName: "xmark").font(.caption) }
-                        .foregroundStyle(Palette.subtle)
+                    Button { dismiss(insight) } label: {
+                        Image(systemName: "xmark").font(.caption).frame(minWidth: 44, minHeight: 44)
+                    }
+                    .foregroundStyle(Palette.muted)
+                    .accessibilityLabel("Dismiss insight")
                 }
             }
         }
@@ -180,19 +279,22 @@ private struct RecentCard: View {
                 Text("No transactions yet.").font(Typography.rowMeta).foregroundStyle(Palette.muted)
             }
             ForEach(recent) { txn in
-                HStack {
-                    CategoryDot(token: txn.categoryColor)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(txn.title).font(Typography.rowTitle).lineLimit(1)
-                        Text(LedgerDates.relativeDayLabel(txn.txnDate)).font(Typography.caption).foregroundStyle(Palette.muted)
+                AdaptiveRow(alignment: .center) {
+                    HStack(spacing: 8) {
+                        CategoryDot(token: txn.categoryColor)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(txn.title).font(Typography.rowTitle).lineLimit(2)
+                            Text(LedgerDates.relativeDayLabel(txn.txnDate)).font(Typography.caption).foregroundStyle(Palette.muted)
+                        }
                     }
-                    Spacer()
+                } trailing: {
                     VStack(alignment: .trailing, spacing: 2) {
-                        Text(txn.amountLabel).font(Typography.amount)
+                        Text(txn.amountLabel).font(Typography.amount).moneyLine()
                             .foregroundStyle(txn.isCredit ? Palette.positive : Palette.ink)
-                        Text(txn.badge.label).font(Typography.caption).foregroundStyle(Palette.subtle)
+                        Text(txn.badge.label).font(Typography.caption).foregroundStyle(Palette.muted)
                     }
                 }
+                .accessibilityElement(children: .combine)
             }
         }
     }

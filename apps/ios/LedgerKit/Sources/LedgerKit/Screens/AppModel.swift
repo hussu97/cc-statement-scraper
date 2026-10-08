@@ -39,6 +39,7 @@ public final class AppModel {
     public let insights: InsightsModel
     public let statements: StatementsModel
     public let settings: SettingsModel
+    public let review: ReviewModel
 
     private let live: LiveUpdates
     private var liveProfile: String?
@@ -46,13 +47,14 @@ public final class AppModel {
 
     public init(services: LedgerServices) {
         self.services = services
-        session = SessionStore(client: services.client)
-        profiles = ProfileStore(api: services.api, selection: services.selection)
+        session = SessionStore(client: services.client, storage: services.sessionStorage)
+        profiles = ProfileStore(api: services.api, selection: services.selection, smsTargets: services.smsTargets)
         overview = OverviewModel(api: services.api)
         activity = ActivityModel(api: services.api)
         insights = InsightsModel(api: services.api)
         statements = StatementsModel(api: services.api)
-        settings = SettingsModel(outbox: services.outbox)
+        settings = SettingsModel(outbox: services.outbox, intake: services.smsIntake(), log: services.captureLog)
+        review = ReviewModel(api: services.api)
         live = LiveUpdates(api: services.api)
     }
 

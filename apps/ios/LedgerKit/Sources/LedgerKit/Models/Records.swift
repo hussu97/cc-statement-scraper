@@ -66,10 +66,47 @@ public struct DocumentRecord: Decodable, Sendable, Hashable, Identifiable {
 public struct SMSIngestResult: Decodable, Sendable, Hashable {
     public let clientMsgId: String
     public let smsCode: String?
-    /// parsed/linked/new/review statuses from the matcher, or `unparsed`,
-    /// `ignored`, `unknown_card`, `rejected_otp`, `duplicate_delivery`, `already_linked`.
+    /// created/linked/duplicate/held/skipped from the matcher, or `unparsed`,
+    /// `ignored`, `unknown_card`, `rejected_otp`, `duplicate_delivery`,
+    /// `already_linked`; newer servers answer `invalid` (with `reason`) for a
+    /// message they refuse instead of failing the whole batch.
     public let status: String
     public let txnCode: String?
+    /// Why a message was refused (`invalid` / `error`). Absent on older servers.
+    public let reason: String?
+
+    public init(clientMsgId: String, smsCode: String?, status: String, txnCode: String?, reason: String? = nil) {
+        self.clientMsgId = clientMsgId
+        self.smsCode = smsCode
+        self.status = status
+        self.txnCode = txnCode
+        self.reason = reason
+    }
+
+    enum CodingKeys: String, CodingKey { case clientMsgId, smsCode, status, txnCode, reason }
+
+    /// Lenient on the optional fields so a newer server's extra shapes never
+    /// make a whole batch's answer unreadable.
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        clientMsgId = (try? c.decodeIfPresent(String.self, forKey: .clientMsgId)) ?? ""
+        smsCode = (try? c.decodeIfPresent(String.self, forKey: .smsCode)) ?? nil
+        status = try c.decode(String.self, forKey: .status)
+        txnCode = (try? c.decodeIfPresent(String.self, forKey: .txnCode)) ?? nil
+        reason = (try? c.decodeIfPresent(String.self, forKey: .reason)) ?? nil
+    }
+
+    /// Per-message statuses that mean the server did not take the message.
+    /// Everything else is final and needs no retry.
+    public static let failureStatuses: Set<String> = ["invalid", "error", "failed", "rejected"]
+
+    public var isFailure: Bool { Self.failureStatuses.contains(status) }
+
+    /// Shown in Settings next to a parked message.
+    public var failureReason: String {
+        if let reason, !reason.isEmpty { return "Ledger rejected this message: \(reason)" }
+        return "Ledger rejected this message (\(status))."
+    }
 }
 
 /// Response of the `statements-upload` Edge Function:

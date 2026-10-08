@@ -19,7 +19,9 @@
 #   * Config/Secrets.Release.xcconfig with the production Supabase URL/anon key and
 #     Sentry DSN (Release builds never fall back to the local 127.0.0.1 config).
 #   * Optional dSYM upload: SENTRY_AUTH_TOKEN, SENTRY_ORG, SENTRY_PROJECT (default ledger-apps),
-#     and `sentry-cli` on PATH (brew install getsentry/tools/sentry-cli).
+#     from the environment or, when unset there, from Config/Secrets.Release.xcconfig;
+#     and `sentry-cli` on PATH (brew install getsentry/tools/sentry-cli). The token is
+#     passed to sentry-cli through the environment and never printed.
 #   * --upload: ASC_KEY_ID, ASC_ISSUER_ID and ~/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8
 #   * --stage: the gh CLI, authenticated.
 set -euo pipefail
@@ -150,7 +152,20 @@ echo "==> Built $IPA"
 # ── dSYMs → Sentry ─────────────────────────────────────────────────────────
 # Crash reports from the app, the intent and the share extension are only
 # readable with these. Skipped (loudly) when not configured.
+# `KEY = value` from the release xcconfig (last assignment wins); prints nothing else.
+release_setting() {
+  sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" Config/Secrets.Release.xcconfig | tail -1 | sed 's/[[:space:]]*$//'
+}
+SENTRY_TOKEN_SOURCE="environment"
+if [[ -z "${SENTRY_AUTH_TOKEN:-}" ]]; then
+  SENTRY_AUTH_TOKEN="$(release_setting SENTRY_AUTH_TOKEN)"
+  SENTRY_TOKEN_SOURCE="Config/Secrets.Release.xcconfig"
+fi
+SENTRY_ORG="${SENTRY_ORG:-$(release_setting SENTRY_ORG)}"
+SENTRY_PROJECT="${SENTRY_PROJECT:-$(release_setting SENTRY_PROJECT)}"
+export SENTRY_AUTH_TOKEN
 if [[ -n "${SENTRY_AUTH_TOKEN:-}" ]]; then
+  echo "==> Sentry token from $SENTRY_TOKEN_SOURCE"
   command -v sentry-cli >/dev/null || { echo "error: SENTRY_AUTH_TOKEN set but sentry-cli not installed" >&2; exit 1; }
   : "${SENTRY_ORG:?set SENTRY_ORG}"
   echo "==> Uploading dSYMs to Sentry ($SENTRY_ORG/${SENTRY_PROJECT:-ledger-apps})"

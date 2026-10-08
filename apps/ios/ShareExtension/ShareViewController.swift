@@ -13,7 +13,12 @@ final class ShareViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         let services = try? LedgerServices.fromBundle()
-        Telemetry.start(target: .shareExtension, config: services?.config)
+        #if DEBUG
+        let isDebug = true
+        #else
+        let isDebug = false
+        #endif
+        Telemetry.start(target: .shareExtension, config: services?.config, isDebugBuild: isDebug)
 
         let host = UIHostingController(rootView: ShareView(state: state) { [weak self] in self?.finish() })
         addChild(host)
@@ -31,9 +36,13 @@ final class ShareViewController: UIViewController {
                 state.finish(.failed("Ledger isn't configured."))
                 return
             }
+            // Shared PDFs go to the same ledger as SMS ("SMS go to", owned only),
+            // never to whichever ledger the app last showed.
+            let target = services.smsTargets.target
+            state.ledgerName = target?.name
             let files = await Self.load(providers)
             state.fileCount = files.count
-            let outcome = await services.pendingUploads.share(files, profileCode: services.selection.profileCode) { file in
+            let outcome = await services.pendingUploads.share(files, profileCode: target?.profileCode) { file in
                 try await services.uploadStatements([file])
             }
             Telemetry.breadcrumb("statement_share", outcome: outcome.isSuccess ? "ok" : "failed",
@@ -69,6 +78,7 @@ final class ShareViewController: UIViewController {
 @Observable
 final class ShareState {
     var fileCount = 0
+    var ledgerName: String?
     var outcome: ShareOutcome?
 
     func finish(_ outcome: ShareOutcome) { self.outcome = outcome }
@@ -81,6 +91,10 @@ struct ShareView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Add to Ledger").font(.system(.title, design: .serif))
+            if let name = state.ledgerName {
+                Label("Uploading to \(name)", systemImage: "tray.and.arrow.down")
+                    .font(Typography.rowMeta).foregroundStyle(Palette.muted)
+            }
             if let outcome = state.outcome {
                 Label(outcome.message, systemImage: outcome.isSuccess ? "checkmark.circle" : "exclamationmark.triangle")
                     .foregroundStyle(outcome.isSuccess ? Palette.positive : Palette.danger)

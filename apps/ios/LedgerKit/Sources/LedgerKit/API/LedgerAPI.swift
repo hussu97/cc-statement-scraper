@@ -31,6 +31,12 @@ public protocol LedgerAPI: SMSIngestAPI {
     func dismissInsight(insightCode: String) async throws
     func documents(profileCode: String, limit: Int) async throws -> [DocumentRecord]
 
+    // Review (match_reviews)
+    /// Open reviews for the profile with what the screen needs to describe them.
+    func reviewInbox(profileCode: String) async throws -> ReviewInbox
+    /// `rpc('resolve_review')`; returns the server's `outcome`.
+    func resolveReview(reviewCode: String, action: ReviewAction) async throws -> String
+
     // Writes
     func setTransactionCategory(txnCode: String, categoryCode: String, applyToMerchant: Bool) async throws
     func uploadStatements(profileCode: String, files: [UploadFile]) async throws -> UploadResponse
@@ -73,21 +79,84 @@ public enum LedgerAPIError: Error, Equatable, CustomStringConvertible {
     case network(String)
     case server(status: Int?, code: String?, message: String)
 
+    /// How the outbox (and the share queue) should treat a failure.
+    public enum Kind: Sendable, Equatable {
+        /// Will likely pass on its own: offline, timeouts, 5xx, a busy database.
+        case transient
+        /// Will fail the same way every time: no permission, invalid input, a contract error.
+        case permanent
+        /// Needs the user to sign in again; not the message's fault.
+        case signedOut
+    }
+
     public var description: String {
         switch self {
         case .notSignedIn: "You are signed out."
-        case .noProfile: "Choose a profile first."
+        case .noProfile: "Choose a ledger first."
         case .network: "No connection to Ledger."
-        case let .server(_, _, message): message
+        case let .server(status, code, message):
+            if Self.isPermission(status: status, code: code) {
+                "You don't have permission to change this ledger (only owners can)."
+            } else {
+                message
+            }
+        }
+    }
+
+    public var kind: Kind {
+        switch self {
+        case .notSignedIn: .signedOut
+        case .noProfile: .permanent
+        case .network: .transient
+        case let .server(status, code, _): Self.classify(status: status, code: code)
         }
     }
 
     /// Worth retrying later without user action.
-    public var isTransient: Bool {
-        switch self {
-        case .network: true
-        case let .server(status, _, _): status.map { $0 >= 500 || $0 == 429 || $0 == 408 } ?? true
-        case .notSignedIn, .noProfile: false
+    public var isTransient: Bool { kind == .transient }
+
+    /// `42501` (insufficient privilege, e.g. a viewer calling `ingest_sms`) or HTTP 403.
+    public var isPermission: Bool {
+        if case let .server(status, code, _) = self { return Self.isPermission(status: status, code: code) }
+        return false
+    }
+
+    static func isPermission(status: Int?, code: String?) -> Bool {
+        code == "42501" || status == 403
+    }
+
+    /// SQLSTATE / PostgREST code first (PostgREST errors carry no HTTP status
+    /// through supabase-swift), then the HTTP status. Unknown failures count as
+    /// transient; the outbox's attempt cap stops them retrying forever.
+    static func classify(status: Int?, code: String?) -> Kind {
+        if isPermission(status: status, code: code) { return .permanent }
+        if let code, !code.isEmpty {
+            if code.hasPrefix("PGRST") {
+                switch code {
+                case "PGRST000", "PGRST001", "PGRST002", "PGRST003": return .transient   // pool / connection
+                case let c where c.hasPrefix("PGRST3"): return .signedOut                  // JWT
+                default: return .permanent                                                 // request / schema
+                }
+            }
+            if code.count == 5 {
+                let sqlClass = String(code.prefix(2))
+                switch sqlClass {
+                // connection, transaction rollback (deadlock / serialization),
+                // insufficient resources, operator intervention (57014 timeout), system error
+                case "08", "40", "53", "57", "58": return .transient
+                case "55": return code == "55P03" ? .transient : .permanent              // lock not available
+                // data exception (22023 invalid parameter), integrity, syntax/access,
+                // raise_exception / no_data_found, invalid authorization
+                case "22", "23", "42", "P0", "28", "2F", "0A": return .permanent
+                default: break
+                }
+            }
         }
+        if let status {
+            if status == 401 { return .signedOut }
+            if status == 408 || status == 429 || status >= 500 { return .transient }
+            if (400..<500).contains(status) { return .permanent }
+        }
+        return .transient
     }
 }

@@ -94,11 +94,12 @@ struct SMSCaptureTests {
         let body = "Purchase of AED 45.10 with Credit Card ending 1234 at CARREFOUR"
         let outcomes: [SMSIntakeOutcome] = [
             .dropped(.dropOTP), .dropped(.dropNotCreditCard(reason: "no_amount")), .noProfile,
-            .delivered(status: "new"), .delivered(status: "unknown_card"), .queued(pending: 3), .failed("x"),
+            .delivered(status: "new"), .delivered(status: "unknown_card"), .queued(.offline), .queued(.signedOut),
+            .parked(reason: "Ledger rejected this message (invalid)."), .failed("x"),
         ]
         for outcome in outcomes {
-            #expect(!outcome.dialog.contains("CARREFOUR"))
-            #expect(!outcome.dialog.contains("1234"))
+            #expect(!outcome.dialog(ledger: "Personal").contains("CARREFOUR"))
+            #expect(!outcome.dialog().contains("1234"))
             #expect(!SensitiveText.looksLikeSMS(outcome.telemetryOutcome))
             _ = body
         }

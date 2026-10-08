@@ -20,12 +20,44 @@ public final class SessionStore {
     public private(set) var phase: Phase = .restoring
     public private(set) var isWorking = false
     public var errorMessage: String?
+    /// Debug builds only: the keychain refused the session, so it is kept in
+    /// memory for this run (the App Intent and Share Extension can't see it).
+    public private(set) var sessionInMemoryOnly = false
 
     private let auth: AuthClient
+    private let storage: SharedKeychainStorage?
     private var listener: Task<Void, Never>?
 
-    public init(client: SupabaseClient) {
+    public init(client: SupabaseClient, storage: SharedKeychainStorage? = nil) {
         auth = client.auth
+        self.storage = storage
+    }
+
+    /// What a session event means once we know whether the session was saved.
+    public enum Persistence: Equatable, Sendable {
+        case saved
+        /// Kept in memory (Debug fallback): usable in this process only.
+        case memoryOnly
+        case failed(OSStatus)
+    }
+
+    /// A sign-in whose session could not be saved is not a sign-in: every
+    /// request would go out with the anon key. Pure, so it is unit-tested.
+    public nonisolated static func phase(signedInAs userID: String, email: String?,
+                                         persistence: Persistence) -> (phase: Phase, error: String?) {
+        switch persistence {
+        case .saved, .memoryOnly:
+            return (.signedIn(userID: userID, email: email), nil)
+        case .failed(let status):
+            return (.signedOut, "Couldn't save your sign-in on this iPhone (keychain error \(status)). Try again; if it keeps failing, reinstall Ledger.")
+        }
+    }
+
+    private var persistence: Persistence {
+        guard let storage else { return .saved }
+        if storage.isUsingMemoryFallback { return .memoryOnly }
+        if let failure = storage.persistenceFailure { return .failed(failure.status) }
+        return .saved
     }
 
     /// Restores the stored session and follows auth events for the app's lifetime.
@@ -39,8 +71,20 @@ public final class SessionStore {
                     // An expired stored session is still "signed in": the client
                     // refreshes it next and emits `.signedOut` if that fails.
                     if let session {
-                        self.phase = .signedIn(userID: session.user.id.uuidString.lowercased(), email: session.user.email)
-                        Telemetry.setUser(id: session.user.id.uuidString.lowercased())
+                        let id = session.user.id.uuidString.lowercased()
+                        let persistence = self.persistence
+                        let (phase, error) = Self.phase(signedInAs: id, email: session.user.email, persistence: persistence)
+                        self.sessionInMemoryOnly = persistence == .memoryOnly
+                        self.phase = phase
+                        if let error {
+                            self.errorMessage = error
+                            if let failure = self.storage?.persistenceFailure {
+                                Telemetry.capture(failure, tags: ["area": "keychain"])
+                            }
+                            Telemetry.setUser(id: nil)
+                        } else {
+                            Telemetry.setUser(id: id)
+                        }
                     } else if event == .initialSession {
                         self.phase = .signedOut
                     }
