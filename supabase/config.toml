@@ -412,3 +412,28 @@ enabled = true
 # declarative_schema_path = "./database"
 # JSON string passed through to pg-delta SQL formatting.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":80,\"commaStyle\":\"trailing\"}"
+
+# ── Edge Functions ──────────────────────────────────────────────────────────
+# Every function authenticates its own callers (user JWT, profile service token,
+# x-cron-secret or a Pub/Sub OIDC token; see supabase/functions/_shared/auth.ts),
+# so the gateway's JWT check is off for all of them.
+[functions.statements-upload]
+verify_jwt = false
+
+[functions.sms-ingest]
+verify_jwt = false
+
+[functions.worker]
+verify_jwt = false
+
+[functions.gmail-push]
+verify_jwt = false
+
+[functions.gmail-watch-renew]
+verify_jwt = false
+
+[functions.outlook-poll]
+verify_jwt = false
+
+[functions.ops-monitor]
+verify_jwt = false
