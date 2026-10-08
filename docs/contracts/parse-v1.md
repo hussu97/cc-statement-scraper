@@ -52,7 +52,7 @@ All money values are **decimal strings, absolute (non-negative)**, except `total
 ```json
 {
   "contract_version": 1,
-  "parser_version": "2026.10.2",
+  "parser_version": "2026.10.3",
   "bank_code": "ADCB",
   "document_kind": "statement_pdf",
   "statements": [

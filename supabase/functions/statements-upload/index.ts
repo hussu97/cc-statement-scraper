@@ -9,6 +9,9 @@
 // Response 200: {"uploads": [{"filename", "doc_code", "status": "queued"|"duplicate",
 //                             "parse_status", "requeued"?}]}
 // A duplicate of a document whose parse failed is queued again (`requeued: true`, SRV-20).
+// Every file's `doc_code` is returned so the client can follow its timeline: the
+// `document_events` rows (received → stored → queued → parsing → parsed → ingested, or
+// duplicate / failed / retry) are member-readable and published over Realtime.
 
 import { withSentry } from "../_shared/sentry.ts";
 import { assertOwner, requireUserOrServiceToken } from "../_shared/auth.ts";

@@ -60,7 +60,7 @@ select is(
 select is(
   (select array_agg(t order by t) from unnest(array[
      'accounts', 'cards', 'profiles', 'transactions', 'statements', 'statement_lines', 'documents',
-     'service_tokens', 'transaction_evidence', 'match_reviews', 'insights', 'recurring_series']) t
+     'service_tokens', 'transaction_evidence', 'match_reviews', 'insights', 'recurring_series', 'document_events']) t
    where has_table_privilege('authenticated', format('public.%I', t), 'INSERT,DELETE')),
   null,
   'authenticated cannot INSERT or DELETE ledger/identity tables directly'
@@ -97,7 +97,7 @@ select set_eq(
     'categories.icon:authenticated:UPDATE', 'categories.kind:authenticated:UPDATE', 'categories.name:authenticated:UPDATE',
     'categories.parent_code:authenticated:UPDATE', 'categories.sort_order:authenticated:UPDATE', 'categories:authenticated:INSERT',
     'categories:authenticated:SELECT', 'category_rules:authenticated:DELETE', 'category_rules:authenticated:INSERT',
-    'category_rules:authenticated:SELECT', 'category_rules:authenticated:UPDATE', 'documents:authenticated:SELECT',
+    'category_rules:authenticated:SELECT', 'category_rules:authenticated:UPDATE', 'document_events:authenticated:SELECT', 'documents:authenticated:SELECT',
     'email_events:authenticated:SELECT', 'email_mailboxes.enabled:authenticated:UPDATE', 'email_mailboxes:authenticated:DELETE',
     'email_mailboxes:authenticated:INSERT', 'email_mailboxes:authenticated:SELECT', 'email_routes.attachment_filename_regex:authenticated:UPDATE',
     'email_routes.enabled:authenticated:UPDATE', 'email_routes.gmail_label_filter:authenticated:UPDATE', 'email_routes.mailbox_code:authenticated:UPDATE',

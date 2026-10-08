@@ -1,5 +1,28 @@
 # Changelog
 
+## Statement detail, spend breakdown, bank logos, document timeline, replacement cards, merchant masking — 2026-10-10 (branch `ledger-v2`)
+
+### Backend (Supabase)
+
+- **feat** `public.statement_detail(p_profile_code, p_stmt_code)` (member read): one statement with its current debit and credit lines, each line with its transaction, merchant name and category; money as decimal strings (shape: ARCHITECTURE §6). Migration `20261010000200`
+- **feat** `public.spend_breakdown(p_profile_code, p_from, p_to, p_group_by, p_top_n = 10)` (member read), built only on `v_spend`: monthly spend by `category` / `bank` / `merchant`, top N groups plus `__other__` ("Others"), every month zero-filled, 4-dp shares (ARCHITECTURE §6). Migration `20261010000200`
+- **feat** Bank logos: `banks.logo_path` (seeded `<bank_code>.png` for the six banks, guarded), public Storage bucket `bank-logos` (no client writes); `statement_cycles` gains a `logo_path` column, `overview` accounts and `filter_meta` banks carry `logo_path`. Migration `20261010000100`
+- **test** pgTAP `20_statement_rpcs_and_logos.test.sql` (contract keys, ordering, decimal strings, top-N fold, zero-filled months, non-member refusal, logo_path in the existing RPCs)
+- **feat** Statement upload / parse timeline: `public.document_events` (`dev_…`, `doc_code`, `stage`, `level`, `message`, `detail`), member read, in the `supabase_realtime` publication. Written by `storeDocument` (`received`, `stored`, `queued`, `duplicate`) through the service-role RPC `log_document_event`, `begin_document_parse` (`parsing`), the worker (`parsed`: bank, statements, lines, parser warnings), `ingest_parsed_document` (`ingested`: statements, lines new/unchanged/withdrawn, transactions created/matched, lines held, cards added), `fail_document` (`failed` with a sentence per error code, e.g. a wrong PDF password; `retry` when transient), `resubmit_document` and `requeue_documents` (`retry`). Messages carry no passwords, PDF text, line text or SMS bodies. Migration `20261010000400`
+- **feat** `ledger-nightly` purges `document_events` older than 90 days (`private.purge_document_events`). Migration `20261010000410` (flagged destructive by the deploy gate: PRODUCTION §2.3)
+- **feat** Edge: `_shared/documents.ts` `logDocumentEvent` (never throws), `uploadEvents`, `formatBytes`; `worker/parse_document.ts` `parsedEvent`. statements-upload already returned `doc_code` per file; documented with the timeline
+- **test** pgTAP `22_document_events.test.sql` (full timeline order, messages and counts, friendly failure text without the raw error, retries, member-only reads, no client writes, cross-profile refusal, 90-day purge); `11_privileges` matrix (`document_events:authenticated:SELECT`); deno `_tests/document_events_test.ts`. Run locally: an upload through `statements-upload` (service token) and its duplicate produced `received → stored → queued` and `received → duplicate`, read back by the member through PostgREST
+
+### Parser
+
+- **fix** SIB card numbers (the SIB card ending 9218 was replaced by a new number): history exports read the card from `Account no.` / `Card no.` / `Card number` headers through a masked-number pattern (any of `x`, `X`, `*`, `•`, with or without the BIN), each row belongs to the card of the header above it, and each billing cycle's `primary_card_last4` is its majority card. E-statements also accept a lower-case mask. Existing outputs are unchanged
+- **chore** `PARSER_VERSION` / `pyproject.toml` 2026.10.3 (new synthetic case)
+- **test** `test_sib_parser.py` (replacement-card history, two card sections in one export, lower-case masked statement card, mask variants); synthetic golden `sib_history_new_card` (card 3333 on every line and cycle)
+
+### Docs
+
+- ARCHITECTURE §3 (`banks.logo_path`, `bank-logos` bucket, `document_events`), §4 (document timeline), §6 (`statement_detail`, `spend_breakdown` shapes), §7 (Realtime); README Edge and RPC tables; PRODUCTION §2.3 (destructive flag), §2.6 (nightly purge), §11 (uploading the logos)
+
 ## Bank logos — 2026-10-08 (branch `ledger-v2`)
 
 ### Web
