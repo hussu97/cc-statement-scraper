@@ -32,15 +32,16 @@ export function Toaster({ children }: { children: ReactNode }) {
             )}
           >
             <div className="min-w-0 flex-1">
-              <T.Title className="text-sm font-medium text-ink">{t.title}</T.Title>
-              {t.description && <T.Description className="mt-0.5 text-[13px] text-muted">{t.description}</T.Description>}
+              <T.Title className="text-sm font-medium text-ink [overflow-wrap:anywhere]">{t.title}</T.Title>
+              {t.description && <T.Description className="mt-0.5 text-[13px] text-muted [overflow-wrap:anywhere]">{t.description}</T.Description>}
             </div>
-            <T.Close aria-label="Dismiss" className="text-muted hover:text-ink">
+            <T.Close aria-label="Dismiss" className="tap -m-1 rounded-sm p-1 text-muted hover:text-ink">
               <X className="size-4" />
             </T.Close>
           </T.Root>
         ))}
-        <T.Viewport className="fixed right-4 bottom-20 z-[60] flex w-[min(360px,calc(100vw-32px))] flex-col gap-2 outline-none md:bottom-4" />
+        {/* Phones: full width above the tab bar and the home indicator. Desktop: bottom-right, 360px. */}
+        <T.Viewport className="fixed inset-x-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-[60] flex flex-col gap-2 outline-none md:left-auto md:w-[360px] lg:bottom-4" />
       </T.Provider>
     </ToastContext.Provider>
   );

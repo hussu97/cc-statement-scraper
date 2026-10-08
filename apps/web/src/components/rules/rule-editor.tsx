@@ -95,7 +95,7 @@ export function RuleEditor({ initial, onClose }: { initial: RuleDraft; onClose: 
           submit();
         }}
       >
-        <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3">
+        <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] items-start gap-3 [&_label]:min-h-10 sm:[&_label]:min-h-0">
           <Field label="When the description">
             {() => (
               <Select

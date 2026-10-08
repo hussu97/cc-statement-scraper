@@ -77,7 +77,7 @@ export function OverviewPage() {
       <AccountsPanel overview={q.data} loading={q.isLoading} error={q.isError ? q.error : null} retry={() => void q.refetch()} />
 
       <Card>
-        <CardHeader title="Recent activity" action={<Link to="/activity" className="inline-flex items-center gap-1 text-[13px] text-accent hover:underline">All activity <ArrowRight className="size-3.5" /></Link>} />
+        <CardHeader title="Recent activity" action={<Link to="/activity" className="tap inline-flex items-center gap-1 text-[13px] text-accent hover:underline">All activity <ArrowRight className="size-3.5" /></Link>} />
         {q.isLoading ? (
           <LoadingRows rows={6} />
         ) : q.isError || !q.data ? (

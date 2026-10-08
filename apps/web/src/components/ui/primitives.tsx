@@ -2,6 +2,7 @@ import { Checkbox as C, DropdownMenu as DM, Popover as P, Switch as SW, Tabs as 
 import { Check, Minus } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { cn } from "@/lib/cn";
+import { useScrollEdges } from "@/lib/hooks";
 
 const MENU =
   "z-50 min-w-44 overflow-hidden rounded-md border border-border bg-surface p-1 shadow-[0_8px_24px_-12px_var(--color-border-strong)] animate-fade-in";
@@ -13,7 +14,13 @@ export const PopoverClose = P.Close;
 export function PopoverContent({ className, align = "start", ...rest }: ComponentProps<typeof P.Content>) {
   return (
     <P.Portal>
-      <P.Content align={align} sideOffset={6} collisionPadding={12} className={cn(MENU, "p-3", className)} {...rest} />
+      <P.Content
+        align={align}
+        sideOffset={6}
+        collisionPadding={12}
+        className={cn(MENU, "max-w-[var(--radix-popover-content-available-width)] p-3", className)}
+        {...rest}
+      />
     </P.Portal>
   );
 }
@@ -24,7 +31,13 @@ export const MenuTrigger = DM.Trigger;
 export function MenuContent({ className, align = "end", ...rest }: ComponentProps<typeof DM.Content>) {
   return (
     <DM.Portal>
-      <DM.Content align={align} sideOffset={6} collisionPadding={12} className={cn(MENU, className)} {...rest} />
+      <DM.Content
+        align={align}
+        sideOffset={6}
+        collisionPadding={12}
+        className={cn(MENU, "max-w-[var(--radix-dropdown-menu-content-available-width)]", className)}
+        {...rest}
+      />
     </DM.Portal>
   );
 }
@@ -32,7 +45,7 @@ export function MenuItem({ className, tone, ...rest }: ComponentProps<typeof DM.
   return (
     <DM.Item
       className={cn(
-        "flex h-8 cursor-pointer items-center gap-2 rounded-sm px-2 text-[13px] outline-none select-none data-[disabled]:opacity-50 data-[highlighted]:bg-surface-2",
+        "flex h-10 cursor-pointer items-center gap-2 rounded-sm px-2 text-sm outline-none lg:h-8 lg:text-[13px] select-none data-[disabled]:opacity-50 data-[highlighted]:bg-surface-2",
         tone === "danger" ? "text-danger" : "text-ink",
         className,
       )}
@@ -50,10 +63,13 @@ export function MenuSeparator() {
 // ── Tabs ────────────────────────────────────────────────────────────────────
 export const Tabs = T.Root;
 export const TabsContent = T.Content;
+/** Tab strip: scrolls sideways on phones, with an edge fade where tabs are hidden (WEB-44). */
 export function TabsList({ className, ...rest }: ComponentProps<typeof T.List>) {
+  const ref = useScrollEdges<HTMLDivElement>();
   return (
     <T.List
-      className={cn("-mx-1 flex gap-1 overflow-x-auto border-b border-border px-1 [scrollbar-width:none]", className)}
+      ref={ref}
+      className={cn("scroll-fade relative -mx-1 flex gap-1 overflow-x-auto border-b border-border px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", className)}
       {...rest}
     />
   );
@@ -94,7 +110,7 @@ export function Segmented<V extends string>({
           aria-checked={value === o.value}
           onClick={() => onChange(o.value)}
           className={cn(
-            "h-7 rounded-[5px] px-2.5 text-[13px] whitespace-nowrap transition-colors",
+            "tap h-7 rounded-[5px] px-2.5 text-[13px] whitespace-nowrap transition-colors",
             value === o.value ? "bg-surface text-ink shadow-[0_1px_0_var(--color-border)]" : "text-muted hover:text-ink",
           )}
         >
