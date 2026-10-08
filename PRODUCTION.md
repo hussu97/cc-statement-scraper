@@ -774,6 +774,34 @@ history):
 | `.env.cutover` | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `LEDGER_DB_URL`, …; `SUPABASE_SERVICE_ROLE_KEY` is legacy (kept until §2.8 step 3, unused by the code) | cutover scripts and one-off admin calls (secret key on `apikey` only, never from a browser) |
 | `apps/ios/Config/Secrets.Release.xcconfig` | `LEDGER_SUPABASE_URL`, `LEDGER_SUPABASE_PUBLISHABLE_KEY`, `LEDGER_SENTRY_DSN`, `LEDGER_ENVIRONMENT`; optionally `SENTRY_AUTH_TOKEN`/`SENTRY_ORG`/`SENTRY_PROJECT` for dSYMs when the shell doesn't set them (prefer the shell: in the xcconfig the token is also an Xcode build setting, BACKLOG IOS-21) | TestFlight builds (§7) |
 
+### 10.1 Release 2026-10-08 (main `10703b4`, iOS build 5)
+
+Passkeys + code-only sign-in, Claude rules, and the database / Edge / parser P2–P3 backlog.
+
+1. Backup: `data/backups/prerelease-{schema,data}-20261008T153826Z.sql` (gitignored).
+2. Edge secret `ALLOWED_ORIGINS=https://cc-statement-scraper.vercel.app` (CORS and `member-invite`
+   redirects); `SENTRY_RELEASE=10703b4`.
+3. Push to `main`: CI, Deploy Parser (2026.10.2 on Cloud Run) and Vercel (passkey UI,
+   `/.well-known/apple-app-site-association`, which Apple's CDN serves) succeeded. Deploy Supabase
+   failed at `supabase link` (token permissions, below), so migrations
+   `20261009000100`–`20261009100100` (6, 31 in total) went in with `supabase db push --db-url`
+   and all 9 functions (new: `member-invite`) with `supabase functions deploy --use-api`.
+   Smoke: every function 401 without auth; `worker` 202 and `ops-monitor` 200 with `x-cron-secret`.
+4. Re-parse: the 32 FAB and Mashreq documents were requeued for parser 2026.10.2. Recon went from
+   FAB 16 ok / 4 fail and Mashreq 12 warn to **FAB 20 ok, Mashreq 12 ok**. Transaction counts
+   (FAB 1099, Mashreq 1233), debit totals, manual categories and orphans (0) are unchanged;
+   38 Mashreq transactions now carry their foreign currency and rate.
+5. iOS build 5 (Associated Domains `webcredentials:cc-statement-scraper.vercel.app`, passkeys)
+   built and signed locally with `ASC_SIGN_WITH_KEY=1` (Xcode had no signed-in account, and the
+   API key added the capability to the App ID), staged, uploaded by `ios-testflight.yml`, and
+   attached to "Friends & Family" behind build 3's review.
+
+**CI token permissions.** `supabase link` (the first step of deploy-supabase) needs more than
+deploying does: it reads `/v1/projects/{ref}/api-keys?reveal=true`, and the PostgREST, Auth and
+network-restriction config. A fine-grained token for CI needs: Project read, **API keys read
+(including secret keys)**, Database config read, Auth config read, Data API (PostgREST) config read,
+network restrictions read, Edge Functions read/write, Edge Function secrets read/write.
+
 ---
 
 ## 11. Operations
