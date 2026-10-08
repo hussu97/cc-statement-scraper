@@ -2176,6 +2176,10 @@ export type Database = {
         Args: { p_month?: string; p_profile_code: string }
         Returns: Json
       }
+      prev_month_to_date_end: {
+        Args: { p_month: string; p_today: string }
+        Returns: string
+      }
       preview_rule: {
         Args: {
           p_category_code: string

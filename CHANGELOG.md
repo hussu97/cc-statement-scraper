@@ -1,5 +1,24 @@
 # Changelog
 
+## Database audit backlog, P2 and P3 — 2026-10-09
+
+### Backend (Supabase)
+
+- **fix** `20261009000100_db_ledger_fixes.sql`:
+  - An SMS held as `unknown_card` is re-processed when a statement registers its card, and its review resolves itself (`private.reprocess_waiting_sms`, called at the end of `ingest_parsed_document`, which now returns `sms_card_registered`) (DB-17r)
+  - `overview`'s month-to-date base stops at the end of last month on the 29th–31st (`public.prev_month_to_date_end(p_month, p_today)`) (DB-18)
+  - `resolve_merchant` reads before it writes; an existing merchant row is never rewritten (DB-19r)
+  - `v_transactions.has_sms` / `has_statement` are scalar sub-queries on the evidence index, evaluated only for the returned page (DB-20)
+  - `statement_lines (profile_code, currency_original, txn_date desc)` index for `estimate_fx`; `anomalies` uses window frames instead of two laterals per row, same output (DB-32r)
+  - Declined alerts are stored `ignored` (existing rows migrated) (DB-34)
+  - An SMS template date more than 7 days from `received_at` falls back to `received_at` and is kept as `parsed_fields.event_at_rejected` (DB-36)
+  - Utilisation uses `greatest(closing_balance, 0)` in `overview` and `statement_cycles` (DB-39)
+  - New transactions are inserted with their merchant and AED amount, so they are categorised once, not twice (DB-44)
+  - `overview.pending_unpriced_count`: pending transactions with no AED amount yet (DB-45)
+  - Ingest rejects a statement dated more than 31 days ahead with a permanent `22023` (DP-04r)
+  - `transactions.fx_rate` is null for AED (backfilled); a statement `fx_rate` that rounds to 0 is stored as unknown instead of failing the ingest (X-33)
+- **test** `13_db_ledger_fixes.test.sql`; `09` and `12` pin `ledger.test_today` for their fixed future dates
+
 ## Supabase publishable / secret API keys — 2026-10-08 (branch `ledger-v2`)
 
 ### Backend
