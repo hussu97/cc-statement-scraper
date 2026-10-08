@@ -10,7 +10,7 @@ Deno.env.delete("SENTRY_DSN");
 
 const PRF = "prf_01k6zz0000000000000000000e";
 
-/** log_document_event as 20261010000500 defines it, recorded in db.tables.document_events. */
+/** log_document_event as 20261010000400 defines it, recorded in db.tables.document_events. */
 const logRpc: RpcHandler = (args, db) => {
   (db.tables.document_events ??= []).push({
     doc_code: args.p_doc_code,

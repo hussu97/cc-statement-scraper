@@ -78,7 +78,7 @@ public final class SupabaseLedgerAPI: LedgerAPI, @unchecked Sendable {
 
     // MARK: Tables
 
-    public func transactions(profileCode: String, query: ActivityQuery) async throws -> TransactionPage {
+    public func transactions(profileCode: String, query: ActivityQuery, page: PageRequest) async throws -> TransactionPage {
         do {
             var q = client.from("v_transactions").select("*", count: .exact).eq("profile_code", value: profileCode)
             if let search = query.searchOrFilter { q = q.or(search) }
@@ -95,13 +95,28 @@ public final class SupabaseLedgerAPI: LedgerAPI, @unchecked Sendable {
                 .order("txn_date", ascending: false)
                 .order("txn_at", ascending: false, nullsFirst: false)
                 .order("txn_code", ascending: false)
-                .range(from: query.rangeStart, to: query.rangeEnd)
+                .range(from: page.offset, to: page.lastIndex)
                 .execute()
             let rows = try LedgerJSON.decode([LedgerTransaction].self, from: response.data)
             return TransactionPage(rows: rows, total: response.count)
         } catch {
             throw Self.map(error)
         }
+    }
+
+    public func transactions(profileCode: String, codes: [String]) async throws -> [LedgerTransaction] {
+        // 100 codes per request keeps the `in.(…)` filter well inside URL limits.
+        var out: [LedgerTransaction] = []
+        for start in stride(from: 0, to: codes.count, by: 100) {
+            let chunk = Array(codes[start..<min(start + 100, codes.count)])
+            out += try await read([LedgerTransaction].self) {
+                try await client.from("v_transactions").select("*")
+                    .eq("profile_code", value: profileCode)
+                    .in("txn_code", values: chunk)
+                    .execute()
+            }
+        }
+        return out
     }
 
     public func insights(profileCode: String) async throws -> [Insight] {
@@ -125,14 +140,19 @@ public final class SupabaseLedgerAPI: LedgerAPI, @unchecked Sendable {
         }
     }
 
-    public func documents(profileCode: String, limit: Int) async throws -> [DocumentRecord] {
-        try await read([DocumentRecord].self) {
-            try await client.from("documents")
-                .select("doc_code,kind,bank_code,original_filename,source,parse_status,parse_error_code,parse_error,created_at,parsed_at")
+    public func documents(profileCode: String, page: PageRequest) async throws -> ListPage<DocumentRecord> {
+        do {
+            let response = try await client.from("documents")
+                .select("doc_code,kind,bank_code,original_filename,source,parse_status,parse_error_code,parse_error,created_at,parsed_at",
+                        count: .exact)
                 .eq("profile_code", value: profileCode)
                 .order("created_at", ascending: false)
-                .limit(limit)
+                .order("doc_code", ascending: false)
+                .range(from: page.offset, to: page.lastIndex)
                 .execute()
+            return ListPage(items: try LedgerJSON.decode([DocumentRecord].self, from: response.data), total: response.count)
+        } catch {
+            throw Self.map(error)
         }
     }
 
@@ -175,6 +195,9 @@ public final class SupabaseLedgerAPI: LedgerAPI, @unchecked Sendable {
                 do {
                     try await channel.subscribeWithError()
                 } catch {
+                    // `client.channel` returns an existing channel by topic: remove
+                    // the failed one so `LiveUpdates`' retry builds a fresh one.
+                    await client.removeChannel(channel)
                     continuation.finish()
                     return
                 }
