@@ -152,7 +152,10 @@ Function secrets (`SUPABASE_URL` and the API keys — `SUPABASE_SECRET_KEYS` /
 are injected automatically; see §2.8) have **one source of truth**: the gitignored
 `supabase/functions/.env.production`. Complete it, then push it with
 [`scripts/cutover/set-edge-secrets.sh`](scripts/cutover/set-edge-secrets.sh). Never type
-secrets inline and never push a file that still holds placeholders.
+secrets inline and never push a file that still holds placeholders. The committed
+`supabase/functions/.env.example` lists every key name the functions read (required,
+production-only, local-only, optional; no values), and a `deno test` guard fails when code
+reads a key it doesn't list.
 
 | Key | Where the value comes from | In the file today |
 |---|---|---|
@@ -616,12 +619,13 @@ setup, branch protection, rollbacks). Summary:
 
 | Workflow | Trigger | What |
 |---|---|---|
-| `ci.yml` | PRs, pushes to `main`, manual (`include_ios`) | Path-filtered jobs `tooling` (actionlint, shellcheck), `supabase` (append-only migration check, `db reset`, pgTAP, DB types drift), `edge` (`deno lint`, `deno fmt --check`, `deno test`), `parser` (ruff, pytest), `web` (tokens, lint, typecheck, test, build), `scraper`, `ios` (`swift test` on LedgerKit, macOS, only on LedgerKit/tokens changes or manual), and the aggregator **`ci-ok`**, the only required check |
+| `ci.yml` | PRs, pushes to `main`, manual (`include_ios`) | Path-filtered jobs `tooling` (actionlint, shellcheck), `supabase` (append-only migration check, `db reset`, pgTAP, DB types drift), `edge` (`deno lint`, `deno fmt --check`, `deno check` and `deno test` against the frozen `deno.lock`), `parser` (ruff, pytest), `web` (tokens, lint, typecheck, test, build), `scraper`, `ios` (`swift test` on LedgerKit, macOS, only on LedgerKit/tokens changes or manual), and the aggregator **`ci-ok`**, the only required check |
 | `deploy-supabase.yml` | push to `main` touching `supabase/migrations/**`, `supabase/functions/**` or `config.toml`; manual (type the project ref, optional `dry_run`) | pgTAP + deno → `production` env → migration history check (`scripts/ci/check-migrations.sh remote linked`) → `db push --dry-run` → destructive-statement guard → `db push` → `functions deploy` |
 | `deploy-parser.yml` | push to `main` touching `services/parser/**`; manual (type `deploy`) | ruff + pytest → `production` env → build/push image → no-traffic tagged revision → `/health` smoke on the tag → 100% traffic |
 | `web-smoke.yml` | Vercel Production deployment success; daily; manual | Probes the production web app (title, CSP, security headers, SPA deep link, assets). Vercel's Git integration does the deploy |
 | `ios-testflight.yml` | push to `main` touching `apps/ios/**` (not `build-number.json`); manual | Uploads the IPA the pre-push hook staged on `ios-ledger-staged` to App Store Connect, then distributes to "Friends & Family" (§7) |
 | `security.yml` | weekly, manual | pip-audit and bandit (parser) |
+| `ios-build.yml` | weekly, PRs/pushes touching `apps/ios/**`, manual | `xcodegen generate` + unsigned simulator `xcodebuild build` of the app and share extension (macOS) |
 
 **Deploys.** Pushes to `main` deploy Supabase and the parser after the `production`
 environment's approval (required reviewers need GitHub Pro/Team on a private repo). Set the
@@ -639,8 +643,8 @@ builds and stages the TestFlight IPA. `SKIP_PRE_PUSH=1 git push` skips the hook,
 
 **Secrets and variables** (names only; how to set them: docs/ci-cd.md §4):
 `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `SUPABASE_PROJECT_REF` (env `production`);
-`GCP_WIF_PROVIDER`, `GCP_DEPLOY_SA` (repo variables; WIF setup in docs/ci-cd.md §5) or the
-fallback `GCP_SA_KEY` (env `production`), optional `GCP_PROJECT_ID`; `ASC_KEY_ID`,
+`GCP_WIF_PROVIDER`, `GCP_DEPLOY_SA` (repo variables; WIF setup in docs/ci-cd.md §5; the parser deploy is WIF-only, there is no
+service-account key secret), optional `GCP_PROJECT_ID`; `ASC_KEY_ID`,
 `ASC_ISSUER_ID`, `ASC_KEY_P8` (App Store Connect); optional `AUTO_DEPLOY`. The deployer SA
 needs `run.admin`, `artifactregistry.writer` and `iam.serviceAccountUser` on `ccs-parser@`.
 

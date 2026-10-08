@@ -1,6 +1,6 @@
 {
   "nodeModulesDir": "none",
-  "lock": false,
+  "lock": { "path": "./deno.lock", "frozen": true },
   "fmt": {
     "lineWidth": 120,
     "singleQuote": false

@@ -113,7 +113,7 @@ Docker Desktop forwards `host.docker.internal` to the Mac's loopback. On Linux, 
 
 ### 3. Edge Functions
 
-Create `supabase/functions/.env` (gitignored):
+Create `supabase/functions/.env` (gitignored; `supabase/functions/.env.example` lists every key, names only):
 
 ```dotenv
 CRON_SECRET=<random string, same as the edge_cron_secret Vault value>
@@ -182,11 +182,11 @@ Create a service token in web Settings → Sources & health → Tokens, or with
 |---|---|
 | Database (pgTAP: RLS guards, matching, categorisation, recon, analytics, SMS templates, FX, legacy import, cross-profile isolation, ingest robustness, review actions, client privilege matrix, re-parse relink; hermetic, so they also pass on a non-empty local DB) | `supabase db reset && supabase test db` |
 | DB types drift | `pnpm db:types:check` (regenerate with `pnpm db:types`) |
-| Edge Functions | `cd supabase/functions && deno test -A .` (the local e2e runs only with `LEDGER_E2E=1` and a served stack) |
+| Edge Functions | `cd supabase/functions && deno lint && deno fmt --check && deno check . && deno test -A .` (the lock `deno.lock` is frozen; the local e2e runs only with `LEDGER_E2E=1` and a served stack) |
 | Parser | `cd services/parser && .venv/bin/ruff check . && .venv/bin/pytest -q` (golden parity needs private PDFs; skipped otherwise) |
 | Web | `pnpm web:test`, `pnpm --filter @ledger/web lint`, `pnpm web:build` |
 | Tokens | `pnpm --filter @ledger/tokens check` (fails if the committed `Tokens.swift` drifts from `tokens.json`; the gitignored `dist/` is regenerated in memory only, so it works from a clean clone) |
-| iOS | `cd apps/ios/LedgerKit && swift test` |
+| iOS | `cd apps/ios/LedgerKit && swift test`; app + share extension compile: `cd apps/ios && xcodegen generate && xcodebuild build -project Ledger.xcodeproj -scheme Ledger -destination "generic/platform=iOS Simulator" CODE_SIGNING_ALLOWED=NO` (CI: `ios-build.yml`, weekly and on app changes) |
 | Scraper | `cd scraper && .venv/bin/pytest -q` |
 
 `bash scripts/install-hooks.sh` (or `pnpm hooks:install`) installs the git hooks; details in
@@ -195,7 +195,7 @@ Create a service token in web Settings → Sources & health → Tokens, or with
   profiles), append-only migrations, eslint / `deno lint` / ruff / shellcheck / actionlint on
   the staged files.
 - **pre-push (full CI mirror for the changed areas):** the same lint, typecheck, test and build
-  steps as `ci.yml` (incl. `deno fmt --check`; pgTAP only when the local stack runs), then on a
+  steps as `ci.yml` (incl. `deno fmt --check` and `deno check`; pgTAP only when the local stack runs), then on a
   `main` push that changes the iOS app it builds and stages the TestFlight IPA.
   `SKIP_PRE_PUSH=1 git push` skips it; `SKIP_RELEASE=1 git push` skips only the iOS release.
   By hand: `pnpm check`, `pnpm check:all`, `pnpm check:plan`.
