@@ -85,8 +85,11 @@ select is((select array_agg(k order by k) from jsonb_object_keys(pg_temp.v('d'):
 select is((select array_agg(k order by k) from jsonb_object_keys(pg_temp.v('d')::jsonb->'statement') k),
           array['account_code', 'bank_code', 'card_last4s', 'closing_balance', 'credit_limit', 'doc_code', 'due_date',
                 'kind', 'min_due', 'opening_balance', 'period_end', 'period_start', 'recon_checks', 'recon_status',
-                'statement_date', 'stmt_code', 'total_credits', 'total_debits'],
+                'statement_date', 'stmt_code', 'total_credits', 'total_debits', 'utilisation'],
           'the statement object has exactly the contract keys');
+select ok((pg_temp.v('d')::jsonb->'statement'->>'utilisation') is null
+          or (pg_temp.v('d')::jsonb->'statement'->>'utilisation')::numeric >= 0,
+          'utilisation is server-computed: closing / limit, never negative');
 select is(pg_temp.v('d')::jsonb->'statement'->>'closing_balance', '1234.50', 'money is a decimal string');
 select is(pg_temp.v('d')::jsonb->'statement'->>'bank_code', 'FAB', 'bank_code comes from the account');
 select is(pg_temp.v('d')::jsonb->'statement'->'card_last4s', '["1111", "2222"]'::jsonb,

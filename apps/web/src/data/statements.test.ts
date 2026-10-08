@@ -28,16 +28,9 @@ describe("isStatementCode", () => {
 });
 
 describe("utilisationOf", () => {
-  it("prefers the server's figure", () => {
-    expect(utilisationOf({ utilisation: "0.4100", closing_balance: "100.00", credit_limit: "1000.00" })).toBe(0.41);
-  });
-  it("otherwise shows closing / limit for display only", () => {
-    expect(utilisationOf({ closing_balance: "8285.56", credit_limit: "30000.00" })).toBeCloseTo(0.2762, 4);
-  });
-  it("is null without a limit, and never negative (a credit balance)", () => {
-    expect(utilisationOf({ closing_balance: "100.00", credit_limit: null })).toBeNull();
-    expect(utilisationOf({ closing_balance: "100.00", credit_limit: "0" })).toBeNull();
-    expect(utilisationOf({ closing_balance: "-50.00", credit_limit: "1000.00" })).toBe(0);
+  it("uses the server's figure only (CLAUDE.md §2.2)", () => {
+    expect(utilisationOf({ utilisation: "0.4100" })).toBe(0.41);
+    expect(utilisationOf({ utilisation: null })).toBeNull();
   });
   it("tones like the statements list", () => {
     expect(utilisationTone(0.1)).toBe("positive");
