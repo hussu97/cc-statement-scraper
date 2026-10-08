@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { displayRatio, toAmount, type MoneyInput } from "@/lib/money";
+import { toAmount, type MoneyInput } from "@/lib/money";
 import { keys } from "./keys";
 import { must } from "./api";
 
@@ -49,8 +49,8 @@ export interface StatementHeader {
   total_credits: Decimal | null;
   min_due: Decimal | null;
   credit_limit: Decimal | null;
-  /** Not sent today; used as soon as the server adds it (see utilisationOf). */
-  utilisation?: Decimal | null;
+  /** closing / limit from the server (null without a limit). */
+  utilisation: Decimal | null;
   doc_code: string | null;
   recon_status: string | null;
   recon_checks: Record<string, unknown> | null;
@@ -81,16 +81,9 @@ export function useStatementDetail(profileCode: string, stmtCode: string) {
   });
 }
 
-/**
- * Utilisation for the tile: the server's figure when it sends one; until
- * then, a display-only ratio of two server values (closing / limit), like a
- * progress bar width. Null without a limit. Pure, unit-tested.
- */
-export function utilisationOf(s: Pick<StatementHeader, "utilisation" | "closing_balance" | "credit_limit">): number | null {
-  const server = toAmount(s.utilisation);
-  if (server !== null) return server;
-  const r = displayRatio(s.closing_balance, s.credit_limit);
-  return r === null ? null : Math.max(0, r);
+/** The server's utilisation ratio as a number for the meter (CLAUDE.md §2.2: never re-derived here). */
+export function utilisationOf(s: Pick<StatementHeader, "utilisation">): number | null {
+  return toAmount(s.utilisation);
 }
 
 /** Meter tone for a utilisation ratio: same thresholds as the cards list. */

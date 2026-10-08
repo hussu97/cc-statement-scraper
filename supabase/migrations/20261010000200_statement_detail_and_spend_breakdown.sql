@@ -84,6 +84,9 @@ begin
         'opening_balance', st.opening_balance::text, 'closing_balance', st.closing_balance::text,
         'total_debits', st.total_debits::text, 'total_credits', st.total_credits::text,
         'min_due', st.min_due::text, 'credit_limit', st.credit_limit::text, 'doc_code', st.doc_code,
+        -- closing / limit, never negative (a card in credit has used none of it, DB-39).
+        'utilisation', round(greatest(st.closing_balance, 0) / nullif(coalesce(st.credit_limit,
+          (select ac.credit_limit from public.accounts ac where ac.account_code = st.account_code)), 0), 4)::text,
         'recon_status', r.status, 'recon_checks', r.checks)
       from (select 1) one
       left join public.statement_recon r on r.stmt_code = st.stmt_code and r.profile_code = p_profile_code),
