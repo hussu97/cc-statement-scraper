@@ -24,7 +24,7 @@ export function BrandLockup({ to, className }: { to?: "/" | "/signin"; className
       <span className="font-display text-[22px] leading-none tracking-[-0.02em] whitespace-nowrap text-ink">{BRAND_NAME}</span>
     </>
   );
-  const cls = cn("flex items-center gap-2.5", className);
+  const cls = cn("flex items-center gap-2.5", to && "tap", className);
   return to ? (
     <Link to={to} className={cls} aria-label={`${BRAND_NAME} home`}>
       {body}

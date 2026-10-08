@@ -22,7 +22,7 @@ import { BrandLockup } from "@/components/brand/brand";
 function AuthFrame({ children, footer }: { children: ReactNode; footer?: ReactNode }) {
   return (
     <div className="flex min-h-dvh flex-col bg-bg">
-      <div className="flex items-center justify-between px-gutter py-4 md:px-gutter-lg">
+      <div className="flex items-center justify-between gap-3 px-gutter pt-[max(1rem,env(safe-area-inset-top))] pb-4 md:px-gutter-lg">
         <BrandLockup />
         <ThemeToggle />
       </div>
@@ -121,7 +121,7 @@ export function SignInPage() {
     <AuthFrame
       footer={
         <footer className="px-gutter pb-6 text-center text-[12px] text-subtle">
-          <Link to="/privacy" className="underline underline-offset-2 hover:text-ink">
+          <Link to="/privacy" className="tap underline underline-offset-2 hover:text-ink">
             Privacy policy
           </Link>
         </footer>
@@ -162,7 +162,7 @@ export function SignInPage() {
           ) : (
             <form onSubmit={onCode} className="mt-8 flex flex-col gap-4" noValidate>
               <p className="text-sm text-muted">
-                We sent a sign-in code to <span className="font-medium text-ink">{email.trim()}</span>. It expires in an hour.
+                We sent a sign-in code to <span className="font-medium text-ink [overflow-wrap:anywhere]">{email.trim()}</span>. It expires in an hour.
               </p>
               <Field label="Code">
                 {(id) => (
