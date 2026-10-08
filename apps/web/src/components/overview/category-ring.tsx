@@ -32,7 +32,7 @@ export function CategoryRing({ categories, total, from, to }: { categories: Over
             <Link
               to="/activity"
               search={{ category: c.category_code ?? "none", from, to }}
-              className="-mx-2 grid grid-cols-[auto_1fr_auto_auto] items-center gap-3 rounded-sm px-2 py-1.5 text-[13px] hover:bg-surface-2"
+              className="-mx-2 grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-3 rounded-sm px-2 py-2.5 text-[13px] hover:bg-surface-2 lg:py-1.5"
             >
               <Dot token={c.color_token} />
               <span className="truncate text-ink">{c.name ?? "Uncategorised"}</span>
