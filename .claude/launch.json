@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@ledger/web", "exec", "vite", "--host", "localhost", "--port", "5173", "--strictPort"],
+      "port": 5173,
+      "url": "http://localhost:5173"
+    }
+  ]
+}
