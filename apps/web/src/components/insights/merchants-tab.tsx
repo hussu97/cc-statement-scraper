@@ -73,7 +73,7 @@ export function MerchantsTab({ profileCode, range }: { profileCode: string; rang
                   <span className="w-5 pt-0.5 text-[12px] text-subtle tabular">{i + 1}</span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline justify-between gap-3">
-                      <MerchantLink row={r} range={range} className="truncate text-sm text-ink" />
+                      <MerchantLink row={r} range={range} className="-my-2.5 truncate py-2.5 text-sm text-ink" />
                       <Money value={r.amount} className="text-sm font-medium text-ink" />
                     </div>
                     <div className="mt-1 flex items-center justify-between gap-3 text-[12px] text-muted">

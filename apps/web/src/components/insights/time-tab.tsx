@@ -79,7 +79,7 @@ function HourHeatmap({ rows }: { rows: Row[] }) {
               {countLabel(selected.txn_count, "transaction")}
             </>
           ) : (
-            <span className="text-muted">Times are in Dubai. Point at a cell for details.</span>
+            <span className="text-muted">Times are in Dubai. Tap or point at a cell for details.</span>
           )}
         </p>
         <HeatLegend />

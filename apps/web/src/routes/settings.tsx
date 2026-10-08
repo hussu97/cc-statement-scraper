@@ -16,7 +16,7 @@ export function SettingsPage() {
   const [raw, setTab] = useTabParam("/settings");
   const tab = settingsTab(raw);
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <div>
       <PageHeader title="Settings" description="Where your data comes from, who can see it, how you sign in, and how Bank Ledger looks." />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="mb-6">
@@ -50,7 +50,7 @@ export function SettingsPage() {
         </TabsContent>
       </Tabs>
       <footer className="mt-10 border-t border-border pt-4 text-[12px] text-subtle">
-        <Link to="/privacy" className="underline underline-offset-2 hover:text-ink">
+        <Link to="/privacy" className="tap underline underline-offset-2 hover:text-ink">
           Privacy policy
         </Link>
       </footer>
