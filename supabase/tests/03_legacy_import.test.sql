@@ -47,9 +47,10 @@ insert into t03_legacy.statement_lines values
 insert into t03_legacy.email_mailboxes values (5, 1, 'gmail', 'me@example.com', true, '{"historyId":"42"}');
 insert into t03_legacy.email_bank_routes values (7, 1, 'ADCB', 5, '["alerts@adcb.com"]', '["statement"]', '.*\.pdf', '["Banks"]', true);
 
-insert into auth.users (id, instance_id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+insert into auth.users (id, instance_id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+                        email_confirmed_at)
 values (pg_temp.v('uh')::uuid, '00000000-0000-0000-0000-000000000000', 'authenticated',
-        'authenticated', pg_temp.v('h') || '@example.com', '{}', '{}', now(), now());
+        'authenticated', pg_temp.v('h') || '@example.com', '{}', '{}', now(), now(), now());
 
 select lives_ok(format($$ select private.import_legacy_metadata(%L::jsonb, 't03_legacy') $$,
                        jsonb_build_object(pg_temp.v('h'), pg_temp.v('h') || '@example.com',
@@ -63,9 +64,10 @@ select is((select count(*)::int from public.profile_members m join public.profil
           'an existing user becomes owner immediately');
 select is((select count(*)::int from private.pending_members pm join public.profiles p using (profile_code)
            where p.key = pg_temp.v('t')), 1, 'a user who has not signed up yet is a pending member');
-insert into auth.users (id, instance_id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+insert into auth.users (id, instance_id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+                        email_confirmed_at)
 values (pg_temp.v('ut')::uuid, '00000000-0000-0000-0000-000000000000', 'authenticated',
-        'authenticated', pg_temp.v('t') || '@example.com', '{}', '{}', now(), now());
+        'authenticated', pg_temp.v('t') || '@example.com', '{}', '{}', now(), now(), now());
 select is((select role from public.profile_members m join public.profiles p using (profile_code)
            where p.key = pg_temp.v('t') and m.user_id = pg_temp.v('ut')::uuid), 'owner',
           'signing up claims the pending membership');
@@ -82,9 +84,10 @@ select is((select count(*)::int from cron.job where jobname = 'ledger-legacy-cho
           'the import (re)schedules the nightly choices job');
 
 -- ── DB-05: a squatted key is never adopted ─────────────────────────────────
-insert into auth.users (id, instance_id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+insert into auth.users (id, instance_id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+                        email_confirmed_at)
 values (pg_temp.v('us')::uuid, '00000000-0000-0000-0000-000000000000', 'authenticated',
-        'authenticated', pg_temp.v('sq') || '@stranger.dev', '{}', '{}', now(), now());
+        'authenticated', pg_temp.v('sq') || '@stranger.dev', '{}', '{}', now(), now(), now());
 select set_config('request.jwt.claims', json_build_object('sub', pg_temp.v('us'), 'role', 'authenticated')::text, true);
 set local role authenticated;
 select public.create_profile(pg_temp.v('sq'), 'Squatter');

@@ -12,6 +12,8 @@ struct RootView: View {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity).background(Palette.bg)
             case .signIn:
                 SignInView(session: model.session)
+            case .offerPasskey:
+                PasskeyOfferView(session: model.session)
             case .pickProfile:
                 ProfilePickerView(profiles: model.profiles, onSignOut: { Task { await model.signOut() } })
             case .main(let code):

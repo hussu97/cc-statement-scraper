@@ -14,6 +14,7 @@
 		4E142F33C460497F23C39750 /* LedgerKit in Frameworks */ = {isa = PBXBuildFile; productRef = 3CADAE061DE32CE51E97EF02 /* LedgerKit */; };
 		4F5F815454811A4ECF4C88FF /* InsightsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05EB2567DB0EA258329DBD95 /* InsightsView.swift */; };
 		659B1CF789C0735789CC64EE /* StatementsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F52CAA6FE73B46EFE59439A4 /* StatementsView.swift */; };
+		67823B3F9665BD78F8BE1182 /* PasskeysView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62D21289B23718DD5F57954 /* PasskeysView.swift */; };
 		748435885CB091FA9BFCACAA /* ActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAE2E3AE75D7627DDCE82B40 /* ActivityView.swift */; };
 		7661F492311F61EFDB72CA0D /* LedgerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDC537589817A7B6C31CC447 /* LedgerApp.swift */; };
 		77AED5C567C9D18DFED64501 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 496168FB383326D0481C9AC8 /* PrivacyInfo.xcprivacy */; };
@@ -78,6 +79,7 @@
 		F190BDC9EB8084E38F344EE7 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		F1E4A856AC27772DBFEAAA57 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		F52CAA6FE73B46EFE59439A4 /* StatementsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatementsView.swift; sourceTree = "<group>"; };
+		F62D21289B23718DD5F57954 /* PasskeysView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasskeysView.swift; sourceTree = "<group>"; };
 		F8A491D8C79A061F71F857D7 /* LedgerShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = LedgerShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		FCE4248BBC6E6FA967938803 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -224,6 +226,7 @@
 		D8F249B71FEBA5D190CA1D8F /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				F62D21289B23718DD5F57954 /* PasskeysView.swift */,
 				4FCEADD59EE2BBF22D5B715A /* SettingsView.swift */,
 			);
 			path = Settings;
@@ -389,6 +392,7 @@
 				7661F492311F61EFDB72CA0D /* LedgerApp.swift in Sources */,
 				C05BE17C5A3CB168D026EAAF /* LogBankSMSIntent.swift in Sources */,
 				ADA71066669326EC96C41A89 /* OverviewView.swift in Sources */,
+				67823B3F9665BD78F8BE1182 /* PasskeysView.swift in Sources */,
 				EBE6B98A364642BCAF0A7E52 /* ProfilePickerView.swift in Sources */,
 				E0FD108F9F8CAE01FBFFBA28 /* ReviewView.swift in Sources */,
 				860158FF70A963842E055393 /* RootView.swift in Sources */,

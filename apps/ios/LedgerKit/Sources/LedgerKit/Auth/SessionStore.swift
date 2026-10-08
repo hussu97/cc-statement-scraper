@@ -1,9 +1,11 @@
+import AuthenticationServices
 import Foundation
 import Observation
-import Supabase
+@_spi(Experimental) import Supabase
 
-/// Sign-in state for the app. Email OTP is the primary path; Sign in with
-/// Apple is behind `appleSignInEnabled` until the provider is configured.
+/// Sign-in state for the app: an emailed one-time code or a passkey. There is
+/// no password and no magic link. After a code sign-in the app offers to add a
+/// passkey (`passkeyOffer`); "Not now" is remembered per user on this device.
 @MainActor
 @Observable
 public final class SessionStore {
@@ -14,11 +16,17 @@ public final class SessionStore {
         case signedIn(userID: String, email: String?)
     }
 
-    /// Flip once Apple is configured as a Supabase Auth provider.
-    public static let appleSignInEnabled = false
+    /// After an email-code sign-in: deciding whether to offer a passkey, or offering it.
+    public enum PasskeyOffer: Equatable, Sendable {
+        case none
+        case checking
+        case offering(userID: String)
+    }
 
     public private(set) var phase: Phase = .restoring
     public private(set) var isWorking = false
+    public private(set) var passkeyOffer: PasskeyOffer = .none
+    public let passkeys: PasskeyStore
     public var errorMessage: String?
     /// Debug builds only: the keychain refused the session, so it is kept in
     /// memory for this run (the App Intent and Share Extension can't see it).
@@ -28,9 +36,10 @@ public final class SessionStore {
     private let storage: SharedKeychainStorage?
     private var listener: Task<Void, Never>?
 
-    public init(client: SupabaseClient, storage: SharedKeychainStorage? = nil) {
+    public init(client: SupabaseClient, storage: SharedKeychainStorage? = nil, defaults: UserDefaults = .standard) {
         auth = client.auth
         self.storage = storage
+        passkeys = PasskeyStore(auth: client.auth, defaults: defaults)
     }
 
     /// What a session event means once we know whether the session was saved.
@@ -49,7 +58,7 @@ public final class SessionStore {
         case .saved, .memoryOnly:
             return (.signedIn(userID: userID, email: email), nil)
         case .failed(let status):
-            return (.signedOut, "Couldn't save your sign-in on this iPhone (keychain error \(status)). Try again; if it keeps failing, reinstall Ledger.")
+            return (.signedOut, "Couldn't save your sign-in on this iPhone (keychain error \(status)). Try again; if it keeps failing, reinstall Bank Ledger.")
         }
     }
 
@@ -90,6 +99,7 @@ public final class SessionStore {
                     }
                 case .signedOut:
                     self.phase = .signedOut
+                    self.passkeyOffer = .none
                     Telemetry.setUser(id: nil)
                 default:
                     break
@@ -105,7 +115,8 @@ public final class SessionStore {
             return
         }
         await run {
-            try await self.auth.signInWithOTP(email: trimmed, shouldCreateUser: true)
+            // Invite-only: an unknown email never creates an account.
+            try await self.auth.signInWithOTP(email: trimmed, shouldCreateUser: false)
             self.phase = .awaitingCode(email: trimmed)
         }
     }
@@ -117,13 +128,53 @@ public final class SessionStore {
             errorMessage = "Enter the code from the email."
             return
         }
-        await run { _ = try await self.auth.verifyOTP(email: email, token: digits, type: .email) }
+        // Hold the route on the sign-in screen until we know whether to offer a passkey.
+        passkeyOffer = .checking
+        var userID: String?
+        await run {
+            let response = try await self.auth.verifyOTP(email: email, token: digits, type: .email)
+            userID = response.user.id.uuidString.lowercased()
+        }
+        guard let userID else {
+            passkeyOffer = .none
+            return
+        }
+        let count = await passkeys.count()
+        let offer = PasskeyStore.shouldOffer(declined: passkeys.offerDeclined(userID: userID), passkeyCount: count)
+        passkeyOffer = offer ? .offering(userID: userID) : .none
     }
 
-    /// Local development only (the seeded demo user). Not shown in Release.
+    /// Discoverable passkey sign-in: no email needed. Cancelling the sheet is silent.
+    public func signInWithPasskey(anchor: ASPresentationAnchor) async {
+        isWorking = true
+        errorMessage = nil
+        defer { isWorking = false }
+        do {
+            try await auth.signInWithPasskey(presentationAnchor: anchor)
+        } catch {
+            if !PasskeyStore.isCancellation(error) { errorMessage = PasskeyStore.message(for: error) }
+        }
+    }
+
+    /// "Add a passkey" on the post-sign-in offer. Cancelling keeps the offer up.
+    public func acceptPasskeyOffer(anchor: ASPresentationAnchor) async {
+        if await passkeys.add(anchor: anchor) { passkeyOffer = .none }
+    }
+
+    /// "Not now": remembered for this user on this device; Settings can still add one.
+    public func declinePasskeyOffer() {
+        if case .offering(let userID) = passkeyOffer { passkeys.setOfferDeclined(true, userID: userID) }
+        passkeys.errorMessage = nil
+        passkeyOffer = .none
+    }
+
+    #if DEBUG
+    /// Local development only: the seeded demo user via `DevSignIn` launch
+    /// environment variables. Compiled out of Release; there is no password UI.
     public func signIn(email: String, password: String) async {
         await run { _ = try await self.auth.signIn(email: email, password: password) }
     }
+    #endif
 
     public func cancelCode() {
         phase = .signedOut
@@ -132,6 +183,7 @@ public final class SessionStore {
 
     public func signOut() async {
         await run { try await self.auth.signOut(scope: .local) }
+        passkeyOffer = .none
         phase = .signedOut
     }
 
@@ -144,7 +196,7 @@ public final class SessionStore {
 
     nonisolated static func message(for error: any Error) -> String {
         if let auth = error as? AuthError { return auth.message }
-        if error is URLError { return "No connection to Ledger." }
+        if error is URLError { return "No connection to Bank Ledger." }
         return error.localizedDescription
     }
 

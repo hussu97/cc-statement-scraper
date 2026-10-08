@@ -9,13 +9,16 @@ public enum AppRoute: Equatable, Sendable {
     case loadingProfiles
     case pickProfile
     case main(profileCode: String)
+    /// Just signed in with an email code: offer to add a passkey (or decide whether to).
+    case offerPasskey
 
     public static func resolve(phase: SessionStore.Phase, profiles: LoadState<[LedgerProfile]>,
-                               selected: String?) -> AppRoute {
+                               selected: String?, passkeyOffer: SessionStore.PasskeyOffer = .none) -> AppRoute {
         switch phase {
         case .restoring: return .restoring
         case .signedOut, .awaitingCode: return .signIn
         case .signedIn:
+            if passkeyOffer != .none { return .offerPasskey }
             if let selected, profiles.value?.contains(where: { $0.profileCode == selected }) == true {
                 return .main(profileCode: selected)
             }
@@ -59,7 +62,8 @@ public final class AppModel {
     }
 
     public var route: AppRoute {
-        AppRoute.resolve(phase: session.phase, profiles: profiles.state, selected: profiles.selectedCode)
+        AppRoute.resolve(phase: session.phase, profiles: profiles.state, selected: profiles.selectedCode,
+                         passkeyOffer: session.passkeyOffer)
     }
 
     public func start() {

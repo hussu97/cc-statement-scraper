@@ -6,6 +6,8 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
+-- Fixed statement dates run up to 2027; pin "today" for the DP-04r future-date guard.
+set local ledger.test_today = '2027-06-30';
 
 -- ── helpers ─────────────────────────────────────────────────────────────────
 create temp table k (name text primary key, v text);

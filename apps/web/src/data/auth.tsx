@@ -54,23 +54,26 @@ function check(error: { message: string; code?: string; status?: number } | null
   if (error) throw new ApiError(error.message, { code: error.code, status: error.status });
 }
 
-export async function signInWithPassword(email: string, password: string): Promise<void> {
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-  check(error);
-}
-
 /**
- * Sends a magic link that also carries a 6-digit code. Existing accounts only:
- * Bank Ledger is invite-only, so an unknown email never creates a user (WEB-04).
+ * Emails a one-time sign-in code. Existing accounts only: Bank Ledger is
+ * invite-only, so an unknown email never creates a user (WEB-04). There is no
+ * link in the email and no password sign-in: the code (or a passkey) is the only way in.
  */
-export async function sendMagicLink(email: string): Promise<void> {
-  const { error } = await supabase.auth.signInWithOtp({ email, options: magicLinkOptions(window.location.origin) });
+export async function sendEmailCode(email: string): Promise<void> {
+  const { error } = await supabase.auth.signInWithOtp({ email, options: emailCodeOptions() });
   check(error);
 }
 
-/** signInWithOtp options. Pure, so the no-sign-up guarantee is unit-tested. */
-export function magicLinkOptions(origin: string): { emailRedirectTo: string; shouldCreateUser: false } {
-  return { emailRedirectTo: `${origin}/`, shouldCreateUser: false };
+/** signInWithOtp options. Pure, so the no-sign-up, no-link guarantee is unit-tested. */
+export function emailCodeOptions(): { shouldCreateUser: false } {
+  return { shouldCreateUser: false };
+}
+
+/** Codes are 6–10 digits depending on the project's OTP length. */
+export const CODE_MIN = 6;
+export const CODE_MAX = 10;
+export function cleanCode(raw: string): string {
+  return raw.replace(/\D/g, "").slice(0, CODE_MAX);
 }
 
 export const NO_ACCOUNT_MESSAGE = "There's no Bank Ledger account for that email. Ask the ledger's owner to invite you.";
@@ -81,15 +84,53 @@ export function signInErrorMessage(error: unknown): string {
   const msg = errorMessage(error);
   // GoTrue answers an OTP for an unknown email with shouldCreateUser=false like this.
   if (code === "otp_disabled" || code === "user_not_found" || /signups? not allowed|user not found/i.test(msg)) return NO_ACCOUNT_MESSAGE;
-  if (code === "invalid_credentials" || /invalid login credentials/i.test(msg)) return "That email and password don't match.";
-  if (code === "otp_expired" || /token has expired|otp.*(expired|invalid)/i.test(msg)) return "That code has expired or is wrong. Ask for a new link.";
+  if (code === "otp_expired" || /token has expired|otp.*(expired|invalid)/i.test(msg)) return "That code has expired or is wrong. Ask for a new code.";
   if (code === "over_email_send_rate_limit" || /rate limit/i.test(msg)) return "Too many emails sent. Wait a minute, then try again.";
-  return msg;
+  if (/error sending .*email/i.test(msg)) return "We couldn't send the email just now. Try again in a minute.";
+  return passkeyErrorMessage(code) ?? msg;
+}
+
+/** Sentences for GoTrue's passkey error codes, or null when the code isn't one. */
+export function passkeyErrorMessage(code: string): string | null {
+  switch (code) {
+    case "webauthn_credential_not_found":
+      return "That passkey is no longer on your Bank Ledger account. Sign in with an email code, then add a new one.";
+    case "webauthn_challenge_expired":
+    case "webauthn_challenge_not_found":
+      return "The passkey prompt timed out. Try again.";
+    case "webauthn_verification_failed":
+      return "The passkey couldn't be verified. Try again, or sign in with an email code.";
+    case "webauthn_credential_exists":
+      return "This device already has a passkey for your account.";
+    case "too_many_passkeys":
+      return "You've reached the passkey limit. Remove one in Settings → Account first.";
+    case "passkey_disabled":
+      return "Passkeys are turned off for Bank Ledger right now. Use an email code.";
+    default:
+      return null;
+  }
 }
 
 export async function verifyEmailCode(email: string, token: string): Promise<void> {
   const { error } = await supabase.auth.verifyOtp({ email, token, type: "email" });
   check(error);
+}
+
+/** Discoverable passkey sign-in: no email needed. Resolves to false when the person cancels. */
+export async function signInWithPasskey(opts?: { conditional?: boolean }): Promise<boolean> {
+  const { error } = await supabase.auth.signInWithPasskey(opts?.conditional ? { options: { mediation: "conditional" } } : undefined);
+  if (error && isPasskeyCancel(error)) return false;
+  check(error);
+  return true;
+}
+
+/** The browser's "cancelled / timed out / aborted" outcomes are not errors to show. */
+export function isPasskeyCancel(error: unknown): boolean {
+  const e = error as { code?: string; name?: string; message?: string; cause?: { name?: string } } | null;
+  if (!e) return false;
+  const names = [e.code, e.name, e.cause?.name];
+  if (names.some((n) => n === "ERROR_CEREMONY_ABORTED" || n === "NotAllowedError" || n === "AbortError")) return true;
+  return /not allowed|operation either timed out|aborted|cancel/i.test(e.message ?? "");
 }
 
 export async function signOut(): Promise<void> {

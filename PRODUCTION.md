@@ -60,14 +60,28 @@ leaving behind:
 ### 2.2 Auth
 
 Dashboard → Authentication:
-- **URL Configuration.** Site URL is the Vercel production URL. Add redirect URLs for the
-  Vercel domain(s) and `http://127.0.0.1:5173` if you want to test magic links against prod.
-- **Providers → Email** enabled (email OTP or magic link). Sign in with Apple isn't used yet.
+- **URL Configuration.** Site URL is the Vercel production URL (the invite email's *Open Bank
+  Ledger* button points there). There are no sign-in links, so no extra redirect URLs are needed.
+- **Sign-in is code-only.** Providers → Email enabled; every email template carries a one-time
+  code (`{{ .Token }}`, 8 digits in production) and **no sign-in link**; there are no passwords.
+  The templates live in `supabase/templates/*.html` and `[auth.email.template.*]` in
+  `supabase/config.toml`, and were pushed to production on 2026-10-08 (§2.7).
+- **Passkeys** (Authentication → Passkeys, beta): enabled. Relying party: display name
+  `Bank Ledger`, **RP ID `<web-host>`**, origin
+  `https://<web-host>`. The iOS app uses the same RP through its Associated
+  Domains entitlement `webcredentials:<web-host>`, which Apple verifies
+  against `https://<web-host>/.well-known/apple-app-site-association`
+  (`apps/web/public/.well-known/`, team `<apple-team-id>`, served as JSON by `vercel.json`).
+  **Changing the RP ID (e.g. a custom domain) strands every existing passkey**; people would
+  sign in with a code and add a new one. Clients: supabase-js ≥ 2.105, supabase-swift ≥ 2.48
+  (`@_spi(Experimental)`). After an email-code sign-in both apps offer to add a passkey; "Not
+  now" is remembered per user on that device, and Settings → Account (web) / Settings →
+  Passkeys (iOS) add, rename and remove them.
 - **Sign-ups: off, always.** Authentication → Sign In / Providers → *Allow new users to sign
   up* = **off** (local `supabase/config.toml` has `[auth] enable_signup = false` to match). A
   signed-up stranger could create ledgers and use storage, LLM and queue capacity, so Bank Ledger
-  never accepts self-registration. The web's magic link no longer creates users
-  (`shouldCreateUser: false`); an unknown email is told to ask a ledger owner for an invite.
+  never accepts self-registration. The email-code request never creates users
+  (`shouldCreateUser: false` on web and iOS); an unknown email is told to ask a ledger owner for an invite.
 - **Adding a member** (sign-ups stay off):
   1. An owner adds the email. The Edge Function **`member-invite`** (`{profile_code, email,
      role}`) runs `add_profile_member` as the owner and, when the email has no Auth user yet
@@ -79,7 +93,8 @@ Dashboard → Authentication:
   2. Fallback: Dashboard → Authentication → Users → **Invite user** with that email. The
      `auth.users` insert trigger claims the pending invite, so the person lands in the ledger
      with the stored role.
-  3. They open the invite email (or request an email code) and sign in.
+  3. The invite email tells them to open Bank Ledger and sign in with that address; the code
+     they request confirms the account (the *Confirm signup* template also sends a code).
 
   If the email already has an Auth user, step 1 adds them directly (`added`) and nothing is
   sent. The invite link goes to the caller's own web origin (`ALLOWED_ORIGINS` when set), so
@@ -103,10 +118,22 @@ supabase db push                    # applies supabase/migrations/* in order
   - enable the extensions `pg_trgm`, `pgmq`, `pg_cron` and `pg_net`
   - create the private Storage bucket **`statements`** (25 MB, `application/pdf`)
   - create the pgmq queues (`parse_document`, `llm_categorize`, `sms_fallback`, each with a
-    `_dlq`)
+    `_dlq`, and `storage_cleanup` for PDFs of a deleted profile)
   - schedule the pg_cron jobs (§2.6)
   - add the Realtime publication
 - `supabase/seed.sql` is **local only**. `db push` never runs it.
+- **`public.rls_auto_enable()` (X-10, decided: leave it).** Production carries Supabase's
+  `rls_auto_enable()` helper (and possibly its `ensure_rls` event trigger), which the local stack
+  and CI don't have. It only turns RLS on for new tables, which every v2 migration does anyway,
+  so it is harmless. Leave it; don't quarantine or drop it. Drift checks should ignore it.
+- **Migrations are never squashed (DB-41, decided).** All `20261008*` migrations are in
+  production, so they stay as they are, including the stale `…900_legacy_import.sql` file name
+  in the comment at the top of `20261008000000_quarantine_legacy.sql` (the file is
+  `20261008000950_legacy_import.sql`). The final definition of a redefined function is listed in
+  docs/audit/01-database.md, Appendix A.
+- **Tests that pin "today".** `ingest_parsed_document` rejects statements dated more than 31
+  days ahead. pgTAP suites with fixed future dates set `ledger.test_today`; nothing in
+  production sets it.
 
 The **Deploy Supabase** workflow (§9) does the same from GitHub.
 
@@ -233,7 +260,12 @@ curl -s -X POST https://<project-ref>.supabase.co/functions/v1/worker \
 Check job health with `select jobname, schedule, active from cron.job;` and
 `select * from cron.job_run_details order by start_time desc limit 20;`.
 `ledger-legacy-choices` removes itself (above); `select * from private.legacy_unmatched_choices();`
-lists staged choices that never met a v2 line.
+lists staged choices that never met a v2 line, and
+`select * from private.legacy_unresolved_category_names();` lists legacy category names that
+match no v2 category even after `private.legacy_category_aliases` (`Entretainment` →
+`Entertainment` is built in; add a row there for any other typo, then the cron applies it).
+Legacy fingerprints collide for genuine same-day repeat purchases, so a fingerprint-keyed choice
+can land on both lines of such a pair (DP-21, accepted: v2 keeps every row).
 
 **Run-history growth.** pg_cron logs every run in `cron.job_run_details` (about 1.6k rows a day;
 the every-minute worker kick alone is 1,440). `ledger-cron-history-purge` (migration
@@ -252,14 +284,26 @@ each daily job.
 | Site URL and redirect URLs | Authentication → URL Configuration | the Vercel production URL (§2.2) | step 9 |
 | Legacy API keys | Project Settings → API Keys → *Legacy API keys* | **disabled**, only after the §2.8 checklist passes | after cutover (§2.8) |
 
-**Product name in dashboards ("Bank Ledger").** The code and `supabase/config.toml` define no
-Auth email templates or sender, so prod uses whatever the dashboards hold. Set these once:
+**Auth config as code.** `supabase/config.toml` holds the Auth email templates
+(`supabase/templates/`: *Magic Link*, *Confirm signup*, *Invite user*, *Change Email Address*,
+*Reauthentication*; code only, no links). Every setting that differs between local and
+production is pinned in the `[remotes.production]` block at the end of the file, so
+`supabase config push --project-ref <project-ref>` (from the repo root) can only write
+production's own values plus the shared templates.
+
+> **Warning.** `supabase config push` has no dry run, sends the whole file, and does **not**
+> ask for confirmation when stdin isn't a terminal. Never run it to "preview a diff"; it is a
+> production write (CLAUDE.md §11). When a setting changes in production, update
+> `[remotes.production]` in the same commit. Verify afterwards with
+> `curl -s https://<project-ref>.supabase.co/auth/v1/settings -H "apikey: <publishable>"`
+> (`mailer_autoconfirm` must be `false`, `disable_signup` `true`, `passkeys_enabled` `true`).
+> Passkey/WebAuthn settings aren't managed by CLI 2.109; they stay in the dashboard.
+
+**Product name in dashboards ("Bank Ledger").** Set these once:
 
 | Setting | Where | Value |
 |---|---|---|
-| Magic link / email code | Authentication → Emails → Templates → *Magic Link* | Subject `Your Bank Ledger sign-in code`; body: `<h2>Sign in to Bank Ledger</h2><p>Your code is <strong>{{ .Token }}</strong>, or <a href="{{ .ConfirmationURL }}">sign in with this link</a>.</p><p>If you didn't ask for this, ignore this email.</p>` |
-| Invite | Templates → *Invite user* | Subject `You're invited to Bank Ledger`; body names Bank Ledger and keeps `{{ .ConfirmationURL }}` |
-| Reset password, Change email | Templates → *Reset Password*, *Change Email Address* | Replace "your account" wording with "your Bank Ledger account" (keep the `{{ … }}` variables) |
+| Email templates | `supabase/templates/` via config push (above) | Done 2026-10-08 |
 | Sender name | Authentication → Emails → SMTP Settings | *Sender name* `Bank Ledger` (needs custom SMTP; the built-in sender's name can't be changed) |
 | Google consent screen | GCP `<gcp-project>` → Google Auth Platform → Branding | App name `Bank Ledger` (§5) |
 | Microsoft consent | Entra → App registrations → the Outlook app → Branding | Name `Bank Ledger` (§6) |
@@ -760,14 +804,23 @@ history):
   as an owner (or from Cards & Statements → documents in the web app). Re-ingest is in place, so codes, categories and
   notes survive.
 - **DLQ:** inspect with `select msg_id, message from pgmq.q_parse_document_dlq;` (`dlq_reason`
-  is inside `message`). Fix the cause, then:
-  - For documents, `requeue_documents` re-queues them.
-  - For other queues, use
-    `select pgmq.send('<queue>', message - 'dlq_reason' - 'dlq_at') from pgmq.q_<queue>_dlq where msg_id = <id>;`
-    then `select pgmq.delete('<queue>_dlq', <id>);`.
+  is inside `message`). Fix the cause, then (service role, e.g. the SQL editor):
+  - `select public.requeue_dlq('<queue>', 100);` moves messages back with a fresh attempt
+    count; for `parse_document` it also re-opens the failed documents. (`requeue_documents`
+    still works per profile.)
+  - `select public.drain_dlq('<queue>');` deletes them instead.
+  - `<queue>` is `parse_document`, `llm_categorize` or `sms_fallback`.
+- **Batch job errors:** `select * from private.job_errors order by created_at desc limit 50;`
+  (per-profile failures of `nightly`, `enqueue_llm_categorize`, `recategorize_stale`,
+  `reestimate_pending_fx`; kept 30 days, counted in `ops_health.job_errors_24h`).
+- **Promote an LLM SMS template:** an approved proposal parses only its own profile's messages.
+  To make it global: `select public.promote_sms_template('<tpl_…>');`.
+- **Delete a profile:** an owner calls `select public.delete_profile('<prf_…>', '<profile key>');`.
+  Vault secrets go with it; its PDFs are queued on `storage_cleanup` (`{bucket, paths[]}`) for
+  the worker to remove through the Storage API.
 - **New SMS format:** add a template row in a guarded content migration (CLAUDE.md §1.9) with
-  `examples`. The validation trigger proves it parses, and unparsed messages re-run
-  automatically. Or approve an LLM proposal in the Review inbox.
+  at least one `examples` entry (required). The validation trigger proves it parses, and the
+  unparsed messages from its senders re-run automatically. Or approve an LLM proposal in the Review inbox.
 - **Add a member:** owner adds the email in Settings → Members, then Dashboard → Authentication
   → Users → Invite user (§2.2). Sign-ups stay off.
 - **Secret rotation:**
