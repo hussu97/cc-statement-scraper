@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import logging
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import typer
+
+if TYPE_CHECKING:
+    from scraper.client import ScraperClient
 
 app = typer.Typer(
     name="ccs-scraper",
@@ -35,7 +39,7 @@ def scrape(
     from scraper.banks.bank_config import load_app_config
     from scraper.banks.downloader import run_end_to_end_downloads
     from scraper.config import get_config
-    from scraper.client import ScraperClient
+    from scraper.upload_state import UploadedState
 
     cfg = get_config(profile=profile)
     if headless is not None:
@@ -103,11 +107,8 @@ def scrape(
             typer.echo("No new PDFs downloaded this session to upload.")
             return
 
-        client = ScraperClient(
-            base_url=cfg.target_url,
-            api_token=cfg.api_token,
-            profile_key=cfg.profile_key,
-        )
+        client = _make_client(cfg)
+        uploaded_state = UploadedState(cfg.download_dir / "state")
 
         # Group PDFs by the bank that produced them (recorded at download time).
         # Any PDF not in the map falls back to a None key and the backend will
@@ -117,11 +118,10 @@ def scrape(
             code = bank_map.get(pdf)
             groups.setdefault(code, []).append(pdf)
 
-        for code, group in groups.items():
-            typer.echo(f"Uploading {len(group)} PDF(s) for bank {code or '(unknown)'} ...")
-            result = client.upload_pdfs(group, bank_code=code)
-            typer.echo(f"Upload result: {result}")
-            bank_map.remove(group)
+        # BankMap entries are kept after upload so `upload-pending` can re-send
+        # them later; uploaded.json records what already reached the server.
+        failures = _upload_groups(client, groups, uploaded_state)
+        _report_failures(failures, profile)
 
 
 @app.command()
@@ -131,22 +131,61 @@ def upload(
 ) -> None:
     """Upload existing local PDF files to backend API."""
     from scraper.config import get_config
-    from scraper.client import ScraperClient
+    from scraper.upload_state import UploadedState
 
     cfg = get_config(profile=profile)
-    client = ScraperClient(
-        base_url=cfg.target_url,
-        api_token=cfg.api_token,
-        profile_key=cfg.profile_key,
-    )
+    client = _make_client(cfg)
     missing = [f for f in files if not f.exists()]
     if missing:
         typer.echo(f"Files not found: {missing}", err=True)
         raise typer.Exit(1)
 
-    typer.echo(f"Uploading {len(files)} file(s) to {cfg.target_url} ...")
+    typer.echo(f"Uploading {len(files)} file(s) to {client.upload_url} ...")
     result = client.upload_pdfs(files)
-    typer.echo(f"Upload result: {result}")
+    typer.echo(_format_result(result))
+    _record_uploaded(UploadedState(cfg.download_dir / "state"), files, result, None)
+
+
+@app.command(name="upload-pending")
+def upload_pending(
+    profile: str = typer.Option(..., "--profile", help="Profile to upload under (e.g. hussain, tejasvie)."),
+    banks: Optional[str] = typer.Option(
+        None,
+        "--banks",
+        help="Comma-separated bank codes to limit the upload to (e.g. FAB,ADCB). Default: all.",
+    ),
+    force: bool = typer.Option(False, "--force", help="Re-send files already recorded as uploaded."),
+) -> None:
+    """Re-send scraped PDFs (recorded in the bank map) that have not been uploaded yet.
+
+    Safe to repeat: the server dedupes by sha256 and reports re-sent files as
+    ``duplicate``.
+    """
+    from scraper.bank_map import BankMap
+    from scraper.config import get_config
+    from scraper.upload_state import UploadedState
+
+    cfg = get_config(profile=profile)
+    state_dir = cfg.download_dir / "state"
+    bank_filter = {b.strip().upper() for b in banks.split(",") if b.strip()} if banks else None
+
+    groups, skipped = _collect_pending(
+        incoming=cfg.download_dir / "incoming",
+        bank_map=BankMap(state_dir),
+        uploaded_state=UploadedState(state_dir),
+        bank_filter=bank_filter,
+        force=force,
+    )
+    if skipped:
+        typer.echo(f"Skipping {skipped} already-uploaded PDF(s) (use --force to re-send).")
+    if not groups:
+        typer.echo("No pending PDFs to upload.")
+        return
+
+    client = _make_client(cfg)
+    typer.echo(f"Uploading to {client.upload_url} ...")
+    failures = _upload_groups(client, groups, UploadedState(state_dir))
+    _report_failures(failures, profile)
 
 
 @app.command(name="install-browser")
@@ -155,6 +194,128 @@ def install_browser() -> None:
     typer.echo("Installing Chromium ...")
     subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=True)
     typer.echo("Done.")
+
+
+def _configure_client_logging() -> None:
+    """Show the upload client's INFO logs (per-file status) on stderr."""
+    client_logger = logging.getLogger("ccs_scraper.client")
+    if not client_logger.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
+        client_logger.addHandler(handler)
+        client_logger.setLevel(logging.INFO)
+        client_logger.propagate = False
+
+
+def _make_client(cfg) -> "ScraperClient":
+    from scraper.client import ScraperClient
+
+    _configure_client_logging()
+    return ScraperClient(
+        base_url=cfg.target_url,
+        api_token=cfg.api_token,
+        profile_key=cfg.profile_key,
+        upload_path=cfg.upload_path,
+        anon_key=cfg.supabase_anon_key,
+    )
+
+
+def _format_result(result: dict) -> str:
+    from scraper.client import parse_upload_response, summarize_uploads
+
+    uploads = parse_upload_response(result)
+    if not uploads:
+        return f"Upload result: {result}"
+    counts = summarize_uploads(uploads)
+    parts = [f"queued={counts.pop('queued', 0)}", f"duplicate={counts.pop('duplicate', 0)}"]
+    parts += [f"{k}={v}" for k, v in sorted(counts.items())]
+    return "Upload result: " + " ".join(parts)
+
+
+def _record_uploaded(uploaded_state, files: list[Path], result: dict, bank_code: str | None) -> None:
+    """Record successfully uploaded *files* in uploaded.json (keyed by sha256).
+
+    With a v2 response, only files echoed back in ``uploads`` are recorded (with
+    their doc_code/status). A legacy response has no per-file detail, so every
+    file in the accepted batch is recorded with status ``uploaded``.
+    """
+    from scraper.client import parse_upload_response
+    from scraper.upload_state import sha256_file
+
+    uploads = parse_upload_response(result)
+    by_name = {u.get("filename"): u for u in uploads}
+    entries: dict[str, dict] = {}
+    for pdf in files:
+        if uploads:
+            item = by_name.get(pdf.name)
+            if item is None:
+                continue
+            info = {"doc_code": item.get("doc_code"), "status": item.get("status")}
+        else:
+            info = {"doc_code": None, "status": "uploaded"}
+        entries[sha256_file(pdf)] = {"filename": pdf.name, "bank_code": bank_code, **info}
+    uploaded_state.record_many(entries)
+
+
+def _upload_groups(client, groups: dict[str | None, list[Path]], uploaded_state) -> list[tuple[str | None, list[Path], str]]:
+    """Upload each bank group; a failing group does not stop the others.
+
+    Returns a list of ``(bank_code, files, error)`` for the groups that failed.
+    """
+    failures: list[tuple[str | None, list[Path], str]] = []
+    for code, group in groups.items():
+        typer.echo(f"Uploading {len(group)} PDF(s) for bank {code or '(unknown)'} ...")
+        try:
+            result = client.upload_pdfs(group, bank_code=code)
+        except Exception as exc:  # noqa: BLE001 — report and continue with remaining groups
+            typer.echo(f"  Upload FAILED for bank {code or '(unknown)'}: {exc}", err=True)
+            failures.append((code, group, str(exc)))
+            continue
+        typer.echo(f"  {_format_result(result)}")
+        _record_uploaded(uploaded_state, group, result, code)
+    return failures
+
+
+def _report_failures(failures: list[tuple[str | None, list[Path], str]], profile: str) -> None:
+    """Print a failure summary and exit non-zero if any group failed."""
+    if not failures:
+        return
+    typer.echo(f"{len(failures)} upload group(s) failed:", err=True)
+    for code, group, error in failures:
+        typer.echo(f"  {code or '(unknown)'}: {len(group)} file(s) — {error}", err=True)
+    typer.echo(f"Retry with: ccs-scraper upload-pending --profile {profile}", err=True)
+    raise typer.Exit(1)
+
+
+def _collect_pending(
+    incoming: Path,
+    bank_map,
+    uploaded_state,
+    bank_filter: set[str] | None = None,
+    force: bool = False,
+) -> tuple[dict[str, list[Path]], int]:
+    """Group incoming PDFs recorded in *bank_map* by bank code.
+
+    Files already in *uploaded_state* are skipped unless *force*. Returns the
+    groups and the number of skipped files.
+    """
+    from scraper.upload_state import sha256_file
+
+    groups: dict[str, list[Path]] = {}
+    skipped = 0
+    if not incoming.exists():
+        return groups, skipped
+    for pdf in sorted(p for p in incoming.iterdir() if p.is_file() and p.suffix.lower() == ".pdf"):
+        code = bank_map.get(pdf)
+        if code is None:
+            continue
+        if bank_filter and code not in bank_filter:
+            continue
+        if not force and uploaded_state.is_uploaded(sha256_file(pdf)):
+            skipped += 1
+            continue
+        groups.setdefault(code, []).append(pdf)
+    return groups, skipped
 
 
 def _months_between(start: str, end: str) -> list[str]:

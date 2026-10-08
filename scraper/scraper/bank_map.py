@@ -1,8 +1,10 @@
 """Persistent mapping of downloaded PDF paths to the bank that produced them.
 
 The map is stored as a JSON file in the scraper state directory so it survives
-process restarts.  Entries are removed after a successful upload so the file
-stays small and only represents PDFs that are pending upload.
+process restarts.  Entries are kept after upload so ``ccs-scraper
+upload-pending`` can re-send a PDF with its bank hint; which files already
+reached the server is tracked separately in ``state/uploaded.json``
+(see ``scraper.upload_state``).
 """
 from __future__ import annotations
 
@@ -27,7 +29,7 @@ class BankMap:
         return self._load().get(str(pdf_path.resolve()))
 
     def remove(self, pdf_paths: list[Path]) -> None:
-        """Remove entries for *pdf_paths* once they have been successfully uploaded."""
+        """Remove entries for *pdf_paths* (e.g. when the PDFs are deleted)."""
         data = self._load()
         changed = False
         for p in pdf_paths:

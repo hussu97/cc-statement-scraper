@@ -7,6 +7,11 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 _ROOT = Path(__file__).resolve().parents[1]
+
+# Legacy FastAPI backend upload route. Ledger v2 (Supabase Edge Function) uses
+# ``/functions/v1/statements-upload`` with CCS_SCRAPER_TARGET_URL=<SUPABASE_URL>.
+DEFAULT_TARGET_URL = "http://127.0.0.1:8040"
+DEFAULT_UPLOAD_PATH = "/api/v1/jobs/upload"
 _ENV_FILE = _ROOT / ".env"
 if _ENV_FILE.exists():
     load_dotenv(_ENV_FILE, override=False)
@@ -15,8 +20,11 @@ if _ENV_FILE.exists():
 @dataclass
 class ScraperConfig:
     # Backend API
-    target_url: str = field(default_factory=lambda: os.environ.get("CCS_SCRAPER_TARGET_URL", "http://127.0.0.1:8000"))
+    target_url: str = field(default_factory=lambda: os.environ.get("CCS_SCRAPER_TARGET_URL") or DEFAULT_TARGET_URL)
+    upload_path: str = field(default_factory=lambda: os.environ.get("CCS_SCRAPER_UPLOAD_PATH") or DEFAULT_UPLOAD_PATH)
     api_token: str = field(default_factory=lambda: os.environ.get("CCS_SCRAPER_API_TOKEN", ""))
+    # Optional Supabase anon/publishable key, sent as the ``apikey`` header when set.
+    supabase_anon_key: str | None = field(default_factory=lambda: os.environ.get("CCS_SCRAPER_SUPABASE_ANON_KEY") or None)
     profile_key: str = field(default="")
 
     # Browser settings
