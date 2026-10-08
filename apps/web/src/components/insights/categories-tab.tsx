@@ -13,7 +13,7 @@ import { Tooltip as HoverTip } from "@/components/ui/primitives";
 import { EmptyState, LoadingRows, QueryView } from "@/components/ui/states";
 import { TooltipCard } from "@/components/charts/chart-tooltip";
 import { categoryVar } from "@/components/charts/palette";
-import { countLabel, deltaTone, rangeLabel } from "./labels";
+import { changeTone, countLabel, rangeLabel } from "./labels";
 
 type Row = RpcReturn<"category_breakdown">[number];
 
@@ -72,11 +72,10 @@ function Breakdown({ rows, range }: { rows: Row[]; range: DateRange }) {
 }
 
 function CategoryRow({ row, range, barRatio }: { row: Row; range: DateRange; barRatio: number | null }) {
-  // category_breakdown returns both periods' amounts; the ratio is display-only.
-  const ratio = displayRatio(row.amount, row.prev_amount);
-  const delta = formatChange(ratio === null ? null : ratio - 1);
-  const tone = deltaTone(row.amount, row.prev_amount);
-  const isNew = delta === null && (toAmount(row.prev_amount) ?? 0) === 0;
+  // Server fraction vs the previous period of the same length; null when that period had no spend.
+  const delta = formatChange(row.change);
+  const tone = changeTone(row.change);
+  const isNew = delta === null;
   return (
     <li>
       <Link

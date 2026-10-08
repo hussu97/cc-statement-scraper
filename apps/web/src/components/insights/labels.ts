@@ -22,12 +22,14 @@ export function resolveTab(tab: string | undefined): InsightTab {
   return INSIGHT_TABS.some((t) => t.value === tab) ? (tab as InsightTab) : "trends";
 }
 
-/** Spending more than before is a warning; spending less is good news. */
-export function deltaTone(current: MoneyInput, previous: MoneyInput): "warn" | "positive" | "neutral" {
-  const c = toAmount(current);
-  const p = toAmount(previous);
-  if (c === null || p === null || p === 0 || c === p) return "neutral";
-  return c > p ? "warn" : "positive";
+/**
+ * Tone for a server change fraction (e.g. category_breakdown.change, 0.12 = +12%):
+ * spending more than before is a warning; spending less is good news.
+ */
+export function changeTone(change: MoneyInput): "warn" | "positive" | "neutral" {
+  const f = toAmount(change);
+  if (f === null || f === 0) return "neutral";
+  return f > 0 ? "warn" : "positive";
 }
 
 const ANOMALY_REASONS: Record<string, string> = {
