@@ -1,613 +1,559 @@
-# Production Deployment Guide
+# Production — Ledger v2
 
-Step-by-step instructions for deploying the full stack. Follow the sections in order — each service depends on values from the previous one.
+This is the free-tier deployment plan for Ledger v2 and the runbook for cutting over from legacy
+v1. Read [ARCHITECTURE.md](ARCHITECTURE.md) first.
 
-For the system architecture overview see [ARCHITECTURE.md](ARCHITECTURE.md).
-
----
-
-## Services overview
-
-| Service | Platform | Notes |
-|---------|----------|-------|
-| Database | Supabase | Free managed PostgreSQL |
-| Backend API | Render | `Dockerfile.api`, embedded worker |
-| PDF Storage | GCS | Cloud Storage bucket |
-| Frontend | Vercel | Static React build |
-| Gmail Relay | GCP Cloud Run | `Dockerfile.gmail-relay` — only needed for Gmail ingestion |
-| Scraper | Local machine | `scraper/` CLI, run manually when needed |
+> **Production data is irreplaceable.** Never push migrations, deploy functions or run writes
+> against the production project without an explicit go-ahead (CLAUDE.md §11). Every
+> `scripts/migrate_legacy.py` step is a dry run unless you pass `--apply`.
 
 ---
 
-## Prerequisites
+## 1. Services
 
-| Tool | Purpose |
-|------|---------|
-| Git | Clone and push |
-| Python 3.12+ | Generate secret keys locally |
-| Node 20 LTS | Frontend build (Vercel handles this, but useful locally) |
-| `gcloud` CLI | GCS bucket + Cloud Run (Gmail relay only) |
-| `gsutil` | GCS bucket setup (bundled with `gcloud`) |
+| Service | Platform (free tier) | Identifier |
+|---|---|---|
+| Database, Auth, Storage, Edge Functions, Realtime, Vault, pg_cron, pgmq | Supabase Free | project **`cc-statement-scraper`**, ref **`<project-ref>`** (the same project legacy uses) |
+| Statement parser | GCP Cloud Run | service `ccs-parser`, region `europe-west1`, min instances 0 |
+| Web app | Vercel Hobby | root directory `apps/web` |
+| iPhone app | TestFlight | bundle `com.example.ledger`, team `<apple-team-id>` |
+| Gmail push | GCP Pub/Sub | topic `ccs-gmail-push`, push subscription → `gmail-push` function |
+| Outlook | Azure app registration (personal accounts) | polled by `outlook-poll` |
+| Error tracking | Sentry (free) | projects `ledger-backend`, `ledger-apps` |
+| LLM | Anthropic API | `ANTHROPIC_API_KEY` (optional; costs a few cents a month) |
+| Scraper | Local laptop | `scraper/` CLI |
 
-Install the `gcloud` CLI: https://cloud.google.com/sdk/docs/install
+**Free-tier limits to watch:**
+- 500 MB database and 1 GB Storage. The PDFs are the bulk.
+- 500k Edge Function invocations a month. The worker kick only calls the worker when a queue
+  has work.
+- The project pauses after 7 idle days. Daily SMS and cron traffic keep it awake, and
+  `ops-heartbeat` alerts if it pauses.
+
+**Tooling:**
+- Supabase CLI ≥ 2.100, `gcloud`, Node 20 + pnpm, Deno 2, Python 3.12 + uv, Xcode + XcodeGen.
+- `psql` (or the Supabase SQL editor) for Vault and one-off SQL.
 
 ```bash
-gcloud auth login
-gcloud config set project YOUR_GCP_PROJECT_ID
+supabase login
+supabase link --project-ref <project-ref>     # asks for the DB password
 ```
 
 ---
 
-## 1 — Supabase (PostgreSQL)
+## 2. Supabase
 
-### 1.1 Create a project
+### 2.1 Postgres version (upgrade recommended)
 
-1. Sign up at [supabase.com](https://supabase.com) and click **New project**.
-2. Choose an organisation, set a project name, and pick a region close to your Render region (e.g. `us-east-1`).
-3. The default database name is `postgres` — leave it as-is.
+The project runs **Postgres 17.6.1.104**. On this build, calling a function the caller lacks
+EXECUTE on **segfaults the server**. v2 never uses `REVOKE EXECUTE` and guards every RPC in its
+body instead, so it is safe as is. Still, a crash-on-call bug in production Postgres is worth
+leaving behind:
 
-### 1.2 Get the connection string
+1. Dashboard → Project Settings → Infrastructure → **Upgrade** to the latest offered 17.x
+   image. Do it during the cutover freeze (§10, step 3), after the backup: it restarts the
+   database (a few minutes of downtime).
+2. After the upgrade, re-run the repro on a scratch function (create, revoke from
+   `authenticated`, call as `authenticated`). Expect `permission denied`, not a crash. Record
+   the result in CLAUDE.md §1.6. Keep the in-body guards either way.
 
-In the Supabase dashboard go to **Project Settings → Database → Connection string** and select the **Session pooler** tab (not Transaction pooler — transaction mode breaks SQLAlchemy's prepared statements). Copy the URI. It looks like:
+### 2.2 Auth
 
+Dashboard → Authentication:
+- **URL Configuration.** Site URL is the Vercel production URL. Add redirect URLs for the
+  Vercel domain(s) and `http://127.0.0.1:5173` if you want to test magic links against prod.
+- **Providers → Email** enabled (email OTP or magic link). Sign in with Apple isn't used yet.
+- **Sign-ups.** Members must be able to sign up to claim their invite: `add_profile_member`
+  stores pending invites by email, and sign-up attaches them. Leave email sign-ups on until both
+  members exist, then optionally disable them. RLS isolates any stray account anyway.
+- **SMTP.** The built-in sender is heavily rate-limited (a few emails an hour). That is fine for
+  two people. Configure custom SMTP if OTP emails go missing.
+
+### 2.3 Database migrations
+
+```bash
+supabase db push --dry-run          # lists the migrations that would run
+supabase db push                    # applies supabase/migrations/* in order
 ```
-postgresql+psycopg://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres?sslmode=require
+
+- The first migration, `20261008000000_quarantine_legacy.sql`, **moves every legacy table and
+  enum from `public` into a `legacy` schema**, only when `public.alembic_version` exists. The
+  legacy backend stops working from this point, so push only inside the cutover freeze (§10).
+- The migrations also:
+  - enable the extensions `pg_trgm`, `pgmq`, `pg_cron` and `pg_net`
+  - create the private Storage bucket **`statements`** (25 MB, `application/pdf`)
+  - create the pgmq queues (`parse_document`, `llm_categorize`, `sms_fallback`, each with a
+    `_dlq`)
+  - schedule the pg_cron jobs (§2.6)
+  - add the Realtime publication
+- `supabase/seed.sql` is **local only**. `db push` never runs it.
+
+The **Deploy Supabase** workflow (§9) does the same from GitHub.
+
+### 2.4 Vault secrets
+
+Run these once in the SQL editor. Values never go in migrations.
+
+```sql
+select vault.create_secret('https://<project-ref>.supabase.co', 'project_url');
+select vault.create_secret('<CRON_SECRET>', 'edge_cron_secret');   -- same value as the CRON_SECRET function secret
+-- to change later: select vault.update_secret(id, '<new>') from vault.secrets where name = 'edge_cron_secret';
 ```
 
-> **Why session pooler?** Supabase exposes three connection modes. The session pooler (port 5432 on the pooler host) is compatible with SQLAlchemy because it supports prepared statements. The transaction pooler (port 6543) does not and will cause errors at runtime.
+Per-profile and per-mailbox secrets are written through RPCs, never by hand:
 
-Save this — it becomes `CCS_PLATFORM_DATABASE_URL` on Render.
+| Vault name | Written by | Read by |
+|---|---|---|
+| `profile:<prf_…>:FAB_PDF_PASSWORD` … `MASHREQ_PDF_PASSWORD`, `ADCB_CID` | web Settings → PDF passwords (`set_profile_secret`), or `migrate_legacy.py --step secrets` | worker → parser `settings` |
+| `mailbox:<mbx_…>:refresh_token` | web Settings → Sources → mailbox → Set refresh token (`set_mailbox_secret`), or the cutover script | gmail-push, gmail-watch-renew, outlook-poll |
 
-### 1.3 Note on migrations
+### 2.5 Edge Functions
 
-Alembic runs automatically on every app startup — `init_db()` calls `alembic upgrade head` before the server begins serving traffic. No pre-deploy command or manual migration step is needed.
+Function secrets (`SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are
+injected automatically):
+
+```bash
+supabase secrets set --project-ref <project-ref> \
+  CRON_SECRET="$(openssl rand -hex 32)" \
+  PARSER_URL=https://ccs-parser-<hash>-ew.a.run.app \
+  PARSER_SECRET=<same value as the parser-secret Secret Manager secret> \
+  ANTHROPIC_API_KEY=<key> \
+  GMAIL_PUSH_AUDIENCE=https://<project-ref>.supabase.co/functions/v1/gmail-push \
+  GMAIL_PUSH_SA_EMAIL=ccs-gmail-push@<gcp-project>.iam.gserviceaccount.com \
+  GMAIL_PUBSUB_TOPIC=projects/<gcp-project>/topics/ccs-gmail-push \
+  GMAIL_OAUTH_CLIENT_ID=<google oauth client id> GMAIL_OAUTH_CLIENT_SECRET=<secret> \
+  MS_OAUTH_CLIENT_ID=<azure client id> MS_OAUTH_CLIENT_SECRET=<secret> \
+  ALLOWED_ORIGINS=https://<vercel-domain> \
+  SENTRY_DSN=<ledger-backend DSN> SENTRY_ENVIRONMENT=production SENTRY_RELEASE=$(git rev-parse --short HEAD)
+supabase secrets list --project-ref <project-ref>
+```
+
+- Use the `CRON_SECRET` value you put in Vault as `edge_cron_secret`.
+- Optional overrides: `LLM_MODEL`, `MS_OAUTH_TENANT` (`consumers`), `OUTLOOK_LOOKBACK_DAYS`,
+  `OUTLOOK_BUDGET_MS`, `WORKER_BUDGET_MS`, `PARSER_TIMEOUT_MS`,
+  `OPS_SMS_UNPARSED_THRESHOLD`, `OPS_OPEN_REVIEWS_THRESHOLD` and `SENTRY_TRACES_SAMPLE_RATE`
+  (see README).
+- **Never set `PARSER_DOCUMENT_BASE_URL` in production.** It exists for local Docker only.
+
+Deploy every function. Each one's `verify_jwt = false` comes from `supabase/config.toml`:
+
+```bash
+supabase functions deploy --project-ref <project-ref>
+# statements-upload sms-ingest worker gmail-push gmail-watch-renew outlook-poll ops-monitor fx-rates
+```
+
+Smoke test:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' -X POST https://<project-ref>.supabase.co/functions/v1/worker   # 401 without x-cron-secret
+curl -s -X POST https://<project-ref>.supabase.co/functions/v1/worker \
+  -H "x-cron-secret: $CRON_SECRET" -d '{"sync":true}'                                                         # summary JSON
+```
+
+### 2.6 pg_cron jobs (created by migrations)
+
+| Job | Schedule (UTC) | Runs |
+|---|---|---|
+| `ledger-worker-kick` | every minute | `worker`, only when a queue has visible messages |
+| `ledger-recategorize-sweep` | `17 */3 * * *` | stale `rules_version` sweep |
+| `ledger-fx-rates` | `0 21 * * *` | `fx-rates` function |
+| `ledger-nightly` | `0 22 * * *` (02:00 Dubai) | void released authorisations, recurring detection, insights |
+| `ledger-llm-enqueue` | `30 22 * * *` | queue uncategorised merchants for the LLM |
+| `ledger-legacy-choices` | `45 22 * * *` | re-apply staged legacy category choices (cutover helper; idempotent) |
+| `ledger-ops-monitor` | `*/15 * * * *` | `ops-monitor` → Sentry plus the `ops-heartbeat` check-in |
+| `ledger-gmail-watch-renew` | `0 3 * * *` | `gmail-watch-renew` |
+| `ledger-outlook-poll` | `5 * * * *` | `outlook-poll` |
+
+Check job health with `select jobname, schedule, active from cron.job;` and
+`select * from cron.job_run_details order by start_time desc limit 20;`. Once v2 parity is
+signed off and every staged choice has applied, unschedule the legacy helper with
+`select cron.unschedule('ledger-legacy-choices')`. Do this in a new migration.
 
 ---
 
-## 2 — GCS Storage Bucket
+## 3. Parser on Cloud Run
 
-### 2.1 Create the bucket
-
-```bash
-export PROJECT=your-gcp-project-id
-export BUCKET=ccs-platform-pdfs        # must be globally unique
-export REGION=us-east1                 # match Render/Supabase region
-
-gsutil mb -p $PROJECT -l $REGION -b on gs://$BUCKET
-```
-
-`-b on` enables uniform bucket-level access (no per-object ACLs).
-
-### 2.2 Create a service account
+From `services/parser/README.md`, with legacy GCP conventions (project from
+`GCP_PROJECT_ID`, Artifact Registry repo `ccs-platform` in `europe-west1`).
 
 ```bash
-gcloud iam service-accounts create ccs-backend \
-  --project $PROJECT \
-  --display-name "CCS Backend"
+PROJECT=<gcp-project>; REGION=europe-west1; SERVICE=ccs-parser
+
+# One time: secrets in Secret Manager and a least-privilege service account
+printf '%s' "$(openssl rand -hex 32)" | gcloud secrets create parser-secret --data-file=- --project "$PROJECT"
+printf '%s' "<ledger-backend DSN>"    | gcloud secrets create parser-sentry-dsn --data-file=- --project "$PROJECT"
+gcloud iam service-accounts create ccs-parser --project "$PROJECT"
+for s in parser-secret parser-sentry-dsn; do
+  gcloud secrets add-iam-policy-binding "$s" --project "$PROJECT" \
+    --member "serviceAccount:ccs-parser@$PROJECT.iam.gserviceaccount.com" --role roles/secretmanager.secretAccessor
+done
+
+# Build and deploy (from services/parser)
+gcloud run deploy "$SERVICE" --source . --project "$PROJECT" --region "$REGION" \
+  --service-account "ccs-parser@$PROJECT.iam.gserviceaccount.com" \
+  --allow-unauthenticated --min-instances 0 --max-instances 3 \
+  --cpu 1 --memory 1Gi --concurrency 4 --timeout 120 \
+  --set-secrets PARSER_SECRET=parser-secret:latest,SENTRY_DSN=parser-sentry-dsn:latest \
+  --set-env-vars SENTRY_ENVIRONMENT=production,SENTRY_RELEASE=$(git rev-parse --short HEAD),PARSER_ALLOWED_HOSTS=<project-ref>.supabase.co
+curl -s "$(gcloud run services describe $SERVICE --region $REGION --format 'value(status.url)')/health"
 ```
 
-### 2.3 Grant bucket access
-
-```bash
-gsutil iam ch \
-  serviceAccount:ccs-backend@$PROJECT.iam.gserviceaccount.com:roles/storage.objectAdmin \
-  gs://$BUCKET
-```
-
-### 2.4 Download a JSON key
-
-```bash
-gcloud iam service-accounts keys create gcs-key.json \
-  --iam-account ccs-backend@$PROJECT.iam.gserviceaccount.com \
-  --project $PROJECT
-```
-
-Keep `gcs-key.json` — you'll paste its contents into a Render secret file in the next section.
+- `--allow-unauthenticated` is required. The worker authenticates with `X-Parser-Secret`, not a
+  Google identity token. `PARSER_ALLOWED_HOSTS` limits downloads to the project's Storage.
+- After deploying, set the service URL as `PARSER_URL` and the `parser-secret` value as
+  `PARSER_SECRET` in the function secrets (§2.5).
+- To rotate the secret: add a new secret version, redeploy the parser, then
+  `supabase secrets set PARSER_SECRET=…`. Parses fail as *transient* in between and retry.
+- The **Deploy Parser** workflow (§9) builds the image with `services/parser/Dockerfile`, pushes
+  it to Artifact Registry and runs the same `gcloud run deploy`.
 
 ---
 
-## 3 — Render (Backend API)
-
-### 3.1 Generate secrets locally
-
-Run these commands on your local machine and copy the outputs:
-
-```bash
-# Session signing key
-python -c "import secrets; print(secrets.token_hex(32))"
-
-# Fernet encryption key for runtime settings
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-```
-
-Also generate bcrypt password hashes for each admin account:
-
-```bash
-cd backend && source .venv/bin/activate
-ccs-platform hash-password    # enter alice's password → copy $2b$... output
-ccs-platform hash-password    # enter bob's password → copy $2b$... output
-```
-
-### 3.2 Create the web service
-
-1. In the Render dashboard click **New → Web Service**.
-2. Connect your GitHub repo.
-3. Set:
-   - **Name**: `ccs-platform`
-   - **Runtime**: `Docker`
-   - **Dockerfile path**: `deploy/Dockerfile.api`
-   - **Docker context**: `.` (repo root)
-   - **Instance type**: Free (512 MB RAM)
-   - **Region**: Choose one closest to your Supabase region
-
-### 3.3 Add the GCS key as a secret file
-
-In the Render service → **Environment → Secret Files**, click **Add Secret File**:
-
-- **Filename** (the mount path inside the container): `/etc/secrets/gcs-key.json`
-  - This is a file path, **not** an environment variable name — type it exactly as shown
-- **Contents**: paste the full JSON contents of `gcs-key.json`
-
-Then in **Environment → Environment Variables** add:
-
-| Key | Value |
-|-----|-------|
-| `CCS_PLATFORM_GCS_CREDENTIALS_FILE` | `/etc/secrets/gcs-key.json` |
-
-> The secret file and the env var work together: Render writes the JSON to the path,
-> and the app reads it via the env var. Both must be set.
-
-### 3.4 Set environment variables
-
-In the Render service → **Environment → Environment Variables**, add all of the following:
-
-**Required:**
-
-| Key | Value |
-|-----|-------|
-| `CCS_PLATFORM_ENVIRONMENT` | `production` |
-| `CCS_PLATFORM_DATABASE_URL` | The Supabase session-pooler DSN from step 1.2 |
-| `CCS_PLATFORM_SESSION_SECRET_KEY` | Output from `secrets.token_hex(32)` |
-| `CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY` | Output from `Fernet.generate_key()` |
-| `CCS_PLATFORM_LOGIN_HASH_HUSSAIN` | `$2b$...` hash from `hash-password` |
-| `CCS_PLATFORM_LOGIN_HASH_BOB` | `$2b$...` hash from `hash-password` |
-| `CCS_PLATFORM_STORAGE_BACKEND` | `gcs` |
-| `CCS_PLATFORM_GCS_BUCKET` | `ccs-platform-pdfs` (your bucket name) |
-| `CCS_PLATFORM_GCS_CREDENTIALS_FILE` | `/etc/secrets/gcs-key.json` |
-
-**Recommended:**
-
-| Key | Value |
-|-----|-------|
-| `CCS_PLATFORM_EMBEDDED_WORKER` | `true` |
-| `CCS_PLATFORM_CORS_ALLOW_ORIGINS` | `https://your-vercel-app.vercel.app` |
-| `CCS_PLATFORM_TIMEZONE` | `Asia/Dubai` |
-| `CCS_PLATFORM_REQUEST_LOGGING_ENABLED` | `false` |
-
-### 3.5 Deploy
-
-Click **Deploy** (or push to your connected branch). Watch the build logs — a successful deploy ends with:
-
-```
-Uvicorn running on http://0.0.0.0:8040
-```
-
-### 3.6 Verify
-
-```bash
-curl https://your-service.onrender.com/api/v1/health
-# → {"status": "ok", ...}
-```
-
-### 3.7 Seed runtime settings (first boot only)
-
-After the first deploy, navigate to the admin UI:
-
-1. Log in with alice or bob credentials.
-2. Go to **Runtime Variables**.
-3. For each profile (alice, bob), set the PDF decryption passwords:
-   - `ADCB_PDF_PASSWORD`
-   - `ADCB_CID` (fallback)
-   - `SIB_PDF_PASSWORD`
-
-Alternatively, add these to the Render environment before the first deploy (they are seeded automatically on startup):
-
-```
-ALICE_ADCB_PDF_PASSWORD=...
-ALICE_SIB_PDF_PASSWORD=...
-BOB_ADCB_PDF_PASSWORD=...
-BOB_SIB_PDF_PASSWORD=...
-```
-
-### 3.8 Create service tokens
-
-**Scraper token** (used by the local CLI):
-
-1. In the admin UI go to **Service API Tokens → New token**.
-2. Set scope: `email_ingestion:upload`.
-3. Copy the token — this becomes `CCS_SCRAPER_API_TOKEN` in the scraper's `.env`.
-
-**Email ingestion token** (used by the GitHub Actions workflows `email-ingest-microsoft.yml` and any Gmail relay):
-
-1. In the admin UI go to **Service API Tokens → New token**.
-2. Set **all three** scopes:
-   - `email_ingestion:read` — list mailboxes, routes, and fetch OAuth access tokens
-   - `email_ingestion:write` — update per-mailbox sync state after each run
-   - `email_ingestion:upload` — upload matched PDF attachments
-3. Copy the token — this becomes `CCS_SERVICE_TOKEN` in the GitHub Actions secrets (and `CCS_SERVICE_TOKEN` env var for the Gmail relay Cloud Run deployment).
-
-> **Common mistake:** a token with only `email_ingestion:upload` will be rejected with `HTTP 401 Invalid service token` when the ingestion script calls `/automation/routes` or `/automation/mailboxes`, which require `email_ingestion:read`.
-
----
-
-## 4 — Vercel (Frontend)
-
-### 4.1 Import the project
-
-1. Go to [vercel.com](https://vercel.com) and click **Add New → Project**.
-2. Import your GitHub repository.
-
-### 4.2 Configure the project
+## 4. Web on Vercel
 
 | Setting | Value |
-|---------|-------|
-| **Root Directory** | `frontend` |
-| **Framework Preset** | Vite |
-| **Build Command** | `npm run build` |
-| **Output Directory** | `dist` |
-
-### 4.3 Set environment variables
-
-No frontend env vars are required. `VITE_API_BASE_URL` must be **unset** (or empty) so the
-frontend uses same-origin paths (`/api/v1/…`) which are proxied to Render by `vercel.json`.
-
-> **Do not set `VITE_API_BASE_URL` to the Render URL** — doing so breaks session cookies on
-> Safari and Chrome incognito because cross-site `SameSite=None` cookies are blocked by
-> browser privacy settings.
-
-### 4.4 Deploy
-
-Click **Deploy**. On success, Vercel shows the production URL (e.g. `https://ccs.vercel.app`).
-
-Go back to Render and update `CCS_PLATFORM_CORS_ALLOW_ORIGINS` to the exact Vercel URL.
-
-### 4.5 Verify
-
-Open the Vercel URL in a browser — you should see the login page.
-
----
-
-## 5 — Gmail Pub/Sub & Relay Worker
-
-This section is only needed if you want automatic Gmail PDF ingestion. Skip it if you use manual scraping only.
-
-### 5.1 Enable required APIs
-
-```bash
-gcloud services enable \
-  run.googleapis.com \
-  pubsub.googleapis.com \
-  gmail.googleapis.com \
-  cloudscheduler.googleapis.com \
-  --project $PROJECT
-```
-
-### 5.2 Create the Pub/Sub topic and subscription
-
-```bash
-export TOPIC=ccs-gmail-push
-export RUN_SERVICE_URL=https://ccs-gmail-relay-xxxx-uc.a.run.app  # placeholder, update after step 5.5
-
-# Create topic
-gcloud pubsub topics create $TOPIC --project $PROJECT
-
-# Grant Gmail permission to publish to the topic
-gcloud pubsub topics add-iam-policy-binding $TOPIC \
-  --member=serviceAccount:gmail-api-push@system.gserviceaccount.com \
-  --role=roles/pubsub.publisher \
-  --project $PROJECT
-```
-
-The subscription is created after the Cloud Run URL is known (step 5.6).
-
-### 5.3 Create an OAuth 2.0 client for Gmail
-
-1. In GCP Console go to **APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client ID**.
-2. Application type: **Web application**.
-3. Add `https://your-service.onrender.com` as an **Authorized redirect URI**.
-4. Copy the **Client ID** and **Client Secret**.
-
-Set these on Render:
-
-```
-CCS_PLATFORM_EMAIL_INGESTION_ENABLED=true
-CCS_PLATFORM_EMAIL_GMAIL_CLIENT_ID=<client-id>
-CCS_PLATFORM_EMAIL_GMAIL_CLIENT_SECRET=<client-secret>
-CCS_PLATFORM_EMAIL_OAUTH_REDIRECT_URI=https://your-service.onrender.com
-```
-
-### 5.4 Generate the Gmail OAuth refresh token
-
-In the admin UI:
-
-1. Go to **Email Ingestion → Mailboxes → Add mailbox** (provider: Gmail).
-2. Click **OAuth Token Setup** and follow the browser flow to authorize.
-3. The refresh token is stored automatically in runtime settings.
-
-### 5.5 Create a service account for the relay
-
-```bash
-gcloud iam service-accounts create ccs-gmail-relay \
-  --display-name "CCS Gmail Relay" \
-  --project $PROJECT
-```
-
-### 5.6 Create a service API token for the relay
-
-In the admin UI go to **Service API Tokens → New token**. Set scope: `email_ingestion:upload`. Copy the token.
-
-### 5.7 Build and deploy the Cloud Run relay
-
-```bash
-# Build and push
-gcloud builds submit \
-  --tag gcr.io/$PROJECT/ccs-gmail-relay \
-  --dockerfile deploy/Dockerfile.gmail-relay \
-  . \
-  --project $PROJECT
-
-# Deploy
-gcloud run deploy ccs-gmail-relay \
-  --image gcr.io/$PROJECT/ccs-gmail-relay \
-  --region us-central1 \
-  --platform managed \
-  --no-allow-unauthenticated \
-  --service-account ccs-gmail-relay@$PROJECT.iam.gserviceaccount.com \
-  --set-env-vars "CCS_API_BASE_URL=https://your-service.onrender.com,CCS_SERVICE_TOKEN=<relay-service-token>,CCS_GMAIL_WATCH_TOPIC=projects/$PROJECT/topics/$TOPIC" \
-  --project $PROJECT
-```
-
-Copy the Cloud Run service URL from the output.
-
-### 5.8 Create the push subscription
-
-```bash
-export RUN_SERVICE_URL=https://ccs-gmail-relay-xxxx-uc.a.run.app  # from step 5.7 output
-
-# Allow Pub/Sub to invoke the Cloud Run service
-gcloud run services add-iam-policy-binding ccs-gmail-relay \
-  --region us-central1 \
-  --member=serviceAccount:service-$(gcloud projects describe $PROJECT --format='value(projectNumber)')@gcp-sa-pubsub.iam.gserviceaccount.com \
-  --role=roles/run.invoker \
-  --project $PROJECT
-
-# Create push subscription pointing at the relay
-gcloud pubsub subscriptions create ccs-gmail-push-sub \
-  --topic $TOPIC \
-  --push-endpoint="$RUN_SERVICE_URL/pubsub/push" \
-  --push-auth-service-account=ccs-gmail-relay@$PROJECT.iam.gserviceaccount.com \
-  --ack-deadline=60 \
-  --project $PROJECT
-```
-
-### 5.9 Schedule daily Gmail watch renewal
-
-Gmail push watches expire after 7 days. A Cloud Scheduler job renews them daily.
-
-```bash
-# Create the scheduler job
-gcloud scheduler jobs create http ccs-gmail-watch-renew \
-  --schedule="0 6 * * *" \
-  --uri="$RUN_SERVICE_URL/watch/renew" \
-  --http-method=POST \
-  --oidc-service-account-email=ccs-gmail-relay@$PROJECT.iam.gserviceaccount.com \
-  --location=us-central1 \
-  --project $PROJECT
-```
-
-### 5.10 Verify
-
-```bash
-# Trigger a manual watch renewal to confirm end-to-end connectivity
-gcloud scheduler jobs run ccs-gmail-watch-renew \
-  --location=us-central1 \
-  --project $PROJECT
-```
-
-Check Cloud Run logs:
-
-```bash
-gcloud run services logs read ccs-gmail-relay \
-  --region us-central1 \
-  --project $PROJECT \
-  --limit 50
-```
-
----
-
-## 6 — Microsoft Outlook / Hotmail Ingestion
-
-This section is only needed if you want automatic email PDF ingestion from Outlook/Hotmail mailboxes. The backend polls Microsoft Graph API directly — no relay worker or Pub/Sub is required.
-
-### 6.1 Register an Azure app
-
-1. Go to [Azure Portal](https://portal.azure.com) → **Microsoft Entra ID → App registrations → New registration**.
-2. **Name**: `ccs-platform` (or any name you prefer).
-3. **Supported account types**: select **Personal Microsoft accounts only** (covers outlook.com, hotmail.com, live.com).
-4. **Redirect URI**: Web → `https://your-service.onrender.com` (replace with your actual Render URL — this is where Microsoft sends the auth code after the user logs in).
-5. Click **Register**.
-
-### 6.2 Add API permissions
-
-In the app → **API permissions → Add a permission → Microsoft Graph → Delegated permissions**, add:
-
-| Permission | Purpose |
 |---|---|
-| `Mail.Read` | Read inbox messages |
-| `offline_access` | Issue refresh tokens (required for long-lived access) |
+| Root Directory | `apps/web` (enable "Include files outside the root directory", since it uses workspace packages) |
+| Framework preset | Vite |
+| Install command | `pnpm install --frozen-lockfile` (Vercel detects pnpm 10 from `packageManager`) |
+| Build command | `pnpm build` (`prebuild` builds `@ledger/tokens`, then `tsc -b && vite build`) |
+| Output directory | `dist` |
+| Node | 20.x or newer |
 
-Click **Grant admin consent** if prompted (may not be needed for personal accounts).
+**Environment variables** (Production; Preview with `VITE_SENTRY_ENVIRONMENT=preview`):
 
-### 6.3 Create a client secret
-
-In the app → **Certificates & secrets → Client secrets → New client secret**:
-
-- Set an expiry (24 months recommended).
-- Copy the **Value** immediately — it is not shown again.
-
-### 6.4 Copy credentials
-
-From the app **Overview** page:
-
-| What | Where |
+| Variable | Value |
 |---|---|
-| **Client ID** | Application (client) ID field |
-| **Client secret** | The value you copied in 6.3 |
+| `VITE_SUPABASE_URL` | `https://<project-ref>.supabase.co` |
+| `VITE_SUPABASE_ANON_KEY` | Dashboard → API keys → anon/publishable |
+| `VITE_SENTRY_DSN` | `ledger-apps` DSN |
+| `VITE_SENTRY_ENVIRONMENT` | `production` |
+| `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` | source-map upload (build only) |
+| `SENTRY_PROJECT` | `ledger-apps` (`vite.config.ts` defaults to `ledger-web`, so this must be set) |
 
-### 6.5 Set environment variables on Render
+**SPA rewrites.** TanStack Router uses browser history (`/activity`, `/settings`, …), so deep
+links need a fallback to `index.html`. **`apps/web` has no `vercel.json` yet.** Add
+`apps/web/vercel.json` before switching production:
 
-In Render → **Environment → Environment Variables**, add:
+```json
+{ "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }] }
+```
 
-| Key | Value |
+Unlike legacy `frontend/vercel.json`, there is no `/api` proxy: the app talks to Supabase
+directly.
+
+Use a **new Vercel project** for `apps/web` and keep the legacy project until §10 step 9, when
+the production domain moves.
+
+---
+
+## 5. Gmail push
+
+1. **Topic** (reuse the legacy one): `ccs-gmail-push`, with `gmail-api-push@system.gserviceaccount.com`
+   granted `roles/pubsub.publisher` (already done for legacy).
+2. **Push service account.** `ccs-gmail-push@<project>.iam.gserviceaccount.com`. Reusing legacy
+   `ccs-gmail-relay@…` is fine; set whichever you pick as `GMAIL_PUSH_SA_EMAIL`. The Pub/Sub
+   service agent must be able to mint tokens for it:
+   ```bash
+   gcloud iam service-accounts add-iam-policy-binding ccs-gmail-push@$PROJECT.iam.gserviceaccount.com \
+     --member serviceAccount:service-$(gcloud projects describe $PROJECT --format='value(projectNumber)')@gcp-sa-pubsub.iam.gserviceaccount.com \
+     --role roles/iam.serviceAccountTokenCreator
+   ```
+3. **Push subscription.** The OIDC audience must equal `GMAIL_PUSH_AUDIENCE`. The ack deadline
+   must be **≥ 120 s**, because a push with several PDFs can take a while and a 500 response
+   triggers redelivery.
+   ```bash
+   gcloud pubsub subscriptions modify-push-config ccs-gmail-push-sub --project $PROJECT \
+     --push-endpoint=https://<project-ref>.supabase.co/functions/v1/gmail-push \
+     --push-auth-service-account=ccs-gmail-push@$PROJECT.iam.gserviceaccount.com \
+     --push-auth-token-audience=https://<project-ref>.supabase.co/functions/v1/gmail-push
+   gcloud pubsub subscriptions update ccs-gmail-push-sub --ack-deadline=120 --project $PROJECT
+   ```
+   For a fresh setup, use `subscriptions create … --topic ccs-gmail-push` with the same flags.
+4. **OAuth client.**
+   - Function secrets: `GMAIL_OAUTH_CLIENT_ID` and `GMAIL_OAUTH_CLIENT_SECRET`.
+   - Refresh tokens: the cutover moves the existing ones into Vault. For a new mailbox, get a
+     refresh token with scope `https://www.googleapis.com/auth/gmail.readonly`, for example
+     through the OAuth Playground using your own client after adding
+     `https://developers.google.com/oauthplayground` as a redirect URI. Then paste it in
+     web Settings → Sources → mailbox → Set refresh token.
+5. **Watch.** `ledger-gmail-watch-renew` renews daily (watches expire after 7 days) on
+   `GMAIL_PUBSUB_TOPIC`, using `sync_state.watch_label_ids` (default `["INBOX"]`). Trigger the
+   first watch by hand:
+   ```bash
+   curl -s -X POST https://<project-ref>.supabase.co/functions/v1/gmail-watch-renew -H "x-cron-secret: $CRON_SECRET"
+   ```
+   The first push after a watch only stores the history cursor. Later pushes ingest.
+
+## 6. Outlook
+
+1. Reuse the legacy Azure app registration (personal Microsoft accounts) or create one. Grant
+   delegated Graph permissions `Mail.Read` and `offline_access`, and create a client secret
+   (note its expiry).
+2. Set the function secrets `MS_OAUTH_CLIENT_ID` and `MS_OAUTH_CLIENT_SECRET`, plus
+   `MS_OAUTH_TENANT` if not `consumers`.
+3. Refresh tokens move with the cutover script. A new mailbox needs an auth-code exchange for a
+   refresh token with scope `offline_access https://graph.microsoft.com/Mail.Read`, pasted in
+   Settings → Sources.
+4. `ledger-outlook-poll` runs hourly at :05. Run it once by hand to verify:
+   `curl -X POST …/functions/v1/outlook-poll -H "x-cron-secret: $CRON_SECRET"`.
+
+---
+
+## 7. iOS release (TestFlight)
+
+1. Create `apps/ios/Config/Secrets.Release.xcconfig` (gitignored):
+   ```
+   LEDGER_SUPABASE_URL = https:/$()/<project-ref>.supabase.co
+   LEDGER_SUPABASE_ANON_KEY = <anon key>
+   LEDGER_SENTRY_DSN = <ledger-apps DSN>
+   ```
+2. Register the App Group `group.com.example.ledger` and the keychain group (automatic signing
+   does it on first archive).
+3. Release:
+   ```bash
+   export SENTRY_AUTH_TOKEN=… SENTRY_ORG=… SENTRY_PROJECT=ledger-apps   # dSYMs → ledger-apps
+   export ASC_KEY_ID=… ASC_ISSUER_ID=…                                 # + AuthKey_<id>.p8
+   apps/ios/scripts/publish-build.sh --upload
+   git add apps/ios/build-number.json && git commit …                   # the script bumps it
+   ```
+   - The script refuses to run without the release xcconfig, or if it points at 127.0.0.1.
+   - It runs `swift test`, archives, exports, uploads dSYMs and uploads to TestFlight.
+   - `--stage` stages the IPA on the `ios-ledger-staged` GitHub release instead.
+4. On each phone, after installing from TestFlight:
+   - Sign in.
+   - Settings → *Set up SMS capture*: create the "Message contains …" automations with **Run
+     Immediately**.
+   - Send yourself a test bank-format SMS and confirm a pending transaction appears on the web
+     app.
+
+---
+
+## 8. Sentry
+
+Two projects (see ARCHITECTURE.md §10):
+
+| Project | Platform | DSN goes to |
+|---|---|---|
+| `ledger-backend` | Deno / Python | `supabase secrets set SENTRY_DSN=…`, Secret Manager `parser-sentry-dsn` |
+| `ledger-apps` | React / Apple | Vercel `VITE_SENTRY_DSN` (+ `SENTRY_PROJECT=ledger-apps` for source maps), iOS `LEDGER_SENTRY_DSN` (+ `SENTRY_PROJECT=ledger-apps` for dSYMs) |
+
+Events carry the tag `service` (edge | parser) in `ledger-backend` and `app` (web | ios) in
+`ledger-apps`. Until the runtimes set these tags (ROADMAP), filter by `function` or
+`parser_version` (backend) and by platform or `target` (iOS).
+
+**Alerts:**
+
+| Alert | Project | Rule |
+|---|---|---|
+| New issue | both | Issue alert: "A new issue is created", `environment:production`, notify by email |
+| Ops heartbeat | `ledger-backend` | Cron monitor `ops-heartbeat`, auto-created by the first check-in (`*/15 * * * *`, 5 min margin), alert on missed or failed check-in |
+| DLQ > 0 | `ledger-backend` | Issue alert: event tag `ops_issue` starts with `dlq:` (from `ops-monitor`), plus worker DLQ error events, any frequency |
+| iOS crash-free < 99% | `ledger-apps` | Metric alert: crash-free session rate < 99% over 24 h, filtered `app:ios` (if session alerts can't filter on the tag, filter on the iOS release package `com.example.ledger`) |
+
+Non-production debug triggers to verify delivery:
+- Edge: the `?debug_sentry=1` flag.
+- Parser: `GET /debug-sentry`, with `X-Parser-Secret`.
+- iOS: the Settings → Debug section.
+- Web: no trigger yet (ROADMAP).
+
+---
+
+## 9. CI/CD (GitHub Actions)
+
+| Workflow | Trigger | What |
+|---|---|---|
+| `ci.yml` | PRs, pushes to `main`, manual | Path-filtered jobs:<br>• `supabase`: `supabase start`, `db reset`, `test db`, DB types drift<br>• `edge`: `deno test`<br>• `parser`: ruff, pytest<br>• `web`: tokens check, lint, test, build<br>• `ios`: `swift test` on LedgerKit, macOS; only on LedgerKit/tokens changes or manual runs<br>• `scraper`<br>• legacy `backend`, `backend-security`, `frontend` |
+| `deploy-supabase.yml` | **manual only** | `supabase db push` and/or `supabase functions deploy`. Requires typing the project ref to confirm. Runs in the `production` environment. |
+| `deploy-parser.yml` | **manual only** | Builds `services/parser`, pushes to Artifact Registry, runs `gcloud run deploy ccs-parser` (min instances 0, secrets from Secret Manager) |
+| `security.yml` | weekly, manual | pip-audit (legacy backend and parser), bandit, Trivy (legacy image) |
+| `deploy-backend.yml`, `deploy-frontend.yml`, `deploy-gmail-relay.yml`, `email-ingest-microsoft.yml` | **legacy** | Remove at decommission (§10, step 12) |
+
+Production deploys are never automatic.
+
+**GitHub secrets.** Create a `production` environment with required reviewers.
+
+| Secret | Used by |
 |---|---|
-| `CCS_PLATFORM_EMAIL_INGESTION_ENABLED` | `true` |
-| `CCS_PLATFORM_EMAIL_MS_CLIENT_ID` | Client ID from 6.4 |
-| `CCS_PLATFORM_EMAIL_MS_CLIENT_SECRET` | Client secret value from 6.4 |
-| `CCS_PLATFORM_EMAIL_OAUTH_REDIRECT_URI` | `https://your-service.onrender.com` (must match the redirect URI registered in 6.2) |
+| `SUPABASE_ACCESS_TOKEN` | deploy-supabase (personal access token) |
+| `SUPABASE_DB_PASSWORD` | deploy-supabase (`supabase link` / `db push`) |
+| `SUPABASE_PROJECT_REF` | deploy-supabase, deploy-parser (`<project-ref>`) |
+| `GCP_SA_KEY`, `GCP_PROJECT_ID` | deploy-parser (same pattern as the legacy gmail relay) |
 
-Redeploy the service after adding these.
-
-### 6.6 Generate the OAuth refresh token
-
-In the admin UI:
-
-1. Go to **Email Ingestion → OAuth Token Setup → Microsoft**.
-2. Click **Authorize** — a Microsoft login URL opens in a new tab.
-3. Log in with the Outlook/Hotmail account whose inbox you want to ingest.
-4. After login, Microsoft redirects to your Render URL. Copy the **full browser URL** (it contains `?code=...`).
-5. Paste the full URL (or just the `code=` value) into the code input field in the admin UI.
-6. Click **Exchange** — the backend exchanges the code for a refresh token server-side.
-7. Copy the refresh token shown and click **Save to Mailbox**, selecting the mailbox to attach it to.
-
-The refresh token is stored encrypted in runtime settings and used for all future polling.
-
-### 6.7 Add the mailbox
-
-In the admin UI → **Email Ingestion → Mailboxes → Add mailbox**:
-
-- **Provider**: Microsoft
-- **Email**: the Outlook/Hotmail address from step 6.6
-- **Active**: enabled
-
-The backend will start polling on the next worker cycle.
-
-### 6.8 Verify
-
-In the admin UI → **Email Ingestion → Mailboxes**, confirm the mailbox shows a recent `Last Sync` timestamp and no errors.
+The GCP deploy SA needs roles `run.admin`, `artifactregistry.writer` and
+`iam.serviceAccountUser` on `ccs-parser@`.
 
 ---
 
-## 7 — Scraper CLI (local)
+## 10. Cutover runbook
 
-The scraper runs on your local machine to download bank statements and upload them to the deployed backend.
+Legacy and v2 share the Supabase project. The first v2 migration moves the legacy tables into
+the `legacy` schema, which stops the legacy backend. Plan a quiet evening, about 2–3 hours plus
+parsing time. Steps are in order; nothing is deleted until step 12.
 
-### 7.1 Install
+**Before the day:**
+- Parser deployed and healthy (§3); new Vercel project building `apps/web` (§4, with
+  `vercel.json`).
+- Sentry projects created (§8).
+- Both members' emails confirmed: **`h_abbasi97@hotmail.com`** owns profile `alice` and
+  **`bob@example.com`** owns profile `bob`.
+- Local tools ready:
+  ```bash
+  backend/.venv/bin/pip install psycopg[binary] httpx cryptography google-cloud-storage
+  ```
+- Legacy values at hand: the Fernet key (`CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY` from
+  Render), the GCS bucket name and a read-capable SA key.
 
-```bash
-cd scraper
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e .
-ccs-scraper install-browser
-```
+### Steps
 
-### 7.2 Configure
+1. **Freeze legacy.**
+   - Render: suspend the `ccs-platform` web service, which runs the API and embedded worker.
+   - Disable the `email-ingest-microsoft` workflow (`gh workflow disable email-ingest-microsoft.yml`).
+   - Pause the Cloud Scheduler job `ccs-gmail-watch-renew`.
+   - Don't run the scraper.
+   - Gmail notifications keep queueing in Pub/Sub, which retries them. Optionally detach the
+     push endpoint so they wait.
+2. **Back up.**
+   ```bash
+   pg_dump "$LEGACY_DB_URL" -Fc -f legacy-$(date +%F).dump        # whole DB (session pooler, port 5432)
+   pg_dump "$LEGACY_DB_URL" --schema=public --data-only -Fc -f legacy-public-data-$(date +%F).dump
+   gsutil ls -l -r gs://<legacy-bucket> > gcs-listing-$(date +%F).txt
+   ```
+   - Keep the dumps and listing off-machine.
+   - Record the legacy row counts (`statements`, `statement_lines`, `pdf_files`) for comparison.
+3. **Upgrade Postgres** (§2.1, recommended). Wait until the project is healthy.
+4. **Apply v2 migrations.** `supabase db push --dry-run`, then `supabase db push`. Or run the
+   Deploy Supabase workflow with `db_push = true`.
+   - Verify `select count(*) from legacy.statements;` matches the backup.
+   - Verify `public` now holds the v2 tables.
+5. **Set Vault and secrets.**
+   - Vault `project_url` and `edge_cron_secret` (§2.4).
+   - All function secrets (§2.5) except the Gmail and MS OAuth client values, which come from
+     step 7.
+6. **Deploy Edge Functions** (§2.5) and confirm that the parser `/health` responds and that the
+   `worker` smoke test returns a summary.
+7. **Migrate data** with `scripts/migrate_legacy.py`. Run each step dry first, then `--apply`.
+   ```bash
+   export LEDGER_DB_URL=postgresql://postgres.<project-ref>:<pw>@aws-0-<region>.pooler.supabase.com:5432/postgres
+   export SUPABASE_URL=https://<project-ref>.supabase.co SUPABASE_SERVICE_ROLE_KEY=<service role key>
+   export LEGACY_FERNET_KEY=<legacy runtime settings key> LEGACY_STORAGE=gcs LEGACY_GCS_BUCKET=<bucket> \
+          GOOGLE_APPLICATION_CREDENTIALS=/path/to/legacy-reader.json
+   M='{"alice":"h_abbasi97@hotmail.com","bob":"bob@example.com"}'
 
-```bash
-cp .env.example .env
-```
+   backend/.venv/bin/python scripts/migrate_legacy.py --step metadata --members "$M"            # dry run
+   backend/.venv/bin/python scripts/migrate_legacy.py --step metadata --members "$M" --apply
+   backend/.venv/bin/python scripts/migrate_legacy.py --step secrets                           # dry run
+   backend/.venv/bin/python scripts/migrate_legacy.py --step secrets --apply --functions-env-out supabase/functions/.env.production
+   backend/.venv/bin/python scripts/migrate_legacy.py --step pdfs --limit 3 --apply             # canary: watch them parse
+   backend/.venv/bin/python scripts/migrate_legacy.py --step pdfs --apply
+   ```
+   - **metadata** imports profiles, legacy-only categories, user rules, staged category choices
+     and email mailboxes and routes. Members who haven't signed up are stored as pending
+     invites and claimed at sign-up.
+   - **secrets** moves PDF passwords and mailbox refresh tokens into Vault, and writes the
+     OAuth app credentials to the env file. That file is gitignored by the root `.env.*`
+     rule; delete it after use.
+     > The script writes `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET`, but the
+     > functions read **`GMAIL_OAUTH_CLIENT_ID` / `GMAIL_OAUTH_CLIENT_SECRET`**. Rename those
+     > two lines before running `supabase secrets set --env-file supabase/functions/.env.production`.
+     > The `MS_OAUTH_*` names match.
+   - **pdfs** uploads every legacy PDF into Storage as `documents(source='legacy')`. Real
+     statements go first, oldest first, and SIB history extracts last. The worker re-parses
+     them through the v2 pipeline.
+8. **Wait for the worker to drain.**
+   ```sql
+   select parse_status, count(*) from public.documents group by 1;   -- until no queued/parsing
+   ```
+   ```sql
+   select queue_name, queue_length from pgmq.metrics_all();
+   ```
+   - Investigate `failed` documents (`parse_error_code`). Fix the password in Settings, then
+     `select requeue_documents('<prf_…>', array['doc_…'])` as an owner, or update and requeue
+     via SQL.
+   - Then finalize:
+     ```bash
+     backend/.venv/bin/python scripts/migrate_legacy.py --step finalize           # read the parity report
+     backend/.venv/bin/python scripts/migrate_legacy.py --step finalize --apply   # apply staged legacy category choices
+     ```
+   - **Parity sign-off.** Per profile and bank, `months_with_delta` should be explained only by
+     the expected deltas: SIB history duplicates that legacy double-counted now disappear, and
+     Mashreq FX rows gain AED estimates. Anything else blocks the rest of the cutover.
+9. **Switch the web app.** Promote the `apps/web` Vercel project to the production domain and
+   remove the domain from the legacy project. Sign in as both members and check Overview,
+   Activity and Cards & Statements against legacy numbers.
+10. **Point the scraper at v2** (in `scraper/.env`):
+    ```dotenv
+    CCS_SCRAPER_TARGET_URL=https://<project-ref>.supabase.co
+    CCS_SCRAPER_UPLOAD_PATH=/functions/v1/statements-upload
+    CCS_SCRAPER_SUPABASE_ANON_KEY=<anon key>
+    CCS_SCRAPER_API_TOKEN=ccs_…     # new v2 token, scope statements:upload
+    ```
+    - v2 tokens belong to one profile. Create one per profile in Settings → Sources → Tokens,
+      and pass the matching one per run, e.g.
+      `CCS_SCRAPER_API_TOKEN=$BOB_TOKEN ccs-scraper scrape --profile bob`.
+    - Run `ccs-scraper upload-pending --profile alice` to confirm the upload path. Already
+      imported PDFs return `duplicate`.
+11. **Switch email.**
+    - Gmail: repoint the push subscription to `gmail-push` (§5, item 3), run `gmail-watch-renew` once,
+      then send yourself a test statement email and check `public.email_events`.
+    - Outlook: run `outlook-poll` once and check the mailbox `last_synced_at`.
+    - **Verify:**
+      - `ops-monitor` returns no issues.
+      - `ops-heartbeat` is checking in.
+      - Sentry shows no new errors.
+      - A test SMS from each phone appears live.
+      - `statement_recon` shows no unexpected `fail`.
+12. **Keep legacy read-only for 30 days, then decommission.** Until then the `legacy` schema
+    stays untouched (no client role can read it) and Render stays suspended, not deleted.
+    After 30 clean days:
+    - Delete the Render service, the legacy Vercel project, the Cloud Run `ccs-gmail-relay`
+      service and its Cloud Scheduler job, and the GCS bucket. Export the bucket first if you
+      want a cold copy.
+    - Delete the workflows `deploy-backend.yml`, `deploy-frontend.yml`, `deploy-gmail-relay.yml`
+      and `email-ingest-microsoft.yml`, and the legacy CI jobs.
+    - Delete `backend/`, `frontend/`, `deploy/Dockerfile.api`, `deploy/Dockerfile.frontend`,
+      `deploy/Dockerfile.gmail-relay` and the legacy `docs/operations` and `docs/security`
+      notes.
+    - Optionally `select cron.unschedule('ledger-legacy-choices')` (in a migration).
+    - Dropping the `legacy` schema is a separate, explicit decision. Take a final `pg_dump`
+      first.
 
-Minimum `.env` for production use:
+### Rollback
 
-```env
-CCS_SCRAPER_TARGET_URL=https://your-service.onrender.com
-CCS_SCRAPER_API_TOKEN=<service token from step 3.8>
-CCS_SCRAPER_HEADLESS=true
+| Failure point | Rollback |
+|---|---|
+| Before step 4 | Resume Render, re-enable the MS workflow and the scheduler job. Nothing changed. |
+| Steps 4–8 (v2 schema applied, parity not signed off) | Stop the v2 cron by deleting the Vault secret `edge_cron_secret`, which makes `invoke_edge` skip, or unschedule `ledger-worker-kick`. Move the legacy tables back: in one transaction, `alter table legacy.<t> set schema public` and `alter type legacy.<type> set schema public` for every table and enum listed in `20261008000000_quarantine_legacy.sql`. Rename or drop the clashing v2 tables first; `profiles`, `banks`, `categories`, `category_rules`, `statements`, `statement_lines`, `email_mailboxes` and `audit_events` share names. As a last resort, restore `legacy-<date>.dump` into a fresh project. Then resume Render and the legacy jobs and repoint nothing (no external endpoints were switched yet). |
+| Steps 9–11 | Point the Vercel domain back at the legacy project, restore the Pub/Sub push endpoint to the legacy relay URL, set the scraper back to `CCS_SCRAPER_UPLOAD_PATH=/api/v1/jobs/upload` and the Render URL, then follow the row above. |
+| After step 12 | No rollback to legacy. Restore from the final dump if ever needed. |
 
-ALICE_FAB_USERNAME=...
-ALICE_FAB_PASSWORD=...
-ALICE_ADCB_CID=...
-ALICE_ADCB_LOGIN_PASSWORD=...
-ALICE_ADCB_PDF_PASSWORD=...
-# ... add other banks as needed
-
-BOB_FAB_USERNAME=...
-# ... bob credentials
-```
-
-### 7.3 Run
-
-```bash
-# Scrape all configured banks for alice (current month)
-ccs-scraper scrape --profile alice
-
-# Backfill a date range
-ccs-scraper scrape --profile alice --months 2024-01:2025-12
-
-# Scrape bob
-ccs-scraper scrape --profile bob --months 2025-01:2025-12
-
-# Upload existing PDFs manually
-ccs-scraper upload --profile alice ~/Downloads/statement.pdf
-```
+Uploads and SMS ingested by v2 during a rollback window stay in v2 and will re-appear when you
+cut over again. sha256 and `client_msg_id` dedup make re-sending them safe.
 
 ---
 
-## Operations
+## 11. Operations
 
-### Key rotation
-
-```bash
-# Rotate runtime settings encryption key
-CCS_PLATFORM_RUNTIME_SETTINGS_OLD_ENCRYPTION_KEY=<old-key> \
-CCS_PLATFORM_RUNTIME_SETTINGS_ENCRYPTION_KEY=<new-key> \
-PYTHONPATH=backend python backend/scripts/rotate_runtime_setting_secrets.py --dry-run
-
-# Remove --dry-run once output looks correct
-```
-
-### Migration preflight
-
-Run before deploying a version that includes DB migrations:
-
-```bash
-cd backend && python scripts/migration_preflight.py
-```
-
-### Retention enforcement
-
-```bash
-# Dry-run (shows what would be deleted)
-PYTHONPATH=backend python backend/scripts/enforce_retention.py
-
-# Apply
-PYTHONPATH=backend python backend/scripts/enforce_retention.py --apply
-```
-
-### Backup / restore drill
-
-```bash
-PYTHONPATH=backend python backend/scripts/backup_platform_state.py --label nightly
-PYTHONPATH=backend python backend/scripts/backup_restore_drill.py --label monthly
-```
-
----
-
-## docker-compose (self-hosted alternative)
-
-For self-hosted deployments (not Render/Vercel):
-
-```bash
-cp .env.example .env.production
-# Edit .env.production with your secrets
-docker-compose -f deploy/docker-compose.prod.yml up -d
-```
+- **Re-parse after a parser fix:** deploy the parser, then `select requeue_documents('<prf_…>')`
+  as an owner (or from Cards & Statements → documents in the web app). Re-ingest is in place, so codes, categories and
+  notes survive.
+- **DLQ:** inspect with `select msg_id, message from pgmq.q_parse_document_dlq;` (`dlq_reason`
+  is inside `message`). Fix the cause, then:
+  - For documents, `requeue_documents` re-queues them.
+  - For other queues, use
+    `select pgmq.send('<queue>', message - 'dlq_reason' - 'dlq_at') from pgmq.q_<queue>_dlq where msg_id = <id>;`
+    then `select pgmq.delete('<queue>_dlq', <id>);`.
+- **New SMS format:** add a template row in a guarded content migration (CLAUDE.md §1.9) with
+  `examples`. The validation trigger proves it parses, and unparsed messages re-run
+  automatically. Or approve an LLM proposal in the Review inbox.
+- **Secret rotation:**
+  - `CRON_SECRET`: update Vault `edge_cron_secret` and the function secret together.
+  - `PARSER_SECRET`: see §3.
+  - Service tokens: revoke and re-create in Settings.
+  - OAuth clients: rotate in Google or Azure, then `supabase secrets set`.
+  - Mailbox tokens: Set refresh token in Settings.
+- **Backups:** the free tier has no downloadable automated backups. Take a monthly
+  `supabase db dump --linked -f ledger-$(date +%F).sql` (schema) and `--data-only` (data). The
+  PDFs are also on the laptop (`scraper/downloads`) and in email.
+- **Pause protection:** if the project pauses, `ops-heartbeat` misses and alerts. Restore it
+  from the dashboard.

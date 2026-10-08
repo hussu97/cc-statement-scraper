@@ -6,6 +6,25 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Ledger v2 parser (Cloud Run image).
+  parser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install pip-audit bandit
+
+      - name: Dependency vulnerability scan
+        run: pip-audit -r services/parser/requirements.txt --strict --disable-pip --no-deps  # fully pinned by uv pip compile
+
+      - name: SAST scan
+        run: bandit -q -r services/parser/ccs_parser -ll -ii
+
+  # LEGACY (v1): backend/ and its image; remove at decommission (PRODUCTION.md §10).
   python:
     runs-on: ubuntu-latest
     steps:
@@ -23,6 +42,7 @@ jobs:
       - name: SAST scan
         run: bandit -q -r backend/ccs_platform -x backend/tests -ll -ii
 
+  # LEGACY (v1)
   container:
     runs-on: ubuntu-latest
     steps:

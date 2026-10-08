@@ -1,5 +1,7 @@
 # Network Hardening Baseline
 
+> **Legacy (v1).** This describes the frozen FastAPI backend (`backend/`) and is kept only until the Ledger v2 cutover. For v2 see [ARCHITECTURE.md](../../ARCHITECTURE.md) and [PRODUCTION.md](../../PRODUCTION.md).
+
 ## Ingress Policy
 - Public ingress is limited to the reverse proxy (`80/443`).
 - API and frontend containers are not published directly; they are only exposed on internal service networks.

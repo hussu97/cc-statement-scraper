@@ -1,197 +1,333 @@
-# Credit Card Statement Platform
+# Ledger
 
-DB-first credit card statement system for FAB, ADCB, ENBD, EIB, SIB, and Mashreq with:
-- Statement header + line canonical storage
-- Deterministic statement replacement on `(bank_code, statement_reference, statement_date)`
-- Async queued jobs for upload, reparse, reclassify, exports, and diagnostics
-- FastAPI backend + React admin panel
-- Decoupled scraper CLI for one-time historical downloads
+A personal credit-card ledger for FAB, ADCB, ENBD, EIB, SIB and Mashreq cards:
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system design and [PRODUCTION.md](PRODUCTION.md) for deployment.
+- **Real time from bank SMS.** An iPhone Shortcuts automation hands each alert to the Ledger
+  app's App Intent.
+- **Reconciled against statements.** Statement PDFs come from the scraper, uploads, Gmail and
+  Outlook.
+- **Evidence-based.** Each transaction is linked to its SMS and statement lines, so nothing is
+  double-counted or lost on re-ingest.
+- **Dynamic categorisation.** Manual > merchant > rule > LLM, recomputed automatically.
+- **Server-side analytics.** Rendered by a React web app and a SwiftUI iPhone app.
 
-## Directory Structure
+Docs:
+- [ARCHITECTURE.md](ARCHITECTURE.md): design, data model, matching, auth
+- [PRODUCTION.md](PRODUCTION.md): deployment and cutover runbook
+- [CHANGELOG.md](CHANGELOG.md)
+- [ROADMAP.md](ROADMAP.md)
+- [docs/contracts/parse-v1.md](docs/contracts/parse-v1.md): parser contract
+- [CLAUDE.md](CLAUDE.md): coding rules
 
-```
-credit-card-scraper/
-├── backend/                   ← Python API package (no Playwright)
-│   ├── ccs_platform/          ← FastAPI app + embedded worker
-│   │   ├── main.py            ← FastAPI app
-│   │   ├── cli.py             ← Typer CLI entry-point
-│   │   ├── api/v1/            ← REST routes + schemas
-│   │   ├── application/       ← jobs, ingestion, analytics, exports
-│   │   ├── domain/            ← parsing models, categorization engine
-│   │   ├── adapters/          ← bank parsers + storage adapters
-│   │   └── db/                ← SQLAlchemy models + session
-│   ├── alembic/               ← database migrations
-│   ├── config/                ← YAML config
-│   ├── scripts/               ← ops/maintenance scripts
-│   ├── tests/                 ← pytest test suite
-│   ├── requirements.txt
-│   ├── requirements-dev.txt
-│   └── pyproject.toml
-├── scraper/                   ← Standalone browser scraper CLI
-│   ├── scraper/
-│   │   ├── cli.py             ← Typer CLI: scrape, upload, install-browser
-│   │   ├── client.py          ← httpx client for backend /api/v1/jobs/upload
-│   │   ├── config.py          ← CCS_SCRAPER_* env settings
-│   │   └── banks/             ← browser adapters (Playwright)
-│   ├── config/banks.yaml      ← Bank portal URLs + file patterns
-│   ├── requirements.txt
-│   └── pyproject.toml
-├── frontend/                  ← React TypeScript admin panel
-├── deploy/                    ← Dockerfiles, Compose, Caddyfile
-├── docs/
-├── ARCHITECTURE.md
-├── PRODUCTION.md
-├── ROADMAP.md
-└── README.md
-```
+## Repository structure
 
-## Architecture
-
-The platform uses a **decoupled architecture**:
-
-- **Backend API** (Render): slim FastAPI service with embedded worker. Handles PDF parsing, statement storage, analytics, exports, email ingestion. No browser code.
-- **Scraper CLI** (local): standalone tool that uses Playwright to download PDFs from bank portals and upload them to the backend via service token.
-- **Frontend** (Vercel): React admin panel calling the backend API.
-- **Gmail Relay** (GCP Cloud Run): forwards email statement attachments to the backend.
-
-## Key APIs
-
-- `POST /jobs/upload` — upload PDFs (session auth or Bearer service token with `upload` scope)
-- `POST /jobs/reclassify`, `POST /jobs/reparse` — reprocess statements
-- `GET /statements`, `GET /statements/{id}/lines`, `GET /statements/{id}/pdf`
-- `/dashboard/overview`, `/dashboard/timeseries`, `/dashboard/category-breakdown`
-- `/runtime-settings` — manage bank credentials and config via admin UI
-
-## Setup — Backend
-
-See [`backend/README.md`](backend/README.md) for full setup instructions.
-
-```bash
-cd backend
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements-dev.txt
-cp .env.example .env  # fill in values
-alembic upgrade head
-ccs-platform api --host 127.0.0.1 --port 8040 --reload
-```
-
-Health check:
-```bash
-curl http://127.0.0.1:8040/api/v1/health
-```
-
-## Setup — Scraper CLI
-
-```bash
-cd scraper
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
-ccs-scraper install-browser          # downloads Chromium (~200 MB, one-time)
-```
-
-Configure `scraper/.env` (copy from `.env.example`):
-```bash
-cp scraper/.env.example scraper/.env
-```
-
-Key settings:
-
-| Variable | Default | Description |
+| Path | What | Stack |
 |---|---|---|
-| `CCS_SCRAPER_TARGET_URL` | `http://127.0.0.1:8040` | Backend API URL |
-| `CCS_SCRAPER_API_TOKEN` | — | Service API token (`upload` scope — create in admin UI → Service API Tokens) |
-| `CCS_SCRAPER_HEADLESS` | `true` | `false` to watch the browser session for debugging |
-| `CCS_SCRAPER_BROWSER_PROXY_URL` | — | Optional SOCKS5/HTTP proxy for all browser traffic |
-| `CCS_SCRAPER_DOWNLOAD_DIR` | `./downloads` | Local directory for downloaded PDFs |
+| `supabase/` | `config.toml`, `migrations/` (schema + all business logic), `functions/` (Edge Functions), `tests/` (pgTAP), `seed.sql` (local demo data) | Postgres 17, Deno 2 |
+| `services/parser/` | Stateless statement parser `POST /parse` for Cloud Run ([README](services/parser/README.md)) | Python 3.12, FastAPI, pdfplumber |
+| `apps/web/` | Web app | Vite, React 19, TanStack Router/Query, supabase-js, Tailwind v4, Recharts |
+| `apps/ios/` | iPhone app, `LedgerKit` package, share extension ([README](apps/ios/README.md)) | SwiftUI, iOS 18, XcodeGen |
+| `packages/tokens/` | Design tokens → CSS variables, chart palette, `Tokens.swift` | Node |
+| `packages/db-types/` | Generated Supabase TypeScript types (never hand-written) | TS |
+| `scraper/` | Local Playwright scraper CLI `ccs-scraper` ([README](scraper/README.md)) | Python 3.12 |
+| `scripts/` | `migrate_legacy.py` (cutover data move), git `hooks/` + `install-hooks.sh` | Python, sh |
+| `docs/` | `contracts/` (parse-v1), legacy `operations/` and `security/` notes | Markdown |
+| `.github/workflows/` | CI (path-filtered) and manual deploy workflows | GitHub Actions |
+| `backend/`, `frontend/`, `deploy/` | **Legacy v1**, frozen until cutover (see below) | FastAPI, React 18 |
 
-### Multi-profile credentials
+## Prerequisites
 
-Credentials are namespaced by profile using a `{PROFILE}_` prefix. Banks with missing credentials are automatically skipped.
+| Tool | Version | Used for |
+|---|---|---|
+| Docker Desktop | recent | local Supabase stack |
+| Supabase CLI | ≥ 2.100 | `supabase start / db reset / test db / functions serve / gen types` |
+| Node + pnpm | Node ≥ 20, pnpm 10 (`corepack enable`) | web app, tokens, workspace scripts |
+| Deno | 2.x | Edge Function tests |
+| Python + uv | 3.12, [uv](https://docs.astral.sh/uv/) | parser, scraper, cutover script |
+| Xcode + XcodeGen | Xcode with the iOS 18+ SDK, `brew install xcodegen` | iPhone app, `swift test` |
 
-```
-ALICE_FAB_USERNAME=           BOB_FAB_USERNAME=
-ALICE_FAB_PASSWORD=           BOB_FAB_PASSWORD=
+## Local setup
 
-ALICE_ADCB_CID=               BOB_ADCB_CID=
-ALICE_ADCB_LOGIN_PASSWORD=    BOB_ADCB_LOGIN_PASSWORD=
-ALICE_ADCB_PDF_PASSWORD=      BOB_ADCB_PDF_PASSWORD=
-
-ALICE_ENBD_USERNAME=          BOB_ENBD_USERNAME=
-ALICE_ENBD_PASSWORD=          BOB_ENBD_PASSWORD=
-
-ALICE_EIB_USERNAME=           BOB_EIB_USERNAME=
-ALICE_EIB_PASSWORD=           BOB_EIB_PASSWORD=
-
-ALICE_SIB_USER_ID=            BOB_SIB_USER_ID=
-ALICE_SIB_PASSWORD=           BOB_SIB_PASSWORD=
-ALICE_SIB_PDF_PASSWORD=       BOB_SIB_PDF_PASSWORD=
-
-ALICE_MASHREQ_USERNAME=       BOB_MASHREQ_USERNAME=
-ALICE_MASHREQ_PASSWORD=       BOB_MASHREQ_PASSWORD=
-```
-
-### Commands
-
-`--profile` is required on every `scrape` and `upload` call.
+### 1. Database and demo data
 
 ```bash
-# Scrape all configured banks for the current month
-ccs-scraper scrape --profile alice
-
-# Scrape specific banks only
-ccs-scraper scrape --profile alice --banks FAB,ADCB
-
-# Scrape a date range (inclusive)
-ccs-scraper scrape --profile alice --months 2024-01:2025-12
-
-# Scrape a single month
-ccs-scraper scrape --profile alice --months 2025-03
-
-# Download only — skip upload to backend
-ccs-scraper scrape --profile alice --no-upload
-
-# Upload existing local PDFs manually
-ccs-scraper upload --profile alice ./downloads/statement.pdf
-
-# Install / reinstall Chromium
-ccs-scraper install-browser
+pnpm install                      # workspace deps (apps/web, packages/*)
+supabase start                    # Postgres, Auth, Storage, Realtime, Edge runtime, Studio
+supabase db reset                 # applies supabase/migrations + supabase/seed.sql
+supabase status -o json           # API_URL, ANON_KEY, SERVICE_ROLE_KEY
 ```
 
-See [`scraper/README.md`](scraper/README.md) for the full CLI reference and bank-specific notes.
+Local ports:
 
-## Setup — Frontend
+| Service | Address |
+|---|---|
+| API / Edge Functions | `http://127.0.0.1:54321` |
+| Postgres | `127.0.0.1:54322` (`postgres`/`postgres`) |
+| Studio | `http://127.0.0.1:54323` |
+| Inbucket (auth emails) | `http://127.0.0.1:54324` |
+
+The seed creates synthetic ledgers with statements, SMS, reviews, budgets, recurring charges and
+insights:
+
+| User | Password | Access |
+|---|---|---|
+| `demo@ledger.local` | `ledger-demo-pass` | Owner of "Demo ledger" and "Household" |
+| `viewer@ledger.local` | `ledger-demo-pass` | Viewer of "Demo ledger" |
+
+pg_cron reaches Edge Functions through two Vault secrets, which you set once after every
+`db reset`. Without them, cron calls are skipped with a notice. The secret must match
+`CRON_SECRET` in `supabase/functions/.env`:
 
 ```bash
-cd frontend
-npm install
-npm run dev
+psql postgresql://postgres:postgres@127.0.0.1:54322/postgres <<'SQL'
+select vault.create_secret('http://host.docker.internal:54321', 'project_url');
+select vault.create_secret('<same value as CRON_SECRET>', 'edge_cron_secret');
+SQL
 ```
 
-Vite dev server proxies `/api` to `http://127.0.0.1:8040`.
-
-## Run Tests
+### 2. Parser (needed for statement uploads to parse)
 
 ```bash
-# Backend
-cd backend && python -m pytest -q
-
-# Frontend
-cd frontend && npm test
+cd services/parser
+uv venv --python 3.12 .venv
+uv pip sync --python .venv/bin/python requirements.txt
+uv pip install --python .venv/bin/python --no-deps -e .
+uv pip install --python .venv/bin/python pytest ruff
+cp .env.example .env              # set PARSER_SECRET; for local dev also:
+#   PARSER_ALLOW_HTTP=true        (local Storage URLs are plain http)
+#   PARSER_ALLOWED_HOSTS=127.0.0.1
+set -a && source .env && set +a
+.venv/bin/uvicorn ccs_parser.app:app --host 127.0.0.1 --port 8080
+curl -s http://127.0.0.1:8080/health
 ```
 
-## Storage backends
+Docker Desktop forwards `host.docker.internal` to the Mac's loopback. On Linux, run uvicorn with
+`--host 0.0.0.0`.
 
-- `CCS_PLATFORM_STORAGE_BACKEND=local|gcs`
-- `CCS_PLATFORM_LOCAL_STORAGE_DIR=...`
-- `CCS_PLATFORM_DATABASE_URL=...` (SQLite for dev, PostgreSQL for prod)
-- `CCS_PLATFORM_GCS_BUCKET=...`
+### 3. Edge Functions
 
-## Migrations
+Create `supabase/functions/.env` (gitignored):
+
+```dotenv
+CRON_SECRET=<random string, same as the edge_cron_secret Vault value>
+PARSER_URL=http://host.docker.internal:8080
+PARSER_SECRET=<same as services/parser/.env>
+# The worker signs Storage URLs with SUPABASE_URL (http://kong:8000 inside Docker).
+# This rewrites their origin so the parser on the host can fetch them.
+PARSER_DOCUMENT_BASE_URL=http://127.0.0.1:54321
+SENTRY_DSN=
+SENTRY_ENVIRONMENT=local
+# Optional: ANTHROPIC_API_KEY=… enables LLM categorisation and the SMS fallback
+```
 
 ```bash
-cd backend && alembic upgrade head
+supabase functions serve --env-file supabase/functions/.env
+# Upload a statement as the demo user (or with a ccs_ service token + X-Profile-Key):
+curl -s -X POST http://127.0.0.1:54321/functions/v1/statements-upload \
+  -H "Authorization: Bearer $USER_JWT" -F profile_code=prf_… -F files=@statement.pdf
 ```
 
-Postgres: set `CCS_PLATFORM_DATABASE_URL` first. Migrations run automatically at startup in production.
+The worker runs every minute through pg_cron once the Vault secrets are set. To run it by hand:
+
+```bash
+curl -s -X POST http://127.0.0.1:54321/functions/v1/worker \
+  -H "x-cron-secret: $CRON_SECRET" -d '{"sync":true}'
+```
+
+### 4. Web app
+
+```bash
+cp apps/web/.env.example apps/web/.env.local   # VITE_SUPABASE_ANON_KEY from `supabase status`
+pnpm web:dev                                   # http://127.0.0.1:5173
+```
+
+Sign in with the demo password, or request an email code and read it in Inbucket.
+
+### 5. iPhone app
+
+```bash
+cp apps/ios/Config/Secrets.example.xcconfig apps/ios/Config/Secrets.xcconfig   # paste ANON_KEY
+cd apps/ios && xcodegen generate && open Ledger.xcodeproj
+```
+
+Simulator builds can sign in as the demo user through `SIMCTL_CHILD_LEDGER_DEV_EMAIL` and
+`SIMCTL_CHILD_LEDGER_DEV_PASSWORD`. SMS capture needs a real device; see
+[apps/ios/README.md](apps/ios/README.md).
+
+### 6. Scraper
+
+```bash
+cd scraper && uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -e ".[dev]"
+.venv/bin/ccs-scraper install-browser
+cp .env.example .env    # v2: CCS_SCRAPER_TARGET_URL=<SUPABASE_URL>,
+                        #     CCS_SCRAPER_UPLOAD_PATH=/functions/v1/statements-upload,
+                        #     CCS_SCRAPER_API_TOKEN=ccs_… (scope statements:upload)
+.venv/bin/ccs-scraper scrape --profile alice --months 2026-09
+.venv/bin/ccs-scraper upload-pending --profile alice   # re-send recorded PDFs (server dedups)
+```
+
+Create a service token in web Settings → Sources & health → Tokens, or with
+`select create_service_token('<prf_…>', 'scraper', array['statements:upload'])`.
+
+## Tests
+
+| Component | Command |
+|---|---|
+| Database (pgTAP: RLS guards, matching, categorisation, recon, analytics, SMS templates, FX, legacy import) | `supabase db reset && supabase test db` |
+| DB types drift | `pnpm db:types:check` (regenerate with `pnpm db:types`) |
+| Edge Functions | `cd supabase/functions && deno test -A .` (the local e2e runs only with `LEDGER_E2E=1` and a served stack) |
+| Parser | `cd services/parser && .venv/bin/ruff check . && .venv/bin/pytest -q` (golden parity needs private PDFs; skipped otherwise) |
+| Web | `pnpm web:test`, `pnpm --filter @ledger/web lint`, `pnpm web:build` |
+| Tokens | `pnpm --filter @ledger/tokens check` (fails if generated CSS, chart or Swift output is stale) |
+| iOS | `cd apps/ios/LedgerKit && swift test` |
+| Scraper | `cd scraper && .venv/bin/pytest -q` |
+
+`scripts/install-hooks.sh` installs a pre-commit hook. It runs web lint and tests when
+`apps/web` files are staged.
+
+## Environment variables
+
+### Web (`apps/web/.env.local`; Vercel project env)
+
+| Variable | Purpose |
+|---|---|
+| `VITE_SUPABASE_URL` | Supabase API URL (`http://127.0.0.1:54321` locally) |
+| `VITE_SUPABASE_ANON_KEY` | Anon/publishable key |
+| `VITE_SENTRY_DSN` | Sentry `ledger-apps` DSN (empty disables Sentry) |
+| `VITE_SENTRY_ENVIRONMENT` | `local` / `preview` / `production` |
+| `VITE_SENTRY_RELEASE` | Release name (defaults to `VERCEL_GIT_COMMIT_SHA` for source maps) |
+| `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` | Build-time only: uploads source maps when the token is set. Set `SENTRY_PROJECT=ledger-apps` (the code defaults to `ledger-web`). |
+
+### Edge Functions (`supabase/functions/.env` locally; `supabase secrets set` in production)
+
+`SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are injected by Supabase.
+
+| Variable | Used by | Default | Purpose |
+|---|---|---|---|
+| `CRON_SECRET` | worker, gmail-watch-renew, outlook-poll, ops-monitor, fx-rates | required | Must equal Vault `edge_cron_secret` (`x-cron-secret` header) |
+| `PARSER_URL` | worker | required | Cloud Run parser base URL |
+| `PARSER_SECRET` | worker | required | Sent as `X-Parser-Secret` |
+| `PARSER_DOCUMENT_BASE_URL` | worker | — | Rewrites the signed Storage URL origin (local only) |
+| `PARSER_TIMEOUT_MS` | worker | `100000` | Parser call timeout |
+| `WORKER_BUDGET_MS` | worker | `50000` | Time budget per worker run |
+| `ANTHROPIC_API_KEY` | worker | — | Enables LLM categorisation and the SMS fallback (queues wait while unset) |
+| `LLM_MODEL` | worker | `claude-haiku-5-5` | Claude model id |
+| `GMAIL_PUSH_AUDIENCE` | gmail-push | required | Expected OIDC audience of Pub/Sub push tokens |
+| `GMAIL_PUSH_SA_EMAIL` | gmail-push | required | Service account the push token must be issued to |
+| `GMAIL_PUBSUB_TOPIC` | gmail-watch-renew | required | `projects/<p>/topics/<t>` |
+| `GMAIL_OAUTH_CLIENT_ID`, `GMAIL_OAUTH_CLIENT_SECRET` | gmail-* | required for Gmail | Google OAuth client (refresh tokens live in Vault) |
+| `MS_OAUTH_CLIENT_ID`, `MS_OAUTH_CLIENT_SECRET` | outlook-poll | required for Outlook | Azure app credentials |
+| `MS_OAUTH_TENANT` | outlook-poll | `consumers` | Azure tenant |
+| `OUTLOOK_LOOKBACK_DAYS` | outlook-poll | `90` | First delta window |
+| `OUTLOOK_BUDGET_MS` | outlook-poll | `100000` | Time budget per run (resumes next run) |
+| `OPS_SMS_UNPARSED_THRESHOLD` | ops-monitor | `5` | Unparsed SMS per 24 h before an issue |
+| `OPS_OPEN_REVIEWS_THRESHOLD` | ops-monitor | `50` | Open reviews before an issue |
+| `ALLOWED_ORIGINS` | all (CORS) | any | Comma-separated allowed origins |
+| `SENTRY_DSN` | all | — | Sentry `ledger-backend` DSN (empty disables Sentry) |
+| `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE` | all | `local`, — | Sentry environment and release |
+| `SENTRY_TRACES_SAMPLE_RATE` | all | `0.1` | Trace sampling |
+
+### Parser (`services/parser/.env`; Cloud Run)
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PARSER_SECRET` | required | Shared secret expected in `X-Parser-Secret` (fails closed) |
+| `PARSER_ALLOWED_HOSTS` | any | Allowed `document_url` hostnames, e.g. `<ref>.supabase.co` (`127.0.0.1` locally) |
+| `PARSER_ALLOW_HTTP` | `false` | Allow `http://` document URLs (local only) |
+| `PARSER_MAX_DOWNLOAD_MB` | `25` | Max PDF size |
+| `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE`, `SENTRY_TRACES_SAMPLE_RATE` | —, `development`, —, `0.2` | Sentry `ledger-backend` (`production` also disables `/debug-sentry` and the OpenAPI docs) |
+| `LOG_LEVEL`, `PORT` | `INFO`, `8080` | Logging and listen port (Cloud Run sets `PORT`) |
+
+### iOS (`apps/ios/Config/Secrets.xcconfig`; `Secrets.Release.xcconfig` for TestFlight; both gitignored)
+
+| Key | Purpose |
+|---|---|
+| `LEDGER_SUPABASE_URL` | `http:/$()/127.0.0.1:54321` locally, `https:/$()/<ref>.supabase.co` in release |
+| `LEDGER_SUPABASE_ANON_KEY` | Anon/publishable key |
+| `LEDGER_SENTRY_DSN` | Sentry `ledger-apps` DSN (empty disables Sentry) |
+| `LEDGER_ENVIRONMENT` | `local` / `production` |
+
+`apps/ios/scripts/publish-build.sh` also reads these:
+- `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` and `SENTRY_PROJECT` (set `ledger-apps`) for dSYM upload
+- `ASC_KEY_ID` and `ASC_ISSUER_ID` (with the AuthKey `.p8`) for the TestFlight upload
+
+### Scraper (`scraper/.env`)
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `CCS_SCRAPER_TARGET_URL` | `http://127.0.0.1:8040` | Upload base URL. For v2, the Supabase URL. |
+| `CCS_SCRAPER_UPLOAD_PATH` | `/api/v1/jobs/upload` | For v2: `/functions/v1/statements-upload` |
+| `CCS_SCRAPER_API_TOKEN` | — | Service token (v2 scope `statements:upload`) |
+| `CCS_SCRAPER_SUPABASE_ANON_KEY` | — | Optional, sent as `apikey` |
+| `CCS_SCRAPER_HEADLESS`, `CCS_SCRAPER_DOWNLOAD_DIR`, `CCS_SCRAPER_BROWSER_*` | `true`, `./downloads`, Dubai | Browser settings |
+| `{PROFILE}_{BANK}_*` | — | Bank portal credentials per profile (see `scraper/.env.example`) |
+
+### Cutover script (`scripts/migrate_legacy.py`)
+
+`LEDGER_DB_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `LEGACY_FERNET_KEY`,
+`LEGACY_STORAGE` (`gcs`|`local`), `LEGACY_GCS_BUCKET`, `GOOGLE_APPLICATION_CREDENTIALS`,
+`LEGACY_LOCAL_ROOT`. See [PRODUCTION.md → Cutover](PRODUCTION.md#10-cutover-runbook).
+
+## Screens
+
+**Web** (`apps/web/src/routes`)
+
+| Route | Screen |
+|---|---|
+| `/signin`, `/welcome` | Sign-in (email code, magic link or password) and first-profile setup |
+| `/` | **Overview**: month hero with pace rule, live pending SMS, category ring, cards and dues, utilisation, insights |
+| `/activity` | **Activity**: unified ledger with URL-synced filters, evidence badges, drawer with evidence timeline, inline, bulk and "apply to merchant" categorisation, notes |
+| `/insights` | **Insights**: trends, categories, merchants, subscriptions, FX, calendar heatmap, time of day, YoY, anomalies |
+| `/budgets` | **Budgets**: total and per category, with progress |
+| `/cards` | **Cards & Statements**: accounts, cards, statements with recon status, upload, documents |
+| `/review` | **Review inbox**: match reviews, unknown cards, unparsed SMS and LLM template proposals |
+| `/rules` | **Rules**: categories, merchants, rules with live impact preview |
+| `/settings` | **Settings**: ledger, members (and invites), sources and health (queues, DLQ, mailboxes, tokens, PDF passwords), SMS setup guide |
+
+**iPhone** (`apps/ios/Ledger`)
+
+| Screen | Contents |
+|---|---|
+| Sign in / Profile picker | Email one-time code (Sign in with Apple stubbed), choose a ledger |
+| Overview | Month spend, pending SMS, categories, dues (Realtime refresh) |
+| Activity | Ledger list, filters, transaction detail and categorisation |
+| Insights | Swift Charts views over the same RPCs |
+| Statements | Statements, recon, PDF upload (document picker) |
+| Settings | SMS capture setup guide, outbox status, profile |
+| **Log Bank SMS** (App Intent) | Called by the Shortcuts automation, with no UI |
+| **Add to Ledger** (share extension) | Sends shared PDFs to `statements-upload` |
+
+## API surface
+
+### Edge Functions (`<SUPABASE_URL>/functions/v1/<name>`)
+
+| Function | Method | Auth | Purpose |
+|---|---|---|---|
+| `statements-upload` | POST multipart (`files`, `bank_code_hint`, `profile_code`) | Service token `statements:upload` (+ `X-Profile-Key`) or user JWT (owner) | Store PDFs, dedup, queue parsing |
+| `sms-ingest` | POST JSON `{profile_code?, messages[≤200]}` | User JWT or service token `sms:ingest` | Batch SMS ingest (idempotent on `client_msg_id`) |
+| `gmail-push` | POST (Pub/Sub envelope) | Google OIDC token | Gmail notifications → documents |
+| `worker`, `gmail-watch-renew`, `outlook-poll`, `ops-monitor`, `fx-rates` | POST | `x-cron-secret` | pg_cron-driven jobs |
+
+### RPCs (`supabase.rpc(...)`, PostgREST)
+
+| Group | RPCs (callable by signed-in members; owner-only marked *) |
+|---|---|
+| Profiles and members | `create_profile`, `add_profile_member`*, `list_profile_members`, `remove_profile_member`*, `cancel_profile_invite`* |
+| Tokens and secrets | `create_service_token`*, `revoke_service_token`*, `set_profile_secret`*, `list_profile_secrets`, `set_mailbox_secret`* |
+| Ingest and review | `ingest_sms`*, `resolve_review`*, `requeue_documents`*, `set_sms_template_active`* |
+| Categorisation | `set_transaction_category`*, `set_transactions_category`*, `preview_rule` |
+| Analytics | `overview`, `spend_series`, `category_breakdown`, `merchant_leaderboard`, `daily_spend`, `hour_weekday_pattern`, `fx_spend`, `statement_cycles`, `yoy_compare`, `anomalies`, `filter_meta`, `budget_status`, `recurring_list` |
+| Service-role only (Edge Functions) | `authenticate_service_token`, `ingest_parsed_document`, `fail_document`, `queue_read`, `queue_delete`, `queue_send`, `queue_to_dlq`, `worker_document_context`, `worker_llm_context`, `worker_sms_context`, `worker_mailbox_secret`, `apply_llm_suggestions`, `propose_sms_template`, `ops_health`, `upsert_fx_rates` |
+
+Views: `v_spend` (the single spend definition) and `v_transactions` (the Activity read model).
+Tables are readable by members under RLS. Owners edit categories, rules, budgets, accounts,
+cards and transaction user fields directly.
+
+## Legacy (until cutover)
+
+`backend/` (FastAPI + embedded worker on Render, PDFs in GCS), `frontend/` (React admin on
+Vercel), `deploy/` (Dockerfiles, Gmail relay on Cloud Run) and the `email-ingest-microsoft`
+GitHub Actions cron are v1. They are **frozen**: don't extend them. Their tables now live in the
+`legacy` schema of the same Supabase project. Setup notes stay in [`backend/README.md`](backend/README.md)
+and `frontend/`; `docs/operations/` and `docs/security/` describe v1 operations. Everything
+here is removed by the cutover in [PRODUCTION.md](PRODUCTION.md#10-cutover-runbook).

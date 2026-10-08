@@ -1,5 +1,7 @@
 # Data Retention and Lifecycle Policy
 
+> **Legacy (v1).** This describes the frozen FastAPI backend (`backend/`) and is kept only until the Ledger v2 cutover. For v2 see [ARCHITECTURE.md](../../ARCHITECTURE.md) and [PRODUCTION.md](../../PRODUCTION.md).
+
 ## Default retention windows
 - Terminal jobs: 90 days
 - Export records: 90 days

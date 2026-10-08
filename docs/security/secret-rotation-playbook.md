@@ -1,5 +1,7 @@
 # Secret Rotation Playbook
 
+> **Legacy (v1).** This describes the frozen FastAPI backend (`backend/`) and is kept only until the Ledger v2 cutover. For v2 see [ARCHITECTURE.md](../../ARCHITECTURE.md) and [PRODUCTION.md](../../PRODUCTION.md).
+
 ## Scope
 This playbook covers all high-risk credentials used by the platform API, scraping workers, storage backends, and CI/CD release flows.
 

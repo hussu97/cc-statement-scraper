@@ -1,3 +1,7 @@
+# LEGACY (v1) — deploys/operates the frozen backend/, frontend/ or Gmail relay.
+# Replaced by Ledger v2 (Supabase + deploy-supabase.yml / deploy-parser.yml,
+# outlook-poll and gmail-push Edge Functions). Disable at cutover and delete at
+# decommission (PRODUCTION.md §10). Do not extend.
 name: Email Ingest Microsoft
 
 on:
