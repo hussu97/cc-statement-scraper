@@ -637,6 +637,46 @@ def _maybe_select_secure_image(page: Any, logger: logging.Logger, credentials: d
         )
 
 
+_BIOMETRIC_PROMPT = "text=/confirm your login using biometrics/i"
+
+
+def _biometric_prompt_visible(page: Any) -> bool:
+    """SIB's push login: "Confirm your login using biometrics (face or touch ID) on your registered mobile"."""
+    try:
+        return page.locator(_BIOMETRIC_PROMPT).count() > 0
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def biometric_wait_seconds(value: str | None = None) -> int:
+    """How long to wait for the owner to approve the SIB app push (SIB_BIOMETRIC_WAIT_S, default 180 s)."""
+    raw = (value if value is not None else os.environ.get("SIB_BIOMETRIC_WAIT_S", "")).strip()
+    try:
+        return max(15, min(int(raw), 900)) if raw else 180
+    except ValueError:
+        return 180
+
+
+def _wait_for_biometric_approval(page: Any, logger: logging.Logger) -> None:
+    """Wait while the SIB app push is pending; the owner approves it on their phone."""
+    budget_s = biometric_wait_seconds()
+    polls = max(1, budget_s // 3)
+    logger.warning(
+        "SIB: login needs approval in the SIB app on your registered phone (Face ID / Touch ID); "
+        "waiting up to %ds",
+        budget_s,
+    )
+    for poll in range(polls):
+        logger.info("SIB: waiting 3000ms — biometric approval pending on the phone (poll %d/%d)", poll + 1, polls)
+        page.wait_for_timeout(3000)
+        if not _biometric_prompt_visible(page):
+            logger.info("SIB: biometric approval received")
+            return
+    raise BrowserDownloadError(
+        f"SIB: login was not approved in the SIB app within {budget_s}s (approve the push, or set SIB_BIOMETRIC_WAIT_S)"
+    )
+
+
 def login(page: Any, logger: logging.Logger, credentials: dict[str, str] | None = None) -> None:
     user_id = require_env("SIB_USER_ID", credentials)
     password = require_env("SIB_PASSWORD", credentials)
@@ -692,11 +732,20 @@ def login(page: Any, logger: logging.Logger, credentials: dict[str, str] | None 
                     poll + 1,
                 )
                 page.wait_for_timeout(1500)
-                if _has_visible_password_input(page):
+                if _has_visible_password_input(page) or _biometric_prompt_visible(page):
                     break
 
-            if _has_visible_password_input(page):
+            if _has_visible_password_input(page) or _biometric_prompt_visible(page):
                 break
+
+    if _biometric_prompt_visible(page):
+        # Push login (since 2026-10): no password step; the SIB app approves it.
+        _wait_for_biometric_approval(page, logger)
+        logger.info("SIB: waiting 2000ms — biometric login approved; letting the portal load")
+        page.wait_for_timeout(2000)
+        if not _has_visible_password_input(page):
+            logger.info("SIB: login submitted (biometric)")
+            return
 
     if not _has_visible_password_input(page):
         raise BrowserDownloadError("SIB: password input not found after Secure Login")
