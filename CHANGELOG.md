@@ -5,7 +5,7 @@
 ### Parser
 
 - **chore** `PARSER_VERSION` and the `pyproject.toml` version 2026.10.2: the fixes below change parser output (NEW-2)
-- **fix** FAB `total_credits` includes the credits the summary's Payments/Credits column leaves out (rewards redemptions, dispute credits), taken from the row's own Total Payment Due when it equals the Current Balance. The four FAB statements with a false recon `fail` now reconcile (DP-10)
+- **fix** FAB `total_credits` includes the credits the summary's Payments/Credits column leaves out (rewards redemptions, dispute credits), taken from the row's own Total Payment Due when it equals the Current Balance. Every local FAB PDF now reconciles debits, credits and balance, including the three statements (19 copies) that were short (DP-10)
 - **feat** Mashreq totals from the "Summary AED" block (all six values and the due date), used only when the block is complete and adds up. All 20 local Mashreq PDFs reconcile debits, credits and balance (DP-12)
 - **fix** Mashreq foreign rows (`<ref> MYR 500.00 @0.9400 470.00`) report `currency_original`, `amount_original` and the printed `fx_rate`, and the description is the merchant only: 38 lines in the local corpus. Kind and `legacy_fingerprint` are unchanged (DP-11)
 - **fix** `EIB_PDF_PASSWORD` and `MASHREQ_PDF_PASSWORD` reach their parsers and the password list used by detection, page counting and totals. The worker already sends every stored key, so no worker or SQL change (X-17)
