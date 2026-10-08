@@ -141,8 +141,9 @@ Per-profile and per-mailbox secrets are written through RPCs, never by hand:
 
 ### 2.5 Edge Functions
 
-Function secrets (`SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are
-injected automatically) have **one source of truth**: the gitignored
+Function secrets (`SUPABASE_URL` and the API keys — `SUPABASE_SECRET_KEYS` /
+`SUPABASE_PUBLISHABLE_KEYS`, plus the legacy `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_ANON_KEY` —
+are injected automatically; see §2.8) have **one source of truth**: the gitignored
 `supabase/functions/.env.production`. Complete it, then push it with
 [`scripts/cutover/set-edge-secrets.sh`](scripts/cutover/set-edge-secrets.sh). Never type
 secrets inline and never push a file that still holds placeholders.
@@ -240,6 +241,7 @@ each daily job.
 | API max rows | Project Settings → Data API → *Max rows* | **2000** (the web's largest page size; the default 1000 silently truncates 2000/page). Local `supabase/config.toml` `[api] max_rows` must match | step 4 |
 | New user sign-ups | Authentication → Sign In / Providers → *Allow new users to sign up* | **off** (members are invited, §2.2) | before the day (no later than step 4) |
 | Site URL and redirect URLs | Authentication → URL Configuration | the Vercel production URL (§2.2) | step 9 |
+| Legacy API keys | Project Settings → API Keys → *Legacy API keys* | **disabled**, only after the §2.8 checklist passes | after cutover (§2.8) |
 
 **Product name in dashboards ("Bank Ledger").** The code and `supabase/config.toml` define no
 Auth email templates or sender, so prod uses whatever the dashboards hold. Set these once:
@@ -252,7 +254,49 @@ Auth email templates or sender, so prod uses whatever the dashboards hold. Set t
 | Sender name | Authentication → Emails → SMTP Settings | *Sender name* `Bank Ledger` (needs custom SMTP; the built-in sender's name can't be changed) |
 | Google consent screen | GCP `<gcp-project>` → Google Auth Platform → Branding | App name `Bank Ledger` (§5) |
 | Microsoft consent | Entra → App registrations → the Outlook app → Branding | Name `Bank Ledger` (§6) |
-| App Store Connect | App Information → *Name* | `Bank Ledger` if available (now *Credit Card Ledger*); the home-screen name already is |
+| App Store Connect | App Information → *Name* | `Bank Ledger` (app id 6820524042); the home-screen name matches |
+
+### 2.8 Supabase API keys (publishable / secret)
+
+The project uses the new API keys; the legacy `anon` / `service_role` JWT keys still work but
+nothing in this repo needs them any more (checked 2026-10-08).
+
+| Consumer | Key | Where it is set |
+|---|---|---|
+| Web | publishable `sb_publishable_…` | `VITE_SUPABASE_PUBLISHABLE_KEY` (Vercel, §4). `src/lib/supabase-key.ts` refuses an `sb_secret_…` value |
+| iOS | publishable | `LEDGER_SUPABASE_PUBLISHABLE_KEY` (`Secrets*.xcconfig`, §7) |
+| Scraper | publishable (optional `apikey`) | `CCS_SCRAPER_SUPABASE_PUBLISHABLE_KEY` (old `…_ANON_KEY` name = deprecated fallback) |
+| Edge Functions | secret (service client), publishable + the caller's JWT (user client) | runtime-injected `SUPABASE_SECRET_KEYS` / `SUPABASE_PUBLISHABLE_KEYS` (JSON, key `default`); fallback custom secrets `SB_SECRET_KEY` / `SB_PUBLISHABLE_KEY` (not set today: not needed), then the legacy env vars |
+| pg_cron → Edge | none | `private.invoke_edge` sends only `x-cron-secret` (Vault `edge_cron_secret`), no JWT |
+| Admin scripts | secret | `.env.cutover` `SUPABASE_SECRET_KEY`, sent as `apikey` (Supabase rejects secret keys from browsers by User-Agent) |
+
+Notes: user sessions are unaffected (Auth still issues user JWTs; functions verify them with
+`auth.getUser`). Realtime authenticates with the signed-in user's JWT, so the 24 h limit on
+publishable-key-only connections does not apply. All functions run with `verify_jwt = false`
+and authenticate in code (`_shared/auth.ts`), so the new non-JWT keys never hit the gateway check.
+Every function logs `supabase: service client using <SOURCE>` on cold start (names only).
+
+**Disabling the legacy JWT keys** (Project Settings → API Keys → *Legacy API keys* →
+*Disable JWT-based API keys*; reversible). Verify first, in this order:
+
+1. Edge Functions use the new keys: in the Logs Explorer, every recent
+   `service client using …` line says `SUPABASE_SECRET_KEYS` (or `SB_SECRET_KEY`), never
+   `SUPABASE_SERVICE_ROLE_KEY`.
+2. Clients are switched: the deployed Vercel build has `VITE_SUPABASE_PUBLISHABLE_KEY` and no
+   `VITE_SUPABASE_ANON_KEY` (`grep -l eyJhbGci dist/assets/*.js` finds nothing in a local
+   `pnpm --filter @ledger/web build` with the prod env); the **TestFlight build installed on every
+   tester's phone** was built with `LEDGER_SUPABASE_PUBLISHABLE_KEY` (older builds embed the anon
+   JWT and stop working); `scraper/.env` has `CCS_SCRAPER_SUPABASE_PUBLISHABLE_KEY` and no
+   `CCS_SCRAPER_SUPABASE_ANON_KEY`.
+3. Nothing else sends a legacy JWT: `private.invoke_edge` headers are `Content-Type` +
+   `x-cron-secret` only (`select pg_get_functiondef('private.invoke_edge(text,jsonb)'::regprocedure)`),
+   there are no Dashboard Database Webhooks, GitHub Actions use only `SUPABASE_ACCESS_TOKEN` /
+   `SUPABASE_DB_PASSWORD`, and Gmail Pub/Sub pushes authenticate with Google OIDC (§5).
+   Then remove `SUPABASE_SERVICE_ROLE_KEY` from `.env.cutover`.
+4. Disable, then smoke-test within minutes: web sign-in + Overview + Activity (Realtime joins),
+   iOS sign-in + an SMS Shortcut post, `worker` with `x-cron-secret` → 202,
+   `statements-upload` without auth → 401, and one `ccs-scraper upload`. If anything fails,
+   re-enable the legacy keys and find the missed client.
 
 ---
 
@@ -335,7 +379,7 @@ echo "$PARSER_URL"; curl -s "$PARSER_URL/health"      # the URL is not a secret
 | Variable | Value |
 |---|---|
 | `VITE_SUPABASE_URL` | `https://<project-ref>.supabase.co` |
-| `VITE_SUPABASE_ANON_KEY` | Dashboard → API keys → anon/publishable |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Dashboard → API Keys → publishable (`sb_publishable_…`; never the secret key) |
 | `VITE_SENTRY_DSN` | `ledger-apps` DSN |
 | `VITE_SENTRY_ENVIRONMENT` | `production` |
 | `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` | source-map upload (build only) |
@@ -343,7 +387,7 @@ echo "$PARSER_URL"; curl -s "$PARSER_URL/health"      # the URL is not a secret
 | `VITE_TESTFLIGHT_URL` | optional: the Friends & Family public TestFlight link (§7). Shows the TestFlight button in Settings → iPhone SMS; leave unset to hide it |
 
 The production values are in the gitignored `apps/web/.env.production.local`, which holds
-exactly these names: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_SENTRY_DSN`,
+exactly these names: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SENTRY_DSN`,
 `VITE_SENTRY_ENVIRONMENT`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`. Paste them into
 Vercel → Settings → Environment Variables (Production), or `vercel env add <NAME> production`
 one at a time. `SENTRY_AUTH_TOKEN` must be a Vercel env var: `vite.config.ts` reads it from
@@ -485,14 +529,14 @@ it. `PROJECT=<gcp-project>`, `URL=https://<project-ref>.supabase.co/functions/v1
 1. Create `apps/ios/Config/Secrets.Release.xcconfig` (gitignored):
    ```
    LEDGER_SUPABASE_URL = https:/$()/<project-ref>.supabase.co
-   LEDGER_SUPABASE_ANON_KEY = <anon key>
+   LEDGER_SUPABASE_PUBLISHABLE_KEY = <sb_publishable_… key>
    LEDGER_SENTRY_DSN = <ledger-apps DSN>
    ```
 2. One-time App Store Connect setup (bundle ids `com.example.ledger` + `.share` are already
    registered with App Groups; Xcode assigns `group.com.example.ledger` on the first archive):
-   create the app record (*Apps → + → New App*, name **Credit Card Ledger**, bundle id
+   create the app record (*Apps → + → New App*, name **Bank Ledger**, SKU `credit-card-ledger`, bundle id
    `com.example.ledger`; the home-screen name is "Bank Ledger", the share extension "Add to Bank Ledger"), then in
-   TestFlight an internal group **Ledger Internal** (automatic distribution) and an external
+   TestFlight an internal group **Bank Ledger Internal** (automatic distribution) and an external
    group **Friends & Family** (public link), and fill *Test Information* (beta description,
    feedback email, privacy policy URL, review contact incl. phone).
 3. Release (same flow as another app; the API key is the one in `~/.appstoreconnect/private_keys`):
@@ -659,8 +703,10 @@ history):
 |---|---|---|
 | `supabase/functions/.env.production` | every function secret (§2.5), incl. `CRON_SECRET` | function secrets and Vault `edge_cron_secret` (§2.4, §2.5) |
 | `services/parser/.env.production` | `PARSER_SECRET` (same value as above), `PARSER_ALLOWED_HOSTS`, `SENTRY_DSN`, `SENTRY_ENVIRONMENT` | Secret Manager `parser-secret` / `parser-sentry-dsn` (§3). Never uploaded (`.gcloudignore`) |
-| `apps/web/.env.production.local` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_SENTRY_DSN`, `VITE_SENTRY_ENVIRONMENT`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` | Vercel env (§4) |
-| `apps/ios/Config/Secrets.Release.xcconfig` | `LEDGER_SUPABASE_URL`, `LEDGER_SUPABASE_ANON_KEY`, `LEDGER_SENTRY_DSN`, `LEDGER_ENVIRONMENT`; optionally `SENTRY_AUTH_TOKEN`/`SENTRY_ORG`/`SENTRY_PROJECT` for dSYMs when the shell doesn't set them (prefer the shell: in the xcconfig the token is also an Xcode build setting, BACKLOG IOS-21) | TestFlight builds (§7) |
+| `apps/web/.env.production.local` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SENTRY_DSN`, `VITE_SENTRY_ENVIRONMENT`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` | Vercel env (§4) |
+| `scraper/.env` | `CCS_SCRAPER_SUPABASE_PUBLISHABLE_KEY` (+ service tokens, bank credentials) | `ccs-scraper upload` (`apikey` header) |
+| `.env.cutover` | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `LEDGER_DB_URL`, …; `SUPABASE_SERVICE_ROLE_KEY` is legacy (kept until §2.8 step 3, unused by the code) | cutover scripts and one-off admin calls (secret key on `apikey` only, never from a browser) |
+| `apps/ios/Config/Secrets.Release.xcconfig` | `LEDGER_SUPABASE_URL`, `LEDGER_SUPABASE_PUBLISHABLE_KEY`, `LEDGER_SENTRY_DSN`, `LEDGER_ENVIRONMENT`; optionally `SENTRY_AUTH_TOKEN`/`SENTRY_ORG`/`SENTRY_PROJECT` for dSYMs when the shell doesn't set them (prefer the shell: in the xcconfig the token is also an Xcode build setting, BACKLOG IOS-21) | TestFlight builds (§7) |
 
 ---
 

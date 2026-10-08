@@ -14,6 +14,9 @@
 #   - CRON_SECRET is shorter than 32 characters,
 #   - a local-only key (PARSER_DOCUMENT_BASE_URL, LEDGER_E2E) or a reserved
 #     SUPABASE_* key is present, or a key appears twice.
+# API keys are not needed here: the runtime injects SUPABASE_SECRET_KEYS /
+# SUPABASE_PUBLISHABLE_KEYS. SB_SECRET_KEY / SB_PUBLISHABLE_KEY are optional
+# overrides read by _shared/supabase.ts (custom names cannot start with SUPABASE_).
 # It then calls `supabase secrets set --env-file` with exactly the keys in the
 # file, via a private temp copy. Values are never printed: only key names.
 #
@@ -35,7 +38,7 @@ REQUIRED_KEYS="CRON_SECRET PARSER_URL PARSER_SECRET"
 RECOMMENDED_KEYS="ALLOWED_ORIGINS GMAIL_PUSH_AUDIENCE GMAIL_PUSH_SA_EMAIL GMAIL_PUBSUB_TOPIC GMAIL_OAUTH_CLIENT_ID GMAIL_OAUTH_CLIENT_SECRET MS_OAUTH_CLIENT_ID MS_OAUTH_CLIENT_SECRET SENTRY_DSN SENTRY_ENVIRONMENT SENTRY_RELEASE"
 FORBIDDEN_KEYS="PARSER_DOCUMENT_BASE_URL LEDGER_E2E"
 
-usage() { sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; }
 
 while [ $# -gt 0 ]; do
   case "$1" in

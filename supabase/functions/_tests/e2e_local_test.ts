@@ -14,14 +14,15 @@ const enabled = Deno.env.get("LEDGER_E2E") === "1";
 
 async function localKeys(): Promise<{ url: string; anon: string; service: string }> {
   const url = Deno.env.get("SUPABASE_URL") ?? "http://127.0.0.1:54321";
-  let anon = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-  let service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  // Publishable / secret keys (sb_publishable_… / sb_secret_…); legacy JWT keys only as a fallback.
+  let anon = Deno.env.get("SB_PUBLISHABLE_KEY") ?? "";
+  let service = Deno.env.get("SB_SECRET_KEY") ?? "";
   if (!anon || !service) {
     const out = await new Deno.Command("supabase", { args: ["status", "-o", "json"], stdout: "piped", stderr: "null" })
       .output();
     const status = JSON.parse(new TextDecoder().decode(out.stdout));
-    anon ||= status.ANON_KEY;
-    service ||= status.SERVICE_ROLE_KEY;
+    anon ||= status.PUBLISHABLE_KEY || status.ANON_KEY;
+    service ||= status.SECRET_KEY || status.SERVICE_ROLE_KEY;
   }
   return { url, anon, service };
 }

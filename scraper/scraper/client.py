@@ -95,7 +95,7 @@ class ScraperClient:
         api_token: str,
         profile_key: str,
         upload_path: str = DEFAULT_UPLOAD_PATH,
-        anon_key: str | None = None,
+        publishable_key: str | None = None,
         *,
         transport: httpx.BaseTransport | None = None,
         retry_delays: tuple[float, ...] = _RETRY_DELAYS,
@@ -107,7 +107,7 @@ class ScraperClient:
         self._api_token = api_token
         self._profile_key = profile_key
         self._upload_path = upload_path
-        self._anon_key = anon_key or None
+        self._publishable_key = publishable_key or None
         self._transport = transport
         self._retry_delays = retry_delays
         self._sleep = sleep
@@ -123,8 +123,8 @@ class ScraperClient:
             "Authorization": f"Bearer {self._api_token}",
             "X-Profile-Key": self._profile_key,
         }
-        if self._anon_key:
-            headers["apikey"] = self._anon_key
+        if self._publishable_key:
+            headers["apikey"] = self._publishable_key
         return headers
 
     def upload_pdfs(self, files: list[Path], bank_code: str | None = None) -> dict:

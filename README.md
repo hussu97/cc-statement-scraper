@@ -57,7 +57,7 @@ Docs:
 pnpm install                      # workspace deps (apps/web, packages/*)
 supabase start                    # Postgres, Auth, Storage, Realtime, Edge runtime, Studio
 supabase db reset                 # applies supabase/migrations + supabase/seed.sql
-supabase status -o json           # API_URL, ANON_KEY, SERVICE_ROLE_KEY
+supabase status -o json           # API_URL, PUBLISHABLE_KEY, SECRET_KEY (legacy ANON_KEY/SERVICE_ROLE_KEY too)
 ```
 
 Local ports:
@@ -144,7 +144,7 @@ curl -s -X POST http://127.0.0.1:54321/functions/v1/worker \
 ### 4. Web app
 
 ```bash
-cp apps/web/.env.example apps/web/.env.local   # VITE_SUPABASE_ANON_KEY from `supabase status`
+cp apps/web/.env.example apps/web/.env.local   # VITE_SUPABASE_PUBLISHABLE_KEY = PUBLISHABLE_KEY from `supabase status`
 pnpm web:dev                                   # http://127.0.0.1:5173
 ```
 
@@ -213,7 +213,7 @@ approval), Vercel's Git integration + `web-smoke.yml`, and `ios-testflight.yml`.
 | Variable | Purpose |
 |---|---|
 | `VITE_SUPABASE_URL` | Supabase API URL (`http://127.0.0.1:54321` locally) |
-| `VITE_SUPABASE_ANON_KEY` | Anon/publishable key |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Publishable key (`sb_publishable_…`). Never a secret key: an `sb_secret_…` value is ignored and the app shows the setup error |
 | `VITE_SENTRY_DSN` | Sentry `ledger-apps` DSN (empty disables Sentry) |
 | `VITE_SENTRY_ENVIRONMENT` | `local` / `preview` / `production`. Empty, `local`, `development`, `test` or `vite dev` never report, even with a DSN |
 | `VITE_SENTRY_RELEASE` | Release name (defaults to `VERCEL_GIT_COMMIT_SHA` for source maps) |
@@ -222,7 +222,11 @@ approval), Vercel's Git integration + `web-smoke.yml`, and `ios-testflight.yml`.
 
 ### Edge Functions (`supabase/functions/.env` locally; production: `supabase/functions/.env.production` pushed with `scripts/cutover/set-edge-secrets.sh`)
 
-`SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are injected by Supabase.
+`SUPABASE_URL`, `SUPABASE_SECRET_KEYS` and `SUPABASE_PUBLISHABLE_KEYS` (JSON `{name: key}`; the
+`default` key is used) are injected by Supabase, as are the legacy `SUPABASE_SERVICE_ROLE_KEY` /
+`SUPABASE_ANON_KEY`. `_shared/supabase.ts` prefers the new keys, then the optional custom secrets
+`SB_SECRET_KEY` / `SB_PUBLISHABLE_KEY` (custom names cannot start with `SUPABASE_`), then the legacy
+JWTs. The service client logs which source it used (never the value).
 
 | Variable | Used by | Default | Purpose |
 |---|---|---|---|
@@ -269,7 +273,7 @@ approval), Vercel's Git integration + `web-smoke.yml`, and `ios-testflight.yml`.
 | Key | Purpose |
 |---|---|
 | `LEDGER_SUPABASE_URL` | `http:/$()/127.0.0.1:54321` locally, `https:/$()/<ref>.supabase.co` in release |
-| `LEDGER_SUPABASE_ANON_KEY` | Anon/publishable key |
+| `LEDGER_SUPABASE_PUBLISHABLE_KEY` | Publishable key (`sb_publishable_…`; never a secret key) |
 | `LEDGER_SENTRY_DSN` | Sentry `ledger-apps` DSN (empty disables Sentry) |
 | `LEDGER_ENVIRONMENT` | `local` / `production`. Sentry starts only in Release builds with an environment other than local/development/dev/test |
 
@@ -287,7 +291,7 @@ approval), Vercel's Git integration + `web-smoke.yml`, and `ios-testflight.yml`.
 | `CCS_SCRAPER_UPLOAD_PATH` | `/api/v1/jobs/upload` | Set `/functions/v1/statements-upload`; the default is the removed legacy route |
 | `{PROFILE}_CCS_SCRAPER_API_TOKEN` | — | Per-profile service token (v2 tokens are profile-scoped; scope `statements:upload`). Wins over the global token |
 | `CCS_SCRAPER_API_TOKEN` | — | Global fallback token for profiles without their own |
-| `CCS_SCRAPER_SUPABASE_ANON_KEY` | — | Optional, sent as `apikey` |
+| `CCS_SCRAPER_SUPABASE_PUBLISHABLE_KEY` | — | Optional publishable key (`sb_publishable_…`), sent as `apikey`. `CCS_SCRAPER_SUPABASE_ANON_KEY` is read as a deprecated fallback |
 | `CCS_SCRAPER_UPLOAD_MAX_FILES`, `CCS_SCRAPER_UPLOAD_MAX_MB` | `20`, `32` | Upload batching: files and MB of PDF per request, clamped to the server's limits (20 files, 40 MB). A 413 halves the batch; batches that succeeded are recorded, so `upload-pending` retries only the rest |
 | `CCS_SCRAPER_HEADLESS`, `CCS_SCRAPER_DOWNLOAD_DIR`, `CCS_SCRAPER_BROWSER_*` | `true`, `./downloads`, Dubai | Browser settings |
 | `{PROFILE}_{BANK}_*` | — | Bank portal credentials per profile (see `scraper/.env.example`) |
