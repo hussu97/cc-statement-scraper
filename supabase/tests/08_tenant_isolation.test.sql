@@ -222,6 +222,27 @@ reset role;
 select is((select count(*)::int from public.sms_templates where template_code = pg_temp.v('tpl')), 0,
           'a rejected proposal nobody else waits on is deleted');
 
+-- ═══ statement_detail / spend_breakdown / document_events / add_replacement_card ═══
+select pg_temp.as_system();
+select pg_temp.set('stmt_b', pg_temp.v('b_stmt_result')::jsonb->'statements'->0->>'stmt_code');
+select pg_temp.set('doc_b', (select doc_code from public.statements where stmt_code = pg_temp.v('stmt_b')));
+select pg_temp.as_user('ua');
+set local role authenticated;
+select throws_ok($$ select public.statement_detail(pg_temp.v('pb'), pg_temp.v('stmt_b')) $$, '42501', null,
+                 'A cannot read B''s statement_detail');
+select throws_ok($$ select public.statement_detail(pg_temp.v('pa'), pg_temp.v('stmt_b')) $$, 'P0002', null,
+                 'nor reach B''s statement through A''s own profile');
+select throws_ok($$ select public.spend_breakdown(pg_temp.v('pb'), '2026-01-01', '2026-12-31', 'bank') $$, '42501', null,
+                 'A cannot read B''s spend_breakdown');
+select is((select count(*)::int from public.document_events where doc_code = pg_temp.v('doc_b')), 0,
+          'A sees none of B''s document events');
+select throws_ok($$ select public.add_replacement_card(pg_temp.v('pa'),
+                      (select card_code from public.cards where profile_code = pg_temp.v('pb') limit 1), '7777') $$,
+                 'P0002', null, 'A cannot register a replacement for B''s card (it is not found in A''s profile)');
+reset role;
+select ok((select count(*) from public.document_events where doc_code = pg_temp.v('doc_b')) > 0,
+          'B''s document has events (the isolation above is not vacuous)');
+
 -- ═══ profile deletion still cascades through the composite FKs ═══════════
 select pg_temp.as_system();
 select lives_ok($$ delete from public.profiles where profile_code = pg_temp.v('pb') $$,

@@ -842,6 +842,18 @@ network restrictions read, Edge Functions read/write, Edge Function secrets read
   (or Dashboard → Storage → `bank-logos` → Upload). Check one at
   `https://<ref>.supabase.co/storage/v1/object/public/bank-logos/FAB.png`. A bank without an
   image just shows the client's fallback; to change a file name, update `banks.logo_path`.
+- **A replaced card (SIB 6774 → new number, 2026-10).** Deploy parser 2026.10.3 and migration
+  `20261010000500`, then run the scraper (it now exports every SIB card the portal lists; set
+  `SIB_CARD_LAST4S` to limit it). The new card's history extract joins the existing SIB account
+  automatically when its first transaction is no earlier than 31 days before the account's last
+  line (6774's last is 2026-08-10) and the card type matches; 6774 becomes `replaced` and keeps
+  its transactions. If the new number is already known (for example from an SMS), or to do it
+  up front, the owner registers it:
+  `select public.add_replacement_card('<prf_…>', '<crd_ of 6774>', '<new last4>');`
+  (it also re-processes SMS held as `unknown_card` for that number). Check with
+  `select last4, status, account_code from public.cards where bank_code = 'SIB';` — one account,
+  two cards. If the new card had already landed on a second account, `add_replacement_card`
+  refuses (`23505`); move it by hand only after a backup.
 - **Re-parse after a parser fix:** deploy the parser, then `select requeue_documents('<prf_…>')`
   as an owner (or from Cards & Statements → documents in the web app). Re-ingest is in place, so codes, categories and
   notes survive.
