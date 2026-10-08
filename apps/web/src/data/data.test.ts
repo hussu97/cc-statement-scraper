@@ -112,6 +112,13 @@ describe("cards & documents", () => {
     expect(r.ok.map((x) => x.name)).toEqual(["a.pdf"]);
     expect(r.rejected.map((x) => x.reason)).toEqual(["Not a PDF", "Larger than 25 MB", "Empty file"]);
   });
+  it("sends at most 20 files per upload, like the Edge Function (WEB-48)", () => {
+    const files = Array.from({ length: 22 }, (_, i) => ({ name: `s${i}.pdf`, size: 10, type: "application/pdf" }) as File);
+    const r = checkUploadFiles(files);
+    expect(r.ok).toHaveLength(20);
+    expect(r.rejected.map((x) => x.name)).toEqual(["s20.pdf", "s21.pdf"]);
+    expect(r.rejected[0]!.reason).toMatch(/Over 20 files/);
+  });
 });
 
 describe("api + insights", () => {

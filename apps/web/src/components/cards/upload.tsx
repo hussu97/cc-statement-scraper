@@ -26,7 +26,7 @@ export function UploadDropzone({ profileCode, disabled }: { profileCode: string;
   const byDoc = eventsByDoc(events.data ?? []);
 
   const handle = (list: FileList | null) => {
-    if (!list || disabled) return;
+    if (!list || disabled || upload.isPending) return;
     const { ok, rejected } = checkUploadFiles([...list]);
     setRejected(rejected);
     setResults([]);
@@ -64,7 +64,7 @@ export function UploadDropzone({ profileCode, disabled }: { profileCode: string;
         <div>
           <p className="text-sm font-medium text-ink">Drop statement PDFs here</p>
           <p className="mt-1 text-[13px] text-muted">
-            Up to 10 files, 25 MB each. Password-protected PDFs use the{" "}
+            Up to 20 files, 25 MB each. Password-protected PDFs use the{" "}
             <Link to="/settings" search={{ tab: "sources" }} hash="statement-passwords" className="text-accent hover:underline">
               statement passwords
             </Link>{" "}
