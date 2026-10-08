@@ -4,6 +4,7 @@ import { useActiveProfile } from "@/data/profile";
 import {
   emptyRuleDraft,
   filterMerchants,
+  MERCHANT_LEADERBOARD_MAX,
   merchantState,
   sampleDescription,
   slicePage,
@@ -46,7 +47,7 @@ export function MerchantsTab() {
     () => (categories.data ?? []).map((c) => ({ ...c, archived: !!c.archived_at })),
     [categories.data],
   );
-  const suggestedCount = useMemo(() => (merchants.data ?? []).filter((m) => merchantState(m) === "suggested").length, [merchants.data]);
+  const suggestedCount = useMemo(() => (merchants.data?.rows ?? []).filter((m) => merchantState(m) === "suggested").length, [merchants.data]);
 
   const assign = (m: MerchantRow, code: string | null, title: string) =>
     setCategory.mutate(
@@ -78,7 +79,7 @@ export function MerchantsTab() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="max-w-xl text-sm text-muted">
-          Merchants you've paid in the last 12 months. A category set here applies to every transaction from that merchant, unless you picked one yourself.
+          Merchants you've paid in the last 12 months, and any merchant with a category set. A category set here applies to every transaction from that merchant, unless you picked one yourself.
         </p>
         {!isOwner && <ViewerNote />}
       </div>
@@ -102,24 +103,32 @@ export function MerchantsTab() {
       <Card>
         <QueryView
           query={merchants}
-          isEmpty={(d) => d.length === 0}
+          isEmpty={(d) => d.rows.length === 0}
           empty={
             <EmptyState icon={<Store />} title="No merchants yet">
               Merchants appear once transactions from the last 12 months are in.
             </EmptyState>
           }
         >
-          {(rows) => {
+          {({ rows, capped }) => {
             const filtered = filterMerchants(rows, { q, suggestionsOnly: view === "suggested" });
+            const cappedNote = capped && (
+              <p className="border-t border-border px-5 py-3 text-[12px] text-muted">
+                Showing your top {MERCHANT_LEADERBOARD_MAX} merchants by spend in the last 12 months, plus every merchant you've set a category for. Set a category from a transaction in Activity to reach others.
+              </p>
+            );
             if (filtered.length === 0) {
               return view === "suggested" && !q ? (
                 <EmptyState icon={<Sparkles />} title="No suggestions to review">
                   When Ledger suggests a category for a merchant, it shows up here for you to accept or reject.
                 </EmptyState>
               ) : (
-                <EmptyState icon={<Search />} title="No merchants match" action={<Button size="sm" onClick={() => setQ("")}>Clear search</Button>}>
-                  Nothing matches “{q}”.
-                </EmptyState>
+                <>
+                  <EmptyState icon={<Search />} title="No merchants match" action={<Button size="sm" onClick={() => setQ("")}>Clear search</Button>}>
+                    Nothing matches “{q}”.
+                  </EmptyState>
+                  {cappedNote}
+                </>
               );
             }
             return (
@@ -137,10 +146,16 @@ export function MerchantsTab() {
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium text-ink">{m.merchant_name}</p>
                           <p className="mt-0.5 text-[12px] text-muted tabular">
-                            {formatCount(m.txn_count)} {m.txn_count === 1 ? "transaction" : "transactions"} · last {formatDate(m.last_date, "short")}
+                            {m.txn_count === null || !m.last_date
+                              ? "No spend in the last 12 months"
+                              : `${formatCount(m.txn_count)} ${m.txn_count === 1 ? "transaction" : "transactions"} · last ${formatDate(m.last_date, "short")}`}
                           </p>
                         </div>
-                        <Money value={m.amount} className="text-right text-sm text-ink sm:col-start-3 sm:row-start-1" />
+                        {m.amount === null ? (
+                          <span className="text-right text-sm text-muted sm:col-start-3 sm:row-start-1">—</span>
+                        ) : (
+                          <Money value={m.amount} className="text-right text-sm text-ink sm:col-start-3 sm:row-start-1" />
+                        )}
                         <div className="col-span-2 -ml-2 flex min-w-0 flex-col items-start sm:col-span-1 sm:col-start-2 sm:row-start-1">
                             {state === "suggested" ? (
                               <span className="inline-flex items-center gap-1.5 px-2 py-0.5 text-[12px] text-ink-2">
@@ -186,6 +201,7 @@ export function MerchantsTab() {
                   })}
                 </ul>
                 <Pager total={filtered.length} page={pager.page} size={pager.size} onPage={pager.setPage} onSize={pager.setSize} noun="merchants" />
+                {cappedNote}
               </>
             );
           }}

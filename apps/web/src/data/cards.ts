@@ -1,8 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FunctionsHttpError } from "@supabase/supabase-js";
 import { supabase, type RpcReturn } from "@/lib/supabase";
 import { keys } from "./keys";
-import { ApiError, must, mustList } from "./api";
+import { ApiError, fetchPage, must, mustList, toApiError, type Page } from "./api";
+import { pageRange } from "@/lib/pagination";
 
 export type StatementCycle = RpcReturn<"statement_cycles">[number];
 
@@ -42,28 +43,95 @@ export function useUpdateAccount(profileCode: string) {
   });
 }
 
-export function useStatementCycles(profileCode: string, limit = 120) {
+/** statement_cycles caps p_limit at 500 server-side; the UI says so when it is reached. */
+export const STATEMENT_CYCLES_MAX = 500;
+
+/** One page of statements, newest first, with the exact total (up to STATEMENT_CYCLES_MAX). */
+export function useStatementCycles(profileCode: string, page: number, size: number) {
   return useQuery({
-    queryKey: keys.cycles(profileCode),
-    queryFn: async () => mustList(await supabase.rpc("statement_cycles", { p_profile_code: profileCode, p_limit: limit })),
+    queryKey: [...keys.cycles(profileCode), page, size],
+    placeholderData: keepPreviousData,
+    queryFn: async (): Promise<Page<StatementCycle>> => {
+      const { from, to } = pageRange(page, size);
+      const args = { p_profile_code: profileCode, p_limit: STATEMENT_CYCLES_MAX };
+      return fetchPage<StatementCycle>(
+        () => supabase.rpc("statement_cycles", args, { count: "exact" }).range(from, to),
+        () => supabase.rpc("statement_cycles", args, { count: "exact", head: true }),
+      );
+    },
   });
 }
 
-export function useDocuments(profileCode: string) {
+const DOC_COLUMNS =
+  "doc_code, kind, bank_code, storage_path, original_filename, size_bytes, source, parse_status, parse_attempts, parser_version, parse_error_code, parse_error, parse_warnings, parsed_at, created_at, updated_at";
+
+/** One page of documents, newest first, with the exact total. */
+export function useDocuments(profileCode: string, page: number, size: number) {
   return useQuery({
-    queryKey: keys.documents(profileCode),
-    queryFn: async () =>
-      mustList(
-        await supabase
-          .from("documents")
-          .select(
-            "doc_code, kind, bank_code, storage_path, original_filename, size_bytes, source, parse_status, parse_attempts, parser_version, parse_error_code, parse_error, parse_warnings, parsed_at, created_at, updated_at",
-          )
-          .eq("profile_code", profileCode)
-          .order("created_at", { ascending: false })
-          .limit(500),
-      ),
+    queryKey: [...keys.documents(profileCode), "page", page, size],
+    placeholderData: keepPreviousData,
+    queryFn: async () => {
+      const { from, to } = pageRange(page, size);
+      const base = () => supabase.from("documents").select(DOC_COLUMNS, { count: "exact" }).eq("profile_code", profileCode);
+      return fetchPage<DocumentRow>(
+        () => base().order("created_at", { ascending: false }).order("doc_code", { ascending: false }).range(from, to),
+        () => supabase.from("documents").select("doc_code", { count: "exact", head: true }).eq("profile_code", profileCode),
+      );
+    },
   });
+}
+
+export interface DocumentRow {
+  doc_code: string;
+  kind: string;
+  bank_code: string | null;
+  storage_path: string;
+  original_filename: string;
+  size_bytes: number | null;
+  source: string;
+  parse_status: string;
+  parse_attempts: number;
+  parser_version: string | null;
+  parse_error_code: string | null;
+  parse_error: string | null;
+  parse_warnings: unknown;
+  parsed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const DOC_STATUSES = ["queued", "parsing", "parsed", "failed"] as const;
+
+/**
+ * Document counts by parse status (exact, server-side head counts) and the
+ * codes of failed documents for "Retry failed". Never derived from a page.
+ */
+export function useDocumentHealth(profileCode: string) {
+  return useQuery({
+    queryKey: [...keys.documents(profileCode), "health"],
+    queryFn: async () => {
+      const head = (status: string) =>
+        supabase.from("documents").select("doc_code", { count: "exact", head: true }).eq("profile_code", profileCode).eq("parse_status", status);
+      const [counts, failed] = await Promise.all([
+        Promise.all(DOC_STATUSES.map(async (st) => [st, (await head(st))] as const)),
+        supabase.from("documents").select("doc_code").eq("profile_code", profileCode).eq("parse_status", "failed").order("created_at", { ascending: false }),
+      ]);
+      const out: Record<string, number> = {};
+      for (const [st, res] of counts) {
+        if (res.error) throw toApiError(res.error, res.status);
+        out[st] = res.count ?? 0;
+      }
+      const failedCodes = mustList(failed).map((d) => d.doc_code);
+      const total = Object.values(out).reduce((a, b) => a + b, 0);
+      return { counts: out, total, failedCodes };
+    },
+  });
+}
+
+/** Storage path of one document, looked up on demand (never from a capped list). */
+export async function documentStoragePath(docCode: string): Promise<string | null> {
+  const row = must(await supabase.from("documents").select("storage_path").eq("doc_code", docCode).maybeSingle());
+  return row?.storage_path ?? null;
 }
 
 export function useRequeueDocuments(profileCode: string) {
@@ -138,11 +206,4 @@ export function useUploadStatements(profileCode: string) {
     },
     onSettled: () => qc.invalidateQueries({ queryKey: keys.documents(profileCode) }),
   });
-}
-
-/** Counts by parse status for the health panel. */
-export function countByStatus<T extends { parse_status: string }>(docs: T[]): Record<string, number> {
-  const out: Record<string, number> = { queued: 0, parsing: 0, parsed: 0, failed: 0 };
-  for (const d of docs) out[d.parse_status] = (out[d.parse_status] ?? 0) + 1;
-  return out;
 }

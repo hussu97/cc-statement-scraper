@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { ArrowRight, ChevronLeft, ChevronRight, Inbox, Lightbulb, MessageSquareText, X } from "lucide-react";
 import { useActiveProfile } from "@/data/profile";
-import { accountLabel, sortInsights, useDismissInsight, useInsights, useOverview, type Overview, type OverviewAccount } from "@/data/overview";
+import { accountLabel, insightTarget, sortInsights, useDismissInsight, useInsights, useOverview, type Insight, type Overview, type OverviewAccount } from "@/data/overview";
 import { evidenceBadge, useTransactions } from "@/data/transactions";
 import { addMonths, daysBetween, formatDate, formatDateTime, formatMonth, formatRelative, formatTime, monthEnd, monthStart, todayDubai } from "@/lib/dates";
 import { formatChange, formatMoney, formatPercent, toAmount } from "@/lib/money";
@@ -10,7 +10,7 @@ import { cn } from "@/lib/cn";
 import { Card, CardHeader, Badge, Dot, Meter, Skeleton } from "@/components/ui/display";
 import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
-import { BankMark, EvidenceBadge, HeroAmount, Money, StatusBadge } from "@/components/ledger";
+import { BankMark, EvidenceBadge, HeroAmount, StatusBadge, TxnAmount } from "@/components/ledger";
 import { PaceRule } from "@/components/overview/pace-rule";
 import { CategoryRing } from "@/components/overview/category-ring";
 
@@ -57,7 +57,7 @@ export function OverviewPage() {
           <CardHeader
             eyebrow="Where it went"
             title={`Top categories in ${formatMonth(month, "short")}`}
-            action={<Link to="/insights" search={{ tab: "categories" }} className="text-[13px] text-accent hover:underline">All categories</Link>}
+            action={<Link to="/insights" search={{ tab: "categories" }} className="tap text-[13px] text-accent hover:underline">All categories</Link>}
           />
           <div className="px-5 pb-5">
             {q.isLoading ? (
@@ -101,8 +101,7 @@ export function OverviewPage() {
                     </p>
                   </div>
                   <div className="text-right">
-                    <Money value={t.amount_aed ?? t.amount_original} direction={t.direction} className="text-sm" />
-                    {t.currency_original !== "AED" && <p className="tabular text-[11px] text-subtle">{formatMoney(t.amount_original, { currency: t.currency_original })}</p>}
+                    <TxnAmount t={t} className="text-sm" />
                   </div>
                 </Link>
               </li>
@@ -230,7 +229,7 @@ function PendingStrip({ profileCode, overview }: { profileCode: string; overview
                     <span>{t.txn_at ? `${formatDate(t.txn_date, "short")} ${formatTime(t.txn_at)}` : formatDate(t.txn_date, "short")}</span>
                   </span>
                   <span className="truncate text-[13px] text-ink">{t.merchant_name ?? t.description}</span>
-                  <Money value={t.amount_aed} direction={t.direction} className="text-[15px] font-medium" />
+                  <TxnAmount t={t} align="start" showOriginal={false} className="text-[15px] font-medium" />
                 </Link>
               </li>
             );
@@ -258,30 +257,50 @@ function InsightsPanel({ profileCode }: { profileCode: string }) {
       ) : (
         <ul className="flex flex-col gap-2 px-5 pb-5">
           {list.slice(0, 5).map((i) => (
-            <li key={i.insight_code} className="group relative rounded-md border border-border bg-bg px-4 py-3 pr-10">
-              <div className="flex items-center gap-2">
-                <span
-                  aria-hidden
-                  className={cn("size-1.5 rounded-pill", i.severity === "alert" ? "bg-danger" : i.severity === "warn" ? "bg-warn" : "bg-info")}
-                />
-                <p className="text-[13.5px] font-medium text-ink">{i.title}</p>
-              </div>
-              <p className="mt-1 text-[13px] leading-relaxed text-muted">{i.body}</p>
-              {isOwner && (
-                <button
-                  type="button"
-                  onClick={() => dismiss.mutate(i.insight_code)}
-                  aria-label={`Dismiss: ${i.title}`}
-                  className="absolute top-2.5 right-2.5 rounded-sm p-1 text-subtle opacity-70 hover:bg-surface-2 hover:text-ink group-hover:opacity-100"
-                >
-                  <X className="size-3.5" />
-                </button>
-              )}
-            </li>
+            <InsightCard key={i.insight_code} insight={i} onDismiss={isOwner ? () => dismiss.mutate(i.insight_code) : undefined} />
           ))}
         </ul>
       )}
     </Card>
+  );
+}
+
+function InsightCard({ insight: i, onDismiss }: { insight: Insight; onDismiss?: () => void }) {
+  const target = insightTarget(i);
+  const body = (
+    <>
+      <div className="flex items-center gap-2">
+        <span aria-hidden className={cn("size-1.5 shrink-0 rounded-pill", i.severity === "alert" ? "bg-danger" : i.severity === "warn" ? "bg-warn" : "bg-info")} />
+        <p className="text-[13.5px] font-medium text-ink">{i.title}</p>
+      </div>
+      <p className="mt-1 text-[13px] leading-relaxed text-muted">{i.body}</p>
+      {target && (
+        <span className="mt-1.5 inline-flex items-center gap-1 text-[12.5px] font-medium text-accent">
+          {target.label} <ArrowRight className="size-3.5" aria-hidden />
+        </span>
+      )}
+    </>
+  );
+  return (
+    <li className="group relative rounded-md border border-border bg-bg transition-colors hover:border-border-strong">
+      {target ? (
+        <Link to={target.to} search={"search" in target ? target.search : undefined} className="block rounded-md px-4 py-3 pr-12">
+          {body}
+        </Link>
+      ) : (
+        <div className="px-4 py-3 pr-12">{body}</div>
+      )}
+      {onDismiss && (
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label={`Dismiss: ${i.title}`}
+          className="absolute top-0 right-0 flex size-11 items-center justify-center rounded-md text-muted hover:bg-surface-2 hover:text-ink md:top-1 md:right-1 md:size-8"
+        >
+          <X className="size-3.5" />
+        </button>
+      )}
+    </li>
   );
 }
 
@@ -290,7 +309,7 @@ function AccountsPanel({ overview, loading, error, retry }: { overview: Overview
     <section aria-labelledby="cards-title">
       <div className="mb-3 flex items-center justify-between">
         <h2 id="cards-title" className="text-[15px] font-semibold text-ink">Cards</h2>
-        <Link to="/cards" className="text-[13px] text-accent hover:underline">Cards & statements</Link>
+        <Link to="/cards" className="tap text-[13px] text-accent hover:underline">Cards & statements</Link>
       </div>
       {loading ? (
         <div className="grid gap-4 md:grid-cols-2"><Skeleton className="h-40 rounded-lg" /><Skeleton className="h-40 rounded-lg" /></div>

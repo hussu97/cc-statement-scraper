@@ -1,6 +1,6 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Search, SlidersHorizontal, X } from "lucide-react";
-import { activeFilterCount, UNCATEGORIZED, type ActivitySearch } from "@/lib/activity-filters";
+import { activeFilterCount, syncSearchText, UNCATEGORIZED, type ActivitySearch } from "@/lib/activity-filters";
 import { matchPreset, presetRange, RANGE_PRESETS, formatDate } from "@/lib/dates";
 import { useDebouncedValue } from "@/lib/hooks";
 import { accountLabel, type FilterMeta } from "@/data/overview";
@@ -15,11 +15,24 @@ type Patch = (p: Partial<ActivitySearch>) => void;
 
 function SearchBox({ value, onChange }: { value: string | undefined; onChange: (v: string | undefined) => void }) {
   const [text, setText] = useState(value ?? "");
+  const written = useRef<string | undefined>(value);
   const debounced = useDebouncedValue(text, 350);
   useEffect(() => {
-    if ((debounced || undefined) !== value) onChange(debounced.trim() || undefined);
+    const next = debounced.trim() || undefined;
+    if (next !== written.current) {
+      written.current = next;
+      onChange(next);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debounced]);
+  // "Clear filters" / Back changed ?q= underneath us: show it (WEB-08).
+  useEffect(() => {
+    const sync = syncSearchText(value, written.current);
+    if (sync !== null) {
+      written.current = value;
+      setText(sync);
+    }
+  }, [value]);
   return (
     <div className="relative min-w-0 flex-1 sm:max-w-80">
       <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-subtle" aria-hidden />

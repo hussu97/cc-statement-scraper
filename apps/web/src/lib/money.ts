@@ -77,6 +77,35 @@ export function formatTxnAmount(value: MoneyInput, direction: string | null | un
   return direction === "credit" ? formatMoney(Math.abs(n), { currency, signed: true }) : formatMoney(Math.abs(n), { currency });
 }
 
+export interface TxnAmountFields {
+  amount_aed: MoneyInput;
+  amount_original: MoneyInput;
+  currency_original: string | null | undefined;
+}
+
+export interface DisplayAmount {
+  value: MoneyInput;
+  currency: string;
+  /** Foreign amount with no AED estimate yet: shown in its own currency (WEB-05). */
+  awaitingFx: boolean;
+  /** The original foreign amount, shown under an AED figure. */
+  original: { value: MoneyInput; currency: string } | null;
+}
+
+/**
+ * Which figure to show for a transaction. Never labels a foreign amount as AED:
+ * with no `amount_aed` (no FX rate yet) the original currency is shown and
+ * flagged as awaiting FX.
+ */
+export function displayAmount(t: TxnAmountFields): DisplayAmount {
+  const cur = (t.currency_original ?? "AED").toUpperCase();
+  const foreign = cur !== "AED";
+  if (toAmount(t.amount_aed) !== null) {
+    return { value: t.amount_aed, currency: "AED", awaitingFx: false, original: foreign ? { value: t.amount_original, currency: cur } : null };
+  }
+  return { value: t.amount_original, currency: cur, awaitingFx: foreign, original: null };
+}
+
 /** Display-only ratio between two server values (e.g. a progress bar width). */
 export function displayRatio(part: MoneyInput, whole: MoneyInput): number | null {
   const a = toAmount(part);
@@ -106,6 +135,11 @@ export function formatChange(fraction: number | string | null | undefined): stri
 export function formatCount(n: number | null | undefined): string {
   if (n === null || n === undefined) return "—";
   return new Intl.NumberFormat("en-US").format(n);
+}
+
+/** Compact count for nav badges: 1…99, then "99+". */
+export function formatBadgeCount(n: number): string {
+  return n > 99 ? "99+" : formatCount(n);
 }
 
 export function formatRate(rate: MoneyInput, digits = 4): string {

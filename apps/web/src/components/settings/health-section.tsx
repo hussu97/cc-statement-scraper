@@ -1,8 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, FileText, MessageSquareText, RotateCw } from "lucide-react";
 import { useActiveProfile } from "@/data/profile";
-import { countByStatus, useDocuments, useRequeueDocuments } from "@/data/cards";
-import { failedDocCodes, useSmsHealth } from "@/data/settings";
+import { useDocumentHealth, useRequeueDocuments } from "@/data/cards";
+import { useSmsHealth } from "@/data/settings";
 import { errorMessage } from "@/data/api";
 import { formatCount } from "@/lib/money";
 import { formatRelative } from "@/lib/dates";
@@ -30,7 +30,7 @@ function Stat({ label, value, className }: { label: string; value: string; class
 
 export function HealthSection() {
   const { profile_code: profileCode, isOwner } = useActiveProfile();
-  const docs = useDocuments(profileCode);
+  const docs = useDocumentHealth(profileCode);
   const sms = useSmsHealth(profileCode);
   const requeue = useRequeueDocuments(profileCode);
   const toast = useToast();
@@ -45,19 +45,18 @@ export function HealthSection() {
             </span>
           }
           action={
-            <Link to="/cards" search={{ tab: "documents" }} className="inline-flex items-center gap-1 text-[13px] text-accent hover:underline">
+            <Link to="/cards" search={{ tab: "documents" }} className="tap inline-flex items-center gap-1 text-[13px] text-accent hover:underline">
               Documents <ArrowRight className="size-3.5" aria-hidden />
             </Link>
           }
         />
         <div className="px-5 pb-5">
           <QueryView query={docs} loading={<LoadingRows rows={1} className="p-0" />}>
-            {(list) => {
-              const counts = countByStatus(list);
-              const failed = failedDocCodes(list);
+            {({ counts, total, failedCodes: failed }) => {
+              const failedCount = counts.failed ?? 0;
               return (
                 <>
-                  {list.length === 0 ? (
+                  {total === 0 ? (
                     <p className="text-[13px] text-muted">No statements yet. Upload PDFs on Cards & statements, or let the scraper or email send them.</p>
                   ) : (
                     <div className="grid grid-cols-4 gap-3">
@@ -66,10 +65,10 @@ export function HealthSection() {
                       ))}
                     </div>
                   )}
-                  {failed.length > 0 && (
+                  {failedCount > 0 && (
                     <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-md bg-danger-soft px-3 py-2">
                       <p className="text-[13px] text-ink-2">
-                        {failed.length === 1 ? "One statement couldn't be read." : `${formatCount(failed.length)} statements couldn't be read.`} Check its password, then retry.
+                        {failedCount === 1 ? "One statement couldn't be read. Check its password, then retry." : `${formatCount(failedCount)} statements couldn't be read. Check their passwords, then retry.`}
                       </p>
                       {isOwner && (
                         <Button
@@ -103,7 +102,7 @@ export function HealthSection() {
             </span>
           }
           action={
-            <Link to="/settings" search={{ tab: "sms" }} className="inline-flex items-center gap-1 text-[13px] text-accent hover:underline">
+            <Link to="/settings" search={{ tab: "sms" }} className="tap inline-flex items-center gap-1 text-[13px] text-accent hover:underline">
               Set up <ArrowRight className="size-3.5" aria-hidden />
             </Link>
           }
@@ -122,7 +121,7 @@ export function HealthSection() {
                   </div>
                   {h.lastSender && <p className="mt-3 text-[12px] text-muted">Latest from {h.lastSender}.</p>}
                   {h.unparsed > 0 && (
-                    <Link to="/review" className="mt-3 inline-flex items-center gap-1 text-[13px] text-accent hover:underline">
+                    <Link to="/review" className="tap mt-3 inline-flex items-center gap-1 text-[13px] text-accent hover:underline">
                       Review messages Ledger couldn't read <ArrowRight className="size-3.5" aria-hidden />
                     </Link>
                   )}

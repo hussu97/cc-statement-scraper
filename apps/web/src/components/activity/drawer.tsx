@@ -20,7 +20,7 @@ import { useActiveProfile } from "@/data/profile";
 import type { FilterMeta } from "@/data/overview";
 import { errorMessage } from "@/data/api";
 import { formatDate, formatDateTime } from "@/lib/dates";
-import { formatMoney, formatRate } from "@/lib/money";
+import { displayAmount, formatMoney, formatRate } from "@/lib/money";
 import { cn } from "@/lib/cn";
 import { Sheet } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/input";
@@ -29,7 +29,7 @@ import { Switch } from "@/components/ui/primitives";
 import { Badge } from "@/components/ui/display";
 import { ErrorState, LoadingRows } from "@/components/ui/states";
 import { useToast } from "@/components/ui/toast";
-import { CategoryPicker, EvidenceBadge, Money, StatusBadge } from "@/components/ledger";
+import { CategoryPicker, EvidenceBadge, Money, StatusBadge, TxnAmount } from "@/components/ledger";
 
 const SOURCE_LABEL: Record<string, string> = {
   manual: "Your choice",
@@ -78,16 +78,19 @@ function DrawerBody({ t, meta }: { t: TxnRow; meta: FilterMeta | undefined }) {
   const update = useUpdateTransaction(profile_code);
   const [notes, setNotes] = useState(t.notes ?? "");
   const fx = t.currency_original && t.currency_original !== "AED";
+  const amount = displayAmount(t);
 
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <Money value={t.amount_aed ?? t.amount_original} direction={t.direction} className="display-num text-[36px] leading-none" />
+        <Money value={amount.value} currency={amount.currency} direction={t.direction} className="display-num text-[36px] leading-none" />
+        {amount.original && <p className="tabular mt-1.5 text-[13px] text-muted">{formatMoney(amount.original.value, { currency: amount.original.currency })}</p>}
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <StatusBadge status={t.status} />
           {t.status === "posted" && <Badge>posted</Badge>}
           <Badge tone="neutral">{t.kind}</Badge>
           <EvidenceBadge kind={evidenceBadge(t)} />
+          {amount.awaitingFx && <Badge tone="warn">Awaiting FX rate</Badge>}
           {t.amount_aed_is_estimate && <Badge tone="warn">AED estimated</Badge>}
           {t.exclude_from_spend && <Badge tone="info">excluded from spend</Badge>}
         </div>
@@ -199,7 +202,7 @@ function RelatedReversal({ t }: { t: TxnRow }) {
       {related.map((r) => (
         <Link key={r.txn_code} to="/activity" search={(s) => ({ ...s, txn: r.txn_code ?? undefined })} className="flex items-center justify-between gap-3 text-[13px] hover:text-accent">
           <span className="truncate">{r.merchant_name ?? r.description} · {formatDate(r.txn_date, "short")}</span>
-          <Money value={r.amount_aed} direction={r.direction} />
+          <TxnAmount t={r} showOriginal={false} />
         </Link>
       ))}
     </section>
@@ -277,7 +280,7 @@ function SmsEvidence({ sms }: { sms: NonNullable<EvidenceItem["sms_messages"]> }
           {formatMoney(sms.amount, { currency: sms.currency ?? "AED" })} {sms.msg_kind && `· ${sms.msg_kind}`} {sms.card_last4 && `· •${sms.card_last4}`}
         </p>
       )}
-      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="mt-1.5 inline-flex items-center gap-1 text-accent hover:underline">
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="tap mt-1.5 inline-flex items-center gap-1 text-accent hover:underline">
         <ChevronDown className={cn("size-3 transition-transform", open && "rotate-180")} /> {open ? "Hide message" : "Show message"}
       </button>
       {open && (

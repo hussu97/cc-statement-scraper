@@ -1,13 +1,14 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { CheckCircle2, ChevronDown, CircleAlert, CircleMinus, ExternalLink, FileText, Pencil, RotateCw, XCircle } from "lucide-react";
 import { useActiveProfile } from "@/data/profile";
 import { accountLabel } from "@/data/overview";
-import { signedDocumentUrl, useAccounts, useDocuments, useRequeueDocuments, useStatementCycles, useUpdateAccount, type StatementCycle } from "@/data/cards";
+import { documentStoragePath, signedDocumentUrl, STATEMENT_CYCLES_MAX, useAccounts, useDocumentHealth, useDocuments, useRequeueDocuments, useStatementCycles, useUpdateAccount, type StatementCycle } from "@/data/cards";
 import { errorMessage } from "@/data/api";
 import { formatDate, formatRelative } from "@/lib/dates";
 import { formatMoney, formatPercent } from "@/lib/money";
-import { DEFAULT_PAGE_SIZE, type PageSize } from "@/lib/pagination";
+import { pageCount } from "@/lib/pagination";
+import { useClampPage, usePageState } from "@/lib/hooks";
 import { RECON_LABEL, RECON_TONE, reconChecks } from "@/lib/recon";
 import { cn } from "@/lib/cn";
 import { Badge, Card, Meter, PageHeader } from "@/components/ui/display";
@@ -157,18 +158,18 @@ function EditAccountDialog({ profileCode, account, onClose }: { profileCode: str
   );
 }
 
-function usePdfOpener(profileCode: string) {
-  const docs = useDocuments(profileCode);
+function usePdfOpener() {
   const toast = useToast();
   return async (docCode: string | null) => {
-    const doc = docs.data?.find((d) => d.doc_code === docCode);
-    if (!doc) {
+    if (!docCode) {
       toast({ title: "No PDF for this statement", tone: "danger" });
       return;
     }
     const win = window.open("about:blank", "_blank");
     try {
-      const url = await signedDocumentUrl(doc.storage_path);
+      const path = await documentStoragePath(docCode);
+      if (!path) throw new Error("The PDF for this statement isn't available.");
+      const url = await signedDocumentUrl(path);
       if (win) win.location.href = url;
       else window.location.assign(url);
     } catch (e) {
@@ -179,15 +180,14 @@ function usePdfOpener(profileCode: string) {
 }
 
 function StatementsTab({ profileCode }: { profileCode: string }) {
-  const q = useStatementCycles(profileCode);
-  const [page, setPage] = useState(1);
-  const [size, setSize] = useState<PageSize>(DEFAULT_PAGE_SIZE);
-  const openPdf = usePdfOpener(profileCode);
-  const rows = useMemo(() => q.data ?? [], [q.data]);
-  const pageRows = useMemo(() => rows.slice((page - 1) * size, page * size), [rows, page, size]);
+  const pager = usePageState();
+  const q = useStatementCycles(profileCode, pager.page, pager.size);
+  useClampPage(pager.page, pager.size, q.data?.total, pager.setPage);
+  const openPdf = usePdfOpener();
   if (q.isLoading) return <Card><LoadingRows rows={6} /></Card>;
   if (q.isError) return <Card><ErrorState error={q.error} onRetry={() => void q.refetch()} /></Card>;
-  if (!rows.length)
+  const { rows, total } = q.data!;
+  if (total === 0)
     return (
       <Card>
         <EmptyState icon={<FileText />} title="No statements yet" action={<Link to="/cards" search={{ tab: "upload" }} className="text-sm text-accent hover:underline">Upload a statement</Link>}>
@@ -197,14 +197,21 @@ function StatementsTab({ profileCode }: { profileCode: string }) {
     );
   return (
     <>
-      <Card className="overflow-hidden">
-        <ul className="divide-y divide-border">
-          {pageRows.map((s) => (
-            <StatementRow key={s.stmt_code} s={s} onOpenPdf={() => void openPdf(s.doc_code)} />
-          ))}
-        </ul>
+      <Card className={cn("overflow-hidden", q.isFetching && !q.isLoading && "opacity-80 transition-opacity")}>
+        {pager.page > pageCount(total, pager.size) ? (
+          <LoadingRows rows={4} />
+        ) : (
+          <ul className="divide-y divide-border">
+            {rows.map((s) => (
+              <StatementRow key={s.stmt_code} s={s} onOpenPdf={() => void openPdf(s.doc_code)} />
+            ))}
+          </ul>
+        )}
       </Card>
-      <Pagination page={page} size={size} total={rows.length} onPage={setPage} onSize={(s) => { setSize(s); setPage(1); }} />
+      <Pagination page={pager.page} size={pager.size} total={total} onPage={pager.setPage} onSize={pager.setSize} />
+      {total >= STATEMENT_CYCLES_MAX && (
+        <p className="px-1 text-[12px] text-muted">Showing your newest {STATEMENT_CYCLES_MAX} statements. Older ones are still in your ledger and in Activity.</p>
+      )}
     </>
   );
 }
@@ -287,14 +294,15 @@ function StatementRow({ s, onOpenPdf }: { s: StatementCycle; onOpenPdf: () => vo
 const PARSE_TONE: Record<string, "neutral" | "info" | "positive" | "danger"> = { queued: "neutral", parsing: "info", parsed: "positive", failed: "danger" };
 
 function DocumentsTab({ profileCode, isOwner }: { profileCode: string; isOwner: boolean }) {
-  const q = useDocuments(profileCode);
+  const pager = usePageState();
+  const q = useDocuments(profileCode, pager.page, pager.size);
+  useClampPage(pager.page, pager.size, q.data?.total, pager.setPage);
+  const health = useDocumentHealth(profileCode);
   const requeue = useRequeueDocuments(profileCode);
-  const openPdf = usePdfOpener(profileCode);
+  const openPdf = usePdfOpener();
   const toast = useToast();
-  const [page, setPage] = useState(1);
-  const [size, setSize] = useState<PageSize>(DEFAULT_PAGE_SIZE);
-  const rows = q.data ?? [];
-  const failed = rows.filter((d) => d.parse_status === "failed").map((d) => d.doc_code);
+  const failed = health.data?.failedCodes ?? [];
+  const failedCount = health.data?.counts.failed ?? 0;
   const parseAgain = (codes: string[]) =>
     requeue.mutate(codes, {
       onSuccess: (n) => toast({ title: `${n} document${n === 1 ? "" : "s"} queued for parsing`, tone: "positive" }),
@@ -302,18 +310,19 @@ function DocumentsTab({ profileCode, isOwner }: { profileCode: string; isOwner: 
     });
   if (q.isLoading) return <Card><LoadingRows rows={6} /></Card>;
   if (q.isError) return <Card><ErrorState error={q.error} onRetry={() => void q.refetch()} /></Card>;
-  if (!rows.length) return <Card><EmptyState icon={<FileText />} title="No documents yet">Uploaded and scraped PDFs appear here with their parse status.</EmptyState></Card>;
+  const { rows, total } = q.data!;
+  if (total === 0) return <Card><EmptyState icon={<FileText />} title="No documents yet">Uploaded and scraped PDFs appear here with their parse status.</EmptyState></Card>;
   return (
     <>
-      {isOwner && failed.length > 0 && (
+      {isOwner && failedCount > 0 && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-danger bg-danger-soft px-4 py-3 text-[13px]">
-          <span className="flex items-center gap-2 text-danger"><CircleAlert className="size-4" />{failed.length} document{failed.length === 1 ? "" : "s"} failed to parse.</span>
-          <Button size="sm" icon={<RotateCw className="size-3.5" />} loading={requeue.isPending} onClick={() => parseAgain(failed)}>Retry failed</Button>
+          <span className="flex items-center gap-2 text-danger"><CircleAlert className="size-4" />{failedCount} document{failedCount === 1 ? "" : "s"} failed to parse.</span>
+          <Button size="sm" icon={<RotateCw className="size-3.5" />} loading={requeue.isPending} disabled={failed.length === 0} onClick={() => parseAgain(failed)}>Retry failed</Button>
         </div>
       )}
       <Card className="overflow-hidden">
         <ul className="divide-y divide-border">
-          {rows.slice((page - 1) * size, page * size).map((d) => (
+          {rows.map((d) => (
             <li key={d.doc_code} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-5 py-3">
               <div className="min-w-0">
                 <button type="button" onClick={() => void openPdf(d.doc_code)} className="block max-w-full truncate text-left text-sm text-ink hover:text-accent">
@@ -340,7 +349,7 @@ function DocumentsTab({ profileCode, isOwner }: { profileCode: string; isOwner: 
           ))}
         </ul>
       </Card>
-      <Pagination page={page} size={size} total={rows.length} onPage={setPage} onSize={(s) => { setSize(s); setPage(1); }} />
+      <Pagination page={pager.page} size={pager.size} total={total} onPage={pager.setPage} onSize={pager.setSize} />
     </>
   );
 }

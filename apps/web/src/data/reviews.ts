@@ -1,8 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, type Tables, type Views } from "@/lib/supabase";
 import type { Json } from "@ledger/db-types";
 import { keys, LEDGER_DOMAINS } from "./keys";
-import { must, mustList } from "./api";
+import { fetchPage, must, mustList, toApiError, type Page } from "./api";
+import { useAuth } from "./auth";
+import { pageRange } from "@/lib/pagination";
 
 export type Review = Tables<"match_reviews">;
 
@@ -60,20 +62,76 @@ export function groupReviews(list: Review[]): { reason: string; items: Review[] 
   return [...map.entries()].sort((a, b) => order(a[0]) - order(b[0])).map(([reason, items]) => ({ reason, items }));
 }
 
-export function useOpenReviews(profileCode: string) {
+/**
+ * Open-review count for the nav badge: a head request, no rows. Gated on a
+ * restored session and a profile, so it never runs with the anon key (anon has
+ * no grant on match_reviews: "permission denied for table match_reviews").
+ */
+export function useOpenReviewCount(profileCode: string | null | undefined) {
+  const { session } = useAuth();
   return useQuery({
-    queryKey: keys.reviews(profileCode),
-    queryFn: async () =>
-      mustList(
-        await supabase
-          .from("match_reviews")
-          .select("*")
-          .eq("profile_code", profileCode)
-          .eq("status", "open")
-          .order("created_at", { ascending: false })
-          .limit(500),
-      ),
+    queryKey: keys.reviewCount(profileCode ?? ""),
+    enabled: reviewQueriesEnabled(session, profileCode),
+    queryFn: async () => {
+      const res = await supabase
+        .from("match_reviews")
+        .select("review_code", { count: "exact", head: true })
+        .eq("profile_code", profileCode!)
+        .eq("status", "open");
+      if (res.error) throw toApiError(res.error, res.status);
+      return res.count ?? 0;
+    },
   });
+}
+
+/** Review queries need a signed-in session and an active profile. Pure, unit-tested. */
+export function reviewQueriesEnabled(session: unknown, profileCode: string | null | undefined): boolean {
+  return !!session && !!profileCode;
+}
+
+/** One page of open reviews, newest first, with the exact total. */
+export function useOpenReviews(profileCode: string, page: number, size: number) {
+  const { session } = useAuth();
+  return useQuery({
+    queryKey: [...keys.reviews(profileCode), page, size],
+    enabled: reviewQueriesEnabled(session, profileCode),
+    placeholderData: keepPreviousData,
+    queryFn: async (): Promise<Page<Review>> => {
+      const { from, to } = pageRange(page, size);
+      const head = () =>
+        supabase.from("match_reviews").select("review_code", { count: "exact", head: true }).eq("profile_code", profileCode).eq("status", "open");
+      return fetchPage<Review>(
+        () =>
+          supabase
+            .from("match_reviews")
+            .select("*", { count: "exact" })
+            .eq("profile_code", profileCode)
+            .eq("status", "open")
+            .order("created_at", { ascending: false })
+            .order("review_code", { ascending: false })
+            .range(from, to),
+        head,
+      );
+    },
+  });
+}
+
+/** Actions in a review card's footer (besides per-candidate links and the card/template pickers). */
+export type ReviewFooterAction = "separate" | "supersede" | "not_a_transaction" | "dismiss";
+
+/**
+ * Which footer actions a review offers. Every open review has at least one way
+ * to be cleared: an unparsed SMS without a proposed format (the LLM proposed
+ * nothing, or the proposal is gone) can be dismissed or marked "not a card
+ * transaction" (WEB-07). Pure, unit-tested.
+ */
+export function reviewFooterActions(r: Pick<Review, "reason" | "subject_type">, hasTemplate: boolean): ReviewFooterAction[] {
+  if (r.reason === "unparsed_sms") return hasTemplate ? [] : ["not_a_transaction", "dismiss"];
+  const out: ReviewFooterAction[] = [];
+  if ((r.subject_type === "statement_line" || r.subject_type === "sms") && r.reason !== "unknown_card") out.push("separate");
+  if (r.reason === "period_overlap") out.push("supersede");
+  out.push("dismiss");
+  return out;
 }
 
 export interface ReviewCandidate {
@@ -168,7 +226,7 @@ export function useReviewContext(profileCode: string, review: Review) {
 export type ResolveAction =
   | { link: string }
   | { create_new: true }
-  | { dismiss: true }
+  | { dismiss: true; not_a_transaction?: true }
   | { card: { account_code: string } }
   | { supersede: string };
 

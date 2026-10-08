@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { Check, ChevronDown, Inbox, Link2, Plus, X } from "lucide-react";
+import { Ban, Check, ChevronDown, Inbox, Link2, Plus, X } from "lucide-react";
 import { useActiveProfile } from "@/data/profile";
-import { REVIEW_REASONS, candidatesOf, groupReviews, useDecideTemplate, useOpenReviews, useResolveReview, useReviewContext, type ResolveAction, type Review } from "@/data/reviews";
+import { REVIEW_REASONS, candidatesOf, groupReviews, reviewFooterActions, useDecideTemplate, useOpenReviews, useResolveReview, useReviewContext, type ResolveAction, type Review } from "@/data/reviews";
 import { useAccounts } from "@/data/cards";
 import { accountLabel } from "@/data/overview";
 import { useSmsBody, type TxnRow } from "@/data/transactions";
@@ -10,38 +10,50 @@ import { errorMessage } from "@/data/api";
 import { formatDate, formatDateTime, formatRelative } from "@/lib/dates";
 
 import { cn } from "@/lib/cn";
+import { formatCount } from "@/lib/money";
+import { useClampPage, usePageState } from "@/lib/hooks";
+import { Pagination } from "@/components/pagination";
 import { Badge, Card, PageHeader, Dot } from "@/components/ui/display";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
 import { useToast } from "@/components/ui/toast";
-import { Money, StatusBadge } from "@/components/ledger";
+import { Money, StatusBadge, TxnAmount } from "@/components/ledger";
 
 export function ReviewPage() {
   const { profile_code } = useActiveProfile();
-  const q = useOpenReviews(profile_code);
-  const groups = groupReviews(q.data ?? []);
+  const pager = usePageState();
+  const q = useOpenReviews(profile_code, pager.page, pager.size);
+  useClampPage(pager.page, pager.size, q.data?.total, pager.setPage);
+  const groups = groupReviews(q.data?.rows ?? []);
+  const total = q.data?.total ?? 0;
+  const paged = total > pager.size;
   return (
     <div>
       <PageHeader
         title="Review"
         description="Things Ledger couldn't decide on its own. Each answer also teaches the matcher for next time."
-        actions={q.data ? <span className="tabular text-sm text-muted">{q.data.length} open</span> : null}
+        actions={q.data ? <span className="tabular text-sm text-muted">{formatCount(total)} open</span> : null}
       />
       {q.isLoading ? (
         <Card><LoadingRows rows={5} /></Card>
       ) : q.isError ? (
         <Card><ErrorState error={q.error} onRetry={() => void q.refetch()} /></Card>
-      ) : groups.length === 0 ? (
+      ) : total === 0 ? (
         <Card><EmptyState icon={<Inbox />} title="Nothing to review">Every SMS and statement line found its match.</EmptyState></Card>
+      ) : groups.length === 0 ? (
+        <Card><LoadingRows rows={3} /></Card>
       ) : (
-        <div className="flex flex-col gap-8">
+        <div className={cn("flex flex-col gap-8", q.isFetching && !q.isLoading && "opacity-80 transition-opacity")}>
           {groups.map((g) => (
             <section key={g.reason} aria-labelledby={`r-${g.reason}`}>
               <div className="mb-3">
                 <h2 id={`r-${g.reason}`} className="flex items-center gap-2 text-[15px] font-semibold text-ink">
                   {REVIEW_REASONS[g.reason]?.title ?? g.reason}
-                  <span className="tabular rounded-pill bg-surface-2 px-2 text-[12px] font-normal text-muted">{g.items.length}</span>
+                  <span className="tabular rounded-pill bg-surface-2 px-2 text-[12px] font-normal text-muted">
+                    {g.items.length}
+                    {paged && " on this page"}
+                  </span>
                 </h2>
                 {REVIEW_REASONS[g.reason] && <p className="mt-1 max-w-2xl text-[13px] text-muted">{REVIEW_REASONS[g.reason]!.help}</p>}
               </div>
@@ -52,6 +64,7 @@ export function ReviewPage() {
               </div>
             </section>
           ))}
+          <Pagination page={pager.page} size={pager.size} total={total} onPage={pager.setPage} onSize={pager.setSize} />
         </div>
       )}
     </div>
@@ -72,6 +85,7 @@ function ReviewCard({ review }: { review: Review }) {
       },
     );
   const busy = resolve.isPending;
+  const footer = ctx.data ? reviewFooterActions(review, !!ctx.data.template) : [];
 
   return (
     <Card className={cn("p-5 transition-opacity", busy && "opacity-60")}>
@@ -89,7 +103,7 @@ function ReviewCard({ review }: { review: Review }) {
             <Subject
               title={ctx.data.line.description_raw}
               meta={`${formatDate(ctx.data.line.txn_date)} · ${ctx.data.line.evidence_type === "history_line" ? "history export" : "statement"} line${ctx.data.line.card_last4 ? ` · •${ctx.data.line.card_last4}` : ""}`}
-              amount={<Money value={ctx.data.line.amount_aed ?? ctx.data.line.amount_original} direction={ctx.data.line.direction} currency={ctx.data.line.amount_aed !== null ? "AED" : ctx.data.line.currency_original} />}
+              amount={<TxnAmount t={ctx.data.line} />}
             />
           )}
           {ctx.data.sms && (
@@ -118,7 +132,7 @@ function ReviewCard({ review }: { review: Review }) {
                         {c.txn_at ? formatDateTime(c.txn_at) : formatDate(c.txn_date)} · {c.bank_code} •{c.card_last4} {score !== undefined && `· match ${Math.round(Number(score))}/100`}
                       </p>
                     </div>
-                    <Money value={c.amount_aed} direction={c.direction} className="text-[13px]" />
+                    <TxnAmount t={c} className="text-[13px]" />
                     {isOwner && (
                       <Button size="sm" variant="secondary" icon={<Link2 className="size-3.5" />} disabled={busy} onClick={() => act({ link: c.txn_code! }, "Linked")}>
                         Same purchase
@@ -133,15 +147,20 @@ function ReviewCard({ review }: { review: Review }) {
           {review.reason === "unknown_card" && isOwner && <UnknownCardAction review={review} bank={ctx.data.sms?.bank_code ?? candidatesOf(review)[0]?.bank_code} last4={ctx.data.sms?.card_last4 ?? candidatesOf(review)[0]?.last4} onRegister={(account) => act({ card: { account_code: account } }, "Card added")} busy={busy} />}
 
           {review.reason === "unparsed_sms" && ctx.data.template && <TemplateProposal review={review} template={ctx.data.template} />}
+          {review.reason === "unparsed_sms" && !ctx.data.template && (
+            <p className="text-[13px] text-muted">
+              Ledger couldn't propose a format for this message. If it isn't a card transaction, mark it so; otherwise dismiss it and add the format later.
+            </p>
+          )}
 
-          {isOwner && review.reason !== "unparsed_sms" && (
+          {isOwner && footer.length > 0 && (
             <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">
-              {(review.subject_type === "statement_line" || review.subject_type === "sms") && review.reason !== "unknown_card" && review.reason !== "unparsed_sms" && (
+              {footer.includes("separate") && (
                 <Button size="sm" icon={<Plus className="size-3.5" />} disabled={busy} onClick={() => act({ create_new: true }, "Kept as a new transaction")}>
                   It's a separate purchase
                 </Button>
               )}
-              {review.reason === "period_overlap" &&
+              {footer.includes("supersede") &&
                 candidatesOf(review)
                   .filter((c) => c.stmt_code)
                   .map((c) => (
@@ -149,7 +168,12 @@ function ReviewCard({ review }: { review: Review }) {
                       Replace statement of {formatDate(c.statement_date)}
                     </Button>
                   ))}
-              {review.reason !== "unparsed_sms" && (
+              {footer.includes("not_a_transaction") && (
+                <Button size="sm" icon={<Ban className="size-3.5" />} disabled={busy} onClick={() => act({ dismiss: true, not_a_transaction: true }, "Marked as not a card transaction")}>
+                  Not a card transaction
+                </Button>
+              )}
+              {footer.includes("dismiss") && (
                 <Button size="sm" variant="ghost" icon={<X className="size-3.5" />} disabled={busy} onClick={() => act({ dismiss: true }, "Dismissed")}>
                   {review.reason === "orphaned" || review.reason === "missing_from_statement" ? "Mark as checked" : "Dismiss"}
                 </Button>
@@ -190,7 +214,7 @@ function SmsSubject({ sms }: { sms: NonNullable<ReturnType<typeof useReviewConte
       meta={`${sms.sender} · ${formatDateTime(sms.received_at)}${sms.card_last4 ? ` · ${sms.bank_code ?? ""} •${sms.card_last4}` : ""}`}
       amount={sms.amount !== null ? <Money value={sms.amount} currency={sms.currency ?? "AED"} /> : undefined}
     >
-      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="mt-1.5 inline-flex items-center gap-1 text-[12px] text-accent hover:underline">
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="tap mt-1.5 inline-flex items-center gap-1 text-[12px] text-accent hover:underline">
         <ChevronDown className={cn("size-3 transition-transform", open && "rotate-180")} /> {open ? "Hide message" : "Show message"}
       </button>
       {open && <p className="mt-1.5 rounded-sm bg-surface-2 px-2 py-1.5 text-[12px] whitespace-pre-wrap text-ink-2">{body.isLoading ? "Loading…" : body.isError ? "Couldn't load the message." : body.data}</p>}
@@ -209,7 +233,7 @@ function TxnSubject({ t }: { t: TxnRow }) {
           <StatusBadge status={t.status} />
         </span>
       }
-      amount={<Money value={t.amount_aed} direction={t.direction} />}
+      amount={<TxnAmount t={t} />}
     />
   );
 }

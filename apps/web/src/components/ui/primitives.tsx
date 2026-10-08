@@ -110,7 +110,7 @@ export function Switch({ className, ...rest }: ComponentProps<typeof SW.Root>) {
   return (
     <SW.Root
       className={cn(
-        "relative inline-flex h-5 w-9 shrink-0 items-center rounded-pill border border-border-strong bg-surface-3 transition-colors data-[state=checked]:border-accent data-[state=checked]:bg-accent disabled:opacity-50",
+        "tap inline-flex h-5 w-9 shrink-0 items-center rounded-pill border border-border-strong bg-surface-3 transition-colors data-[state=checked]:border-accent data-[state=checked]:bg-accent disabled:opacity-50",
         className,
       )}
       {...rest}
@@ -124,7 +124,7 @@ export function Checkbox({ className, ...rest }: ComponentProps<typeof C.Root>) 
   return (
     <C.Root
       className={cn(
-        "flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-border-strong bg-surface transition-colors data-[state=checked]:border-accent data-[state=checked]:bg-accent data-[state=indeterminate]:border-accent data-[state=indeterminate]:bg-accent",
+        "tap flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-border-strong bg-surface transition-colors data-[state=checked]:border-accent data-[state=checked]:bg-accent data-[state=indeterminate]:border-accent data-[state=indeterminate]:bg-accent",
         className,
       )}
       {...rest}

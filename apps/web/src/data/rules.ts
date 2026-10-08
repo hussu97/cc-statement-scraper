@@ -230,41 +230,81 @@ export interface MerchantRow {
   merchant_name: string;
   category_code: string | null;
   category_name: string | null;
-  amount: number;
-  txn_count: number;
-  last_date: string;
+  /** Spend over the last 12 months; null when the merchant has none (it is listed for its assignment). */
+  amount: number | null;
+  txn_count: number | null;
+  last_date: string | null;
   assignment: Tables<"merchant_profile_category"> | null;
 }
 
-/** Merchants seen in the last 12 months with their profile-level category. */
+/** merchant_leaderboard caps p_limit at 200 server-side. */
+export const MERCHANT_LEADERBOARD_MAX = 200;
+
+type Assignment = Tables<"merchant_profile_category"> & { merchants: { display_name: string } | null };
+type BoardRow = { merchant_code: string | null; merchant_name: string; category_code: string | null; category_name: string | null; amount: number; txn_count: number; last_date: string };
+
+/**
+ * Leaderboard rows (top spend, last 12 months) plus every merchant with a
+ * profile-level category or suggestion that fell outside it, so no assignment
+ * or pending suggestion is ever hidden by the leaderboard cap (WEB-02). Pure.
+ */
+export function mergeMerchants(board: BoardRow[], assignments: Assignment[]): MerchantRow[] {
+  const byCode = new Map(assignments.map((a) => [a.merchant_code, a]));
+  const strip = (a: Assignment | undefined): Tables<"merchant_profile_category"> | null => {
+    if (!a) return null;
+    const { merchants: _m, ...rest } = a;
+    return rest;
+  };
+  const rows: MerchantRow[] = board
+    .filter((r): r is BoardRow & { merchant_code: string } => !!r.merchant_code)
+    .map((r) => ({
+      merchant_code: r.merchant_code,
+      merchant_name: r.merchant_name,
+      category_code: r.category_code,
+      category_name: r.category_name,
+      amount: r.amount,
+      txn_count: r.txn_count,
+      last_date: r.last_date,
+      assignment: strip(byCode.get(r.merchant_code)),
+    }));
+  const seen = new Set(rows.map((r) => r.merchant_code));
+  const extra = assignments
+    .filter((a) => !seen.has(a.merchant_code))
+    .map((a) => ({
+      merchant_code: a.merchant_code,
+      merchant_name: a.merchants?.display_name ?? a.merchant_code,
+      category_code: a.category_code,
+      category_name: null,
+      amount: null,
+      txn_count: null,
+      last_date: null,
+      assignment: strip(a),
+    }))
+    .sort((a, b) => a.merchant_name.localeCompare(b.merchant_name));
+  return [...rows, ...extra];
+}
+
+/**
+ * Merchants seen in the last 12 months (top 200 by spend) with their
+ * profile-level category, plus every merchant that has an assignment.
+ * `capped` is true when the leaderboard hit its server limit.
+ */
 export function useMerchants(profileCode: string) {
   return useQuery({
     queryKey: keys.merchants(profileCode),
-    queryFn: async (): Promise<MerchantRow[]> => {
+    queryFn: async (): Promise<{ rows: MerchantRow[]; capped: boolean }> => {
       const today = todayDubai();
       const [board, mpc] = await Promise.all([
         supabase.rpc("merchant_leaderboard", {
           p_profile_code: profileCode,
           p_from: addMonths(today, -12),
           p_to: today,
-          p_limit: 200,
+          p_limit: MERCHANT_LEADERBOARD_MAX,
         }),
-        supabase.from("merchant_profile_category").select("*").eq("profile_code", profileCode),
+        supabase.from("merchant_profile_category").select("*, merchants(display_name)").eq("profile_code", profileCode),
       ]);
       const rows = mustList(board);
-      const assignments = mustList(mpc);
-      return rows
-        .filter((r) => r.merchant_code)
-        .map((r) => ({
-          merchant_code: r.merchant_code,
-          merchant_name: r.merchant_name,
-          category_code: r.category_code,
-          category_name: r.category_name,
-          amount: r.amount,
-          txn_count: r.txn_count,
-          last_date: r.last_date,
-          assignment: assignments.find((a) => a.merchant_code === r.merchant_code) ?? null,
-        }));
+      return { rows: mergeMerchants(rows, mustList(mpc) as unknown as Assignment[]), capped: rows.length >= MERCHANT_LEADERBOARD_MAX };
     },
   });
 }

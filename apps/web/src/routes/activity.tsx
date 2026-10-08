@@ -3,9 +3,10 @@ import { useNavigate } from "@tanstack/react-router";
 import { NotebookPen, ReceiptText, X } from "lucide-react";
 import { activityRoute } from "@/router";
 import { listSearch, withFilter, type ActivitySearch } from "@/lib/activity-filters";
-import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { DEFAULT_PAGE_SIZE, pageCount } from "@/lib/pagination";
+import { useClampPage } from "@/lib/hooks";
 import { formatDate, formatTime } from "@/lib/dates";
-import { formatCount, formatMoney } from "@/lib/money";
+import { formatCount } from "@/lib/money";
 import { cn } from "@/lib/cn";
 import { useActiveProfile } from "@/data/profile";
 import { useFilterMeta } from "@/data/overview";
@@ -16,7 +17,7 @@ import { Checkbox } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
 import { useToast } from "@/components/ui/toast";
-import { CategoryPicker, EvidenceBadge, Money, StatusBadge } from "@/components/ledger";
+import { CategoryPicker, EvidenceBadge, StatusBadge, TxnAmount } from "@/components/ledger";
 import { Pagination } from "@/components/pagination";
 import { ActivityFilters } from "@/components/activity/filters";
 import { TransactionDrawer } from "@/components/activity/drawer";
@@ -38,6 +39,10 @@ export function ActivityPage() {
     void navigate({ search: next, replace: true });
   };
   const patch = (p: Partial<ActivitySearch>) => go(withFilter(search, p));
+  const size = search.size ?? DEFAULT_PAGE_SIZE;
+  // A page past the end (stale URL, or a bulk action that emptied the last page) moves to the last page.
+  useClampPage(search.page ?? 1, size, q.data?.total, (p) => go({ ...search, page: p > 1 ? p : undefined }));
+  const outOfRange = !!q.data && (search.page ?? 1) > pageCount(q.data.total, size);
   const rows = useMemo(() => q.data?.rows ?? [], [q.data]);
   const groups = useMemo(() => groupByDay(rows), [rows]);
   const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.txn_code!));
@@ -59,7 +64,7 @@ export function ActivityPage() {
       <ActivityFilters search={search} patch={patch} meta={meta.data} onClear={() => go({})} />
 
       <Card className={cn("mt-4", q.isFetching && !q.isLoading && "opacity-80 transition-opacity")}>
-        {q.isLoading ? (
+        {q.isLoading || outOfRange ? (
           <LoadingRows rows={10} />
         ) : q.isError ? (
           <ErrorState error={q.error} onRetry={() => void q.refetch()} />
@@ -122,7 +127,7 @@ export function ActivityPage() {
       {q.data && q.data.total > 0 && (
         <Pagination
           page={search.page ?? 1}
-          size={search.size ?? DEFAULT_PAGE_SIZE}
+          size={size}
           total={q.data.total}
           onPage={(p) => go({ ...search, page: p > 1 ? p : undefined })}
           onSize={(s) => go(withFilter(search, { size: s === DEFAULT_PAGE_SIZE ? undefined : s }))}
@@ -180,7 +185,6 @@ function TxnLine({
   canEdit: boolean;
   onCategory: (code: string | null, toMerchant: boolean) => void;
 }) {
-  const fx = t.currency_original && t.currency_original !== "AED";
   return (
     <div
       role="row"
@@ -222,8 +226,7 @@ function TxnLine({
         {t.bank_code} •{t.card_last4 ?? "—"}
       </span>
       <span role="cell" className="text-right">
-        <Money value={t.amount_aed ?? t.amount_original} direction={t.direction} className="text-sm" />
-        {fx && <span className="tabular block text-[11px] text-subtle">{formatMoney(t.amount_original, { currency: t.currency_original! })}</span>}
+        <TxnAmount t={t} className="text-sm" />
       </span>
     </div>
   );

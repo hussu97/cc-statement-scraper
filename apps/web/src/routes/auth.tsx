@@ -1,7 +1,7 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Link, Navigate, useNavigate, useSearch } from "@tanstack/react-router";
 import { ArrowLeft, Mail, KeyRound } from "lucide-react";
-import { signInWithPassword, sendMagicLink, useAuth, verifyEmailCode } from "@/data/auth";
+import { signInErrorMessage, signInWithPassword, sendMagicLink, useAuth, verifyEmailCode } from "@/data/auth";
 import { profileKeyFromName, useCreateProfile, useProfileContext } from "@/data/profile";
 import { errorMessage } from "@/data/api";
 import { Button } from "@/components/ui/button";
@@ -46,8 +46,7 @@ export function SignInPage() {
     try {
       await fn();
     } catch (e) {
-      const msg = errorMessage(e);
-      setError(/invalid login credentials/i.test(msg) ? "That email and password don't match." : msg);
+      setError(signInErrorMessage(e));
     } finally {
       setBusy(false);
     }

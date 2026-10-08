@@ -9,6 +9,15 @@ export type TxnSource = (typeof TXN_SOURCES)[number];
 /** Category filter value meaning "no category". */
 export const UNCATEGORIZED = "none";
 
+/**
+ * The search box keeps its own text while typing and writes `?q=` after a
+ * debounce. When `?q=` changes for another reason ("Clear filters", Back), the
+ * box must follow (WEB-08). Returns the text to show, or null to keep typing.
+ */
+export function syncSearchText(urlQ: string | undefined, lastWritten: string | undefined): string | null {
+  return (urlQ ?? undefined) === (lastWritten ?? undefined) ? null : (urlQ ?? "");
+}
+
 export interface ActivitySearch {
   from?: ISODate;
   to?: ISODate;

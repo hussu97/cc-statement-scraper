@@ -293,3 +293,29 @@ All four modes unless noted:
 - Household (empty) profile: overview, insights, review, members
 
 No horizontal page overflow was found at 390 px on any screen. No console errors were seen apart from the Sentry warning (WEB-03).
+
+## Fix status
+
+Fixed on `ledger-v2` (uncommitted), 2026-10-08. Verified with `pnpm --filter @ledger/web test` (145 pass), lint, `tsc -b`, `vite build`, `pnpm --filter @ledger/tokens check` (drift + 9 contrast tests), and a headless walk of the affected screens at 1440 and 390 px in light and dark (demo account, Demo ledger). axe colour-contrast nodes on those screens went from 781 (desktop light) to 0. The only remaining nodes are 8–10 on Settings → Sources, which are revoked tokens drawn at 60% opacity (inactive UI, WEB-42).
+
+| ID | Status | Notes |
+|---|---|---|
+| Sentry local | fixed | `shouldInitSentry`: no init when `VITE_SENTRY_ENVIRONMENT` is empty, `local`, `development` or `test`, or under `import.meta.env.DEV`, even with a DSN. The supabase integration's `errors: true` is off. It reported every failed PostgREST request a second time, unfiltered, which is how the two Activity errors reached Sentry. Errors now go only through `reportQueryError`. |
+| Sentry "Requested range not satisfiable" | fixed | See WEB-01. |
+| Sentry "permission denied for table match_reviews" | fixed (client) | The shell's nav badge ran `useOpenReviews("")` before the session was restored, so it went out with the anon key. Anon has no grant on `match_reviews`; reproduced with curl and the anon key. The badge is now a `head` count gated on session + profile (`useOpenReviewCount`). No grant is needed. |
+| WEB-01 | fixed | `fetchPage` turns 416/PGRST103 into `{rows: [], total}` via a head count. `useClampPage` moves to the last page. Applied to Activity, Statements, Documents and Review. `/activity?page=99` now lands on `?page=5`. |
+| WEB-02 | fixed / partial | Statements, documents and reviews are paginated server-side with `.range()` and an exact count. The health counts use head counts per status. "Open PDF" looks up its document by code. Merchants now also list every assigned or suggested merchant outside the top-200 leaderboard, and say when the cap is hit. Still needed: `statement_cycles` caps at 500 (the UI says so), and a merchant search RPC (see the report). |
+| WEB-03 | fixed | `beforeSendSpan: scrubSpan` scrubs span names, attributes and links: `db.query`, `db.body`, query-string values and secrets. `beforeSendTransaction` is removed. Tests cover the wiring as well as the function. |
+| WEB-04 | fixed (client) | `shouldCreateUser: false`. GoTrue's `otp_disabled` maps to "There's no Ledger account for that email. Ask the ledger's owner to invite you." Still needed: set `[auth] enable_signup = false` in Supabase Auth for production. |
+| WEB-05 | fixed | `displayAmount` + `<TxnAmount>`: with no `amount_aed`, the amount shows in its original currency with an "awaiting FX" hint (the drawer shows an "Awaiting FX rate" badge). Applied to Activity, the drawer, Overview, Review and related transactions. |
+| WEB-06 / WEB-29 | fixed | Light: muted `#5E574D`, subtle `#6E665B`, accent `#964F2F`, warn `#855C11`. Dark: muted `#B0A799`, subtle `#9A9184`. New 12-colour chart palette with every pair ≥ 15 ΔE2000 and ≥ 3:1 on bg and surface. `tokens.json#contrast` declares the pairs, and `packages/tokens/test/contrast.test.mjs` (run by `check`) enforces them. `Tokens.swift` is regenerated. |
+| WEB-07 | fixed / partial | An unparsed SMS with no proposed format now offers "Not a card transaction" (`{dismiss, not_a_transaction}`) and "Dismiss". "Retry AI" needs a new RPC (see the report). |
+| WEB-08 | fixed | The search box follows `?q=` when it changes elsewhere ("Clear filters", Back). |
+| WEB-17 | partial | The palette is now distinct. Seed categories still share tokens (Dining = Forex Charge, Grocery = Medicine). That needs a DB reassignment (see the report). |
+| WEB-18 | fixed | `axisTickInterval` replaces `minTickGap`: every label shows when they fit (7 on mobile, 14 on desktop). |
+| WEB-21 | fixed | Reduced motion also sets `animation-iteration-count: 1`. |
+| WEB-22 | fixed / partial | The new `tap` utility extends hit areas to 44 px below `lg` on small buttons, switches, checkboxes, category pills and inline links. Insight dismiss is 44×44 on mobile. Calendar heat cells are deferred (a 7×N grid can't take 44 px cells). |
+| WEB-23 | fixed | Review replaces Cards in the mobile bottom bar, with a numeric badge. Cards moves to More. |
+| WEB-25 | fixed | `insightTarget` maps each kind to its screen. Cards are links ("See budgets", …). |
+| WEB-45 | fixed | Insights are filtered by `valid_until`. |
+| Others | deferred | The other P2/P3 items are out of this pass's scope. Server totals and projections (WEB-26, WEB-37, Activity sum) need RPCs. |

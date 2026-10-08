@@ -352,10 +352,6 @@ export function watchState(expiresAt: string | null, now: Date = new Date()): "n
   return "ok";
 }
 
-export function failedDocCodes<T extends { doc_code: string; parse_status: string }>(docs: T[]): string[] {
-  return docs.filter((d) => d.parse_status === "failed").map((d) => d.doc_code);
-}
-
 export const EMAIL_EVENT_TONE: Record<string, "positive" | "neutral" | "danger" | "warn"> = {
   ingested: "positive",
   duplicate: "neutral",
