@@ -132,6 +132,10 @@ public struct ReconChecks: Decodable, Sendable, Hashable {
     public let expectedClosing: Decimal?
     public let totals: String?
     public let unmatchedSms: Int?
+    /// Lines without an AED amount yet: the sums are approximate, not wrong.
+    public let unpricedLines: Int?
+    /// No lines although the header shows activity, or all were superseded.
+    public let noLines: Bool?
 }
 
 /// `rpc('filter_meta')`.

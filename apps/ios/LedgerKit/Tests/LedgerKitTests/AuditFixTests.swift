@@ -103,7 +103,7 @@ struct ReviewPresentationTests {
         return try LedgerJSON.decode(LedgerTransaction.self, from: Data(json.utf8))
     }
 
-    @Test("unknown card: register to an account of the same bank, or dismiss")
+    @Test("unknown card: register to an account of the same bank, not a card transaction, or dismiss")
     func unknownCard() {
         let review = MatchReview(reviewCode: "rev_1", subjectType: "sms", subjectCode: "sms_1", reason: "unknown_card",
                                  candidates: [.init(txnCode: nil, bankCode: "ADCB", last4: "9208", templateCode: nil)])
@@ -115,9 +115,10 @@ struct ReviewPresentationTests {
                        LedgerAccount(accountCode: "acc_adcb", bankCode: "ADCB", productName: "Lulu Platinum")])
         let item = ReviewPresentation.item(review, inbox: inbox)
         #expect(item.subject == "ADCB •9208 · AED 46.00 · VOX CINEMAS")
-        #expect(item.options.map(\.label) == ["Add •9208 to Lulu Platinum", "Dismiss"])
+        #expect(item.options.map(\.label) == ["Add •9208 to Lulu Platinum", "Not a card transaction", "Dismiss"])
         #expect(item.options[0].action == .registerCard(accountCode: "acc_adcb"))
-        #expect(item.options[1].isDestructive)
+        #expect(item.options[1].action == .notATransaction)
+        #expect(item.options[2].isDestructive)
     }
 
     @Test("ambiguous SMS: link to each candidate, keep as new, or dismiss")

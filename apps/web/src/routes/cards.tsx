@@ -3,16 +3,16 @@ import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { CheckCircle2, ChevronDown, CircleAlert, CircleMinus, ExternalLink, FileText, Pencil, RotateCw, XCircle } from "lucide-react";
 import { useActiveProfile } from "@/data/profile";
 import { accountLabel } from "@/data/overview";
-import { documentStoragePath, signedDocumentUrl, STATEMENT_CYCLES_MAX, useAccounts, useDocumentHealth, useDocuments, useRequeueDocuments, useStatementCycles, useUpdateAccount, type StatementCycle } from "@/data/cards";
+import { docWarnings, documentStoragePath, signedDocumentUrl, STATEMENT_CYCLES_MAX, useAccounts, useDocumentHealth, useDocuments, useRequeueDocuments, useStatementCycles, useUpdateAccount, type StatementCycle } from "@/data/cards";
 import { errorMessage } from "@/data/api";
 import { formatDate, formatRelative } from "@/lib/dates";
 import { formatMoney, formatPercent } from "@/lib/money";
 import { pageCount } from "@/lib/pagination";
 import { useClampPage, usePageState } from "@/lib/hooks";
-import { RECON_LABEL, RECON_TONE, reconChecks } from "@/lib/recon";
+import { reconBadge, reconChecks, reconNote } from "@/lib/recon";
 import { cn } from "@/lib/cn";
 import { Badge, Card, Meter, PageHeader } from "@/components/ui/display";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/primitives";
+import { Tabs, TabsContent, TabsList, TabsTrigger, Tooltip } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Field, Input } from "@/components/ui/input";
@@ -219,6 +219,8 @@ function StatementsTab({ profileCode }: { profileCode: string }) {
 function StatementRow({ s, onOpenPdf }: { s: StatementCycle; onOpenPdf: () => void }) {
   const [open, setOpen] = useState(false);
   const checks = reconChecks(s.recon_checks as Record<string, unknown> | null);
+  const badge = reconBadge(s.recon_status);
+  const note = reconNote(s.recon_status);
   return (
     <li>
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-5 py-3.5 md:grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(0,1fr))_auto]">
@@ -249,7 +251,7 @@ function StatementRow({ s, onOpenPdf }: { s: StatementCycle; onOpenPdf: () => vo
           {s.utilisation !== null && <Meter value={s.utilisation} className="mt-1 h-1 w-20" tone={s.utilisation > 0.7 ? "danger" : s.utilisation > 0.3 ? "warn" : "positive"} />}
         </div>
         <div className="flex items-center justify-end gap-2">
-          {s.recon_status ? <Badge tone={RECON_TONE[s.recon_status] ?? "neutral"}>{RECON_LABEL[s.recon_status] ?? s.recon_status}</Badge> : <Badge>Not checked</Badge>}
+          <Badge tone={badge.tone}>{badge.label}</Badge>
         </div>
       </div>
       {open && (
@@ -259,6 +261,7 @@ function StatementRow({ s, onOpenPdf }: { s: StatementCycle; onOpenPdf: () => vo
               <div><dt className="text-[11px] text-subtle">Closing</dt><dd className="tabular">{formatMoney(s.closing_balance)}</dd></div>
               <div><dt className="text-[11px] text-subtle">Due</dt><dd>{s.due_date ? formatDate(s.due_date) : "—"}</dd></div>
             </dl>
+            {note && <p className="mb-2 text-[13px] text-muted">{note}</p>}
             <ul className="flex flex-col gap-1.5">
               {checks.map((c) => (
                 <li key={c.key} className="flex items-start gap-2 text-[13px]">
@@ -267,7 +270,7 @@ function StatementRow({ s, onOpenPdf }: { s: StatementCycle; onOpenPdf: () => vo
                   {c.detail && <span className="tabular text-muted">· {c.detail}</span>}
                 </li>
               ))}
-              {checks.length === 0 && <li className="text-[13px] text-muted">No reconciliation has run for this statement.</li>}
+              {checks.length === 0 && !note && <li className="text-[13px] text-muted">No reconciliation has run for this statement.</li>}
             </ul>
             <p className="tabular mt-3 text-[12px] text-muted">
               {s.line_count} lines · debits {formatMoney(s.debits)} · credits {formatMoney(s.credits)}
@@ -338,6 +341,7 @@ function DocumentsTab({ profileCode, isOwner }: { profileCode: string; isOwner: 
                 {d.parse_status === "failed" && d.parse_error && <p className="mt-1 text-[12px] text-danger">{d.parse_error}</p>}
               </div>
               <div className="flex items-center gap-2">
+                <WarningsChip warnings={docWarnings(d.parse_warnings)} />
                 <Badge tone={PARSE_TONE[d.parse_status] ?? "neutral"} className={d.parse_status === "parsing" ? "animate-pulse" : undefined}>{d.parse_status}</Badge>
                 {isOwner && (d.parse_status === "failed" || d.parse_status === "parsed") && (
                   <Button size="icon-sm" variant="ghost" aria-label={`Parse ${d.original_filename} again`} onClick={() => parseAgain([d.doc_code])}>
@@ -351,5 +355,29 @@ function DocumentsTab({ profileCode, isOwner }: { profileCode: string; isOwner: 
       </Card>
       <Pagination page={pager.page} size={pager.size} total={total} onPage={pager.setPage} onSize={pager.setSize} />
     </>
+  );
+}
+
+/** "2 warnings" next to a parsed document; the parser's notes in a tooltip (digit runs masked by docWarnings). */
+function WarningsChip({ warnings }: { warnings: string[] }) {
+  if (warnings.length === 0) return null;
+  const shown = warnings.slice(0, 6);
+  const label = `${warnings.length} warning${warnings.length === 1 ? "" : "s"}`;
+  return (
+    <Tooltip
+      content={
+        <ul className="flex flex-col gap-1">
+          {shown.map((w, i) => (
+            <li key={i}>{w}</li>
+          ))}
+          {warnings.length > shown.length && <li>+{warnings.length - shown.length} more</li>}
+        </ul>
+      }
+    >
+      <button type="button" aria-label={`${label}: ${shown.join("; ")}`} className="tap inline-flex items-center gap-1 rounded-pill text-[12px] text-muted hover:text-ink">
+        <CircleAlert className="size-3.5" aria-hidden />
+        <span className="tabular">{label}</span>
+      </button>
+    </Tooltip>
   );
 }

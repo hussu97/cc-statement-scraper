@@ -120,10 +120,16 @@ public struct ReviewInbox: Sendable, Hashable {
     }
 }
 
-/// `resolve_review`'s `p_action`.
+/// What the user answers on a review: `resolve_review`'s `p_action`, or
+/// `retryWithAI` (`rpc('retry_sms_fallback')`, unparsed SMS only).
 public enum ReviewAction: Sendable, Hashable {
     case link(txnCode: String)
     case createNew
     case dismiss
     case registerCard(accountCode: String)
+    /// `{"not_a_transaction": true}` — exactly that (with `dismiss` the server
+    /// would only dismiss). SMS subjects; outcome `ignored`.
+    case notATransaction
+    /// Ask the LLM fallback to read an unparsed SMS again.
+    case retryWithAI
 }

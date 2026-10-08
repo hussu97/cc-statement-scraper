@@ -43,8 +43,8 @@ export function useUpdateAccount(profileCode: string) {
   });
 }
 
-/** statement_cycles caps p_limit at 500 server-side; the UI says so when it is reached. */
-export const STATEMENT_CYCLES_MAX = 500;
+/** statement_cycles caps p_limit at 5000 server-side; the UI says so when it is reached. */
+export const STATEMENT_CYCLES_MAX = 5000;
 
 /** One page of statements, newest first, with the exact total (up to STATEMENT_CYCLES_MAX). */
 export function useStatementCycles(profileCode: string, page: number, size: number) {
@@ -98,6 +98,30 @@ export interface DocumentRow {
   parsed_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * documents.parse_warnings (a jsonb array the parser and ingest fill) as short
+ * display strings. Strings pass through; objects show their `message` or
+ * `code`. Long digit runs (card or account numbers) are masked and each line is
+ * capped, so a tooltip never shows more than the parser's own summary. Pure,
+ * unit-tested.
+ */
+export function docWarnings(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const w of raw) {
+    let text: string | null = null;
+    if (typeof w === "string") text = w;
+    else if (w && typeof w === "object") {
+      const o = w as Record<string, unknown>;
+      text = typeof o.message === "string" ? o.message : typeof o.code === "string" ? o.code : null;
+    }
+    if (!text?.trim()) continue;
+    const masked = text.replace(/\d[\d ]{4,}\d/g, (m) => (m.replace(/\D/g, "").length >= 6 ? "••••" : m)).trim();
+    out.push(masked.length > 160 ? `${masked.slice(0, 159)}…` : masked);
+  }
+  return out;
 }
 
 export const DOC_STATUSES = ["queued", "parsing", "parsed", "failed"] as const;

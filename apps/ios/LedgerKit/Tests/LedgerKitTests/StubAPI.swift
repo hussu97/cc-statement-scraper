@@ -49,7 +49,13 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
     func reviewInbox(profileCode: String) async throws -> ReviewInbox { inbox }
     func resolveReview(reviewCode: String, action: ReviewAction) async throws -> String {
         lock.withLock { resolved.append((reviewCode, action)) }
+        if let resolveError { throw resolveError }
         return "dismissed"
+    }
+    var resolveError: LedgerAPIError?
+    private(set) var retried: [String] = []
+    func retrySMSFallback(reviewCode: String) async throws {
+        lock.withLock { retried.append(reviewCode) }
     }
 
     // MARK: Unused by these tests
