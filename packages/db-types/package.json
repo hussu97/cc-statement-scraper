@@ -1,0 +1,9 @@
+{
+  "name": "@ledger/db-types",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/database.ts",
+  "types": "src/database.ts",
+  "exports": { ".": "./src/database.ts" }
+}

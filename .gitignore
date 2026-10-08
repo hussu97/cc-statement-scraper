@@ -30,6 +30,8 @@ build/
 # Runtime/output artifacts
 logs/
 data/
+# …but the Ledger web app's data layer is source code
+!apps/web/src/data/
 *.log
 *.db
 *.sqlite
@@ -46,3 +48,18 @@ frontend/*.tsbuildinfo
 .playwright-mcp/
 
 downloads/
+# Ledger v2
+node_modules/
+apps/web/dist/
+apps/web/.vite/
+*.tsbuildinfo
+apps/ios/**/.build/
+apps/ios/**/xcuserdata/
+apps/ios/**/DerivedData/
+apps/ios/Config/Secrets.xcconfig
+supabase/functions/.env
+apps/ios/build/
+apps/ios/Config/Secrets.Release.xcconfig
+.vercel/
+.vercel
+.env*

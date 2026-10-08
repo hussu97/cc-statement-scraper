@@ -1,0 +1,98 @@
+import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Outlet, Link } from "@tanstack/react-router";
+import { AppShell } from "@/components/shell";
+import { parseActivitySearch } from "@/lib/activity-filters";
+import { parseInsightsSearch, parseTabSearch } from "@/lib/search";
+import { EmptyState } from "@/components/ui/states";
+
+const rootRoute = createRootRoute({
+  component: () => <Outlet />,
+  notFoundComponent: () => (
+    <EmptyState title="This page doesn't exist" className="min-h-[60dvh]" action={<Link to="/" className="text-accent underline">Go to overview</Link>}>
+      Check the address, or head back to your overview.
+    </EmptyState>
+  ),
+});
+
+const signInRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/signin",
+  component: lazyRouteComponent(() => import("@/routes/auth"), "SignInPage"),
+});
+
+const welcomeRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/welcome",
+  validateSearch: (s: Record<string, unknown>): { new?: 1 } => (s.new ? { new: 1 } : {}),
+  component: lazyRouteComponent(() => import("@/routes/auth"), "WelcomePage"),
+});
+
+const appRoute = createRoute({ getParentRoute: () => rootRoute, id: "app", component: AppShell });
+
+const overviewRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/",
+  validateSearch: (s: Record<string, unknown>): { month?: string } =>
+    typeof s.month === "string" && /^\d{4}-\d{2}-01$/.test(s.month) ? { month: s.month } : {},
+  component: lazyRouteComponent(() => import("@/routes/overview"), "OverviewPage"),
+});
+
+export const activityRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/activity",
+  validateSearch: parseActivitySearch,
+  component: lazyRouteComponent(() => import("@/routes/activity"), "ActivityPage"),
+});
+
+export const insightsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/insights",
+  validateSearch: parseInsightsSearch,
+  component: lazyRouteComponent(() => import("@/routes/insights"), "InsightsPage"),
+});
+
+const budgetsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/budgets",
+  component: lazyRouteComponent(() => import("@/routes/budgets"), "BudgetsPage"),
+});
+
+const cardsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/cards",
+  validateSearch: parseTabSearch,
+  component: lazyRouteComponent(() => import("@/routes/cards"), "CardsPage"),
+});
+
+const reviewRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/review",
+  component: lazyRouteComponent(() => import("@/routes/review"), "ReviewPage"),
+});
+
+const rulesRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/rules",
+  validateSearch: parseTabSearch,
+  component: lazyRouteComponent(() => import("@/routes/rules"), "RulesPage"),
+});
+
+const settingsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/settings",
+  validateSearch: parseTabSearch,
+  component: lazyRouteComponent(() => import("@/routes/settings"), "SettingsPage"),
+});
+
+const routeTree = rootRoute.addChildren([
+  signInRoute,
+  welcomeRoute,
+  appRoute.addChildren([overviewRoute, activityRoute, insightsRoute, budgetsRoute, cardsRoute, reviewRoute, rulesRoute, settingsRoute]),
+]);
+
+export const router = createRouter({ routeTree, defaultPreload: "intent", scrollRestoration: true });
+
+declare module "@tanstack/react-router" {
+  interface Register {
+    router: typeof router;
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@ledger/tokens",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./tokens.css": "./dist/tokens.css",
+    "./tokens.json": "./tokens.json",
+    "./chart": {
+      "types": "./dist/chart.d.ts",
+      "default": "./dist/chart.js"
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test \"test/*.test.mjs\"",
+    "check": "node scripts/build.mjs --check && node --test \"test/*.test.mjs\""
+  }
+}

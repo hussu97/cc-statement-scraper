@@ -1,0 +1,662 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		07A1FE280DBD7CEE19B027AB /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41E5147D73DD93C7A015339F /* ShareViewController.swift */; };
+		1176CC00449538BB2CD3BE6C /* LedgerKit in Frameworks */ = {isa = PBXBuildFile; productRef = B88DC4F872A6B8B169F66444 /* LedgerKit */; };
+		1D830163AD6DCE4782E30CE8 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FCEADD59EE2BBF22D5B715A /* SettingsView.swift */; };
+		2AF7A777F5554D6851F1C5F0 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = A83ED65B612B753580BB01DD /* Components.swift */; };
+		4E142F33C460497F23C39750 /* LedgerKit in Frameworks */ = {isa = PBXBuildFile; productRef = 3CADAE061DE32CE51E97EF02 /* LedgerKit */; };
+		4F5F815454811A4ECF4C88FF /* InsightsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05EB2567DB0EA258329DBD95 /* InsightsView.swift */; };
+		659B1CF789C0735789CC64EE /* StatementsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F52CAA6FE73B46EFE59439A4 /* StatementsView.swift */; };
+		748435885CB091FA9BFCACAA /* ActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAE2E3AE75D7627DDCE82B40 /* ActivityView.swift */; };
+		7661F492311F61EFDB72CA0D /* LedgerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDC537589817A7B6C31CC447 /* LedgerApp.swift */; };
+		77AED5C567C9D18DFED64501 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 496168FB383326D0481C9AC8 /* PrivacyInfo.xcprivacy */; };
+		7A19A23E1C8368E0F3EB5B51 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 4C249495FC88BB9133CB717E /* PrivacyInfo.xcprivacy */; };
+		7B056F939B7822BC41E88540 /* LedgerShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F8A491D8C79A061F71F857D7 /* LedgerShare.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		860158FF70A963842E055393 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCE4248BBC6E6FA967938803 /* RootView.swift */; };
+		88E22D6FB72866F27D8AE476 /* ActivitySheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0120325ABB16C928EB7D78A2 /* ActivitySheets.swift */; };
+		96964A46ECACE02F55F2E30D /* SignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFDA37FE8678FA89D04F3841 /* SignInView.swift */; };
+		ADA71066669326EC96C41A89 /* OverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A31E4CF859EB1BA241A2C0C1 /* OverviewView.swift */; };
+		C05BE17C5A3CB168D026EAAF /* LogBankSMSIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 306FF1BBB7DC9A30BCC65C13 /* LogBankSMSIntent.swift */; };
+		D735424BB191ECF6BEFB087C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F190BDC9EB8084E38F344EE7 /* Assets.xcassets */; };
+		E0FD108F9F8CAE01FBFFBA28 /* ReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7DE35B2ABB9AA3A980FD35D /* ReviewView.swift */; };
+		EBE6B98A364642BCAF0A7E52 /* ProfilePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842801DBC37F9A8E31C6DFA8 /* ProfilePickerView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		C16DFED98AC864E59D7C3174 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B0A8B9A62D78718FE29D671C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E6D8A3C59AE470EED95533AC;
+			remoteInfo = LedgerShare;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		17F8D23CD50515F0BA0D8981 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				7B056F939B7822BC41E88540 /* LedgerShare.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		0120325ABB16C928EB7D78A2 /* ActivitySheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivitySheets.swift; sourceTree = "<group>"; };
+		05EB2567DB0EA258329DBD95 /* InsightsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsightsView.swift; sourceTree = "<group>"; };
+		076A0083646CF5850906DE83 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
+		15C0186C1E6AFC4A04ACCC41 /* LedgerKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LedgerKit; path = LedgerKit; sourceTree = SOURCE_ROOT; };
+		18CF2690692498221A6F2653 /* LedgerShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LedgerShare.entitlements; sourceTree = "<group>"; };
+		29A5D1F13A9777F8DF1C1BCC /* Ledger.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Ledger.entitlements; sourceTree = "<group>"; };
+		306FF1BBB7DC9A30BCC65C13 /* LogBankSMSIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogBankSMSIntent.swift; sourceTree = "<group>"; };
+		41E5147D73DD93C7A015339F /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		440D48465D990731AC380564 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		496168FB383326D0481C9AC8 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		4C249495FC88BB9133CB717E /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		4FCEADD59EE2BBF22D5B715A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		842801DBC37F9A8E31C6DFA8 /* ProfilePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilePickerView.swift; sourceTree = "<group>"; };
+		90DD295322C6F4844758D023 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
+		A31E4CF859EB1BA241A2C0C1 /* OverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewView.swift; sourceTree = "<group>"; };
+		A83ED65B612B753580BB01DD /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
+		AAE2E3AE75D7627DDCE82B40 /* ActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityView.swift; sourceTree = "<group>"; };
+		B58A729CF0C51D66DEEDC26A /* Ledger.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Ledger.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BDC537589817A7B6C31CC447 /* LedgerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerApp.swift; sourceTree = "<group>"; };
+		E7DE35B2ABB9AA3A980FD35D /* ReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewView.swift; sourceTree = "<group>"; };
+		EFDA37FE8678FA89D04F3841 /* SignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInView.swift; sourceTree = "<group>"; };
+		F190BDC9EB8084E38F344EE7 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		F1E4A856AC27772DBFEAAA57 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		F52CAA6FE73B46EFE59439A4 /* StatementsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatementsView.swift; sourceTree = "<group>"; };
+		F8A491D8C79A061F71F857D7 /* LedgerShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = LedgerShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		FCE4248BBC6E6FA967938803 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		ABD8F4F549B4DD2C598C0958 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4E142F33C460497F23C39750 /* LedgerKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BEDB20D07F84761F660CA805 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1176CC00449538BB2CD3BE6C /* LedgerKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		386FEA08CC77E210641F703D /* Ledger */ = {
+			isa = PBXGroup;
+			children = (
+				DB1D1603FFAD1F3A7BCACE44 /* Activity */,
+				3A9060CD6CF2FD406CFEB9FD /* App */,
+				70B7A106562AC9DE924B57DE /* Components */,
+				EBFBF1ABEFB6004D629B4CF6 /* Insights */,
+				FD9612D2EC0D00E696282BA1 /* Intents */,
+				65D5F81E8AF042129118B445 /* Onboarding */,
+				4633D38C398A212F90654F29 /* Overview */,
+				AA228B2B5C90296C345ECEED /* Resources */,
+				E68653B65277F1FC17330CBE /* Review */,
+				D8F249B71FEBA5D190CA1D8F /* Settings */,
+				613F54D1A78E328AD04425BC /* Statements */,
+				F1E4A856AC27772DBFEAAA57 /* Info.plist */,
+				29A5D1F13A9777F8DF1C1BCC /* Ledger.entitlements */,
+				496168FB383326D0481C9AC8 /* PrivacyInfo.xcprivacy */,
+			);
+			path = Ledger;
+			sourceTree = "<group>";
+		};
+		39D0B7209C269777A9D2CB69 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				076A0083646CF5850906DE83 /* Debug.xcconfig */,
+				90DD295322C6F4844758D023 /* Release.xcconfig */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		3A9060CD6CF2FD406CFEB9FD /* App */ = {
+			isa = PBXGroup;
+			children = (
+				BDC537589817A7B6C31CC447 /* LedgerApp.swift */,
+				FCE4248BBC6E6FA967938803 /* RootView.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		4633D38C398A212F90654F29 /* Overview */ = {
+			isa = PBXGroup;
+			children = (
+				A31E4CF859EB1BA241A2C0C1 /* OverviewView.swift */,
+			);
+			path = Overview;
+			sourceTree = "<group>";
+		};
+		6080F44FB8EB1CAFF257F25F = {
+			isa = PBXGroup;
+			children = (
+				39D0B7209C269777A9D2CB69 /* Config */,
+				386FEA08CC77E210641F703D /* Ledger */,
+				67155E20D69186BA03D55C14 /* Packages */,
+				CB9DA7D8B7A3C1F5A8C94E49 /* ShareExtension */,
+				672E309D080729BF93B82C50 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		613F54D1A78E328AD04425BC /* Statements */ = {
+			isa = PBXGroup;
+			children = (
+				F52CAA6FE73B46EFE59439A4 /* StatementsView.swift */,
+			);
+			path = Statements;
+			sourceTree = "<group>";
+		};
+		65D5F81E8AF042129118B445 /* Onboarding */ = {
+			isa = PBXGroup;
+			children = (
+				842801DBC37F9A8E31C6DFA8 /* ProfilePickerView.swift */,
+				EFDA37FE8678FA89D04F3841 /* SignInView.swift */,
+			);
+			path = Onboarding;
+			sourceTree = "<group>";
+		};
+		67155E20D69186BA03D55C14 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				15C0186C1E6AFC4A04ACCC41 /* LedgerKit */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		672E309D080729BF93B82C50 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B58A729CF0C51D66DEEDC26A /* Ledger.app */,
+				F8A491D8C79A061F71F857D7 /* LedgerShare.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		70B7A106562AC9DE924B57DE /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				A83ED65B612B753580BB01DD /* Components.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		AA228B2B5C90296C345ECEED /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				F190BDC9EB8084E38F344EE7 /* Assets.xcassets */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		CB9DA7D8B7A3C1F5A8C94E49 /* ShareExtension */ = {
+			isa = PBXGroup;
+			children = (
+				440D48465D990731AC380564 /* Info.plist */,
+				18CF2690692498221A6F2653 /* LedgerShare.entitlements */,
+				4C249495FC88BB9133CB717E /* PrivacyInfo.xcprivacy */,
+				41E5147D73DD93C7A015339F /* ShareViewController.swift */,
+			);
+			path = ShareExtension;
+			sourceTree = "<group>";
+		};
+		D8F249B71FEBA5D190CA1D8F /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				4FCEADD59EE2BBF22D5B715A /* SettingsView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		DB1D1603FFAD1F3A7BCACE44 /* Activity */ = {
+			isa = PBXGroup;
+			children = (
+				0120325ABB16C928EB7D78A2 /* ActivitySheets.swift */,
+				AAE2E3AE75D7627DDCE82B40 /* ActivityView.swift */,
+			);
+			path = Activity;
+			sourceTree = "<group>";
+		};
+		E68653B65277F1FC17330CBE /* Review */ = {
+			isa = PBXGroup;
+			children = (
+				E7DE35B2ABB9AA3A980FD35D /* ReviewView.swift */,
+			);
+			path = Review;
+			sourceTree = "<group>";
+		};
+		EBFBF1ABEFB6004D629B4CF6 /* Insights */ = {
+			isa = PBXGroup;
+			children = (
+				05EB2567DB0EA258329DBD95 /* InsightsView.swift */,
+			);
+			path = Insights;
+			sourceTree = "<group>";
+		};
+		FD9612D2EC0D00E696282BA1 /* Intents */ = {
+			isa = PBXGroup;
+			children = (
+				306FF1BBB7DC9A30BCC65C13 /* LogBankSMSIntent.swift */,
+			);
+			path = Intents;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		4C63ED7EA67F3DD405FABA36 /* Ledger */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DD0B3ABF594D0EF5EF60062E /* Build configuration list for PBXNativeTarget "Ledger" */;
+			buildPhases = (
+				F1F080D0181C4541717A419D /* Sources */,
+				14420028183664A5B903B70E /* Resources */,
+				BEDB20D07F84761F660CA805 /* Frameworks */,
+				17F8D23CD50515F0BA0D8981 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				11400A812688B23F85245E43 /* PBXTargetDependency */,
+			);
+			name = Ledger;
+			packageProductDependencies = (
+				B88DC4F872A6B8B169F66444 /* LedgerKit */,
+			);
+			productName = Ledger;
+			productReference = B58A729CF0C51D66DEEDC26A /* Ledger.app */;
+			productType = "com.apple.product-type.application";
+		};
+		E6D8A3C59AE470EED95533AC /* LedgerShare */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A6BC08DDD17D92D4C800440D /* Build configuration list for PBXNativeTarget "LedgerShare" */;
+			buildPhases = (
+				928B4980483D167D2E8FDE30 /* Sources */,
+				1BA2AD4A0804783C9708591A /* Resources */,
+				ABD8F4F549B4DD2C598C0958 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = LedgerShare;
+			packageProductDependencies = (
+				3CADAE061DE32CE51E97EF02 /* LedgerKit */,
+			);
+			productName = LedgerShare;
+			productReference = F8A491D8C79A061F71F857D7 /* LedgerShare.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		B0A8B9A62D78718FE29D671C /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					4C63ED7EA67F3DD405FABA36 = {
+						DevelopmentTeam = <apple-team-id>;
+						ProvisioningStyle = Automatic;
+					};
+					E6D8A3C59AE470EED95533AC = {
+						DevelopmentTeam = <apple-team-id>;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 700EA40EC2902E5BA06B39FA /* Build configuration list for PBXProject "Ledger" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 6080F44FB8EB1CAFF257F25F;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				7B411864E803B818218CD911 /* XCLocalSwiftPackageReference "LedgerKit" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 672E309D080729BF93B82C50 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				4C63ED7EA67F3DD405FABA36 /* Ledger */,
+				E6D8A3C59AE470EED95533AC /* LedgerShare */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		14420028183664A5B903B70E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D735424BB191ECF6BEFB087C /* Assets.xcassets in Resources */,
+				77AED5C567C9D18DFED64501 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1BA2AD4A0804783C9708591A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7A19A23E1C8368E0F3EB5B51 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		928B4980483D167D2E8FDE30 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				07A1FE280DBD7CEE19B027AB /* ShareViewController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F1F080D0181C4541717A419D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				88E22D6FB72866F27D8AE476 /* ActivitySheets.swift in Sources */,
+				748435885CB091FA9BFCACAA /* ActivityView.swift in Sources */,
+				2AF7A777F5554D6851F1C5F0 /* Components.swift in Sources */,
+				4F5F815454811A4ECF4C88FF /* InsightsView.swift in Sources */,
+				7661F492311F61EFDB72CA0D /* LedgerApp.swift in Sources */,
+				C05BE17C5A3CB168D026EAAF /* LogBankSMSIntent.swift in Sources */,
+				ADA71066669326EC96C41A89 /* OverviewView.swift in Sources */,
+				EBE6B98A364642BCAF0A7E52 /* ProfilePickerView.swift in Sources */,
+				E0FD108F9F8CAE01FBFFBA28 /* ReviewView.swift in Sources */,
+				860158FF70A963842E055393 /* RootView.swift in Sources */,
+				1D830163AD6DCE4782E30CE8 /* SettingsView.swift in Sources */,
+				96964A46ECACE02F55F2E30D /* SignInView.swift in Sources */,
+				659B1CF789C0735789CC64EE /* StatementsView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		11400A812688B23F85245E43 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E6D8A3C59AE470EED95533AC /* LedgerShare */;
+			targetProxy = C16DFED98AC864E59D7C3174 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		9C1386B84DE36CC20C7DD48C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Ledger/Ledger.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Ledger/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(LEDGER_BUNDLE_PREFIX)";
+				PRODUCT_NAME = Ledger;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+			};
+			name = Release;
+		};
+		B01FB7665179A53C7A9FFFC7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = ShareExtension/LedgerShare.entitlements;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ShareExtension/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(LEDGER_BUNDLE_PREFIX).share";
+				PRODUCT_NAME = LedgerShare;
+				SDKROOT = iphoneos;
+			};
+			name = Debug;
+		};
+		B9022F33E707639162E7BC15 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = ShareExtension/LedgerShare.entitlements;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ShareExtension/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(LEDGER_BUNDLE_PREFIX).share";
+				PRODUCT_NAME = LedgerShare;
+				SDKROOT = iphoneos;
+			};
+			name = Release;
+		};
+		D44F4CA16B0CE320CB52869A /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 90DD295322C6F4844758D023 /* Release.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = complete;
+			};
+			name = Release;
+		};
+		E3CA30C737304FE993AD41E6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 076A0083646CF5850906DE83 /* Debug.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = complete;
+			};
+			name = Debug;
+		};
+		F7A88946D48E8C1205C767E7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Ledger/Ledger.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Ledger/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(LEDGER_BUNDLE_PREFIX)";
+				PRODUCT_NAME = Ledger;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		700EA40EC2902E5BA06B39FA /* Build configuration list for PBXProject "Ledger" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E3CA30C737304FE993AD41E6 /* Debug */,
+				D44F4CA16B0CE320CB52869A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A6BC08DDD17D92D4C800440D /* Build configuration list for PBXNativeTarget "LedgerShare" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B01FB7665179A53C7A9FFFC7 /* Debug */,
+				B9022F33E707639162E7BC15 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		DD0B3ABF594D0EF5EF60062E /* Build configuration list for PBXNativeTarget "Ledger" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F7A88946D48E8C1205C767E7 /* Debug */,
+				9C1386B84DE36CC20C7DD48C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		7B411864E803B818218CD911 /* XCLocalSwiftPackageReference "LedgerKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = LedgerKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		3CADAE061DE32CE51E97EF02 /* LedgerKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LedgerKit;
+		};
+		B88DC4F872A6B8B169F66444 /* LedgerKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LedgerKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = B0A8B9A62D78718FE29D671C /* Project object */;
+}

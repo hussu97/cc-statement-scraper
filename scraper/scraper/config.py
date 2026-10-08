@@ -7,6 +7,15 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 _ROOT = Path(__file__).resolve().parents[1]
+
+# Legacy FastAPI backend upload route. Ledger v2 (Supabase Edge Function) uses
+# ``/functions/v1/statements-upload`` with CCS_SCRAPER_TARGET_URL=<SUPABASE_URL>.
+DEFAULT_TARGET_URL = "http://127.0.0.1:8040"
+DEFAULT_UPLOAD_PATH = "/api/v1/jobs/upload"
+# Ledger v2 statements-upload accepts at most 20 files (form.ts MAX_FILES) and 40 MB
+# (MAX_REQUEST_BYTES) per request; the client splits bigger uploads (audit SRV-02).
+UPLOAD_MAX_FILES_PER_REQUEST = 20
+UPLOAD_MAX_BYTES_PER_REQUEST = 32 * 1024 * 1024
 _ENV_FILE = _ROOT / ".env"
 if _ENV_FILE.exists():
     load_dotenv(_ENV_FILE, override=False)
@@ -15,8 +24,11 @@ if _ENV_FILE.exists():
 @dataclass
 class ScraperConfig:
     # Backend API
-    target_url: str = field(default_factory=lambda: os.environ.get("CCS_SCRAPER_TARGET_URL", "http://127.0.0.1:8000"))
+    target_url: str = field(default_factory=lambda: os.environ.get("CCS_SCRAPER_TARGET_URL") or DEFAULT_TARGET_URL)
+    upload_path: str = field(default_factory=lambda: os.environ.get("CCS_SCRAPER_UPLOAD_PATH") or DEFAULT_UPLOAD_PATH)
     api_token: str = field(default_factory=lambda: os.environ.get("CCS_SCRAPER_API_TOKEN", ""))
+    # Optional Supabase anon/publishable key, sent as the ``apikey`` header when set.
+    supabase_anon_key: str | None = field(default_factory=lambda: os.environ.get("CCS_SCRAPER_SUPABASE_ANON_KEY") or None)
     profile_key: str = field(default="")
 
     # Browser settings
@@ -55,6 +67,20 @@ class ScraperConfig:
         }
 
 
+def profile_token_env(profile: str) -> str:
+    """Env var holding the profile's own service token, e.g. ``ALICE_CCS_SCRAPER_API_TOKEN``.
+
+    Ledger v2 service tokens belong to exactly one profile, so each profile needs its own.
+    Namespaced like the bank credentials (``<PROFILE>_FAB_USERNAME``).
+    """
+    return f"{profile.upper()}_CCS_SCRAPER_API_TOKEN"
+
+
+def resolve_api_token(profile: str) -> str:
+    """``<PROFILE>_CCS_SCRAPER_API_TOKEN`` if set, else the global ``CCS_SCRAPER_API_TOKEN``."""
+    return os.environ.get(profile_token_env(profile)) or os.environ.get("CCS_SCRAPER_API_TOKEN", "")
+
+
 def get_config(profile: str) -> ScraperConfig:
     cfg = ScraperConfig()
     cfg.profile_key = profile
@@ -62,9 +88,32 @@ def get_config(profile: str) -> ScraperConfig:
     # never share incoming/, state/, or browser_profiles/ folders.
     cfg.download_dir = cfg.download_dir / profile.lower()
     cfg._reload_credentials()
+    cfg.api_token = resolve_api_token(profile)
     if not cfg.api_token:
         raise RuntimeError(
-            "CCS_SCRAPER_API_TOKEN is not set. "
-            "Add it to scraper/.env or export it before running."
+            f"No API token for profile {profile!r}: set {profile_token_env(profile)} "
+            "(or the global CCS_SCRAPER_API_TOKEN) in scraper/.env or export it before running."
         )
     return cfg
+
+
+def _positive_int_env(name: str) -> int | None:
+    raw = (os.environ.get(name) or "").strip()
+    try:
+        value = int(float(raw))
+    except ValueError:
+        return None
+    return value if value > 0 else None
+
+
+def upload_max_files() -> int:
+    """Files per upload request: ``CCS_SCRAPER_UPLOAD_MAX_FILES`` (never above the server's 20)."""
+    value = _positive_int_env("CCS_SCRAPER_UPLOAD_MAX_FILES") or UPLOAD_MAX_FILES_PER_REQUEST
+    return min(value, UPLOAD_MAX_FILES_PER_REQUEST)
+
+
+def upload_max_bytes() -> int:
+    """Bytes of PDF per upload request: ``CCS_SCRAPER_UPLOAD_MAX_MB`` (never above 32 MB)."""
+    mb = _positive_int_env("CCS_SCRAPER_UPLOAD_MAX_MB")
+    value = mb * 1024 * 1024 if mb else UPLOAD_MAX_BYTES_PER_REQUEST
+    return min(value, UPLOAD_MAX_BYTES_PER_REQUEST)
