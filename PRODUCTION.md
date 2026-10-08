@@ -830,6 +830,13 @@ network restrictions read, Edge Functions read/write, Edge Function secrets read
   select public.resolve_review('<rev_one_of_them>', jsonb_build_object('supersede', '<stm_stale>'));
   select public.resolve_review('<rev_each_other>', '{"dismiss": true}'::jsonb);
   ```
+- **Bank logos:** migration `20261010000100` creates the public `bank-logos` bucket and sets
+  `banks.logo_path = '<bank_code>.png'`; the images themselves are uploaded by hand (no client
+  can write the bucket). From the repo root, after a yes in chat (it writes to production):
+  `for b in ADCB EIB ENBD FAB MASHREQ SIB; do supabase storage cp assets/banks/$b.png ss:///bank-logos/$b.png --experimental --linked; done`
+  (or Dashboard → Storage → `bank-logos` → Upload). Check one at
+  `https://<ref>.supabase.co/storage/v1/object/public/bank-logos/FAB.png`. A bank without an
+  image just shows the client's fallback; to change a file name, update `banks.logo_path`.
 - **Re-parse after a parser fix:** deploy the parser, then `select requeue_documents('<prf_…>')`
   as an owner (or from Cards & Statements → documents in the web app). Re-ingest is in place, so codes, categories and
   notes survive.

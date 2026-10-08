@@ -119,7 +119,7 @@ fx_rates (global)
 | `profiles` | A ledger (`key` is the legacy `X-Profile-Key`, e.g. `hussain`). |
 | `profile_members` | `(profile_code, user_id)`, role `owner` or `viewer`. Pending invites live in `private.pending_members` and are claimed by `auth.users` triggers once the user's email is **confirmed** (on insert when already confirmed, or on the confirmation / email change); `add_profile_member` also treats an unconfirmed account as not signed up. Self sign-up is disabled (§8), so that user is created by an Auth invite. An owner deletes a whole profile with `delete_profile(p_profile_code, p_confirm_key)`: its Vault secrets go with it and its PDFs are queued on `storage_cleanup`. |
 | `service_tokens` | `ccs_<hex>` tokens. Only the sha256 is stored. Scopes are `statements:upload` and `sms:ingest`, each tied to one profile. |
-| `banks` | FAB, ADCB, ENBD, EIB, SIB, MASHREQ, plus their SMS sender ids. |
+| `banks` | FAB, ADCB, ENBD, EIB, SIB, MASHREQ, plus their SMS sender ids. `logo_path` names the bank's image in the public `bank-logos` bucket (`<bank_code>.png`); clients build `<SUPABASE_URL>/storage/v1/object/public/bank-logos/<logo_path>`. |
 | `accounts`, `cards` | Credit-card accounts (kind `credit_card` only) and their cards by `last4`. A replacement card is a new card on the same account. |
 | `documents` | One PDF as received: `sha256` unique per profile, `source` scraper/upload/ios/gmail/outlook/legacy, `parse_status` queued/parsing/parsed/failed. Stored at `statements/<profile_code>/<doc_code>.pdf`. |
 | `statements` | `kind` is `statement` or `history_extract` (SIB history exports). Identity is `(account, statement_date)` per kind among active rows. Holds totals, due date, min due and credit limit. `doc_code` is the document that currently evidences it; several documents can evidence one statement (§4). |
@@ -141,7 +141,9 @@ Queues (pgmq): `parse_document`, `llm_categorize`, `sms_fallback` and `storage_c
 through the Storage API, so the worker removes them). `drain_dlq(queue)` and `requeue_dlq(queue, limit)` are the service-role
 DLQ tools.
 Storage: private bucket `statements` (25 MB limit, `application/pdf`). Members can read their
-profile's folder. Only Edge Functions write to it.
+profile's folder. Only Edge Functions write to it. Public bucket `bank-logos` (1 MB, PNG/SVG/
+WebP/JPEG) holds the bank logos named by `banks.logo_path`; no policy lets clients write it,
+the operator uploads them (PRODUCTION §11).
 
 ---
 
@@ -408,15 +410,37 @@ ignore and income categories, void and orphaned transactions, and anything marke
 `exclude_from_spend`. Buckets use `txn_date`, a Dubai date. Every analytics RPC builds on it.
 Clients render results and never re-derive money.
 
-Analytics RPCs (all security invoker, so RLS applies):
+Analytics RPCs (security invoker, so RLS applies, except the two marked *, which are
+SECURITY DEFINER with an explicit member check and filter by profile themselves):
 
 | Group | RPCs |
 |---|---|
-| Overview and trends | `overview`, `spend_series` (grain, group_by, optional `p_top` with an "Other" fold) |
+| Overview and trends | `overview`, `spend_series` (grain, group_by, optional `p_top` with an "Other" fold), `spend_breakdown`* |
 | Breakdowns | `category_breakdown`, `merchant_leaderboard`, `daily_spend`, `hour_weekday_pattern` |
-| Currency and cycles | `fx_spend`, `statement_cycles`, `yoy_compare` |
+| Currency and cycles | `fx_spend`, `statement_cycles`, `statement_detail`*, `yoy_compare` |
 | Exceptions and metadata | `anomalies`, `filter_meta` |
 | Budgets and recurring | `budget_status`, `recurring_list` |
+
+`overview` (accounts), `statement_cycles` and `filter_meta` (banks) carry each bank's `logo_path`.
+
+`spend_breakdown(profile, from, to, group_by, top_n = 10)` returns monthly spend from `v_spend`
+grouped by `category`, `bank` or `merchant`:
+`{group_by, total, months: ['YYYY-MM'…], groups: [{key, label, color_token, logo_path, total, share}],
+series: [{month, total, values: {<key>: amount}}]}`. The top N groups by total over the whole
+range keep their key (`__uncategorized__` / `__unknown__` for none); the rest fold into
+`__other__` ("Others"). Every month of the range is listed and every series row carries every
+group key, zero-filled. Money is a decimal string; `share` is the group's part of the range
+total with 4 decimals, clamped to 0..1 (a group of only refunds can be net negative).
+`color_token` is set for categories only, `logo_path` for banks only.
+
+`statement_detail(profile, stmt)` returns one statement with its current lines:
+`{statement: {stmt_code, kind, bank_code, account_code, card_last4s, statement_date, period_start,
+period_end, due_date, opening_balance, closing_balance, total_debits, total_credits, min_due,
+credit_limit, doc_code, recon_status, recon_checks}, debits: {count, total, lines}, credits: {…}}`;
+a line is `{line_code, txn_code, txn_date, posting_date, description, merchant_name, amount_aed,
+amount_original, currency_original, category_code, kind, card_last4}`, ordered by `txn_date`,
+`line_no`. `description` is the line as the statement printed it; `merchant_name` and
+`category_code` come from the transaction the line evidences.
 
 `v_transactions` is the Activity read model. It carries category source, evidence flags
 (`has_sms`, `has_statement`; scalar sub-queries on the evidence index, evaluated only for the
