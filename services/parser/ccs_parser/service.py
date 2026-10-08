@@ -14,6 +14,7 @@ from pydantic import ValidationError
 
 from ccs_parser import CONTRACT_VERSION, PARSER_VERSION, PASSWORD_SETTING_KEYS, SUPPORTED_BANKS
 from ccs_parser.contract import ParseResponse
+from ccs_parser.countries import normalize_country_code
 from ccs_parser.detection import detect_bank_code
 from ccs_parser.domain.parsing.models import ParserError
 from ccs_parser.domain.statements.identity import resolve_statement_identity
@@ -57,14 +58,22 @@ def money_or_none(value: float | Decimal | None) -> str | None:
     return None if value is None else money(value)
 
 
-def fx_rate(value: float | None) -> str | None:
+def fx_rate(value: float | None, currency: str | None = None) -> str | None:
+    """AED per unit of ``currency`` as numeric(18,8), or None.
+
+    An AED line is always "1" whatever the bank printed (X-33: some parsers gave 1, some
+    null). A rate that rounds to zero at 8 places can't be stored (the DB requires
+    fx_rate > 0), so it is reported as unknown rather than failing the parse.
+    """
+    if currency == "AED":
+        return "1"
     if value is None:
         return None
     dec = Decimal(repr(abs(float(value))))
-    if dec == 0:
-        return None
     if dec.as_tuple().exponent < -8:  # type: ignore[operator]
         dec = dec.quantize(_FX_PLACES)
+    if dec == 0:
+        return None
     return format(dec.normalize(), "f")
 
 
@@ -137,10 +146,10 @@ def _line_out(line: ParsedLine) -> dict[str, Any]:
         "amount_original": money(line.amount_original),
         "currency_original": line.currency_original,
         "amount_aed": money_or_none(line.amount_aed),
-        "fx_rate": fx_rate(line.fx_rate_to_aed),
+        "fx_rate": fx_rate(line.fx_rate_to_aed, line.currency_original),
         "direction": line.direction,
         "kind": map_kind(line.transaction_kind, line.merchant_normalized, line.direction),
-        "country_code": line.country_code,
+        "country_code": normalize_country_code(line.country_code),
         "card_last4": _card(line.card_last4),
         "card_holder": line.card_holder,
         "legacy_fingerprint": line.fingerprint,
@@ -195,42 +204,34 @@ def _clean_settings(settings: dict[str, Any] | None) -> dict[str, str]:
     return {str(k): str(v) for k, v in (settings or {}).items() if v not in (None, "")}
 
 
-def parse_document(
+# A wrong bank hint makes the hinted parser fail (or find nothing) on a PDF it can't read.
+# These failures are worth one detection pass before failing permanently (SRV-17).
+_HINT_RETRY_CODES = frozenset({"UNSUPPORTED_LAYOUT", "PDF_DECRYPT_FAILED", "PARSE_OUTPUT_INVALID"})
+
+
+def _detect_or_fail(pdf_path: Path, passwords: list[str | None]) -> str:
+    detected = detect_bank_code(pdf_path, extra_passwords=passwords)
+    if detected:
+        return detected.upper().strip()
+    state = pdf_open_state(pdf_path, passwords)
+    if state == "encrypted":
+        raise ParserError("PDF_DECRYPT_FAILED", "PDF is encrypted and none of the supplied passwords opened it.")
+    if state == "corrupt":
+        raise ParserError("UNSUPPORTED_LAYOUT", "File could not be read as a PDF.")
+    raise ParserError("BANK_UNDETECTED", "Could not infer the bank from the PDF content.")
+
+
+def _parse_as(
+    bank_code: str,
     pdf_path: Path,
     *,
-    filename: str | None = None,
-    bank_code_hint: str | None = None,
-    settings: dict[str, Any] | None = None,
+    filename: str | None,
+    runtime_settings: dict[str, str],
+    passwords: list[str | None],
+    pdf_sha256: str,
+    extra_warnings: list[str],
 ) -> dict[str, Any]:
-    """Parse ``pdf_path`` and return a validated parse-v1 response dict.
-
-    Raises ``ParserError`` for permanent, classified failures; anything else is a bug
-    or a transient failure and should surface as a 5xx.
-    """
-    pdf_path = Path(pdf_path)
-    runtime_settings = _clean_settings(settings)
-    passwords: list[str | None] = [runtime_settings.get(key) for key in PASSWORD_SETTING_KEYS]
-    check_document_limits(pdf_path, passwords)
-    pdf_sha256 = hashlib.sha256(pdf_path.read_bytes()).hexdigest()
-
-    hint = (bank_code_hint or "").strip().upper() or None
-    if hint is not None:
-        if hint not in SUPPORTED_BANKS:
-            raise ParserError("UNSUPPORTED_BANK", f"Unsupported bank code: {hint}")
-        bank_code = hint
-    else:
-        detected = detect_bank_code(pdf_path, extra_passwords=passwords)
-        if not detected:
-            state = pdf_open_state(pdf_path, passwords)
-            if state == "encrypted":
-                raise ParserError(
-                    "PDF_DECRYPT_FAILED", "PDF is encrypted and none of the supplied passwords opened it."
-                )
-            if state == "corrupt":
-                raise ParserError("UNSUPPORTED_LAYOUT", "File could not be read as a PDF.")
-            raise ParserError("BANK_UNDETECTED", "Could not infer the bank from the PDF content.")
-        bank_code = detected.upper().strip()
-
+    """Parse ``pdf_path`` as ``bank_code`` and return the validated contract response."""
     try:
         parsed = parse_statement_pdf(
             bank_code,
@@ -264,6 +265,8 @@ def parse_document(
         "document_kind": "history_pdf" if is_history else "statement_pdf",
         "statements": [_statement_out(st, pdf_sha256=pdf_sha256, totals=totals) for st in statements],
     }
+    for st in response["statements"]:
+        st["warnings"] = [*extra_warnings, *st["warnings"]]
     # Validate against the contract (which mirrors the DB constraints). The same PDF
     # always produces the same output, so a violation is permanent, not a retryable 5xx.
     try:
@@ -272,3 +275,92 @@ def parse_document(
         summary = _validation_summary(exc)
         logger.warning("parser output failed contract validation | bank=%s | %s", bank_code, summary)
         raise ParserError("PARSE_OUTPUT_INVALID", f"{bank_code}: parser output is invalid ({summary}).") from exc
+
+
+def _has_no_lines(response: dict[str, Any]) -> bool:
+    return all(not st["lines"] for st in response["statements"])
+
+
+def parse_document(
+    pdf_path: Path,
+    *,
+    filename: str | None = None,
+    bank_code_hint: str | None = None,
+    settings: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Parse ``pdf_path`` and return a validated parse-v1 response dict.
+
+    Raises ``ParserError`` for permanent, classified failures; anything else is a bug
+    or a transient failure and should surface as a 5xx.
+
+    With a ``bank_code_hint`` the hinted parser runs first and the bank is also detected
+    from the PDF (SRV-17). If the hinted parse fails with a layout, decryption or output
+    error, or finds no lines at all, and detection names a different bank, the parse is
+    retried once as that bank and every statement carries a warning. A hinted parse that
+    did find lines stands, with a warning when detection disagrees.
+    """
+    pdf_path = Path(pdf_path)
+    runtime_settings = _clean_settings(settings)
+    passwords: list[str | None] = [runtime_settings.get(key) for key in PASSWORD_SETTING_KEYS]
+    check_document_limits(pdf_path, passwords)
+    pdf_sha256 = hashlib.sha256(pdf_path.read_bytes()).hexdigest()
+
+    def parse_as(bank_code: str, extra_warnings: list[str] | None = None) -> dict[str, Any]:
+        return _parse_as(
+            bank_code,
+            pdf_path,
+            filename=filename,
+            runtime_settings=runtime_settings,
+            passwords=passwords,
+            pdf_sha256=pdf_sha256,
+            extra_warnings=extra_warnings or [],
+        )
+
+    hint = (bank_code_hint or "").strip().upper() or None
+    if hint is None:
+        return parse_as(_detect_or_fail(pdf_path, passwords))
+    if hint not in SUPPORTED_BANKS:
+        raise ParserError("UNSUPPORTED_BANK", f"Unsupported bank code: {hint}")
+
+    hinted: dict[str, Any] | None = None
+    hint_error: ParserError | None = None
+    try:
+        hinted = parse_as(hint)
+    except ParserError as exc:
+        if exc.code not in _HINT_RETRY_CODES:
+            raise
+        hint_error = exc
+
+    detected = (detect_bank_code(pdf_path, extra_passwords=passwords) or "").upper().strip()
+    if detected not in SUPPORTED_BANKS or detected == hint:
+        detected = ""
+
+    if hinted is not None and not _has_no_lines(hinted):
+        if detected:
+            # The hinted parser read the PDF, so the hint wins (it is the route's or the
+            # user's explicit choice, and ENBD/EIB share a template detection can confuse),
+            # but say so: a permissive parser can read another bank's rows.
+            logger.warning("bank_code_hint disagrees with detection | hint=%s | detected=%s", hint, detected)
+            note = f"This PDF looks like {detected}, not {hint}; parsed as {hint} because of the bank hint"
+            for st in hinted["statements"]:
+                st["warnings"].insert(0, note)
+        return hinted
+
+    def hinted_outcome() -> dict[str, Any]:
+        if hinted is not None:
+            return hinted
+        assert hint_error is not None
+        raise hint_error
+
+    if not detected:
+        return hinted_outcome()
+
+    logger.warning("bank_code_hint did not match the PDF | hint=%s | detected=%s", hint, detected)
+    warning = f"Bank hint {hint} did not match this PDF; parsed as {detected} (detected from the PDF)"
+    try:
+        retried = parse_as(detected, [warning])
+    except ParserError:
+        return hinted_outcome()
+    if hinted is not None and _has_no_lines(retried):
+        return hinted
+    return retried

@@ -26,12 +26,12 @@ separately):
 |---|---|---|---|---|---|
 | Database (Supabase SQL) | 12 | 20 | – | 2 | 34 |
 | Edge Functions | 5 | 7 | – | – | 12 |
-| Parser | 2 | 3 | – | – | 5 |
+| Parser | 2 | 1 | – | – | 3 |
 | Web | 16 | 26 | 5 | – | 47 |
 | iOS | 14 | 10 | 7 | 3 | 34 |
 | Scraper | – | 2 | – | – | 2 |
 | CI, config and ops | 1 | 6 | – | 1 | 8 |
-| **Total** | **50** | **74** | **12** | **6** | **142** |
+| **Total** | **50** | **72** | **12** | **6** | **140** |
 
 There are no open P0 or P1 findings. The last P1 remainders (WEB-02 statements beyond 500 and
 merchant search, WEB-07 "Retry AI") landed in `98f901c`. What is left of the P1s are the device
@@ -189,7 +189,7 @@ These are actions, not code changes. Most are already steps in [PRODUCTION.md](.
 | DP-20 | A FAB card replacement creates a second FAB account, splitting `statement_cycles` and utilisation history | Model change | Treat a new primary card on the same bank and holder as a replacement on the existing account, or offer "merge accounts" | M |
 | DP-21 | Legacy fingerprints collide for genuine same-day repeat purchases, so fingerprint-keyed choices can cross-apply | Legacy data; v2 keeps every row | Accept; note it in the finalize output | S |
 | X-23 | `legacy.*` keeps 294 grants to `anon`/`authenticated` (blocked by revoked schema USAGE) | Defence in depth | `revoke all on all tables in schema legacy from anon, authenticated` | S |
-| X-33 | Contract nits: `fx_rate` is 1 or null for AED by bank; the `concat_ws` dedup key drops nulls; a sub-1e-8 rate rounds to 0; iOS relies on Foundation's `spendAvg3M` key mapping | Minor | Normalise `fx_rate` for AED, use `format('%s|%s', …)` for the key, explicit `CodingKeys` on iOS | S |
+| X-33r | Contract nits: the `concat_ws` line-key hash drops nulls; iOS relies on Foundation's `spendAvg3M` key mapping (the parser now always sends `fx_rate` `"1"` for AED and null for a sub-1e-8 rate) | Minor | Use `format('%s|%s', …)` for the key (re-keys every line: pair with a re-parse), explicit `CodingKeys` on iOS | S |
 
 ### Edge Functions
 
@@ -208,8 +208,6 @@ These are actions, not code changes. Most are already steps in [PRODUCTION.md](.
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
 | SRV-12 | Capacity: `--concurrency 4` on 1 vCPU / 1 GiB with CPU-bound parses (and four 768 MB child caps) may time out or OOM under the bulk import (unverified) | Watch the canary step first | `--concurrency 2` (more instances), or a worker-side in-flight cap | S |
-| SRV-17 | A wrong bank hint skips detection entirely, so it fails permanently | Out of the P1 pass | On `UNSUPPORTED_LAYOUT` with a hint, run detection and retry once with the detected bank plus a warning | S |
-| X-25r | `country_code` has no defined format (`AE`, `ARE`, `UAE`, `IRL`, `DXB`, `YOU` seen) | The rest of the contract drift is fixed | Normalise to ISO 3166 alpha-2 or null, document it in parse-v1 | S |
 
 ### Web
 

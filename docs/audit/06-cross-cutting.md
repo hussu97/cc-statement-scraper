@@ -335,4 +335,6 @@ multi-document line union (DP-02). X-29 is resolved: the parser deploys to
 in parse-v1 except the `country_code` format. Open items: [BACKLOG.md](BACKLOG.md).
 
 **Parser pass (2026-10-08):** X-17 is fixed: the parser's password list and the EIB and Mashreq
-parsers use `EIB_PDF_PASSWORD` / `MASHREQ_PDF_PASSWORD`; the worker already sent them.
+parsers use `EIB_PDF_PASSWORD` / `MASHREQ_PDF_PASSWORD`; the worker already sent them. X-25 is
+fully fixed: `country_code` is ISO 3166-1 alpha-2 or null. X-33's parser nits are fixed (`fx_rate`
+`"1"` for every AED line, null below 1e-8); the line-key and iOS nits remain (BACKLOG X-33r).
