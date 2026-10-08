@@ -45,6 +45,21 @@ public protocol LedgerAPI: SMSIngestAPI {
     func setTransactionCategory(txnCode: String, categoryCode: String, applyToMerchant: Bool) async throws
     func uploadStatements(profileCode: String, files: [UploadFile]) async throws -> UploadResponse
 
+    // Statement detail, spend split, banks, upload timeline (SupabaseLedgerAPI+Statements.swift)
+    /// `rpc('statement_detail')`. P0002 when the statement is unknown to the profile.
+    func statementDetail(profileCode: String, stmtCode: String) async throws -> StatementDetail
+    /// `rpc('spend_breakdown')`: top `topN` groups plus Others, by month.
+    func spendBreakdown(profileCode: String, from: CalendarDay, to: CalendarDay, groupBy: SpendSplitGrouping,
+                        topN: Int) async throws -> SpendBreakdown
+    /// `public.banks` (names, logos, SMS senders).
+    func banks() async throws -> [BankInfo]
+    /// One `v_transactions` row, for the transaction sheet; nil when gone.
+    func transaction(profileCode: String, txnCode: String) async throws -> LedgerTransaction?
+    /// `public.document_events` of these documents, in server order.
+    func documentEvents(profileCode: String, docCodes: [String]) async throws -> [DocumentEvent]
+    /// New `document_events` rows of the profile, live (Realtime INSERTs).
+    func documentEventStream(profileCode: String) -> AsyncStream<DocumentEvent>
+
     /// Fires whenever a row the screens show changes (transactions, SMS,
     /// documents, insights) for the profile. Ends when the caller stops iterating.
     func changes(profileCode: String) -> AsyncStream<LedgerChange>

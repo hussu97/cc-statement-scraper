@@ -43,6 +43,10 @@ public final class AppModel {
     public let statements: StatementsModel
     public let settings: SettingsModel
     public let review: ReviewModel
+    /// Bank names and logos for every screen (environment object).
+    public let banks: BankCatalog
+    /// Insights' Monthly spend split (environment object).
+    public let spendSplit: SpendSplitModel
 
     private let live: LiveUpdates
     private var liveProfile: String?
@@ -55,7 +59,10 @@ public final class AppModel {
         overview = OverviewModel(api: services.api)
         activity = ActivityModel(api: services.api)
         insights = InsightsModel(api: services.api)
-        statements = StatementsModel(api: services.api)
+        statements = StatementsModel(api: services.api, pendingUploads: services.pendingUploads,
+                                     flushPending: { await services.flushPendingUploads() })
+        banks = BankCatalog(api: services.api, supabaseURL: services.config.supabaseURL)
+        spendSplit = SpendSplitModel(api: services.api)
         settings = SettingsModel(outbox: services.outbox, intake: services.smsIntake(), log: services.captureLog)
         review = ReviewModel(api: services.api)
         live = LiveUpdates(api: services.api)
@@ -99,9 +106,10 @@ public final class AppModel {
                 await self?.refresh(after: tables, profileCode: code)
             }
         }
+        async let c: Void = banks.refresh()
         async let a: Void = overview.load(profileCode: code)
         async let b: Void = activity.load(profileCode: code)
-        _ = await (a, b)
+        _ = await (a, b, c)
     }
 
     /// The app came to the foreground: send anything the intent or the Share

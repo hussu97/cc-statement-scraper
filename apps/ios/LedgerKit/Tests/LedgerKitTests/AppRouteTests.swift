@@ -70,7 +70,7 @@ struct ShareOutcomeTests {
             UploadResponse(uploads: [.init(filename: f.filename, docCode: "doc_1", status: "queued")])
         }
         #expect(outcome == .uploaded(queued: 2, duplicates: 0))
-        #expect(outcome.message == "2 statements queued for parsing.")
+        #expect(outcome.message == "Sent 2 PDFs: watch progress in Bank Ledger → Statements.")
     }
 
     @Test("offline or signed out: kept for the app to send")
