@@ -5,7 +5,13 @@
 //   parse_document  (vt 300s, 3 at a time) → parser /parse → ingest_parsed_document
 //   llm_categorize  (vt 300s, 2 at a time) → Claude → apply_llm_suggestions
 //   sms_fallback    (vt 300s, 2 at a time) → Claude → propose_sms_template
-// A failing message is retried by visibility timeout and dead-lettered after 5 reads.
+// A failing parse is retried with backoff (re-sent with a delay) and dead-lettered after
+// 5 attempts; LLM jobs are retried by visibility timeout.
+//
+// Time budget (SRV-04): the Edge wall clock is 150 s (free plan). A round only starts
+// when the time left before that deadline (minus a safety margin) covers the slowest
+// thing it can wait on: PARSER_TIMEOUT_MS (75 s) + ingest for a parse round, the LLM
+// timeout for LLM rounds. WORKER_BUDGET_MS (default 50 s) also caps when new rounds start.
 //
 // pg_net gives up after 5s, so by default the work runs in the background
 // (EdgeRuntime.waitUntil) and the call returns 202. `{"sync": true}` (or ?sync=1)
@@ -19,9 +25,11 @@ import { type Db, serviceClient } from "../_shared/supabase.ts";
 import { llmConfigured } from "../_shared/llm.ts";
 import { queueRead } from "./queue.ts";
 import { PARSE_QUEUE, processParseMessage } from "./parse_document.ts";
+import { canStart, llmRoundNeedMs, parseRoundNeedMs, type WorkerTiming, workerTiming } from "./budget.ts";
 import { LLM_QUEUE, processLlmCategorize, processSmsFallback, SMS_QUEUE } from "./llm_jobs.ts";
 
 const VT_SECONDS = 300;
+
 let warnedNoLlm = false;
 
 interface Summary {
@@ -45,30 +53,32 @@ async function settle<T>(items: T[], fn: (x: T) => Promise<unknown>, out: unknow
   }
 }
 
-export async function runWorker(svc: Db, budgetMs: number): Promise<Summary> {
+export async function runWorker(svc: Db, timing: WorkerTiming): Promise<Summary> {
   const started = Date.now();
-  const deadline = started + budgetMs;
   const llm = llmConfigured();
   if (!llm && !warnedNoLlm) {
     console.warn("worker: ANTHROPIC_API_KEY not set; llm_categorize and sms_fallback messages are left queued");
     warnedNoLlm = true;
   }
   const summary: Summary = { rounds: 0, parse: [], llm: [], sms: [], errors: 0, llm_enabled: llm, elapsed_ms: 0 };
+  const parseNeed = parseRoundNeedMs(timing);
+  const llmNeed = llmRoundNeedMs(timing);
 
-  while (Date.now() < deadline) {
+  while (canStart(timing, Date.now(), Math.min(parseNeed, llm ? llmNeed : parseNeed))) {
     summary.rounds++;
     let seen = 0;
 
-    const parseMsgs = await queueRead(svc, PARSE_QUEUE, VT_SECONDS, 3);
-    seen += parseMsgs.length;
-    await settle(parseMsgs, (m) => processParseMessage(svc, m), summary.parse, summary);
-
-    if (llm && Date.now() < deadline) {
+    if (canStart(timing, Date.now(), parseNeed)) {
+      const parseMsgs = await queueRead(svc, PARSE_QUEUE, VT_SECONDS, 3);
+      seen += parseMsgs.length;
+      await settle(parseMsgs, (m) => processParseMessage(svc, m), summary.parse, summary);
+    }
+    if (llm && canStart(timing, Date.now(), llmNeed)) {
       const llmMsgs = await queueRead(svc, LLM_QUEUE, VT_SECONDS, 2);
       seen += llmMsgs.length;
       await settle(llmMsgs, (m) => processLlmCategorize(svc, m), summary.llm, summary);
     }
-    if (llm && Date.now() < deadline) {
+    if (llm && canStart(timing, Date.now(), llmNeed)) {
       const smsMsgs = await queueRead(svc, SMS_QUEUE, VT_SECONDS, 2);
       seen += smsMsgs.length;
       await settle(smsMsgs, (m) => processSmsFallback(svc, m), summary.sms, summary);
@@ -80,10 +90,11 @@ export async function runWorker(svc: Db, budgetMs: number): Promise<Summary> {
 }
 
 async function handler(req: Request): Promise<Response> {
+  const startedAt = Date.now();
   requireMethod(req, "POST");
   await requireCron(req);
   const budget = Number(Deno.env.get("WORKER_BUDGET_MS") ?? "50000");
-  return await runCronJob(req, "worker", () => runWorker(serviceClient(), budget));
+  return await runCronJob(req, "worker", () => runWorker(serviceClient(), workerTiming(startedAt, budget)));
 }
 
 Deno.serve(withSentry("worker", handler));

@@ -2,14 +2,51 @@
 
 from __future__ import annotations
 
+from datetime import date, time
+from decimal import Decimal
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-Money = Annotated[str, StringConstraints(pattern=r"^\d+(\.\d+)?$")]
+# The output must satisfy the database's own constraints (X-06), so a parser bug is
+# a permanent PARSE_OUTPUT_INVALID instead of a failed ingest:
+#   numeric(14,2) amounts >= 0, numeric(18,8) fx_rate > 0, real calendar dates,
+#   last-4 '^[0-9]{4}$', period_start <= period_end.
+MIN_YEAR = 2000
+MAX_YEAR = 2100
+# A statement covers about a month; anything longer is a mis-read year.
+MAX_STATEMENT_PERIOD_DAYS = 100
+# Due dates fall weeks after the statement date (real data: 18-26 days).
+MAX_DUE_DAYS_AFTER_STATEMENT = 120
+
+
+def _real_date(value: str) -> str:
+    parsed = date.fromisoformat(value)
+    if not MIN_YEAR <= parsed.year <= MAX_YEAR:
+        raise ValueError(f"year {parsed.year} is outside {MIN_YEAR}-{MAX_YEAR}")
+    return value
+
+
+def _real_time(value: str) -> str:
+    time.fromisoformat(value)
+    return value
+
+
+def _positive(value: str) -> str:
+    if Decimal(value) <= 0:
+        raise ValueError("must be greater than zero")
+    return value
+
+
+# numeric(14,2): at most 12 integer digits.
+Money = Annotated[str, StringConstraints(pattern=r"^\d{1,12}(\.\d+)?$")]
 # Signed amount: opening/closing balances (negative = card in credit).
-SignedMoney = Annotated[str, StringConstraints(pattern=r"^-?\d+(\.\d+)?$")]
-IsoDate = Annotated[str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}$")]
+SignedMoney = Annotated[str, StringConstraints(pattern=r"^-?\d{1,12}(\.\d+)?$")]
+# numeric(18,8): at most 10 integer digits, and the DB requires fx_rate > 0.
+FxRate = Annotated[str, StringConstraints(pattern=r"^\d{1,10}(\.\d+)?$"), AfterValidator(_positive)]
+IsoDate = Annotated[str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}$"), AfterValidator(_real_date)]
+IsoTime = Annotated[str, StringConstraints(pattern=r"^\d{2}:\d{2}(:\d{2}(\.\d+)?)?$"), AfterValidator(_real_time)]
+Last4 = Annotated[str, StringConstraints(pattern=r"^[0-9]{4}$")]
 
 DocumentKind = Literal["statement_pdf", "history_pdf"]
 StatementKind = Literal["statement", "history_extract"]
@@ -25,6 +62,9 @@ ErrorCode = Literal[
     "BANK_UNDETECTED",
     "DOWNLOAD_FAILED",
     "INVALID_REQUEST",
+    "PARSE_TIMEOUT",
+    "PDF_TOO_LARGE",
+    "PARSE_OUTPUT_INVALID",
     "INTERNAL_ERROR",
 ]
 
@@ -52,18 +92,18 @@ class Totals(_Strict):
 class Line(_Strict):
     line_no: int = Field(ge=1)
     txn_date: IsoDate
-    txn_time: str | None
+    txn_time: IsoTime | None
     posting_date: IsoDate | None
     description_raw: str
     merchant_normalized: str
     amount_original: Money
     currency_original: Annotated[str, StringConstraints(pattern=r"^[A-Z]{3}$")]
     amount_aed: Money | None
-    fx_rate: Money | None
+    fx_rate: FxRate | None
     direction: Direction
     kind: LineKind
     country_code: str | None
-    card_last4: str | None
+    card_last4: Last4 | None
     card_holder: str | None
     legacy_fingerprint: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 
@@ -77,13 +117,31 @@ class Statement(_Strict):
     period_start: IsoDate | None
     period_end: IsoDate | None
     due_date: IsoDate | None
-    primary_card_last4: str | None
+    primary_card_last4: Last4 | None
     card_holder: str | None
     card_type: str | None
     totals: Totals
     warnings: list[str]
     metadata: dict[str, Any]
     lines: list[Line]
+
+    @model_validator(mode="after")
+    def _dates_are_consistent(self) -> Statement:
+        start = date.fromisoformat(self.period_start) if self.period_start else None
+        end = date.fromisoformat(self.period_end) if self.period_end else None
+        stmt = date.fromisoformat(self.statement_date)
+        if start and end:
+            if start > end:
+                raise ValueError("period_start is after period_end")
+            if self.kind == "statement" and (end - start).days > MAX_STATEMENT_PERIOD_DAYS:
+                raise ValueError(f"statement period is longer than {MAX_STATEMENT_PERIOD_DAYS} days")
+        if self.due_date and self.kind == "statement":
+            due = date.fromisoformat(self.due_date)
+            if due < stmt:
+                raise ValueError("due_date is before statement_date")
+            if (due - stmt).days > MAX_DUE_DAYS_AFTER_STATEMENT:
+                raise ValueError(f"due_date is more than {MAX_DUE_DAYS_AFTER_STATEMENT} days after statement_date")
+        return self
 
 
 class ParseResponse(_Strict):

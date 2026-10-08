@@ -2,7 +2,8 @@
 //
 //   Deno.serve(withSentry("name", handler));
 //
-// Sentry is initialised once per isolate when SENTRY_DSN is set. The Deno SDK does
+// Sentry is initialised once per isolate when SENTRY_DSN is set and SENTRY_ENVIRONMENT
+// is not local ('', local, development, test — unset means local). The Deno SDK does
 // not isolate concurrent requests, so each request runs inside Sentry.withScope.
 // Events go through scrubEvent(), which removes request bodies, auth headers, query
 // strings and any body/sms/password/token-like fields before they leave the isolate.
@@ -133,15 +134,23 @@ export function scrubBreadcrumb<T extends AnyEvent | null>(b: T): T {
 let initialised = false;
 let enabled = false;
 
+/** Environments that never report, even with a DSN set (local replays, tests). Unset = "local". */
+export const LOCAL_ENVIRONMENTS: ReadonlySet<string> = new Set(["", "local", "development", "test"]);
+
 export function sentryEnvironment(): string {
-  return Deno.env.get("SENTRY_ENVIRONMENT") || "local";
+  return (Deno.env.get("SENTRY_ENVIRONMENT") ?? "").trim() || "local";
+}
+
+/** True when events should be sent: a DSN is set and the environment isn't local. */
+export function sentryActive(environment: string | undefined, dsn: string | undefined): boolean {
+  return Boolean((dsn ?? "").trim()) && !LOCAL_ENVIRONMENTS.has((environment ?? "").trim().toLowerCase());
 }
 
 function ensureInit(): boolean {
   if (initialised) return enabled;
   initialised = true;
   const dsn = Deno.env.get("SENTRY_DSN");
-  if (!dsn) return false;
+  if (!sentryActive(sentryEnvironment(), dsn)) return false;
   Sentry.init({
     dsn,
     environment: sentryEnvironment(),

@@ -13,25 +13,18 @@ import { assertOwner, requireUserOrServiceToken } from "../_shared/auth.ts";
 import { HttpError, json, requireMethod } from "../_shared/http.ts";
 import { serviceClient } from "../_shared/supabase.ts";
 import { type DocumentSource, MAX_PDF_BYTES, sanitizeFilename, storeDocument, validateBankHint, validatePdf } from "../_shared/documents.ts";
-import { MAX_FILES, parseUploadForm } from "./form.ts";
+import { parseMultipart, parseUploadForm, readBodyCapped } from "./form.ts";
 
 async function handler(req: Request): Promise<Response> {
   requireMethod(req, "POST");
   const caller = await requireUserOrServiceToken(req, "statements:upload");
 
-  const len = Number(req.headers.get("content-length") ?? "0");
-  if (len > MAX_FILES * MAX_PDF_BYTES + 1_000_000) throw new HttpError(413, "PAYLOAD_TOO_LARGE", "request too large");
   const ctype = req.headers.get("content-type") ?? "";
   if (!ctype.toLowerCase().startsWith("multipart/form-data")) {
     throw new HttpError(415, "UNSUPPORTED_MEDIA_TYPE", "send multipart/form-data");
   }
-  let formData: FormData;
-  try {
-    formData = await req.formData();
-  } catch {
-    throw new HttpError(400, "INVALID_MULTIPART", "could not parse multipart body");
-  }
-  const form = parseUploadForm(formData);
+  // Bounded read (SRV-06): never buffer more than MAX_REQUEST_BYTES, with or without content-length.
+  const form = parseUploadForm(await parseMultipart(await readBodyCapped(req), ctype));
 
   let profileCode: string;
   let source: DocumentSource;

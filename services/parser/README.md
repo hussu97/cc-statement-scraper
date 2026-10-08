@@ -19,8 +19,9 @@ services/parser/
 ├── ccs_parser/
 │   ├── app.py              # FastAPI: POST /parse, GET /health, /debug-sentry (non-prod)
 │   ├── service.py          # parse_document(): PDF -> contract dict (no HTTP)
-│   ├── contract.py         # pydantic models of the parse-v1 request/response
-│   ├── detection.py        # bank detection from PDF text (copied from legacy jobs.py)
+│   ├── contract.py         # pydantic models of parse-v1; mirrors the DB constraints (X-06)
+│   ├── limits.py           # per-parse child process: CPU/wall/memory/pages/size/inflate limits
+│   ├── detection.py        # bank detection: scored markers, line items ignored (legacy rules as fallback)
 │   ├── totals.py           # best-effort statement totals extraction (never raises)
 │   ├── kinds.py            # legacy kind -> contract kind mapping
 │   ├── sentry.py           # Sentry init + before_send scrubber
@@ -76,7 +77,7 @@ Set `PARSER_ALLOW_HTTP=true` to fetch from a plain-http local file server while 
 
 | Method | Path | Auth | Notes |
 |---|---|---|---|
-| `POST` | `/parse` | `X-Parser-Secret` | Contract parse-v1. Downloads `document_url` (30 s timeout, 25 MB max), detects the bank when `bank_code_hint` is null, parses, returns statements. |
+| `POST` | `/parse` | `X-Parser-Secret` | Contract parse-v1. Downloads `document_url` (30 s timeout, 25 MB max), detects the bank when `bank_code_hint` is null, parses in a resource-limited child process (see `ccs_parser/limits.py`), validates the output against the DB constraints, returns statements. |
 | `GET` | `/health` | none | `{"status": "ok", "parser_version", "contract_version"}` |
 | `GET` | `/debug-sentry` | `X-Parser-Secret` | Raises an error to test Sentry. Not registered when `SENTRY_ENVIRONMENT=production`. |
 
@@ -88,6 +89,9 @@ Errors use `{"error": {"code", "message"}}`:
 | 422 | `PDF_DECRYPT_FAILED`, `UNSUPPORTED_BANK`, `UNSUPPORTED_LAYOUT`, `BANK_UNDETECTED` | Permanent parse failures. |
 | 422 | `DOWNLOAD_FAILED` | Permanent download failure: storage 4xx, oversize, empty body, non-https or disallowed host. |
 | 422 | `INVALID_REQUEST` | Request body failed validation. |
+| 422 | `PARSE_TIMEOUT` | The parse exceeded its CPU (`PARSER_CPU_LIMIT_SECONDS`) or wall-clock (`PARSER_PARSE_TIMEOUT_SECONDS`) limit and was killed. |
+| 422 | `PDF_TOO_LARGE` | Over `PARSER_MAX_PDF_MB` or `PARSER_MAX_PAGES`, inflated streams over `PARSER_MAX_INFLATE_MB`, or out of memory. |
+| 422 | `PARSE_OUTPUT_INVALID` | The parser's own output broke the contract / DB constraints (e.g. `period_start > period_end`, bad last-4). Deterministic, so permanent. |
 | 502 | `DOWNLOAD_FAILED` | Transient download failure: timeout, connection error, storage 429/5xx. |
 | 500 | `INTERNAL_ERROR` | Unexpected error (retried by the worker). |
 
@@ -114,8 +118,15 @@ Implementation notes beyond the contract:
 | `PARSER_ALLOWED_HOSTS` | no | any | Comma-separated allow-list of `document_url` hosts, e.g. `<project>.supabase.co`. |
 | `PARSER_MAX_DOWNLOAD_MB` | no | `25` | Max PDF size. |
 | `PARSER_ALLOW_HTTP` | no | `false` | Allow `http://` URLs (local dev only). |
-| `SENTRY_DSN` | no | — | Enables Sentry when set. |
-| `SENTRY_ENVIRONMENT` | no | `development` | Sentry environment; `production` also disables `/debug-sentry` and OpenAPI docs. |
+| `PARSER_MAX_PDF_MB` | no | `15` | Larger PDFs fail with `PDF_TOO_LARGE` before any extraction. |
+| `PARSER_MAX_PAGES` | no | `30` | More pages fail with `PDF_TOO_LARGE` (real statements have at most 8). |
+| `PARSER_CPU_LIMIT_SECONDS` | no | `30` | `RLIMIT_CPU` of the per-parse child process (real parses take about 1 s). |
+| `PARSER_PARSE_TIMEOUT_SECONDS` | no | `60` | Wall clock after which the parse child is killed. Keep below the worker's `PARSER_TIMEOUT_MS` (75 s). |
+| `PARSER_MEMORY_LIMIT_MB` | no | `768` | `RLIMIT_AS` of the parse child (Linux only). |
+| `PARSER_MAX_INFLATE_MB` | no | `32` | Total decompressed PDF stream bytes per parse (decompression-bomb guard; real statements use under 2 MB). |
+| `PARSER_ISOLATION` | no | `process` | `inline` runs parses in the server process without CPU/wall/memory limits (tests and debugging only). |
+| `SENTRY_DSN` | no | — | Enables Sentry when set (and the environment isn't local). |
+| `SENTRY_ENVIRONMENT` | no | `local` | Sentry environment. `local`, `development`, `test` or unset never send events, even with a DSN. `production` also disables `/debug-sentry` and OpenAPI docs. |
 | `SENTRY_RELEASE` | no | — | Sentry release (e.g. the git SHA). |
 | `SENTRY_TRACES_SAMPLE_RATE` | no | `0.2` | Performance sampling rate. |
 | `LOG_LEVEL` | no | `INFO` | Python log level. |

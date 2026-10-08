@@ -11,7 +11,8 @@ const server = Deno.serve({ port: 0, hostname: "127.0.0.1", onListen() {} }, asy
 });
 const port = (server.addr as Deno.NetAddr).port;
 Deno.env.set("SENTRY_DSN", `http://publickey@127.0.0.1:${port}/1`);
-Deno.env.set("SENTRY_ENVIRONMENT", "test");
+// "test"/"local" disable Sentry (sentry_local_test.ts); use a non-local name here.
+Deno.env.set("SENTRY_ENVIRONMENT", "ci");
 Deno.env.set("SENTRY_TRACES_SAMPLE_RATE", "0");
 
 const { withSentry, Sentry } = await import("../_shared/sentry.ts");
@@ -70,7 +71,7 @@ Deno.test({
     assert(!raw.includes("pk-zq81-secret"), "profile key leaked");
     assertEquals(ev.tags.function, "sms-ingest");
     assertEquals(ev.tags.service, "edge");
-    assertEquals(ev.environment, "test");
+    assertEquals(ev.environment, "ci");
     assertEquals(ev.contexts?.trace?.trace_id, TRACE_ID);
     await server.shutdown();
   },

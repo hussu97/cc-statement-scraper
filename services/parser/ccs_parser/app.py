@@ -19,6 +19,7 @@ from fastapi.responses import JSONResponse
 from ccs_parser import CONTRACT_VERSION, PARSER_VERSION
 from ccs_parser.contract import ParseRequest
 from ccs_parser.domain.parsing.models import ParserError
+from ccs_parser.limits import run_parse
 from ccs_parser.sentry import init_sentry, set_bank_tag
 from ccs_parser.service import parse_document
 
@@ -36,6 +37,10 @@ PERMANENT_CODES = frozenset(
         "BANK_UNDETECTED",
         "DOWNLOAD_FAILED",
         "INVALID_REQUEST",
+        # Resource limits (SRV-01) and output validation (X-06): deterministic for a given PDF.
+        "PARSE_TIMEOUT",
+        "PDF_TOO_LARGE",
+        "PARSE_OUTPUT_INVALID",
     }
 )
 
@@ -189,7 +194,8 @@ def create_app() -> FastAPI:
 
     @app.post("/parse", dependencies=[Depends(require_parser_secret)])
     def parse(body: ParseRequest) -> JSONResponse:
-        # Sync on purpose: pdfplumber is blocking, so FastAPI runs this in its threadpool.
+        # Sync on purpose: the handler thread waits on the isolated parse process
+        # (ccs_parser.limits), so FastAPI runs it in its threadpool.
         started = time.monotonic()
         set_bank_tag(body.bank_code_hint)
         filename = body.filename or _filename_from_url(body.document_url)
@@ -197,7 +203,8 @@ def create_app() -> FastAPI:
             pdf_path = Path(tmp) / "document.pdf"
             size = download_document(body.document_url, pdf_path)
             try:
-                result = parse_document(
+                result = run_parse(
+                    parse_document,
                     pdf_path,
                     filename=filename,
                     bank_code_hint=body.bank_code_hint,

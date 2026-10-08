@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from ccs_parser.sentry import FILTERED, scrub_event, strip_query
 
 SIGNED_URL = "https://abc.supabase.co/storage/v1/object/sign/statements/doc.pdf?token=eyJhbGciOiJIUzI1NiJ9.secret-part"
@@ -77,13 +79,47 @@ def test_init_sentry_disabled_without_dsn(monkeypatch) -> None:
     assert init_sentry() is False
 
 
+@pytest.mark.parametrize("environment", [None, "", "local", "LOCAL", " development ", "test"])
+def test_init_sentry_disabled_for_local_environments_even_with_dsn(monkeypatch, environment) -> None:
+    import sentry_sdk
+
+    from ccs_parser.sentry import init_sentry, sentry_environment
+
+    monkeypatch.setenv("SENTRY_DSN", "https://public@o0.ingest.invalid/1")
+    if environment is None:
+        monkeypatch.delenv("SENTRY_ENVIRONMENT", raising=False)
+        assert sentry_environment() == "local"
+    else:
+        monkeypatch.setenv("SENTRY_ENVIRONMENT", environment)
+    assert init_sentry() is False
+    assert sentry_sdk.get_client().is_active() is False
+
+
+@pytest.mark.parametrize(
+    ("environment", "dsn", "active"),
+    [
+        ("production", "https://k@o0.ingest.invalid/1", True),
+        ("staging", "https://k@o0.ingest.invalid/1", True),
+        ("production", "", False),
+        ("local", "https://k@o0.ingest.invalid/1", False),
+        ("development", "https://k@o0.ingest.invalid/1", False),
+        ("test", "https://k@o0.ingest.invalid/1", False),
+        ("", "https://k@o0.ingest.invalid/1", False),
+    ],
+)
+def test_sentry_active_matrix(environment, dsn, active) -> None:
+    from ccs_parser.sentry import sentry_active
+
+    assert sentry_active(environment, dsn) is active
+
+
 def test_init_sentry_wires_scrubber(monkeypatch) -> None:
     import sentry_sdk
 
     from ccs_parser.sentry import init_sentry
 
     monkeypatch.setenv("SENTRY_DSN", "https://public@o0.ingest.invalid/1")
-    monkeypatch.setenv("SENTRY_ENVIRONMENT", "test")
+    monkeypatch.setenv("SENTRY_ENVIRONMENT", "staging")
     monkeypatch.setenv("SENTRY_RELEASE", "ccs-parser@test")
     monkeypatch.delenv("SENTRY_TRACES_SAMPLE_RATE", raising=False)
     try:
@@ -93,7 +129,7 @@ def test_init_sentry_wires_scrubber(monkeypatch) -> None:
         assert options["send_default_pii"] is False
         assert options["traces_sample_rate"] == 0.2
         assert options["release"] == "ccs-parser@test"
-        assert options["environment"] == "test"
+        assert options["environment"] == "staging"
     finally:
         sentry_sdk.init(dsn=None)
 
@@ -112,7 +148,7 @@ def test_init_sentry_tags_events_with_service_parser(monkeypatch) -> None:
 
     monkeypatch.setattr(parser_sentry, "scrub_event", recording_scrub)
     monkeypatch.setenv("SENTRY_DSN", "http://public@127.0.0.1:9/1")
-    monkeypatch.setenv("SENTRY_ENVIRONMENT", "test")
+    monkeypatch.setenv("SENTRY_ENVIRONMENT", "staging")
     try:
         assert parser_sentry.init_sentry() is True
         sentry_sdk.capture_message("tag check")

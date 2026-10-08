@@ -16,9 +16,14 @@ export function llmConfigured(): boolean {
   return Boolean(Deno.env.get("ANTHROPIC_API_KEY"));
 }
 
+/** Per-request timeout. No SDK retries: the queue retries, and the worker budgets one call per round. */
+export const LLM_TIMEOUT_MS = 60_000;
+
 let _client: InstanceType<typeof Anthropic> | null = null;
 function client(): InstanceType<typeof Anthropic> {
-  if (!_client) _client = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY"), maxRetries: 1, timeout: 60_000 });
+  if (!_client) {
+    _client = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY"), maxRetries: 0, timeout: LLM_TIMEOUT_MS });
+  }
   return _client;
 }
 
@@ -29,9 +34,31 @@ export class LlmOutputError extends Error {
   }
 }
 
+/** The model says the SMS is not a card transaction (OTP, promotion, ...): nothing to template. */
+export class LlmNotApplicable extends Error {
+  constructor(message = "not a card transaction") {
+    super(message);
+    this.name = "LlmNotApplicable";
+  }
+}
+
+/**
+ * A short, safe reason for Sentry/DLQ: our own validation text (never SMS content), with
+ * anything but letters, digits, spaces and `._-` stripped.
+ */
+export function llmErrorReason(e: unknown): string {
+  if (e instanceof LlmOutputError || e instanceof LlmNotApplicable) {
+    return e.message.replace(/[^A-Za-z0-9 ._-]/g, "").slice(0, 80);
+  }
+  // deno-lint-ignore no-explicit-any
+  const status = (e as any)?.status;
+  if (typeof status === "number") return `http ${status}`;
+  return String((e as Error)?.name ?? "error").replace(/[^A-Za-z0-9 ._-]/g, "").slice(0, 40);
+}
+
 /** Retry (leave the queue message) vs give up (DLQ). Auth/config errors are retried: they need a fix, not a DLQ. */
 export function isTransientLlmError(e: unknown): boolean {
-  if (e instanceof LlmOutputError) return false;
+  if (e instanceof LlmOutputError || e instanceof LlmNotApplicable) return false;
   if (e instanceof Anthropic.APIConnectionError) return true;
   if (e instanceof Anthropic.APIError) {
     const s = e.status ?? 0;
@@ -168,6 +195,8 @@ export const SMS_SYSTEM = [
   "- last4: the card digits shown; date_format is a PostgreSQL to_date format for the date group (e.g. DD/MM/YYYY, DD-MON-YY).",
   "msg_kind: purchase (completed card spend), preauth (authorisation/hold), refund, reversal, payment (card bill payment),",
   "declined, debit_card (debit/current account, not a credit card), other (not a card transaction).",
+  "If the SMS is not a card transaction at all (OTP, promotion, balance or service notice), set msg_kind to other",
+  "and field_groups.amount and expect.amount to null; the other fields can then be null or a best effort.",
   "expect: the values your template extracts from THIS message (amount as written without separators, currency code,",
   "last4, merchant as written).",
 ].join("\n");
@@ -184,7 +213,7 @@ export function smsTemplateSchema(bankCodes: string[]): Record<string, unknown> 
       body_pattern: { type: "string" },
       field_groups: {
         type: "object",
-        properties: Object.fromEntries(FIELD_NAMES.map((f) => [f, f === "amount" ? { type: "integer" } : nullableInt])),
+        properties: Object.fromEntries(FIELD_NAMES.map((f) => [f, nullableInt])),
         required: [...FIELD_NAMES],
         additionalProperties: false,
       },
@@ -192,7 +221,7 @@ export function smsTemplateSchema(bankCodes: string[]): Record<string, unknown> 
       msg_kind: { type: "string", enum: MSG_KINDS },
       expect: {
         type: "object",
-        properties: { amount: { type: "string" }, currency: nullableStr, last4: nullableStr, merchant: nullableStr },
+        properties: { amount: nullableStr, currency: nullableStr, last4: nullableStr, merchant: nullableStr },
         required: ["amount", "currency", "last4", "merchant"],
         additionalProperties: false,
       },
@@ -282,6 +311,13 @@ export interface TemplateProposal {
 export function validateTemplateProposal(raw: unknown, bankCodes: string[]): TemplateProposal {
   if (!raw || typeof raw !== "object") throw new LlmOutputError("proposal is not an object");
   const r = raw as Record<string, unknown>;
+  if (r.msg_kind === "other") {
+    const fg = (r.field_groups && typeof r.field_groups === "object" ? r.field_groups : {}) as Record<string, unknown>;
+    const ex = (r.expect && typeof r.expect === "object" ? r.expect : {}) as Record<string, unknown>;
+    if (fg.amount === null || fg.amount === undefined || ex.amount === null || ex.amount === undefined) {
+      throw new LlmNotApplicable();
+    }
+  }
   if (typeof r.bank_code !== "string" || !bankCodes.includes(r.bank_code)) throw new LlmOutputError("unknown bank_code");
   if (typeof r.msg_kind !== "string" || !MSG_KINDS.includes(r.msg_kind)) throw new LlmOutputError("invalid msg_kind");
   const body = checkPattern(r.body_pattern, "body_pattern", 1000);

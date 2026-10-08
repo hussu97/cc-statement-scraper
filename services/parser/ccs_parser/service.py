@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
+
+from pydantic import ValidationError
 
 from ccs_parser import CONTRACT_VERSION, PARSER_VERSION, PASSWORD_SETTING_KEYS, SUPPORTED_BANKS
 from ccs_parser.contract import ParseResponse
@@ -16,12 +19,14 @@ from ccs_parser.domain.parsing.models import ParserError
 from ccs_parser.domain.statements.identity import resolve_statement_identity
 from ccs_parser.domain.statements.types import ParsedLine, ParsedStatement
 from ccs_parser.kinds import map_kind
+from ccs_parser.limits import check_document_limits
 from ccs_parser.parser_adapter import parse_statement_pdf
 from ccs_parser.totals import TOTAL_KEYS, TotalsResult, extract_totals, read_text_lines
 
 logger = logging.getLogger(__name__)
 
 _UNKNOWN_CARD = "0000"
+_LAST4_RE = re.compile(r"[0-9]{4}")
 _HISTORY_PDF_TYPE = "transaction_history"
 _FX_PLACES = Decimal("1e-8")
 # Totals that keep their sign; every other money value is absolute.
@@ -68,10 +73,25 @@ def _iso(value: date | None) -> str | None:
 
 
 def _card(value: str | None) -> str | None:
+    """A 4-digit card suffix, or None (unknown, placeholder or malformed: the DB requires ^[0-9]{4}$)."""
     token = (value or "").strip()
-    if not token or token == _UNKNOWN_CARD:
+    if token == _UNKNOWN_CARD or not _LAST4_RE.fullmatch(token):
         return None
     return token
+
+
+def _validation_summary(exc: ValidationError) -> str:
+    """Where the output broke the contract, without echoing values (they are statement data)."""
+    parts: list[str] = []
+    for err in exc.errors()[:5]:
+        loc = ".".join(str(p) for p in err.get("loc", ()))
+        if err.get("type") == "value_error" and not loc.endswith(("_date", "_time", "period_start", "period_end")):
+            detail = str(err.get("msg", "")).removeprefix("Value error, ")
+        else:
+            detail = str(err.get("type", "invalid"))
+        parts.append(f"{loc or 'response'}: {detail}")
+    more = exc.error_count() - len(parts)
+    return "; ".join(parts) + (f" (+{more} more)" if more > 0 else "")
 
 
 # ---------------------------------------------------------------- PDF state
@@ -190,6 +210,7 @@ def parse_document(
     pdf_path = Path(pdf_path)
     runtime_settings = _clean_settings(settings)
     passwords: list[str | None] = [runtime_settings.get(key) for key in PASSWORD_SETTING_KEYS]
+    check_document_limits(pdf_path, passwords)
     pdf_sha256 = hashlib.sha256(pdf_path.read_bytes()).hexdigest()
 
     hint = (bank_code_hint or "").strip().upper() or None
@@ -243,5 +264,11 @@ def parse_document(
         "document_kind": "history_pdf" if is_history else "statement_pdf",
         "statements": [_statement_out(st, pdf_sha256=pdf_sha256, totals=totals) for st in statements],
     }
-    # Validate against the contract model; a failure here is a parser bug (5xx).
-    return ParseResponse.model_validate(response).model_dump(mode="json")
+    # Validate against the contract (which mirrors the DB constraints). The same PDF
+    # always produces the same output, so a violation is permanent, not a retryable 5xx.
+    try:
+        return ParseResponse.model_validate(response).model_dump(mode="json")
+    except ValidationError as exc:
+        summary = _validation_summary(exc)
+        logger.warning("parser output failed contract validation | bank=%s | %s", bank_code, summary)
+        raise ParserError("PARSE_OUTPUT_INVALID", f"{bank_code}: parser output is invalid ({summary}).") from exc

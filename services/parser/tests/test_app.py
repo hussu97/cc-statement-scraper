@@ -17,6 +17,8 @@ def client(monkeypatch) -> TestClient:
     monkeypatch.setenv("PARSER_SECRET", SECRET)
     monkeypatch.delenv("SENTRY_DSN", raising=False)
     monkeypatch.delenv("PARSER_ALLOWED_HOSTS", raising=False)
+    # parse_document is monkeypatched with lambdas below; isolation is covered in test_limits.py.
+    monkeypatch.setenv("PARSER_ISOLATION", "inline")
     return TestClient(app_module.create_app(), raise_server_exceptions=False)
 
 
@@ -62,6 +64,9 @@ def test_invalid_body_is_422_invalid_request(client) -> None:
         ("UNSUPPORTED_BANK", 422),
         ("UNSUPPORTED_LAYOUT", 422),
         ("BANK_UNDETECTED", 422),
+        ("PARSE_TIMEOUT", 422),
+        ("PDF_TOO_LARGE", 422),
+        ("PARSE_OUTPUT_INVALID", 422),
         ("SOMETHING_ELSE", 500),
     ],
 )

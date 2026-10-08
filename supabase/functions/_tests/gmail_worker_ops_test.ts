@@ -95,11 +95,17 @@ Deno.test("base64UrlToBytes handles url-safe alphabet without padding", () => {
 // ── worker ──────────────────────────────────────────────────────────────────
 Deno.test("classifyParserResponse follows contract parse-v1", () => {
   assertEquals(classifyParserResponse(200, { contract_version: 1, statements: [] }).action, "ingest");
-  assertEquals(classifyParserResponse(200, { contract_version: 2 }).action, "permanent");
+  assertEquals(classifyParserResponse(200, { contract_version: 2 }).action, "transient");
   const d = classifyParserResponse(422, { error: { code: "PDF_DECRYPT_FAILED", message: "bad password" } });
-  assertEquals(d, { action: "permanent", code: "PDF_DECRYPT_FAILED", message: "bad password" });
+  assertEquals(d, { action: "permanent", code: "PDF_DECRYPT_FAILED", message: "bad password", status: 422 });
   assertEquals(classifyParserResponse(502, { error: { code: "DOWNLOAD_FAILED" } }).action, "transient");
-  assertEquals(classifyParserResponse(500, null), { action: "transient", code: "HTTP_500", message: "parser returned HTTP 500" });
+  assertEquals(classifyParserResponse(500, null), {
+    action: "transient",
+    code: "PARSER_HTTP_500",
+    message: "parser returned HTTP 500",
+    status: 500,
+    config: false,
+  });
   assertEquals(classifyParserResponse(401, { error: { code: "UNAUTHORIZED" } }).action, "transient");
   assertEquals(classifyParserResponse(429, null).action, "transient");
 });

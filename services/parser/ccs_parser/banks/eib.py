@@ -15,6 +15,8 @@ from ccs_parser.domain.parsing.utils import (
     parse_date,
     statement_month_from_date,
 )
+from ccs_parser.domain.parsing.period_years import resolve_period_years
+from ccs_parser.totals import _ENBD_LIMIT_ROW_RE
 
 BANK_CODE = "EIB"
 BANK_NAME = "Emirates Islamic Bank"
@@ -70,6 +72,7 @@ def parse_eib_statement(pdf_path: str | Path) -> StatementParseResult:
     statement_month: str | None = None
     period_start = None
     period_end = None
+    summary_statement_date = None
 
     warnings: list[str] = []
     transactions: list[TransactionRecord] = []
@@ -88,6 +91,14 @@ def parse_eib_statement(pdf_path: str | Path) -> StatementParseResult:
 
         if "Card Type:" in line and card_type is None:
             card_type = line.split("Card Type:", maxsplit=1)[-1].strip()
+
+        summary_match = _ENBD_LIMIT_ROW_RE.match(line)
+        if summary_match and summary_statement_date is None:
+            try:
+                summary_statement_date = parse_date(summary_match.group("statement_date"), "%d/%m/%Y")
+            except ValueError:
+                summary_statement_date = None
+            continue
 
         period_match = _STATEMENT_PERIOD_RE.search(line)
         if period_match:
@@ -142,6 +153,20 @@ def parse_eib_statement(pdf_path: str | Path) -> StatementParseResult:
                 fingerprint=fingerprint,
             )
         )
+
+    # The printed period uses 2-digit years that are wrong around Dec/Jan (DP-03/04).
+    newest_posting = max((t.posting_date for t in transactions), default=None)
+    period_start, period_end, corrected = resolve_period_years(
+        period_start,
+        period_end,
+        statement_date=summary_statement_date,
+        newest_posting=newest_posting,
+    )
+    if corrected and period_end is not None:
+        warnings.append("EIB: statement period year corrected from the statement/transaction dates")
+        statement_month = statement_month_from_date(period_end)
+        for tx in transactions:
+            tx.statement_month = statement_month
 
     if not transactions:
         warnings.append("No EIB transaction rows matched expected pattern")
