@@ -20,6 +20,18 @@ pip install -r requirements-dev.txt  # includes dev/test extras
 > The backend is run directly (not as an installed CLI tool), so editable-install is unnecessary.
 > `requirements.txt` pins all production dependencies. `requirements-dev.txt` extends it with pytest + httpx.
 
+### Lock files
+
+| File | Contents | Regenerate with |
+|------|----------|-----------------|
+| `requirements.txt` | Production runtime pins, compiled from `pyproject.toml` `[project.dependencies]` | `pip-compile requirements.in --output-file requirements.txt` |
+| `requirements-export.txt` | Extra pins for the optional `[export]` extra (pandas/openpyxl), installed on top of `requirements.txt` | `pip-compile requirements-export.in --output-file requirements-export.txt` |
+| `requirements-dev.txt` | Hand-maintained; extends `requirements.txt` with pytest, httpx, pip-tools, bandit | — |
+
+`deploy/Dockerfile.api` installs from both lock files, so the production image ships
+exactly the versions CI tests and `pip-audit` scans. Regenerate the lock files after
+changing dependencies in `pyproject.toml`, and commit the result.
+
 ## Database
 
 ```bash
