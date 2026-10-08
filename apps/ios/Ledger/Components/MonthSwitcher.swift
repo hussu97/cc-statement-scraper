@@ -12,6 +12,7 @@ struct MonthSwitcher: View {
         HStack(spacing: 0) {
             Button(action: month.goBack) {
                 Image(systemName: "chevron.left")
+                    .foregroundStyle(month.canGoBack ? Palette.accent : Palette.subtle)
                     .frame(width: Metrics.tapMin, height: Metrics.tapMin)
                     .contentShape(Rectangle())
             }
@@ -39,6 +40,7 @@ struct MonthSwitcher: View {
 
             Button(action: month.goForward) {
                 Image(systemName: "chevron.right")
+                    .foregroundStyle(month.canGoForward ? Palette.accent : Palette.subtle)
                     .frame(width: Metrics.tapMin, height: Metrics.tapMin)
                     .contentShape(Rectangle())
             }
@@ -50,7 +52,9 @@ struct MonthSwitcher: View {
         .background(Palette.surface, in: Capsule())
         .overlay(Capsule().stroke(Palette.border, lineWidth: 0.5))
         // Swipe the switcher like a page: left for the next month, right for the previous.
-        .gesture(DragGesture(minimumDistance: 24).onEnded { drag in
+        // High priority so a swipe is not also a tap on the title (the picker);
+        // a tap never reaches 24 pt, so the buttons still get it.
+        .highPriorityGesture(DragGesture(minimumDistance: 24).onEnded { drag in
             guard abs(drag.translation.width) > abs(drag.translation.height) else { return }
             if drag.translation.width < -40 { month.goForward() } else if drag.translation.width > 40 { month.goBack() }
         })

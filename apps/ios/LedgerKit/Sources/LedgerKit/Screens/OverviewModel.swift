@@ -118,8 +118,17 @@ extension Overview {
 
     /// Reference figures under the chip, as the server returned them.
     /// `["Same day last month AED 2,100", "3-month average AED 9,000 a month"]`.
-    public var referenceLines: [String] {
-        var lines = ["Same day last month \(MoneyFormat.aed(spendPrevMonthToDate, fractionDigits: 0))"]
+    /// A completed month shows the whole previous month instead:
+    /// `["August AED 7,400", "3-month average …"]`.
+    public var referenceLines: [String] { referenceLines() }
+
+    public func referenceLines(today: CalendarDay = LedgerDates.today()) -> [String] {
+        let previous = month.adding(months: -1)
+        let first = isCurrentMonth(today: today)
+            ? "Same day last month \(MoneyFormat.aed(spendPrevMonthToDate, fractionDigits: 0))"
+            : "\(previous.year == today.year ? LedgerDates.monthName(previous) : LedgerDates.monthTitle(previous)) "
+                + MoneyFormat.aed(spendPrevMonth, fractionDigits: 0)
+        var lines = [first]
         if spendAvg3m > 0 { lines.append("3-month average \(MoneyFormat.aed(spendAvg3m, fractionDigits: 0)) a month") }
         return lines
     }
