@@ -1,0 +1,35 @@
+{
+  "statement": {
+    "stmt_code": "stm_01hzy3k8w9m2n4p6q8r0s2t4v6", "kind": "statement", "bank_code": "FAB",
+    "account_code": "acc_01hzy3k8w9m2n4p6q8r0s2t4v6", "card_last4s": ["1234", "5678"],
+    "statement_date": "2026-09-25", "period_start": "2026-08-26", "period_end": "2026-09-25", "due_date": "2026-10-20",
+    "opening_balance": "1000.00", "closing_balance": "4210.55", "total_debits": "5120.10", "total_credits": "1909.55",
+    "min_due": "210.53", "credit_limit": "30000.00", "doc_code": "doc_01hzy3k8w9m2n4p6q8r0s2t4v6",
+    "recon_status": "warn",
+    "recon_checks": {"line_count": 3, "sum_debits": "5120.10", "sum_credits": "1909.55", "held_lines": 1,
+                     "sms_coverage": "0.6667", "debits_match": true, "credits_match": true,
+                     "balance_equation": false, "expected_closing": "4210.50", "unmatched_sms": 2}
+  },
+  "debits": {
+    "count": 2, "total": "5120.10",
+    "lines": [
+      {"line_code": "stl_01hzy3k8w9m2n4p6q8r0s2t4a1", "txn_code": "txn_01hzy3k8w9m2n4p6q8r0s2t4a1",
+       "txn_date": "2026-08-28", "posting_date": "2026-08-29", "description": "AMZN MKTP US*2K4QJ71Z0",
+       "merchant_name": "Amazon", "amount_aed": "45.32", "amount_original": "12.34", "currency_original": "USD",
+       "category_code": "cat_01hzy3k8w9m2n4p6q8r0s2t4c1", "kind": "purchase", "card_last4": "1234"},
+      {"line_code": "stl_01hzy3k8w9m2n4p6q8r0s2t4a2", "txn_code": null,
+       "txn_date": "2026-09-02", "posting_date": null, "description": "CARREFOUR MOE DUBAI",
+       "merchant_name": null, "amount_aed": "5074.78", "amount_original": "5074.78", "currency_original": "AED",
+       "category_code": null, "kind": "purchase", "card_last4": "5678"}
+    ]
+  },
+  "credits": {
+    "count": 1, "total": "1909.55",
+    "lines": [
+      {"line_code": "stl_01hzy3k8w9m2n4p6q8r0s2t4a3", "txn_code": "txn_01hzy3k8w9m2n4p6q8r0s2t4a3",
+       "txn_date": "2026-09-10", "posting_date": "2026-09-10", "description": "PAYMENT RECEIVED - THANK YOU",
+       "merchant_name": null, "amount_aed": "1909.55", "amount_original": "1909.55", "currency_original": "AED",
+       "category_code": null, "kind": "payment", "card_last4": "1234"}
+    ]
+  }
+}

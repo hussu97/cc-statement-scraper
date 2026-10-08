@@ -114,7 +114,7 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
     }
     func recurringList(profileCode: String) async throws -> [RecurringCharge] { [] }
     func filterMeta(profileCode: String) async throws -> FilterMeta {
-        FilterMeta(accounts: [], cards: [], categories: [], banks: [],
+        FilterMeta(accounts: [], cards: [], categories: categoryOptions, banks: [],
                    dateRange: FilterMeta.DateRange(min: firstTransactionDay, max: nil))
     }
     func transactions(profileCode: String, query: ActivityQuery, page: PageRequest) async throws -> TransactionPage {
@@ -141,12 +141,57 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
     func setTransactionCategory(txnCode: String, categoryCode: String, applyToMerchant: Bool) async throws {
         lock.withLock { recategorised.append((txnCode, categoryCode, applyToMerchant)) }
     }
-    func uploadStatements(profileCode: String, files: [UploadFile]) async throws -> UploadResponse { .init(uploads: []) }
+    func uploadStatements(profileCode: String, files: [UploadFile]) async throws -> UploadResponse {
+        var items: [UploadResponse.Item] = []
+        for file in files { items += try uploadFile(file).uploads }
+        return UploadResponse(uploads: items)
+    }
     /// Realtime: each subscription gets the next scripted change list, then
     /// ends (a failed or dropped subscription). Past the script it stays open.
     var changeScript: [[String]] = []
     private(set) var subscriptions = 0
     private var openStreams: [AsyncStream<LedgerChange>.Continuation] = []
+    // MARK: Statement detail, spend split, banks, upload timeline
+
+    var detail: StatementDetail?
+    var detailError: LedgerAPIError?
+    var breakdown: SpendBreakdown?
+    private(set) var breakdownCalls: [SpendSplitGrouping] = []
+    var bankRows: [BankInfo] = []
+    var categoryOptions: [FilterMeta.CategoryOption] = []
+    /// `document_events` the initial fetch returns, by doc code.
+    var storedEvents: [String: [DocumentEvent]] = [:]
+    /// Per filename: the upload answer, or the error to throw.
+    var uploadAnswers: [String: Result<UploadResponse.Item, LedgerAPIError>] = [:]
+    private(set) var uploadedFilenames: [String] = []
+    /// Events pushed here reach `documentEventStream` subscribers.
+    let eventFeed = AsyncStream<DocumentEvent>.makeStream()
+
+    func statementDetail(profileCode: String, stmtCode: String) async throws -> StatementDetail {
+        if let detailError { throw detailError }
+        guard let detail else { throw LedgerAPIError.server(status: nil, code: "P0002", message: "unknown statement") }
+        return detail
+    }
+    func spendBreakdown(profileCode: String, from: CalendarDay, to: CalendarDay, groupBy: SpendSplitGrouping,
+                        topN: Int) async throws -> SpendBreakdown {
+        lock.withLock { breakdownCalls.append(groupBy) }
+        guard let breakdown else { throw LedgerAPIError.network("offline") }
+        return breakdown
+    }
+    func banks() async throws -> [BankInfo] { bankRows }
+    func documentEvents(profileCode: String, docCodes: [String]) async throws -> [DocumentEvent] {
+        DocumentEvent.ordered(docCodes.flatMap { storedEvents[$0] ?? [] })
+    }
+    func documentEventStream(profileCode: String) -> AsyncStream<DocumentEvent> { eventFeed.stream }
+    func uploadFile(_ file: UploadFile) throws -> UploadResponse {
+        lock.withLock { uploadedFilenames.append(file.filename) }
+        switch uploadAnswers[file.filename] {
+        case .success(let item)?: return UploadResponse(uploads: [item])
+        case .failure(let error)?: throw error
+        case nil: return UploadResponse(uploads: [])
+        }
+    }
+
     func changes(profileCode: String) -> AsyncStream<LedgerChange> {
         let script: [String]? = lock.withLock {
             defer { subscriptions += 1 }

@@ -190,7 +190,7 @@ private struct CategoryRingCard: View {
             .padding(.horizontal, 22)
             .dynamicTypeSize(...DynamicTypeSize.xxLarge)
         }
-        .accessibilityLabel("Spending by category")
+        .chartAccessibility(.categoryRing(categories, total: total))
     }
 
     private var legend: some View {
@@ -221,12 +221,16 @@ private struct AccountsCard: View {
             ForEach(accounts) { summary in
                 VStack(alignment: .leading, spacing: 6) {
                     AdaptiveRow(alignment: .firstTextBaseline) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(summary.account.title).font(Typography.rowTitle)
-                            if let cards = summary.account.cardsLabel {
-                                Text("\(summary.account.bankCode) \(cards)").font(Typography.caption).foregroundStyle(Palette.muted)
+                        HStack(alignment: .center, spacing: 10) {
+                            BankLogo(bankCode: summary.account.bankCode, size: 28)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(summary.account.title).font(Typography.rowTitle)
+                                if let cards = summary.account.cardsLabel {
+                                    Text(cards).font(Typography.caption).foregroundStyle(Palette.muted)
+                                }
                             }
                         }
+                        .accessibilityElement(children: .combine)
                     } trailing: {
                         VStack(alignment: .trailing, spacing: 2) {
                             if let balance = summary.account.latestStatement?.closingBalance {

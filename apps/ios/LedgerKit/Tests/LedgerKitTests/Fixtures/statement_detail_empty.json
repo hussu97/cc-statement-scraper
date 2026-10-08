@@ -1,0 +1,11 @@
+{
+  "statement": {
+    "stmt_code": "stm_01hzy3k8w9m2n4p6q8r0s2t4v7", "kind": "history_extract", "bank_code": "SIB",
+    "account_code": "acc_01hzy3k8w9m2n4p6q8r0s2t4v7", "card_last4s": [],
+    "statement_date": "2026-09-01", "period_start": null, "period_end": null, "due_date": null,
+    "opening_balance": null, "closing_balance": null, "total_debits": null, "total_credits": null,
+    "min_due": null, "credit_limit": null, "doc_code": null, "recon_status": "n/a", "recon_checks": {}
+  },
+  "debits": {"count": 0, "total": "0.00", "lines": []},
+  "credits": {"count": 0, "total": "0.00", "lines": []}
+}

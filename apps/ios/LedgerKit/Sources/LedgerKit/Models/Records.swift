@@ -130,17 +130,33 @@ public struct SMSIngestResult: Decodable, Sendable, Hashable {
 }
 
 /// Response of the `statements-upload` Edge Function:
-/// `{"uploads": [{"filename", "doc_code", "status": "queued"|"duplicate"}]}`.
+/// `{"uploads": [{"filename", "doc_code", "status": "queued"|"duplicate", "parse_status", "requeued"?}]}`.
+/// `requeued`: a duplicate of a document whose parse failed, queued again.
 public struct UploadResponse: Decodable, Sendable, Hashable {
     public struct Item: Decodable, Sendable, Hashable {
         public let filename: String
         public let docCode: String
         public let status: String
+        public let parseStatus: String?
+        public let requeued: Bool
 
-        public init(filename: String, docCode: String, status: String) {
+        public init(filename: String, docCode: String, status: String, parseStatus: String? = nil, requeued: Bool = false) {
             self.filename = filename
             self.docCode = docCode
             self.status = status
+            self.parseStatus = parseStatus
+            self.requeued = requeued
+        }
+
+        enum CodingKeys: String, CodingKey { case filename, docCode, status, parseStatus, requeued }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            filename = try c.decode(String.self, forKey: .filename)
+            docCode = try c.decode(String.self, forKey: .docCode)
+            status = try c.decode(String.self, forKey: .status)
+            parseStatus = (try? c.decodeIfPresent(String.self, forKey: .parseStatus)) ?? nil
+            requeued = (try? c.decodeIfPresent(Bool.self, forKey: .requeued)) ?? false
         }
     }
     public let uploads: [Item]

@@ -22,11 +22,13 @@ public final class LedgerScreens {
     private let live: LiveUpdates
 
     public init(api: any LedgerAPI, live: LiveUpdates? = nil,
-                today: @escaping @Sendable () -> CalendarDay = { LedgerDates.today() }) {
+                today: @escaping @Sendable () -> CalendarDay = { LedgerDates.today() },
+                pendingUploads: PendingUploads? = nil,
+                flushPending: (@MainActor @Sendable () async -> Int)? = nil) {
         overview = OverviewModel(api: api)
         activity = ActivityModel(api: api)
         insights = InsightsModel(api: api)
-        statements = StatementsModel(api: api)
+        statements = StatementsModel(api: api, pendingUploads: pendingUploads, flushPending: flushPending)
         review = ReviewModel(api: api)
         month = MonthSelection(today: today)
         self.live = live ?? LiveUpdates(api: api)

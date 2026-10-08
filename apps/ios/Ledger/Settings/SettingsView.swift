@@ -132,13 +132,17 @@ struct SettingsView: View {
 
 private struct ParkedRow: View {
     let message: ParkedMessage
+    @Environment(BankCatalog.self) private var banks: BankCatalog?
     let target: SMSTarget?
     let retry: () -> Void
     let delete: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(message.title()).font(Typography.rowTitle)
+            HStack(spacing: 8) {
+                if let bank = banks?.bankCode(forSender: message.sender) { BankLogo(bankCode: bank, size: 18) }
+                Text(message.title()).font(Typography.rowTitle)
+            }
             Text(message.preview).font(Typography.caption).foregroundStyle(Palette.muted).lineLimit(2)
             Text(message.reason).font(Typography.caption).foregroundStyle(Palette.danger)
             HStack {

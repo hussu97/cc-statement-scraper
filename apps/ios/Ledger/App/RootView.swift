@@ -67,6 +67,8 @@ struct MainTabs: View {
                 NavigationStack { SettingsView(model: model) }
             }
         }
+        .environment(model.banks)
+        .environment(model.spendSplit)
     }
 }
 

@@ -40,6 +40,10 @@ public final class AppModel {
     /// Overview, Activity, Insights, Statements and Review for the selected ledger.
     public let screens: LedgerScreens
     public let settings: SettingsModel
+    /// Bank names and logos for every screen (environment object).
+    public let banks: BankCatalog
+    /// Insights' Monthly spend split (environment object).
+    public let spendSplit: SpendSplitModel
 
     private var lastPhase: SessionStore.Phase = .restoring
 
@@ -47,7 +51,10 @@ public final class AppModel {
         self.services = services
         session = SessionStore(client: services.client, storage: services.sessionStorage)
         profiles = ProfileStore(api: services.api, selection: services.selection, smsTargets: services.smsTargets)
-        screens = LedgerScreens(api: services.api)
+        screens = LedgerScreens(api: services.api, pendingUploads: services.pendingUploads,
+                                flushPending: { await services.flushPendingUploads() })
+        banks = BankCatalog(api: services.api, supabaseURL: services.config.supabaseURL)
+        spendSplit = SpendSplitModel(api: services.api)
         settings = SettingsModel(outbox: services.outbox, intake: services.smsIntake(), log: services.captureLog)
     }
 
@@ -90,7 +97,9 @@ public final class AppModel {
     /// Points every tab at the profile (clearing the previous ledger's data
     /// first) and follows Realtime changes.
     public func profileSelected(_ code: String) async {
+        async let logos: Void = banks.refresh()
         await screens.select(code)
+        await logos
     }
 
     /// The app came to the foreground: send anything the intent or the Share

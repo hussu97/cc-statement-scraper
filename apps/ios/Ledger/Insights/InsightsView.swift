@@ -20,7 +20,8 @@ struct InsightsView: View {
             }
 
             StateContainer(state: model.state, retry: reload) { content in
-                TrendCard(points: content.trend)
+                let range = InsightsModel.range(for: model.period, month: month.requestMonth)
+                SpendSplitCard(trend: content.trend, from: range.from, to: range.to, profileCode: profileCode)
                 if !content.budgets.isEmpty { BudgetsCard(budgets: content.budgets, scope: model.budgetsScope()) }
                 CategoriesCard(categories: content.categories)
                 MerchantsCard(merchants: content.merchants)
@@ -40,37 +41,6 @@ struct InsightsView: View {
     }
 
     private func reload() { Task { await model.load(profileCode: profileCode, month: month.requestMonth) } }
-}
-
-private struct TrendCard: View {
-    let points: [SpendPoint]
-
-    var body: some View {
-        Card {
-            SectionHeader(title: "Monthly spend")
-            if points.isEmpty {
-                Text("No spending in this period.").font(Typography.rowMeta).foregroundStyle(Palette.muted)
-            } else {
-                Chart(points) { point in
-                    BarMark(x: .value("Month", point.monthLabel),
-                            y: .value("AED", point.amount.chartValue))
-                        .foregroundStyle(Palette.accent)
-                        .cornerRadius(3)
-                }
-                .chartYAxis {
-                    AxisMarks { value in
-                        AxisGridLine().foregroundStyle(ChartPalette.grid)
-                        AxisValueLabel {
-                            if let v = value.as(Double.self) {
-                                Text(MoneyFormat.compact(Decimal(Int(v))))
-                            }
-                        }
-                    }
-                }
-                .frame(height: 180)
-            }
-        }
-    }
 }
 
 private struct CategoriesCard: View {

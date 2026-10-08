@@ -1,0 +1,11 @@
+{
+  "group_by": "category", "total": "860.40",
+  "months": ["2026-10"],
+  "groups": [
+    {"key": "cat_01hzy3k8w9m2n4p6q8r0s2t4c1", "label": "Groceries", "color_token": "cat-3", "logo_path": null, "total": "600.40", "share": "0.6978"},
+    {"key": "__uncategorized__", "label": "Uncategorized", "color_token": null, "logo_path": null, "total": "260.00", "share": "0.3022"}
+  ],
+  "series": [
+    {"month": "2026-10", "total": "860.40", "values": {"cat_01hzy3k8w9m2n4p6q8r0s2t4c1": "600.40", "__uncategorized__": "260.00"}}
+  ]
+}

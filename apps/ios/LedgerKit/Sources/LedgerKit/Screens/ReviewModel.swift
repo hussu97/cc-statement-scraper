@@ -13,6 +13,16 @@ public struct ReviewItem: Sendable, Hashable, Identifiable {
     public let options: [Option]
     /// Shown when the phone offers only "Dismiss" for this kind of review.
     public let note: String?
+    /// The bank the subject belongs to, drawn as its logo beside `subjectBody`.
+    public var bankCode: String? = nil
+
+    /// `subject` without the leading bank code the logo replaces:
+    /// `"•9208 · AED 46.00 · VOX CINEMAS"`. VoiceOver reads the logo's bank name first.
+    public var subjectBody: String {
+        guard let bankCode, subject.hasPrefix(bankCode) else { return subject }
+        let rest = subject.dropFirst(bankCode.count).drop { $0 == " " }
+        return rest.isEmpty ? subject : String(rest)
+    }
 
     public struct Option: Sendable, Hashable, Identifiable {
         public var id: String { label }
@@ -128,7 +138,11 @@ public enum ReviewPresentation {
             note = "More options for this are on the web."
         }
         options.append(.init(label: "Dismiss", action: .dismiss))
-        return ReviewItem(review: review, subject: subject, subjectDetail: detail, options: options, note: note)
+        let bank = inbox.sms[review.subjectCode]?.bankCode
+            ?? (inbox.lines[review.subjectCode] == nil && inbox.transactions[review.subjectCode] == nil
+                ? review.candidates.first?.bankCode : nil)
+        return ReviewItem(review: review, subject: subject, subjectDetail: detail, options: options, note: note,
+                          bankCode: bank)
     }
 
     static func describeSubject(_ review: MatchReview, inbox: ReviewInbox) -> (String, String?) {

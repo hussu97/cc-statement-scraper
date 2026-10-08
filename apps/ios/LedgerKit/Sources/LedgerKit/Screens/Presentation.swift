@@ -126,15 +126,8 @@ public struct ReconChip: Sendable, Hashable, Identifiable {
     public let tone: Tone
 
     public static func chips(for cycle: StatementCycle) -> [ReconChip] {
-        var chips: [ReconChip] = []
-        switch cycle.reconStatus {
-        case "ok": chips.append(.init(label: "Reconciled", tone: .positive))
-        case "warn": chips.append(.init(label: "Check", tone: .warn))
-        case "fail": chips.append(.init(label: "Mismatch", tone: .danger))
-        // A history extract has no totals: nothing to reconcile (DP-08). Neutral, not an error.
-        case "n/a": chips.append(.init(label: "Nothing to reconcile", tone: .neutral))
-        default: chips.append(.init(label: "Not reconciled", tone: .neutral))
-        }
+        let status = ReconPresentation.status(cycle.reconStatus)
+        var chips: [ReconChip] = [.init(label: status.label, tone: status.tone)]
         guard let checks = cycle.reconChecks else { return chips }
         if checks.debitsMatch == false { chips.append(.init(label: "Debits differ", tone: .danger)) }
         if checks.creditsMatch == false { chips.append(.init(label: "Credits differ", tone: .danger)) }

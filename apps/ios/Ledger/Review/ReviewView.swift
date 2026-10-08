@@ -55,7 +55,11 @@ private struct ReviewGroupCard: View {
             ForEach(group.items) { item in
                 Divider().overlay(Palette.border)
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(item.subject).font(Typography.rowTitle).foregroundStyle(Palette.ink)
+                    HStack(alignment: .center, spacing: 8) {
+                        if let bank = item.bankCode { BankLogo(bankCode: bank, size: 22) }
+                        Text(item.subjectBody).font(Typography.rowTitle).foregroundStyle(Palette.ink)
+                    }
+                    .accessibilityElement(children: .combine)
                     if let detail = item.subjectDetail {
                         Text(detail).font(Typography.caption).foregroundStyle(Palette.muted)
                     }
