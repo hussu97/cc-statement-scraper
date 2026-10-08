@@ -112,10 +112,22 @@ supabase db push                    # applies supabase/migrations/* in order
   - enable the extensions `pg_trgm`, `pgmq`, `pg_cron` and `pg_net`
   - create the private Storage bucket **`statements`** (25 MB, `application/pdf`)
   - create the pgmq queues (`parse_document`, `llm_categorize`, `sms_fallback`, each with a
-    `_dlq`)
+    `_dlq`, and `storage_cleanup` for PDFs of a deleted profile)
   - schedule the pg_cron jobs (§2.6)
   - add the Realtime publication
 - `supabase/seed.sql` is **local only**. `db push` never runs it.
+- **`public.rls_auto_enable()` (X-10, decided: leave it).** Production carries Supabase's
+  `rls_auto_enable()` helper (and possibly its `ensure_rls` event trigger), which the local stack
+  and CI don't have. It only turns RLS on for new tables, which every v2 migration does anyway,
+  so it is harmless. Leave it; don't quarantine or drop it. Drift checks should ignore it.
+- **Migrations are never squashed (DB-41, decided).** All `20261008*` migrations are in
+  production, so they stay as they are, including the stale `…900_legacy_import.sql` file name
+  in the comment at the top of `20261008000000_quarantine_legacy.sql` (the file is
+  `20261008000950_legacy_import.sql`). The final definition of a redefined function is listed in
+  docs/audit/01-database.md, Appendix A.
+- **Tests that pin "today".** `ingest_parsed_document` rejects statements dated more than 31
+  days ahead. pgTAP suites with fixed future dates set `ledger.test_today`; nothing in
+  production sets it.
 
 The **Deploy Supabase** workflow (§9) does the same from GitHub.
 
@@ -239,7 +251,12 @@ curl -s -X POST https://nkmylznisjcnmqbxosey.supabase.co/functions/v1/worker \
 Check job health with `select jobname, schedule, active from cron.job;` and
 `select * from cron.job_run_details order by start_time desc limit 20;`.
 `ledger-legacy-choices` removes itself (above); `select * from private.legacy_unmatched_choices();`
-lists staged choices that never met a v2 line.
+lists staged choices that never met a v2 line, and
+`select * from private.legacy_unresolved_category_names();` lists legacy category names that
+match no v2 category even after `private.legacy_category_aliases` (`Entretainment` →
+`Entertainment` is built in; add a row there for any other typo, then the cron applies it).
+Legacy fingerprints collide for genuine same-day repeat purchases, so a fingerprint-keyed choice
+can land on both lines of such a pair (DP-21, accepted: v2 keeps every row).
 
 **Run-history growth.** pg_cron logs every run in `cron.job_run_details` (about 1.6k rows a day;
 the every-minute worker kick alone is 1,440). `ledger-cron-history-purge` (migration
@@ -767,14 +784,23 @@ history):
   as an owner (or from Cards & Statements → documents in the web app). Re-ingest is in place, so codes, categories and
   notes survive.
 - **DLQ:** inspect with `select msg_id, message from pgmq.q_parse_document_dlq;` (`dlq_reason`
-  is inside `message`). Fix the cause, then:
-  - For documents, `requeue_documents` re-queues them.
-  - For other queues, use
-    `select pgmq.send('<queue>', message - 'dlq_reason' - 'dlq_at') from pgmq.q_<queue>_dlq where msg_id = <id>;`
-    then `select pgmq.delete('<queue>_dlq', <id>);`.
+  is inside `message`). Fix the cause, then (service role, e.g. the SQL editor):
+  - `select public.requeue_dlq('<queue>', 100);` moves messages back with a fresh attempt
+    count; for `parse_document` it also re-opens the failed documents. (`requeue_documents`
+    still works per profile.)
+  - `select public.drain_dlq('<queue>');` deletes them instead.
+  - `<queue>` is `parse_document`, `llm_categorize` or `sms_fallback`.
+- **Batch job errors:** `select * from private.job_errors order by created_at desc limit 50;`
+  (per-profile failures of `nightly`, `enqueue_llm_categorize`, `recategorize_stale`,
+  `reestimate_pending_fx`; kept 30 days, counted in `ops_health.job_errors_24h`).
+- **Promote an LLM SMS template:** an approved proposal parses only its own profile's messages.
+  To make it global: `select public.promote_sms_template('<tpl_…>');`.
+- **Delete a profile:** an owner calls `select public.delete_profile('<prf_…>', '<profile key>');`.
+  Vault secrets go with it; its PDFs are queued on `storage_cleanup` (`{bucket, paths[]}`) for
+  the worker to remove through the Storage API.
 - **New SMS format:** add a template row in a guarded content migration (CLAUDE.md §1.9) with
-  `examples`. The validation trigger proves it parses, and unparsed messages re-run
-  automatically. Or approve an LLM proposal in the Review inbox.
+  at least one `examples` entry (required). The validation trigger proves it parses, and the
+  unparsed messages from its senders re-run automatically. Or approve an LLM proposal in the Review inbox.
 - **Add a member:** owner adds the email in Settings → Members, then Dashboard → Authentication
   → Users → Invite user (§2.2). Sign-ups stay off.
 - **Secret rotation:**

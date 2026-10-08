@@ -324,3 +324,8 @@ Fixed on `ledger-v2` (uncommitted), 2026-10-08. Verified with `pnpm --filter @le
 Statements up to 5000 cycles) and WEB-07 is fixed ("Retry AI" via `retry_sms_fallback`; "Not a card
 transaction" now sends exactly `{not_a_transaction: true}`). Everything still open, including the
 deferred P2/P3 items and the "Missing analytics" recommendations, is in [BACKLOG.md](BACKLOG.md).
+
+**SQL side of WEB-14 (2026-10-09):** `public.reject_merchant_suggestion(p_profile_code,
+p_merchant_code)` deletes the LLM suggestion and records `merchant_category_skips.reason =
+'rejected'`, which `enqueue_llm_categorize` never re-queues (`20261009000200`). The Merchants tab
+still has to call it instead of deleting the row.
