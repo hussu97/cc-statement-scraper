@@ -10,13 +10,13 @@ const VARIANTS: Record<Variant, string> = {
   secondary: "bg-surface text-ink border border-border hover:border-border-strong hover:bg-surface-2",
   ghost: "bg-transparent text-ink-2 border border-transparent hover:bg-surface-2 hover:text-ink",
   danger: "bg-transparent text-danger border border-border hover:bg-danger-soft hover:border-danger",
-  link: "bg-transparent text-accent border-0 underline-offset-4 hover:underline px-0 h-auto",
+  link: "tap bg-transparent text-accent border-0 underline-offset-4 hover:underline px-0 h-auto",
 };
 const SIZES: Record<Size, string> = {
-  sm: "h-8 px-3 text-[13px] gap-1.5 rounded-sm",
+  sm: "tap h-8 px-3 text-[13px] gap-1.5 rounded-sm",
   md: "h-10 px-4 text-sm gap-2 rounded-md",
   icon: "h-10 w-10 rounded-md justify-center",
-  "icon-sm": "h-8 w-8 rounded-sm justify-center",
+  "icon-sm": "tap h-8 w-8 rounded-sm justify-center",
 };
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {

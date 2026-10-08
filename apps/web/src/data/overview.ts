@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, type Tables } from "@/lib/supabase";
 import { keys } from "./keys";
 import { must, mustList } from "./api";
+import { todayDubai } from "@/lib/dates";
 
 export interface OverviewCategory {
   category_code: string | null;
@@ -88,10 +89,56 @@ export function useInsights(profileCode: string) {
           .select("*")
           .eq("profile_code", profileCode)
           .is("dismissed_at", null)
+          // Expired insights hide at once, not after the nightly cleanup (WEB-45).
+          .or(`valid_until.is.null,valid_until.gte.${todayDubai()}`)
           .order("created_at", { ascending: false })
           .limit(20),
       ),
   });
+}
+
+/** Where an insight card leads. `search` is the target screen's URL search. */
+export type InsightTarget =
+  | { to: "/budgets"; label: string }
+  | { to: "/review"; label: string }
+  | { to: "/cards"; search: { tab: "statements" }; label: string }
+  | { to: "/insights"; search: { tab?: string }; label: string }
+  | { to: "/activity"; search: { category?: string; txn?: string }; label: string };
+
+/**
+ * Map an insight to the screen that answers it (WEB-25). Pure, unit-tested;
+ * null for an unknown kind, so a new server kind never links somewhere wrong.
+ */
+export function insightTarget(i: Pick<Insight, "kind" | "data">): InsightTarget | null {
+  const data = (i.data && typeof i.data === "object" && !Array.isArray(i.data) ? i.data : {}) as Record<string, unknown>;
+  const str = (k: string) => (typeof data[k] === "string" && /^[a-z]{3}_[0-9a-z]{26}$/.test(data[k] as string) ? (data[k] as string) : undefined);
+  switch (i.kind) {
+    case "budget_risk":
+      return { to: "/budgets", label: "See budgets" };
+    case "statement_due":
+      return { to: "/cards", search: { tab: "statements" }, label: "See statements" };
+    case "price_change":
+    case "new_recurring":
+      return { to: "/insights", search: { tab: "subscriptions" }, label: "See subscriptions" };
+    case "uncategorized":
+      return { to: "/activity", search: { category: "none" }, label: "Categorise them" };
+    case "category_spike": {
+      const category = str("category_code");
+      return category
+        ? { to: "/activity", search: { category }, label: "See transactions" }
+        : { to: "/insights", search: { tab: "categories" }, label: "See categories" };
+    }
+    case "large_transaction": {
+      const txn = str("txn_code");
+      return txn ? { to: "/activity", search: { txn }, label: "See transaction" } : { to: "/activity", search: {}, label: "See activity" };
+    }
+    case "review_backlog":
+      return { to: "/review", label: "Open review" };
+    case "spend_pace":
+      return { to: "/insights", search: {}, label: "See trends" };
+    default:
+      return null;
+  }
 }
 
 /** Severity order for display: alerts first. */

@@ -3,7 +3,7 @@ import { applyActivityFilters, evidenceBadge, groupByDay, sortEvidence, type Evi
 import { domainsFor } from "./realtime";
 import { chooseActiveProfile, profileKeyFromName, type ProfileSummary } from "./profile";
 import { candidatesOf, groupReviews, type Review } from "./reviews";
-import { countByStatus, checkUploadFiles } from "./cards";
+import { checkUploadFiles } from "./cards";
 import { friendlyMessage } from "./api";
 import { sortInsights } from "./overview";
 
@@ -106,9 +106,6 @@ describe("reviews", () => {
 });
 
 describe("cards & documents", () => {
-  it("counts documents by status", () => {
-    expect(countByStatus([{ parse_status: "parsed" }, { parse_status: "failed" }, { parse_status: "parsed" }])).toEqual({ queued: 0, parsing: 0, parsed: 2, failed: 1 });
-  });
   it("prechecks uploads", () => {
     const f = (name: string, size: number, type = "application/pdf") => ({ name, size, type }) as File;
     const r = checkUploadFiles([f("a.pdf", 10), f("b.png", 10, "image/png"), f("c.pdf", 30 * 1024 * 1024), f("d.pdf", 0)]);

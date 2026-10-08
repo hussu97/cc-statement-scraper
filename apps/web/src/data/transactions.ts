@@ -3,7 +3,7 @@ import { supabase, type Views } from "@/lib/supabase";
 import { ilikePattern, UNCATEGORIZED, type ActivitySearch } from "@/lib/activity-filters";
 import { DEFAULT_PAGE_SIZE, pageRange } from "@/lib/pagination";
 import { keys, LEDGER_DOMAINS } from "./keys";
-import { must, mustList, toApiError } from "./api";
+import { fetchPage, must, mustList } from "./api";
 
 export type TxnRow = Views<"v_transactions">;
 
@@ -40,14 +40,16 @@ export function useTransactions(profileCode: string, search: ActivitySearch) {
     queryFn: async () => {
       const size = search.size ?? DEFAULT_PAGE_SIZE;
       const { from, to } = pageRange(search.page ?? 1, size);
-      const base = supabase.from("v_transactions").select("*", { count: "exact" }).eq("profile_code", profileCode);
-      const res = await applyActivityFilters(base, search)
-        .order("txn_date", { ascending: false })
-        .order("txn_at", { ascending: false, nullsFirst: false })
-        .order("txn_code", { ascending: false })
-        .range(from, to);
-      if (res.error) throw toApiError(res.error, res.status);
-      return { rows: res.data ?? [], total: res.count ?? 0 };
+      // An out-of-range page returns { rows: [], total } and the screen clamps (WEB-01).
+      return fetchPage<TxnRow>(
+        () =>
+          applyActivityFilters(supabase.from("v_transactions").select("*", { count: "exact" }).eq("profile_code", profileCode), search)
+            .order("txn_date", { ascending: false })
+            .order("txn_at", { ascending: false, nullsFirst: false })
+            .order("txn_code", { ascending: false })
+            .range(from, to),
+        () => applyActivityFilters(supabase.from("v_transactions").select("txn_code", { count: "exact", head: true }).eq("profile_code", profileCode), search),
+      );
     },
   });
 }

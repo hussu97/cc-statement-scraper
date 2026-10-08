@@ -100,3 +100,50 @@ export function scrubEvent<E extends ScrubbableEvent>(event: E): E {
 export function isSafeTagValue(v: unknown): boolean {
   return typeof v === "string" && /^([a-z]{3}_[0-9a-z]{26}|[A-Za-z0-9_.:-]{1,64})$/.test(v) && !v.includes("@");
 }
+
+// ── spans (WEB-03) ──────────────────────────────────────────────────────────
+// SDK v11 streams spans (traceLifecycle "stream"), which bypass beforeSend and
+// beforeSendTransaction. Router and supabase-js spans carry URLs (with ?q=
+// search text), filter values (`db.query`) and request bodies (`db.body`), so
+// every span goes through scrubSpan via `beforeSendSpan`.
+
+/** Span attribute keys (or their last dotted segment) whose values are always removed. */
+const SENSITIVE_ATTR = /(^|\.)(query|body|request_body|response_body|search|statement|text|cookies?|headers?|authorization|x-profile-key|password|secret|token|email|sms_body|message_body)$/i;
+
+/** Replace every query-string value: "/activity?q=cafe&page=2" → "/activity?q=[Filtered]&page=[Filtered]". */
+export function stripQueryValues(value: string): string {
+  return value.replace(/([?&][^=&#\s]+=)[^&#\s]*/g, `$1${FILTERED}`);
+}
+
+function scrubAttrValue(key: string, value: unknown): unknown {
+  if (SENSITIVE_ATTR.test(key) || SENSITIVE_KEY.test(key)) return FILTERED;
+  if (typeof value === "string") return stripQueryValues(scrubString(value));
+  if (Array.isArray(value)) return value.map((v) => (typeof v === "string" ? stripQueryValues(scrubString(v)) : v));
+  if (value && typeof value === "object" && "value" in value) {
+    // Typed attribute object { value, type, unit }.
+    const obj = value as { value: unknown };
+    return { ...obj, value: scrubAttrValue("", obj.value) };
+  }
+  return value;
+}
+
+export function scrubAttributes<A extends Record<string, unknown>>(attrs: A | undefined): A | undefined {
+  if (!attrs) return attrs;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(attrs)) out[k] = scrubAttrValue(k, v);
+  return out as A;
+}
+
+interface ScrubbableSpan {
+  name: string;
+  attributes?: Record<string, unknown>;
+  links?: { attributes?: Record<string, unknown> }[];
+}
+
+/** beforeSendSpan: returns a copy with PII removed from the name and attributes. */
+export function scrubSpan<S extends ScrubbableSpan>(span: S): S {
+  const out: S = { ...span, name: stripQueryValues(scrubString(span.name ?? "")) };
+  if (span.attributes) out.attributes = scrubAttributes(span.attributes);
+  if (span.links) out.links = span.links.map((l) => ({ ...l, attributes: scrubAttributes(l.attributes) }));
+  return out;
+}

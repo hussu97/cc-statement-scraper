@@ -10,7 +10,8 @@ import { Segmented } from "@/components/ui/primitives";
 import { EmptyState, LoadingBlock, QueryView } from "@/components/ui/states";
 import { AXIS_TICK, CURSOR_FILL, GRID_STROKE, MoneyTooltip, axisMoney } from "@/components/charts/chart-tooltip";
 import { seriesFill, seriesToken } from "@/components/charts/palette";
-import { bucketLabel, defaultGrain, rangeLabel } from "./labels";
+import { axisTickInterval, bucketLabel, defaultGrain, rangeLabel } from "./labels";
+import { useMediaQuery } from "@/lib/hooks";
 
 const GROUPS: { value: SpendGroup; label: string }[] = [
   { value: "none", label: "Total" },
@@ -75,6 +76,7 @@ function TrendsChart({ rows, grain, byCategory }: { rows: SpendSeriesRow[]; grai
   );
   const labelOf = useMemo(() => new Map(series.map((s) => [s.key, s.label])), [series]);
   const last = series.length - 1;
+  const wide = useMediaQuery("(min-width: 768px)");
 
   return (
     <div className="px-2 pb-4">
@@ -88,7 +90,7 @@ function TrendsChart({ rows, grain, byCategory }: { rows: SpendSeriesRow[]; grai
               tick={AXIS_TICK}
               axisLine={false}
               tickLine={false}
-              minTickGap={18}
+              interval={axisTickInterval(pivot.rows.length, wide ? 14 : 7)}
             />
             <YAxis tickFormatter={axisMoney} tick={AXIS_TICK} axisLine={false} tickLine={false} width={44} />
             <Tooltip

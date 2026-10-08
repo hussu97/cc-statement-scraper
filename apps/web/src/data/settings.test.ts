@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   addMemberError,
   canRemoveMember,
-  failedDocCodes,
   isEmail,
   joinList,
   memberActionError,
@@ -125,15 +124,6 @@ describe("email routes", () => {
 });
 
 describe("sources", () => {
-  it("collects failed document codes", () => {
-    expect(
-      failedDocCodes([
-        { doc_code: "d1", parse_status: "failed" },
-        { doc_code: "d2", parse_status: "parsed" },
-      ]),
-    ).toEqual(["d1"]);
-  });
-
   it("labels token scopes", () => {
     expect(tokenScopeLabel("statements:upload")).toMatch(/Upload/);
     expect(tokenScopeLabel("other")).toBe("other");

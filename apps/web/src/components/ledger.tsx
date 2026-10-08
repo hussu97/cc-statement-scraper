@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Check, ChevronDown, MessageSquareText, FileText, Layers, CircleDashed, Search, Tag } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { formatMoney, formatTxnAmount, type MoneyInput } from "@/lib/money";
+import { displayAmount, formatMoney, formatTxnAmount, type MoneyInput, type TxnAmountFields } from "@/lib/money";
 import { Popover, PopoverContent, PopoverTrigger, Checkbox, Tooltip } from "./ui/primitives";
 import { Badge, Dot, type Tone } from "./ui/display";
 import { orderCategories } from "@/data/rules";
@@ -9,6 +9,37 @@ import { orderCategories } from "@/data/rules";
 export function Money({ value, currency = "AED", direction, className, signed, compact }: { value: MoneyInput; currency?: string; direction?: string | null; className?: string; signed?: boolean; compact?: boolean }) {
   const text = direction ? formatTxnAmount(value, direction, currency) : formatMoney(value, { currency, signed, compact });
   return <span className={cn("tabular whitespace-nowrap", direction === "credit" && "text-positive", className)}>{text}</span>;
+}
+
+/**
+ * A transaction amount: AED when the server has an AED figure (with the
+ * original foreign amount underneath), otherwise the original currency with an
+ * "awaiting FX" hint. Never a foreign amount labelled AED (WEB-05).
+ */
+export function TxnAmount({
+  t,
+  className,
+  align = "end",
+  showOriginal = true,
+}: {
+  t: TxnAmountFields & { direction?: string | null };
+  className?: string;
+  align?: "start" | "end";
+  showOriginal?: boolean;
+}) {
+  const a = displayAmount(t);
+  return (
+    <span className={cn("inline-flex flex-col", align === "end" ? "items-end text-right" : "items-start")}>
+      <Money value={a.value} currency={a.currency} direction={t.direction} className={className} />
+      {a.awaitingFx ? (
+        <Tooltip content="No exchange rate yet. The AED amount appears once a rate or the statement arrives.">
+          <span className="text-[11px] text-warn">awaiting FX</span>
+        </Tooltip>
+      ) : showOriginal && a.original ? (
+        <span className="tabular text-[11px] text-muted">{formatMoney(a.original.value, { currency: a.original.currency })}</span>
+      ) : null}
+    </span>
+  );
 }
 
 /** Hero figure: small currency code + large Fraunces numerals. */
@@ -107,7 +138,7 @@ export function CategoryPicker({
         <button
           type="button"
           className={cn(
-            "inline-flex max-w-full items-center gap-1.5 rounded-pill border border-transparent px-2 py-0.5 text-[12px] transition-colors hover:border-border hover:bg-surface-2 disabled:pointer-events-none",
+            "tap inline-flex max-w-full items-center gap-1.5 rounded-pill border border-transparent px-2 py-0.5 text-[12px] transition-colors hover:border-border hover:bg-surface-2 disabled:pointer-events-none",
             value ? "text-ink-2" : "text-subtle italic",
             triggerClassName,
           )}

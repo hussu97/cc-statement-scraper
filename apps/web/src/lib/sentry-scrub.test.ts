@@ -43,3 +43,32 @@ describe("sentry scrubber", () => {
     expect(isSafeTagValue("Your card was used for AED 50")).toBe(false);
   });
 });
+
+describe("span scrubber", () => {
+  it("filters query values, bodies and secrets in span names, attributes and links", async () => {
+    const { scrubSpan, stripQueryValues } = await import("./sentry-scrub");
+    expect(stripQueryValues("/activity?q=cafe&page=2#x")).toBe("/activity?q=[Filtered]&page=[Filtered]#x");
+    const out = scrubSpan({
+      name: "from(sms_messages) for demo@ledger.local",
+      attributes: {
+        "db.table": "sms_messages",
+        "db.query": ["eq(sms_code, sms_x)"],
+        "db.body": { body: "Your card was used" },
+        "sentry.op": "db.select",
+        "http.url": { value: "https://x.test/rest/v1/t?apikey=k&select=*", type: "string" },
+        count: 3,
+      },
+      links: [{ attributes: { "url.query": "q=cafe" } }],
+    });
+    expect(out.name).toBe("from(sms_messages) for [email]");
+    expect(out.attributes).toEqual({
+      "db.table": "sms_messages",
+      "db.query": "[Filtered]",
+      "db.body": "[Filtered]",
+      "sentry.op": "db.select",
+      "http.url": { value: "https://x.test/rest/v1/t?apikey=[Filtered]&select=[Filtered]", type: "string" },
+      count: 3,
+    });
+    expect(out.links).toEqual([{ attributes: { "url.query": "[Filtered]" } }]);
+  });
+});

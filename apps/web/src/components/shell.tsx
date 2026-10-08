@@ -19,10 +19,11 @@ import {
   Check,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { formatBadgeCount } from "@/lib/money";
 import { useAuth, signOut } from "@/data/auth";
 import { useProfileContext } from "@/data/profile";
 import { useRealtimeInvalidation } from "@/data/realtime";
-import { useOpenReviews } from "@/data/reviews";
+import { useOpenReviewCount } from "@/data/reviews";
 import { applyTheme, readTheme, type ThemePref } from "@/lib/theme";
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger, Segmented } from "./ui/primitives";
 import { Sheet } from "./ui/dialog";
@@ -36,8 +37,8 @@ interface NavItem {
 }
 
 function useNav(profileCode: string | null): NavItem[] {
-  const reviews = useOpenReviews(profileCode ?? "");
-  const open = profileCode ? (reviews.data?.length ?? 0) : 0;
+  const reviews = useOpenReviewCount(profileCode);
+  const open = profileCode ? (reviews.data ?? 0) : 0;
   return [
     { to: "/", label: "Overview", icon: <LayoutGrid /> },
     { to: "/activity", label: "Activity", icon: <ReceiptText /> },
@@ -150,7 +151,7 @@ function Sidebar({ nav }: { nav: NavItem[] }) {
           >
             <span className={cn(isActive(n.to) ? "text-accent" : "text-subtle group-hover:text-ink-2")}>{n.icon}</span>
             <span className="flex-1">{n.label}</span>
-            {n.badge ? <span className="tabular rounded-pill bg-accent px-1.5 text-[11px] leading-[18px] font-medium text-accent-ink">{n.badge}</span> : null}
+            {n.badge ? <span className="tabular rounded-pill bg-accent px-1.5 text-[11px] leading-[18px] font-medium text-accent-ink">{formatBadgeCount(n.badge)}</span> : null}
           </Link>
         ))}
       </nav>
@@ -162,7 +163,8 @@ function Sidebar({ nav }: { nav: NavItem[] }) {
   );
 }
 
-const MOBILE_TABS = ["/", "/activity", "/insights", "/cards"];
+/** Bottom-bar tabs on mobile; Review (the daily action surface) is one of them, Cards moves to More. */
+const MOBILE_TABS = ["/", "/activity", "/insights", "/review"];
 
 function MobileNav({ nav }: { nav: NavItem[] }) {
   const isActive = useIsActive();
@@ -188,10 +190,16 @@ function MobileNav({ nav }: { nav: NavItem[] }) {
             key={n.to}
             to={n.to}
             aria-current={isActive(n.to) ? "page" : undefined}
-            className={cn("flex h-14 flex-col items-center justify-center gap-1 text-[10.5px] [&_svg]:size-5", isActive(n.to) ? "text-accent" : "text-muted")}
+            aria-label={n.badge ? `${n.label}, ${n.badge} open` : undefined}
+            className={cn("relative flex h-14 flex-col items-center justify-center gap-1 text-[10.5px] [&_svg]:size-5", isActive(n.to) ? "text-accent" : "text-muted")}
           >
             {n.icon}
             <span>{n.label.split(" ")[0]}</span>
+            {n.badge ? (
+              <span aria-hidden className="tabular absolute top-1.5 left-1/2 ml-1.5 min-w-[18px] rounded-pill bg-accent px-1 text-center text-[10.5px] leading-[18px] font-medium text-accent-ink">
+                {formatBadgeCount(n.badge)}
+              </span>
+            ) : null}
           </Link>
         ))}
         <button
@@ -210,7 +218,7 @@ function MobileNav({ nav }: { nav: NavItem[] }) {
             <Link key={n.to} to={n.to} onClick={() => setMore(false)} className="flex h-11 items-center gap-3 rounded-md px-2 text-sm text-ink hover:bg-surface-2 [&_svg]:size-4 [&_svg]:text-subtle">
               {n.icon}
               <span className="flex-1">{n.label}</span>
-              {n.badge ? <span className="tabular rounded-pill bg-accent px-1.5 text-[11px] text-accent-ink">{n.badge}</span> : null}
+              {n.badge ? <span className="tabular rounded-pill bg-accent px-1.5 text-[11px] text-accent-ink">{formatBadgeCount(n.badge)}</span> : null}
             </Link>
           ))}
         </nav>

@@ -23,3 +23,12 @@ export function pageCount(total: number | null | undefined, size: number): numbe
   if (!total || total <= 0) return 1;
   return Math.ceil(total / size);
 }
+
+/**
+ * The page to move to when `page` is past the end of `total` rows (WEB-01),
+ * or null when `page` is valid. An empty result always clamps to page 1.
+ */
+export function clampPage(page: number, total: number, size: number): number | null {
+  const last = pageCount(total, size);
+  return page > last ? last : null;
+}

@@ -65,6 +65,16 @@ export function bucketLabel(bucket: string, grain: Grain, long = false): string 
 }
 
 /** Years offered by the year-over-year selector, newest first. */
+/**
+ * Recharts `interval` for a category axis: show every label when they fit
+ * (`maxLabels`), else every Nth, evenly. Replaces `minTickGap`, which dropped
+ * arbitrary months ("May", "Aug") on a 6-bar chart at 390 px (WEB-18).
+ */
+export function axisTickInterval(count: number, maxLabels: number): number {
+  if (count <= maxLabels || maxLabels < 1) return 0;
+  return Math.ceil(count / maxLabels) - 1;
+}
+
 export function yearOptions(currentYear: number, count = 6): number[] {
   return Array.from({ length: count }, (_, i) => currentYear - i);
 }
