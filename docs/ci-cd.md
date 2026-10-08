@@ -43,7 +43,7 @@ Deleted with the legacy code: `deploy-backend.yml`, `deploy-frontend.yml`,
 |---|---|---|---|
 | `tooling` | `.github/workflows/**`, `scripts/hooks/**`, `scripts/ci/**`, `scripts/install-hooks.sh`, `scripts/cutover/*.sh`, `apps/ios/scripts/*.sh` | actionlint (incl. shellcheck of `run:` blocks), shellcheck | Linux |
 | `supabase` | `supabase/migrations|tests/**`, `seed.sql`, `config.toml`, `packages/db-types/**`, `check-migrations.sh` | append-only check vs PR base / previous `main` (only if migrations changed) → `supabase start` → `db reset` → `test db` (pgTAP) → types drift vs `packages/db-types` | Linux |
-| `edge` | `supabase/functions/**`, `config.toml` | `deno lint` → `deno fmt --check` (**advisory**, see §7) → `deno test -A` | Linux |
+| `edge` | `supabase/functions/**`, `config.toml` | `deno lint` → `deno fmt --check` → `deno test -A` | Linux |
 | `parser` | `services/parser/**`, `docs/contracts/**` | uv venv → `ruff check` → `pytest` | Linux |
 | `web` | `apps/web/**`, `packages/**`, root `package.json`, lockfile, workspace | tokens check → lint → typecheck → test → build | Linux |
 | `scraper` | `scraper/**` | uv venv → `pytest` | Linux |
@@ -139,7 +139,7 @@ gcloud run services update-traffic ccs-parser --project <gcp-project> \
   (`VITE_*`, `SENTRY_*`) that already lives in Vercel.
 - What the integration lacks is a check that what it shipped works. Vercel reports each
   deployment back to GitHub as a Deployment; `web-smoke.yml` runs on the Production one's
-  `success` and checks the production URL: `/` is 200 with `<title>Ledger</title>`, the CSP
+  `success` and checks the production URL: `/` is 200 with `<title>Bank Ledger</title>`, the CSP
   is present and allows `https://<project-ref>.supabase.co` with
   `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `nosniff`, HSTS, the SPA deep link
   `/activity` is 200 HTML, a hashed asset is 200 + `immutable`, a missing asset is 404.
@@ -206,7 +206,7 @@ Pre-push behaviour:
 
 - **Fast path:** no CI-relevant files (docs only) → exits immediately.
 - **Blocking:** anything CI would fail on. **Warn, not block:** missing toolchain/venv,
-  `deno fmt`, and Supabase when Docker or the local stack isn't running or the local DB is
+  and Supabase when Docker or the local stack isn't running or the local DB is
   behind the repo's migrations (CI runs pgTAP regardless). `PRE_PUSH_DB_RESET=1 git push`
   lets the hook `supabase db reset` first (wipes local data).
 - `SKIP_PRE_PUSH=1 git push` skips everything; `SKIP_RELEASE=1` skips only the iOS release;
@@ -277,6 +277,26 @@ Required reviewers on an environment in a **private** repository need GitHub Pro
 Free plan the `production` environment still scopes the secrets and records deployments, but
 nobody is asked to approve: set `AUTO_DEPLOY=false` if every production change must be a
 deliberate manual dispatch.
+
+### 4.1 Status: configured on 2026-10-08
+
+Names only. The repo is on the GitHub **Free** plan (private), so required reviewers and branch
+protection are not available.
+
+| Item | Where | State |
+|---|---|---|
+| `production` environment | repo | exists (merged with Vercel's `Production`; names are case-insensitive); branch policy **`main` only**; required reviewer **not set** (plan) |
+| `testflight` environment | repo | exists, no rules |
+| `SUPABASE_PROJECT_REF`, `SUPABASE_DB_PASSWORD` | env `production` | set |
+| `SUPABASE_ACCESS_TOKEN` | env `production` | **missing**: create at supabase.com → Account → Access Tokens, then `gh secret set SUPABASE_ACCESS_TOKEN -R hussu97/cc-statement-scraper --env production` (prompts) |
+| `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8` | env `testflight` | set (same key as another app) |
+| `GCP_WIF_PROVIDER`, `GCP_DEPLOY_SA`, `GCP_PROJECT_ID`, `AUTO_DEPLOY` (`true`) | repo variables | set |
+| `LEGACY_DEPLOYS_ENABLED` | repo variable | absent |
+| Legacy repo secrets (`CCS_*`, `GCP_PROJECT_ID`, `GCP_SA_KEY`, `RENDER_DEPLOY_HOOK`, `VERCEL_DEPLOY_HOOK`) | repo | still present; unused by v2 (WIF wins over `GCP_SA_KEY`) |
+| WIF pool `github`, provider `github-oidc` | GCP | created; condition: this repo and environment `production` or `Production` (the claim may carry the stored capitalisation) |
+| `github-deployer@` SA, no keys | GCP | `run.admin` on service `ccs-parser`, `artifactregistry.writer` on repo `ledger`, `iam.serviceAccountUser` on `ccs-parser@`, `workloadIdentityUser` for the repo principalSet |
+| Artifact Registry repo `ledger` (me-central1) | GCP | created |
+| Branch protection on `main` (`ci-ok`) | repo | **not available** on Free (rulesets too) |
 
 ---
 
@@ -353,13 +373,10 @@ the gates.
 
 ## 7. Known gaps / follow-ups
 
-- **Run the history check against production once before the first automated deploy:**
-  `supabase link --project-ref <project-ref> && SUPABASE_DB_PASSWORD=… bash scripts/ci/check-migrations.sh remote linked`.
-  If any migration was edited after production applied it (e.g. during the final audit
-  fixes), the first `deploy-supabase` run will stop there; decide per file whether to restore
-  the applied content and fix forward in a new migration.
-- `supabase/functions` is not `deno fmt` clean (19 files). Run `deno fmt` there in its own
-  commit, then drop `continue-on-error` from the CI step and make the hook check blocking.
+- **History check against production: done 2026-10-08** (`supabase link --project-ref
+  <project-ref> && bash scripts/ci/check-migrations.sh remote linked`): 25 applied,
+  0 pending, every applied migration's statements identical to the repo file. Re-run it by
+  hand before a deploy if in doubt; `deploy-supabase` runs it on every deploy anyway.
 - The local dev DB may lag the repo's migrations; the pre-push hook then skips pgTAP with a
   warning until `supabase db reset`.
 - `supabase/config.toml` changes (auth settings etc.) are not pushed by any workflow; apply

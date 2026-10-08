@@ -59,7 +59,7 @@ function AccountsTab({ profileCode, isOwner }: { profileCode: string; isOwner: b
     return (
       <Card>
         <EmptyState title="No cards yet" action={<Link to="/cards" search={{ tab: "upload" }} className="text-sm text-accent hover:underline">Upload a statement</Link>}>
-          Ledger creates a card account from your first statement or SMS alert.
+          Bank Ledger creates a card account from your first statement or SMS alert.
         </EmptyState>
       </Card>
     );

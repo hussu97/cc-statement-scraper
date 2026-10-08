@@ -1,5 +1,30 @@
 # Changelog
 
+## Bank Ledger rebrand and SMS setup guide — 2026-10-08 (branch `ledger-v2`)
+
+### Web
+
+- **feat** Brand mark (a ledger column closed by a double rule) drawn from tokens: `BrandMark` / `BrandLockup` in the sidebar, mobile header, splash, sign-in and privacy page; product copy says "Bank Ledger" everywhere (the *ledger* entity keeps its name)
+- **feat** Favicons (SVG, dark-mode aware; 16/32 PNG), `apple-touch-icon.png`, maskable `icon-192/512.png` and `site.webmanifest` (name, theme/background colours from tokens), wired in `index.html` with description, app-name and per-scheme `theme-color` meta; CSP unchanged (all `'self'`)
+- **feat** Settings → iPhone SMS rewritten as a step-by-step guide for the one "Log Bank SMS" automation: prerequisites, 10 steps with mock-ups of the exact field values, copy buttons for `Card` and `Log Bank SMS`, *Open Shortcuts app* (iOS only), a client-side QR code to open the guide on the phone (desktop), optional TestFlight button (`VITE_TESTFLIGHT_URL`), how to test, banner meanings, troubleshooting and the privacy note
+- **test** `brand.test.ts` (mark geometry = source SVG, favicon/manifest/index.html colours = tokens, linked icons exist), `sms-guide.test.ts` (UA detection incl. iPadOS, TestFlight URL validation, step integrity, keyword and action name pinned to the Swift sources), `qr.test.ts`
+- **chore** dependency `uqr` (QR encoding, no runtime deps)
+
+### Docs
+
+- README, ARCHITECTURE, PRODUCTION, CLAUDE.md say "Bank Ledger"; `VITE_TESTFLIGHT_URL` documented (README env table, PRODUCTION §4, `.env.example`); PRODUCTION §2.7 lists the dashboard settings that still say the old name (Auth email templates, SMTP sender name, Google/Microsoft consent screens, App Store Connect name)
+- **chore** `assets/brand/bank-ledger-mark.svg` + `scripts/brand/generate-icons.mjs` (`pnpm brand:icons[:check]`, root devDependency `@resvg/resvg-js`) render every icon, including the opaque `assets/brand/ios/AppIcon-1024.png` staged for the iOS asset catalog
+
+## CI/CD follow-ups — 2026-10-08 (branch `ledger-v2`)
+
+### Backend (Supabase)
+
+- **style** `deno fmt` on `supabase/functions` (19 files, formatting only; lint and 91 tests unchanged); `deno fmt --check` is now blocking in `ci.yml` (`edge`) and the pre-push hook (the unused advisory helper is gone)
+
+### Docs
+
+- PRODUCTION.md §9 and README hooks/CI section point to docs/ci-cd.md and describe `ci.yml` + `ci-ok`, `deploy-supabase`, `deploy-parser`, `web-smoke`, `ios-testflight`, pre-commit (fast) / pre-push (full) and `SKIP_PRE_PUSH` / `SKIP_RELEASE`; `LEGACY_DEPLOYS_ENABLED` noted as deletable
+
 ## Legacy v1 removed — 2026-10-08 (branch `ledger-v2`)
 
 The cutover is complete, so the legacy v1 code is deleted (it stays in git history). The

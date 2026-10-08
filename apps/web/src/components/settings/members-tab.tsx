@@ -167,7 +167,7 @@ function AddMember({ ledgerName }: { ledgerName: string }) {
         onSuccess: (result) => {
           toast(
             result === "invited"
-              ? { title: "Invite saved", description: `${email.trim()} will get access to ${ledgerName} the first time they sign in to Ledger.`, tone: "positive" }
+              ? { title: "Invite saved", description: `${email.trim()} will get access to ${ledgerName} the first time they sign in to Bank Ledger.`, tone: "positive" }
               : { title: "Member added", description: `${email.trim()} can now open ${ledgerName}.`, tone: "positive" },
           );
           setEmail("");
@@ -187,7 +187,7 @@ function AddMember({ ledgerName }: { ledgerName: string }) {
           submit();
         }}
       >
-        <p className="text-[13px] text-muted">If they haven't used Ledger yet, they get access the first time they sign in with this email. Adding someone who's already a member changes their role.</p>
+        <p className="text-[13px] text-muted">If they haven't used Bank Ledger yet, they get access the first time they sign in with this email. Adding someone who's already a member changes their role.</p>
         <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_16rem_auto] sm:items-end">
           <Field label="Email" error={touched && invalid ? "Enter an email address like them@example.com." : null}>
             {(id, d) => (

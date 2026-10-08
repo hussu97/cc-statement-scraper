@@ -61,7 +61,7 @@ export async function signInWithPassword(email: string, password: string): Promi
 
 /**
  * Sends a magic link that also carries a 6-digit code. Existing accounts only:
- * Ledger is invite-only, so an unknown email never creates a user (WEB-04).
+ * Bank Ledger is invite-only, so an unknown email never creates a user (WEB-04).
  */
 export async function sendMagicLink(email: string): Promise<void> {
   const { error } = await supabase.auth.signInWithOtp({ email, options: magicLinkOptions(window.location.origin) });
@@ -73,7 +73,7 @@ export function magicLinkOptions(origin: string): { emailRedirectTo: string; sho
   return { emailRedirectTo: `${origin}/`, shouldCreateUser: false };
 }
 
-export const NO_ACCOUNT_MESSAGE = "There's no Ledger account for that email. Ask the ledger's owner to invite you.";
+export const NO_ACCOUNT_MESSAGE = "There's no Bank Ledger account for that email. Ask the ledger's owner to invite you.";
 
 /** Sentences for sign-in failures people can act on. */
 export function signInErrorMessage(error: unknown): string {
