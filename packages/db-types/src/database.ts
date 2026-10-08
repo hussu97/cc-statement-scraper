@@ -2043,6 +2043,10 @@ export type Database = {
           spent_aed: number
         }[]
       }
+      cancel_profile_invite: {
+        Args: { p_email: string; p_profile_code: string }
+        Returns: undefined
+      }
       category_breakdown: {
         Args: { p_from: string; p_profile_code: string; p_to: string }
         Returns: {
@@ -2110,6 +2114,16 @@ export type Database = {
       ingest_sms: {
         Args: { p_messages: Json; p_profile_code: string }
         Returns: Json
+      }
+      list_profile_members: {
+        Args: { p_profile_code: string }
+        Returns: {
+          created_at: string
+          email: string
+          pending: boolean
+          role: string
+          user_id: string
+        }[]
       }
       list_profile_secrets: {
         Args: { p_profile_code: string }
@@ -2200,6 +2214,10 @@ export type Database = {
           status: string
         }[]
       }
+      remove_profile_member: {
+        Args: { p_profile_code: string; p_user_id: string }
+        Returns: undefined
+      }
       requeue_documents: {
         Args: { p_doc_codes?: string[]; p_profile_code: string }
         Returns: number
@@ -2243,6 +2261,7 @@ export type Database = {
           p_group?: string
           p_profile_code: string
           p_to: string
+          p_top?: number
         }
         Returns: {
           amount: number

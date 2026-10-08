@@ -1,0 +1,141 @@
+import { describe, expect, it } from "vitest";
+import {
+  addMemberError,
+  canRemoveMember,
+  failedDocCodes,
+  isEmail,
+  joinList,
+  memberActionError,
+  memberInitials,
+  memberKey,
+  memberName,
+  regexError,
+  routedBanks,
+  secretStatus,
+  settingsTab,
+  shortUserId,
+  splitList,
+  tokenScopeLabel,
+  watchState,
+  type ProfileMember,
+} from "./settings";
+
+describe("settingsTab", () => {
+  it("accepts known tabs and falls back to sources", () => {
+    expect(settingsTab("sms")).toBe("sms");
+    expect(settingsTab("billing")).toBe("sources");
+    expect(settingsTab(undefined)).toBe("sources");
+  });
+});
+
+describe("members", () => {
+  it("shortens user ids", () => {
+    expect(shortUserId("1b2c3d4e-0000-4000-8000-000000000000")).toBe("1b2c3d4e");
+  });
+
+  it("explains unknown emails", () => {
+    expect(addMemberError({ code: "P0002", message: "no user with that email has signed up yet" })).toMatch(/sign in to Ledger once first/);
+    expect(addMemberError(new Error("no user with that email has signed up yet"))).toMatch(/sign in to Ledger once first/);
+    expect(addMemberError({ code: "42501", message: "x" })).toMatch(/Only owners/);
+    expect(addMemberError({ message: "boom" })).toBe("boom");
+  });
+
+  const member = (p: Partial<ProfileMember>): ProfileMember => ({
+    user_id: "1b2c3d4e-0000-4000-8000-000000000000",
+    email: "sara.khan@example.com",
+    role: "viewer",
+    created_at: "2026-10-01T00:00:00Z",
+    pending: false,
+    ...p,
+  });
+
+  it("names and keys members and invites", () => {
+    expect(memberName(member({}))).toBe("sara.khan@example.com");
+    expect(memberName(member({ email: null }))).toBe("Member 1b2c3d4e");
+    expect(memberKey(member({}))).toBe("1b2c3d4e-0000-4000-8000-000000000000");
+    expect(memberKey(member({ user_id: null, email: "New@Example.com", pending: true }))).toBe("invite:new@example.com");
+    expect(memberInitials(member({}))).toBe("SK");
+    expect(memberInitials(member({ email: "bob@example.com" }))).toBe("BO");
+    expect(memberInitials(member({ email: null }))).toBe("1B");
+  });
+
+  it("offers removal except for invites, yourself and the last owner", () => {
+    const me = member({ user_id: "me", role: "owner" });
+    const viewer = member({ user_id: "v" });
+    const invite = member({ user_id: null, email: "x@y.co", pending: true, role: "owner" });
+    const other = member({ user_id: "o", role: "owner" });
+    expect(canRemoveMember(viewer, [me, viewer, invite], "me")).toBe(true);
+    expect(canRemoveMember(invite, [me, viewer, invite], "me")).toBe(false);
+    expect(canRemoveMember(me, [me, other], "me")).toBe(false);
+    expect(canRemoveMember(other, [me, other], "me")).toBe(true);
+    // a pending owner invite doesn't count as a second owner
+    expect(canRemoveMember(other, [other, invite, viewer], "me")).toBe(false);
+  });
+
+  it("explains member action failures", () => {
+    expect(memberActionError({ code: "22023", message: "x" })).toMatch(/at least one owner/);
+    expect(memberActionError({ code: "42501", message: "x" })).toMatch(/Only owners/);
+    expect(memberActionError({ code: "P0002", message: "x" })).toMatch(/no longer have access/);
+    expect(memberActionError({ message: "boom" })).toBe("boom");
+    expect(memberActionError(null)).toMatch(/Try again/);
+  });
+
+  it("checks email shape", () => {
+    expect(isEmail(" a@b.co ")).toBe(true);
+    expect(isEmail("a@b")).toBe(false);
+  });
+});
+
+describe("secrets", () => {
+  it("reports set/not set without values", () => {
+    const list = [{ key: "FAB_PDF_PASSWORD", updated_at: "2026-10-01T10:00:00Z" }];
+    expect(secretStatus(list, "FAB_PDF_PASSWORD")).toEqual({ set: true, updatedAt: "2026-10-01T10:00:00Z" });
+    expect(secretStatus(list, "ADCB_CID")).toEqual({ set: false, updatedAt: null });
+  });
+});
+
+describe("email routes", () => {
+  it("round-trips comma lists", () => {
+    expect(splitList(joinList(["a@x.com", "b@y.com"]))).toEqual(["a@x.com", "b@y.com"]);
+    expect(joinList(null)).toBe("");
+  });
+
+  it("validates regexes", () => {
+    expect(regexError("")).toBeNull();
+    expect(regexError("statement.*\\.pdf$")).toBeNull();
+    expect(regexError("(")).toMatch(/valid/);
+  });
+
+  it("finds banks that already have a route, except the one being edited", () => {
+    const routes = [
+      { bank_code: "FAB", route_code: "r1" },
+      { bank_code: "ADCB", route_code: "r2" },
+    ];
+    expect([...routedBanks(routes)]).toEqual(["FAB", "ADCB"]);
+    expect([...routedBanks(routes, "r1")]).toEqual(["ADCB"]);
+  });
+
+  it("flags push watches", () => {
+    const now = new Date("2026-10-08T12:00:00Z");
+    expect(watchState(null, now)).toBe("none");
+    expect(watchState("2026-10-08T11:00:00Z", now)).toBe("expired");
+    expect(watchState("2026-10-08T20:00:00Z", now)).toBe("soon");
+    expect(watchState("2026-10-12T00:00:00Z", now)).toBe("ok");
+  });
+});
+
+describe("sources", () => {
+  it("collects failed document codes", () => {
+    expect(
+      failedDocCodes([
+        { doc_code: "d1", parse_status: "failed" },
+        { doc_code: "d2", parse_status: "parsed" },
+      ]),
+    ).toEqual(["d1"]);
+  });
+
+  it("labels token scopes", () => {
+    expect(tokenScopeLabel("statements:upload")).toMatch(/Upload/);
+    expect(tokenScopeLabel("other")).toBe("other");
+  });
+});

@@ -3,10 +3,9 @@ import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { ArrowRight, ChevronLeft, ChevronRight, Inbox, Lightbulb, MessageSquareText, X } from "lucide-react";
 import { useActiveProfile } from "@/data/profile";
 import { accountLabel, sortInsights, useDismissInsight, useInsights, useOverview, type Overview, type OverviewAccount } from "@/data/overview";
-import { latestCycleByAccount, useStatementCycles, type StatementCycle } from "@/data/cards";
 import { evidenceBadge, useTransactions } from "@/data/transactions";
 import { addMonths, daysBetween, formatDate, formatDateTime, formatMonth, formatRelative, formatTime, monthEnd, monthStart, todayDubai } from "@/lib/dates";
-import { formatDeltaPercent, formatMoney, formatPercent, toAmount } from "@/lib/money";
+import { formatChange, formatMoney, formatPercent, toAmount } from "@/lib/money";
 import { cn } from "@/lib/cn";
 import { Card, CardHeader, Badge, Dot, Meter, Skeleton } from "@/components/ui/display";
 import { Button } from "@/components/ui/button";
@@ -75,7 +74,7 @@ export function OverviewPage() {
         <InsightsPanel profileCode={profile_code} />
       </div>
 
-      <AccountsPanel profileCode={profile_code} overview={q.data} loading={q.isLoading} error={q.isError ? q.error : null} retry={() => void q.refetch()} />
+      <AccountsPanel overview={q.data} loading={q.isLoading} error={q.isError ? q.error : null} retry={() => void q.refetch()} />
 
       <Card>
         <CardHeader title="Recent activity" action={<Link to="/activity" className="inline-flex items-center gap-1 text-[13px] text-accent hover:underline">All activity <ArrowRight className="size-3.5" /></Link>} />
@@ -126,10 +125,10 @@ function HeroSkeleton() {
 }
 
 function Hero({ data, isCurrent, today }: { data: Overview; isCurrent: boolean; today: string }) {
-  const delta = formatDeltaPercent(data.spend, isCurrent ? data.spend_prev_month_to_date : data.spend_prev_month);
-  const deltaN = toAmount(data.spend) !== null && toAmount(isCurrent ? data.spend_prev_month_to_date : data.spend_prev_month) !== null
-    ? (toAmount(data.spend) ?? 0) - (toAmount(isCurrent ? data.spend_prev_month_to_date : data.spend_prev_month) ?? 0)
-    : 0;
+  // Server fractions: vs last month by the same day (the whole month for a past month), and vs the 3-month average.
+  const delta = formatChange(data.change_vs_prev_month_to_date);
+  const deltaUp = (toAmount(data.change_vs_prev_month_to_date) ?? 0) > 0;
+  const avgDelta = isCurrent ? null : formatChange(data.change_vs_avg_3m);
   const dayLabel = `the ${ordinal(Number(today.slice(8, 10)))}`;
   return (
     <div className="mt-2">
@@ -140,7 +139,7 @@ function Hero({ data, isCurrent, today }: { data: Overview; isCurrent: boolean; 
           <p className="mt-3 text-sm text-muted">
             {delta ? (
               <>
-                <span className={cn("font-medium", deltaN > 0 ? "text-warn" : "text-positive")}>{delta}</span>{" "}
+                <span className={cn("font-medium", deltaUp ? "text-warn" : "text-positive")}>{delta}</span>{" "}
                 {isCurrent ? `vs last month by ${dayLabel}` : "vs the month before"}
               </>
             ) : (
@@ -148,6 +147,7 @@ function Hero({ data, isCurrent, today }: { data: Overview; isCurrent: boolean; 
             )}
             <span className="mx-2 text-border-strong">/</span>
             3-month average {formatMoney(data.spend_avg_3m, { whole: true })}
+            {avgDelta && <span className="tabular"> ({avgDelta})</span>}
           </p>
         </div>
         <dl className="flex gap-8 text-sm">
@@ -285,9 +285,7 @@ function InsightsPanel({ profileCode }: { profileCode: string }) {
   );
 }
 
-function AccountsPanel({ profileCode, overview, loading, error, retry }: { profileCode: string; overview: Overview | undefined; loading: boolean; error: unknown; retry: () => void }) {
-  const cycles = useStatementCycles(profileCode);
-  const latest = useMemo(() => latestCycleByAccount(cycles.data ?? []), [cycles.data]);
+function AccountsPanel({ overview, loading, error, retry }: { overview: Overview | undefined; loading: boolean; error: unknown; retry: () => void }) {
   return (
     <section aria-labelledby="cards-title">
       <div className="mb-3 flex items-center justify-between">
@@ -307,7 +305,7 @@ function AccountsPanel({ profileCode, overview, loading, error, retry }: { profi
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {overview.accounts.map((a) => (
-            <AccountCard key={a.account_code} account={a} cycle={latest.get(a.account_code)} />
+            <AccountCard key={a.account_code} account={a} />
           ))}
         </div>
       )}
@@ -315,11 +313,11 @@ function AccountsPanel({ profileCode, overview, loading, error, retry }: { profi
   );
 }
 
-function AccountCard({ account: a, cycle }: { account: OverviewAccount; cycle: StatementCycle | undefined }) {
+function AccountCard({ account: a }: { account: OverviewAccount }) {
   const st = a.latest_statement;
   const today = todayDubai();
   const dueIn = st?.due_date ? daysBetween(today, st.due_date) : null;
-  const util = cycle?.utilisation ?? null;
+  const util = toAmount(a.utilisation);
   return (
     <Card className="flex flex-col gap-4 p-5">
       <div className="flex items-start gap-3">

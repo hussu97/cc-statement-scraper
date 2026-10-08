@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { displayRatio, formatDeltaPercent, formatMoney, formatPercent, formatTxnAmount, moneyParts, toAmount } from "./money";
+import { displayRatio, formatChange, formatMoney, formatPercent, formatTxnAmount, moneyParts, toAmount } from "./money";
 
 describe("money", () => {
   it("parses numbers and decimal strings", () => {
@@ -43,9 +43,11 @@ describe("money", () => {
     expect(displayRatio("25", "100")).toBe(0.25);
     expect(displayRatio("25", 0)).toBeNull();
     expect(formatPercent(0.256)).toBe("26%");
-    expect(formatDeltaPercent("120", "100")).toBe("+20%");
-    expect(formatDeltaPercent("80", "100")).toBe("−20%");
-    expect(formatDeltaPercent("100", "100")).toBe("±0%");
-    expect(formatDeltaPercent("100", "0")).toBeNull();
+    expect(formatChange("0.2000")).toBe("+20%");
+    expect(formatChange("-0.2000")).toBe("−20%");
+    expect(formatChange("0.0040")).toBe("±0%");
+    expect(formatChange(-1)).toBe("−100%");
+    expect(formatChange(null)).toBeNull();
+    expect(formatChange("")).toBeNull();
   });
 });

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { insightsRoute } from "@/router";
 import { RANGE_PRESETS, isISODate, type RangePreset } from "@/lib/dates";
-import { insightsRange } from "@/lib/search";
+import { insightsRange, withInsightsRange } from "@/lib/search";
 import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 
@@ -19,7 +19,7 @@ export function RangeControl() {
 
   const setCustom = (from: string, to: string) => {
     if (!isISODate(from) || !isISODate(to) || from > to) return;
-    void navigate({ search: (s) => ({ tab: s.tab, from, to }), replace: true });
+    void navigate({ search: (s) => withInsightsRange(s, { from, to }), replace: true });
   };
 
   return (
@@ -58,7 +58,7 @@ export function RangeControl() {
             return;
           }
           setCustomOpen(false);
-          void navigate({ search: (s) => ({ tab: s.tab, range: v as RangePreset }), replace: true });
+          void navigate({ search: (s) => withInsightsRange(s, { range: v as RangePreset }), replace: true });
         }}
         options={[...RANGE_PRESETS, { value: CUSTOM, label: "Custom range" }]}
       />

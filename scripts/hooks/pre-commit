@@ -79,7 +79,35 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 4. Scraper tests (only if scraper files changed)
+# 4. Ledger web ESLint + Vitest (only if apps/web files changed)
+# ---------------------------------------------------------------------------
+STAGED_LEDGER_WEB=$(git diff --cached --name-only | grep -E '^apps/web/.*\.(ts|tsx)$' || true)
+
+if [ -n "$STAGED_LEDGER_WEB" ]; then
+  if command -v pnpm >/dev/null 2>&1; then
+    info "ESLint (apps/web)..."
+    if pnpm --silent --filter @ledger/web lint 2>&1; then
+      pass "ESLint (apps/web) OK"
+    else
+      fail "ESLint (apps/web) errors found"
+      ERRORS=$((ERRORS + 1))
+    fi
+    info "Vitest (apps/web)..."
+    if pnpm --silent --filter @ledger/web test 2>&1; then
+      pass "Vitest (apps/web) OK"
+    else
+      fail "Vitest (apps/web) failed"
+      ERRORS=$((ERRORS + 1))
+    fi
+  else
+    echo "  pnpm not found — skipping apps/web checks (corepack enable)"
+  fi
+else
+  info "ESLint/Vitest — no apps/web .ts/.tsx files staged, skipping"
+fi
+
+# ---------------------------------------------------------------------------
+# 5. Scraper tests (only if scraper files changed)
 # ---------------------------------------------------------------------------
 STAGED_SCRAPER=$(git diff --cached --name-only | grep -E '^scraper/' || true)
 
