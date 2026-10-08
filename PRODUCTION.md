@@ -131,6 +131,11 @@ supabase db push                    # applies supabase/migrations/* in order
   in the comment at the top of `20261008000000_quarantine_legacy.sql` (the file is
   `20261008000950_legacy_import.sql`). The final definition of a redefined function is listed in
   docs/audit/01-database.md, Appendix A.
+- **`20261010000410_document_events_retention.sql` is flagged destructive.** Its
+  `private.purge_document_events()` body contains a `DELETE FROM public.document_events` (90-day
+  retention), which the deploy gate's grep reports. Nothing is deleted when the migration runs;
+  rows are purged later by `ledger-nightly`. A push-triggered deploy stops on it: run the
+  **Deploy Supabase** workflow by hand with `allow_destructive` (after a yes in chat, §9).
 - **Tests that pin "today".** `ingest_parsed_document` rejects statements dated more than 31
   days ahead. pgTAP suites with fixed future dates set `ledger.test_today`; nothing in
   production sets it.
@@ -249,7 +254,7 @@ curl -s -X POST https://nkmylznisjcnmqbxosey.supabase.co/functions/v1/worker \
 | `ledger-worker-kick` | every minute | `worker`, only when a queue has visible messages |
 | `ledger-recategorize-sweep` | `17 */3 * * *` | stale `rules_version` sweep |
 | `ledger-fx-rates` | `0 21 * * *` | `fx-rates` function |
-| `ledger-nightly` | `0 22 * * *` (02:00 Dubai) | void released authorisations, recurring detection, insights |
+| `ledger-nightly` | `0 22 * * *` (02:00 Dubai) | purge `document_events` older than 90 days, void released authorisations, recurring detection, insights |
 | `ledger-llm-enqueue` | `30 22 * * *` | queue uncategorised merchants for the LLM |
 | `ledger-legacy-choices` | `45 22 * * *` | apply staged legacy category choices once per transaction (cutover helper); unschedules itself when nothing is pending or 30 days after staging |
 | `ledger-ops-monitor` | `*/15 * * * *` | `ops-monitor` → Sentry plus the `ops-heartbeat` check-in |
@@ -829,6 +834,38 @@ network restrictions read, Edge Functions read/write, Edge Function secrets read
   select public.resolve_review('<rev_one_of_them>', jsonb_build_object('supersede', '<stm_stale>'));
   select public.resolve_review('<rev_each_other>', '{"dismiss": true}'::jsonb);
   ```
+- **Bank logos:** migration `20261010000100` creates the public `bank-logos` bucket and sets
+  `banks.logo_path = '<bank_code>.png'`; the images themselves are uploaded by hand (no client
+  can write the bucket). From the repo root, after a yes in chat (it writes to production):
+  `for b in ADCB EIB ENBD FAB MASHREQ SIB; do supabase storage cp assets/banks/$b.png ss:///bank-logos/$b.png --experimental --linked; done`
+  (or Dashboard → Storage → `bank-logos` → Upload). Check one at
+  `https://<ref>.supabase.co/storage/v1/object/public/bank-logos/FAB.png`. A bank without an
+  image just shows the client's fallback; to change a file name, update `banks.logo_path`.
+- **Private merchant masks** (ARCHITECTURE §5). Database owner only, as `postgres` in psql or the
+  SQL editor (a production write: ask first). Never put a real pattern in the repository,
+  a migration, a test or a doc:
+  ```sql
+  insert into private.merchant_masks (pattern, replacement_merchant_name, replacement_category_name)
+  values ('<case-insensitive regex>', '<generic name>', '<category name or null>');
+  -- applied at once by trigger; returns nothing. Check (expect 0):
+  select count(*) from public.transactions where description ~* '<same regex>';
+  ```
+  Rejected with `22023`: an invalid regex, one matching empty text, embedded options, or a
+  replacement that matches its own pattern. Re-run by hand with
+  `select private.apply_merchant_masks();`. `update private.merchant_masks set active = false …`
+  stops future masking but does not unmask; originals are in `private.masked_originals`.
+- **A replaced card (SIB 6774 → new number, 2026-10).** Deploy parser 2026.10.3 and migration
+  `20261010000500`, then run the scraper (it now exports every SIB card the portal lists; set
+  `SIB_CARD_LAST4S` to limit it). The new card's history extract joins the existing SIB account
+  automatically when its first transaction is no earlier than 31 days before the account's last
+  line (6774's last is 2026-08-10) and the card type matches; 6774 becomes `replaced` and keeps
+  its transactions. If the new number is already known (for example from an SMS), or to do it
+  up front, the owner registers it:
+  `select public.add_replacement_card('<prf_…>', '<crd_ of 6774>', '<new last4>');`
+  (it also re-processes SMS held as `unknown_card` for that number). Check with
+  `select last4, status, account_code from public.cards where bank_code = 'SIB';` — one account,
+  two cards. If the new card had already landed on a second account, `add_replacement_card`
+  refuses (`23505`); move it by hand only after a backup.
 - **Re-parse after a parser fix:** deploy the parser, then `select requeue_documents('<prf_…>')`
   as an owner (or from Cards & Statements → documents in the web app). Re-ingest is in place, so codes, categories and
   notes survive.

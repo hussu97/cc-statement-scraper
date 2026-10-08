@@ -139,18 +139,21 @@ export type Database = {
         Row: {
           bank_code: string
           created_at: string
+          logo_path: string | null
           name: string
           sms_senders: string[]
         }
         Insert: {
           bank_code: string
           created_at?: string
+          logo_path?: string | null
           name: string
           sms_senders?: string[]
         }
         Update: {
           bank_code?: string
           created_at?: string
+          logo_path?: string | null
           name?: string
           sms_senders?: string[]
         }
@@ -378,6 +381,47 @@ export type Database = {
           },
           {
             foreignKeyName: "category_rules_profile_code_fkey"
+            columns: ["profile_code"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["profile_code"]
+          },
+        ]
+      }
+      document_events: {
+        Row: {
+          created_at: string
+          detail: Json
+          doc_code: string
+          event_code: string
+          level: string
+          message: string
+          profile_code: string
+          stage: string
+        }
+        Insert: {
+          created_at?: string
+          detail?: Json
+          doc_code: string
+          event_code?: string
+          level?: string
+          message: string
+          profile_code: string
+          stage: string
+        }
+        Update: {
+          created_at?: string
+          detail?: Json
+          doc_code?: string
+          event_code?: string
+          level?: string
+          message?: string
+          profile_code?: string
+          stage?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_events_profile_code_fkey"
             columns: ["profile_code"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -2060,6 +2104,14 @@ export type Database = {
         Args: { p_email: string; p_profile_code: string; p_role?: string }
         Returns: string
       }
+      add_replacement_card: {
+        Args: {
+          p_card_code: string
+          p_new_last4: string
+          p_profile_code: string
+        }
+        Returns: Json
+      }
       anomalies: {
         Args: { p_from: string; p_profile_code: string; p_to: string }
         Returns: {
@@ -2197,6 +2249,17 @@ export type Database = {
           key: string
           updated_at: string
         }[]
+      }
+      log_document_event: {
+        Args: {
+          p_detail?: Json
+          p_doc_code: string
+          p_level: string
+          p_message: string
+          p_profile_code: string
+          p_stage: string
+        }
+        Returns: string
       }
       merchant_key: { Args: { p: string }; Returns: string }
       merchant_leaderboard: {
@@ -2370,6 +2433,16 @@ export type Database = {
         Args: { p_category_code: string; p_txn_codes: string[] }
         Returns: number
       }
+      spend_breakdown: {
+        Args: {
+          p_from: string
+          p_group_by: string
+          p_profile_code: string
+          p_to: string
+          p_top_n?: number
+        }
+        Returns: Json
+      }
       spend_series: {
         Args: {
           p_from: string
@@ -2402,6 +2475,7 @@ export type Database = {
           due_date: string
           kind: string
           line_count: number
+          logo_path: string
           min_due: number
           period_end: string
           period_start: string
@@ -2411,6 +2485,10 @@ export type Database = {
           stmt_code: string
           utilisation: number
         }[]
+      }
+      statement_detail: {
+        Args: { p_profile_code: string; p_stmt_code: string }
+        Returns: Json
       }
       upsert_fx_rates: {
         Args: { p_as_of: string; p_rates: Json; p_source: string }

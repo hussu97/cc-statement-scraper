@@ -1,5 +1,7 @@
 // Storing an incoming statement PDF: validation, sha256 dedup, Storage upload and
 // the `documents` row. Shared by statements-upload, gmail-push and outlook-poll.
+// Each step is also written to the document's timeline (public.document_events:
+// received, stored, queued, or duplicate), which the apps follow over Realtime.
 //
 // Ordering matters: the documents INSERT trigger enqueues `parse_document`, so the
 // object must already be in Storage when the row appears. We therefore reserve a
@@ -135,20 +137,112 @@ async function duplicateResult(svc: Db, profileCode: string, doc: ExistingDoc, s
   return { ...base, parse_status: r.parse_status as ParseStatus, ...(r.requeued === true ? { requeued: true } : {}) };
 }
 
+// ── document timeline (public.document_events) ──────────────────────────────
+
+export type DocumentStage =
+  | "received"
+  | "stored"
+  | "duplicate"
+  | "queued"
+  | "parsing"
+  | "parsed"
+  | "ingested"
+  | "failed"
+  | "retry";
+
+export interface DocumentEvent {
+  stage: DocumentStage;
+  level: "info" | "warn" | "error";
+  /** A sentence for end users: never a password, PDF text, line text or SMS body. */
+  message: string;
+  detail: Record<string, unknown>;
+}
+
+/** "812 B", "48 KB", "1.2 MB". */
+export function formatBytes(n: number): string {
+  if (!Number.isFinite(n) || n < 0) return "0 B";
+  if (n < 1024) return `${Math.round(n)} B`;
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/** The upload-side events storeDocument writes (pure, for tests). */
+export const uploadEvents = {
+  received: (filename: string, sizeBytes: number, source: DocumentSource): DocumentEvent => ({
+    stage: "received",
+    level: "info",
+    message: `Received ${filename} (${formatBytes(sizeBytes)}).`,
+    detail: { filename, size_bytes: sizeBytes, source },
+  }),
+  stored: (): DocumentEvent => ({ stage: "stored", level: "info", message: "Saved the PDF.", detail: {} }),
+  queued: (): DocumentEvent => ({ stage: "queued", level: "info", message: "Waiting to be read.", detail: {} }),
+  duplicate: (filename: string, parseStatus: ParseStatus): DocumentEvent => ({
+    stage: "duplicate",
+    level: "info",
+    message: parseStatus === "failed"
+      ? `${filename} was uploaded before and could not be read then.`
+      : `${filename} was uploaded before; there is nothing new to import.`,
+    detail: { filename, parse_status: parseStatus },
+  }),
+};
+
+/**
+ * Append an event to a document's timeline with the service-role RPC log_document_event.
+ * Never throws: a lost timeline entry must not fail an upload or a parse.
+ */
+export async function logDocumentEvent(
+  svc: Db,
+  profileCode: string,
+  docCode: string,
+  event: DocumentEvent,
+): Promise<void> {
+  try {
+    const { error } = await svc.rpc("log_document_event", {
+      p_profile_code: profileCode,
+      p_doc_code: docCode,
+      p_stage: event.stage,
+      p_level: event.level,
+      p_message: event.message,
+      p_detail: event.detail,
+    });
+    if (error) {
+      captureMessage("could not log a document event", {
+        level: "warning",
+        tags: { profile_code: profileCode, doc_code: docCode, stage: event.stage, sqlstate: error.code },
+        fingerprint: ["documents", "log_document_event_failed"],
+      });
+    }
+  } catch {
+    // best effort
+  }
+}
+
 /** Dedupe and store one prepared PDF. Uses the service-role client (caller already authorised). */
 export async function storeDocument(svc: Db, input: StoreInput): Promise<StoreResult> {
   const { filename, bytes, sha256: sha } = input.document;
+  const received = uploadEvents.received(filename, bytes.length, input.source);
 
   const existing = await findBySha(svc, input.profileCode, sha);
-  if (existing) return await duplicateResult(svc, input.profileCode, existing, sha);
+  if (existing) {
+    await logDocumentEvent(svc, input.profileCode, existing.doc_code, received);
+    await logDocumentEvent(
+      svc,
+      input.profileCode,
+      existing.doc_code,
+      uploadEvents.duplicate(filename, existing.parse_status),
+    );
+    return await duplicateResult(svc, input.profileCode, existing, sha);
+  }
 
   const { data: docCode, error: codeErr } = await svc.rpc("gen_code", { prefix: "doc" });
   if (codeErr || typeof docCode !== "string") throw pgErrorToHttp(codeErr, "could not allocate doc_code");
   const path = `${input.profileCode}/${docCode}.pdf`;
+  await logDocumentEvent(svc, input.profileCode, docCode, received);
 
   const bucket = svc.storage.from("statements");
   const up = await bucket.upload(path, bytes, { contentType: "application/pdf", upsert: false });
   if (up.error) throw new HttpError(502, "STORAGE_UPLOAD_FAILED", "could not store the PDF");
+  await logDocumentEvent(svc, input.profileCode, docCode, uploadEvents.stored());
 
   const { error: insErr } = await svc.from("documents").insert({
     doc_code: docCode,
@@ -166,10 +260,19 @@ export async function storeDocument(svc: Db, input: StoreInput): Promise<StoreRe
     if (insErr.code === "23505") {
       // Lost a race with a concurrent upload of the same file.
       const winner = await findBySha(svc, input.profileCode, sha);
-      if (winner) return await duplicateResult(svc, input.profileCode, winner, sha);
+      if (winner) {
+        await logDocumentEvent(
+          svc,
+          input.profileCode,
+          winner.doc_code,
+          uploadEvents.duplicate(filename, winner.parse_status),
+        );
+        return await duplicateResult(svc, input.profileCode, winner, sha);
+      }
     }
     throw pgErrorToHttp(insErr, "could not record the document");
   }
+  await logDocumentEvent(svc, input.profileCode, docCode, uploadEvents.queued());
   return { status: "queued", doc_code: docCode, sha256: sha, parse_status: "queued" };
 }
 
