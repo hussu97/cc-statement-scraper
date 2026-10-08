@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Ban, Check, ChevronDown, Inbox, Link2, Plus, Sparkles, X } from "lucide-react";
 import { useActiveProfile } from "@/data/profile";
-import { NOT_A_TRANSACTION, REVIEW_REASONS, candidatesOf, groupReviews, reviewActionError, reviewFooterActions, useDecideTemplate, useOpenReviews, useResolveReview, useRetrySmsFallback, useReviewContext, type ResolveAction, type Review } from "@/data/reviews";
+import { NOT_A_TRANSACTION, REVIEW_REASONS, candidatesOf, groupReviews, reviewActionError, reviewFooterActions, useDecideTemplate, useInfiniteOpenReviews, useOpenReviews, useResolveReview, useRetrySmsFallback, useReviewContext, type ResolveAction, type Review } from "@/data/reviews";
 import { useAccounts } from "@/data/cards";
 import { accountLabel } from "@/data/overview";
 import { useSmsBody, type TxnRow } from "@/data/transactions";
@@ -11,8 +11,12 @@ import { formatDate, formatDateTime, formatRelative } from "@/lib/dates";
 
 import { cn } from "@/lib/cn";
 import { formatCount } from "@/lib/money";
-import { useClampPage, usePageState } from "@/lib/hooks";
+import { useClampPage, useMediaQuery } from "@/lib/hooks";
+import { DEFAULT_PAGE_SIZE, type PageSize } from "@/lib/pagination";
+import { INFINITE_QUERY, pagePatch, sizePatch, type PageSearch } from "@/lib/infinite";
+import { reviewRoute } from "@/router";
 import { Pagination } from "@/components/pagination";
+import { InfiniteFooter } from "@/components/infinite-footer";
 import { Badge, Card, PageHeader, Dot } from "@/components/ui/display";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -23,12 +27,21 @@ import { BankLogo, CardRef } from "@/components/bank-logo";
 
 export function ReviewPage() {
   const { profile_code } = useActiveProfile();
-  const pager = usePageState();
-  const q = useOpenReviews(profile_code, pager.page, pager.size);
-  useClampPage(pager.page, pager.size, q.data?.total, pager.setPage);
+  const search = reviewRoute.useSearch();
+  const navigate = useNavigate({ from: "/review" });
+  const setPaging = (p: PageSearch) => void navigate({ search: (s) => ({ ...s, ...p }), replace: true });
+  const pager = { page: search.page ?? 1, size: search.size ?? DEFAULT_PAGE_SIZE, setPage: (p: number) => setPaging(pagePatch(p)), setSize: (s: PageSize) => setPaging(sizePatch(s)) };
+  // Phones scroll forever; wider screens keep numbered pages in the URL.
+  const phone = useMediaQuery(INFINITE_QUERY);
+  const pagedQ = useOpenReviews(profile_code, pager.page, pager.size, !phone);
+  const infinite = useInfiniteOpenReviews(profile_code, phone);
+  const q = phone
+    ? { ...infinite, data: infinite.data ? { rows: infinite.items, total: infinite.total ?? infinite.items.length } : undefined, isError: infinite.isError && !infinite.isFetchNextPageError }
+    : pagedQ;
+  useClampPage(pager.page, pager.size, phone ? undefined : q.data?.total, pager.setPage);
   const groups = groupReviews(q.data?.rows ?? []);
   const total = q.data?.total ?? 0;
-  const paged = total > pager.size;
+  const paged = phone ? (q.data?.rows.length ?? 0) < total : total > pager.size;
   return (
     <div>
       <PageHeader
@@ -53,7 +66,7 @@ export function ReviewPage() {
                   {REVIEW_REASONS[g.reason]?.title ?? g.reason}
                   <span className="tabular rounded-pill bg-surface-2 px-2 text-[12px] font-normal text-muted">
                     {g.items.length}
-                    {paged && " on this page"}
+                    {paged && (phone ? " loaded" : " on this page")}
                   </span>
                 </h2>
                 {REVIEW_REASONS[g.reason] && <p className="mt-1 max-w-2xl text-[13px] text-muted">{REVIEW_REASONS[g.reason]!.help}</p>}
@@ -65,7 +78,19 @@ export function ReviewPage() {
               </div>
             </section>
           ))}
-          <Pagination page={pager.page} size={pager.size} total={total} onPage={pager.setPage} onSize={pager.setSize} />
+          {phone ? (
+            <InfiniteFooter
+              hasNextPage={infinite.hasNextPage}
+              isFetchingNextPage={infinite.isFetchingNextPage}
+              isFetchNextPageError={infinite.isFetchNextPageError}
+              error={infinite.error}
+              fetchNextPage={infinite.fetchNextPage}
+              loaded={infinite.items.length}
+              noun="reviews"
+            />
+          ) : (
+            <Pagination page={pager.page} size={pager.size} total={total} onPage={pager.setPage} onSize={pager.setSize} />
+          )}
         </div>
       )}
     </div>
