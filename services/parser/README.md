@@ -31,7 +31,7 @@ services/parser/
 ├── tests/                  # unit tests, ported legacy tests, golden parity
 ├── Dockerfile
 ├── pyproject.toml
-└── requirements.txt        # pinned, generated with `uv pip compile`
+└── requirements.txt        # pinned with hashes, generated with `uv pip compile --generate-hashes`
 ```
 
 ## Setup
@@ -47,11 +47,15 @@ uv pip install --python .venv/bin/python pytest ruff
 source .venv/bin/activate
 ```
 
-Regenerate pins after changing `pyproject.toml` dependencies:
+Regenerate pins (with hashes) after changing `pyproject.toml` dependencies:
 
 ```bash
-uv pip compile pyproject.toml -o requirements.txt --python-version 3.12
+uv pip compile pyproject.toml -o requirements.txt --python-version 3.12 --generate-hashes
 ```
+
+The image installs them with `pip install --require-hashes --only-binary=:all:`, from a base image
+pinned by digest (`Dockerfile`), and copies `ccs_parser/` without pip-installing it (no unpinned
+build backend). Plain `uvicorn`, without the `[standard]` extras (SRV-13).
 
 `pdfplumber` and `pdfminer.six` are pinned exactly: their text output drives every
 parser regex. Re-run the golden parity suite before changing them.
@@ -231,6 +235,12 @@ gcloud run deploy "$SERVICE" --source . --project "$PROJECT" --region "$REGION" 
   --set-secrets PARSER_SECRET=parser-secret:latest,SENTRY_DSN=parser-sentry-dsn:latest \
   --set-env-vars SENTRY_ENVIRONMENT=production,SENTRY_RELEASE=$(git rev-parse --short HEAD),PARSER_ALLOWED_HOSTS=<project>.supabase.co
 ```
+
+Capacity (SRV-12, measured 2026-10-08): a parse takes 0.9 s CPU (p95 1.1 s) and peaks at
+150-180 MB RSS in its child process (95 local statements). In the image (1 vCPU, 1 GiB, amd64
+under emulation), four concurrent parses of the largest statements peaked at 444 MiB and finished
+in 14 s; eight would take 52 s, close to the 60 s kill. `--concurrency 4` is kept: Cloud Run never
+sends an instance more than four, and each worker run sends at most three.
 
 `--allow-unauthenticated` is required because the Supabase worker authenticates with
 `X-Parser-Secret` rather than a Google identity token. Store the same secret value
