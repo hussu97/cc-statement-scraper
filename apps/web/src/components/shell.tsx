@@ -28,6 +28,8 @@ import { applyTheme, readTheme, type ThemePref } from "@/lib/theme";
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger, Segmented } from "./ui/primitives";
 import { Sheet } from "./ui/dialog";
 import { ErrorState } from "./ui/states";
+import { BrandLockup, BrandMark } from "./brand/brand";
+import { BRAND_NAME } from "@/lib/brand";
 
 interface NavItem {
   to: string;
@@ -125,12 +127,7 @@ function ProfileSwitcher({ compact }: { compact?: boolean }) {
 }
 
 function Wordmark() {
-  return (
-    <Link to="/" className="flex items-baseline gap-1.5 px-2 text-ink">
-      <span className="font-display text-[22px] leading-none tracking-[-0.02em]">Bank Ledger</span>
-      <span className="size-1.5 translate-y-[-2px] rounded-pill bg-accent" aria-hidden />
-    </Link>
-  );
+  return <BrandLockup to="/" className="px-2" />;
 }
 
 function Sidebar({ nav }: { nav: NavItem[] }) {
@@ -234,7 +231,10 @@ function MobileNav({ nav }: { nav: NavItem[] }) {
 export function Splash() {
   return (
     <div className="flex min-h-dvh items-center justify-center" role="status" aria-label="Loading">
-      <span className="font-display text-2xl text-subtle animate-pulse">Bank Ledger</span>
+      <span className="flex items-center gap-3 animate-pulse">
+        <BrandMark className="size-8" />
+        <span className="font-display text-2xl text-subtle">{BRAND_NAME}</span>
+      </span>
     </div>
   );
 }

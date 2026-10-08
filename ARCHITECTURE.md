@@ -1,6 +1,6 @@
-# Architecture — Ledger v2
+# Architecture — Bank Ledger (v2)
 
-Ledger is a personal credit-card ledger for two people (and their household). Bank SMS alerts
+Bank Ledger is a personal credit-card ledger for two people (and their household). Bank SMS alerts
 feed it in near real time, statement PDFs reconcile it, and categorisation and analytics run
 in the database. This document describes v2. The legacy v1 stack was removed after the cutover;
 what remains of it (the `legacy` database schema) is summarised at the end.
@@ -16,7 +16,7 @@ Related docs: [README.md](README.md) (setup, commands, env vars), [PRODUCTION.md
  iPhone (SwiftUI, apps/ios)                 Scraper CLI (local Playwright, scraper/)
   • Shortcuts automation → LogBankSMSIntent    • multipart upload, service token ccs_…
       → App Group outbox → rpc ingest_sms ─┐            │
-  • Statements upload / "Add to Ledger"     │            │       Gmail ──Pub/Sub push (OIDC)──┐
+  • Statements upload / "Add to Bank Ledger"│            │       Gmail ──Pub/Sub push (OIDC)──┐
     share extension ───────────────────────┤            │       Outlook ◀─Graph delta poll──┐ │
                                            │            │                                   │ │
  Web (Vite + React, apps/web, Vercel)      │            ▼                                   │ │
@@ -50,7 +50,7 @@ scales to zero), Vercel Hobby (web) and TestFlight (iOS). The scraper runs only 
 | **Edge Functions** | `supabase/functions/` | HTTP ingress and I/O. They authenticate callers, store PDFs, call the parser and Claude, poll mailboxes and report health. They hold no business rules beyond input validation. |
 | **Parser** | `services/parser/` | Stateless `POST /parse`. Downloads a PDF from a signed URL, decrypts it with candidate passwords, detects the bank (scoring legal-name and brand markers outside transaction rows, so a merchant naming another bank doesn't win) and returns normalised statements (contract parse-v1). Each parse runs in a resource-limited child process (15 MB, 30 pages, 32 MB inflated, 30 s CPU, 60 s wall), and the output is validated against the DB's constraints before it is returned. It never touches the DB. |
 | **Web app** | `apps/web/` | Vite + React 19 + TanStack Router/Query + supabase-js, Tailwind v4 on `@ledger/tokens`. Renders RPC results. It never computes money. |
-| **iPhone app** | `apps/ios/` | SwiftUI app, `LedgerKit` package, `LogBankSMSIntent` App Intent, "Add to Ledger" share extension. |
+| **iPhone app** | `apps/ios/` | SwiftUI app, `LedgerKit` package, `LogBankSMSIntent` App Intent, "Add to Bank Ledger" share extension. |
 | **Design tokens** | `packages/tokens/` | One `tokens.json` generates CSS variables, a chart palette module and `Tokens.swift`. |
 | **DB types** | `packages/db-types/` | `supabase gen types` output. Never hand-written; CI checks for drift. |
 | **Scraper** | `scraper/` | Local-only Playwright CLI that downloads statements and uploads them to `statements-upload`. Its architecture is frozen. |
@@ -453,7 +453,7 @@ RLS applies to every change event.
 - **Users** sign in with Supabase Auth: email one-time code or magic link, and a password for
   the seeded demo user. Sign in with Apple is stubbed on iOS. Membership in `profile_members`
   grants access, and a profile can have several owners and viewers.
-- **No self sign-up.** Ledger is private: `[auth] enable_signup = false` locally, and the same
+- **No self sign-up.** Bank Ledger is private: `[auth] enable_signup = false` locally, and the same
   dashboard setting in production. The web's magic link uses `shouldCreateUser: false`, so an
   unknown email gets "Ask the ledger's owner to invite you". A member is added by an owner with
   `add_profile_member` (an existing user is added at once; otherwise a pending invite is

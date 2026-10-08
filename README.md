@@ -1,8 +1,8 @@
-# Ledger
+# Bank Ledger
 
 A personal credit-card ledger for FAB, ADCB, ENBD, EIB, SIB and Mashreq cards:
 
-- **Real time from bank SMS.** An iPhone Shortcuts automation hands each alert to the Ledger
+- **Real time from bank SMS.** An iPhone Shortcuts automation hands each alert to the Bank Ledger
   app's App Intent.
 - **Reconciled against statements.** Statement PDFs come from the scraper, uploads, Gmail and
   Outlook.
@@ -14,6 +14,7 @@ A personal credit-card ledger for FAB, ADCB, ENBD, EIB, SIB and Mashreq cards:
 Docs:
 - [ARCHITECTURE.md](ARCHITECTURE.md): design, data model, matching, auth
 - [PRODUCTION.md](PRODUCTION.md): deployment, operations and the cutover record
+- [docs/ci-cd.md](docs/ci-cd.md): CI, deploy workflows, git hooks, release flows
 - [CHANGELOG.md](CHANGELOG.md)
 - [ROADMAP.md](ROADMAP.md)
 - [docs/contracts/parse-v1.md](docs/contracts/parse-v1.md): parser contract (limits, output validation, error codes)
@@ -30,11 +31,12 @@ Docs:
 | `apps/web/` | Web app | Vite, React 19, TanStack Router/Query, supabase-js, Tailwind v4, Recharts |
 | `apps/ios/` | iPhone app, `LedgerKit` package, share extension ([README](apps/ios/README.md)) | SwiftUI, iOS 18, XcodeGen |
 | `packages/tokens/` | Design tokens → CSS variables, chart palette, `Tokens.swift` | Node |
+| `assets/brand/` | Bank Ledger mark (`bank-ledger-mark.svg`); `pnpm brand:icons` renders the web favicons, PWA icons, `site.webmanifest` and `ios/AppIcon-1024.png` from it (`scripts/brand/generate-icons.mjs`, `--check` for drift) | Node (`@resvg/resvg-js`) |
 | `packages/db-types/` | Generated Supabase TypeScript types (never hand-written) | TS |
 | `scraper/` | Local Playwright scraper CLI `ccs-scraper` ([README](scraper/README.md)) | Python 3.12 |
-| `scripts/` | `cutover/` (production Edge and Vault secret helpers), git `hooks/` + `install-hooks.sh` | sh, SQL |
-| `docs/` | `contracts/` (parse-v1), `audit/` (audit reports + backlog) | Markdown |
-| `.github/workflows/` | CI (path-filtered) and manual deploy workflows | GitHub Actions |
+| `scripts/` | `cutover/` (production Edge and Vault secret helpers), `ci/` (migration history check, web smoke test), git `hooks/` + `install-hooks.sh` | sh, SQL |
+| `docs/` | `ci-cd.md`, `contracts/` (parse-v1), `audit/` (audit reports + backlog) | Markdown |
+| `.github/workflows/` | `ci.yml` (path-filtered, `ci-ok` gate), `deploy-supabase`, `deploy-parser`, `web-smoke`, `ios-testflight`, `security` ([docs/ci-cd.md](docs/ci-cd.md)) | GitHub Actions |
 
 ## Prerequisites
 
@@ -187,14 +189,22 @@ Create a service token in web Settings → Sources & health → Tokens, or with
 | iOS | `cd apps/ios/LedgerKit && swift test` |
 | Scraper | `cd scraper && .venv/bin/pytest -q` |
 
-`scripts/install-hooks.sh` installs the git hooks:
-- **pre-commit:** web lint and tests when `apps/web` files are staged, scraper tests when
-  `scraper/` is staged.
-- **pre-push:** `deno test`, parser ruff and pytest, tokens check, web lint and tests, DB types
-  drift (only when the local stack is running) and scraper tests. Each check skips when its
-  directory or tool is missing.
+`bash scripts/install-hooks.sh` (or `pnpm hooks:install`) installs the git hooks; details in
+[docs/ci-cd.md](docs/ci-cd.md) §3:
+- **pre-commit (fast, staged files only):** secrets guard (`.env*`, `*.p8`, provisioning
+  profiles), append-only migrations, eslint / `deno lint` / ruff / shellcheck / actionlint on
+  the staged files.
+- **pre-push (full CI mirror for the changed areas):** the same lint, typecheck, test and build
+  steps as `ci.yml` (incl. `deno fmt --check`; pgTAP only when the local stack runs), then on a
+  `main` push that changes the iOS app it builds and stages the TestFlight IPA.
+  `SKIP_PRE_PUSH=1 git push` skips it; `SKIP_RELEASE=1 git push` skips only the iOS release.
+  By hand: `pnpm check`, `pnpm check:all`, `pnpm check:plan`.
 - **prepare-commit-msg / commit-msg:** enforce the commit author and reject `Co-Authored-By`
   trailers.
+
+CI (`ci.yml`) runs the same checks per changed area; its `ci-ok` job is the single required
+check. Deploys: `deploy-supabase.yml`, `deploy-parser.yml` (push to `main` + `production`
+approval), Vercel's Git integration + `web-smoke.yml`, and `ios-testflight.yml`.
 
 ## Environment variables
 
@@ -207,6 +217,7 @@ Create a service token in web Settings → Sources & health → Tokens, or with
 | `VITE_SENTRY_DSN` | Sentry `ledger-apps` DSN (empty disables Sentry) |
 | `VITE_SENTRY_ENVIRONMENT` | `local` / `preview` / `production`. Empty, `local`, `development`, `test` or `vite dev` never report, even with a DSN |
 | `VITE_SENTRY_RELEASE` | Release name (defaults to `VERCEL_GIT_COMMIT_SHA` for source maps) |
+| `VITE_TESTFLIGHT_URL` | Optional public TestFlight link (`https://testflight.apple.com/join/…`). Shows *Get the Bank Ledger app (TestFlight)* in Settings → iPhone SMS; hidden when unset or not a TestFlight URL |
 | `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` | Build-time only: uploads source maps when the token is set. `SENTRY_PROJECT` defaults to `ledger-apps`. |
 
 ### Edge Functions (`supabase/functions/.env` locally; production: `supabase/functions/.env.production` pushed with `scripts/cutover/set-edge-secrets.sh`)
@@ -307,7 +318,7 @@ Used for the production Edge Function secrets and Vault entries, and for secret 
 | `/cards` | **Cards & Statements**: accounts, cards, statements with recon status, upload, documents |
 | `/review` | **Review inbox**: match reviews, unknown cards, unparsed SMS ("not a card transaction") and LLM template proposals. On mobile it is a bottom tab with a count |
 | `/rules` | **Rules**: categories, merchants, rules with live impact preview |
-| `/settings` | **Settings**: ledger, members (and invites), sources and health (queues, DLQ, mailboxes, tokens, PDF passwords), SMS setup guide |
+| `/settings` | **Settings**: ledger, members (and invites), sources and health (queues, DLQ, mailboxes, tokens, PDF passwords), iPhone SMS setup guide (step-by-step Shortcuts automation with copy buttons, *Open Shortcuts* on iPhone, a QR code to open it on the phone from a desktop, optional TestFlight button) |
 
 **iPhone** (`apps/ios/Ledger`)
 
@@ -321,7 +332,7 @@ Used for the production Edge Function secrets and Vault entries, and for secret 
 | Review | Open match reviews: link, keep as new, dismiss, register an unknown card (read-only for viewers) |
 | Settings | "SMS go to" ledger, SMS capture guide (one "Card" automation, Last captured, Send test), "Not sent" outbox list (Retry / Delete), profile |
 | **Log Bank SMS** (App Intent) | Called by the Shortcuts automation, with no UI |
-| **Add to Ledger** (share extension) | Sends shared PDFs to `statements-upload` |
+| **Add to Bank Ledger** (share extension) | Sends shared PDFs to `statements-upload` |
 
 ## API surface
 

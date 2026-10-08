@@ -105,7 +105,7 @@ export function BudgetsPage() {
                   )
                 }
               >
-                Set a monthly limit for all spending or for a category, and Ledger will track it as the month goes.
+                Set a monthly limit for all spending or for a category, and Bank Ledger will track it as the month goes.
               </EmptyState>
             ) : (
               <EmptyState icon={<Target />} title={`No budgets apply to ${formatMonth(month)}`}>

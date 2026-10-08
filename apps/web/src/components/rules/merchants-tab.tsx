@@ -208,7 +208,7 @@ export function MerchantsTab() {
             if (filtered.length === 0) {
               return !q ? (
                 <EmptyState icon={<Sparkles />} title="No suggestions to review">
-                  When Ledger suggests a category for a merchant, it shows up here for you to accept or reject.
+                  When Bank Ledger suggests a category for a merchant, it shows up here for you to accept or reject.
                 </EmptyState>
               ) : (
                 <EmptyState icon={<Search />} title="No suggestions match" action={<Button size="sm" onClick={() => setQ("")}>Clear search</Button>}>

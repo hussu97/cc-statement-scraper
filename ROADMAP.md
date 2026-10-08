@@ -1,4 +1,4 @@
-# Roadmap — Ledger v2
+# Roadmap — Bank Ledger (v2)
 
 ## Done (branch `ledger-v2`)
 
@@ -9,7 +9,7 @@
 | Parser | Stateless Cloud Run `/parse` (contract parse-v1) reusing the legacy parsers, with totals, `fx_rate`, legacy fingerprints and golden parity tests. |
 | SMS | 25 real templates (ADCB, FAB, ENBD, SIB) including known non-transaction alerts; daily FX fallback for pending foreign-currency SMS. |
 | Web | New `apps/web`: Overview, Activity, Insights, Budgets, Cards & Statements, Review, Rules, Settings; tokens-driven earthy theme; Realtime; Sentry. |
-| iOS | SwiftUI app + LedgerKit: Overview, Activity, Insights, Statements, Settings; `LogBankSMSIntent` with App Group outbox; "Add to Ledger" share extension; TestFlight script. |
+| iOS | SwiftUI app + LedgerKit: Overview, Activity, Insights, Statements, Settings; `LogBankSMSIntent` with App Group outbox; "Add to Bank Ledger" share extension; TestFlight script. |
 | Scraper | Configurable upload target and path, per-bank failure isolation, `upload-pending`. |
 | Cutover tooling | `private.import_legacy_metadata`, legacy category choices, parity report, the one-off `scripts/migrate_legacy.py` (removed after the cutover), pending invites. |
 | CI/CD | Path-filtered CI (supabase, edge, parser, web, ios, scraper) and manual deploy workflows for Supabase and the parser. |

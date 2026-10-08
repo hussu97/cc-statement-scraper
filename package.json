@@ -24,6 +24,11 @@
     "edge:test": "cd supabase/functions && deno test -A .",
     "db:migrations:check": "bash scripts/ci/check-migrations.sh diff origin/main HEAD",
     "lint:workflows": "actionlint && shellcheck -x scripts/hooks/* scripts/ci/*.sh scripts/install-hooks.sh",
-    "smoke:web": "bash scripts/ci/web-smoke.sh"
+    "smoke:web": "bash scripts/ci/web-smoke.sh",
+    "brand:icons": "node scripts/brand/generate-icons.mjs",
+    "brand:icons:check": "node scripts/brand/generate-icons.mjs --check"
+  },
+  "devDependencies": {
+    "@resvg/resvg-js": "2.6.2"
   }
 }

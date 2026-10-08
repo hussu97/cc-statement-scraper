@@ -1,6 +1,6 @@
-# Production — Ledger v2
+# Production — Bank Ledger (v2)
 
-This is the free-tier deployment plan and operations guide for Ledger v2, with a record of the
+This is the free-tier deployment plan and operations guide for Bank Ledger (v2), with a record of the
 cutover from legacy v1 (§10). Read [ARCHITECTURE.md](ARCHITECTURE.md) first.
 
 > **Production data is irreplaceable.** Never push migrations, deploy functions or run writes
@@ -65,7 +65,7 @@ Dashboard → Authentication:
 - **Providers → Email** enabled (email OTP or magic link). Sign in with Apple isn't used yet.
 - **Sign-ups: off, always.** Authentication → Sign In / Providers → *Allow new users to sign
   up* = **off** (local `supabase/config.toml` has `[auth] enable_signup = false` to match). A
-  signed-up stranger could create ledgers and use storage, LLM and queue capacity, so Ledger
+  signed-up stranger could create ledgers and use storage, LLM and queue capacity, so Bank Ledger
   never accepts self-registration. The web's magic link no longer creates users
   (`shouldCreateUser: false`); an unknown email is told to ask a ledger owner for an invite.
 - **Adding a member** (sign-ups stay off):
@@ -241,6 +241,19 @@ each daily job.
 | New user sign-ups | Authentication → Sign In / Providers → *Allow new users to sign up* | **off** (members are invited, §2.2) | before the day (no later than step 4) |
 | Site URL and redirect URLs | Authentication → URL Configuration | the Vercel production URL (§2.2) | step 9 |
 
+**Product name in dashboards ("Bank Ledger").** The code and `supabase/config.toml` define no
+Auth email templates or sender, so prod uses whatever the dashboards hold. Set these once:
+
+| Setting | Where | Value |
+|---|---|---|
+| Magic link / email code | Authentication → Emails → Templates → *Magic Link* | Subject `Your Bank Ledger sign-in code`; body: `<h2>Sign in to Bank Ledger</h2><p>Your code is <strong>{{ .Token }}</strong>, or <a href="{{ .ConfirmationURL }}">sign in with this link</a>.</p><p>If you didn't ask for this, ignore this email.</p>` |
+| Invite | Templates → *Invite user* | Subject `You're invited to Bank Ledger`; body names Bank Ledger and keeps `{{ .ConfirmationURL }}` |
+| Reset password, Change email | Templates → *Reset Password*, *Change Email Address* | Replace "your account" wording with "your Bank Ledger account" (keep the `{{ … }}` variables) |
+| Sender name | Authentication → Emails → SMTP Settings | *Sender name* `Bank Ledger` (needs custom SMTP; the built-in sender's name can't be changed) |
+| Google consent screen | GCP `credit-card-scraper-ht` → Google Auth Platform → Branding | App name `Bank Ledger` (§5) |
+| Microsoft consent | Entra → App registrations → the Outlook app → Branding | Name `Bank Ledger` (§6) |
+| App Store Connect | App Information → *Name* | `Bank Ledger` if available (now *Credit Card Ledger*); the home-screen name already is |
+
 ---
 
 ## 3. Parser on Cloud Run
@@ -327,6 +340,7 @@ echo "$PARSER_URL"; curl -s "$PARSER_URL/health"      # the URL is not a secret
 | `VITE_SENTRY_ENVIRONMENT` | `production` |
 | `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` | source-map upload (build only) |
 | `SENTRY_PROJECT` | `ledger-apps` (also the `vite.config.ts` default) |
+| `VITE_TESTFLIGHT_URL` | optional: the Friends & Family public TestFlight link (§7). Shows the TestFlight button in Settings → iPhone SMS; leave unset to hide it |
 
 The production values are in the gitignored `apps/web/.env.production.local`, which holds
 exactly these names: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_SENTRY_DSN`,
@@ -414,7 +428,7 @@ it. `PROJECT=credit-card-scraper-ht`, `URL=https://nkmylznisjcnmqbxosey.supabase
    consent screen with gcloud, so do it in the console as `hussainabbasi786110@gmail.com` with
    project `credit-card-scraper-ht` selected:
    1. **APIs & Services → OAuth consent screen** (Google Auth Platform) → *Get started*. App
-      name `Ledger`, support email = your Gmail → Audience **External** → contact email →
+      name `Bank Ledger`, support email = your Gmail → Audience **External** → contact email →
       agree → *Create*.
    2. **Audience** → keep *Testing* → *Test users* → *Add users* → the Gmail mailbox you ingest
       from → *Save*.
@@ -477,7 +491,7 @@ it. `PROJECT=credit-card-scraper-ht`, `URL=https://nkmylznisjcnmqbxosey.supabase
 2. One-time App Store Connect setup (bundle ids `com.hussu97.ledger` + `.share` are already
    registered with App Groups; Xcode assigns `group.com.hussu97.ledger` on the first archive):
    create the app record (*Apps → + → New App*, name **Credit Card Ledger**, bundle id
-   `com.hussu97.ledger`; the home-screen name stays "Ledger"), then in
+   `com.hussu97.ledger`; the home-screen name is "Bank Ledger", the share extension "Add to Bank Ledger"), then in
    TestFlight an internal group **Ledger Internal** (automatic distribution) and an external
    group **Friends & Family** (public link), and fill *Test Information* (beta description,
    feedback email, privacy policy URL, review contact incl. phone).
@@ -547,43 +561,41 @@ Non-production debug triggers to verify delivery (they need a reporting environm
 
 ## 9. CI/CD (GitHub Actions)
 
+Full reference: **[docs/ci-cd.md](docs/ci-cd.md)** (workflows, CI jobs, hooks, secrets, WIF
+setup, branch protection, rollbacks). Summary:
+
 | Workflow | Trigger | What |
 |---|---|---|
-| `ci.yml` | PRs, pushes to `main`, manual | Path-filtered jobs:<br>• `supabase`: `supabase start`, `db reset`, `test db`, DB types drift<br>• `edge`: `deno test`<br>• `parser`: ruff, pytest<br>• `web`: tokens check, lint, test, build<br>• `ios`: `swift test` on LedgerKit, macOS; only on LedgerKit/tokens changes or manual runs<br>• `scraper` |
-| `deploy-supabase.yml` | **manual only** | `supabase db push` and/or `supabase functions deploy`. Requires typing the project ref to confirm. Runs in the `production` environment. |
-| `deploy-parser.yml` | **manual only** | Builds `services/parser`, pushes to Artifact Registry, runs `gcloud run deploy ccs-parser` (min instances 0, secrets from Secret Manager) |
+| `ci.yml` | PRs, pushes to `main`, manual (`include_ios`) | Path-filtered jobs `tooling` (actionlint, shellcheck), `supabase` (append-only migration check, `db reset`, pgTAP, DB types drift), `edge` (`deno lint`, `deno fmt --check`, `deno test`), `parser` (ruff, pytest), `web` (tokens, lint, typecheck, test, build), `scraper`, `ios` (`swift test` on LedgerKit, macOS, only on LedgerKit/tokens changes or manual), and the aggregator **`ci-ok`**, the only required check |
+| `deploy-supabase.yml` | push to `main` touching `supabase/migrations/**`, `supabase/functions/**` or `config.toml`; manual (type the project ref, optional `dry_run`) | pgTAP + deno → `production` env → migration history check (`scripts/ci/check-migrations.sh remote linked`) → `db push --dry-run` → destructive-statement guard → `db push` → `functions deploy` |
+| `deploy-parser.yml` | push to `main` touching `services/parser/**`; manual (type `deploy`) | ruff + pytest → `production` env → build/push image → no-traffic tagged revision → `/health` smoke on the tag → 100% traffic |
+| `web-smoke.yml` | Vercel Production deployment success; daily; manual | Probes the production web app (title, CSP, security headers, SPA deep link, assets). Vercel's Git integration does the deploy |
+| `ios-testflight.yml` | push to `main` touching `apps/ios/**` (not `build-number.json`); manual | Uploads the IPA the pre-push hook staged on `ios-ledger-staged` to App Store Connect, then distributes to "Friends & Family" (§7) |
 | `security.yml` | weekly, manual | pip-audit and bandit (parser) |
 
-Production deploys are never automatic.
+**Deploys.** Pushes to `main` deploy Supabase and the parser after the `production`
+environment's approval (required reviewers need GitHub Pro/Team on a private repo). Set the
+repository variable `AUTO_DEPLOY=false` to make push-triggered Supabase runs plan-only and skip
+push-triggered parser deploys; manual dispatch still deploys. Every deploy job refuses refs
+other than `main`, never cancels midway and writes a rollback note to the run summary.
+Migrations are append-only (checked in pre-commit, pre-push, CI and before `db push`): fix
+forward with a new migration.
 
-**Guards.**
-- `deploy-supabase` and `deploy-parser` run only from `main`: a `guard` job fails any dispatch
-  from another ref before the `production` environment gate, and both still need their typed
-  confirmation. Also give the `production` environment a deployment-branch policy of
-  `main` only (Settings → Environments → production → Deployment branches).
+**Hooks** (`bash scripts/install-hooks.sh`): `pre-commit` is fast (staged files only: secrets
+guard, append-only migrations, eslint / deno lint / ruff / shellcheck / actionlint);
+`pre-push` mirrors CI for the changed areas, then on a `main` push that changes the iOS app
+builds and stages the TestFlight IPA. `SKIP_PRE_PUSH=1 git push` skips the hook,
+`SKIP_RELEASE=1 git push` skips only the iOS release.
 
-**Merge timing.** `workflow_dispatch` workflows can be dispatched only once the file is on the
-default branch, so the deploy workflows need `ledger-v2` merged into `main`. The merge also
-deletes `backend/` and `frontend/` from `main`, so first make sure every Git-connected legacy
-build is off (§10 step 1): Render `ccs-platform` Auto-Deploy off (or the service deleted) and
-the legacy Vercel project disconnected (or deleted). Otherwise they rebuild on the merge and
-fail. The new `apps/web` Vercel project builds Production on the merge as usual.
+**Secrets and variables** (names only; how to set them: docs/ci-cd.md §4):
+`SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `SUPABASE_PROJECT_REF` (env `production`);
+`GCP_WIF_PROVIDER`, `GCP_DEPLOY_SA` (repo variables; WIF setup in docs/ci-cd.md §5) or the
+fallback `GCP_SA_KEY` (env `production`), optional `GCP_PROJECT_ID`; `ASC_KEY_ID`,
+`ASC_ISSUER_ID`, `ASC_KEY_P8` (App Store Connect); optional `AUTO_DEPLOY`. The deployer SA
+needs `run.admin`, `artifactregistry.writer` and `iam.serviceAccountUser` on `ccs-parser@`.
 
-**Permissions.** Every workflow sets `permissions: contents: read` (or none, for the guard).
-CI's `changes` job adds `pull-requests: read`, which `dorny/paths-filter` needs to list PR files
-in a private repo.
-
-**GitHub secrets.** Create a `production` environment with required reviewers.
-
-| Secret | Used by |
-|---|---|
-| `SUPABASE_ACCESS_TOKEN` | deploy-supabase (personal access token) |
-| `SUPABASE_DB_PASSWORD` | deploy-supabase (`supabase link` / `db push`) |
-| `SUPABASE_PROJECT_REF` | deploy-supabase, deploy-parser (`nkmylznisjcnmqbxosey`) |
-| `GCP_SA_KEY`, `GCP_PROJECT_ID` | deploy-parser |
-
-The GCP deploy SA needs roles `run.admin`, `artifactregistry.writer` and
-`iam.serviceAccountUser` on `ccs-parser@`.
+The legacy repository variable `LEGACY_DEPLOYS_ENABLED` is no longer read by any workflow and
+can be deleted: `gh variable delete LEGACY_DEPLOYS_ENABLED`.
 
 ---
 
@@ -596,7 +608,7 @@ removed the legacy code, and its parent (or `cdd77b1`, the `ledger-v2` head befo
 removal) still has the runbook, `backend/` and the cutover script. Other sections refer to the
 steps by number:
 
-1. **Freeze legacy:** legacy workflows off (`LEGACY_DEPLOYS_ENABLED=false`), Render
+1. **Freeze legacy:** legacy deploy workflows disabled (since deleted), Render
    `ccs-platform` Auto-Deploy off and suspended, legacy Vercel project disconnected from Git,
    Cloud Scheduler `ccs-gmail-watch-renew` paused, Cloud Run `ccs-gmail-relay` left deployed.
 2. **Back up:** whole-DB and `public`-data `pg_dump`s plus a GCS bucket listing, kept off-machine.
@@ -618,7 +630,7 @@ steps by number:
 10. **Point the scraper at v2** (README → Scraper env).
 11. **Switch email** to `gmail-push` / `outlook-poll` (§5, §6).
 12. **Decommission.** Legacy code removed from the repo: `backend/`, `frontend/`, `deploy/`,
-    the legacy workflows and CI jobs, the legacy git hook steps, `docs/operations/`,
+    the legacy CI jobs and git hook steps, `docs/operations/`,
     `docs/security/` and `scripts/migrate_legacy.py` (with its tests). Still to do **outside
     the repo**, once legacy has been read-only for 30 clean days:
     - [ ] Delete the Render service `ccs-platform`, the legacy Vercel project, the Cloud Run

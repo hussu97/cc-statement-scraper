@@ -16,7 +16,7 @@ export function SettingsPage() {
   const tab = settingsTab(raw);
   return (
     <div className="mx-auto w-full max-w-5xl">
-      <PageHeader title="Settings" description="Where your data comes from, who can see it, and how Ledger looks." />
+      <PageHeader title="Settings" description="Where your data comes from, who can see it, and how Bank Ledger looks." />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="mb-6">
           <TabsTrigger value="sources">Sources & health</TabsTrigger>

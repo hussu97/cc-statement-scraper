@@ -1,4 +1,4 @@
-/* Ledger web styles.
+/* Bank Ledger web styles.
  * Colour, type and shape come ONLY from @ledger/tokens (CSS variables). The
  * @theme block below maps them onto Tailwind's namespaces with `inline`, so a
  * utility like `bg-surface` compiles to `background: var(--color-surface)` and
@@ -143,4 +143,23 @@
   background-size: 100% 6px;
   background-repeat: no-repeat;
   background-position: bottom left;
+}
+
+/*
+ * QR codes stay dark-on-light in every theme: phone cameras read inverted codes
+ * unreliably. Same selectors as packages/tokens' theme switch.
+ */
+.qr-code {
+  color: var(--color-ink);
+  background: var(--color-surface);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .qr-code {
+    color: var(--color-bg);
+    background: var(--color-ink);
+  }
+}
+:root[data-theme="dark"] .qr-code {
+  color: var(--color-bg);
+  background: var(--color-ink);
 }
