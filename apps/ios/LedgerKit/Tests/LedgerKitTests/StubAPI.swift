@@ -76,15 +76,62 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
     func budgetStatus(profileCode: String, month: CalendarDay?) async throws -> [BudgetStatus] { [] }
     func recurringList(profileCode: String) async throws -> [RecurringCharge] { [] }
     func filterMeta(profileCode: String) async throws -> FilterMeta {
-        FilterMeta(accounts: [], cards: [], categories: [], banks: [], dateRange: nil)
+        FilterMeta(accounts: [], cards: [], categories: categoryOptions, banks: [], dateRange: nil)
     }
     func transactions(profileCode: String, query: ActivityQuery) async throws -> TransactionPage { .init(rows: [], total: 0) }
     func insights(profileCode: String) async throws -> [Insight] { [] }
     func dismissInsight(insightCode: String) async throws {}
     func documents(profileCode: String, limit: Int) async throws -> [DocumentRecord] { [] }
     func setTransactionCategory(txnCode: String, categoryCode: String, applyToMerchant: Bool) async throws {}
-    func uploadStatements(profileCode: String, files: [UploadFile]) async throws -> UploadResponse { .init(uploads: []) }
+    func uploadStatements(profileCode: String, files: [UploadFile]) async throws -> UploadResponse {
+        var items: [UploadResponse.Item] = []
+        for file in files { items += try uploadFile(file).uploads }
+        return UploadResponse(uploads: items)
+    }
     func changes(profileCode: String) -> AsyncStream<LedgerChange> { AsyncStream { $0.finish() } }
+
+    // MARK: Statement detail, spend split, banks, upload timeline
+
+    var detail: StatementDetail?
+    var detailError: LedgerAPIError?
+    var breakdown: SpendBreakdown?
+    private(set) var breakdownCalls: [SpendSplitGrouping] = []
+    var bankRows: [BankInfo] = []
+    var transactionsByCode: [String: LedgerTransaction] = [:]
+    var categoryOptions: [FilterMeta.CategoryOption] = []
+    /// `document_events` the initial fetch returns, by doc code.
+    var storedEvents: [String: [DocumentEvent]] = [:]
+    /// Per filename: the upload answer, or the error to throw.
+    var uploadAnswers: [String: Result<UploadResponse.Item, LedgerAPIError>] = [:]
+    private(set) var uploadedFilenames: [String] = []
+    /// Events pushed here reach `documentEventStream` subscribers.
+    let eventFeed = AsyncStream<DocumentEvent>.makeStream()
+
+    func statementDetail(profileCode: String, stmtCode: String) async throws -> StatementDetail {
+        if let detailError { throw detailError }
+        guard let detail else { throw LedgerAPIError.server(status: nil, code: "P0002", message: "unknown statement") }
+        return detail
+    }
+    func spendBreakdown(profileCode: String, from: CalendarDay, to: CalendarDay, groupBy: SpendSplitGrouping,
+                        topN: Int) async throws -> SpendBreakdown {
+        lock.withLock { breakdownCalls.append(groupBy) }
+        guard let breakdown else { throw LedgerAPIError.network("offline") }
+        return breakdown
+    }
+    func banks() async throws -> [BankInfo] { bankRows }
+    func transaction(profileCode: String, txnCode: String) async throws -> LedgerTransaction? { transactionsByCode[txnCode] }
+    func documentEvents(profileCode: String, docCodes: [String]) async throws -> [DocumentEvent] {
+        DocumentEvent.ordered(docCodes.flatMap { storedEvents[$0] ?? [] })
+    }
+    func documentEventStream(profileCode: String) -> AsyncStream<DocumentEvent> { eventFeed.stream }
+    func uploadFile(_ file: UploadFile) throws -> UploadResponse {
+        lock.withLock { uploadedFilenames.append(file.filename) }
+        switch uploadAnswers[file.filename] {
+        case .success(let item)?: return UploadResponse(uploads: [item])
+        case .failure(let error)?: throw error
+        case nil: return UploadResponse(uploads: [])
+        }
+    }
 }
 
 /// A clock tests can move.

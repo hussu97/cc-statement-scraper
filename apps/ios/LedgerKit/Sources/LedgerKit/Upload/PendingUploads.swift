@@ -32,21 +32,79 @@ public struct PendingUploads: Sendable {
     }
 
     /// Uploads each pending file on its own (extension memory is tight) and
-    /// deletes it once the server has it. Stops at the first failure.
+    /// deletes it once the server has it. A failure that will pass (offline,
+    /// signed out, server busy) stops the run and keeps the rest for later; a
+    /// permanent rejection (too large, not a PDF, no longer an owner) moves that
+    /// file to `rejected/` with the reason and carries on, so one bad PDF never
+    /// blocks the queue (BACKLOG IOS-16r).
     @discardableResult
     public func flush(profileCode: String, upload: @Sendable (UploadFile) async throws -> UploadResponse) async -> Int {
         var sent = 0
         for url in list() {
-            guard let data = try? Data(contentsOf: url) else { continue }
+            guard let data = try? Data(contentsOf: url) else {
+                quarantine(url, reason: "The saved file couldn't be read.")
+                continue
+            }
             do {
                 _ = try await upload(UploadFile(filename: Self.originalName(url), data: data))
                 try? FileManager.default.removeItem(at: url)
                 sent += 1
+            } catch let error as LedgerAPIError where error.kind == .permanent {
+                quarantine(url, reason: error.description)
             } catch {
                 break
             }
         }
         return sent
+    }
+
+    // MARK: Rejected
+
+    /// A PDF the server refused for good, kept so the person can see why.
+    public struct Rejected: Sendable, Hashable, Identifiable {
+        public var id: URL { url }
+        public let url: URL
+        public let filename: String
+        public let reason: String
+    }
+
+    var rejectedDirectory: URL { directory.appendingPathComponent("rejected", isDirectory: true) }
+
+    public func rejected() -> [Rejected] {
+        let urls = (try? FileManager.default.contentsOfDirectory(at: rejectedDirectory, includingPropertiesForKeys: nil)) ?? []
+        return urls.filter { $0.pathExtension.lowercased() == "pdf" }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            .map { url in
+                let reason = (try? String(contentsOf: Self.reasonURL(url), encoding: .utf8)) ?? "The server refused this PDF."
+                return Rejected(url: url, filename: Self.originalName(url), reason: reason)
+            }
+    }
+
+    /// Deletes a rejected PDF and its reason.
+    public func discard(_ item: Rejected) {
+        try? FileManager.default.removeItem(at: item.url)
+        try? FileManager.default.removeItem(at: Self.reasonURL(item.url))
+    }
+
+    func quarantine(_ url: URL, reason: String) {
+        let fm = FileManager.default
+        try? fm.createDirectory(at: rejectedDirectory, withIntermediateDirectories: true)
+        let target = rejectedDirectory.appendingPathComponent(url.lastPathComponent)
+        try? fm.removeItem(at: target)
+        if (try? fm.moveItem(at: url, to: target)) == nil {
+            try? fm.removeItem(at: url)   // never let it block the queue
+            return
+        }
+        try? Data(reason.utf8).write(to: Self.reasonURL(target), options: .atomic)
+    }
+
+    static func reasonURL(_ pdf: URL) -> URL { pdf.appendingPathExtension("reason") }
+
+    /// `"2 PDFs waiting to upload"`, nil when none.
+    public var waitingLabel: String? {
+        let n = count
+        guard n > 0 else { return nil }
+        return n == 1 ? "1 PDF waiting to upload" : "\(n) PDFs waiting to upload"
     }
 }
 
@@ -76,9 +134,9 @@ public enum ShareOutcome: Equatable, Sendable {
         switch self {
         case let .uploaded(queued, duplicates):
             var parts: [String] = []
-            if queued > 0 { parts.append(queued == 1 ? "1 statement queued for parsing" : "\(queued) statements queued for parsing") }
-            if duplicates > 0 { parts.append(duplicates == 1 ? "1 already in Ledger" : "\(duplicates) already in Ledger") }
-            return parts.isEmpty ? "Nothing to upload." : parts.joined(separator: ", ") + "."
+            if queued > 0 { parts.append(queued == 1 ? "Sent: watch progress in Bank Ledger → Statements" : "Sent \(queued) PDFs: watch progress in Bank Ledger → Statements") }
+            if duplicates > 0 { parts.append(duplicates == 1 ? "1 already in Bank Ledger" : "\(duplicates) already in Bank Ledger") }
+            return parts.isEmpty ? "Nothing to upload." : parts.joined(separator: ". ") + "."
         case .savedForLater(let n):
             return n == 1 ? "Saved. It will upload next time you open Ledger." : "Saved \(n) PDFs. They will upload next time you open Ledger."
         case .noProfile:

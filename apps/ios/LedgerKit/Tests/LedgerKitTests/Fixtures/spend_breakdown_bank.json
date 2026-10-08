@@ -1,0 +1,14 @@
+{
+  "group_by": "bank", "total": "3500.00",
+  "months": ["2026-08", "2026-09", "2026-10"],
+  "groups": [
+    {"key": "FAB", "label": "First Abu Dhabi Bank", "color_token": null, "logo_path": "FAB.png", "total": "2000.00", "share": "0.5714"},
+    {"key": "ADCB", "label": "Abu Dhabi Commercial Bank", "color_token": null, "logo_path": "ADCB.png", "total": "1400.00", "share": "0.4000"},
+    {"key": "__other__", "label": "Others", "color_token": null, "logo_path": null, "total": "100.00", "share": "0.0286"}
+  ],
+  "series": [
+    {"month": "2026-08", "total": "1000.00", "values": {"FAB": "750.00", "ADCB": "250.00", "__other__": "0.00"}},
+    {"month": "2026-09", "total": "0.00", "values": {"FAB": "0.00", "ADCB": "0.00", "__other__": "0.00"}},
+    {"month": "2026-10", "total": "2500.00", "values": {"FAB": "1250.00", "ADCB": "1150.00", "__other__": "100.00"}}
+  ]
+}

@@ -1,0 +1,5 @@
+[
+  {"bank_code": "ADCB", "name": "Abu Dhabi Commercial Bank", "sms_senders": ["ADCB", "ADCBAlert"], "created_at": "2026-10-08T00:00:00+00:00", "logo_path": "ADCB.png"},
+  {"bank_code": "RAKBANK", "name": "RAKBANK", "sms_senders": ["RAKBANK"], "created_at": "2026-10-08T00:00:00+00:00", "logo_path": "RAKBANK.png"},
+  {"bank_code": "CBD", "name": "Commercial Bank of Dubai", "sms_senders": [], "created_at": "2026-10-08T00:00:00+00:00", "logo_path": null}
+]
