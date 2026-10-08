@@ -56,7 +56,7 @@ public enum ReviewPresentation {
         case "low_score": "The closest transaction is only a partial match. Link it if it's the same purchase."
         case "amount_drift": "The posted amount differs from the alert."
         case "unknown_card": "An SMS mentions a card Ledger doesn't know. Choose the account it belongs to; waiting messages from it are then processed."
-        case "unparsed_sms": "A bank message didn't match any format. Review the proposed template on the web."
+        case "unparsed_sms": "A bank message didn't match any format. Ask the AI to try again, or mark it as not a card transaction. Proposed formats are accepted on the web."
         case "orphaned": "Their only evidence was removed. Dismiss once checked."
         case "missing_from_statement": "An SMS purchase never appeared on its statement. It may have been released."
         case "period_overlap": "Two statements of the same card cover the same days. Resolve it on the web."
@@ -91,6 +91,18 @@ public enum ReviewPresentation {
             if accounts.isEmpty {
                 note = "No \(bank ?? "matching") account yet. It appears after a statement from that bank; or add it on the web."
             }
+            if review.subjectType == "sms" {
+                options.append(.init(label: "Not a card transaction", action: .notATransaction))
+            }
+        case "unparsed_sms" where review.subjectType == "sms":
+            // Same as the web's footer: without a proposed format, the AI can
+            // try again; a proposal is accepted or rejected on the web.
+            if review.candidates.contains(where: { $0.templateCode != nil }) {
+                note = "Ledger proposed a format for this message. Accept or reject it on the web."
+            } else {
+                options.append(.init(label: "Retry with AI", action: .retryWithAI))
+            }
+            options.append(.init(label: "Not a card transaction", action: .notATransaction))
         case "ambiguous", "low_score", "amount_drift":
             guard canMatch else {
                 note = "More options for this are on the web."
@@ -140,7 +152,46 @@ public enum ReviewPresentation {
         case "linked": "Linked."
         case "created": "Kept as a new transaction."
         case "dismissed": "Dismissed."
+        case "ignored": "Marked as not a card transaction."
+        case "superseded": "Older statement superseded."
+        case "retrying": "Sent to the AI again. If it still can't read the message, it comes back here."
         default: "Done."
+        }
+    }
+
+    /// `resolve_review` / `retry_sms_fallback` errors in words (the web's
+    /// `reviewActionError`). P0002: the review, or a code in the answer, is gone
+    /// or belongs to another ledger — usually it was answered elsewhere. 22023:
+    /// the answer doesn't fit the review (e.g. a transaction on another account).
+    public static func errorMessage(_ error: any Error) -> String {
+        guard case let .server(_, code, message)? = error as? LedgerAPIError else {
+            return LoadState<Int>.message(for: error)
+        }
+        func has(_ needle: String) -> Bool { message.range(of: needle, options: .caseInsensitive) != nil }
+        switch code {
+        case "P0002":
+            return has("is not open")
+                ? "This review was already answered, or it's no longer in this ledger. The list has been refreshed."
+                : "Something this answer refers to no longer exists in this ledger. The list has been refreshed."
+        case "22023":
+            if has("different account") || has("not on this message's account") {
+                return "That transaction is on a different card account, so it can't be linked here."
+            }
+            if has("already part of a transaction") {
+                return "This message is already part of a transaction, so it can't be marked as not a card transaction."
+            }
+            if has("already has a confirmed") {
+                return "That transaction already has its own statement line or SMS, so it can't take this one."
+            }
+            if has("not an open unparsed_sms review") {
+                return "Only an open unrecognised-SMS review can be sent to the AI again."
+            }
+            if has("no account or amount") {
+                return "Ledger doesn't know this message's card or amount yet. Add the card first."
+            }
+            return "That answer doesn't fit this review. The list has been refreshed."
+        default:
+            return LoadState<Int>.message(for: error)
         }
     }
 }
@@ -174,7 +225,7 @@ public final class ReviewModel {
             let outcome = try await api.resolveReview(reviewCode: item.review.reviewCode, action: option.action)
             message = ReviewPresentation.outcomeMessage(outcome)
         } catch {
-            message = LoadState<Int>.message(for: error)
+            message = ReviewPresentation.errorMessage(error)
         }
         await load(profileCode: profileCode)
     }

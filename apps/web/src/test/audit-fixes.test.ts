@@ -97,14 +97,14 @@ describe("WEB-05: foreign amounts without an AED estimate", () => {
 
 describe("WEB-07: every review can be cleared", () => {
   const r = (reason: string, subject_type = "sms") => ({ reason, subject_type });
-  it("offers dismiss and not-a-transaction for an unparsed SMS without a proposed format", () => {
-    expect(reviewFooterActions(r("unparsed_sms"), false)).toEqual(["not_a_transaction", "dismiss"]);
+  it("offers retry-with-AI, not-a-transaction and dismiss for an unparsed SMS without a proposed format", () => {
+    expect(reviewFooterActions(r("unparsed_sms"), false)).toEqual(["retry_ai", "not_a_transaction", "dismiss"]);
     expect(reviewFooterActions(r("unparsed_sms"), true)).toEqual([]);
   });
 
   it("keeps the existing actions for other reasons", () => {
     expect(reviewFooterActions(r("ambiguous", "statement_line"), false)).toEqual(["separate", "dismiss"]);
-    expect(reviewFooterActions(r("unknown_card"), false)).toEqual(["dismiss"]);
+    expect(reviewFooterActions(r("unknown_card"), false)).toEqual(["not_a_transaction", "dismiss"]);
     expect(reviewFooterActions(r("period_overlap", "statement"), false)).toEqual(["supersede", "dismiss"]);
     expect(reviewFooterActions(r("orphaned", "transaction"), false)).toEqual(["dismiss"]);
   });

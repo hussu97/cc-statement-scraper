@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase, type Tables } from "@/lib/supabase";
+import { supabase, type RpcReturn, type Tables } from "@/lib/supabase";
 import type { Json } from "@ledger/db-types";
 import { addMonths, todayDubai } from "@/lib/dates";
 import { keys, LEDGER_DOMAINS } from "./keys";
@@ -305,6 +305,60 @@ export function useMerchants(profileCode: string) {
       ]);
       const rows = mustList(board);
       return { rows: mergeMerchants(rows, mustList(mpc) as unknown as Assignment[]), capped: rows.length >= MERCHANT_LEADERBOARD_MAX };
+    },
+  });
+}
+
+export type MerchantSearchRow = RpcReturn<"merchant_search">[number];
+
+/** merchant_search caps p_limit at 2000 server-side. */
+export const MERCHANT_SEARCH_MAX = 2000;
+
+/** Ask for one row more than a page, to know whether a next page exists. Pure. */
+export function merchantSearchArgs(page: number, size: number): { p_offset: number; p_limit: number } {
+  return { p_offset: (Math.max(1, page) - 1) * size, p_limit: Math.min(size + 1, MERCHANT_SEARCH_MAX) };
+}
+
+/** Trim the look-ahead row. At the 2000 cap a full page may have a next page. Pure. */
+export function merchantSearchPage<T>(rows: T[], size: number): { rows: T[]; hasMore: boolean } {
+  const hasMore = rows.length > size || (size >= MERCHANT_SEARCH_MAX && rows.length >= MERCHANT_SEARCH_MAX);
+  return { rows: rows.slice(0, size), hasMore };
+}
+
+/**
+ * Search hits as list rows. A merchant already known from the 12-month
+ * leaderboard or an assignment keeps its spend, category and suggestion; the
+ * count and last date are merchant_search's (all time). Pure, unit-tested.
+ */
+export function mergeSearchRows(hits: MerchantSearchRow[], known: MerchantRow[]): MerchantRow[] {
+  const byCode = new Map(known.map((m) => [m.merchant_code, m]));
+  return hits.map((h) => {
+    const k = byCode.get(h.merchant_code);
+    return {
+      merchant_code: h.merchant_code,
+      merchant_name: k?.merchant_name ?? h.display_name,
+      category_code: k?.category_code ?? h.manual_category_code ?? null,
+      category_name: k?.category_name ?? null,
+      amount: k?.amount ?? null,
+      txn_count: h.txn_count,
+      last_date: h.last_date,
+      assignment: k?.assignment ?? null,
+    };
+  });
+}
+
+/**
+ * Every merchant of the profile matching `q` (all of them when empty), a
+ * server page at a time: merchant_search orders by match quality, then count.
+ */
+export function useMerchantSearch(profileCode: string, q: string, page: number, size: number, enabled = true) {
+  return useQuery({
+    queryKey: [...keys.merchants(profileCode), "search", q, page, size],
+    enabled,
+    placeholderData: keepPreviousData,
+    queryFn: async () => {
+      const rows = mustList(await supabase.rpc("merchant_search", { p_profile_code: profileCode, p_q: q, ...merchantSearchArgs(page, size) }));
+      return merchantSearchPage(rows, size);
     },
   });
 }

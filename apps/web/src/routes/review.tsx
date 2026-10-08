@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { Ban, Check, ChevronDown, Inbox, Link2, Plus, X } from "lucide-react";
+import { Ban, Check, ChevronDown, Inbox, Link2, Plus, Sparkles, X } from "lucide-react";
 import { useActiveProfile } from "@/data/profile";
-import { REVIEW_REASONS, candidatesOf, groupReviews, reviewFooterActions, useDecideTemplate, useOpenReviews, useResolveReview, useReviewContext, type ResolveAction, type Review } from "@/data/reviews";
+import { NOT_A_TRANSACTION, REVIEW_REASONS, candidatesOf, groupReviews, reviewActionError, reviewFooterActions, useDecideTemplate, useOpenReviews, useResolveReview, useRetrySmsFallback, useReviewContext, type ResolveAction, type Review } from "@/data/reviews";
 import { useAccounts } from "@/data/cards";
 import { accountLabel } from "@/data/overview";
 import { useSmsBody, type TxnRow } from "@/data/transactions";
@@ -75,16 +75,22 @@ function ReviewCard({ review }: { review: Review }) {
   const { profile_code, isOwner } = useActiveProfile();
   const ctx = useReviewContext(profile_code, review);
   const resolve = useResolveReview(profile_code);
+  const retryAi = useRetrySmsFallback(profile_code);
   const toast = useToast();
   const act = (action: ResolveAction, done: string) =>
     resolve.mutate(
       { reviewCode: review.review_code, action },
       {
         onSuccess: () => toast({ title: done, tone: "positive" }),
-        onError: (e) => toast({ title: "Couldn't resolve", description: errorMessage(e), tone: "danger" }),
+        onError: (e) => toast({ title: "Couldn't resolve", description: reviewActionError(e), tone: "danger" }),
       },
     );
-  const busy = resolve.isPending;
+  const retry = () =>
+    retryAi.mutate(review.review_code, {
+      onSuccess: () => toast({ title: "Sent to the AI again", description: "If it still can't read the message, it comes back here.", tone: "positive" }),
+      onError: (e) => toast({ title: "Couldn't retry", description: reviewActionError(e), tone: "danger" }),
+    });
+  const busy = resolve.isPending || retryAi.isPending;
   const footer = ctx.data ? reviewFooterActions(review, !!ctx.data.template) : [];
 
   return (
@@ -149,7 +155,7 @@ function ReviewCard({ review }: { review: Review }) {
           {review.reason === "unparsed_sms" && ctx.data.template && <TemplateProposal review={review} template={ctx.data.template} />}
           {review.reason === "unparsed_sms" && !ctx.data.template && (
             <p className="text-[13px] text-muted">
-              Ledger couldn't propose a format for this message. If it isn't a card transaction, mark it so; otherwise dismiss it and add the format later.
+              Ledger couldn't propose a format for this message. Ask the AI to try again, mark it as not a card transaction, or dismiss it and add the format later.
             </p>
           )}
 
@@ -168,8 +174,13 @@ function ReviewCard({ review }: { review: Review }) {
                       Replace statement of {formatDate(c.statement_date)}
                     </Button>
                   ))}
+              {footer.includes("retry_ai") && (
+                <Button size="sm" icon={<Sparkles className="size-3.5" />} disabled={busy} loading={retryAi.isPending} onClick={retry}>
+                  Retry with AI
+                </Button>
+              )}
               {footer.includes("not_a_transaction") && (
-                <Button size="sm" icon={<Ban className="size-3.5" />} disabled={busy} onClick={() => act({ dismiss: true, not_a_transaction: true }, "Marked as not a card transaction")}>
+                <Button size="sm" icon={<Ban className="size-3.5" />} disabled={busy} onClick={() => act(NOT_A_TRANSACTION, "Marked as not a card transaction")}>
                   Not a card transaction
                 </Button>
               )}

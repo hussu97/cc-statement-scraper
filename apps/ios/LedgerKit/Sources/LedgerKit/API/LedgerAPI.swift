@@ -34,8 +34,12 @@ public protocol LedgerAPI: SMSIngestAPI {
     // Review (match_reviews)
     /// Open reviews for the profile with what the screen needs to describe them.
     func reviewInbox(profileCode: String) async throws -> ReviewInbox
-    /// `rpc('resolve_review')`; returns the server's `outcome`.
+    /// `rpc('resolve_review')`; returns the server's `outcome`. `.retryWithAI`
+    /// goes to `retrySMSFallback` and returns `"retrying"`.
     func resolveReview(reviewCode: String, action: ReviewAction) async throws -> String
+    /// `rpc('retry_sms_fallback')`: closes an open `unparsed_sms` review and
+    /// queues the message for the LLM fallback again.
+    func retrySMSFallback(reviewCode: String) async throws
 
     // Writes
     func setTransactionCategory(txnCode: String, categoryCode: String, applyToMerchant: Bool) async throws

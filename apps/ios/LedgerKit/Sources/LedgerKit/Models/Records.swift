@@ -68,11 +68,13 @@ public struct SMSIngestResult: Decodable, Sendable, Hashable {
     public let smsCode: String?
     /// created/linked/duplicate/held/skipped from the matcher, or `unparsed`,
     /// `ignored`, `unknown_card`, `rejected_otp`, `duplicate_delivery`,
-    /// `already_linked`; newer servers answer `invalid` (with `reason`) for a
-    /// message they refuse instead of failing the whole batch.
+    /// `already_linked`; newer servers answer `invalid` (not stored; `reason`
+    /// says why) for a message they refuse, and `failed` (stored, but
+    /// processing raised; `reason` = `error:<sqlstate>`) instead of failing
+    /// the whole batch. Both are terminal: the outbox parks them, never retries.
     public let status: String
     public let txnCode: String?
-    /// Why a message was refused (`invalid` / `error`). Absent on older servers.
+    /// Why a message was refused (`invalid` / `failed`). Absent on older servers.
     public let reason: String?
 
     public init(clientMsgId: String, smsCode: String?, status: String, txnCode: String?, reason: String? = nil) {
@@ -102,11 +104,29 @@ public struct SMSIngestResult: Decodable, Sendable, Hashable {
 
     public var isFailure: Bool { Self.failureStatuses.contains(status) }
 
-    /// Shown in Settings next to a parked message.
+    /// Shown in Settings → Not sent next to a parked message.
     public var failureReason: String {
-        if let reason, !reason.isEmpty { return "Ledger rejected this message: \(reason)" }
+        if status == "failed" {
+            let code = reason.flatMap { $0.hasPrefix("error:") ? String($0.dropFirst(6)) : nil }
+            let detail = code.map { $0.isEmpty ? "" : " (error \($0))" } ?? ""
+            return "Ledger saved this message but couldn't process it\(detail). It tries again when SMS formats change."
+        }
+        if let reason, !reason.isEmpty {
+            if let sentence = Self.invalidReasons[reason] { return "Ledger rejected this message: \(sentence)" }
+            return "Ledger rejected this message: \(reason)"
+        }
         return "Ledger rejected this message (\(status))."
     }
+
+    /// `ingest_sms`'s `invalid` reasons (`private.sms_input_problem`), in words.
+    static let invalidReasons: [String: String] = [
+        "not_an_object": "it wasn't sent in the expected format.",
+        "invalid_client_msg_id": "its message ID isn't valid.",
+        "missing_body": "it has no text.",
+        "body_too_long": "it's longer than 2,000 characters.",
+        "invalid_sender": "its sender isn't valid.",
+        "invalid_received_at": "its received time isn't valid.",
+    ]
 }
 
 /// Response of the `statements-upload` Edge Function:

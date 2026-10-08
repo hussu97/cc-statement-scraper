@@ -131,6 +131,8 @@ public struct ReconChip: Sendable, Hashable, Identifiable {
         case "ok": chips.append(.init(label: "Reconciled", tone: .positive))
         case "warn": chips.append(.init(label: "Check", tone: .warn))
         case "fail": chips.append(.init(label: "Mismatch", tone: .danger))
+        // A history extract has no totals: nothing to reconcile (DP-08). Neutral, not an error.
+        case "n/a": chips.append(.init(label: "Nothing to reconcile", tone: .neutral))
         default: chips.append(.init(label: "Not reconciled", tone: .neutral))
         }
         guard let checks = cycle.reconChecks else { return chips }
@@ -138,6 +140,8 @@ public struct ReconChip: Sendable, Hashable, Identifiable {
         if checks.creditsMatch == false { chips.append(.init(label: "Credits differ", tone: .danger)) }
         if checks.balanceEquation == false { chips.append(.init(label: "Balance off", tone: .danger)) }
         if checks.totals == "not_extracted" { chips.append(.init(label: "No totals", tone: .warn)) }
+        if checks.noLines == true { chips.append(.init(label: "No lines read", tone: .warn)) }
+        if let n = checks.unpricedLines, n > 0 { chips.append(.init(label: "\(n) awaiting FX", tone: .info)) }
         if let n = checks.unmatchedSms, n > 0 {
             chips.append(.init(label: "\(n) SMS not on statement", tone: .warn))
         }

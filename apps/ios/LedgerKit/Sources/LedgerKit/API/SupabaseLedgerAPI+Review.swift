@@ -54,23 +54,33 @@ extension SupabaseLedgerAPI {
     }
 
     public func resolveReview(reviewCode: String, action: ReviewAction) async throws -> String {
+        guard let payload = action.json else {
+            try await retrySMSFallback(reviewCode: reviewCode)
+            return "retrying"
+        }
         struct Result: Decodable { let outcome: String? }
         let result = try await rpc("resolve_review", Result.self, [
             "p_review_code": .string(reviewCode),
-            "p_action": action.json,
+            "p_action": payload,
         ])
         return result.outcome ?? "done"
+    }
+
+    public func retrySMSFallback(reviewCode: String) async throws {
+        _ = try await rpc("retry_sms_fallback", Ignored.self, ["p_review_code": .string(reviewCode)])
     }
 }
 
 extension ReviewAction {
-    /// `p_action` for `resolve_review`.
-    var json: AnyJSON {
+    /// `p_action` for `resolve_review`; nil for `.retryWithAI` (another RPC).
+    var json: AnyJSON? {
         switch self {
         case .link(let txnCode): .object(["link": .string(txnCode)])
         case .createNew: .object(["create_new": .bool(true)])
         case .dismiss: .object(["dismiss": .bool(true)])
         case .registerCard(let accountCode): .object(["card": .object(["account_code": .string(accountCode)])])
+        case .notATransaction: .object(["not_a_transaction": .bool(true)])
+        case .retryWithAI: nil
         }
     }
 }

@@ -117,19 +117,22 @@ export function useOpenReviews(profileCode: string, page: number, size: number) 
 }
 
 /** Actions in a review card's footer (besides per-candidate links and the card/template pickers). */
-export type ReviewFooterAction = "separate" | "supersede" | "not_a_transaction" | "dismiss";
+export type ReviewFooterAction = "separate" | "supersede" | "retry_ai" | "not_a_transaction" | "dismiss";
 
 /**
  * Which footer actions a review offers. Every open review has at least one way
  * to be cleared: an unparsed SMS without a proposed format (the LLM proposed
- * nothing, or the proposal is gone) can be dismissed or marked "not a card
- * transaction" (WEB-07). Pure, unit-tested.
+ * nothing, or the proposal is gone) can be sent to the AI again, marked "not a
+ * card transaction", or dismissed (WEB-07). An SMS from an unknown card can
+ * also be marked "not a card transaction" (e.g. a debit-card alert). Pure,
+ * unit-tested.
  */
 export function reviewFooterActions(r: Pick<Review, "reason" | "subject_type">, hasTemplate: boolean): ReviewFooterAction[] {
-  if (r.reason === "unparsed_sms") return hasTemplate ? [] : ["not_a_transaction", "dismiss"];
+  if (r.reason === "unparsed_sms") return hasTemplate ? [] : ["retry_ai", "not_a_transaction", "dismiss"];
   const out: ReviewFooterAction[] = [];
   if ((r.subject_type === "statement_line" || r.subject_type === "sms") && r.reason !== "unknown_card") out.push("separate");
   if (r.reason === "period_overlap") out.push("supersede");
+  if (r.reason === "unknown_card" && r.subject_type === "sms") out.push("not_a_transaction");
   out.push("dismiss");
   return out;
 }
@@ -226,9 +229,42 @@ export function useReviewContext(profileCode: string, review: Review) {
 export type ResolveAction =
   | { link: string }
   | { create_new: true }
-  | { dismiss: true; not_a_transaction?: true }
+  | { dismiss: true }
+  | { not_a_transaction: true }
   | { card: { account_code: string } }
   | { supersede: string };
+
+/**
+ * resolve_review's "not a card transaction" payload: exactly this object. The
+ * server checks `dismiss` first, so adding `dismiss` would only dismiss the
+ * review and leave the SMS unmarked. Outcome: `ignored`.
+ */
+export const NOT_A_TRANSACTION: ResolveAction = { not_a_transaction: true };
+
+/**
+ * Friendly text for resolve_review / retry_sms_fallback errors. P0002: the
+ * review (or a code in the answer) is gone or belongs to another ledger —
+ * usually it was already resolved elsewhere. 22023: the answer doesn't fit the
+ * review (e.g. linking to a transaction on another account). Pure, unit-tested.
+ */
+export function reviewActionError(e: { code?: string; message?: string } | null | undefined): string {
+  const code = e?.code;
+  const msg = e?.message ?? "";
+  if (code === "P0002") {
+    return /review .* is not open/i.test(msg)
+      ? "This review was already answered, or it's no longer in this ledger. The list has been refreshed."
+      : "Something this answer refers to no longer exists in this ledger. The list has been refreshed.";
+  }
+  if (code === "22023") {
+    if (/different account|not on this message's account/i.test(msg)) return "That transaction is on a different card account, so it can't be linked here.";
+    if (/already part of a transaction/i.test(msg)) return "This message is already part of a transaction, so it can't be marked as not a card transaction.";
+    if (/already has a confirmed/i.test(msg)) return "That transaction already has its own statement line or SMS, so it can't take this one.";
+    if (/not an open unparsed_sms review/i.test(msg)) return "Only an open unrecognised-SMS review can be sent to the AI again.";
+    if (/no account or amount/i.test(msg)) return "Ledger doesn't know this message's card or amount yet. Add the card first.";
+    return "That answer doesn't fit this review. The list has been refreshed.";
+  }
+  return msg || "Something went wrong.";
+}
 
 function useInvalidateAfterReview(profileCode: string) {
   const qc = useQueryClient();
@@ -240,6 +276,15 @@ export function useResolveReview(profileCode: string) {
   return useMutation({
     mutationFn: async (v: { reviewCode: string; action: ResolveAction }) =>
       must(await supabase.rpc("resolve_review", { p_review_code: v.reviewCode, p_action: v.action as unknown as Json })),
+    onSettled: invalidate,
+  });
+}
+
+/** Ask the LLM fallback to look at an unparsed SMS again; the review is closed and reopens if it still can't parse it. */
+export function useRetrySmsFallback(profileCode: string) {
+  const invalidate = useInvalidateAfterReview(profileCode);
+  return useMutation({
+    mutationFn: async (reviewCode: string) => must(await supabase.rpc("retry_sms_fallback", { p_review_code: reviewCode })),
     onSettled: invalidate,
   });
 }

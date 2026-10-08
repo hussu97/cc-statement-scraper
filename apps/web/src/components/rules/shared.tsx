@@ -75,6 +75,54 @@ export function Pager({
   );
 }
 
+/** Pager for a server list without a total (a look-ahead row says whether there is a next page). */
+export function SearchPager({
+  page,
+  size,
+  shown,
+  hasMore,
+  onPage,
+  onSize,
+  noun = "rows",
+}: {
+  page: number;
+  size: PageSize;
+  shown: number;
+  hasMore: boolean;
+  onPage: (p: number) => void;
+  onSize: (s: PageSize) => void;
+  noun?: string;
+}) {
+  if (page <= 1 && !hasMore) return null;
+  const from = (page - 1) * size + (shown ? 1 : 0);
+  const to = (page - 1) * size + shown;
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3 text-[13px] text-muted">
+      <span className="tabular">
+        {formatCount(from)}–{formatCount(to)} {noun}
+        {hasMore ? " · more on the next page" : ""}
+      </span>
+      <div className="flex items-center gap-2">
+        <Select
+          size="sm"
+          ariaLabel="Rows per page"
+          value={String(size)}
+          onValueChange={(v) => onSize(normalizePageSize(v))}
+          options={PAGE_SIZES.map((n) => ({ value: String(n), label: `${n} / page` }))}
+          className="w-[7.5rem]"
+        />
+        <Button size="icon-sm" variant="ghost" aria-label="Previous page" disabled={page <= 1} onClick={() => onPage(page - 1)}>
+          <ChevronLeft className="size-4" />
+        </Button>
+        <span className="tabular">{page}</span>
+        <Button size="icon-sm" variant="ghost" aria-label="Next page" disabled={!hasMore} onClick={() => onPage(page + 1)}>
+          <ChevronRight className="size-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 /** Confirmation for destructive or irreversible actions. */
 export function ConfirmDialog({
   open,
