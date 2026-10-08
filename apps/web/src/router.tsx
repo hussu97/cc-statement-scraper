@@ -81,9 +81,10 @@ export const statementRoute = createRoute({
   component: lazyRouteComponent(() => import("@/routes/statement"), "StatementPage"),
 });
 
-const reviewRoute = createRoute({
+export const reviewRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/review",
+  validateSearch: parsePageSearch,
   component: lazyRouteComponent(() => import("@/routes/review"), "ReviewPage"),
 });
 

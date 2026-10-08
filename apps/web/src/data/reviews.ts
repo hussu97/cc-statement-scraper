@@ -4,6 +4,7 @@ import type { Json } from "@ledger/db-types";
 import { keys, LEDGER_DOMAINS } from "./keys";
 import { fetchPage, must, mustList, toApiError, type Page } from "./api";
 import { useAuth } from "./auth";
+import { useInfiniteList } from "./infinite";
 import { pageRange } from "@/lib/pagination";
 
 export type Review = Tables<"match_reviews">;
@@ -89,30 +90,47 @@ export function reviewQueriesEnabled(session: unknown, profileCode: string | nul
   return !!session && !!profileCode;
 }
 
+/** Rows [from, to] of open reviews, newest first, with the exact total. */
+export function fetchOpenReviews(profileCode: string, from: number, to: number): Promise<Page<Review>> {
+  const head = () =>
+    supabase.from("match_reviews").select("review_code", { count: "exact", head: true }).eq("profile_code", profileCode).eq("status", "open");
+  return fetchPage<Review>(
+    () =>
+      supabase
+        .from("match_reviews")
+        .select("*", { count: "exact" })
+        .eq("profile_code", profileCode)
+        .eq("status", "open")
+        .order("created_at", { ascending: false })
+        .order("review_code", { ascending: false })
+        .range(from, to),
+    head,
+  );
+}
+
 /** One page of open reviews, newest first, with the exact total. */
-export function useOpenReviews(profileCode: string, page: number, size: number) {
+export function useOpenReviews(profileCode: string, page: number, size: number, enabled = true) {
   const { session } = useAuth();
   return useQuery({
     queryKey: [...keys.reviews(profileCode), page, size],
-    enabled: reviewQueriesEnabled(session, profileCode),
+    enabled: enabled && reviewQueriesEnabled(session, profileCode),
     placeholderData: keepPreviousData,
     queryFn: async (): Promise<Page<Review>> => {
       const { from, to } = pageRange(page, size);
-      const head = () =>
-        supabase.from("match_reviews").select("review_code", { count: "exact", head: true }).eq("profile_code", profileCode).eq("status", "open");
-      return fetchPage<Review>(
-        () =>
-          supabase
-            .from("match_reviews")
-            .select("*", { count: "exact" })
-            .eq("profile_code", profileCode)
-            .eq("status", "open")
-            .order("created_at", { ascending: false })
-            .order("review_code", { ascending: false })
-            .range(from, to),
-        head,
-      );
+      return fetchOpenReviews(profileCode, from, to);
     },
+  });
+}
+
+const reviewId = (r: Review) => r.review_code;
+/** Phones: every open review, 100 at a time. */
+export function useInfiniteOpenReviews(profileCode: string, enabled = true) {
+  const { session } = useAuth();
+  return useInfiniteList<Review>({
+    queryKey: [...keys.reviews(profileCode), "infinite"],
+    enabled: enabled && reviewQueriesEnabled(session, profileCode),
+    fetch: (from, to) => fetchOpenReviews(profileCode, from, to),
+    idOf: reviewId,
   });
 }
 
