@@ -456,7 +456,7 @@ Collected 2026-10-08 from the fixes recorded in [01](01-database.md#fix-status) 
 | DP-14 | fixed (docs) | X-03: Gmail OAuth client copied from Render (PRODUCTION §5.4) |
 | DP-15 | fixed | X-08 per-profile advisory lock on ingest |
 | DP-16 | fixed | ingest is order-independent (DP-01/02), so upload order no longer matters |
-| DP-10 | fixed | `totals.py` adds the credits FAB's Payments/Credits column omits (rewards redemption, dispute credit), from the row's own Total Payment Due; all 19 local copies of the 4 statements reconcile |
+| DP-10 | fixed | `totals.py` adds the credits FAB's Payments/Credits column omits (rewards redemption, dispute credit), from the row's own Total Payment Due; the three affected statements in the local corpus (19 PDF copies) and every other FAB PDF reconcile |
 | DP-11 | fixed | `mashreq.py` splits `<ref> <CUR> <amount> @<rate>` into currency, original amount and rate; 38 lines; `legacy_fingerprint` unchanged |
 | DP-12 | fixed | `totals.py` reads the Mashreq "Summary AED" block; all 20 local Mashreq PDFs reconcile debits, credits and balance |
 | DP-09, DP-17–DP-22 | open | BACKLOG (DP-18 is a cutover decision) |
