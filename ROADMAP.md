@@ -17,10 +17,9 @@
 ## Next
 
 ### 1. Cutover (blocking)
-- [ ] Add `apps/web/vercel.json` with an SPA rewrite before switching the production domain
-      (PRODUCTION.md §4).
-- [ ] Fix `scripts/migrate_legacy.py --step secrets`: it emits `GOOGLE_OAUTH_CLIENT_*`, but
-      the functions read `GMAIL_OAUTH_CLIENT_*`.
+- [x] Add `apps/web/vercel.json` (SPA rewrite, asset caching, CSP and security headers).
+- [x] Fix `scripts/migrate_legacy.py --step secrets` to emit `GMAIL_OAUTH_CLIENT_*`, the names
+      the functions read.
 - [ ] Upgrade Supabase Postgres off 17.6.1.104 and re-test the `REVOKE EXECUTE` segfault.
 - [ ] Run the cutover runbook (PRODUCTION.md §10), sign off parity, run old and new side by
       side.
@@ -29,11 +28,8 @@
       legacy Dockerfiles, workflows and docs; unschedule `ledger-legacy-choices`.
 
 ### 2. Observability follow-ups
-- [ ] Set the agreed Sentry tags:
-  - [ ] `service=edge` in `_shared/sentry.ts` and `service=parser` in `ccs_parser/sentry.py`
-  - [ ] `app=web` in `apps/web/src/lib/sentry.ts` and `app=ios` in LedgerKit `Telemetry`
-  - [ ] change the default project names (`ledger-web`, `ledger-ios`) to `ledger-apps` in
-        `vite.config.ts`, `.env.example`, `publish-build.sh` and the iOS README
+- [x] Set the agreed Sentry tags (`service=edge|parser`, `app=web|ios`) and default the web
+      and iOS project names to `ledger-apps`.
 - [ ] Add a web debug trigger for verifying Sentry outside production.
 
 ### 3. Smart features
@@ -52,8 +48,8 @@
 - [ ] Home-screen and Lock-screen widgets (month spend, pace, pending SMS).
 
 ### 6. Scraper
-- [ ] Per-profile service tokens. v2 tokens belong to one profile, but the scraper reads a
-      single `CCS_SCRAPER_API_TOKEN`.
+- [x] Per-profile service tokens: `<PROFILE>_CCS_SCRAPER_API_TOKEN`, falling back to the
+      global `CCS_SCRAPER_API_TOKEN`.
 - [ ] Backlog: dedupe adapter helpers into `shared.py` (fixed sleeps, broad excepts).
 
 ### 7. Later

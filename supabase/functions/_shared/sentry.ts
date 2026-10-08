@@ -159,6 +159,8 @@ function ensureInit(): boolean {
     // deno-lint-ignore no-explicit-any
     beforeBreadcrumb: (b: any) => scrubBreadcrumb(b),
   });
+  // ledger-backend is shared with the parser (service=parser); `function` is set per request.
+  Sentry.setTag("service", "edge");
   const region = Deno.env.get("SB_REGION");
   if (region) Sentry.setTag("region", region);
   enabled = true;

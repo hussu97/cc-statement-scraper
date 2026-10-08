@@ -18,7 +18,7 @@
 #   * An "Apple Distribution" identity in the keychain (Xcode → Settings → Accounts).
 #   * Config/Secrets.Release.xcconfig with the production Supabase URL/anon key and
 #     Sentry DSN (Release builds never fall back to the local 127.0.0.1 config).
-#   * Optional dSYM upload: SENTRY_AUTH_TOKEN, SENTRY_ORG, SENTRY_PROJECT (default ledger-ios),
+#   * Optional dSYM upload: SENTRY_AUTH_TOKEN, SENTRY_ORG, SENTRY_PROJECT (default ledger-apps),
 #     and `sentry-cli` on PATH (brew install getsentry/tools/sentry-cli).
 #   * --upload: ASC_KEY_ID, ASC_ISSUER_ID and ~/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8
 #   * --stage: the gh CLI, authenticated.
@@ -153,9 +153,9 @@ echo "==> Built $IPA"
 if [[ -n "${SENTRY_AUTH_TOKEN:-}" ]]; then
   command -v sentry-cli >/dev/null || { echo "error: SENTRY_AUTH_TOKEN set but sentry-cli not installed" >&2; exit 1; }
   : "${SENTRY_ORG:?set SENTRY_ORG}"
-  echo "==> Uploading dSYMs to Sentry ($SENTRY_ORG/${SENTRY_PROJECT:-ledger-ios})"
+  echo "==> Uploading dSYMs to Sentry ($SENTRY_ORG/${SENTRY_PROJECT:-ledger-apps})"
   sentry-cli debug-files upload --include-sources \
-    --org "$SENTRY_ORG" --project "${SENTRY_PROJECT:-ledger-ios}" \
+    --org "$SENTRY_ORG" --project "${SENTRY_PROJECT:-ledger-apps}" \
     "$ARCHIVE/dSYMs"
 else
   echo "==> SENTRY_AUTH_TOKEN not set — dSYMs NOT uploaded; crashes from build $BUILD will be unsymbolicated."

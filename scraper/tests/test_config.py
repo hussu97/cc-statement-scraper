@@ -35,6 +35,7 @@ def _clear_scraper_env(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(key, raising=False)
     # Also clear profile-prefixed variants used by the new multi-profile format.
     for profile in ("ALICE", "BOB"):
+        monkeypatch.delenv(f"{profile}_CCS_SCRAPER_API_TOKEN", raising=False)
         for key in _CREDENTIAL_KEYS:
             monkeypatch.delenv(f"{profile}_{key}", raising=False)
 
@@ -188,3 +189,38 @@ def test_credentials_profile_isolation(monkeypatch: pytest.MonkeyPatch) -> None:
     bob_cfg = get_config(profile="bob")
     assert alice_cfg.credentials["FAB_USERNAME"] == "alice_user"
     assert bob_cfg.credentials["FAB_USERNAME"] == "tej_user"
+
+
+def test_profile_token_takes_precedence_over_global(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_scraper_env(monkeypatch)
+    monkeypatch.setenv("CCS_SCRAPER_API_TOKEN", "global-token")
+    monkeypatch.setenv("BOB_CCS_SCRAPER_API_TOKEN", "tej-token")
+
+    assert get_config(profile="bob").api_token == "tej-token"
+    # Profile names are upper-cased like the credential namespace.
+    assert get_config(profile="Bob").api_token == "tej-token"
+    # A profile without its own token falls back to the global one.
+    assert get_config(profile="alice").api_token == "global-token"
+
+
+def test_profile_token_alone_is_enough(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_scraper_env(monkeypatch)
+    monkeypatch.setenv("ALICE_CCS_SCRAPER_API_TOKEN", "alice-token")
+
+    assert get_config(profile="alice").api_token == "alice-token"
+    with pytest.raises(RuntimeError, match="BOB_CCS_SCRAPER_API_TOKEN"):
+        get_config(profile="bob")
+
+
+def test_blank_profile_token_falls_back_to_global(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_scraper_env(monkeypatch)
+    monkeypatch.setenv("CCS_SCRAPER_API_TOKEN", "global-token")
+    monkeypatch.setenv("ALICE_CCS_SCRAPER_API_TOKEN", "")
+
+    assert get_config(profile="alice").api_token == "global-token"
+
+
+def test_missing_tokens_raise(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_scraper_env(monkeypatch)
+    with pytest.raises(RuntimeError, match="ALICE_CCS_SCRAPER_API_TOKEN"):
+        get_config(profile="alice")

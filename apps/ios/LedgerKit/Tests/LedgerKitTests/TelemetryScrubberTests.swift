@@ -80,4 +80,11 @@ struct TelemetryScrubberTests {
         #expect(Telemetry.releaseName(info: ["CFBundleShortVersionString": "1.2.0", "CFBundleVersion": "42"]) == "ledger-ios@1.2.0+42")
         #expect(Telemetry.releaseName(info: nil) == "ledger-ios@0.0.0+0")
     }
+
+    @Test("every target tags app=ios for the shared ledger-apps project, plus its target")
+    func scopeTags() {
+        #expect(Telemetry.scopeTags(target: .app) == ["app": "ios", "target": "app"])
+        #expect(Telemetry.scopeTags(target: .intent) == ["app": "ios", "target": "intent"])
+        #expect(Telemetry.scopeTags(target: .shareExtension) == ["app": "ios", "target": "share_extension"])
+    }
 }

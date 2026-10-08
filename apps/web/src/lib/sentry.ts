@@ -8,6 +8,9 @@ const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ??
 
 export const sentryEnabled = Boolean(dsn);
 
+/** Scope tags on every event: `ledger-apps` is shared with iOS (app=ios). */
+export const SENTRY_APP_TAGS = { app: "web" } as const;
+
 /** Initialise Sentry once. A no-op without VITE_SENTRY_DSN. */
 export function initSentry(router: unknown): void {
   if (!dsn) return;
@@ -15,6 +18,7 @@ export function initSentry(router: unknown): void {
     dsn,
     environment: (import.meta.env.VITE_SENTRY_ENVIRONMENT as string | undefined) ?? import.meta.env.MODE,
     release: import.meta.env.VITE_SENTRY_RELEASE as string | undefined,
+    initialScope: { tags: { ...SENTRY_APP_TAGS } },
     // Equivalent of sendDefaultPii=false in SDK v11: collect no user info,
     // cookies, headers, bodies, query params or DB payloads.
     dataCollection: {

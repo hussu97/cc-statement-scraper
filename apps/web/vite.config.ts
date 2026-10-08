@@ -11,7 +11,7 @@ const sentryPlugins: PluginOption[] = process.env.SENTRY_AUTH_TOKEN
   ? [
       sentryVitePlugin({
         org: process.env.SENTRY_ORG,
-        project: process.env.SENTRY_PROJECT ?? "ledger-web",
+        project: process.env.SENTRY_PROJECT ?? "ledger-apps",
         authToken: process.env.SENTRY_AUTH_TOKEN,
         release: { name: process.env.VITE_SENTRY_RELEASE ?? process.env.VERCEL_GIT_COMMIT_SHA },
         sourcemaps: { filesToDeleteAfterUpload: ["./dist/**/*.map"] },

@@ -19,6 +19,12 @@ public enum Telemetry {
         return "ledger-ios@\(version)+\(build)"
     }
 
+    /// Scope tags on every event. `ledger-apps` is shared with the web app
+    /// (app=web), so `app` separates the platforms; `target` the iOS process.
+    public static func scopeTags(target: TelemetryTarget) -> [String: String] {
+        ["app": "ios", "target": target.rawValue]
+    }
+
     /// No-op when the DSN is unset (local builds without Secrets.xcconfig) or
     /// when this process already started Sentry — the intent runs inside the
     /// app process, which may have started it as `.app`.
@@ -46,7 +52,7 @@ public enum Telemetry {
             options.beforeBreadcrumb = { crumb in TelemetryScrubber.scrub(breadcrumb: crumb) }
         }
         SentrySDK.configureScope { scope in
-            scope.setTag(value: target.rawValue, key: "target")
+            for (key, value) in scopeTags(target: target) { scope.setTag(value: value, key: key) }
         }
     }
 

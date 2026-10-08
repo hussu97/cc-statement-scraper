@@ -3,7 +3,10 @@
 //   dist/chart.js     — chart palette for JS charts
 //   dist/chart.d.ts   — TypeScript declarations for dist/chart.js
 //   ../../apps/ios/LedgerKit/Sources/LedgerKit/Theme/Tokens.swift — the same values for SwiftUI
-// `--check` fails if any generated file is stale (used in CI).
+// `--check` (CI) regenerates everything in memory and writes nothing. It fails only when a
+// COMMITTED output (Tokens.swift) differs from what tokens.json produces. dist/ is gitignored
+// and rebuilt by `build` (the web app's pre-scripts), so it is never compared: the check is
+// deterministic from a clean clone.
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -134,19 +137,23 @@ export declare const categoryTokens: string[];
 export declare const categoryVar: (token: string | null | undefined) => string;
 `;
 
+// [path, content, committed]: committed outputs are tracked in git and drift-checked.
 const outputs = [
-  [resolve(root, "dist/tokens.css"), css],
-  [resolve(root, "dist/chart.js"), chartJs],
-  [resolve(root, "dist/chart.d.ts"), chartDts],
-  [resolve(root, "../../apps/ios/LedgerKit/Sources/LedgerKit/Theme/Tokens.swift"), swift],
+  [resolve(root, "dist/tokens.css"), css, false],
+  [resolve(root, "dist/chart.js"), chartJs, false],
+  [resolve(root, "dist/chart.d.ts"), chartDts, false],
+  [resolve(root, "../../apps/ios/LedgerKit/Sources/LedgerKit/Theme/Tokens.swift"), swift, true],
 ];
 
 let stale = false;
-for (const [path, content] of outputs) {
+for (const [path, content, committed] of outputs) {
   if (check) {
+    if (!committed) continue; // generated above in memory; gitignored, rebuilt by `build`
     if (!existsSync(path) || readFileSync(path, "utf8") !== content) {
-      console.error(`stale: ${path}`);
+      console.error(`stale: ${path} — run 'pnpm --filter @ledger/tokens build' and commit it`);
       stale = true;
+    } else {
+      console.log(`current ${path}`);
     }
   } else if (existsSync(path) && readFileSync(path, "utf8") === content) {
     console.log(`unchanged ${path}`);

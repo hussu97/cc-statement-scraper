@@ -63,6 +63,20 @@ class ScraperConfig:
         }
 
 
+def profile_token_env(profile: str) -> str:
+    """Env var holding the profile's own service token, e.g. ``ALICE_CCS_SCRAPER_API_TOKEN``.
+
+    Ledger v2 service tokens belong to exactly one profile, so each profile needs its own.
+    Namespaced like the bank credentials (``<PROFILE>_FAB_USERNAME``).
+    """
+    return f"{profile.upper()}_CCS_SCRAPER_API_TOKEN"
+
+
+def resolve_api_token(profile: str) -> str:
+    """``<PROFILE>_CCS_SCRAPER_API_TOKEN`` if set, else the global ``CCS_SCRAPER_API_TOKEN``."""
+    return os.environ.get(profile_token_env(profile)) or os.environ.get("CCS_SCRAPER_API_TOKEN", "")
+
+
 def get_config(profile: str) -> ScraperConfig:
     cfg = ScraperConfig()
     cfg.profile_key = profile
@@ -70,9 +84,10 @@ def get_config(profile: str) -> ScraperConfig:
     # never share incoming/, state/, or browser_profiles/ folders.
     cfg.download_dir = cfg.download_dir / profile.lower()
     cfg._reload_credentials()
+    cfg.api_token = resolve_api_token(profile)
     if not cfg.api_token:
         raise RuntimeError(
-            "CCS_SCRAPER_API_TOKEN is not set. "
-            "Add it to scraper/.env or export it before running."
+            f"No API token for profile {profile!r}: set {profile_token_env(profile)} "
+            "(or the global CCS_SCRAPER_API_TOKEN) in scraper/.env or export it before running."
         )
     return cfg

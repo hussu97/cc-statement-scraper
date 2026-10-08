@@ -69,6 +69,7 @@ Deno.test({
     assert(!raw.includes("ccs_0123456789abcdef"), "service token leaked");
     assert(!raw.includes("pk-zq81-secret"), "profile key leaked");
     assertEquals(ev.tags.function, "sms-ingest");
+    assertEquals(ev.tags.service, "edge");
     assertEquals(ev.environment, "test");
     assertEquals(ev.contexts?.trace?.trace_id, TRACE_ID);
     await server.shutdown();

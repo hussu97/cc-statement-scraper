@@ -96,3 +96,30 @@ def test_init_sentry_wires_scrubber(monkeypatch) -> None:
         assert options["environment"] == "test"
     finally:
         sentry_sdk.init(dsn=None)
+
+
+def test_init_sentry_tags_events_with_service_parser(monkeypatch) -> None:
+    import sentry_sdk
+
+    from ccs_parser import PARSER_VERSION
+    from ccs_parser import sentry as parser_sentry
+
+    captured: list[dict] = []
+
+    def recording_scrub(event, hint=None):
+        captured.append(event)
+        return None  # drop: nothing is sent
+
+    monkeypatch.setattr(parser_sentry, "scrub_event", recording_scrub)
+    monkeypatch.setenv("SENTRY_DSN", "http://public@127.0.0.1:9/1")
+    monkeypatch.setenv("SENTRY_ENVIRONMENT", "test")
+    try:
+        assert parser_sentry.init_sentry() is True
+        sentry_sdk.capture_message("tag check")
+        sentry_sdk.flush(2)
+        assert len(captured) == 1
+        assert captured[0]["tags"]["service"] == "parser"
+        assert captured[0]["tags"]["parser_version"] == PARSER_VERSION
+    finally:
+        sentry_sdk.get_isolation_scope().clear()
+        sentry_sdk.init()

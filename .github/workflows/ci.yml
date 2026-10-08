@@ -190,12 +190,10 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Fails only if the committed Tokens.swift drifts from tokens.json; dist/ is
+      # rebuilt by the web app's pretest/prebuild scripts.
       - name: Tokens (generated Swift is committed and must be current)
-        run: |
-          pnpm --filter @ledger/tokens build
-          git diff --exit-code -- apps/ios/LedgerKit/Sources/LedgerKit/Theme/Tokens.swift \
-            || { echo "::error::Tokens.swift is stale. Run 'pnpm tokens' and commit it."; exit 1; }
-          pnpm --filter @ledger/tokens check
+        run: pnpm --filter @ledger/tokens check
 
       - name: Lint
         run: pnpm --filter @ledger/web lint

@@ -161,7 +161,7 @@ cd scraper && uv venv --python 3.12 .venv && uv pip install --python .venv/bin/p
 .venv/bin/ccs-scraper install-browser
 cp .env.example .env    # v2: CCS_SCRAPER_TARGET_URL=<SUPABASE_URL>,
                         #     CCS_SCRAPER_UPLOAD_PATH=/functions/v1/statements-upload,
-                        #     CCS_SCRAPER_API_TOKEN=ccs_… (scope statements:upload)
+                        #     ALICE_CCS_SCRAPER_API_TOKEN=ccs_… (one per profile, scope statements:upload)
 .venv/bin/ccs-scraper scrape --profile alice --months 2026-09
 .venv/bin/ccs-scraper upload-pending --profile alice   # re-send recorded PDFs (server dedups)
 ```
@@ -178,7 +178,7 @@ Create a service token in web Settings → Sources & health → Tokens, or with
 | Edge Functions | `cd supabase/functions && deno test -A .` (the local e2e runs only with `LEDGER_E2E=1` and a served stack) |
 | Parser | `cd services/parser && .venv/bin/ruff check . && .venv/bin/pytest -q` (golden parity needs private PDFs; skipped otherwise) |
 | Web | `pnpm web:test`, `pnpm --filter @ledger/web lint`, `pnpm web:build` |
-| Tokens | `pnpm --filter @ledger/tokens check` (fails if generated CSS, chart or Swift output is stale) |
+| Tokens | `pnpm --filter @ledger/tokens check` (fails if the committed `Tokens.swift` drifts from `tokens.json`; the gitignored `dist/` is regenerated in memory only, so it works from a clean clone) |
 | iOS | `cd apps/ios/LedgerKit && swift test` |
 | Scraper | `cd scraper && .venv/bin/pytest -q` |
 
@@ -196,7 +196,7 @@ Create a service token in web Settings → Sources & health → Tokens, or with
 | `VITE_SENTRY_DSN` | Sentry `ledger-apps` DSN (empty disables Sentry) |
 | `VITE_SENTRY_ENVIRONMENT` | `local` / `preview` / `production` |
 | `VITE_SENTRY_RELEASE` | Release name (defaults to `VERCEL_GIT_COMMIT_SHA` for source maps) |
-| `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` | Build-time only: uploads source maps when the token is set. Set `SENTRY_PROJECT=ledger-apps` (the code defaults to `ledger-web`). |
+| `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` | Build-time only: uploads source maps when the token is set. `SENTRY_PROJECT` defaults to `ledger-apps`. |
 
 ### Edge Functions (`supabase/functions/.env` locally; `supabase secrets set` in production)
 
@@ -257,7 +257,8 @@ Create a service token in web Settings → Sources & health → Tokens, or with
 |---|---|---|
 | `CCS_SCRAPER_TARGET_URL` | `http://127.0.0.1:8040` | Upload base URL. For v2, the Supabase URL. |
 | `CCS_SCRAPER_UPLOAD_PATH` | `/api/v1/jobs/upload` | For v2: `/functions/v1/statements-upload` |
-| `CCS_SCRAPER_API_TOKEN` | — | Service token (v2 scope `statements:upload`) |
+| `{PROFILE}_CCS_SCRAPER_API_TOKEN` | — | Per-profile service token (v2 tokens are profile-scoped; scope `statements:upload`). Wins over the global token |
+| `CCS_SCRAPER_API_TOKEN` | — | Global fallback token for profiles without their own (legacy) |
 | `CCS_SCRAPER_SUPABASE_ANON_KEY` | — | Optional, sent as `apikey` |
 | `CCS_SCRAPER_HEADLESS`, `CCS_SCRAPER_DOWNLOAD_DIR`, `CCS_SCRAPER_BROWSER_*` | `true`, `./downloads`, Dubai | Browser settings |
 | `{PROFILE}_{BANK}_*` | — | Bank portal credentials per profile (see `scraper/.env.example`) |
