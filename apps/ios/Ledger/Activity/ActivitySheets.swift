@@ -19,6 +19,8 @@ struct CategorySheet: View {
                         Text(transaction.title).font(Typography.rowTitle)
                         Text("\(transaction.amountLabel) · \(LedgerDates.dayLabel(transaction.txnDate))")
                             .font(Typography.rowMeta).monospacedDigit().foregroundStyle(Palette.muted)
+                        BankCardLabel(bankCode: transaction.bankCode, label: transaction.cardSuffix, size: 18,
+                                      font: Typography.rowMeta)
                         if let source = transaction.categorySource {
                             Text("Category from \(source)").font(Typography.caption).foregroundStyle(Palette.subtle)
                         }
