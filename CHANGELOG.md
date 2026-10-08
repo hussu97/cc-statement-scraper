@@ -45,6 +45,15 @@
   - `private.legacy_category_aliases` (`Entretainment` → `Entertainment`) used by `apply_legacy_category_choices`; `private.legacy_unresolved_category_names()` lists names that still match no category, for the finalize output (DP-19 / X-24)
 - **test** `17_db_identity_and_legacy.test.sql`; `03`, `06`, `07` create confirmed test users
 - **test** `18_review_regressions.test.sql`: a line displaced by a manual link keeps its own transaction (DB-27) and an `unknown_card` SMS without a card number is bound to the chosen account (DB-43) (DB-28r)
+- **decision** DB-35 (code entropy) and DP-21 (legacy fingerprint collisions) accepted; X-10 (prod `rls_auto_enable()`) left in place; DB-41 no squash (every migration is in production); `amount_drift` stays a reserved review reason; `profiles.timezone` / `base_currency` stay reserved. Not done: DB-40 (needs an accept step, goes with NEW-1), DP-20 (account merge is a model decision), the X-33 `concat_ws` line key (changing it would re-key all stored evidence)
+
+### Docs
+
+- docs/audit/BACKLOG.md: the database P2/P3 items moved to "Done: database pass 2026-10-09"; Edge/Web rows note their SQL side; new DB-21e (drain `storage_cleanup`) and X-33r (iOS `CodingKeys`); summary recounted
+- docs/audit/01 Fix status and Appendix A (final definitions after the pass); 02, 03, 04, 06 Fix status notes
+- ARCHITECTURE §3–§7: confirmed-email invites, `delete_profile`, template scope and targeted re-processing, `merchant_category_skips`, `storage_cleanup` and DLQ tools, idempotent parse claims, `save_mailbox_sync_state`, insight kinds, batch-job errors, new `ops_health` keys
+- PRODUCTION §2.3 (X-10, DB-41, `ledger.test_today`), §2.6 (legacy alias report, DP-21), §11 (DLQ tools, job errors, template promotion, profile deletion)
+- README: new RPCs in the RPC table, pgTAP suites 13–18
 
 ## Supabase publishable / secret API keys — 2026-10-08 (branch `ledger-v2`)
 

@@ -180,7 +180,7 @@ Create a service token in web Settings → Sources & health → Tokens, or with
 
 | Component | Command |
 |---|---|
-| Database (pgTAP: RLS guards, matching, categorisation, recon, analytics, SMS templates, FX, legacy import, cross-profile isolation, ingest robustness, review actions, client privilege matrix, re-parse relink; hermetic, so they also pass on a non-empty local DB) | `supabase db reset && supabase test db` |
+| Database (pgTAP: RLS guards, matching, categorisation, recon, analytics, SMS templates, FX, legacy import, cross-profile isolation, ingest robustness, review actions, client privilege matrix, re-parse relink, the 2026-10-09 P2/P3 fixes (`13`–`18`); hermetic, so they also pass on a non-empty local DB) | `supabase db reset && supabase test db` |
 | DB types drift | `pnpm db:types:check` (regenerate with `pnpm db:types`) |
 | Edge Functions | `cd supabase/functions && deno test -A .` (the local e2e runs only with `LEDGER_E2E=1` and a served stack) |
 | Parser | `cd services/parser && .venv/bin/ruff check . && .venv/bin/pytest -q` (golden parity needs private PDFs; skipped otherwise) |
@@ -353,12 +353,12 @@ Used for the production Edge Function secrets and Vault entries, and for secret 
 
 | Group | RPCs (callable by signed-in members; owner-only marked *) |
 |---|---|
-| Profiles and members | `create_profile`, `add_profile_member`*, `list_profile_members`, `remove_profile_member`*, `cancel_profile_invite`* |
+| Profiles and members | `create_profile`, `add_profile_member`*, `list_profile_members`, `remove_profile_member`*, `cancel_profile_invite`*, `delete_profile`* (with the profile key as confirmation) |
 | Tokens and secrets | `create_service_token`*, `revoke_service_token`*, `set_profile_secret`*, `list_profile_secrets`, `set_mailbox_secret`* |
 | Ingest and review | `ingest_sms`* (per-message statuses), `resolve_review`* (`link`, `create_new`, `dismiss`, `card`, `supersede`, `not_a_transaction`), `retry_sms_fallback`*, `requeue_documents`*, `set_sms_template_active`* |
-| Categorisation | `set_transaction_category`*, `set_transactions_category`*, `preview_rule`, `merchant_search` |
+| Categorisation | `set_transaction_category`*, `set_transactions_category`*, `preview_rule` (optional `p_rule_code` when editing), `merchant_search`, `reject_merchant_suggestion`* |
 | Analytics | `overview`, `spend_series`, `category_breakdown`, `merchant_leaderboard`, `daily_spend`, `hour_weekday_pattern`, `fx_spend`, `statement_cycles`, `yoy_compare`, `anomalies`, `filter_meta`, `budget_status`, `recurring_list` |
-| Service-role only (Edge Functions) | `authenticate_service_token`, `ingest_parsed_document`, `fail_document`, `queue_read`, `queue_delete`, `queue_send`, `queue_to_dlq`, `worker_document_context`, `worker_llm_context`, `worker_sms_context`, `worker_mailbox_secret`, `apply_llm_suggestions`, `propose_sms_template`, `ops_health`, `upsert_fx_rates` |
+| Service-role only (Edge Functions) | `authenticate_service_token`, `ingest_parsed_document`, `fail_document`, `queue_read`, `queue_delete`, `queue_send`, `queue_to_dlq`, `worker_document_context`, `worker_llm_context`, `worker_sms_context`, `worker_mailbox_secret`, `apply_llm_suggestions`, `propose_sms_template`, `promote_sms_template`, `ops_health`, `upsert_fx_rates`, `begin_document_parse`, `resubmit_document`, `save_mailbox_sync_state`, `drain_dlq`, `requeue_dlq` |
 
 Views: `v_spend` (the single spend definition) and `v_transactions` (the Activity read model).
 Tables are readable by members under RLS. Owners edit categories, rules, budgets, accounts,
