@@ -641,6 +641,30 @@ export type Database = {
           },
         ]
       }
+      fx_rates: {
+        Row: {
+          aed_per_unit: number
+          as_of: string
+          currency: string
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          aed_per_unit: number
+          as_of: string
+          currency: string
+          source: string
+          updated_at?: string
+        }
+        Update: {
+          aed_per_unit?: number
+          as_of?: string
+          currency?: string
+          source?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       insights: {
         Row: {
           body: string
@@ -1979,7 +2003,7 @@ export type Database = {
     Functions: {
       add_profile_member: {
         Args: { p_email: string; p_profile_code: string; p_role?: string }
-        Returns: undefined
+        Returns: string
       }
       anomalies: {
         Args: { p_from: string; p_profile_code: string; p_to: string }
@@ -2252,6 +2276,10 @@ export type Database = {
           stmt_code: string
           utilisation: number
         }[]
+      }
+      upsert_fx_rates: {
+        Args: { p_as_of: string; p_rates: Json; p_source: string }
+        Returns: Json
       }
       worker_document_context: { Args: { p_doc_code: string }; Returns: Json }
       worker_llm_context: {
