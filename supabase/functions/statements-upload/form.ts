@@ -63,7 +63,11 @@ export function parseUploadForm(form: FormData): UploadForm {
  */
 export async function readBodyCapped(req: Request, maxBytes: number = MAX_REQUEST_BYTES): Promise<Uint8Array> {
   const tooLarge = () =>
-    new HttpError(413, "PAYLOAD_TOO_LARGE", `request exceeds ${Math.floor(maxBytes / 1024 / 1024)} MB; send fewer files`);
+    new HttpError(
+      413,
+      "PAYLOAD_TOO_LARGE",
+      `request exceeds ${Math.floor(maxBytes / 1024 / 1024)} MB; send fewer files`,
+    );
   const declared = req.headers.get("content-length");
   if (declared !== null && /^\d+$/.test(declared.trim()) && Number(declared) > maxBytes) throw tooLarge();
   if (!req.body) return new Uint8Array();

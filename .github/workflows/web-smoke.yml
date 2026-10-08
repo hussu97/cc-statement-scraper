@@ -7,7 +7,7 @@ name: Web smoke (Vercel)
 #
 # Vercel reports each deployment back to GitHub as a Deployment; when a
 # Production one succeeds, this probes the production URL with
-# scripts/ci/web-smoke.sh: 200 + <title>Ledger</title>, CSP and security
+# scripts/ci/web-smoke.sh: 200 + <title>Bank Ledger</title>, CSP and security
 # headers, an SPA deep link, a hashed asset (immutable) and a missing asset
 # (404). It also runs daily, so a broken alias or expired domain is noticed
 # without a deploy. Rollback: Vercel dashboard → Deployments → previous

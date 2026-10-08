@@ -49,7 +49,10 @@ Deno.test("verifyPushToken rejects wrong audience, account, issuer, unverified e
 Deno.test("decodePubSubEnvelope", () => {
   const data = btoa(JSON.stringify({ emailAddress: "me@gmail.com", historyId: 12345 }));
   assertEquals(decodePubSubEnvelope({ message: { data } }), { emailAddress: "me@gmail.com", historyId: "12345" });
-  assertEquals(decodePubSubEnvelope({ message: { attributes: { emailAddress: "a@b" } } }), { emailAddress: "a@b", historyId: null });
+  assertEquals(decodePubSubEnvelope({ message: { attributes: { emailAddress: "a@b" } } }), {
+    emailAddress: "a@b",
+    historyId: null,
+  });
   assertThrows(() => decodePubSubEnvelope({}), HttpError);
   assertThrows(() => decodePubSubEnvelope({ message: { data: "!!!" } }), HttpError);
   assertThrows(() => decodePubSubEnvelope({ message: { data: btoa("{}") } }), HttpError);
@@ -66,7 +69,12 @@ Deno.test("pdfAttachmentStubs walks nested parts and keys by partId", () => {
           partId: "1",
           mimeType: "multipart/mixed",
           parts: [
-            { partId: "1.1", filename: "Statement.PDF", mimeType: "application/octet-stream", body: { attachmentId: "AAA" } },
+            {
+              partId: "1.1",
+              filename: "Statement.PDF",
+              mimeType: "application/octet-stream",
+              body: { attachmentId: "AAA" },
+            },
             { partId: "1.2", filename: "", mimeType: "application/pdf", body: { attachmentId: "BBB" } },
             { partId: "1.3", filename: "logo.png", mimeType: "image/png", body: { attachmentId: "CCC" } },
           ],
@@ -83,7 +91,9 @@ Deno.test("pdfAttachmentStubs walks nested parts and keys by partId", () => {
 
 Deno.test("historyMessageIds dedupes", () => {
   const ids = historyMessageIds({
-    history: [{ messagesAdded: [{ message: { id: "a" } }, { message: { id: "b" } }] }, { messagesAdded: [{ message: { id: "a" } }] }],
+    history: [{ messagesAdded: [{ message: { id: "a" } }, { message: { id: "b" } }] }, {
+      messagesAdded: [{ message: { id: "a" } }],
+    }],
   });
   assertEquals(ids, ["a", "b"]);
 });

@@ -66,23 +66,6 @@ run_check() {
   fi
 }
 
-# Non-blocking: a failure is reported as a warning.
-run_advisory() {
-  local label="$1"; shift
-  if [ -n "$DRY_RUN" ]; then
-    echo "  would run (advisory): $label ${DIM}($*)${NC}"
-    record PLAN "$label (advisory)" 0
-    return 0
-  fi
-  if ( "$@" ) >/dev/null 2>&1; then
-    record PASS "$label" 0
-  else
-    echo "${YELLOW}warn${NC} $label failed (advisory, not blocking)"
-    record WARN "$label" 0 "advisory"
-    WARNINGS=$((WARNINGS + 1))
-  fi
-}
-
 skip() { echo "  ${DIM}skip${NC} $1 — $2"; record SKIP "$1" 0 "$2"; }
 warn() { echo "${YELLOW}warn${NC} $1 — $2"; record WARN "$1" 0 "$2"; WARNINGS=$((WARNINGS + 1)); }
 have() { command -v "$1" >/dev/null 2>&1; }
@@ -203,7 +186,7 @@ if want edge; then
   section "Edge Functions"
   if have deno; then
     run_check "deno lint" bash -c 'cd supabase/functions && deno lint -q'
-    run_advisory "deno fmt --check" bash -c 'cd supabase/functions && deno fmt --check -q'
+    run_check "deno fmt --check" bash -c 'cd supabase/functions && deno fmt --check -q'
     run_check "deno test" bash -c 'cd supabase/functions && deno test -A -q .'
   else
     skip "Edge Functions" "deno not found (brew install deno)"

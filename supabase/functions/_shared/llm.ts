@@ -116,8 +116,7 @@ export interface Suggestion {
   confidence: number;
 }
 
-export const CATEGORIZE_SYSTEM =
-  "You categorise credit-card merchants for a personal finance ledger in the UAE. " +
+export const CATEGORIZE_SYSTEM = "You categorise credit-card merchants for a personal finance ledger in the UAE. " +
   "For each merchant, pick the single best category from the provided list, using the merchant name " +
   "and example statement descriptions. Give a confidence between 0 and 1. If no category fits or you " +
   "cannot tell what the merchant is, leave that merchant out instead of guessing.";
@@ -226,7 +225,16 @@ export function smsTemplateSchema(bankCodes: string[]): Record<string, unknown> 
         additionalProperties: false,
       },
     },
-    required: ["bank_code", "name", "sender_pattern", "body_pattern", "field_groups", "date_format", "msg_kind", "expect"],
+    required: [
+      "bank_code",
+      "name",
+      "sender_pattern",
+      "body_pattern",
+      "field_groups",
+      "date_format",
+      "msg_kind",
+      "expect",
+    ],
     additionalProperties: false,
   };
 }
@@ -318,7 +326,9 @@ export function validateTemplateProposal(raw: unknown, bankCodes: string[]): Tem
       throw new LlmNotApplicable();
     }
   }
-  if (typeof r.bank_code !== "string" || !bankCodes.includes(r.bank_code)) throw new LlmOutputError("unknown bank_code");
+  if (typeof r.bank_code !== "string" || !bankCodes.includes(r.bank_code)) {
+    throw new LlmOutputError("unknown bank_code");
+  }
   if (typeof r.msg_kind !== "string" || !MSG_KINDS.includes(r.msg_kind)) throw new LlmOutputError("invalid msg_kind");
   const body = checkPattern(r.body_pattern, "body_pattern", 1000);
   const sender = r.sender_pattern === undefined || r.sender_pattern === null || r.sender_pattern === ""
@@ -345,7 +355,9 @@ export function validateTemplateProposal(raw: unknown, bankCodes: string[]): Tem
   let dateFormat: string | null = null;
   if (typeof r.date_format === "string" && r.date_format.trim()) {
     dateFormat = r.date_format.trim();
-    if (dateFormat.length > 40 || !/^[A-Za-z0-9 /\-.:,]+$/.test(dateFormat)) throw new LlmOutputError("bad date_format");
+    if (dateFormat.length > 40 || !/^[A-Za-z0-9 /\-.:,]+$/.test(dateFormat)) {
+      throw new LlmOutputError("bad date_format");
+    }
   }
 
   const ex = (r.expect && typeof r.expect === "object" ? r.expect : {}) as Record<string, unknown>;

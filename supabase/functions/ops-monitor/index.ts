@@ -33,10 +33,19 @@ async function handler(req: Request): Promise<Response> {
   }
   const issues = evaluateHealth(data ?? {}, thresholdsFromEnv());
   for (const i of issues) {
-    captureMessage(i.message, { level: i.level, fingerprint: ["ops", i.issue], tags: { ops_issue: i.issue }, extra: i.extra });
+    captureMessage(i.message, {
+      level: i.level,
+      fingerprint: ["ops", i.issue],
+      tags: { ops_issue: i.issue },
+      extra: i.extra,
+    });
   }
   checkIn("ok");
-  return json({ checked_at: new Date().toISOString(), issues: issues.map((i) => ({ issue: i.issue, level: i.level })) }, 200, req);
+  return json(
+    { checked_at: new Date().toISOString(), issues: issues.map((i) => ({ issue: i.issue, level: i.level })) },
+    200,
+    req,
+  );
 }
 
 Deno.serve(withSentry("ops-monitor", handler));

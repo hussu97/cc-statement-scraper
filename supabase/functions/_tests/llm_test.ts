@@ -87,7 +87,8 @@ Deno.test("validateTemplateProposal normalises a good proposal", () => {
 });
 
 Deno.test("validateTemplateProposal rejects unsafe or inconsistent proposals", () => {
-  const bad = (over: Record<string, unknown>) => assertThrows(() => validateTemplateProposal({ ...good, ...over }, BANKS), LlmOutputError);
+  const bad = (over: Record<string, unknown>) =>
+    assertThrows(() => validateTemplateProposal({ ...good, ...over }, BANKS), LlmOutputError);
   bad({ bank_code: "XYZ" });
   bad({ msg_kind: "transfer" });
   bad({ body_pattern: "(?<amount>[0-9]+)" }); // named group
