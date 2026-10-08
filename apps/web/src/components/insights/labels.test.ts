@@ -4,9 +4,9 @@ import {
   anomalyReasonLabel,
   bucketLabel,
   cadenceLabel,
+  changeTone,
   countLabel,
   defaultGrain,
-  deltaTone,
   priceChangeBadge,
   rangeLabel,
   resolveTab,
@@ -20,12 +20,12 @@ describe("insights labels", () => {
     expect(resolveTab("fx")).toBe("fx");
   });
 
-  it("tones deltas from the spender's side", () => {
-    expect(deltaTone("120.00", "100.00")).toBe("warn");
-    expect(deltaTone(80, 100)).toBe("positive");
-    expect(deltaTone(100, 100)).toBe("neutral");
-    expect(deltaTone(100, 0)).toBe("neutral");
-    expect(deltaTone(null, 100)).toBe("neutral");
+  it("tones server change fractions from the spender's side", () => {
+    expect(changeTone("0.2000")).toBe("warn");
+    expect(changeTone(-0.2)).toBe("positive");
+    expect(changeTone("0.0000")).toBe("neutral");
+    expect(changeTone(null)).toBe("neutral");
+    expect(changeTone(undefined)).toBe("neutral");
   });
 
   it("labels anomaly reasons and cadences", () => {

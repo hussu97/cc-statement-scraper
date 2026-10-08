@@ -2052,6 +2052,7 @@ export type Database = {
         Returns: {
           amount: number
           category_code: string
+          change: number
           color_token: string
           name: string
           prev_amount: number
