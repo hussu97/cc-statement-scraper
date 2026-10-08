@@ -48,7 +48,7 @@ scales to zero), Vercel Hobby (web) and TestFlight (iOS). The scraper runs only 
 |---|---|---|
 | **Database** | `supabase/migrations/` | All state and all business logic: schema, RLS, ingestion, matching, reconciliation, categorisation, analytics, insights, queues, cron. |
 | **Edge Functions** | `supabase/functions/` | HTTP ingress and I/O. They authenticate callers, store PDFs, call the parser and Claude, poll mailboxes and report health. They hold no business rules beyond input validation. |
-| **Parser** | `services/parser/` | Stateless `POST /parse`. Downloads a PDF from a signed URL, decrypts it with candidate passwords, detects the bank and returns normalised statements (contract parse-v1). It never touches the DB. |
+| **Parser** | `services/parser/` | Stateless `POST /parse`. Downloads a PDF from a signed URL, decrypts it with candidate passwords, detects the bank (scoring legal-name and brand markers outside transaction rows, so a merchant naming another bank doesn't win) and returns normalised statements (contract parse-v1). Each parse runs in a resource-limited child process (15 MB, 30 pages, 32 MB inflated, 30 s CPU, 60 s wall), and the output is validated against the DB's constraints before it is returned. It never touches the DB. |
 | **Web app** | `apps/web/` | Vite + React 19 + TanStack Router/Query + supabase-js, Tailwind v4 on `@ledger/tokens`. Renders RPC results. It never computes money. |
 | **iPhone app** | `apps/ios/` | SwiftUI app, `LedgerKit` package, `LogBankSMSIntent` App Intent, "Add to Ledger" share extension. |
 | **Design tokens** | `packages/tokens/` | One `tokens.json` generates CSS variables, a chart palette module and `Tokens.swift`. |
@@ -64,9 +64,9 @@ a `deno test` guard enforces this.
 
 | Function | Caller and auth | What it does |
 |---|---|---|
-| `statements-upload` | Scraper: `Bearer ccs_…` service token with scope `statements:upload`, optional `X-Profile-Key`. Web/iOS: user JWT plus `profile_code` (owner only). | Accepts multipart `files` (PDF only), dedups on sha256 per profile, writes the object to Storage **before** the `documents` row. The insert trigger then enqueues `parse_document`. Returns `{uploads:[{filename, doc_code, status: queued|duplicate}]}`. |
+| `statements-upload` | Scraper: `Bearer ccs_…` service token with scope `statements:upload`, optional `X-Profile-Key`. Web/iOS: user JWT plus `profile_code` (owner only). | Accepts multipart `files` (PDF only, ≤ 20 files and ≤ 40 MB per request, enforced while streaming, before form parsing), dedups on sha256 per profile, writes the object to Storage **before** the `documents` row. The insert trigger then enqueues `parse_document`. Returns `{uploads:[{filename, doc_code, status: queued|duplicate}]}`. |
 | `sms-ingest` | User JWT plus `profile_code`, or a service token with scope `sms:ingest` | Batch of ≤200 messages → `ingest_sms`. Idempotent on `client_msg_id`. For automations and tools; the iOS app calls the `ingest_sms` RPC directly. |
-| `worker` | pg_cron (`x-cron-secret`) | pgmq consumer. `parse_document` → parser → `ingest_parsed_document`; `llm_categorize` → Claude → `apply_llm_suggestions`; `sms_fallback` → Claude → `propose_sms_template`. Splits permanent from transient failures; dead-letters after 5 reads. Returns 202 and works in the background (pg_net times out at 5 s). |
+| `worker` | pg_cron (`x-cron-secret`) | pgmq consumer. `parse_document` → parser → `ingest_parsed_document`; `llm_categorize` → Claude → `apply_llm_suggestions`; `sms_fallback` → Claude → `propose_sms_template`. Only contract errors are permanent; everything else retries with backoff and dead-letters after 5 attempts (§4). A round starts only if it can finish inside the Edge wall clock (`EDGE_WALL_CLOCK_MS`, 150 s: a parse round needs `PARSER_TIMEOUT_MS` + 20 s, an LLM round 65 s). Returns 202 and works in the background (pg_net times out at 5 s). |
 | `gmail-push` | Google-signed OIDC token from Pub/Sub (audience `GMAIL_PUSH_AUDIENCE`, SA `GMAIL_PUSH_SA_EMAIL`) | `history.list` from the stored cursor, matches PDF attachments to the mailbox's routes and stores them (`source = gmail`). Returns 500 to make Pub/Sub redeliver; redelivery is idempotent. |
 | `gmail-watch-renew` | pg_cron daily | Renews `users.watch` (watches expire after 7 days) on `GMAIL_PUBSUB_TOPIC`. |
 | `outlook-poll` | pg_cron hourly | Microsoft Graph delta over Inbox, DeletedItems and Archive. Resumable within `OUTLOOK_BUDGET_MS`. Replaces the legacy GitHub Actions cron. |
@@ -90,6 +90,13 @@ Conventions (enforced by pgTAP guards; see CLAUDE.md §1):
 - Money is `numeric(14,2)` and FX is `numeric(18,8)`.
 - Time is `timestamptz`. Business dates are `Asia/Dubai` calendar dates (`public.dubai_date()`).
 - Every table carries `profile_code`, child tables included, so RLS is a single predicate.
+- **Tenant integrity is structural.** Each parent has `UNIQUE (profile_code, <code>)` and every
+  child references it through a **composite FK** `(profile_code, <parent>_code)`: cards,
+  statements, statement lines, SMS, transactions (including related, rule and recurring
+  links), evidence, reviews, recon and email routes. A child can only point at a parent of its
+  own profile, and every code-taking RPC also checks the code belongs to the caller's profile.
+  `08_tenant_isolation.test.sql` holds the negative cross-profile tests. (The old single-column
+  FKs were dropped so PostgREST sees one relationship per pair.)
 
 ```
 auth.users ─< profile_members >─ profiles ─┬─ profile_state (rules_version)
@@ -110,21 +117,21 @@ fx_rates (global)
 | Table | Notes |
 |---|---|
 | `profiles` | A ledger (`key` is the legacy `X-Profile-Key`, e.g. `alice`). |
-| `profile_members` | `(profile_code, user_id)`, role `owner` or `viewer`. Pending invites live in `private.pending_members` and are claimed by an `auth.users` insert trigger on sign-up. |
+| `profile_members` | `(profile_code, user_id)`, role `owner` or `viewer`. Pending invites live in `private.pending_members` and are claimed by an `auth.users` insert trigger when the user is created. Self sign-up is disabled (§8), so that user is created by an Auth invite. |
 | `service_tokens` | `ccs_<hex>` tokens. Only the sha256 is stored. Scopes are `statements:upload` and `sms:ingest`, each tied to one profile. |
 | `banks` | FAB, ADCB, ENBD, EIB, SIB, MASHREQ, plus their SMS sender ids. |
 | `accounts`, `cards` | Credit-card accounts (kind `credit_card` only) and their cards by `last4`. A replacement card is a new card on the same account. |
 | `documents` | One PDF as received: `sha256` unique per profile, `source` scraper/upload/ios/gmail/outlook/legacy, `parse_status` queued/parsing/parsed/failed. Stored at `statements/<profile_code>/<doc_code>.pdf`. |
-| `statements` | `kind` is `statement` or `history_extract` (SIB history exports). Identity is `(account, statement_date)` per kind among active rows. Holds totals, due date, min due and credit limit. |
-| `statement_lines` | **Immutable evidence.** `line_key` is a sha256 of the raw facts and `occurrence` is the ordinal among identical keys, so two identical coffees are two lines. Only `is_current` and `superseded_at` change. Carries `fx_rate` and `legacy_fingerprint`. |
-| `sms_templates` | Data-driven regex per bank (sender and body patterns, `field_groups`, `msg_kind`, `priority`, `examples`). A BEFORE trigger rejects a template unless every example parses to its `expect`. |
-| `sms_messages` | Raw SMS (OTPs never arrive). `client_msg_id` is unique per profile. Parsed fields, `parse_status` pending/parsed/ignored/unparsed/failed. |
+| `statements` | `kind` is `statement` or `history_extract` (SIB history exports). Identity is `(account, statement_date)` per kind among active rows. Holds totals, due date, min due and credit limit. `doc_code` is the document that currently evidences it; several documents can evidence one statement (§4). |
+| `statement_lines` | **Immutable evidence.** `line_key` is a sha256 of the raw facts and `occurrence` is the ordinal among identical keys, so two identical coffees are two lines. Only `is_current`, `superseded_at` and `source_doc_codes` change. `source_doc_codes` lists the documents whose parse contains the line; it stays current while any of them does. Carries `fx_rate` and `legacy_fingerprint`. |
+| `sms_templates` | Data-driven regex per bank (sender and body patterns, `field_groups`, `msg_kind`, `priority`, `examples`). A BEFORE trigger rejects a template unless every example parses to its `expect`, `field_groups` are valid, and patterns are bounded (≤ 1000/200 chars, no back-references). Members see only templates for their banks, their messages or their proposals; `examples` is not readable by clients. |
+| `sms_messages` | Raw SMS (OTPs never arrive), body ≤ 2000 chars. `client_msg_id` is unique per profile. Parsed fields, `parse_status` pending/parsed/ignored/unparsed/failed (`ignore_reason = error:<sqlstate>` when processing raised). |
 | `transactions` | The canonical ledger. Derived facts (status pending/posted/void/orphaned, dates, amounts, FX, merchant) come from evidence via `private.refresh_transaction()`. User fields: `manual_category_code`, `notes`, `exclude_from_spend`. |
 | `transaction_evidence` | Links a transaction to a statement line, history line or SMS. `role` primary/auth/post/reversal/duplicate, `method` new/exact/scored/tie/manual/legacy, `is_active`, `is_locked`. A line or SMS has at most one active link, and a transaction has at most one active statement line and one active history line. |
-| `match_reviews` | Human decisions: ambiguous, low_score, amount_drift, orphaned, missing_from_statement, period_overlap, unknown_card, unparsed_sms. |
-| `statement_recon` | Per-statement checks and an ok/warn/fail status. |
-| `merchants`, `merchant_aliases` | Global. `merchant_key()` strips payment-wallet prefixes, cities/countries and trailing digits. |
-| `categories`, `category_rules`, `merchant_profile_category` | Per profile. Categories are archived, never deleted. Rules are exact/prefix/contains/regex with optional conditions. Merchant categories come from a user's manual choice or an LLM suggestion. |
+| `match_reviews` | Human decisions: ambiguous, low_score, orphaned, missing_from_statement, period_overlap, unknown_card, unparsed_sms. (`amount_drift` is allowed by the CHECK but nothing raises it yet.) |
+| `statement_recon` | Per-statement checks and an ok/warn/fail/n/a status (§4). |
+| `merchants`, `merchant_aliases` | Global rows, but a member reads only merchants referenced by their profiles' transactions, merchant choices or recurring series. `merchant_key()` strips payment-wallet prefixes, cities/countries and trailing digits. |
+| `categories`, `category_rules`, `merchant_profile_category` | Per profile. Categories are archived, never deleted. Rules are exact/prefix/contains/regex with optional conditions, validated on write (known keys and types, own `card_code`, pattern ≤ 200 chars, no back-references). Merchant categories come from a user's manual choice or an LLM suggestion. |
 | `budgets`, `recurring_series`, `insights`, `audit_events` | Monthly budgets (total or per category), detected subscriptions, the nightly insight feed, and an audit trail of user edits. |
 | `email_mailboxes`, `email_routes`, `email_events` | Mailbox (gmail/outlook, `sync_state` cursor), per-bank routing rules, and per-attachment idempotency log. |
 | `fx_rates` | Global AED-per-unit market rates (fallback estimate only). |
@@ -153,39 +160,72 @@ the transaction's facts:
 ### Statement path
 
 `document → parse_document queue → worker → parser /parse → ingest_parsed_document(doc, payload)`
-runs in one DB transaction, with a 120 s statement timeout:
+runs in one DB transaction. It takes the **per-profile advisory lock** first
+(`private.lock_profile`: `pg_advisory_xact_lock(hashtext(profile_code))`), as do `ingest_sms` and
+`resolve_review`, so concurrent ingests for one profile serialise and can't create duplicate
+accounts or cards or deadlock (the bulk legacy import parses several documents at once). There
+is no function-level `statement_timeout`: Postgres arms the timer when the outer statement
+starts, so a `SET` on a function never applied. Regex cost is bounded on write instead (rule
+and template pattern caps, no back-references, SMS bodies ≤ 2000 chars), and the caller's role
+timeout applies.
 
 1. **Account resolution.** `resolve_statement_account` finds or creates the account and card
-   from bank + primary last4.
-2. **In-place re-ingest.** The same `(account, statement_date, kind)` updates the existing
-   statement. Lines are diffed on `(line_key, occurrence)`:
-   - Unchanged lines keep their codes and evidence.
-   - Vanished lines go `is_current = false`. Their evidence is deactivated and their
-     transactions are refreshed, so they may become orphaned.
-   - New lines are inserted.
-   - A line that reappears (for example after a parser fix) is re-activated.
+   from bank + primary last4. Without a last4 it never invents an account: the account this
+   document already produced, else the bank's only active account, else an explicit statement
+   reference seen on exactly one account, else a permanent `22023`. A card-less statement with
+   no rows (the ADCB companion PDF) is skipped with a document warning.
+2. **Lines are a union over documents.** One statement can be evidenced by several documents:
+   the same PDF from email and the scraper, a card-less companion PDF, or overlapping SIB
+   history windows. Lines are diffed on `(line_key, occurrence)`, and each line records the
+   documents that contain it in `source_doc_codes`:
+   - A line already present gains the document; its codes and evidence are kept.
+   - New lines are inserted. A line that reappears (for example after a parser fix) is
+     re-activated.
+   - A document can only withdraw **its own** evidence. A line leaves the ledger
+     (`is_current = false`, evidence deactivated, transaction refreshed, possibly orphaned)
+     only when no document contains it any more, i.e. on a **re-parse of the same document**.
+     Another document for the same statement or history cycle never supersedes lines; it may
+     fill header fields that are still null, and a document without rows never touches the
+     header.
+   - When a re-parse no longer produces a statement it produced before (a corrected date or
+     account), the document's evidence is withdrawn from it, and a statement left with no
+     current lines is retired (`superseded`, `superseded_by` null). A later re-parse that
+     produces it again revives it with its codes intact.
 3. **History extracts.** SIB history exports are `kind = history_extract` and their lines are
    `history_line` evidence. A transaction may hold one statement line **and** one history line,
    so a history row and the real statement row land on the same transaction and are never
-   double-counted. Statement amounts win.
+   double-counted. Statement amounts win. History windows are additive (rule 2).
 4. **Matching.** `match_statement_lines` runs (below).
 5. **Period overlap.** Overlap of more than 3 days with another active real statement of the
    same account opens a `period_overlap` review. Nothing is superseded automatically;
-   `resolve_review {"supersede": …}` does that.
+   `resolve_review {"supersede": …}` does that, and only for a statement that is one of the
+   review's candidates, on the same profile and account, and not the subject itself.
 6. **Reconciliation.** `reconcile_statement` runs (below).
 
-The worker treats parser 4xx codes (`PDF_DECRYPT_FAILED`, `UNSUPPORTED_*`, `BANK_UNDETECTED`,
-permanent `DOWNLOAD_FAILED`) as permanent: `fail_document(permanent)` marks the document
-`failed`. Everything else is transient. The message is retried by visibility timeout (300 s)
-and dead-lettered after 5 reads. Owners can call `requeue_documents` after a parser fix.
+The worker treats a parser response as permanent only when it is a 422 carrying one of the
+contract's permanent codes (`PDF_DECRYPT_FAILED`, `UNSUPPORTED_*`, `BANK_UNDETECTED`,
+`DOWNLOAD_FAILED`, `INVALID_REQUEST`, `PARSE_TIMEOUT`, `PDF_TOO_LARGE`, `PARSE_OUTPUT_INVALID`),
+and an ingest error as permanent for SQLSTATE class 22, `23502` and `23514`.
+`fail_document(permanent)` then marks the document `failed`. Everything else, including
+404/403 from a wrong `PARSER_URL`, is transient: the message is re-sent with backoff (60 s,
+5 min, 15 min, 30 min) and dead-lettered after 5 attempts. See
+[parse-v1](docs/contracts/parse-v1.md#worker-classification). Owners can call
+`requeue_documents` after a parser fix.
 
 ### SMS path
 
-`ingest_sms(profile, [{client_msg_id, received_at, sender, body}])` stores each message
-(idempotent) and calls `process_sms`:
+`ingest_sms(profile, [{client_msg_id, received_at, sender, body}])` validates, stores and
+processes **each message on its own**, so one bad message never fails the batch. Every message
+gets its own result status: the `process_sms` outcome (for example `unknown_card`, `held`,
+`ignored`, `unparsed`); `duplicate_delivery` for a `client_msg_id` already stored;
+`rejected_otp` (defence in depth: OTPs are dropped on the device); `invalid` with a `reason`
+when the shape is wrong (missing `client_msg_id`, empty or over-long body, bad `received_at`);
+or `failed` with `reason = error:<sqlstate>` when processing raised (the message is kept with
+`parse_status = failed`). Clients (the iOS outbox) park only that message. `process_sms`:
 
 1. `match_sms_template` takes the first active template by `priority` whose sender and body
-   regex match. The regex runs under a statement timeout.
+   regex match. A template whose date fields don't form a real date (`31/02/26`) does not
+   apply; it never raises.
    - **No template matches:** the message is `unparsed` and an `sms_fallback` job is enqueued.
    - **`other` / `debit_card`:** the message is `ignored`. Approval prompts, due reminders,
      logins and debit-card or account alerts are seeded at priority 900+ so they never reach
@@ -204,8 +244,9 @@ so a new bank format needs an INSERT, not a deploy.
 
 Matching is deterministic and greedy over a temp candidate table.
 
-**Candidates** must share the account and direction, have no active evidence of the same type,
-and fall within ±3 days on `txn_date` (or ±1 day on posting date when both are known).
+**Candidates** must share the profile, account and direction (joined on
+`(profile_code, account_code)`), have no active evidence of the same type, and fall within
+±3 days on `txn_date` (or ±1 day on posting date when both are known).
 
 **Score (0–100)** from `private.match_score`:
 
@@ -222,7 +263,9 @@ A missing amount or date component rejects the pair.
 
 **Outcome:**
 - **Auto-link** when the score is ≥ 75 and no *materially different* competitor is within 15
-  points. Method is `exact` at ≥ 85, otherwise `scored`.
+  points. Method is `exact` at ≥ 85, otherwise `scored`. A competitor whose merchant affinity
+  (trigram or word similarity) is at least 0.3 below the pair's is not a competitor, so
+  "AED 100 at ENOC" and "AED 100 at Carrefour" on the same day pair up without a review.
 - **Review** (`low_score` or `ambiguous`) when the score is 55–75 or a different competitor is
   within 15 points. The top 5 candidates are stored and the evidence is held until resolved.
 - **New transaction** when the score is below 55.
@@ -234,8 +277,9 @@ ambiguous. They pair in order (score, date distance, `line_no`, creation time) w
 
 **SMS-specific rules** (`match_sms`):
 1. **Duplicate alert.** Same account, kind, amount and currency, and either an identical body
-   hash or (Δ event ≤ 3 min and description similarity ≥ 0.8), received within 10 min. The
-   message links as `role = duplicate`.
+   hash or (Δ event ≤ 3 min and description similarity ≥ 0.8), received within 10 min. Two
+   alerts with different available limits are never duplicates. The message links as
+   `role = duplicate`.
 2. **Late SMS.** An SMS for a transaction a statement already posted links as `role = auth`.
 3. **Otherwise** a new `pending` transaction is created. A `reversal` SMS gets `related_txn_code`
    pointing at the matching debit from the last 30 days.
@@ -266,10 +310,18 @@ After each FX update, pending SMS transactions are re-estimated. All three stay
 - `unmatched_sms`: pending SMS transactions dated inside the period, up to 3 days before its
   end. Each one also opens a `missing_from_statement` review.
 
+Lines without a printed AED amount (`amount_aed` null, e.g. FX rows) are counted at their
+printed rate and reported as `unpriced_lines`.
+
 Status:
-- **fail:** any totals mismatch beyond 0.01.
-- **warn:** totals were not extracted, or held or unmatched items exist.
+- **fail:** any totals mismatch beyond 0.01 that the unpriced lines don't explain.
+- **warn:** totals were not extracted; held or unmatched items exist; a mismatch is explained by
+  unpriced lines; or the statement has no current lines although its header shows activity, or
+  all its lines were withdrawn.
+- **n/a:** history extracts. They are windows with no totals, so there is nothing to reconcile.
 - **ok:** otherwise.
+
+A `missing_from_statement` review resolves itself once its transaction stops being pending.
 
 ---
 
@@ -340,9 +392,10 @@ The nightly job `private.nightly()` (22:00 UTC = 02:00 Dubai) runs three steps:
 1. Voids released authorisations.
 2. Detects recurring charges: ≥ 3 charges (≥ 2 for yearly) at a weekly, monthly or yearly
    cadence with amount CV below 10%.
-3. Generates the deterministic, deduplicated insight feed: spend pace, category spike, budget
-   risk, price change, new recurring, statement due, uncategorised, review backlog and large
-   transaction.
+3. Generates the deterministic, deduplicated insight feed. Today it emits five kinds:
+   `category_spike`, `budget_risk`, `price_change`, `statement_due` and `uncategorized`. The
+   CHECK also allows `spend_pace`, `new_recurring`, `review_backlog` and `large_transaction`,
+   which are reserved: nothing generates them yet (docs/audit/BACKLOG.md, DB-29).
 
 ---
 
@@ -355,7 +408,8 @@ The nightly job `private.nightly()` (22:00 UTC = 02:00 Dubai) runs three steps:
 | `ledger-fx-rates` | `0 21 * * *` | `fx-rates` function |
 | `ledger-nightly` | `0 22 * * *` | `private.nightly()` |
 | `ledger-llm-enqueue` | `30 22 * * *` | `private.enqueue_llm_categorize()` |
-| `ledger-legacy-choices` | `45 22 * * *` | `private.apply_legacy_category_choices()` (cutover helper; idempotent) |
+| `ledger-legacy-choices` | `45 22 * * *` | `private.legacy_choices_cron()`: applies staged legacy category choices once per transaction (never over a later user edit), then unschedules itself when nothing is pending or 30 days after staging. Leftovers: `private.legacy_unmatched_choices()` |
+| `ledger-cron-history-purge` | `50 23 * * *` | deletes `cron.job_run_details` older than 7 days |
 | `ledger-ops-monitor` | `*/15 * * * *` | `ops-monitor` function |
 | `ledger-gmail-watch-renew` | `0 3 * * *` | `gmail-watch-renew` function |
 | `ledger-outlook-poll` | `5 * * * *` | `outlook-poll` function |
@@ -387,6 +441,14 @@ RLS applies to every change event.
 - **Users** sign in with Supabase Auth: email one-time code or magic link, and a password for
   the seeded demo user. Sign in with Apple is stubbed on iOS. Membership in `profile_members`
   grants access, and a profile can have several owners and viewers.
+- **No self sign-up.** Ledger is private: `[auth] enable_signup = false` locally, and the same
+  dashboard setting in production. The web's magic link uses `shouldCreateUser: false`, so an
+  unknown email gets "Ask the ledger's owner to invite you". A member is added by an owner with
+  `add_profile_member` (an existing user is added at once; otherwise a pending invite is
+  stored), and the person's Auth user is created by an Auth invite (Dashboard → Authentication
+  → Users → Invite user, or the admin API), which works with sign-ups off. The insert trigger
+  then claims the pending invite. The legacy import refuses to adopt a profile key it did not
+  create (`private.legacy_import_profiles`), so a squatted key can't capture migrated data.
 - **RLS on every table.** Policies call `authz.my_profile_codes()` or
   `authz.my_owned_profile_codes()`. These are SECURITY DEFINER functions in the `authz` schema,
   evaluated once per statement through `(select …)`. Members read; owners write the user-editable
@@ -413,17 +475,30 @@ RLS applies to every change event.
 
 ## 9. SMS capture on iOS
 
-iOS gives apps no access to SMS. The supported route is a Shortcuts **personal automation**:
-*Message → Message contains "AED" → Run Immediately → Log Bank SMS* (Message = Shortcut Input's
-Content, Sender = Shortcut Input's Sender). It is repeated for keywords such as "Card" and
-"ending". Settings → *Set up SMS capture* walks through it.
+iOS gives apps no access to SMS. The supported route is **one** Shortcuts personal automation:
+*Message → Message contains "Card" → Run Immediately, Notify When Run **on** → Log Bank SMS*
+(Message = Shortcut Input's Content, Sender = Shortcut Input's Sender). "Card" appears in every
+ADCB, FAB, ENBD and SIB credit-card purchase, refund and decline format in the template seed;
+a single keyword means each alert fires once. Settings → *Set up SMS capture* walks through it
+and shows "Last captured" and a "Send test" button. Whether Shortcuts' "contains" is
+case-insensitive (the ENBD refund says "card") still needs a real-device check.
 
 ```
 Bank SMS → Shortcuts automation → LogBankSMSIntent (openAppWhenRun = false, separate process)
   → SMSCapture.classify (on device: drop OTPs, debit-card / account alerts, no-amount messages)
-  → App Group outbox (fresh client_msg_id) → flush via rpc('ingest_sms') with the shared-keychain session
-  → retry with backoff (30 s doubling, cap 1 h); the app flushes again on foreground
+  → App Group outbox (fresh client_msg_id) → flush via rpc('ingest_sms') to the "SMS go to" ledger
+  → per-message result; failures classified as permanent / transient / signed out
 ```
+
+- **"SMS go to" ledger.** An explicit setting in the App Group, limited to ledgers the user
+  owns (default: the first owned one). The App Intent, the share extension and queued PDF
+  uploads use it, never the ledger currently on screen.
+- **Outbox.** Errors are classified by SQLSTATE / PGRST code, then HTTP status. Transient ones
+  (offline, 5xx, `57014`, `08`/`40`/`53` classes) retry with backoff for up to 8 attempts, then
+  park; signed-out never uses up attempts. A permanent batch error is split until the bad
+  message is alone; a `42501` parks that ledger's batch; a per-message `invalid`/`failed`
+  status parks only that message. Parked messages are listed in Settings → "Not sent" with
+  Retry and Delete, and Shortcut results say why a message waits.
 
 - **Server-side parsing is data-driven** through `sms_templates`. Seed templates for ADCB, FAB,
   ENBD and SIB are built from real alerts.
@@ -445,12 +520,20 @@ Bank SMS → Shortcuts automation → LogBankSMSIntent (openAppWhenRun = false, 
 | `ledger-apps` | Web app and iPhone app (app, intent and share extension) | `app` = `web` \| `ios` (plus `target` on iOS) |
 
 - `release` is the git SHA and `environment` is `local | preview | production` everywhere.
+- **Local never reports.** Every runtime refuses to start Sentry when the environment is unset,
+  `local`, `development` or `test` (iOS also `dev` and any Debug build; web also Vite dev
+  mode), even with a DSN: `_shared/sentry.ts` `sentryActive`, `ccs_parser/sentry.py`
+  `sentry_active`, web `shouldInitSentry`, LedgerKit `Telemetry.shouldStart`.
 - **Distributed tracing.** Web and iOS send `sentry-trace` and `baggage` to Edge Functions,
   which continue the trace and forward it to `/parse`. An upload becomes one trace across
   client → Edge → parser.
 - **PII.** `sendDefaultPii` is off. A per-runtime scrubber (each with unit tests) strips SMS
-  bodies, PDF passwords, tokens, `Authorization` and `X-Profile-Key` headers, emails and signed
-  URL query strings. Tags carry only opaque codes.
+  bodies, PDF passwords, tokens, `Authorization` and `X-Profile-Key` headers, email fields and
+  signed URL query strings. (Free-text email addresses are not yet regex-scrubbed in the Edge
+  and parser scrubbers: BACKLOG SRV-18.) The web scrubs spans too (`beforeSendSpan`), because
+  Sentry v11 streams spans past `beforeSendTransaction`, and its Supabase integration no longer
+  re-reports failed requests. Tags carry only opaque codes. Ingest rejections carry the SQLSTATE
+  and the constraint name, with literal values filtered from the PG message.
 - **Database health.** The DB can't run the SDK, so `ops-monitor` turns `ops_health()` into
   issues every 15 min:
   - cron failures

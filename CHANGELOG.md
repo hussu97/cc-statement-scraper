@@ -1,5 +1,96 @@
 # Changelog
 
+## Audit fixes (pre-cutover) — 2026-10-08 (branch `ledger-v2`)
+
+Fixes for the P0 and P1 findings of the six pre-cutover audits in `docs/audit/` (01 database,
+02 data parity, 03 server, 04 web, 05 iOS, 06 cross-cutting), plus the P2/P3 items fixed along
+the way. IDs refer to those reports. Everything not yet fixed is listed in
+[docs/audit/BACKLOG.md](docs/audit/BACKLOG.md).
+
+### Backend (Supabase)
+
+- **fix** Tenant integrity is structural (DB-01, DB-02, DB-03, DB-14; migration `…1500`): every parent has `UNIQUE (profile_code, code)` and every child references it through a composite FK (cards, statements, lines, SMS, transactions incl. related/rule/recurring, evidence, reviews, recon, email routes). `resolve_review`'s card branch only accepts an account of the review's profile and bank; `supersede` only an open candidate of the review on the same profile and account, never the subject (DB-33). Matcher candidate joins are on `(profile_code, account_code)`
+- **fix** No data loss from extra documents (DP-01, DP-02, DP-06): `statement_lines.source_doc_codes` records which documents contain each line. A document only withdraws its own evidence, so a card-less ADCB companion PDF or a shorter SIB history window can no longer supersede lines; only a re-parse of the same document can. A card-less statement without rows is skipped with a document warning. Real-data replay: ADCB line coverage 80.8 % → 100 %, SIB 53.2 % → 100 %, orphaned reviews 150 → 0
+- **fix** Re-parsing a document whose statement date or account changed retires the old statement instead of duplicating the ledger; a later re-parse that produces it again revives it with its codes (DB-06)
+- **fix** A statement without a card number never invents an account: same document → its account, then the bank's only active account, then an explicit reference seen on one account, else a permanent `22023` (DB-07)
+- **fix** `ingest_sms` validates and processes each message on its own: `invalid` (+ `reason`), `failed` (`error:<sqlstate>`, message kept), `duplicate_delivery`, `rejected_otp` or the processing outcome; one bad SMS never fails the batch. An impossible template date means "template doesn't apply". The template re-process trigger isolates errors too (DB-08)
+- **fix** Rule `conditions` are validated on write (known keys, numeric amounts, existing bank, own card, ISO currency, kind, direction) by `private.rule_problem` in the trigger and `preview_rule`; evaluation uses `private.safe_numeric`, so a bad rule can't stop ingestion (DB-09)
+- **fix** The matcher no longer calls separable pairs ambiguous: a competitor ≥ 0.3 below on merchant affinity isn't a conflict (DB-10)
+- **fix** Ingestion and review resolution take a per-profile advisory lock (`private.lock_profile`) first, so the bulk legacy import can't create duplicate accounts or cards or deadlock (X-08, DB-42, DP-15)
+- **fix** Function-level `statement_timeout` removed (it never applied); regex cost bounded on write instead: rule patterns ≤ 200 chars, template patterns ≤ 1000/200, no back-references, SMS bodies ≤ 2000 chars (DB-13)
+- **fix** Merchants and aliases are readable only when the caller's profiles reference them; SMS templates only for the caller's banks, messages or proposals; `sms_templates.examples` is not granted to clients (DB-04)
+- **fix** Self sign-up disabled (`[auth] enable_signup = false`, DB-04 / WEB-04); members join by invite. The legacy import refuses to adopt a profile key it did not create (`private.legacy_import_profiles`, DB-05)
+- **fix** `legacy_parity_report(p_schema)` casts the legacy `varchar`/enum columns and adds `legacy_lines_missing` / `legacy_aed_missing`; `private.legacy_missing_lines()` lists lost lines (DB-11, X-02, DP-05)
+- **fix** Legacy category choices are evaluated once per transaction and never re-applied over a user edit; `ledger-legacy-choices` unschedules itself when nothing is pending or 30 days after staging; `private.legacy_unmatched_choices()` lists leftovers (DB-12)
+- **fix** Reconciliation: lines without an AED amount count at their printed rate and downgrade an explained mismatch to `warn` (`unpriced_lines`, DB-16 / X-18); history extracts get `n/a`; an empty statement whose header shows activity, or whose lines were all withdrawn, is `warn`, never `ok` (DP-08)
+- **fix** Two alerts with different available limits are never duplicates (DB-15); `missing_from_statement` reviews resolve once the transaction stops being pending (DB-17, partly); a line displaced by a manual link gets its own transaction and linking onto a locked line is refused (DB-27); resolving `unknown_card` for an SMS without last4 binds it to the chosen account (DB-43); orphan reviews raised and resolved in one transaction are dropped (DP-06)
+- **perf** The matcher resolves each line's merchant once (DB-19, partly); indexes on `transactions.stmt_code`, `related_txn_code`, `rule_code` and `statement_lines(profile_code, legacy_fingerprint)` (DB-32, partly)
+- **feat** Migration `…1900`: `retry_sms_fallback` (owner re-asks the LLM for an unparsed SMS), `merchant_search` (every merchant of a profile, not limited by spend), `statement_cycles` `p_limit` up to 5000, `resolve_review {"not_a_transaction": true}`, and distinct seed colours for Medicine, Forex Charge and Apple in-app purchase
+- **chore** `ledger-cron-history-purge` deletes `cron.job_run_details` older than 7 days (X-11); local `[api] max_rows = 2000` (X-07)
+- **test** pgTAP `08_tenant_isolation` (negative cross-profile tests), `09_ingest_robustness`, `10_web_review_and_search`; `02` and `03` are hermetic and `03` mocks the legacy schema with the real `varchar`/enum types (DB-28, X-31). 10 files, 503 assertions
+- **fix** Edge `worker`: only a 422 carrying a contract permanent code is permanent; every other parser response (401/403/404/400/413, a 422 without a known code, a 200 without parse-v1, 5xx, timeouts) is retried with backoff (60 s / 5 min / 15 min / 30 min) and dead-lettered after 5 attempts, with error-level Sentry events per status (SRV-03). Ingest SQLSTATE class 22, `23502` and `23514` are permanent; the event carries the SQLSTATE and constraint with literal values filtered (X-06)
+- **fix** Edge `worker` time budget: a round starts only if it fits the Edge wall clock (`EDGE_WALL_CLOCK_MS`, 150 s); `PARSER_TIMEOUT_MS` defaults to 75 s (was 100 s), above the parser's 60 s kill (SRV-04)
+- **fix** `statements-upload` caps a request at 40 MB, enforced on `content-length` and while streaming chunked bodies, before form parsing (SRV-06)
+- **fix** SMS fallback: a non-transaction message (`msg_kind=other`, null amount) is skipped without a DLQ entry; deterministic failures dead-letter once with a sanitised reason; no LLM call without banks (`NO_BANKS`); SDK retries off (the queue retries)
+- **fix** Edge Sentry never initialises when `SENTRY_ENVIRONMENT` is unset, `local`, `development` or `test`, even with a DSN (`sentryActive`)
+- **test** deno: `worker_test.ts` (parse state machine, DLQ, budget, backoff, upload body cap), `sentry_local_test.ts`. 91 pass
+- **fix** `scripts/migrate_legacy.py`: `--target local|prod` is required and checked against `LEDGER_DB_URL`/`SUPABASE_URL`; `--apply` against prod also needs `--yes-i-mean-prod <ref>` (DP-13). Legacy PDFs carry their known bank as `documents.bank_code`; an insert conflict deletes the uploaded object; a missing profile exits with a clear message; differing OAuth app credentials across profiles warn (SRV-09). `scripts/tests` 12 pass
+
+### Parser
+
+- **fix** Resource limits (SRV-01): every parse runs in a killable forkserver child (30 s CPU, 60 s wall, 768 MB address space on Linux, 32 MB inflated streams); PDFs over 15 MB or 30 pages are rejected before extraction. A 65 KB crafted PDF that took 202 s is now rejected in 0.2 s. New permanent 422 codes `PARSE_TIMEOUT` and `PDF_TOO_LARGE`
+- **fix** Output validated against the DB's constraints before it is returned (X-06): real dates (2000–2100), `period_start ≤ period_end`, statement period ≤ 100 days, due date 0–120 days after the statement date, 4-digit last-4 (malformed values become null), `txn_time`, `numeric(14,2)` amounts, `fx_rate > 0`. A violation is the permanent 422 `PARSE_OUTPUT_INVALID` (field paths only)
+- **fix** ENBD/EIB statement years come from the full Statement Date (else the newest posting date), so Dec/Jan statements no longer fail or land a year in the future: 38 lost lines recovered (DP-03, DP-04)
+- **fix** FAB rows with an original amount in decimal-comma (`EUR 108,99`) or 3-decimal (`KWD 18.750`) format were skipped; both affected statements now reconcile (DP-07)
+- **fix** Bank detection scores every bank on legal-name and brand markers outside transaction rows, so "TRANSFER EMIRATES NBD" on a FAB statement no longer wins (SRV-08)
+- **fix** Parser Sentry never initialises for an unset, `local`, `development` or `test` environment (`sentry_active`)
+- **test** `test_limits.py`, `test_output_validation.py`, `test_upload_bank_detection.py`; golden parity allows the ENBD year and FAB line deltas explicitly. 272 pass (92 golden cases on the private corpus)
+
+### Web
+
+- **fix** Out-of-range pages clamp to the last page instead of "Requested range not satisfiable" (WEB-01); statements, documents and reviews paginate server-side with exact counts, health counts use head counts, and Merchants lists every assigned or suggested merchant beyond the top 200 (WEB-02, partly)
+- **fix** The Review nav badge is a head count gated on session and profile (fixes "permission denied for table match_reviews" sent with the anon key); the Supabase Sentry integration no longer re-reports every failed request
+- **fix** Sentry spans are scrubbed (`beforeSendSpan`; `beforeSendTransaction` was ignored by streamed spans, WEB-03); Sentry never initialises for an empty, `local`, `development` or `test` environment or in Vite dev mode
+- **fix** Magic links never create users (`shouldCreateUser: false`); an unknown email is told to ask for an invite (WEB-04)
+- **fix** A foreign amount without an FX rate shows in its own currency with "awaiting FX" instead of as AED (WEB-05)
+- **fix** An unparsed SMS without a proposed format can be marked "Not a card transaction" or dismissed (WEB-07)
+- **fix** Tokens meet WCAG AA: darker light `muted`/`subtle`/`accent`/`warn`, lighter dark `muted`/`subtle`, a 12-hue chart palette with every pair ≥ 15 ΔE2000 and ≥ 3:1; `packages/tokens/test/contrast.test.mjs` enforces the declared pairs (WEB-06, WEB-29). axe colour-contrast nodes 781 → 0 on the walked screens. `Tokens.swift` regenerated
+- **feat** Insight cards link to their screen (WEB-25); Review replaces Cards in the mobile bottom bar with a count (WEB-23); 44 px hit areas below `lg` (WEB-22, partly); "Clear filters"/Back resets the search box (WEB-08); every Trends label shows on mobile (WEB-18); reduced motion stops infinite animations (WEB-21); expired insights are hidden (WEB-45)
+- **feat** Adopts the post-audit DB contracts: "Not a card transaction" sends exactly `{not_a_transaction: true}` (it was also sending `dismiss`, so the SMS was never marked), and also applies to unknown-card SMS; "Retry AI" on an unparsed SMS (`retry_sms_fallback`, WEB-07); friendly P0002/22023 review errors; Rules → Merchants searches and pages server-side through `merchant_search`; Statements page up to 5000 cycles (WEB-02); recon `n/a` shows as a neutral "Nothing to reconcile" with the unpriced / no-lines checks explained; document parse warnings shown with digits masked
+- **test** `src/test/audit-fixes.test.ts`, `db-contract.test.ts`, `sentry-scrub.test.ts`, `sentry.test.ts` wiring tests. 159 pass
+
+### iOS
+
+- **fix** Sentry never starts for `LEDGER_ENVIRONMENT` local/development/dev/test or Debug builds, even with a DSN (`Telemetry.shouldStart`)
+- **fix** SMS outbox can no longer wedge (IOS-01): failures are classified (`LedgerAPIError.kind`: 42501/22xxx/23xxx/P0xxx/PGRST1-2xx/4xx permanent; network, 5xx, 57014, 08/40/53xxx transient; 401/PGRST3xx signed out). A permanently failing batch is split until the bad message is alone; a permission error parks that ledger's batch; per-message `invalid`/`error` statuses (newer `ingest_sms`) park only that message; transient retries stop after 8 attempts. Parked messages are listed in Settings → "Not sent" with Retry (to the current SMS ledger) / Delete. Flushes in one process are serialised. Shortcut results say why a message waits (offline / signed out / server) instead of always "when you're back online"
+- **feat** Explicit "SMS go to" ledger (IOS-02): owned ledgers only, defaults to the first owned one, stored in the App Group; the App Intent and the Share Extension (which now shows "Uploading to …") use it instead of the last-viewed ledger. Viewers no longer see the statement upload card
+- **fix** One due-date rule for Overview and Statements (`DueStatus`, IOS-03): past due dates read "Was due 25 Sep"; "Overdue" only for an account's latest statement with no payment detected (not detectable on the phone yet, so never shown)
+- **fix** Overview hero (IOS-04) renders the server's `change_vs_prev_month_to_date` ("52% below the same day last month") and per-account `utilisation`; the 3-month average is shown as a plain figure (it is a full-month average) and only used as a ratio for completed months. Overview no longer fetches `statement_cycles`
+- **fix** Dynamic Type (IOS-05): the hero number scales with `@ScaledMetric` and stacks under its unit when needed; pending strip, ring card, card, statement, upload and Activity rows stack from xxxLarge (`AdaptiveRow`); money stays on one line (`moneyLine()`); chips wrap between words and cap at accessibility2; labelled filter and 44 pt dismiss buttons
+- **feat** SMS setup guide (IOS-06): one automation on "Card" (present in every ADCB/FAB/ENBD/SIB card alert in the template seed), keep "Notify When Run" on; Settings and the guide show "Last captured" and a "Send test" that runs the intent's path with a synthetic non-transaction message
+- **feat** Review screen (IOS-07) from Overview → Needs attention: open `match_reviews` with link to candidate / keep as new / dismiss, and register an unknown card to an account of the same bank (`resolve_review`); read-only for viewers. Shortcut results for `unknown_card`/`held` point to it
+- **feat** `PrivacyInfo.xcprivacy` in the app and the share extension (IOS-08): UserDefaults (1C8F.1, CA92.1), crash data only, no tracking
+- **fix** A sign-in whose session couldn't be saved to the keychain is no longer shown as signed in (IOS-09); Debug builds keep the session in memory instead, and the no-access-group keychain fallback is Debug-only
+- **chore** `scripts/publish-build.sh` reads `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` from the environment or `Config/Secrets.Release.xcconfig`, passes the token via the environment and never prints it
+- **chore** `Tokens.swift` regenerated from the AA-contrast tokens (with the web change)
+- **feat** Adopts the post-audit DB contracts: Review offers "Retry AI" (`retry_sms_fallback`) and "Not a card transaction"; the outbox parks per-message `invalid`/`failed` statuses with readable reasons; recon `n/a` decodes
+- **test** `AuditFixTests`, `OutboxFailureTests`, `DBContractTests` and decoding fixtures for the new `overview` and `ingest_sms` shapes. 114 pass
+
+### Scraper
+
+- **fix** Uploads are split into requests of ≤ 20 files and ≤ 32 MB (`CCS_SCRAPER_UPLOAD_MAX_FILES` / `CCS_SCRAPER_UPLOAD_MAX_MB`, clamped to the server's limits); a 413 halves the batch; a partial failure raises `UploadBatchError` and the batches that succeeded are recorded, so `upload-pending` retries only the rest (SRV-02). 135 tests pass
+
+### Docs / CI
+
+- **docs** `docs/audit/01`–`06`: database, real-data parity (aggregates only), server, web, iOS and cross-cutting audits, each with a Fix status. `docs/audit/BACKLOG.md` collects every finding and recommendation not yet fixed, with a "do before / at cutover" list
+- **docs** PRODUCTION.md runbook: function and Vault secrets from one gitignored source (`scripts/cutover/set-edge-secrets.sh`, which refuses placeholders and never echoes, and `set-vault-secrets.sql`) (X-01, X-04); Gmail OAuth client copied from Render (X-03); ordered legacy disable list and rollback (X-13); dashboard settings: Postgres upgrade, API max rows 2000, sign-ups off (X-07); `supabase migration list --linked` before `db push` (X-09); Vault set only after functions deploy (X-21)
+- **docs** PRODUCTION.md after the fixes: `migrate_legacy.py --target prod`, dry run first, `--yes-i-mean-prod <project-ref>` for writes (zsh-safe); members added via Supabase Auth → Invite user with sign-ups off; parser limits and nested timeouts (60 s < 75 s < 120 s) on Cloud Run in `<gcp-project>` / `me-central1`; Sentry off for local/dev/test in every runtime; post-import ENBD/FAB checks with SQL to requeue and supersede a stale bad-year statement; parity sign-off on `legacy_lines_missing = 0`; rotate the exposed Anthropic key and Sentry org token
+- **docs** parse-v1: the full error table (`INVALID_REQUEST`, `PARSE_TIMEOUT`, `PDF_TOO_LARGE`, `PARSE_OUTPUT_INVALID`, 502 `DOWNLOAD_FAILED`, 500 `INTERNAL_ERROR`), output validation rules, resource limits, and code-based worker classification (SRV-21, X-25)
+- **docs** ARCHITECTURE: composite FKs, per-profile ingest lock, multi-document line union, recon `n/a`, per-message `ingest_sms` statuses, iOS outbox classification and "SMS go to", no self sign-up, local-off Sentry; removed the stale "120 s statement timeout" and "regex runs under a statement timeout" claims (DB-13) and the insight kinds that are never generated (DB-29). README: env vars (`PARSER_TIMEOUT_MS` 75000, `EDGE_WALL_CLOCK_MS`, parser limits, scraper batching, Sentry local behaviour), `docs/audit`, new RPCs and screens. ROADMAP: audit row and remaining cutover tasks
+- **ci** `ci.yml` `changes` job gets `pull-requests: read`, so PR runs no longer fail on the paths filter (X-05); legacy workflows run only while the repository variable `LEGACY_DEPLOYS_ENABLED` is `true` (X-13); `deploy-supabase` and `deploy-parser` refuse any ref but `main` (X-12)
+- **chore** The parser deploys to `<gcp-project>` / `me-central1`, Artifact Registry repo `ledger` (X-29); `services/parser/.gcloudignore` and `.dockerignore` keep `.env*`, `.venv` and tests out of the upload and image (X-15)
+- **chore** Git hooks skip missing `backend/`/`frontend/` and tools, `pre-push` runs the v2 checks, `commit-msg` rejects `Co-Authored-By` (X-14)
+
 ## Ledger v2 — 2026-10-08 (branch `ledger-v2`)
 
 A rebuild around Supabase. The DB and business logic move into Postgres, ingress and I/O into

@@ -101,6 +101,55 @@ Field rules:
 - `amount_aed` is null when the bank does not print the AED amount (e.g. Mashreq foreign rows).
 - `fx_rate` is AED per one unit of `currency_original`, as a decimal string, or null.
 - `legacy_fingerprint` is `domain.parsing.utils.fingerprint_for(...)`, computed exactly as the legacy backend did. It is used to carry legacy category overrides across.
+- `country_code` is free text from the statement (values seen: `AE`, `ARE`, `UAE`, `IRL`, …). It has no defined format yet.
+- A `history_extract` is a **window**, not a complete record of its cycle. Ingest unions the lines of every document of a statement by `(line_key, occurrence)`, so a later, shorter export never removes lines an earlier one contributed (ARCHITECTURE §4).
+
+### Output validation
+
+The parser validates every 200 response against `ccs_parser/contract.py` before returning it.
+The rules mirror the database constraints, so a parser bug surfaces as a contract error with
+field paths instead of a failed ingest:
+
+| Field | Rule |
+|---|---|
+| every date | ISO `YYYY-MM-DD`, a real calendar date, year 2000–2100 |
+| `period_start`, `period_end` | `period_start ≤ period_end`; for `kind = statement` the period is at most **100 days** |
+| `due_date` (`kind = statement`) | on or after `statement_date`, at most **120 days** after it |
+| `primary_card_last4`, `card_last4` | `^[0-9]{4}$` or null. The parser drops a malformed value to null rather than failing. |
+| `txn_time` | `HH:MM[:SS[.ffffff]]`, a real time, or null |
+| money | decimal strings within `numeric(14,2)` (≤ 12 integer digits); only `opening_balance` / `closing_balance` may be negative |
+| `fx_rate` | within `numeric(18,8)` and **> 0**, or null |
+| `currency_original` | `^[A-Z]{3}$` |
+| `legacy_fingerprint` | 64 lowercase hex characters |
+| `statements` | at least one; unknown keys are rejected everywhere |
+
+A violation is the permanent 422 `PARSE_OUTPUT_INVALID`. Its message lists the failing field
+paths only, never the values.
+
+ENBD and EIB print the wrong year at the Dec/Jan boundary (`29-Dec-25 to 28-Jan-25`). The
+parser re-derives the period years from the summary row's full Statement Date, else the newest
+posting date (`domain/parsing/period_years.py`).
+
+### Resource limits
+
+Each parse runs in a short-lived child process (`ccs_parser/limits.py`). The size and page
+checks run before any text extraction.
+
+| Limit | Default | Env override | Breach |
+|---|---|---|---|
+| Downloaded file | 25 MB | `PARSER_MAX_DOWNLOAD_MB` | `DOWNLOAD_FAILED` (422) |
+| PDF size | 15 MB | `PARSER_MAX_PDF_MB` | `PDF_TOO_LARGE` |
+| Pages | 30 | `PARSER_MAX_PAGES` | `PDF_TOO_LARGE` |
+| Inflated content streams, per parse | 32 MB | `PARSER_MAX_INFLATE_MB` | `PDF_TOO_LARGE` |
+| Address space of the child (Linux) | 768 MB | `PARSER_MEMORY_LIMIT_MB` | `PDF_TOO_LARGE` |
+| CPU time (`RLIMIT_CPU`) | 30 s | `PARSER_CPU_LIMIT_SECONDS` | `PARSE_TIMEOUT` |
+| Wall clock (the child is killed) | 60 s | `PARSER_PARSE_TIMEOUT_SECONDS` | `PARSE_TIMEOUT` |
+
+Real statements need about 1 s of CPU, at most 8 pages and under 2 MB inflated. The worker's
+HTTP timeout (`PARSER_TIMEOUT_MS`, default 75 s) must stay above the parser's 60 s kill, and
+Cloud Run's request timeout (120 s) above both. `PARSER_ISOLATION=inline` (tests and debugging
+only) parses in-process: the size, page and inflate checks still apply, the CPU, wall-clock and
+memory limits do not.
 
 ## Response 4xx/5xx
 
@@ -108,8 +157,33 @@ Field rules:
 { "error": { "code": "PDF_DECRYPT_FAILED", "message": "…" } }
 ```
 
-| Status | Codes |
-|---|---|
-| 401 | `UNAUTHORIZED` |
-| 422 | `PDF_DECRYPT_FAILED`, `UNSUPPORTED_BANK`, `UNSUPPORTED_LAYOUT`, `BANK_UNDETECTED`, `DOWNLOAD_FAILED`. These are permanent; the worker marks the document failed and does not retry. |
-| 5xx | Transient. The worker retries through the pgmq visibility timeout, and moves the message to the DLQ after 5 reads. |
+| Status | Codes | Meaning |
+|---|---|---|
+| 401 | `UNAUTHORIZED` | Missing or wrong `X-Parser-Secret` |
+| 422 | `PDF_DECRYPT_FAILED`, `UNSUPPORTED_BANK`, `UNSUPPORTED_LAYOUT`, `BANK_UNDETECTED`, `DOWNLOAD_FAILED`, `INVALID_REQUEST`, `PARSE_TIMEOUT`, `PDF_TOO_LARGE`, `PARSE_OUTPUT_INVALID` | **Permanent.** The same PDF will always fail the same way. |
+| 500 | `INTERNAL_ERROR` | Unexpected parser error |
+| 502 | `DOWNLOAD_FAILED` | Transient Storage failure: timeout, network error, or a 429/5xx from Storage |
+
+`DOWNLOAD_FAILED` is 422 when the URL itself is unusable (not https, host not allowed, a 4xx
+from Storage other than 429, an empty or oversized file) and 502 when the download merely failed.
+`INVALID_REQUEST` is a request body that doesn't match the schema.
+
+### Worker classification
+
+The worker (`supabase/functions/worker/parse_document.ts`, `classifyParserResponse`) decides by
+**code**, not by status:
+
+- **Permanent** only when the status is 422 **and** the body is a parse-v1 error envelope whose
+  `code` is one of the nine 422 codes above. `fail_document(permanent)` marks the document
+  `failed` with that code. No retry.
+- **Transient** otherwise, including 401/403/404/405/400/413 (a wrong `PARSER_URL`, a Cloud Run
+  IAM change, a proxy), a 422 without a known code, a 200 without a parse-v1 body, 5xx and
+  timeouts. Non-load statuses are flagged as configuration problems in Sentry (fingerprinted per
+  status). The message is re-sent with backoff (60 s, 5 min, 15 min, 30 min) and dead-lettered
+  after 5 attempts (`MAX_ATTEMPTS`).
+- After a 200, `ingest_parsed_document` errors are permanent for SQLSTATE class 22, `23502` and
+  `23514` (the payload's content is rejected, `INGEST_<sqlstate>`) and transient otherwise (for
+  example `23505`, `40P01`, `57014`).
+
+A misconfiguration therefore never fails documents for good: fix it, and the retries or
+`requeue_documents` pick them up.
