@@ -1,5 +1,18 @@
 # Changelog
 
+## Statement detail, spend breakdown, bank logos, document timeline, replacement cards, merchant masking — 2026-10-10 (branch `ledger-v2`)
+
+### Backend (Supabase)
+
+- **feat** `public.statement_detail(p_profile_code, p_stmt_code)` (member read): one statement with its current debit and credit lines, each line with its transaction, merchant name and category; money as decimal strings (shape: ARCHITECTURE §6). Migration `20261010000200`
+- **feat** `public.spend_breakdown(p_profile_code, p_from, p_to, p_group_by, p_top_n = 10)` (member read), built only on `v_spend`: monthly spend by `category` / `bank` / `merchant`, top N groups plus `__other__` ("Others"), every month zero-filled, 4-dp shares (ARCHITECTURE §6). Migration `20261010000200`
+- **feat** Bank logos: `banks.logo_path` (seeded `<bank_code>.png` for the six banks, guarded), public Storage bucket `bank-logos` (no client writes); `statement_cycles` gains a `logo_path` column, `overview` accounts and `filter_meta` banks carry `logo_path`. Migration `20261010000100`
+- **test** pgTAP `20_statement_rpcs_and_logos.test.sql` (contract keys, ordering, decimal strings, top-N fold, zero-filled months, non-member refusal, logo_path in the existing RPCs)
+
+### Docs
+
+- ARCHITECTURE §3 (`banks.logo_path`, `bank-logos` bucket) and §6 (`statement_detail`, `spend_breakdown` shapes); README RPC table; PRODUCTION §11 (uploading the logos)
+
 ## Edge Functions and CI backlog (audit P2/P3) — 2026-10-09 (branch `ledger-v2`)
 
 ### Backend (Supabase)

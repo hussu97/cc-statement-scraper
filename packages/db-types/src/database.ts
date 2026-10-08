@@ -139,18 +139,21 @@ export type Database = {
         Row: {
           bank_code: string
           created_at: string
+          logo_path: string | null
           name: string
           sms_senders: string[]
         }
         Insert: {
           bank_code: string
           created_at?: string
+          logo_path?: string | null
           name: string
           sms_senders?: string[]
         }
         Update: {
           bank_code?: string
           created_at?: string
+          logo_path?: string | null
           name?: string
           sms_senders?: string[]
         }
@@ -2370,6 +2373,16 @@ export type Database = {
         Args: { p_category_code: string; p_txn_codes: string[] }
         Returns: number
       }
+      spend_breakdown: {
+        Args: {
+          p_from: string
+          p_group_by: string
+          p_profile_code: string
+          p_to: string
+          p_top_n?: number
+        }
+        Returns: Json
+      }
       spend_series: {
         Args: {
           p_from: string
@@ -2402,6 +2415,7 @@ export type Database = {
           due_date: string
           kind: string
           line_count: number
+          logo_path: string
           min_due: number
           period_end: string
           period_start: string
@@ -2411,6 +2425,10 @@ export type Database = {
           stmt_code: string
           utilisation: number
         }[]
+      }
+      statement_detail: {
+        Args: { p_profile_code: string; p_stmt_code: string }
+        Returns: Json
       }
       upsert_fx_rates: {
         Args: { p_as_of: string; p_rates: Json; p_source: string }
