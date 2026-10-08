@@ -63,7 +63,8 @@ class Production(unittest.TestCase):
                     "gcloud run services update-traffic ccs-parser --to-latest", "vercel --prod",
                     "gh secret set SUPABASE_ACCESS_TOKEN --env production",
                     "gh workflow run deploy-supabase.yml --ref main", "gh pr merge 12",
-                    "apps/ios/scripts/publish-build.sh", 'psql "$LEDGER_DB_URL" -c "select 1"',
+                    "apps/ios/scripts/publish-build.sh", "supabase config push",
+                    "echo n | supabase config push --project-ref x", 'psql "$LEDGER_DB_URL" -c "select 1"',
                     "supabase db query --linked 'update x set y=1'",
                     "GH_TOKEN=$(gh auth token --user hussu97) gh api -X PUT repos/hussu97/cc-statement-scraper/x"]:
             self.assertEqual(bash(cmd), "ask", cmd)
