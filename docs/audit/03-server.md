@@ -553,3 +553,9 @@ and documents the limits, step 8 has the ENBD/FAB post-import checks; README has
 `PARSER_TIMEOUT_MS` 75000, `EDGE_WALL_CLOCK_MS`, the scraper batching variables and the Sentry
 local behaviour; CHANGELOG has an "Audit fixes (pre-cutover)" section. Open items:
 [BACKLOG.md](BACKLOG.md).
+
+**SQL side for the Edge pass (2026-10-09, `20261009000400_db_ops_and_worker_rpcs.sql`):** SRV-10
+(`ops_health` `mailboxes_stale`, `gmail_watch_expiring`, `mailbox_errors`), SRV-15
+(`save_mailbox_sync_state`), SRV-20 (`begin_document_parse`, `resubmit_document`, `fail_document`
+never un-parses) and SRV-22 (`drain_dlq`, `requeue_dlq`, `documents_stuck` = `parsing` > 1 h,
+queue `newest_age_s` for alert-on-increase). The Edge Functions still have to call them.

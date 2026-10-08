@@ -460,3 +460,11 @@ Collected 2026-10-08 from the fixes recorded in [01](01-database.md#fix-status) 
 
 A full end-to-end re-run of this rehearsal with all fixes (including the ENBD and FAB parser
 changes) is still to do; it is in BACKLOG "Do before / at cutover".
+
+**Database P2/P3 pass (2026-10-09):** DP-04r fixed (ingest rejects a statement more than 31 days
+ahead, `20261009000100`); DP-09 fixed (Cashback `MURABAHA PROFIT` / `BONUS` need a credit,
+`…0200`); DP-19 fixed (`private.legacy_category_aliases` with `Entretainment` → `Entertainment`,
+`private.legacy_unresolved_category_names()` for finalize, `…0500`); DP-21 accepted (noted in
+PRODUCTION §2.6 next to the legacy-choice reports). DP-20 (card replacement opens a second
+account) stays open: it needs a model decision (automatic replacement vs a "merge accounts"
+action that re-points statements, lines and transactions), see BACKLOG.
