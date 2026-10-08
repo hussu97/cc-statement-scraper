@@ -643,7 +643,7 @@ transactions, 7 card-less empty ADCB documents parsed with a "skipped" warning.
 | DB-18 | fixed | `9-100` `public.prev_month_to_date_end`; `13` tests for 30 Mar / 31 Dec |
 | DB-19 | fixed | `9-100` select first, insert only for a new key; `merchant_aliases` kept for manual merges; `13` test |
 | DB-20 | fixed | `9-100` scalar sub-queries on `transaction_evidence_txn_idx`, evaluated for the page only (50-row page: 50 index probes, 2.7 ms vs 7–8 ms); `13` test |
-| DB-21 | fixed | `9-500` `delete_profile`, `storage_cleanup` queue, `trg_audit` skip; `17` test |
+| DB-21 | fixed | `9-500` `delete_profile`, `storage_cleanup` queue, `trg_audit` skip; `17` test. The worker drains `storage_cleanup` (Edge + CI pass: `20261009100100_storage_cleanup_worker`, test `19`) |
 | DB-22 | fixed | `9-300` targeted re-processing (sender, scope, newest first, live pattern changes only). Moving it to a queue: not needed at 500 bounded messages |
 | DB-23 | fixed | `9-500` confirmed-email triggers and `add_profile_member`; `17` tests |
 | DB-24 | fixed | `9-200` whole-word seed rules, guarded update of untouched seed rules; `14` tests |

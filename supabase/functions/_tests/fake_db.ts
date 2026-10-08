@@ -84,6 +84,7 @@ export class FakeDb {
   defaults: Record<string, Row> = { documents: { parse_status: "queued" } };
   objects = new Map<string, Uint8Array>();
   uploadError: PgErr | null = null;
+  removeError: (PgErr & { statusCode?: string }) | null = null;
   private seq = 0;
 
   constructor(init: Partial<Pick<FakeDb, "tables" | "rpcs">> = {}) {
@@ -117,8 +118,9 @@ export class FakeDb {
       },
       remove: (paths: string[]) => {
         this.calls.push({ kind: "remove", name: paths.join(","), args: paths });
-        for (const p of paths) this.objects.delete(p);
-        return Promise.resolve({ data: [], error: null });
+        if (this.removeError) return Promise.resolve({ data: null, error: this.removeError });
+        const removed = paths.filter((p) => this.objects.delete(p)).map((name) => ({ name }));
+        return Promise.resolve({ data: removed, error: null });
       },
     }),
   };
@@ -133,23 +135,21 @@ export class FakeDb {
 }
 
 /**
- * merge_mailbox_sync_state as the migration defines it: shallow merge, the Gmail cursor
- * only moves forward, columns change only when passed.
+ * save_mailbox_sync_state as 20261009000400 defines it: `old || patch`, then a numeric
+ * Gmail cursor that would move backwards is restored; the timestamps only move forward.
  */
-export const mergeSyncStateRpc: RpcHandler = (args, db) => {
+export const saveSyncStateRpc: RpcHandler = (args, db) => {
   const mb = (db.tables.email_mailboxes ?? []).find((m) => m.mailbox_code === args.p_mailbox_code);
   if (!mb) return { data: null, error: { code: "P0002", message: "unknown mailbox" } };
-  const patch = { ...(args.p_patch as Row) };
-  const state = { ...((mb.sync_state as Row) ?? {}) };
-  if ("gmail_history_id" in patch) {
-    const n = String(patch.gmail_history_id ?? "");
-    const o = String(state.gmail_history_id ?? "");
-    delete patch.gmail_history_id;
-    if (/^\d+$/.test(n) && (!/^\d+$/.test(o) || BigInt(n) > BigInt(o))) patch.gmail_history_id = n;
-  }
-  mb.sync_state = { ...state, ...patch, updated_at: "now" };
-  if (args.p_last_synced_at) mb.last_synced_at = args.p_last_synced_at;
-  if (args.p_watch_expires_at) mb.watch_expires_at = args.p_watch_expires_at;
+  const old = { ...((mb.sync_state as Row) ?? {}) };
+  const next: Row = { ...old, ...(args.p_patch as Row), updated_at: "now" };
+  const o = String(old.gmail_history_id ?? "");
+  const n = String(next.gmail_history_id ?? "");
+  if (/^\d+$/.test(o) && /^\d+$/.test(n) && BigInt(o) > BigInt(n)) next.gmail_history_id = old.gmail_history_id;
+  mb.sync_state = next;
+  const later = (a: unknown, b: unknown) => (!a ? b : String(a) > String(b) ? a : b);
+  if (args.p_last_synced_at) mb.last_synced_at = later(mb.last_synced_at, args.p_last_synced_at);
+  if (args.p_watch_expires_at) mb.watch_expires_at = later(mb.watch_expires_at, args.p_watch_expires_at);
   return { data: mb.sync_state, error: null };
 };
 

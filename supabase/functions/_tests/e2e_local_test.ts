@@ -247,20 +247,56 @@ Deno.test({
       const ib1 = await i1.json();
       assertEquals(i1.status, 200, JSON.stringify(ib1));
       assertEquals(ib1, { status: "invited", invite_sent: true });
+      // The invite created an unconfirmed Auth user; the membership stays pending until the
+      // address is confirmed (DB-23).
       const { data: invitedList } = await user.rpc("list_profile_members", { p_profile_code: profileCode });
       const invited = (invitedList as { email: string; user_id: string | null; pending: boolean }[])
         .find((m) => m.email === invitee);
-      assert(invited && invited.user_id && !invited.pending, "the invite created the user and claimed the pending row");
-      inviteeId = invited.user_id;
+      assert(invited && invited.pending && !invited.user_id, "the invitee is pending until confirmed");
+      const { data: authUsers } = await svc.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      const invitedUser = authUsers.users.find((u) => u.email === invitee);
+      assert(invitedUser && invitedUser.invited_at && !invitedUser.email_confirmed_at, "unconfirmed invited user");
+      inviteeId = invitedUser.id;
       const i2 = await invite(jwt, { action: "resend" });
       const ib2 = await i2.json();
       assertEquals(i2.status, 429, JSON.stringify(ib2));
       assertEquals(ib2.error.code, "INVITE_COOLDOWN");
       const i3 = await invite(jwt, { action: "invite" });
-      assertEquals((await i3.json()).status, "added", "re-adding an invited user sends nothing new");
+      assertEquals(
+        await i3.json(),
+        { status: "invited", invite_sent: false, invite_error: "INVITE_COOLDOWN" },
+        "re-inviting within the cooldown sends nothing",
+      );
       const evil = await invite(jwt, { redirect_to: "https://evil.example/" });
       assertEquals(evil.status, 422);
       await evil.body?.cancel();
+
+      // ── delete_profile queues the PDFs on storage_cleanup; the worker removes them (DB-21e) ──
+      const cronSecret = Deno.env.get("CRON_SECRET") ?? "";
+      if (cronSecret) {
+        const del = await user.rpc("delete_profile", { p_profile_code: profileCode, p_confirm_key: `e2e${rand}` });
+        assert(!del.error, del.error?.message);
+        assertEquals((del.data as { storage_objects: number }).storage_objects, storedPaths.length);
+        profileCode = null;
+        const w = await fetch(`${fnUrl}/worker`, {
+          method: "POST",
+          headers: { "x-cron-secret": cronSecret, "content-type": "application/json" },
+          body: JSON.stringify({ sync: true }),
+        });
+        const summary = await w.json();
+        assertEquals(w.status, 200, JSON.stringify(summary));
+        assert(
+          (summary.storage as { outcome: string }[]).some((r) => r.outcome === "done"),
+          JSON.stringify(summary.storage),
+        );
+        for (const path of storedPaths) {
+          const gone = await svc.storage.from("statements").download(path);
+          assert(gone.error, `${path} should have been removed`);
+        }
+        storedPaths.length = 0;
+      } else {
+        console.warn("e2e: CRON_SECRET not set; skipping the delete_profile / storage_cleanup check");
+      }
     } finally {
       if (storedPaths.length) await svc.storage.from("statements").remove(storedPaths);
       if (profileCode) {

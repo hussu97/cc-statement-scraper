@@ -2233,15 +2233,6 @@ export type Database = {
           txn_count: number
         }[]
       }
-      merge_mailbox_sync_state: {
-        Args: {
-          p_last_synced_at?: string
-          p_mailbox_code: string
-          p_patch: Json
-          p_watch_expires_at?: string
-        }
-        Returns: Json
-      }
       ops_health: { Args: never; Returns: Json }
       overview: {
         Args: { p_month?: string; p_profile_code: string }

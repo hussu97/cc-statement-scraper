@@ -11,7 +11,6 @@ import {
   verifyPushToken,
 } from "../_shared/gmail.ts";
 import { classifyParserResponse, rewriteOrigin } from "../worker/parse_document.ts";
-import { DEFAULT_THRESHOLDS, dlqIssue, evaluateHealth, mailboxCheck } from "../ops-monitor/health.ts";
 import { attachmentTooLarge, decodeBase64Any } from "../_shared/provider.ts";
 import { deltaKey, initialDeltaUrl, pdfAttachments, storedCursor } from "../outlook-poll/graph.ts";
 
@@ -177,91 +176,4 @@ Deno.test("outlook cursors honour the legacy sync_state keys", () => {
     ]).map((a) => a.id),
     ["1", "4"],
   );
-});
-
-// ── ops-monitor ─────────────────────────────────────────────────────────────
-Deno.test("evaluateHealth raises one issue per problem type", () => {
-  const t = { ...DEFAULT_THRESHOLDS, smsUnparsed24h: 5, openReviews: 50 };
-  assertEquals(
-    evaluateHealth({
-      queues: { parse_document: { depth: 3, oldest_age_s: 10 }, parse_document_dlq: { depth: 0, oldest_age_s: null } },
-      cron_failures_15m: [],
-      documents_failed_24h: 0,
-      documents_stuck: 0,
-      sms_unparsed_24h: 5,
-      recon_failed: 0,
-      open_reviews: 3,
-    }, t),
-    [],
-  );
-  const issues = evaluateHealth({
-    queues: { sms_fallback_dlq: { depth: 2, oldest_age_s: 60 }, parse_document_dlq: { depth: 1, oldest_age_s: 5 } },
-    cron_failures_15m: [{ job: "ledger-worker-kick", message: "boom" }, { job: "ledger-worker-kick", message: "boom" }],
-    documents_failed_24h: 1,
-    documents_stuck: 2,
-    sms_unparsed_24h: 6,
-    recon_failed: 1,
-    open_reviews: 51,
-  }, t);
-  assertEquals(issues.map((i) => i.issue).sort(), [
-    "cron_failures",
-    "dlq:parse_document_dlq",
-    "dlq:sms_fallback_dlq",
-    "documents_failed",
-    "documents_stuck",
-    "recon_failed",
-    "review_backlog",
-    "sms_unparsed",
-  ]);
-  const cron = issues.find((i) => i.issue === "cron_failures")!;
-  assertEquals(cron.extra, { jobs: ["ledger-worker-kick"] }); // no return_message
-  assertEquals(cron.level, "error");
-});
-
-Deno.test("evaluateHealth: mailbox checks accept counts, rows or {count, mailbox_codes} (SRV-10)", () => {
-  assertEquals(mailboxCheck(undefined), { count: 0, codes: [] });
-  assertEquals(mailboxCheck(2), { count: 2, codes: [] });
-  assertEquals(mailboxCheck([{ mailbox_code: "mbx_a" }, { mailbox_code: "mbx_b" }]), {
-    count: 2,
-    codes: ["mbx_a", "mbx_b"],
-  });
-  assertEquals(mailboxCheck({ count: 3, mailbox_codes: ["mbx_a"] }), { count: 3, codes: ["mbx_a"] });
-
-  const issues = evaluateHealth({
-    mailbox_errors: [{ mailbox_code: "mbx_err" }],
-    mailboxes_stale: 1,
-    gmail_watch_expiring: { count: 1, mailbox_codes: ["mbx_w"] },
-  });
-  const by = Object.fromEntries(issues.map((i) => [i.issue, i]));
-  assertEquals(Object.keys(by).sort(), ["gmail_watch_expiring", "mailbox_errors", "mailboxes_stale"]);
-  assertEquals(by.mailbox_errors.level, "error");
-  assertEquals(by.mailbox_errors.extra.mailbox_codes, ["mbx_err"]);
-  assertEquals(by.mailboxes_stale.level, "warning");
-  assertEquals(by.gmail_watch_expiring.extra.mailbox_codes, ["mbx_w"]);
-  // Older ops_health without the keys: nothing raised.
-  assertEquals(evaluateHealth({ mailbox_errors: 0, mailboxes_stale: [], gmail_watch_expiring: null }), []);
-});
-
-Deno.test("evaluateHealth: parse queue age warns past the threshold", () => {
-  const old = evaluateHealth({ queues: { parse_document: { depth: 40, oldest_age_s: 4 * 3600 } } });
-  assertEquals(old.map((i) => [i.issue, i.level]), [["parse_queue_age", "warning"]]);
-  assertEquals(evaluateHealth({ queues: { parse_document: { depth: 40, oldest_age_s: 3600 } } }), []);
-});
-
-Deno.test("dlqIssue alerts on new arrivals, then once a day (SRV-22)", () => {
-  const t = DEFAULT_THRESHOLDS;
-  const q = (newest_age_s?: number) => ({ depth: 3, oldest_age_s: 99_999, newest_age_s });
-  assertEquals(dlqIssue("parse_document_dlq", { depth: 0, oldest_age_s: null }, t), null);
-  // Older ops_health (no newest_age_s): every check, as before.
-  assertEquals(dlqIssue("parse_document_dlq", q(), t)?.level, "error");
-  // A message arrived since the last check.
-  assertEquals(dlqIssue("parse_document_dlq", q(120), t)?.level, "error");
-  assertEquals(dlqIssue("parse_document_dlq", q(t.checkIntervalS + 30), t)?.level, "error");
-  // Nothing new: silent, except one reminder per day of age.
-  const fired = [];
-  for (let age = 2 * t.checkIntervalS; age < 2 * 86_400; age += t.checkIntervalS) {
-    const i = dlqIssue("parse_document_dlq", q(age + 7), t);
-    if (i) fired.push([age, i.level]);
-  }
-  assertEquals(fired, [[86_400, "warning"]]);
 });

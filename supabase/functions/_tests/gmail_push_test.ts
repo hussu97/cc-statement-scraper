@@ -6,7 +6,7 @@ import { isPermanentMailboxError, MAX_BACKFILL_PAGES, processMailbox } from "../
 import { type Mailbox, mailboxErrorCode } from "../_shared/email_ingest.ts";
 import { HttpError } from "../_shared/http.ts";
 import { ProviderHttpError } from "../_shared/provider.ts";
-import { b64url, FakeDb, fakeFetch, type FetchRoute, mergeSyncStateRpc, PDF_BYTES } from "./fake_db.ts";
+import { b64url, FakeDb, fakeFetch, type FetchRoute, PDF_BYTES, saveSyncStateRpc } from "./fake_db.ts";
 
 Deno.env.delete("SENTRY_DSN");
 Deno.env.set("GMAIL_OAUTH_CLIENT_ID", "cid");
@@ -45,7 +45,7 @@ function setup(syncState: Record<string, unknown> = { gmail_history_id: "100" })
     },
     rpcs: {
       worker_mailbox_secret: () => ({ data: "refresh-token", error: null }),
-      merge_mailbox_sync_state: mergeSyncStateRpc,
+      save_mailbox_sync_state: saveSyncStateRpc,
     },
   });
   return { db, mailbox };
@@ -53,7 +53,7 @@ function setup(syncState: Record<string, unknown> = { gmail_history_id: "100" })
 
 const cursor = (db: FakeDb) => (db.tables.email_mailboxes[0].sync_state as Record<string, unknown>).gmail_history_id;
 const savedCursors = (db: FakeDb) =>
-  db.rpcCalls("merge_mailbox_sync_state").map((a) => (a.p_patch as Record<string, unknown>).gmail_history_id);
+  db.rpcCalls("save_mailbox_sync_state").map((a) => (a.p_patch as Record<string, unknown>).gmail_history_id);
 
 function message(id: string, withPdf: boolean, size = PDF_BYTES.length) {
   return {
