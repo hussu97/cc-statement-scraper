@@ -1,6 +1,6 @@
 name: Deploy Parser (Cloud Run)
 
-# Manual only. Builds services/parser, pushes it to Artifact Registry and deploys
+# Manual only, from main only (guard job), with a typed confirmation. Builds services/parser, pushes it to Artifact Registry and deploys
 # the `ccs-parser` Cloud Run service (scale to zero). Same GCP auth pattern as the
 # legacy deploy-gmail-relay workflow.
 #
@@ -22,9 +22,8 @@ on:
       region:
         description: "Cloud Run / Artifact Registry region"
         type: choice
-        default: europe-west1
+        default: me-central1
         options:
-          - europe-west1
           - me-central1
 
 permissions:
@@ -35,7 +34,26 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Refuse to deploy anything that isn't main. Runs before the `production`
+  # environment gate so a wrong-branch dispatch fails loudly instead of asking
+  # for approval. Pair with a deployment-branch policy (main only) on the
+  # `production` environment (PRODUCTION.md §9).
+  guard:
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Require main
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          if [ "$REF" != "refs/heads/main" ]; then
+            echo "::error::Production deploys run only from main (got $REF); nothing deployed."
+            exit 1
+          fi
+
   deploy:
+    needs: guard
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 20
@@ -75,7 +93,7 @@ jobs:
       - name: Build and push image
         run: |
           SHA=$(git rev-parse --short HEAD)
-          IMAGE="${REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/ccs-platform/${SERVICE}:${SHA}"
+          IMAGE="${REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/ledger/${SERVICE}:${SHA}"
           docker build --platform linux/amd64 -t "$IMAGE" services/parser
           docker push "$IMAGE"
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"

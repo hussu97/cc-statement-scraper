@@ -30,6 +30,12 @@ jobs:
   # ------------------------------------------------------------------
   changes:
     runs-on: ubuntu-latest
+    # dorny/paths-filter lists PR files through the REST API, which needs
+    # pull-requests: read in a private repo (job-level permissions replace the
+    # workflow-level block, so contents: read is repeated).
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       supabase: ${{ steps.filter.outputs.supabase }}
       edge: ${{ steps.filter.outputs.edge }}

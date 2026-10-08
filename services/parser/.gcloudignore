@@ -1,0 +1,30 @@
+# Files NOT uploaded by `gcloud run deploy --source .` / `gcloud builds submit`
+# (Cloud Build source tarball in the <project>_cloudbuild bucket). When this file
+# exists gcloud ignores .gitignore, so every rule must be listed here.
+# The image itself is further trimmed by .dockerignore.
+
+.gcloudignore
+.git/
+.gitignore
+
+# Secrets: never upload local env files (PARSER_SECRET, Sentry DSN).
+.env
+.env.*
+!.env.example
+
+# Local tooling and caches
+.venv/
+venv/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+.DS_Store
+
+# Tests, private fixtures and scripts are not needed to build the image
+tests/
+scripts/
+*.pdf
+*.PDF

@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# Commit message hook — enforce the project commit author identity.
+# Commit message hook — enforce the project commit author identity and reject
+# co-author trailers (CLAUDE.md §4: no Co-Authored-By trailer of any kind).
 
 set -euo pipefail
 
 REQUIRED_NAME="Hussain Abbasi"
 REQUIRED_EMAIL="h_abbasi97@hotmail.com"
+MSG_FILE="${1:-}"
 
 AUTHOR_NAME="${GIT_AUTHOR_NAME:-$(git config user.name || true)}"
 AUTHOR_EMAIL="${GIT_AUTHOR_EMAIL:-$(git config user.email || true)}"
@@ -18,5 +20,12 @@ if [ "$AUTHOR_NAME" != "$REQUIRED_NAME" ] || [ "$AUTHOR_EMAIL" != "$REQUIRED_EMA
   echo ""
   echo "Use:"
   echo "  git commit --author=\"$REQUIRED_NAME <$REQUIRED_EMAIL>\" -m \"...\""
+  exit 1
+fi
+
+# Ignore comment lines (git strips them) when looking for trailers.
+if [ -n "$MSG_FILE" ] && [ -f "$MSG_FILE" ] \
+   && grep -v '^#' "$MSG_FILE" | grep -qiE '^[[:space:]]*co-authored-by:'; then
+  echo "Commit message contains a Co-Authored-By trailer. Remove it (CLAUDE.md §4)."
   exit 1
 fi

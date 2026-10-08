@@ -363,7 +363,9 @@ The nightly job `private.nightly()` (22:00 UTC = 02:00 Dubai) runs three steps:
 `private.invoke_edge(fn)` uses pg_net to POST to `<project_url>/functions/v1/<fn>` with header
 `x-cron-secret`. It reads two **Vault** secrets:
 - `project_url`
-- `edge_cron_secret`, whose value must equal the `CRON_SECRET` function secret
+- `edge_cron_secret`, whose value must equal the `CRON_SECRET` function secret (both are set
+  from `supabase/functions/.env.production` by `scripts/cutover/set-vault-secrets.sql` and
+  `scripts/cutover/set-edge-secrets.sh`; PRODUCTION.md §2.4–2.5)
 
 Without them, cron calls are skipped with a notice.
 
@@ -494,5 +496,7 @@ v1 is a FastAPI backend with an embedded worker on Render, PDFs in GCS, a React 
 (`frontend/`) on Vercel, a Gmail relay on Cloud Run (`deploy/Dockerfile.gmail-relay`), and a
 GitHub Actions cron for Microsoft mail (`.github/workflows/email-ingest-microsoft.yml`). It uses
 the same Supabase project, and its tables are moved into the `legacy` schema by the first v2
-migration. `backend/` and `frontend/` are frozen: don't extend them. They and their deploy
-workflows are removed after the cutover in PRODUCTION.md.
+migration. `backend/` and `frontend/` are frozen: don't extend them. Their workflows run only
+while the repository variable `LEGACY_DEPLOYS_ENABLED` is `true`, are disabled at cutover and
+are removed with the code after it (PRODUCTION.md §9–10). The v2 deploy workflows are manual
+and run only from `main`.

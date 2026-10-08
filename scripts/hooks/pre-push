@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
-# Pre-push hook — full CI mirror (runs on git push)
+# Pre-push hook — CI mirror (runs on git push)
 # Catches failures before wasting GitHub Actions minutes.
 # Skip with: git push --no-verify
+#
+# Every section skips cleanly when its directory or tool is missing, so the hook
+# keeps working after legacy backend/ and frontend/ are deleted (PRODUCTION.md
+# §10 step 12) and on machines without every toolchain installed.
 
 set -euo pipefail
 
@@ -10,105 +14,127 @@ cd "$REPO_ROOT"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-YELLOW='\033[1;33d'
+YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
 pass() { echo -e "${GREEN}✓${NC} $1"; }
 fail() { echo -e "${RED}✗${NC} $1"; }
 info() { echo -e "${YELLOW}→${NC} $1"; }
+skip() { echo "  $1 — skipping"; }
 section() { echo -e "\n${BLUE}══ $1 ══${NC}"; }
 
 ERRORS=0
 
-# Activate virtualenv if present
-if [ -f "backend/.venv/bin/activate" ]; then
-  # shellcheck disable=SC1091
-  source backend/.venv/bin/activate
-fi
-
-# Resolve python binary
-PYTHON="$(command -v python3 || command -v python || true)"
-if [ -z "$PYTHON" ]; then
-  echo "  python not found in PATH — skipping Python checks"
-fi
-
-# ---------------------------------------------------------------------------
-section "BACKEND"
-# ---------------------------------------------------------------------------
-
-# 1. Syntax check
-if [ -n "$PYTHON" ]; then
-  info "Python syntax check..."
-  if "$PYTHON" -m compileall -q backend/ccs_platform backend/scripts 2>&1; then
-    pass "Syntax OK"
+# run_check <label> <command...>: runs in a subshell so a failed `cd` never leaks.
+run_check() {
+  local label="$1"; shift
+  info "$label..."
+  if ( "$@" ) 2>&1; then
+    pass "$label OK"
   else
-    fail "Syntax errors"
+    fail "$label failed"
     ERRORS=$((ERRORS + 1))
+  fi
+}
+
+# ===========================================================================
+section "LEDGER v2"
+# ===========================================================================
+
+# Edge Functions (deno unit tests; e2e is opt-in and not run here)
+if [ -d supabase/functions ]; then
+  if command -v deno >/dev/null 2>&1; then
+    run_check "Edge Functions (deno test)" bash -c 'cd supabase/functions && deno test -A -q .'
+  else
+    skip "deno not found (brew install deno)"
   fi
 fi
 
-# 2. Backend tests
-if [ -n "$PYTHON" ]; then
-  info "Backend tests (pytest)..."
-  # Force a non-production environment so the session-key validation never fires.
-  # The hook runs with a stripped shell env; the backend .env isn't auto-loaded here.
-  if cd backend && CCS_PLATFORM_ENVIRONMENT=test "$PYTHON" -m pytest -q 2>&1; then
-    pass "Backend tests passed"
+# Parser (ruff + pytest)
+if [ -d services/parser ]; then
+  if [ -x services/parser/.venv/bin/pytest ] && [ -x services/parser/.venv/bin/ruff ]; then
+    run_check "Parser (ruff)" bash -c 'cd services/parser && .venv/bin/ruff check .'
+    run_check "Parser (pytest)" bash -c 'cd services/parser && .venv/bin/pytest -q'
   else
-    fail "Backend tests failed"
-    ERRORS=$((ERRORS + 1))
+    skip "services/parser/.venv not set up (see services/parser/README.md)"
   fi
-  cd "$REPO_ROOT"
 fi
 
-# 3. Bandit SAST
-info "Bandit SAST..."
-BANDIT="$(command -v bandit || true)"
-if [ -n "$BANDIT" ]; then
-  if "$BANDIT" -q -r backend/ccs_platform -x backend/tests -ll -ii 2>&1; then
-    pass "Bandit OK"
+# Web (tokens drift, lint, unit tests)
+if [ -d apps/web ]; then
+  if command -v pnpm >/dev/null 2>&1 && [ -d node_modules ]; then
+    run_check "Tokens (Tokens.swift drift)" pnpm --silent --filter @ledger/tokens check
+    run_check "Web lint" pnpm --silent --filter @ledger/web lint
+    run_check "Web tests (Vitest)" pnpm --silent --filter @ledger/web test
   else
-    fail "Bandit found security issues"
-    ERRORS=$((ERRORS + 1))
+    skip "pnpm or node_modules missing (corepack enable && pnpm install)"
   fi
-else
-  echo "  bandit not found — skipping (pip install bandit)"
 fi
 
-# ---------------------------------------------------------------------------
-section "FRONTEND"
-# ---------------------------------------------------------------------------
-
-# 4. Frontend lint
-info "ESLint..."
-if cd frontend && npm run lint --silent 2>&1; then
-  pass "ESLint OK"
+# DB types drift — only when the local Supabase stack is running.
+if command -v supabase >/dev/null 2>&1 && command -v pnpm >/dev/null 2>&1 \
+   && supabase status >/dev/null 2>&1; then
+  run_check "DB types drift" pnpm --silent db:types:check
 else
-  fail "ESLint errors"
-  ERRORS=$((ERRORS + 1))
+  skip "DB types drift: local Supabase stack not running"
 fi
-cd "$REPO_ROOT"
 
-# 5. Frontend tests
-info "Frontend tests (Vitest)..."
-if cd frontend && npm test -- --run 2>&1; then
-  pass "Frontend tests passed"
-else
-  fail "Frontend tests failed"
-  ERRORS=$((ERRORS + 1))
+# Scraper
+if [ -d scraper ]; then
+  if [ -x scraper/.venv/bin/pytest ]; then
+    run_check "Scraper tests" bash -c 'cd scraper && .venv/bin/pytest -q'
+  else
+    skip "scraper/.venv not found (cd scraper && pip install -e '.[dev]')"
+  fi
 fi
-cd "$REPO_ROOT"
 
-# 6. Frontend build (catches TypeScript errors)
-info "Frontend build (tsc + vite)..."
-if cd frontend && npm run build 2>&1; then
-  pass "Frontend build OK"
-else
-  fail "Frontend build failed"
-  ERRORS=$((ERRORS + 1))
+# ===========================================================================
+# LEGACY v1 — removed at decommission. Each block runs only if its dir exists.
+# ===========================================================================
+if [ -d backend/ccs_platform ]; then
+  section "LEGACY BACKEND"
+
+  LEGACY_PYTHON=""
+  if [ -x backend/.venv/bin/python ]; then
+    LEGACY_PYTHON="$REPO_ROOT/backend/.venv/bin/python"
+  else
+    LEGACY_PYTHON="$(command -v python3 || command -v python || true)"
+  fi
+
+  if [ -n "$LEGACY_PYTHON" ]; then
+    LEGACY_PY_DIRS="backend/ccs_platform"
+    [ -d backend/scripts ] && LEGACY_PY_DIRS="$LEGACY_PY_DIRS backend/scripts"
+    # shellcheck disable=SC2086
+    run_check "Python syntax" "$LEGACY_PYTHON" -m compileall -q $LEGACY_PY_DIRS
+    # Force a non-production environment so the session-key validation never fires.
+    run_check "Backend tests (pytest)" bash -c \
+      "cd backend && CCS_PLATFORM_ENVIRONMENT=test '$LEGACY_PYTHON' -m pytest -q"
+  else
+    skip "python not found"
+  fi
+
+  BANDIT="$(command -v bandit || true)"
+  if [ -z "$BANDIT" ] && [ -x backend/.venv/bin/bandit ]; then
+    BANDIT="backend/.venv/bin/bandit"
+  fi
+  if [ -n "$BANDIT" ]; then
+    run_check "Bandit SAST" "$BANDIT" -q -r backend/ccs_platform -x backend/tests -ll -ii
+  else
+    skip "bandit not found (pip install bandit)"
+  fi
 fi
-cd "$REPO_ROOT"
+
+if [ -f frontend/package.json ]; then
+  section "LEGACY FRONTEND"
+  if [ -d frontend/node_modules ]; then
+    run_check "ESLint" bash -c 'cd frontend && npm run lint --silent'
+    run_check "Frontend tests (Vitest)" bash -c 'cd frontend && npm test -- --run'
+    run_check "Frontend build (tsc + vite)" bash -c 'cd frontend && npm run build'
+  else
+    skip "frontend/node_modules missing (cd frontend && npm ci)"
+  fi
+fi
 
 # ---------------------------------------------------------------------------
 echo ""

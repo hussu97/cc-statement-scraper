@@ -30,7 +30,7 @@ Docs:
 | `packages/tokens/` | Design tokens → CSS variables, chart palette, `Tokens.swift` | Node |
 | `packages/db-types/` | Generated Supabase TypeScript types (never hand-written) | TS |
 | `scraper/` | Local Playwright scraper CLI `ccs-scraper` ([README](scraper/README.md)) | Python 3.12 |
-| `scripts/` | `migrate_legacy.py` (cutover data move), git `hooks/` + `install-hooks.sh` | Python, sh |
+| `scripts/` | `migrate_legacy.py` (cutover data move), `cutover/` (production Edge and Vault secret helpers), git `hooks/` + `install-hooks.sh` | Python, sh, SQL |
 | `docs/` | `contracts/` (parse-v1), legacy `operations/` and `security/` notes | Markdown |
 | `.github/workflows/` | CI (path-filtered) and manual deploy workflows | GitHub Actions |
 | `backend/`, `frontend/`, `deploy/` | **Legacy v1**, frozen until cutover (see below) | FastAPI, React 18 |
@@ -182,8 +182,14 @@ Create a service token in web Settings → Sources & health → Tokens, or with
 | iOS | `cd apps/ios/LedgerKit && swift test` |
 | Scraper | `cd scraper && .venv/bin/pytest -q` |
 
-`scripts/install-hooks.sh` installs a pre-commit hook. It runs web lint and tests when
-`apps/web` files are staged.
+`scripts/install-hooks.sh` installs the git hooks:
+- **pre-commit:** web lint and tests when `apps/web` files are staged, scraper tests when
+  `scraper/` is staged, and legacy backend syntax/bandit checks while `backend/` exists.
+- **pre-push:** `deno test`, parser ruff and pytest, tokens check, web lint and tests, DB types
+  drift (only when the local stack is running), scraper tests, plus the legacy suites while
+  `backend/` and `frontend/` exist. Each check skips when its directory or tool is missing.
+- **prepare-commit-msg / commit-msg:** enforce the commit author and reject `Co-Authored-By`
+  trailers.
 
 ## Environment variables
 
@@ -198,7 +204,7 @@ Create a service token in web Settings → Sources & health → Tokens, or with
 | `VITE_SENTRY_RELEASE` | Release name (defaults to `VERCEL_GIT_COMMIT_SHA` for source maps) |
 | `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` | Build-time only: uploads source maps when the token is set. `SENTRY_PROJECT` defaults to `ledger-apps`. |
 
-### Edge Functions (`supabase/functions/.env` locally; `supabase secrets set` in production)
+### Edge Functions (`supabase/functions/.env` locally; production: `supabase/functions/.env.production` pushed with `scripts/cutover/set-edge-secrets.sh`)
 
 `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are injected by Supabase.
 
@@ -267,7 +273,16 @@ Create a service token in web Settings → Sources & health → Tokens, or with
 
 `LEDGER_DB_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `LEGACY_FERNET_KEY`,
 `LEGACY_STORAGE` (`gcs`|`local`), `LEGACY_GCS_BUCKET`, `GOOGLE_APPLICATION_CREDENTIALS`,
-`LEGACY_LOCAL_ROOT`. See [PRODUCTION.md → Cutover](PRODUCTION.md#10-cutover-runbook).
+`LEGACY_LOCAL_ROOT`. They live in the gitignored repo-root `.env.cutover`
+(`set -a; source .env.cutover; set +a`). See [PRODUCTION.md → Cutover](PRODUCTION.md#10-cutover-runbook).
+
+Production secret helpers (`scripts/cutover/`):
+- `set-edge-secrets.sh [--dry-run] [--sentry-release SHA]`: validates
+  `supabase/functions/.env.production` (no empty or `<placeholder>` values, required keys
+  present, no local-only keys) and pushes exactly its keys with `supabase secrets set`. Prints
+  key names only.
+- `set-vault-secrets.sql`: psql template for Vault `project_url` and `edge_cron_secret`
+  (`-v project_url=… -v edge_cron_secret="$CRON_SECRET"`); no values are committed.
 
 ## Screens
 
@@ -328,7 +343,9 @@ cards and transaction user fields directly.
 
 `backend/` (FastAPI + embedded worker on Render, PDFs in GCS), `frontend/` (React admin on
 Vercel), `deploy/` (Dockerfiles, Gmail relay on Cloud Run) and the `email-ingest-microsoft`
-GitHub Actions cron are v1. They are **frozen**: don't extend them. Their tables now live in the
-`legacy` schema of the same Supabase project. Setup notes stay in [`backend/README.md`](backend/README.md)
+GitHub Actions cron are v1. They are **frozen**: don't extend them. Their tables are in `public`
+of the same Supabase project until the cutover's first migration moves them into the `legacy`
+schema. The legacy workflows run only while the repository variable `LEGACY_DEPLOYS_ENABLED`
+is `true` (PRODUCTION.md §9). Setup notes stay in [`backend/README.md`](backend/README.md)
 and `frontend/`; `docs/operations/` and `docs/security/` describe v1 operations. Everything
 here is removed by the cutover in [PRODUCTION.md](PRODUCTION.md#10-cutover-runbook).
