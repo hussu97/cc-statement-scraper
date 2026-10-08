@@ -21,7 +21,8 @@
 - **fix** WEB-19: closing the URL-driven transaction drawer returns focus to the row that opened it
 - **fix** WEB-43: closing a drawer opened from the list pops its history entry (Back no longer reopens it); a deep-linked drawer closes with `replace`, and a "Reverses / Reversed by" link swaps the drawer in place
 - **fix** Transaction drawer on phones: narrower label column, a 32px amount, long raw statement lines wrap anywhere
-- **test** `lib/scroll.test.ts` (`scrollEdges`, `revealScrollLeft`)
+- **feat** WEB-15 / WEB-22r: the calendar heatmap stops at today (future days are neither drawn nor counted: "134 days of 161", not "of 184") and sizes its cells to the card (`fitCalendar`); on a phone a long range turns into 7 day columns with a row per week (~34px cells instead of 13px), and tapping a day opens a sheet with that day's transactions and an "Open this day in Activity" link
+- **test** `lib/scroll.test.ts` (`scrollEdges`, `revealScrollLeft`), `components/charts/heat-fit.test.ts` (`fitCalendar`, `calendarEnd`)
 
 ## Edge Functions and CI backlog (audit P2/P3) — 2026-10-09 (branch `ledger-v2`)
 
