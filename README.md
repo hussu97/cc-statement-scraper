@@ -148,7 +148,9 @@ cp apps/web/.env.example apps/web/.env.local   # VITE_SUPABASE_PUBLISHABLE_KEY =
 pnpm web:dev                                   # http://127.0.0.1:5173
 ```
 
-Sign in with the demo password, or request an email code and read it in Inbucket.
+Request an email code for `demo@ledger.local` and read it in Inbucket
+(http://127.0.0.1:54324). To try passkeys locally open http://localhost:5173 (the local RP ID is
+`localhost`; browsers refuse an IP address as an RP ID).
 
 ### 5. iPhone app
 
@@ -314,7 +316,7 @@ Used for the production Edge Function secrets and Vault entries, and for secret 
 
 | Route | Screen |
 |---|---|
-| `/signin`, `/welcome` | Sign-in (email code, magic link or password; existing users only) and first-profile setup |
+| `/signin`, `/welcome` | Sign-in (emailed one-time code or passkey; existing users only; offers to add a passkey after a code sign-in) and first-profile setup |
 | `/` | **Overview**: month hero with pace rule, live pending SMS, category ring, cards and dues, utilisation, insights |
 | `/activity` | **Activity**: unified ledger with URL-synced filters, evidence badges, drawer with evidence timeline, inline, bulk and "apply to merchant" categorisation, notes |
 | `/insights` | **Insights**: trends, categories, merchants, subscriptions, FX, calendar heatmap, time of day, YoY, anomalies |
@@ -322,13 +324,13 @@ Used for the production Edge Function secrets and Vault entries, and for secret 
 | `/cards` | **Cards & Statements**: accounts, cards, statements with recon status, upload, documents |
 | `/review` | **Review inbox**: match reviews, unknown cards, unparsed SMS ("not a card transaction") and LLM template proposals. On mobile it is a bottom tab with a count |
 | `/rules` | **Rules**: categories, merchants, rules with live impact preview |
-| `/settings` | **Settings**: ledger, members (and invites), sources and health (queues, DLQ, mailboxes, tokens, PDF passwords), iPhone SMS setup guide (step-by-step Shortcuts automation with copy buttons, *Open Shortcuts* on iPhone, a QR code to open it on the phone from a desktop, optional TestFlight button) |
+| `/settings` | **Settings**: ledger, members (and invites), account (sign-out, passkeys: add, rename, remove), sources and health (queues, DLQ, mailboxes, tokens, PDF passwords), iPhone SMS setup guide (step-by-step Shortcuts automation with copy buttons, *Open Shortcuts* on iPhone, a QR code to open it on the phone from a desktop, optional TestFlight button) |
 
 **iPhone** (`apps/ios/Ledger`)
 
 | Screen | Contents |
 |---|---|
-| Sign in / Profile picker | Email one-time code (Sign in with Apple stubbed), choose a ledger |
+| Sign in / Profile picker | Email one-time code or passkey, then an offer to add a passkey; choose a ledger. Settings → Passkeys manages them |
 | Overview | Month spend posted so far (server comparisons), pending SMS, categories, dues ("Was due …"), Needs attention (reviews, uncategorised) (Realtime refresh) |
 | Activity | Ledger list, filters, transaction detail and categorisation |
 | Insights | Swift Charts views over the same RPCs |

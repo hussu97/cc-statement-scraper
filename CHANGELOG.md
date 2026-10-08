@@ -1,5 +1,31 @@
 # Changelog
 
+## Passkeys and code-only email sign-in — 2026-10-08 (branch `ledger-v2`)
+
+### Backend (Supabase)
+
+- **feat** Auth email templates as code (`supabase/templates/`, `[auth.email.template.*]`): *Magic Link*, *Confirm signup*, *Invite user*, *Change Email Address* and *Reauthentication* carry a one-time code and no sign-in link; the invite tells people to sign in with their email. Pushed to production
+- **feat** `[auth.passkey]` / `[auth.webauthn]` locally (RP ID `localhost`, origin `http://localhost:5173`); production passkeys use RP ID `cc-statement-scraper.vercel.app` (dashboard)
+- **fix** `[remotes.production]` pins every setting that differs from local (site URL, redirect URLs, email confirmations, OTP length 8, TOTP MFA, max rows, vector storage), so a `supabase config push` can't overwrite production with local values again (it did once today and was restored within minutes; see PRODUCTION §2.7)
+
+### Web
+
+- **feat** Sign-in is an emailed code or a passkey (`signInWithPasskey`, with passkey autofill in the email field where the browser supports conditional UI). Password and magic-link sign-in removed; `emailCodeOptions()` sends no redirect link and never creates users; codes of 6–10 digits accepted; "Send a new code"
+- **feat** After a code sign-in, "Add a passkey?" (Add / Not now). "Not now" is remembered per user in this browser (`data/passkeys.ts`)
+- **feat** Settings → Account: signed-in email, sign out, and passkeys (list with created / last used, add, rename, remove)
+- **feat** `/.well-known/apple-app-site-association` (webcredentials for `2F94NY8R3T.com.hussu97.ledger`), served as JSON and excluded from the SPA rewrite
+- **test** `passkeys.test.ts` (offer rule, Not-now storage, support detection, default names, cancel detection, error sentences, code cleaning)
+
+### iOS
+
+- **feat** Sign in with a passkey (`SessionStore.signInWithPasskey`, supabase-swift `@_spi(Experimental)`), plus the post-sign-in offer (`AppRoute.offerPasskey`, `PasskeyOfferView`) and Settings → Account → Passkeys (`PasskeysView`, `LedgerKit.PasskeyStore`: list, add, rename, remove). Associated Domains `webcredentials:$(LEDGER_PASSKEY_DOMAIN)`
+- **fix** The email-code request no longer passes `shouldCreateUser: true`; the Debug password form is gone (the env-driven `DevSignIn` for the local demo user stays, Debug only)
+- **test** `PasskeyTests` (offer rule, Not-now flag, cancellation, error sentences, routing)
+
+### Docs
+
+- PRODUCTION §2.2 (code-only sign-in, passkeys, RP ID warning) and §2.7 (auth config as code, the `config push` warning); ARCHITECTURE §8; README sign-in and local passkey testing
+
 ## Supabase publishable / secret API keys — 2026-10-08 (branch `ledger-v2`)
 
 ### Backend
