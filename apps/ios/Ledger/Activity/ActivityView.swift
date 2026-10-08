@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ActivityView: View {
     @Bindable var model: ActivityModel
+    let months: MonthRange
     let profileCode: String
     @State private var editing: LedgerTransaction?
     @State private var showFilters = false
@@ -21,7 +22,7 @@ struct ActivityView: View {
             // Debounce typing; the model drops superseded responses.
             try? await Task.sleep(for: .milliseconds(350))
             guard !Task.isCancelled else { return }
-            await model.load(profileCode: profileCode)
+            await model.loadIfNeeded(profileCode: profileCode)
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -39,9 +40,9 @@ struct ActivityView: View {
             }
         }
         .sheet(isPresented: $showFilters) {
-            ActivityFilterSheet(query: $model.query, meta: model.meta) {
+            ActivityFilterSheet(initial: model.query, meta: model.meta, months: months) { draft in
                 showFilters = false
-                reload()
+                Task { await model.apply(draft, profileCode: profileCode) }
             }
         }
         .alert("Couldn't update", isPresented: Binding(get: { model.errorMessage != nil },
@@ -66,23 +67,15 @@ struct ActivityView: View {
                         Button { editing = txn } label: { TransactionRow(txn: txn) }
                             .listRowBackground(Palette.bg)
                             .listRowSeparatorTint(Palette.border)
+                            .onAppear { Task { await model.rowAppeared(txn) } }
                     }
                 } header: {
                     Text(section.title).font(Typography.caption.weight(.semibold)).foregroundStyle(Palette.muted)
                 }
             }
-            if model.canLoadMore {
-                Button {
-                    Task { await model.loadMore(profileCode: profileCode) }
-                } label: {
-                    HStack {
-                        Spacer()
-                        if model.isLoadingMore { ProgressView() } else { Text("Load more") }
-                        Spacer()
-                    }
-                }
-                .listRowBackground(Palette.bg)
-            }
+            PagingFooter(footer: model.footer, endMessage: model.endMessage) { await model.loadMore() }
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
         }
     }
 

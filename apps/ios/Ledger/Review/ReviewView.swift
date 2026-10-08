@@ -29,10 +29,13 @@ struct ReviewView: View {
                         Task { await model.resolve(item, option, profileCode: profileCode) }
                     }
                 }
+                if !groups.isEmpty {
+                    PagingFooter(footer: model.footer, endMessage: model.endMessage) { await model.loadMore() }
+                }
             }
         }
         .ledgerNavigation("Review")
-        .task { await model.load(profileCode: profileCode) }
+        .task { await model.open(profileCode: profileCode) }
         .refreshable { await model.load(profileCode: profileCode) }
     }
 
