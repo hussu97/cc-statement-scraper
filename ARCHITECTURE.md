@@ -450,11 +450,15 @@ RLS applies to every change event.
 
 ## 8. Auth and RLS
 
-- **Users** sign in with Supabase Auth: email one-time code or magic link, and a password for
-  the seeded demo user. Sign in with Apple is stubbed on iOS. Membership in `profile_members`
+- **Users** sign in with Supabase Auth: an emailed one-time code or a **passkey** (WebAuthn,
+  relying party `<web-host>`; the iOS app shares it through Associated
+  Domains and the web host's `apple-app-site-association`). There are no passwords and no
+  sign-in links in emails (only the seeded local demo user has a password, used by the Debug
+  iOS `DevSignIn`). After a code sign-in, web and iOS offer to add a passkey; "Not now" is
+  remembered per user on the device, and Settings manages passkeys. Membership in `profile_members`
   grants access, and a profile can have several owners and viewers.
 - **No self sign-up.** Bank Ledger is private: `[auth] enable_signup = false` locally, and the same
-  dashboard setting in production. The web's magic link uses `shouldCreateUser: false`, so an
+  dashboard setting in production. The email-code request uses `shouldCreateUser: false` (web and iOS), so an
   unknown email gets "Ask the ledger's owner to invite you". A member is added by an owner with
   `add_profile_member` (an existing user is added at once; otherwise a pending invite is
   stored), and the person's Auth user is created by an Auth invite (Dashboard → Authentication

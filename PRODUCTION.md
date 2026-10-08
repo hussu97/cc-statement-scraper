@@ -60,14 +60,28 @@ leaving behind:
 ### 2.2 Auth
 
 Dashboard → Authentication:
-- **URL Configuration.** Site URL is the Vercel production URL. Add redirect URLs for the
-  Vercel domain(s) and `http://127.0.0.1:5173` if you want to test magic links against prod.
-- **Providers → Email** enabled (email OTP or magic link). Sign in with Apple isn't used yet.
+- **URL Configuration.** Site URL is the Vercel production URL (the invite email's *Open Bank
+  Ledger* button points there). There are no sign-in links, so no extra redirect URLs are needed.
+- **Sign-in is code-only.** Providers → Email enabled; every email template carries a one-time
+  code (`{{ .Token }}`, 8 digits in production) and **no sign-in link**; there are no passwords.
+  The templates live in `supabase/templates/*.html` and `[auth.email.template.*]` in
+  `supabase/config.toml`, and were pushed to production on 2026-10-08 (§2.7).
+- **Passkeys** (Authentication → Passkeys, beta): enabled. Relying party: display name
+  `Bank Ledger`, **RP ID `<web-host>`**, origin
+  `https://<web-host>`. The iOS app uses the same RP through its Associated
+  Domains entitlement `webcredentials:<web-host>`, which Apple verifies
+  against `https://<web-host>/.well-known/apple-app-site-association`
+  (`apps/web/public/.well-known/`, team `<apple-team-id>`, served as JSON by `vercel.json`).
+  **Changing the RP ID (e.g. a custom domain) strands every existing passkey**; people would
+  sign in with a code and add a new one. Clients: supabase-js ≥ 2.105, supabase-swift ≥ 2.48
+  (`@_spi(Experimental)`). After an email-code sign-in both apps offer to add a passkey; "Not
+  now" is remembered per user on that device, and Settings → Account (web) / Settings →
+  Passkeys (iOS) add, rename and remove them.
 - **Sign-ups: off, always.** Authentication → Sign In / Providers → *Allow new users to sign
   up* = **off** (local `supabase/config.toml` has `[auth] enable_signup = false` to match). A
   signed-up stranger could create ledgers and use storage, LLM and queue capacity, so Bank Ledger
-  never accepts self-registration. The web's magic link no longer creates users
-  (`shouldCreateUser: false`); an unknown email is told to ask a ledger owner for an invite.
+  never accepts self-registration. The email-code request never creates users
+  (`shouldCreateUser: false` on web and iOS); an unknown email is told to ask a ledger owner for an invite.
 - **Adding a member** (sign-ups stay off):
   1. An owner adds the email: web Settings → Members (`add_profile_member`). If the email has
      no Auth user yet this stores a **pending invite**.
@@ -75,7 +89,8 @@ Dashboard → Authentication:
      (or the admin API `auth.admin.inviteUserByEmail`). Invites work with sign-ups disabled. The
      `auth.users` insert trigger claims the pending invite, so the person lands in the ledger
      with the stored role.
-  3. They open the invite email (or request an email code) and sign in.
+  3. The invite email tells them to open Bank Ledger and sign in with that address; the code
+     they request confirms the account (the *Confirm signup* template also sends a code).
 
   If the email already has an Auth user, step 1 adds them directly (`added`) and step 2 is
   skipped. An in-app invite that sends the email itself is on the backlog
@@ -243,14 +258,26 @@ each daily job.
 | Site URL and redirect URLs | Authentication → URL Configuration | the Vercel production URL (§2.2) | step 9 |
 | Legacy API keys | Project Settings → API Keys → *Legacy API keys* | **disabled**, only after the §2.8 checklist passes | after cutover (§2.8) |
 
-**Product name in dashboards ("Bank Ledger").** The code and `supabase/config.toml` define no
-Auth email templates or sender, so prod uses whatever the dashboards hold. Set these once:
+**Auth config as code.** `supabase/config.toml` holds the Auth email templates
+(`supabase/templates/`: *Magic Link*, *Confirm signup*, *Invite user*, *Change Email Address*,
+*Reauthentication*; code only, no links). Every setting that differs between local and
+production is pinned in the `[remotes.production]` block at the end of the file, so
+`supabase config push --project-ref <project-ref>` (from the repo root) can only write
+production's own values plus the shared templates.
+
+> **Warning.** `supabase config push` has no dry run, sends the whole file, and does **not**
+> ask for confirmation when stdin isn't a terminal. Never run it to "preview a diff"; it is a
+> production write (CLAUDE.md §11). When a setting changes in production, update
+> `[remotes.production]` in the same commit. Verify afterwards with
+> `curl -s https://<project-ref>.supabase.co/auth/v1/settings -H "apikey: <publishable>"`
+> (`mailer_autoconfirm` must be `false`, `disable_signup` `true`, `passkeys_enabled` `true`).
+> Passkey/WebAuthn settings aren't managed by CLI 2.109; they stay in the dashboard.
+
+**Product name in dashboards ("Bank Ledger").** Set these once:
 
 | Setting | Where | Value |
 |---|---|---|
-| Magic link / email code | Authentication → Emails → Templates → *Magic Link* | Subject `Your Bank Ledger sign-in code`; body: `<h2>Sign in to Bank Ledger</h2><p>Your code is <strong>{{ .Token }}</strong>, or <a href="{{ .ConfirmationURL }}">sign in with this link</a>.</p><p>If you didn't ask for this, ignore this email.</p>` |
-| Invite | Templates → *Invite user* | Subject `You're invited to Bank Ledger`; body names Bank Ledger and keeps `{{ .ConfirmationURL }}` |
-| Reset password, Change email | Templates → *Reset Password*, *Change Email Address* | Replace "your account" wording with "your Bank Ledger account" (keep the `{{ … }}` variables) |
+| Email templates | `supabase/templates/` via config push (above) | Done 2026-10-08 |
 | Sender name | Authentication → Emails → SMTP Settings | *Sender name* `Bank Ledger` (needs custom SMTP; the built-in sender's name can't be changed) |
 | Google consent screen | GCP `<gcp-project>` → Google Auth Platform → Branding | App name `Bank Ledger` (§5) |
 | Microsoft consent | Entra → App registrations → the Outlook app → Branding | Name `Bank Ledger` (§6) |
