@@ -39,6 +39,15 @@ _ROW_RE = re.compile(
     re.IGNORECASE,
 )
 
+# DP-11: a foreign-currency row prints the original amount and the rate between the
+# reference and the AED amount: "<merchant> <reference> MYR 500.00 @0.9400 470.00".
+# The legacy row regexes leave "<reference> MYR 500.00 @0.9400" in the description and
+# call the row AED; this splits that residue into currency, amount and rate.
+_FX_RESIDUE_RE = re.compile(
+    r"^(?P<merchant>.+?)\s+(?P<reference>[A-Z0-9]{8,})\s+"
+    r"(?P<currency>[A-Z]{3})\s+(?P<amount>\d[\d,]*(?:\.\d+)?)\s+@(?P<rate>\d+(?:\.\d+)?)$"
+)
+
 _STATEMENT_PERIOD_RE = re.compile(
     rf"(?:statement\s*period|period)\s*[:#-]?\s*(?P<start>{_DATE_TOKEN})\s*(?:to|-)\s*(?P<end>{_DATE_TOKEN})",
     re.IGNORECASE,
@@ -126,20 +135,38 @@ def _is_ignored_line(line: str) -> bool:
 
 
 def _extract_country_code(description: str) -> str | None:
+    # Mashreq prints "<merchant><city>" in lower case with no country column. Like the
+    # other parsers, only a trailing upper-case 3-letter token counts (legacy upper-cased
+    # any last word, so "al ain" gave "AIN"); the service maps it to ISO alpha-2 (X-25r).
     tokens = description.split()
     if not tokens:
         return None
-    maybe = tokens[-1].strip().upper()
-    if len(maybe) == 3 and maybe.isalpha():
+    maybe = tokens[-1].strip()
+    if len(maybe) == 3 and maybe.isalpha() and maybe.upper() == maybe:
         return maybe
     return None
 
 
-def parse_mashreq_statement(pdf_path: str | Path) -> StatementParseResult:
+def _split_fx_residue(description: str) -> tuple[str, str, float, float] | None:
+    """(merchant, currency, original amount, AED per unit) of a foreign row, or None."""
+    match = _FX_RESIDUE_RE.match(description)
+    if not match:
+        return None
+    rate = float(match.group("rate"))
+    original = parse_amount(match.group("amount"))
+    if rate <= 0 or original <= 0 or match.group("currency") == "AED":
+        return None
+    return match.group("merchant").strip(), match.group("currency"), original, rate
+
+
+def parse_mashreq_statement(pdf_path: str | Path, pdf_password: str | None = None) -> StatementParseResult:
     path = Path(pdf_path)
     lines: list[str] = []
 
-    with pdfplumber.open(str(path)) as pdf:
+    # An encrypted PDF without the right password raises here; the service maps it
+    # to PDF_DECRYPT_FAILED (audit X-17).
+    open_kwargs: dict = {"password": pdf_password} if pdf_password else {}
+    with pdfplumber.open(str(path), **open_kwargs) as pdf:
         for page in pdf.pages:
             extracted = page.extract_text() or ""
             page_lines = [line.strip() for line in extracted.splitlines() if line.strip()]
@@ -238,6 +265,18 @@ def parse_mashreq_statement(pdf_path: str | Path) -> StatementParseResult:
             merchant_norm,
         )
 
+        # The kind, sign and legacy fingerprint above stay exactly as legacy computed them
+        # (legacy category choices are keyed by the fingerprint); only the reported fields
+        # of a foreign row change (DP-11).
+        amount_original = amount_signed
+        amount_aed = amount_signed if currency == "AED" else None
+        fx_rate_to_aed = 1.0 if currency == "AED" else None
+        fx_split = _split_fx_residue(description) if currency == "AED" else None
+        if fx_split is not None:
+            description, currency, original, fx_rate_to_aed = fx_split
+            merchant_norm = merchant_normalize(description)
+            amount_original = -original if amount_signed < 0 else original
+
         transactions.append(
             TransactionRecord(
                 bank_name=BANK_NAME,
@@ -250,10 +289,10 @@ def parse_mashreq_statement(pdf_path: str | Path) -> StatementParseResult:
                 merchant_raw=description,
                 merchant_normalized=merchant_norm,
                 country_code=_extract_country_code(description),
-                amount_original=amount_signed,
+                amount_original=amount_original,
                 currency_original=currency,
-                amount_aed=amount_signed if currency == "AED" else None,
-                fx_rate_to_aed=1.0 if currency == "AED" else None,
+                amount_aed=amount_aed,
+                fx_rate_to_aed=fx_rate_to_aed,
                 transaction_kind=kind,
                 source_pdf=str(path),
                 fingerprint=fingerprint,

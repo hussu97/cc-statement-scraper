@@ -1,0 +1,116 @@
+{
+  "bank_code": "ENBD",
+  "contract_version": 1,
+  "document_kind": "statement_pdf",
+  "statements": [
+    {
+      "bank_code": "ENBD",
+      "card_holder": "JANE Q SAMPLE",
+      "card_type": "Sample One Visa Credit Card",
+      "due_date": "2026-02-22",
+      "kind": "statement",
+      "lines": [
+        {
+          "amount_aed": "250.00",
+          "amount_original": "250.00",
+          "card_holder": "JANE Q SAMPLE",
+          "card_last4": "5678",
+          "country_code": "AE",
+          "currency_original": "AED",
+          "description_raw": "CORNER GROCERY DUBAI ARE",
+          "direction": "debit",
+          "fx_rate": "1",
+          "kind": "purchase",
+          "legacy_fingerprint": "72493d3a02805476a949b64a98f80de5ef16c208953bd4c09e04467d8da97db8",
+          "line_no": 1,
+          "merchant_normalized": "CORNER GROCERY DUBAI ARE",
+          "posting_date": "2025-12-31",
+          "txn_date": "2025-12-30",
+          "txn_time": null
+        },
+        {
+          "amount_aed": "400.00",
+          "amount_original": "400.00",
+          "card_holder": "JANE Q SAMPLE",
+          "card_last4": "5678",
+          "country_code": "GB",
+          "currency_original": "AED",
+          "description_raw": "ONLINE STORE LONDON GBR",
+          "direction": "debit",
+          "fx_rate": "1",
+          "kind": "purchase",
+          "legacy_fingerprint": "abac2e1f3c0675948d1e098ce6558c29955fe7c1bc7be915a3b52fe7cc44a541",
+          "line_no": 2,
+          "merchant_normalized": "ONLINE STORE LONDON GBR",
+          "posting_date": "2026-01-06",
+          "txn_date": "2026-01-05",
+          "txn_time": null
+        },
+        {
+          "amount_aed": "900.00",
+          "amount_original": "900.00",
+          "card_holder": "JANE Q SAMPLE",
+          "card_last4": "5678",
+          "country_code": null,
+          "currency_original": "AED",
+          "description_raw": "PAYMENT RECEIVED THANK YOU",
+          "direction": "credit",
+          "fx_rate": "1",
+          "kind": "payment",
+          "legacy_fingerprint": "ee13ddbc0d453453c561fccda2eb0dcca225b531d78157c626bd1a2c039c7721",
+          "line_no": 3,
+          "merchant_normalized": "PAYMENT RECEIVED THANK YOU",
+          "posting_date": "2026-01-10",
+          "txn_date": "2026-01-10",
+          "txn_time": null
+        },
+        {
+          "amount_aed": "25.00",
+          "amount_original": "25.00",
+          "card_holder": "JANE Q SAMPLE",
+          "card_last4": "5678",
+          "country_code": "AE",
+          "currency_original": "AED",
+          "description_raw": "COFFEE SHOP DUBAI ARE",
+          "direction": "debit",
+          "fx_rate": "1",
+          "kind": "purchase",
+          "legacy_fingerprint": "1c0e87a055d80c362cc2d16f3c4131f34ceadb02851765d7c9eb14dd5e928ce2",
+          "line_no": 4,
+          "merchant_normalized": "COFFEE SHOP DUBAI ARE",
+          "posting_date": "2026-01-16",
+          "txn_date": "2026-01-15",
+          "txn_time": null
+        }
+      ],
+      "metadata": {
+        "card_holder": "JANE Q SAMPLE",
+        "card_last4": "5678",
+        "card_type": "Sample One Visa Credit Card",
+        "pdf_sha256": "917b12592f26152b5b26248168f045e3a5cc7fb2dcb9ed2852926a7e9d230341",
+        "statement_date": "2026-01-28",
+        "statement_month": "2026-01",
+        "statement_period_end": "2026-01-28",
+        "statement_period_start": "2025-12-29",
+        "statement_reference": null
+      },
+      "period_end": "2026-01-28",
+      "period_start": "2025-12-29",
+      "primary_card_last4": "5678",
+      "reference_source": "fallback",
+      "statement_date": "2026-01-28",
+      "statement_reference": "AUTO-ENBD-2026-01-28-5678",
+      "totals": {
+        "closing_balance": "1500.00",
+        "credit_limit": "20000.00",
+        "min_due": "75.00",
+        "opening_balance": "1725.00",
+        "total_credits": "900.00",
+        "total_debits": "675.00"
+      },
+      "warnings": [
+        "ENBD: statement period year corrected from the statement/transaction dates"
+      ]
+    }
+  ]
+}

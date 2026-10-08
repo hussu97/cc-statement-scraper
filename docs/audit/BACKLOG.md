@@ -26,12 +26,12 @@ separately):
 |---|---|---|---|---|---|
 | Database (Supabase SQL) | 0 | 2 | – | 2 | 4 |
 | Edge Functions | 5 | 8 | – | – | 13 |
-| Parser | 5 | 3 | – | – | 8 |
+| Parser | 1 | – | – | – | 1 |
 | Web | 16 | 26 | 5 | – | 47 |
 | iOS | 14 | 11 | 7 | 3 | 35 |
 | Scraper | – | 2 | – | – | 2 |
-| CI, config and ops | 1 | 6 | – | 1 | 8 |
-| **Total** | **41** | **58** | **12** | **6** | **117** |
+| CI, config and ops | 1 | 5 | – | 1 | 7 |
+| **Total** | **37** | **54** | **12** | **6** | **109** |
 
 There are no open P0 or P1 findings. The last P1 remainders (WEB-02 statements beyond 500 and
 merchant search, WEB-07 "Retry AI") landed in `98f901c`. What is left of the P1s are the device
@@ -55,8 +55,10 @@ These are actions, not code changes. Most are already steps in [PRODUCTION.md](.
 4. **Repo and CI.** `gh variable set LEGACY_DEPLOYS_ENABLED --body true` **before** merging
    `ledger-v2` into `main`; create the `production` environment with its secrets and a `main`-only
    branch policy (V-X-12).
-5. **Parser.** Bump `PARSER_VERSION` (NEW-2), deploy to `<gcp-project>` / `me-central1`,
-   put the URL in `PARSER_URL`, and check `/health`.
+5. **Parser.** Deploy `PARSER_VERSION` 2026.10.2 (NEW-2 done) to `<gcp-project>` /
+   `me-central1`, put the URL in `PARSER_URL`, and check `/health`. Requeue documents parsed by an
+   older version (`documents.parser_version`), at least FAB and Mashreq, whose totals and foreign
+   rows changed.
 6. **Gmail OAuth client** from Render into `GMAIL_OAUTH_CLIENT_ID/SECRET` before Render is
    deleted (X-03).
 7. **Full rehearsal with the final code** on the local stack loaded from a fresh prod backup:
@@ -101,11 +103,7 @@ None open. All twelve were done or decided on 2026-10-09: see
 
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
-| DP-10 | FAB `total_credits` extraction is short by whole payment amounts in 4 statements, giving a false recon `fail` (the balance equation holds) | Not part of the P0/P1 parser fixes | Read the summary block's payment and other-credit lines separately in `totals.py`, plus golden cases | M |
-| DP-11 | Mashreq FX rows aren't recognised: stored as AED with currency, amount and reference left in the description (38 transactions, 36 one-off merchants, invisible to `fx_spend`) | Not part of the P0/P1 parser fixes | Parse the FX sub-line into `currency_original`, `amount_original`, `fx_rate`; golden cases | M |
-| DP-12 | Mashreq totals are never extracted, so all 12 Mashreq statements are `warn` and 42 % of lines have no completeness check | Not part of the P0/P1 parser fixes | Add Mashreq to `totals.py` | M |
-| X-17 | `EIB_PDF_PASSWORD` and `MASHREQ_PDF_PASSWORD` are accepted and stored but never sent to or tried by the parser | Contract and parser change | Wire them into the parser's password map, the worker `settings` and parse-v1, or remove them from the allow-list and Settings | S |
-| NEW-2 | `PARSER_VERSION` is still `2026.10.0` although the ENBD-year, FAB-amount and validation fixes change output, so `documents.parser_version` can't tell old parses from new | Found while writing the post-import checks | Bump it (for example `2026.10.1`) and on every output change; a test that a golden delta requires a bump | S |
+| NEW-4 | Mashreq `card_last4` / `primary_card_last4` is the card's first four digits (BIN): `_CARD_LAST4_RE` takes the first group of "Card No 4xxx XXXX XXXX 1234". Every Mashreq statement of a profile lands on one card, SMS with the real last 4 can't match it, and the fallback statement reference carries the BIN | Found while building the synthetic golden set; fixing it changes card and account identity | Take the last group of the masked number (keep the BIN-based `legacy_fingerprint`). Decide with DP-20 first: with real last-4s, a replacement card (two in the local corpus) creates a second Mashreq account | S |
 
 ### Web
 
@@ -163,6 +161,7 @@ None open. All twelve were done or decided on 2026-10-09: see
 |---|---|---|---|---|
 | DB-40 | `add_profile_member` reveals whether an email has an account (`invited` vs `added`) and adds existing users without consent | Low risk for a two-person app; needs an accept step and UI, so it goes with NEW-1 | Return one status; optional accept step (with NEW-1) | M |
 | DP-20 | A FAB card replacement creates a second FAB account, splitting `statement_cycles` and utilisation history | Model change | Treat a new primary card on the same bank and holder as a replacement on the existing account, or offer "merge accounts" | M |
+| X-33r | Contract nits: the `concat_ws` line-key hash drops nulls; iOS relies on Foundation's `spendAvg3M` key mapping (the parser now always sends `fx_rate` `"1"` for AED and null for a sub-1e-8 rate) | Minor | Use `format('%s|%s', …)` for the key (re-keys every line: pair with a re-parse), explicit `CodingKeys` on iOS | S |
 
 ### Edge Functions
 
@@ -179,11 +178,7 @@ None open. All twelve were done or decided on 2026-10-09: see
 
 ### Parser
 
-| ID | Summary | Why deferred / dependency | Suggested fix | Effort |
-|---|---|---|---|---|
-| SRV-12 | Capacity: `--concurrency 4` on 1 vCPU / 1 GiB with CPU-bound parses (and four 768 MB child caps) may time out or OOM under the bulk import (unverified) | Watch the canary step first | `--concurrency 2` (more instances), or a worker-side in-flight cap | S |
-| SRV-17 | A wrong bank hint skips detection entirely, so it fails permanently | Out of the P1 pass | On `UNSUPPORTED_LAYOUT` with a hint, run detection and retry once with the detected bank plus a warning | S |
-| X-25r | `country_code` has no defined format (`AE`, `ARE`, `UAE`, `IRL`, `DXB`, `YOU` seen) | The rest of the contract drift is fixed | Normalise to ISO 3166 alpha-2 or null, document it in parse-v1 | S |
+None open (SRV-12, SRV-17 and X-25r are done).
 
 ### Web
 
@@ -243,8 +238,7 @@ None open. All twelve were done or decided on 2026-10-09: see
 
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
-| SRV-13 | Supply chain: `deno.json` `lock: false`, no pip hashes, base image by tag, `uvicorn[standard]` extras | Out of the P1 pass | Commit `deno.lock` and deploy `--frozen`; `uv pip compile --generate-hashes`; pin the base image digest; plain `uvicorn` | M |
-| SRV-24 | Golden parity never runs in CI (the corpus is private) | Needs a redacted corpus or protected storage | A small synthetic/redacted golden set per layout, or a protected CI job with encrypted corpus | M |
+| SRV-13r | Supply chain, Edge part: `deno.json` `lock: false` (the parser part is done: hashed requirements, digest-pinned base image, plain `uvicorn`) | Out of the P1 pass | Commit `deno.lock` and deploy `--frozen` | S |
 | X-26 | CI runs no `deno lint`/`check`/`fmt` (fmt fails on 18 files) and never builds the iOS app or extension targets | Out of the P1 pass | Add lint and check (fix or drop fmt); a weekly `xcodegen && xcodebuild build` job (with IOS-11) | S |
 | X-32 | Vercel previews use the production Supabase project and CSP; their auth redirects aren't allow-listed | Decision | Disable previews, or point them at a non-prod project | S |
 | DP-22 | A rehearsal on the shared local stack also categorises the demo profiles' merchants and drains their `sms_fallback` queue (demo SMS sent to Claude) | Local ops only | Rehearse on a stack without seed data, or scope `enqueue_llm_categorize` by profile when run by hand | S |

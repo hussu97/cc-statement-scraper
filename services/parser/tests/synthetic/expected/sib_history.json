@@ -1,0 +1,151 @@
+{
+  "bank_code": "SIB",
+  "contract_version": 1,
+  "document_kind": "history_pdf",
+  "statements": [
+    {
+      "bank_code": "SIB",
+      "card_holder": "JANE Q SAMPLE",
+      "card_type": "Sample Islamic Card",
+      "due_date": null,
+      "kind": "history_extract",
+      "lines": [
+        {
+          "amount_aed": "150.00",
+          "amount_original": "150.00",
+          "card_holder": "JANE Q SAMPLE",
+          "card_last4": "2222",
+          "country_code": null,
+          "currency_original": "AED",
+          "description_raw": "CORNER GROCERY SHARJAH",
+          "direction": "debit",
+          "fx_rate": "1",
+          "kind": "purchase",
+          "legacy_fingerprint": "c590ced736aca40b2769ee27cbcbdd54b4a5ec3ae8558e7221701969ba8cd685",
+          "line_no": 1,
+          "merchant_normalized": "CORNER GROCERY SHARJAH",
+          "posting_date": "2026-01-03",
+          "txn_date": "2026-01-03",
+          "txn_time": null
+        },
+        {
+          "amount_aed": "45.50",
+          "amount_original": "45.50",
+          "card_holder": "JANE Q SAMPLE",
+          "card_last4": "2222",
+          "country_code": null,
+          "currency_original": "AED",
+          "description_raw": "BOOK SHOP DUBAI",
+          "direction": "debit",
+          "fx_rate": "1",
+          "kind": "purchase",
+          "legacy_fingerprint": "2c2bf5c1c3ee8d059a79c1b3ae9d236040cc7c53f38e67c725fc8ba98d8ba5d0",
+          "line_no": 2,
+          "merchant_normalized": "BOOK SHOP DUBAI",
+          "posting_date": "2026-01-10",
+          "txn_date": "2026-01-10",
+          "txn_time": null
+        }
+      ],
+      "metadata": {
+        "card_holder": "JANE Q SAMPLE",
+        "card_last4": "2222",
+        "card_type": "Sample Islamic Card",
+        "pdf_sha256": "122ce61bd92d78a4571901762cb059c6bf59ad46e04b30805cf492ccebbfbfc6",
+        "pdf_type": "transaction_history",
+        "statement_date": "2026-01-12",
+        "statement_month": "2026-01",
+        "statement_period_end": "2026-01-12",
+        "statement_period_start": "2025-12-13",
+        "statement_reference": null
+      },
+      "period_end": "2026-01-12",
+      "period_start": "2025-12-13",
+      "primary_card_last4": "2222",
+      "reference_source": "fallback",
+      "statement_date": "2026-01-12",
+      "statement_reference": "AUTO-SIB-2026-01-12-2222",
+      "totals": {
+        "closing_balance": null,
+        "credit_limit": null,
+        "min_due": null,
+        "opening_balance": null,
+        "total_credits": null,
+        "total_debits": null
+      },
+      "warnings": []
+    },
+    {
+      "bank_code": "SIB",
+      "card_holder": "JANE Q SAMPLE",
+      "card_type": "Sample Islamic Card",
+      "due_date": null,
+      "kind": "history_extract",
+      "lines": [
+        {
+          "amount_aed": "500.00",
+          "amount_original": "500.00",
+          "card_holder": "JANE Q SAMPLE",
+          "card_last4": "2222",
+          "country_code": null,
+          "currency_original": "AED",
+          "description_raw": "CREDIT CARD PAYMENT",
+          "direction": "credit",
+          "fx_rate": "1",
+          "kind": "payment",
+          "legacy_fingerprint": "2aa6f3e3333f8a7df213c261c489ef1f470beef96d2807ceae089c654ab94fba",
+          "line_no": 1,
+          "merchant_normalized": "CREDIT CARD PAYMENT",
+          "posting_date": "2026-01-15",
+          "txn_date": "2026-01-15",
+          "txn_time": null
+        },
+        {
+          "amount_aed": null,
+          "amount_original": "20.00",
+          "card_holder": "JANE Q SAMPLE",
+          "card_last4": "2222",
+          "country_code": null,
+          "currency_original": "USD",
+          "description_raw": "ONLINE STORE LONDON",
+          "direction": "debit",
+          "fx_rate": null,
+          "kind": "purchase",
+          "legacy_fingerprint": "122682a0f475a1f762a5a46a7a3845d1cf87aa6ae46d92e7ba7aca9d344a0be1",
+          "line_no": 2,
+          "merchant_normalized": "ONLINE STORE LONDON",
+          "posting_date": "2026-01-20",
+          "txn_date": "2026-01-20",
+          "txn_time": null
+        }
+      ],
+      "metadata": {
+        "card_holder": "JANE Q SAMPLE",
+        "card_last4": "2222",
+        "card_type": "Sample Islamic Card",
+        "pdf_sha256": "122ce61bd92d78a4571901762cb059c6bf59ad46e04b30805cf492ccebbfbfc6",
+        "pdf_type": "transaction_history",
+        "statement_date": "2026-02-12",
+        "statement_month": "2026-02",
+        "statement_period_end": "2026-02-12",
+        "statement_period_start": "2026-01-13",
+        "statement_reference": null
+      },
+      "period_end": "2026-02-12",
+      "period_start": "2026-01-13",
+      "primary_card_last4": "2222",
+      "reference_source": "fallback",
+      "statement_date": "2026-02-12",
+      "statement_reference": "AUTO-SIB-2026-02-12-2222",
+      "totals": {
+        "closing_balance": null,
+        "credit_limit": null,
+        "min_due": null,
+        "opening_balance": null,
+        "total_credits": null,
+        "total_debits": null
+      },
+      "warnings": []
+    }
+  ]
+}

@@ -48,6 +48,17 @@ def test_fx_rate_formatting() -> None:
     assert fx_rate(100.0 / 27.23) == "3.67242012"
 
 
+def test_fx_rate_contract_nits() -> None:
+    """X-33: AED is always "1"; a rate below numeric(18,8) precision is unknown, not "0"."""
+    assert fx_rate(None, "AED") == "1"
+    assert fx_rate(1.0, "AED") == "1"
+    assert fx_rate(0.999, "AED") == "1"
+    assert fx_rate(0.000000004, "VND") is None
+    assert fx_rate(0.000000006, "VND") == "0.00000001"
+    assert fx_rate(0.00014, "IDR") == "0.00014"
+    assert fx_rate(None, "USD") is None
+
+
 @pytest.mark.parametrize(
     ("merchant", "amount", "expected"),
     [
