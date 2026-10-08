@@ -42,6 +42,9 @@ public enum LedgerDates {
         (day.year == today.year ? dayMonth : dayMonthYear).string(from: day.startDate)
     }
 
+    /// `"8 Oct 2026"`: always with the year (statement periods, timeline headers).
+    public static func fullDayLabel(_ day: CalendarDay) -> String { dayMonthYear.string(from: day.startDate) }
+
     /// `"Today"`, `"Yesterday"`, else `dayLabel`. Used as Activity section headers.
     public static func relativeDayLabel(_ day: CalendarDay, today: CalendarDay = LedgerDates.today()) -> String {
         if day == today { return "Today" }

@@ -112,7 +112,7 @@ struct TransactionRow: View {
         if typeSize.prefersStackedRows {
             VStack(alignment: .leading, spacing: 2) {
                 Text(txn.categoryName ?? "Uncategorized")
-                Text(txn.cardLabel)
+                BankCardLabel(bankCode: txn.bankCode, label: txn.cardSuffix, size: 16)
             }
             .font(Typography.caption)
             .foregroundStyle(Palette.muted)
@@ -120,7 +120,7 @@ struct TransactionRow: View {
             HStack(spacing: 6) {
                 Text(txn.categoryName ?? "Uncategorized")
                 Text("·")
-                Text(txn.cardLabel)
+                BankCardLabel(bankCode: txn.bankCode, label: txn.cardSuffix, size: 16)
             }
             .font(Typography.caption)
             .foregroundStyle(Palette.muted)
