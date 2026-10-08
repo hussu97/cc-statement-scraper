@@ -3,7 +3,6 @@ import { createLocalJWKSet } from "../_shared/deps.ts";
 import { exportJWK, generateKeyPair, SignJWT } from "npm:jose@6.2.12";
 import { HttpError } from "../_shared/http.ts";
 import {
-  base64UrlToBytes,
   decodePubSubEnvelope,
   type GmailMessage,
   headerMap,
@@ -12,7 +11,8 @@ import {
   verifyPushToken,
 } from "../_shared/gmail.ts";
 import { classifyParserResponse, rewriteOrigin } from "../worker/parse_document.ts";
-import { evaluateHealth } from "../ops-monitor/health.ts";
+import { DEFAULT_THRESHOLDS, dlqIssue, evaluateHealth, mailboxCheck } from "../ops-monitor/health.ts";
+import { attachmentTooLarge, decodeBase64Any } from "../_shared/provider.ts";
 import { deltaKey, initialDeltaUrl, pdfAttachments, storedCursor } from "../outlook-poll/graph.ts";
 
 // ── Pub/Sub OIDC ────────────────────────────────────────────────────────────
@@ -83,8 +83,8 @@ Deno.test("pdfAttachmentStubs walks nested parts and keys by partId", () => {
     },
   };
   assertEquals(pdfAttachmentStubs(msg), [
-    { attachmentId: "AAA", key: "part:1.1", filename: "Statement.PDF" },
-    { attachmentId: "BBB", key: "part:1.2", filename: "statement.pdf" },
+    { attachmentId: "AAA", key: "part:1.1", filename: "Statement.PDF", size: null },
+    { attachmentId: "BBB", key: "part:1.2", filename: "statement.pdf", size: null },
   ]);
   assertEquals(headerMap(msg).subject, "Statement");
 });
@@ -98,8 +98,37 @@ Deno.test("historyMessageIds dedupes", () => {
   assertEquals(ids, ["a", "b"]);
 });
 
-Deno.test("base64UrlToBytes handles url-safe alphabet without padding", () => {
-  assertEquals(new TextDecoder().decode(base64UrlToBytes("JVBERi0_Pz8")), "%PDF-???");
+Deno.test("decodeBase64Any handles url-safe and standard alphabets, with or without padding (SRV-07)", () => {
+  const dec = (s: string, impl: "auto" | "std" = "auto") => new TextDecoder().decode(decodeBase64Any(s, impl));
+  for (const impl of ["auto", "std"] as const) {
+    assertEquals(dec("JVBERi0_Pz8", impl), "%PDF-???", impl); // Gmail: base64url, no padding
+    assertEquals(dec("JVBERi0/Pz8=", impl), "%PDF-???", impl); // Graph: standard, padded
+    assertEquals(dec("JVBE\nRi0/Pz8=", impl), "%PDF-???", impl); // line-wrapped
+    assertEquals(decodeBase64Any("", impl).length, 0);
+    assertThrows(() => decodeBase64Any("!!!", impl));
+  }
+  // ~21 MB decodes well inside the 2 s Edge CPU limit (the atob loop took ~1 s per 20 MB).
+  const b64 = "QUFB".repeat(1024 * 7000); // "AAA" × 7,168,000
+  for (const impl of ["auto", "std"] as const) {
+    const t0 = performance.now();
+    assertEquals(decodeBase64Any(b64, impl).length, 3 * 1024 * 7000);
+    const ms = performance.now() - t0;
+    assert(ms < 500, `${impl} decode took ${ms} ms`);
+  }
+});
+
+Deno.test("attachmentTooLarge skips attachments over 25 MB before download (SRV-07)", () => {
+  assert(attachmentTooLarge(25 * 1024 * 1024 + 1));
+  assert(!attachmentTooLarge(25 * 1024 * 1024));
+  assert(!attachmentTooLarge(null) && !attachmentTooLarge(undefined) && !attachmentTooLarge("x"));
+});
+
+Deno.test("pdfAttachmentStubs carries Gmail's reported size", () => {
+  const stubs = pdfAttachmentStubs({
+    id: "m",
+    payload: { partId: "1", filename: "a.pdf", mimeType: "application/pdf", body: { attachmentId: "X", size: 1234 } },
+  });
+  assertEquals(stubs[0].size, 1234);
 });
 
 // ── worker ──────────────────────────────────────────────────────────────────
@@ -152,7 +181,7 @@ Deno.test("outlook cursors honour the legacy sync_state keys", () => {
 
 // ── ops-monitor ─────────────────────────────────────────────────────────────
 Deno.test("evaluateHealth raises one issue per problem type", () => {
-  const t = { smsUnparsed24h: 5, openReviews: 50 };
+  const t = { ...DEFAULT_THRESHOLDS, smsUnparsed24h: 5, openReviews: 50 };
   assertEquals(
     evaluateHealth({
       queues: { parse_document: { depth: 3, oldest_age_s: 10 }, parse_document_dlq: { depth: 0, oldest_age_s: null } },
@@ -187,4 +216,52 @@ Deno.test("evaluateHealth raises one issue per problem type", () => {
   const cron = issues.find((i) => i.issue === "cron_failures")!;
   assertEquals(cron.extra, { jobs: ["ledger-worker-kick"] }); // no return_message
   assertEquals(cron.level, "error");
+});
+
+Deno.test("evaluateHealth: mailbox checks accept counts, rows or {count, mailbox_codes} (SRV-10)", () => {
+  assertEquals(mailboxCheck(undefined), { count: 0, codes: [] });
+  assertEquals(mailboxCheck(2), { count: 2, codes: [] });
+  assertEquals(mailboxCheck([{ mailbox_code: "mbx_a" }, { mailbox_code: "mbx_b" }]), {
+    count: 2,
+    codes: ["mbx_a", "mbx_b"],
+  });
+  assertEquals(mailboxCheck({ count: 3, mailbox_codes: ["mbx_a"] }), { count: 3, codes: ["mbx_a"] });
+
+  const issues = evaluateHealth({
+    mailbox_errors: [{ mailbox_code: "mbx_err" }],
+    mailboxes_stale: 1,
+    gmail_watch_expiring: { count: 1, mailbox_codes: ["mbx_w"] },
+  });
+  const by = Object.fromEntries(issues.map((i) => [i.issue, i]));
+  assertEquals(Object.keys(by).sort(), ["gmail_watch_expiring", "mailbox_errors", "mailboxes_stale"]);
+  assertEquals(by.mailbox_errors.level, "error");
+  assertEquals(by.mailbox_errors.extra.mailbox_codes, ["mbx_err"]);
+  assertEquals(by.mailboxes_stale.level, "warning");
+  assertEquals(by.gmail_watch_expiring.extra.mailbox_codes, ["mbx_w"]);
+  // Older ops_health without the keys: nothing raised.
+  assertEquals(evaluateHealth({ mailbox_errors: 0, mailboxes_stale: [], gmail_watch_expiring: null }), []);
+});
+
+Deno.test("evaluateHealth: parse queue age warns past the threshold", () => {
+  const old = evaluateHealth({ queues: { parse_document: { depth: 40, oldest_age_s: 4 * 3600 } } });
+  assertEquals(old.map((i) => [i.issue, i.level]), [["parse_queue_age", "warning"]]);
+  assertEquals(evaluateHealth({ queues: { parse_document: { depth: 40, oldest_age_s: 3600 } } }), []);
+});
+
+Deno.test("dlqIssue alerts on new arrivals, then once a day (SRV-22)", () => {
+  const t = DEFAULT_THRESHOLDS;
+  const q = (newest_age_s?: number) => ({ depth: 3, oldest_age_s: 99_999, newest_age_s });
+  assertEquals(dlqIssue("parse_document_dlq", { depth: 0, oldest_age_s: null }, t), null);
+  // Older ops_health (no newest_age_s): every check, as before.
+  assertEquals(dlqIssue("parse_document_dlq", q(), t)?.level, "error");
+  // A message arrived since the last check.
+  assertEquals(dlqIssue("parse_document_dlq", q(120), t)?.level, "error");
+  assertEquals(dlqIssue("parse_document_dlq", q(t.checkIntervalS + 30), t)?.level, "error");
+  // Nothing new: silent, except one reminder per day of age.
+  const fired = [];
+  for (let age = 2 * t.checkIntervalS; age < 2 * 86_400; age += t.checkIntervalS) {
+    const i = dlqIssue("parse_document_dlq", q(age + 7), t);
+    if (i) fired.push([age, i.level]);
+  }
+  assertEquals(fired, [[86_400, "warning"]]);
 });

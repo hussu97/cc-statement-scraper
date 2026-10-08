@@ -6,7 +6,9 @@
 //   * User JWT (web / iOS): multipart `profile_code` is required and the caller must
 //     be an owner of it. `source` may be `upload` (default) or `ios`.
 //
-// Response 200: {"uploads": [{"filename", "doc_code", "status": "queued"|"duplicate"}]}
+// Response 200: {"uploads": [{"filename", "doc_code", "status": "queued"|"duplicate",
+//                             "parse_status", "requeued"?}]}
+// A duplicate of a document whose parse failed is queued again (`requeued: true`, SRV-20).
 
 import { withSentry } from "../_shared/sentry.ts";
 import { assertOwner, requireUserOrServiceToken } from "../_shared/auth.ts";
@@ -15,10 +17,11 @@ import { serviceClient } from "../_shared/supabase.ts";
 import {
   type DocumentSource,
   MAX_PDF_BYTES,
+  type PreparedDocument,
+  prepareDocument,
   sanitizeFilename,
   storeDocument,
   validateBankHint,
-  validatePdf,
 } from "../_shared/documents.ts";
 import { parseMultipart, parseUploadForm, readBodyCapped } from "./form.ts";
 
@@ -52,27 +55,28 @@ async function handler(req: Request): Promise<Response> {
   const bankCode = await validateBankHint(svc, form.bankCodeHint);
 
   // Read and validate every file before storing any, so a bad file rejects the batch.
-  const items: { filename: string; bytes: Uint8Array }[] = [];
+  const items: PreparedDocument[] = [];
   for (const f of form.files) {
-    const filename = sanitizeFilename(f.name);
     if (f.size > MAX_PDF_BYTES) {
-      throw new HttpError(413, "FILE_TOO_LARGE", `${filename} exceeds the ${MAX_PDF_BYTES / 1024 / 1024} MB limit`);
+      throw new HttpError(
+        413,
+        "FILE_TOO_LARGE",
+        `${sanitizeFilename(f.name)} exceeds the ${MAX_PDF_BYTES / 1024 / 1024} MB limit`,
+      );
     }
-    const bytes = new Uint8Array(await f.arrayBuffer());
-    validatePdf(bytes, filename);
-    items.push({ filename, bytes });
+    items.push(await prepareDocument(new Uint8Array(await f.arrayBuffer()), f.name));
   }
 
   const uploads = [];
-  for (const item of items) {
-    const r = await storeDocument(svc, {
-      profileCode,
-      bytes: item.bytes,
-      filename: item.filename,
-      source,
-      bankCodeHint: bankCode,
+  for (const document of items) {
+    const r = await storeDocument(svc, { profileCode, document, source, bankCodeHint: bankCode });
+    uploads.push({
+      filename: document.filename,
+      doc_code: r.doc_code,
+      status: r.status,
+      parse_status: r.parse_status,
+      ...(r.requeued ? { requeued: true } : {}),
     });
-    uploads.push({ filename: item.filename, doc_code: r.doc_code, status: r.status });
   }
   return json({ uploads }, 200, req);
 }
