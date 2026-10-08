@@ -461,6 +461,13 @@ RLS applies to every change event.
   → Users → Invite user, or the admin API), which works with sign-ups off. The insert trigger
   then claims the pending invite. The legacy import refuses to adopt a profile key it did not
   create (`private.legacy_import_profiles`), so a squatted key can't capture migrated data.
+- **API keys.** Clients (web, iOS, scraper `apikey`) ship only the publishable key
+  (`sb_publishable_…`); RLS applies and the signed-in user's JWT carries identity (Realtime
+  included). Edge Functions use the secret key (`sb_secret_…`, maps to `service_role`) from the
+  runtime-injected `SUPABASE_SECRET_KEYS`, falling back to `SB_SECRET_KEY` and then the legacy
+  `service_role` JWT; their user clients pair the publishable key with the caller's JWT. pg_cron
+  calls carry only `x-cron-secret`. The legacy anon/service_role JWT keys can be disabled once
+  PRODUCTION.md §2.8 passes.
 - **RLS on every table.** Policies call `authz.my_profile_codes()` or
   `authz.my_owned_profile_codes()`. These are SECURITY DEFINER functions in the `authz` schema,
   evaluated once per statement through `(select …)`. Members read; owners write the user-editable

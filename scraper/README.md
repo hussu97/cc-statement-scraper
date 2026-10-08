@@ -34,7 +34,7 @@ cp .env.example .env
 | `CCS_SCRAPER_UPLOAD_PATH` | `/api/v1/jobs/upload` | Upload route appended to the target URL — set `/functions/v1/statements-upload` for Ledger v2 |
 | `<PROFILE>_CCS_SCRAPER_API_TOKEN` | — | Per-profile service token, e.g. `HUSSAIN_CCS_SCRAPER_API_TOKEN` (profile upper-cased, like the bank credentials). Takes precedence over the global token. Needed for Ledger v2, where each token belongs to one profile |
 | `CCS_SCRAPER_API_TOKEN` | — | Global fallback token, used for any profile without its own (`statements:upload` scope for Ledger v2; legacy backend uses `email_ingestion:upload`) |
-| `CCS_SCRAPER_SUPABASE_ANON_KEY` | — | Optional Supabase anon/publishable key, sent as the `apikey` header when set |
+| `CCS_SCRAPER_SUPABASE_PUBLISHABLE_KEY` | — | Optional Supabase publishable key (`sb_publishable_…`), sent as the `apikey` header when set. The old `CCS_SCRAPER_SUPABASE_ANON_KEY` name still works (deprecated, warns) |
 | `CCS_SCRAPER_HEADLESS` | `true` | Run browser headless (`false` to watch the session) |
 | `CCS_SCRAPER_BROWSER_PROXY_URL` | — | Optional SOCKS5/HTTP proxy for all browser traffic |
 | `CCS_SCRAPER_BROWSER_GEO_LATITUDE` | `25.2048` | Geolocation spoof latitude (Dubai) |
@@ -117,7 +117,7 @@ CCS_SCRAPER_TARGET_URL=https://<project-ref>.supabase.co
 CCS_SCRAPER_UPLOAD_PATH=/functions/v1/statements-upload
 HUSSAIN_CCS_SCRAPER_API_TOKEN=<hussain's token, scope statements:upload>
 TEJASVIE_CCS_SCRAPER_API_TOKEN=<tejasvie's token, scope statements:upload>
-CCS_SCRAPER_SUPABASE_ANON_KEY=<anon/publishable key>   # optional
+CCS_SCRAPER_SUPABASE_PUBLISHABLE_KEY=<sb_publishable_… key>   # optional
 ```
 
 v2 tokens are profile-scoped (Settings → Sources → Tokens, one per profile), so

@@ -134,13 +134,13 @@ def _pdf(tmp_path: Path, name: str = "stmt.pdf") -> Path:
     return p
 
 
-def _client(handler, *, anon_key: str | None = None, upload_path: str = _V2_PATH, sleeps: list | None = None) -> ScraperClient:
+def _client(handler, *, publishable_key: str | None = None, upload_path: str = _V2_PATH, sleeps: list | None = None) -> ScraperClient:
     return ScraperClient(
         "https://abc.supabase.co",
         "tok",
         "hussain",
         upload_path=upload_path,
-        anon_key=anon_key,
+        publishable_key=publishable_key,
         transport=httpx.MockTransport(handler),
         retry_delays=(1, 2, 3),
         sleep=(sleeps.append if sleeps is not None else (lambda _s: None)),
@@ -188,9 +188,9 @@ def test_apikey_header_sent_when_configured(tmp_path: Path) -> None:
         seen.append(request)
         return httpx.Response(200, json={})
 
-    _client(handler, anon_key="anon_123").upload_pdfs([_pdf(tmp_path)])
+    _client(handler, publishable_key="sb_publishable_123").upload_pdfs([_pdf(tmp_path)])
     headers = seen[0].headers
-    assert headers["apikey"] == "anon_123"
+    assert headers["apikey"] == "sb_publishable_123"
     assert headers["Authorization"] == "Bearer tok"
     assert headers["X-Profile-Key"] == "hussain"
 
