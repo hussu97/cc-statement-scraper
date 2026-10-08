@@ -804,6 +804,48 @@ export type Database = {
           },
         ]
       }
+      merchant_category_skips: {
+        Row: {
+          category_set_hash: string | null
+          created_at: string
+          merchant_code: string
+          profile_code: string
+          reason: string
+          updated_at: string
+        }
+        Insert: {
+          category_set_hash?: string | null
+          created_at?: string
+          merchant_code: string
+          profile_code: string
+          reason: string
+          updated_at?: string
+        }
+        Update: {
+          category_set_hash?: string | null
+          created_at?: string
+          merchant_code?: string
+          profile_code?: string
+          reason?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "merchant_category_skips_merchant_code_fkey"
+            columns: ["merchant_code"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["merchant_code"]
+          },
+          {
+            foreignKeyName: "merchant_category_skips_profile_code_fkey"
+            columns: ["profile_code"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["profile_code"]
+          },
+        ]
+      }
       merchant_profile_category: {
         Row: {
           category_code: string
@@ -2023,6 +2065,7 @@ export type Database = {
       apply_llm_suggestions: {
         Args: {
           p_category_set_hash: string
+          p_merchant_codes?: string[]
           p_model: string
           p_profile_code: string
           p_suggestions: Json
@@ -2188,6 +2231,7 @@ export type Database = {
           p_pattern: string
           p_priority?: number
           p_profile_code: string
+          p_rule_code?: string
         }
         Returns: Json
       }
@@ -2237,6 +2281,10 @@ export type Database = {
           recurring_code: string
           status: string
         }[]
+      }
+      reject_merchant_suggestion: {
+        Args: { p_merchant_code: string; p_profile_code: string }
+        Returns: undefined
       }
       remove_profile_member: {
         Args: { p_profile_code: string; p_user_id: string }
