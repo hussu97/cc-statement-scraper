@@ -1,0 +1,190 @@
+# Bank Ledger: lessons learned
+
+> Read the index at session start. Add an entry after any correction from the user, or after
+> a bug that cost a debugging session (CLAUDE.md §12.3). Newest first. The title is the lesson,
+> so the index alone should tell you whether an entry applies to what you are about to do.
+> When a lesson can be checked by a machine, add the guard and name it under **Enforced by**.
+
+## Index
+
+| When | Lesson |
+|---|---|
+| 2026-10-08 | [`supabase config push` has no dry run and pushes the whole file](#supabase-config-push-has-no-dry-run-and-pushes-the-whole-file) |
+| 2026-10-08 | [A push to `main` is a production deploy](#a-push-to-main-is-a-production-deploy) |
+| 2026-10-08 | [Stage explicit paths; `git add -A` commits other people's work](#stage-explicit-paths-git-add--a-commits-other-peoples-work) |
+| 2026-10-08 | [A secret that reached a transcript is a secret to rotate](#a-secret-that-reached-a-transcript-is-a-secret-to-rotate) |
+| 2026-10-08 | [Clients hold the publishable key; only Edge Functions hold the secret key](#clients-hold-the-publishable-key-only-edge-functions-hold-the-secret-key) |
+| 2026-10-08 | [Never push an env file "as is"](#never-push-an-env-file-as-is) |
+| 2026-10-08 | [Never `REVOKE EXECUTE`: on PG 17.6.1.104 the call segfaults the server](#never-revoke-execute-on-pg-1761104-the-call-segfaults-the-server) |
+| 2026-10-08 | [Policies read `= any ((select f())::text[])`, and both halves matter](#policies-read--any-select-ftext-and-both-halves-matter) |
+| 2026-10-08 | [Local green is not prod green: prod has older default privileges](#local-green-is-not-prod-green-prod-has-older-default-privileges) |
+| 2026-10-08 | [`migration up` matches versions, not contents: reset before pgTAP](#migration-up-matches-versions-not-contents-reset-before-pgtap) |
+| 2026-10-08 | [The `legacy` schema and the leftover `backend/` folder are kept](#the-legacy-schema-and-the-leftover-backend-folder-are-kept) |
+| 2026-10-08 | [A broad `.gitignore` rule hides source: check new paths with `git check-ignore`](#a-broad-gitignore-rule-hides-source-check-new-paths-with-git-check-ignore) |
+| 2026-10-08 | [Sentry is off in local, dev and test; the real projects are `credit-card-ledger-*`](#sentry-is-off-in-local-dev-and-test-the-real-projects-are-credit-card-ledger-) |
+| 2026-10-08 | [App Store processing rejects "iPhone" in App Intent text (ITMS-90626)](#app-store-processing-rejects-iphone-in-app-intent-text-itms-90626) |
+| 2026-10-08 | [Green tests are not a working feature: run it and look at it](#green-tests-are-not-a-working-feature-run-it-and-look-at-it) |
+| 2026-10-08 | [Tooling defaults that don't work here: `gh` account, Supabase MCP, `localhost`, pip](#tooling-defaults-that-dont-work-here-gh-account-supabase-mcp-localhost-pip) |
+
+## Lessons
+
+### `supabase config push` has no dry run and pushes the whole file
+- **What went wrong**: `supabase config push` sends the **whole** `supabase/config.toml` to the
+  remote project and does not ask for confirmation when stdin isn't a TTY (piping `n` does not
+  stop it). Run to "see the diff", it overwrote production auth (`site_url`, email
+  confirmations, OTP length, MFA) with local values, which had to be restored.
+- **Rule**: never run it to preview anything; there is no dry run. Production-only values are
+  pinned in the `[remotes.production]` block at the end of `config.toml`: any value that
+  differs between local and prod goes there in the same commit. Pushing is a production action:
+  explicit yes in chat, run from the repo root (`--workdir` from elsewhere silently picks up the
+  cwd's config), then verify with `GET /auth/v1/settings`. Don't break what it carries: email
+  sign-in is code-only (`supabase/templates/` use `{{ .Token }}`; no links, no passwords), and
+  passkeys use `rp_id = <web-host>` with the AASA file at
+  `apps/web/public/.well-known/apple-app-site-association`. Changing `rp_id` strands every
+  passkey. Detail: `supabase/CLAUDE.md`.
+- **Enforced by**: `.claude/hooks/guard.py` asks before `supabase config push`.
+
+### A push to `main` is a production deploy
+- **What happens**: `main` has no reviewer gate (GitHub Free plan, `AUTO_DEPLOY=true`). A push
+  that touches `supabase/` runs `db push` + `functions deploy` on `cc-statement-scraper`; one that
+  touches `services/parser/` deploys Cloud Run; every push builds Vercel Production; and when the
+  iOS app changed, the pre-push hook archives, signs and stages a TestFlight build that goes to
+  external testers. Merging a PR into `main` is the same thing.
+- **Rule**: pushing or merging to `main` needs an explicit yes in chat, like `supabase db push`.
+  Say what will deploy (areas, migrations, functions, iOS build) when asking. Feature branches and
+  PRs are not production. See `docs/ci-cd.md`.
+- **Enforced by**: `.claude/hooks/guard.py` asks before any push to `main`, force push or deploy.
+
+### Stage explicit paths; `git add -A` commits other people's work
+- **What went wrong**: `f530ca1` ("iOS: rename to Bank Ledger; TestFlight release scripts") also
+  deleted 189 files of `backend/` and the root `.dockerignore`. That deletion had been staged in
+  the shared checkout by a different piece of work, and a blanket stage swept it into an
+  unrelated iOS commit.
+- **Rule**: `git add <path> <path>`, never `git add -A`, `git add .`, `git add -u` or
+  `git commit -a`. Before every commit, read `git diff --cached --stat` and account for every
+  path. Several sessions and worktrees share this repository (and its stash): leave anything you
+  did not change alone.
+- **Enforced by**: `.claude/hooks/guard.py` (denies the blanket forms).
+
+### A secret that reached a transcript is a secret to rotate
+- **What went wrong**: the Anthropic API key and the Sentry org auth token appeared in chat
+  transcripts and logs during development, so both had to be rotated before cutover
+  (`docs/audit/BACKLOG.md`, "Do before / at cutover" 1).
+- **Rule**: secrets live only in the gitignored files listed in CLAUDE.md §11.4. Never `cat`,
+  `echo`, `grep` (without `-c`/`-q`), `printenv` or `Read` them. Check shape, not value:
+  `cut -d= -f1 FILE` for key names, `grep -c '^KEY=' FILE` for presence, or test a property
+  (starts with `https://`, has no `<`) without printing it, as audit X-01 did. Push values with
+  the prompted or file-based tools (`gh secret set NAME` with no `--body`,
+  `scripts/cutover/set-edge-secrets.sh`), never on a command line. If a value does leak, say so
+  and ask the user to rotate it.
+- **Enforced by**: `.claude/hooks/guard.py` (denies printing secret files, env dumps, token
+  echoes, `Read` of secret files); `scripts/hooks/pre-commit` (refuses staging `.env*`,
+  `*.p8`, `*.p12`, `Secrets*.xcconfig`).
+
+### Clients hold the publishable key; only Edge Functions hold the secret key
+- **Rule**: web, iOS and the scraper use only the Supabase publishable key (`sb_publishable_…`);
+  RLS and the user's JWT do the rest. Edge Functions get the secret key from the
+  runtime-injected `SUPABASE_SECRET_KEYS` through `_shared/supabase.ts` (`resolveApiKey`), never by
+  reading `SUPABASE_SERVICE_ROLE_KEY` directly. The secret key otherwise exists only in
+  `.env.cutover` for one-off admin scripts, sent as `apikey`, never from a browser.
+- **Enforced by**: `apps/web/src/lib/supabase-key.ts` + `supabase-key.test.ts` and iOS
+  `LedgerConfig` refuse an `sb_secret_` key; `supabase/functions/_tests/api_keys_test.ts`.
+
+### Never push an env file "as is"
+- **What went wrong** (audit X-01): the cutover runbook pushed the whole local
+  `supabase/functions/.env.production` with `supabase secrets set --env-file`; the file held a
+  placeholder `PARSER_URL`, which would have broken every parse right before the canary.
+- **Rule**: function secrets go through `scripts/cutover/set-edge-secrets.sh`, which refuses
+  empty or `<placeholder>` values, local-only keys and a non-https `PARSER_URL`. A secrets push is
+  a production action: ask first.
+
+### Never `REVOKE EXECUTE`: on PG 17.6.1.104 the call segfaults the server
+- **What went wrong**: on Supabase Postgres 17.6.1.104 (production's build), calling a function
+  the caller lacks EXECUTE on crashes the server (reproduced locally on 2026-10-08).
+- **Rule**: guard in the body (`perform private.assert_service_role();` or
+  `perform private.assert_member(p_profile_code, need_owner);`); keep internals in `private`.
+- **Enforced by**: `supabase/tests/01_rls.test.sql` ("no public/authz function has EXECUTE
+  revoked").
+
+### Policies read `= any ((select f())::text[])`, and both halves matter
+- **Rule**: `profile_code = any ((select authz.my_profile_codes())::text[])`. The `(select …)`
+  makes Postgres evaluate the membership function once per statement (an initplan) instead of
+  once per row. The `::text[]` cast makes the scalar subquery an array expression; without it
+  `= any (select …)` is parsed as `ANY (subquery)` and compares `text` with `text[]`.
+  Copy an existing policy in `20261008000200_identity.sql`; don't hand-write a variant.
+
+### Local green is not prod green: prod has older default privileges
+- **What went wrong** (audit FV-01): production was created with Supabase's older default
+  privileges (`GRANT ALL ON TABLES TO anon, authenticated`). Local and CI stacks are restricted,
+  so every v2 table would have reached prod with table-wide client grants while all 503 local
+  pgTAP tests passed.
+- **Rule**: grant clients exactly what they need, per column for updates; never rely on
+  defaults. When a migration changes a client grant, update the matrix in
+  `supabase/tests/11_privileges.test.sql` in the same commit.
+- **Enforced by**: `11_privileges.test.sql`; the quarantine migration revokes the defaults first.
+
+### `migration up` matches versions, not contents: reset before pgTAP
+- **What went wrong** (audit FV-04, X-31): the shared local stack ran stale bodies of four
+  migrations that had been edited after it applied them, and pgTAP failed on a stack holding a
+  `legacy` schema and extra data.
+- **Rule**: `supabase db reset && supabase test db` from a fresh reset, every time. Once a
+  migration is on `origin/main` it is immutable: fix forward with a new one.
+- **Enforced by**: pre-commit, pre-push and CI (`scripts/ci/check-migrations.sh`) refuse edits to
+  migrations on `main`; `deploy-supabase` compares applied migrations with the files.
+
+### The `legacy` schema and the leftover `backend/` folder are kept
+- **Rule**: the `legacy` schema in production is the historical record of v1: read-only, never
+  written, dropped or truncated, and the migrations that reference it (quarantine, legacy import,
+  parity report) stay as applied history. The tracked v1 code is gone, but the main checkout still
+  has an untracked `backend/` folder (`backend/data/` with private statement PDFs and backups,
+  `backend/logs/`) and a root `data/`: never delete or "clean up" either.
+- **Enforced by**: `.claude/hooks/guard.py` (denies dropping or writing `legacy`, `rm -r` of
+  `backend/` or `data/`).
+
+### A broad `.gitignore` rule hides source: check new paths with `git check-ignore`
+- **What went wrong**: the root `data/` rule (for private statement PDFs) silently hid
+  `apps/web/src/data/`, the web data layer, until `!apps/web/src/data/` was added. The trailing
+  `.env*` rule likewise re-ignores `.env.example` files that are not already tracked, so a new
+  `supabase/functions/.env.example` (BACKLOG X-16r) would not be added.
+- **Rule**: when you create a directory or file whose name a broad rule might match (`data`,
+  `build`, `dist`, `logs`, `tmp`, `downloads`, `.env.example`), run
+  `git check-ignore -v <path>` and check `git status` lists it before committing.
+
+### Sentry is off in local, dev and test; the real projects are `credit-card-ledger-*`
+- **Rule**: every runtime reports only for a deployed environment: with a DSN and an environment
+  that is not `''`, `local`, `development` or `test` (iOS also `dev`, `debug`, and never a Debug
+  build). Never set a deployed environment name locally to "test Sentry". The projects (org
+  `melting-moments`) are `credit-card-ledger-backend` (Edge `service=edge`, parser
+  `service=parser`) and `credit-card-ledger-apps` (web `app=web`, iOS `app=ios`). The old
+  `ledger-apps`/`ledger-backend` slugs never existed: source-map and dSYM uploads to them failed
+  with "Project not found" (`221ea5a`).
+- **Enforced by**: `supabase/functions/_tests/sentry_local_test.ts`, `apps/web/src/lib/sentry.test.ts`,
+  `AuditFixTests.swift` (`Telemetry.shouldStart`).
+
+### App Store processing rejects "iPhone" in App Intent text (ITMS-90626)
+- **What went wrong**: TestFlight build 2 was rejected during processing because the
+  `LogBankSMSIntent` description said "iPhone".
+- **Rule**: App Intent titles, descriptions, parameter text and App Shortcut phrases never name
+  an Apple device or trademark ("iPhone", "iPad", "Siri"). Say "this device" or "your phone".
+
+### Green tests are not a working feature: run it and look at it
+- **What went wrong**: the 2000/page option passed every test and silently showed at most 1000
+  rows per page, because PostgREST's `max_rows` capped the response (audit X-07). A rejected
+  iOS session showed a signed-in "Couldn't load: You are signed out" screen that no test
+  covered. Both were found only by running the app.
+- **Rule**: before calling a change done, run it: `pnpm check` (the CI mirror for the areas you
+  touched), then the thing itself (web in a browser, iOS in the simulator, a function with
+  `curl` against the local stack) and look at the result. Say which checks ran and which were
+  skipped.
+
+### Tooling defaults that don't work here: `gh` account, Supabase MCP, `localhost`, pip
+- **`gh`**: the active account (`h-abbasi`) cannot see `hussu97/cc-statement-scraper`. Use
+  `GH_TOKEN=$(gh auth token --user hussu97) gh …`, inline, never printing the token.
+- **Supabase MCP**: the connector is scoped to a different organisation and cannot see
+  `cc-statement-scraper`. Use the Supabase CLI (linked to `<project-ref>`) for read-only
+  inspection, and ask before anything that writes.
+- **`localhost`**: curl local services at `127.0.0.1` (`http://127.0.0.1:54321/…`); the parser's
+  local allow-list and the docs use `127.0.0.1`.
+- **Python**: environments are made with `uv` (`uv venv --python 3.12 .venv`, then
+  `uv pip sync`/`uv pip install --python .venv/bin/python …`, as in the service READMEs and CI),
+  not `pip install` into whatever Python is on the PATH.
