@@ -188,8 +188,8 @@ if [[ -z "${SENTRY_AUTH_TOKEN:-}" ]]; then
 fi
 SENTRY_ORG="${SENTRY_ORG:-$(release_setting SENTRY_ORG)}"
 SENTRY_PROJECT="${SENTRY_PROJECT:-$(release_setting SENTRY_PROJECT)}"
-# Unset: the project id at the end of the DSN. The slug `ledger-apps` is not
-# what Sentry calls it ("Project not found"), and the id cannot drift from the DSN.
+# Unset: use the project id at the end of the DSN (slug: credit-card-ledger-apps);
+# the id cannot drift from the DSN.
 if [[ -z "${SENTRY_PROJECT:-}" ]]; then
   SENTRY_PROJECT="$(release_setting LEDGER_SENTRY_DSN | sed -n 's|.*/\([0-9][0-9]*\)$|\1|p')"
 fi
@@ -199,9 +199,9 @@ if [[ -n "${SENTRY_AUTH_TOKEN:-}" ]]; then
   command -v sentry-cli >/dev/null || {
     echo "error: SENTRY_AUTH_TOKEN set but sentry-cli not installed (brew install getsentry/tools/sentry-cli)" >&2; exit 1; }
   : "${SENTRY_ORG:?set SENTRY_ORG}"
-  echo "==> Uploading dSYMs to Sentry ($SENTRY_ORG/${SENTRY_PROJECT:-ledger-apps})"
+  echo "==> Uploading dSYMs to Sentry ($SENTRY_ORG/${SENTRY_PROJECT:-credit-card-ledger-apps})"
   sentry-cli debug-files upload --include-sources \
-    --org "$SENTRY_ORG" --project "${SENTRY_PROJECT:-ledger-apps}" \
+    --org "$SENTRY_ORG" --project "${SENTRY_PROJECT:-credit-card-ledger-apps}" \
     "$ARCHIVE/dSYMs"
 else
   echo "==> SENTRY_AUTH_TOKEN not set — dSYMs NOT uploaded; crashes from build $BUILD will be unsymbolicated."

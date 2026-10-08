@@ -214,11 +214,11 @@ approval), Vercel's Git integration + `web-smoke.yml`, and `ios-testflight.yml`.
 |---|---|
 | `VITE_SUPABASE_URL` | Supabase API URL (`http://127.0.0.1:54321` locally) |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | Publishable key (`sb_publishable_…`). Never a secret key: an `sb_secret_…` value is ignored and the app shows the setup error |
-| `VITE_SENTRY_DSN` | Sentry `ledger-apps` DSN (empty disables Sentry) |
+| `VITE_SENTRY_DSN` | Sentry `credit-card-ledger-apps` DSN (empty disables Sentry) |
 | `VITE_SENTRY_ENVIRONMENT` | `local` / `preview` / `production`. Empty, `local`, `development`, `test` or `vite dev` never report, even with a DSN |
 | `VITE_SENTRY_RELEASE` | Release name (defaults to `VERCEL_GIT_COMMIT_SHA` for source maps) |
 | `VITE_TESTFLIGHT_URL` | Optional public TestFlight link (`https://testflight.apple.com/join/…`). Shows *Get the Bank Ledger app (TestFlight)* in Settings → iPhone SMS; hidden when unset or not a TestFlight URL |
-| `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` | Build-time only: uploads source maps when the token is set. `SENTRY_PROJECT` defaults to `ledger-apps`. |
+| `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` | Build-time only: uploads source maps when the token is set. `SENTRY_PROJECT` defaults to `credit-card-ledger-apps`. |
 
 ### Edge Functions (`supabase/functions/.env` locally; production: `supabase/functions/.env.production` pushed with `scripts/cutover/set-edge-secrets.sh`)
 
@@ -250,7 +250,7 @@ JWTs. The service client logs which source it used (never the value).
 | `OPS_SMS_UNPARSED_THRESHOLD` | ops-monitor | `5` | Unparsed SMS per 24 h before an issue |
 | `OPS_OPEN_REVIEWS_THRESHOLD` | ops-monitor | `50` | Open reviews before an issue |
 | `ALLOWED_ORIGINS` | all (CORS) | any | Comma-separated allowed origins |
-| `SENTRY_DSN` | all | — | Sentry `ledger-backend` DSN (empty disables Sentry) |
+| `SENTRY_DSN` | all | — | Sentry `credit-card-ledger-backend` DSN (empty disables Sentry) |
 | `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE` | all | `local`, — | Sentry environment and release. Unset, `local`, `development` and `test` disable Sentry even with a DSN; production sets `production` |
 | `SENTRY_TRACES_SAMPLE_RATE` | all | `0.1` | Trace sampling |
 
@@ -265,7 +265,7 @@ JWTs. The service client logs which source it used (never the value).
 | `PARSER_MAX_PDF_MB`, `PARSER_MAX_PAGES`, `PARSER_MAX_INFLATE_MB` | `15`, `30`, `32` | Rejected before extraction / while inflating: `PDF_TOO_LARGE` |
 | `PARSER_CPU_LIMIT_SECONDS`, `PARSER_PARSE_TIMEOUT_SECONDS`, `PARSER_MEMORY_LIMIT_MB` | `30`, `60`, `768` | Per-parse child process limits: `PARSE_TIMEOUT` / `PDF_TOO_LARGE` (memory cap Linux only) |
 | `PARSER_ISOLATION` | `process` | `inline` parses in-process (tests and debugging only; CPU, wall and memory limits off) |
-| `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE`, `SENTRY_TRACES_SAMPLE_RATE` | —, `local`, —, `0.2` | Sentry `ledger-backend`. Unset, `local`, `development` and `test` never report; `production` also disables `/debug-sentry` and the OpenAPI docs |
+| `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE`, `SENTRY_TRACES_SAMPLE_RATE` | —, `local`, —, `0.2` | Sentry `credit-card-ledger-backend`. Unset, `local`, `development` and `test` never report; `production` also disables `/debug-sentry` and the OpenAPI docs |
 | `LOG_LEVEL`, `PORT` | `INFO`, `8080` | Logging and listen port (Cloud Run sets `PORT`) |
 
 ### iOS (`apps/ios/Config/Secrets.xcconfig`; `Secrets.Release.xcconfig` for TestFlight; both gitignored)
@@ -274,11 +274,11 @@ JWTs. The service client logs which source it used (never the value).
 |---|---|
 | `LEDGER_SUPABASE_URL` | `http:/$()/127.0.0.1:54321` locally, `https:/$()/<ref>.supabase.co` in release |
 | `LEDGER_SUPABASE_PUBLISHABLE_KEY` | Publishable key (`sb_publishable_…`; never a secret key) |
-| `LEDGER_SENTRY_DSN` | Sentry `ledger-apps` DSN (empty disables Sentry) |
+| `LEDGER_SENTRY_DSN` | Sentry `credit-card-ledger-apps` DSN (empty disables Sentry) |
 | `LEDGER_ENVIRONMENT` | `local` / `production`. Sentry starts only in Release builds with an environment other than local/development/dev/test |
 
 `apps/ios/scripts/testflight.sh` (and `publish-build.sh`, which calls it) also reads these:
-- `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` and `SENTRY_PROJECT` (set `ledger-apps`) for dSYM upload,
+- `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` and `SENTRY_PROJECT` (set `credit-card-ledger-apps`) for dSYM upload,
   from the environment or else `Secrets.Release.xcconfig`; the token is never printed
 - `ASC_KEY_ID` and `ASC_ISSUER_ID` (with the AuthKey `.p8`) for the TestFlight upload and
   `testflight-distribute.mjs`; both default to the single key in `~/.appstoreconnect/private_keys`
