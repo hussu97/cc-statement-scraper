@@ -109,14 +109,18 @@ public struct ReviewInbox: Sendable, Hashable {
     public let lines: [String: ReviewLine]
     public let transactions: [String: LedgerTransaction]
     public let accounts: [LedgerAccount]
+    /// Every open review of the ledger (this page holds `reviews.count` of them).
+    public let total: Int?
 
     public init(reviews: [MatchReview], sms: [String: ReviewSMS] = [:], lines: [String: ReviewLine] = [:],
-                transactions: [String: LedgerTransaction] = [:], accounts: [LedgerAccount] = []) {
+                transactions: [String: LedgerTransaction] = [:], accounts: [LedgerAccount] = [],
+                total: Int? = nil) {
         self.reviews = reviews
         self.sms = sms
         self.lines = lines
         self.transactions = transactions
         self.accounts = accounts
+        self.total = total
     }
 }
 
