@@ -15,11 +15,13 @@
 - **feat** Wrong bank hint: when the hinted parse fails (layout, decryption, output) or finds no lines and detection names another bank, the parser retries once as that bank and warns; a hinted parse with lines keeps the hint and warns when detection disagrees (SRV-17)
 - **test** Synthetic golden set that runs in CI (`tests/test_synthetic_golden.py`): eight fictional statements (FAB, ENBD Dec/Jan year, EIB and Mashreq encrypted, ADCB, SIB history, a wrong hint) built as PDFs at test time and compared with committed snapshots (SRV-24)
 - **test** `tests/synthetic/versions.json` records the snapshot digest per `PARSER_VERSION`: changed output under a recorded version fails the suite, and `python -m tests.synthetic.update` refuses to record it (NEW-2). A test pins `pyproject.toml`'s version to `PARSER_VERSION`
+- **chore** Supply chain (SRV-13, parser part): `requirements.txt` with hashes (`uv pip compile --generate-hashes`), installed with `pip --require-hashes --only-binary=:all:`; base image pinned by digest; plain `uvicorn` without the `[standard]` extras; the image copies `ccs_parser/` instead of pip-installing it (no unpinned build backend). Built and run locally: `/health` and `/parse` OK
+- **docs** Capacity measured, `--concurrency 4` kept (SRV-12): a parse peaks at 150-180 MB; four concurrent parses peaked at 444 MiB and took 14 s on one vCPU
 - **test** `tests/synthetic_pdf.py` (dependency-free PDF writer) and fictional statements in `tests/synthetic/cases.py`; `test_pdf_passwords.py`, `test_mashreq_fx.py`, totals cases
 
 ### Docs
 
-- parse-v1: password keys, totals per bank, Mashreq foreign rows, bank-hint retry, `fx_rate`, `country_code`, versioning; parser README; BACKLOG (DP-10, DP-11, DP-12, X-17, SRV-17, X-25r, SRV-24, NEW-2 done; X-33 parser part done; NEW-4 Mashreq `card_last4` is the card's BIN); 02, 03 and 06 fix status
+- parse-v1: password keys, totals per bank, Mashreq foreign rows, bank-hint retry, `fx_rate`, `country_code`, versioning; parser README; BACKLOG (DP-10, DP-11, DP-12, X-17, SRV-17, X-25r, SRV-24, NEW-2, SRV-12 done; SRV-13 parser part done; X-33 parser part done; NEW-4 Mashreq `card_last4` is the card's BIN); 02, 03 and 06 fix status; PRODUCTION §3 capacity note
 
 ## Supabase publishable / secret API keys — 2026-10-08 (branch `ledger-v2`)
 

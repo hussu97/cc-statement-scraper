@@ -26,12 +26,12 @@ separately):
 |---|---|---|---|---|---|
 | Database (Supabase SQL) | 12 | 20 | – | 2 | 34 |
 | Edge Functions | 5 | 7 | – | – | 12 |
-| Parser | 1 | 1 | – | – | 2 |
+| Parser | 1 | – | – | – | 1 |
 | Web | 16 | 26 | 5 | – | 47 |
 | iOS | 14 | 10 | 7 | 3 | 34 |
 | Scraper | – | 2 | – | – | 2 |
 | CI, config and ops | 1 | 5 | – | 1 | 7 |
-| **Total** | **49** | **71** | **12** | **6** | **138** |
+| **Total** | **49** | **70** | **12** | **6** | **137** |
 
 There are no open P0 or P1 findings. The last P1 remainders (WEB-02 statements beyond 500 and
 merchant search, WEB-07 "Retry AI") landed in `98f901c`. What is left of the P1s are the device
@@ -206,9 +206,7 @@ These are actions, not code changes. Most are already steps in [PRODUCTION.md](.
 
 ### Parser
 
-| ID | Summary | Why deferred / dependency | Suggested fix | Effort |
-|---|---|---|---|---|
-| SRV-12 | Capacity: `--concurrency 4` on 1 vCPU / 1 GiB with CPU-bound parses (and four 768 MB child caps) may time out or OOM under the bulk import (unverified) | Watch the canary step first | `--concurrency 2` (more instances), or a worker-side in-flight cap | S |
+None open (SRV-12, SRV-17 and X-25r are done).
 
 ### Web
 
@@ -267,7 +265,7 @@ These are actions, not code changes. Most are already steps in [PRODUCTION.md](.
 
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
-| SRV-13 | Supply chain: `deno.json` `lock: false`, no pip hashes, base image by tag, `uvicorn[standard]` extras | Out of the P1 pass | Commit `deno.lock` and deploy `--frozen`; `uv pip compile --generate-hashes`; pin the base image digest; plain `uvicorn` | M |
+| SRV-13r | Supply chain, Edge part: `deno.json` `lock: false` (the parser part is done: hashed requirements, digest-pinned base image, plain `uvicorn`) | Out of the P1 pass | Commit `deno.lock` and deploy `--frozen` | S |
 | X-26 | CI runs no `deno lint`/`check`/`fmt` (fmt fails on 18 files) and never builds the iOS app or extension targets | Out of the P1 pass | Add lint and check (fix or drop fmt); a weekly `xcodegen && xcodebuild build` job (with IOS-11) | S |
 | X-32 | Vercel previews use the production Supabase project and CSP; their auth redirects aren't allow-listed | Decision | Disable previews, or point them at a non-prod project | S |
 | DP-22 | A rehearsal on the shared local stack also categorises the demo profiles' merchants and drains their `sms_fallback` queue (demo SMS sent to Claude) | Local ops only | Rehearse on a stack without seed data, or scope `enqueue_llm_categorize` by profile when run by hand | S |
