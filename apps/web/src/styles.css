@@ -206,3 +206,22 @@
   color: var(--color-bg);
   background: var(--color-ink);
 }
+
+/*
+ * Bank logo chip: a light rounded square in every theme. The ENBD, SIB, EIB and
+ * FAB marks are navy or purple and vanish on the dark surface
+ * (assets/banks/README.md). Same selectors as packages/tokens' theme switch.
+ */
+.bank-chip {
+  background: var(--color-surface);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .bank-chip {
+    background: var(--color-ink);
+    border-color: transparent;
+  }
+}
+:root[data-theme="dark"] .bank-chip {
+  background: var(--color-ink);
+  border-color: transparent;
+}

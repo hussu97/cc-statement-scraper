@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Ban, Check, ChevronDown, Inbox, Link2, Plus, Sparkles, X } from "lucide-react";
 import { useActiveProfile } from "@/data/profile";
-import { NOT_A_TRANSACTION, REVIEW_REASONS, candidatesOf, groupReviews, reviewActionError, reviewFooterActions, useDecideTemplate, useOpenReviews, useResolveReview, useRetrySmsFallback, useReviewContext, type ResolveAction, type Review } from "@/data/reviews";
+import { NOT_A_TRANSACTION, REVIEW_REASONS, candidatesOf, groupReviews, reviewActionError, reviewFooterActions, useDecideTemplate, useInfiniteOpenReviews, useOpenReviews, useResolveReview, useRetrySmsFallback, useReviewContext, type ResolveAction, type Review } from "@/data/reviews";
 import { useAccounts } from "@/data/cards";
 import { accountLabel } from "@/data/overview";
 import { useSmsBody, type TxnRow } from "@/data/transactions";
@@ -11,23 +11,37 @@ import { formatDate, formatDateTime, formatRelative } from "@/lib/dates";
 
 import { cn } from "@/lib/cn";
 import { formatCount } from "@/lib/money";
-import { useClampPage, usePageState } from "@/lib/hooks";
+import { useClampPage, useMediaQuery } from "@/lib/hooks";
+import { DEFAULT_PAGE_SIZE, type PageSize } from "@/lib/pagination";
+import { INFINITE_QUERY, pagePatch, sizePatch, type PageSearch } from "@/lib/infinite";
+import { reviewRoute } from "@/router";
 import { Pagination } from "@/components/pagination";
+import { InfiniteFooter } from "@/components/infinite-footer";
 import { Badge, Card, PageHeader, Dot } from "@/components/ui/display";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
 import { useToast } from "@/components/ui/toast";
 import { Money, StatusBadge, TxnAmount } from "@/components/ledger";
+import { BankLogo, CardRef } from "@/components/bank-logo";
 
 export function ReviewPage() {
   const { profile_code } = useActiveProfile();
-  const pager = usePageState();
-  const q = useOpenReviews(profile_code, pager.page, pager.size);
-  useClampPage(pager.page, pager.size, q.data?.total, pager.setPage);
+  const search = reviewRoute.useSearch();
+  const navigate = useNavigate({ from: "/review" });
+  const setPaging = (p: PageSearch) => void navigate({ search: (s) => ({ ...s, ...p }), replace: true });
+  const pager = { page: search.page ?? 1, size: search.size ?? DEFAULT_PAGE_SIZE, setPage: (p: number) => setPaging(pagePatch(p)), setSize: (s: PageSize) => setPaging(sizePatch(s)) };
+  // Phones scroll forever; wider screens keep numbered pages in the URL.
+  const phone = useMediaQuery(INFINITE_QUERY);
+  const pagedQ = useOpenReviews(profile_code, pager.page, pager.size, !phone);
+  const infinite = useInfiniteOpenReviews(profile_code, phone);
+  const q = phone
+    ? { ...infinite, data: infinite.data ? { rows: infinite.items, total: infinite.total ?? infinite.items.length } : undefined, isError: infinite.isError && !infinite.isFetchNextPageError }
+    : pagedQ;
+  useClampPage(pager.page, pager.size, phone ? undefined : q.data?.total, pager.setPage);
   const groups = groupReviews(q.data?.rows ?? []);
   const total = q.data?.total ?? 0;
-  const paged = total > pager.size;
+  const paged = phone ? (q.data?.rows.length ?? 0) < total : total > pager.size;
   return (
     <div>
       <PageHeader
@@ -52,7 +66,7 @@ export function ReviewPage() {
                   {REVIEW_REASONS[g.reason]?.title ?? g.reason}
                   <span className="tabular rounded-pill bg-surface-2 px-2 text-[12px] font-normal text-muted">
                     {g.items.length}
-                    {paged && " on this page"}
+                    {paged && (phone ? " loaded" : " on this page")}
                   </span>
                 </h2>
                 {REVIEW_REASONS[g.reason] && <p className="mt-1 max-w-2xl text-[13px] text-muted">{REVIEW_REASONS[g.reason]!.help}</p>}
@@ -64,7 +78,19 @@ export function ReviewPage() {
               </div>
             </section>
           ))}
-          <Pagination page={pager.page} size={pager.size} total={total} onPage={pager.setPage} onSize={pager.setSize} />
+          {phone ? (
+            <InfiniteFooter
+              hasNextPage={infinite.hasNextPage}
+              isFetchingNextPage={infinite.isFetchingNextPage}
+              isFetchNextPageError={infinite.isFetchNextPageError}
+              error={infinite.error}
+              fetchNextPage={infinite.fetchNextPage}
+              loaded={infinite.items.length}
+              noun="reviews"
+            />
+          ) : (
+            <Pagination page={pager.page} size={pager.size} total={total} onPage={pager.setPage} onSize={pager.setSize} />
+          )}
         </div>
       )}
     </div>
@@ -135,7 +161,7 @@ function ReviewCard({ review }: { review: Review }) {
                     <div className="min-w-40 flex-1">
                       <p className="truncate text-[13px] text-ink">{c.merchant_name ?? c.description}</p>
                       <p className="text-[12px] text-muted">
-                        {c.txn_at ? formatDateTime(c.txn_at) : formatDate(c.txn_date)} · {c.bank_code} •{c.card_last4} {score !== undefined && `· match ${Math.round(Number(score))}/100`}
+                        {c.txn_at ? formatDateTime(c.txn_at) : formatDate(c.txn_date)} · <CardRef bankCode={c.bank_code} last4={c.card_last4} className="align-middle" /> {score !== undefined && `· match ${Math.round(Number(score))}/100`}
                       </p>
                     </div>
                     <TxnAmount t={c} className="text-[13px]" />
@@ -239,7 +265,7 @@ function TxnSubject({ t }: { t: TxnRow }) {
       title={<Link to="/activity" search={{ txn: t.txn_code ?? undefined }} className="hover:text-accent">{t.merchant_name ?? t.description}</Link>}
       meta={
         <span className="inline-flex flex-wrap items-center gap-2">
-          {t.txn_at ? formatDateTime(t.txn_at) : formatDate(t.txn_date)} · {t.bank_code} •{t.card_last4}
+          {t.txn_at ? formatDateTime(t.txn_at) : formatDate(t.txn_date)} · <CardRef bankCode={t.bank_code} last4={t.card_last4} className="align-middle" />
           {t.category_name && <span className="inline-flex items-center gap-1"><Dot token={t.category_color} />{t.category_name}</span>}
           <StatusBadge status={t.status} />
         </span>
@@ -293,7 +319,7 @@ function TemplateProposal({ review, template }: { review: Review; template: NonN
     <div className="flex flex-col gap-3 rounded-md border border-border bg-bg p-3" data-review={review.review_code}>
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-[13px] font-medium text-ink">Proposed format: {template.name}</p>
-        <Badge tone="info">{template.bank_code}</Badge>
+        <Badge tone="info"><BankLogo bankCode={template.bank_code} size="xs" decorative />{template.bank_code}</Badge>
         <Badge>{template.msg_kind}</Badge>
         {template.source === "llm" && <Badge tone="accent">suggested by AI</Badge>}
       </div>

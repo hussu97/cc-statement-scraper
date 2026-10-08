@@ -15,6 +15,7 @@ import { buildCalendar, calendarEnd, DAY_LABEL_W, fitCalendar, heatLevel, MONTH_
 import { heatFill } from "@/components/charts/palette";
 import { HeatLegend } from "@/components/charts/heat-legend";
 import { allZero, countLabel, rangeLabel } from "./labels";
+import { CardRef } from "@/components/bank-logo";
 
 type Row = RpcReturn<"daily_spend">[number];
 
@@ -222,7 +223,7 @@ function DayTransactions({ profileCode, day }: { profileCode: string; day: strin
                   <span className="min-w-0">
                     <span className="block truncate text-sm text-ink">{t.merchant_name ?? t.description}</span>
                     <span className="block truncate text-[12px] text-muted">
-                      {t.category_name ?? "Uncategorised"} · {t.bank_code} •{t.card_last4}
+                      {t.category_name ?? "Uncategorised"} · <CardRef bankCode={t.bank_code} last4={t.card_last4} className="align-middle" />
                     </span>
                   </span>
                   <TxnAmount t={t} className="text-sm" />

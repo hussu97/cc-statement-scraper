@@ -3,7 +3,7 @@ import { supabase, type RpcReturn } from "@/lib/supabase";
 import type { DateRange } from "@/lib/dates";
 import type { Grain, SpendGroup } from "@/lib/search";
 import { keys } from "./keys";
-import { mustList } from "./api";
+import { must, mustList } from "./api";
 
 export type { Grain, SpendGroup };
 export type SpendSeriesRow = RpcReturn<"spend_series">[number];
@@ -16,9 +16,10 @@ function rangeArgs(profileCode: string, r: DateRange) {
  * Spend over time. With `top`, the server folds groups outside the top N (by
  * total over the whole range) into one "Other" group (group_key null).
  */
-export function useSpendSeries(profileCode: string, range: DateRange, grain: Grain, group: SpendGroup, top?: number) {
+export function useSpendSeries(profileCode: string, range: DateRange, grain: Grain, group: SpendGroup, top?: number, enabled = true) {
   return useQuery({
     queryKey: keys.analytics(profileCode, "series", range, grain, group, top ?? null),
+    enabled,
     placeholderData: keepPreviousData,
     queryFn: async () =>
       mustList(
@@ -139,4 +140,51 @@ export function pivotSeries(rows: SpendSeriesRow[]): SeriesPivot {
     rows: [...byBucket.values()].sort((a, b) => String(a.bucket).localeCompare(String(b.bucket))),
     groups: [...groups.values()].sort((a, b) => Number(a.key === OTHER_KEY) - Number(b.key === OTHER_KEY) || b.total - a.total),
   };
+}
+
+// ── spend_breakdown ──────────────────────────────────────────────────────────
+export const BREAKDOWN_GROUPS = ["category", "bank", "merchant"] as const;
+export type BreakdownGroupBy = (typeof BREAKDOWN_GROUPS)[number];
+/** The server's folded "everything outside the top N" group ("Others"), always last. */
+export const BREAKDOWN_OTHER_KEY = "__other__";
+/** Groups kept by the server before folding the rest into "Others". */
+export const BREAKDOWN_TOP_N = 10;
+
+export interface SpendBreakdownGroup {
+  /** category_code (or "__uncategorized__"), bank_code, merchant_code (or "__unknown__"), or "__other__". */
+  key: string;
+  label: string;
+  color_token: string | null;
+  logo_path: string | null;
+  /** Decimal string. */
+  total: string;
+  /** Share of the range total, decimal string 0–1 (4 dp). */
+  share: string;
+}
+
+/** spend_breakdown(...) result (generated as Json; shape in ARCHITECTURE §6). Money is decimal strings. */
+export interface SpendBreakdown {
+  group_by: BreakdownGroupBy;
+  total: string;
+  /** Every month of the range, "YYYY-MM", oldest first. */
+  months: string[];
+  groups: SpendBreakdownGroup[];
+  /** One row per month; `values` carries every group key, zero-filled. */
+  series: { month: string; total: string; values: Record<string, string> }[];
+}
+
+/** Monthly spend split by category, bank or merchant: top N plus "Others", computed on the server from v_spend. */
+export function useSpendBreakdown(profileCode: string, range: DateRange, groupBy: BreakdownGroupBy, topN = BREAKDOWN_TOP_N) {
+  return useQuery({
+    queryKey: keys.analytics(profileCode, "breakdown", range, groupBy, topN),
+    placeholderData: keepPreviousData,
+    queryFn: async () =>
+      must(
+        await supabase.rpc("spend_breakdown", {
+          ...rangeArgs(profileCode, range),
+          p_group_by: groupBy,
+          p_top_n: topN,
+        }),
+      ) as unknown as SpendBreakdown,
+  });
 }

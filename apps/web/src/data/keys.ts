@@ -5,6 +5,8 @@ import type { ActivitySearch } from "@/lib/activity-filters";
 export const keys = {
   session: ["session"] as const,
   profiles: ["profiles"] as const,
+  /** Reference data (not profile-scoped). */
+  banks: ["banks"] as const,
   passkeys: (userId: string) => ["passkeys", userId] as const,
   profile: (p: string) => ["p", p] as const,
   domain: (p: string, d: Domain) => ["p", p, d] as const,
@@ -26,6 +28,8 @@ export const keys = {
   accounts: (p: string) => ["p", p, "accounts"] as const,
   cycles: (p: string) => ["p", p, "statements", "cycles"] as const,
   documents: (p: string) => ["p", p, "documents"] as const,
+  statement: (p: string, stmtCode: string) => ["p", p, "statements", "one", stmtCode] as const,
+  documentEvents: (p: string, docCodes: readonly string[]) => ["p", p, "documents", "events", [...docCodes].sort().join(",")] as const,
 
   reviews: (p: string) => ["p", p, "reviews", "open"] as const,
   reviewCount: (p: string) => ["p", p, "reviews", "count"] as const,

@@ -2,6 +2,7 @@ import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Outlet,
 import { AppShell } from "@/components/shell";
 import { parseActivitySearch } from "@/lib/activity-filters";
 import { parseInsightsSearch, parseTabSearch } from "@/lib/search";
+import { parsePageSearch } from "@/lib/infinite";
 import { EmptyState } from "@/components/ui/states";
 
 const rootRoute = createRootRoute({
@@ -67,13 +68,23 @@ const budgetsRoute = createRoute({
 const cardsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/cards",
-  validateSearch: parseTabSearch,
+  validateSearch: (raw: Record<string, unknown>) => ({ ...parseTabSearch(raw), ...parsePageSearch(raw) }),
   component: lazyRouteComponent(() => import("@/routes/cards"), "CardsPage"),
 });
 
-const reviewRoute = createRoute({
+/** One statement: header, totals, debits and credits, reconciliation, processing log. `?txn=` opens a line's transaction. */
+export const statementRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/statements/$stmtCode",
+  validateSearch: (s: Record<string, unknown>): { txn?: string } =>
+    typeof s.txn === "string" && /^txn_[0-9a-z]{26}$/.test(s.txn) ? { txn: s.txn } : {},
+  component: lazyRouteComponent(() => import("@/routes/statement"), "StatementPage"),
+});
+
+export const reviewRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/review",
+  validateSearch: parsePageSearch,
   component: lazyRouteComponent(() => import("@/routes/review"), "ReviewPage"),
 });
 
@@ -95,7 +106,7 @@ const routeTree = rootRoute.addChildren([
   signInRoute,
   welcomeRoute,
   privacyRoute,
-  appRoute.addChildren([overviewRoute, activityRoute, insightsRoute, budgetsRoute, cardsRoute, reviewRoute, rulesRoute, settingsRoute]),
+  appRoute.addChildren([overviewRoute, activityRoute, insightsRoute, budgetsRoute, cardsRoute, statementRoute, reviewRoute, rulesRoute, settingsRoute]),
 ]);
 
 export const router = createRouter({ routeTree, defaultPreload: "intent", scrollRestoration: true });

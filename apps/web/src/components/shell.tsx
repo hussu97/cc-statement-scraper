@@ -55,7 +55,8 @@ function useNav(profileCode: string | null): NavItem[] {
 
 function useIsActive() {
   const path = useRouterState({ select: (s) => s.location.pathname });
-  return (to: string) => (to === "/" ? path === "/" : path === to || path.startsWith(`${to}/`));
+  // A statement page belongs to "Cards & statements".
+  return (to: string) => (to === "/" ? path === "/" : path === to || path.startsWith(`${to}/`) || (to === "/cards" && path.startsWith("/statements/")));
 }
 
 export function ThemeToggle({ className }: { className?: string }) {

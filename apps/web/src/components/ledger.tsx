@@ -6,6 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger, Checkbox, Tooltip } from "./ui
 import { Badge, Dot, type Tone } from "./ui/display";
 import { orderCategories } from "@/data/rules";
 import { useMediaQuery } from "@/lib/hooks";
+import { BankLogo } from "./bank-logo";
 
 export function Money({ value, currency = "AED", direction, className, signed, compact }: { value: MoneyInput; currency?: string; direction?: string | null; className?: string; signed?: boolean; compact?: boolean }) {
   const text = direction ? formatTxnAmount(value, direction, currency) : formatMoney(value, { currency, signed, compact });
@@ -208,16 +209,7 @@ export function CategoryPicker({
   );
 }
 
+/** @deprecated Use <BankLogo>; kept as an alias so older call sites show the logo too. */
 export function BankMark({ bank, className }: { bank: string | null | undefined; className?: string }) {
-  return (
-    <span
-      aria-hidden
-      className={cn(
-        "inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-surface-2 text-[10px] font-semibold tracking-wide text-ink-2",
-        className,
-      )}
-    >
-      {(bank ?? "?").slice(0, 4)}
-    </span>
-  );
+  return <BankLogo bankCode={bank} className={className} />;
 }
