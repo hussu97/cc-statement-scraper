@@ -1,0 +1,14 @@
+# Whitelist: Vercel only needs the web app, shared packages and the workspace files.
+/*
+!/apps
+!/packages
+!/package.json
+!/pnpm-lock.yaml
+!/pnpm-workspace.yaml
+/apps/*
+!/apps/web
+**/.env*
+!**/.env.example
+**/node_modules
+**/dist
+**/.vercel
