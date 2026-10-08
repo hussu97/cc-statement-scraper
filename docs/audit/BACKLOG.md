@@ -24,61 +24,51 @@ separately):
 
 | Area | P2 | P3 | UX recs | Verify | Total |
 |---|---|---|---|---|---|
-| Database (Supabase SQL) | 0 | 3 | – | 2 | 5 |
+| Database (Supabase SQL) | 0 | 2 | – | 1 | 3 |
 | Edge Functions | 0 | 0 | – | – | 0 |
 | Parser | 1 | – | – | – | 1 |
-| Web | 16 | 26 | 5 | – | 47 |
-| iOS | 14 | 11 | 7 | 3 | 35 |
+| Web | 16 | 25 | 5 | – | 46 |
+| iOS | 14 | 9 | 7 | 2 | 32 |
 | Scraper | – | 2 | – | – | 2 |
-| CI, config and ops | 0 | 1 | – | 1 | 2 |
-| **Total** | **31** | **43** | **12** | **6** | **92** |
+| CI, config and ops | 0 | 0 | – | 0 | 0 |
+| **Total** | **31** | **38** | **12** | **3** | **84** |
 
 There are no open P0 or P1 findings. The last P1 remainders (WEB-02 statements beyond 500 and
 merchant search, WEB-07 "Retry AI") landed in `98f901c`. What is left of the P1s are the device
 and production checks under [Needs verification](#needs-verification) and the cutover actions
 below.
 
-## Do before / at cutover
+## Open operational actions
 
-These are actions, not code changes. Most are already steps in [PRODUCTION.md](../../PRODUCTION.md) §10.
+Actions, not code changes. The cutover happened on 2026-10-08 (PRODUCTION §10, §10.1); what is
+left of the cutover list:
 
-1. **Rotate the exposed secrets.** The Anthropic API key and the Sentry org auth token appeared in
-   chat transcripts and logs during development. Create new ones, put them in
-   `supabase/functions/.env.production` (Anthropic) and in Vercel plus your shell (Sentry), and
-   revoke the old ones. (PRODUCTION §10, Before the day)
-2. **Dashboard settings** (PRODUCTION §2.7): sign-ups **off** before the day (DB-04, WEB-04),
-   Postgres upgrade off 17.6.1.104 at step 3, Data API *Max rows* = 2000 at step 4 (X-07), Site
-   URL and redirects at step 9. While there, check Auth → *Confirm email* (V-DB-23).
-3. **Members with sign-ups off.** After `--step metadata`, invite both emails through Dashboard →
-   Authentication → Users → *Invite user*; the pending invites attach on user creation
-   (PRODUCTION §2.2), or with the `member-invite` Edge Function (NEW-1; the web button is NEW-1r).
-4. **Repo and CI.** `gh variable set LEGACY_DEPLOYS_ENABLED --body true` **before** merging
-   `ledger-v2` into `main`; create the `production` environment with its secrets and a `main`-only
-   branch policy (V-X-12).
-5. **Parser.** Deploy `PARSER_VERSION` 2026.10.2 (NEW-2 done) to `credit-card-scraper-ht` /
-   `me-central1`, put the URL in `PARSER_URL`, and check `/health`. Requeue documents parsed by an
-   older version (`documents.parser_version`), at least FAB and Mashreq, whose totals and foreign
-   rows changed.
-6. **Gmail OAuth client** from Render into `GMAIL_OAUTH_CLIENT_ID/SECRET` before Render is
-   deleted (X-03).
-7. **Full rehearsal with the final code** on the local stack loaded from a fresh prod backup:
-   migrations from scratch (the step 4 `db push` path on a prod-schema copy, 02 "Runbook
-   problems" 1, X-09), then metadata, secrets, pdfs, drain, post-import checks, finalize. Target:
-   `legacy_lines_missing = 0` for every bank and only the expected deltas (02 "Recommended fix
-   order" 5). The earlier re-run covered only the ADCB/SIB documents, before the ENBD and FAB
-   parser fixes.
-8. **Post-import ENBD/FAB checks** (PRODUCTION step 8): no statement with an impossible date,
-   requeue anything parsed before the parser deploy, supersede a stale bad-year ENBD statement
-   if one survives, and dismiss its `period_overlap` reviews.
-9. **Real-device SMS checks** before relying on SMS capture: the single *Message contains
-   "Card"* automation, including whether "contains" is case-insensitive (V-IOS-06), and the first
-   TestFlight upload with the privacy manifests (V-IOS-08).
-10. **Manual data decisions:** the encrypted staging PDF in the legacy bucket that neither legacy
-    nor v2 ever ingested (DP-18); any legacy category name still listed by
-    `private.legacy_unresolved_category_names()` at finalize (add an alias row; `Entretainment`
-    is built in, DP-19/X-24). Prod's `public.rls_auto_enable()` stays (X-10, decided).
-11. **Vercel previews** talk to production (X-32). Decision (2026-10-09): previews are **off** for the
-    `apps/web` project; switch them off in the Vercel dashboard (PRODUCTION §4).
+1. **Rotate the secrets that appeared in chat or logs:** the Anthropic API key, the Sentry org
+   auth token, the Supabase secret key, the database password and the first `sbp_` access token
+   (delete it; the CI token is `github-actions-cc-statement-scraper-prod`). Put the new values in
+   the gitignored env files, Vercel, Edge Function secrets and GitHub, then revoke the old ones.
+2. **Postgres upgrade** off 17.6.1.104 (§2.1). Blocked on the free tier; do it when the plan allows.
+3. **Gmail:** a new OAuth client in `credit-card-scraper-ht` (PRODUCTION §5 item 6), then the
+   Gmail watch. The Outlook poll is live.
+4. **Real-device SMS check (V-IOS-06):** the *Message contains "Card"* automation on a locked
+   phone, and whether "contains" is case-insensitive.
+5. **DP-18:** the encrypted staging PDF in the legacy bucket that was never ingested.
+6. **Vercel previews off** (X-32): switch them off in the Vercel dashboard (PRODUCTION §4).
+7. **CI token permissions:** `supabase link` needs read access to secret API keys and the Auth /
+   PostgREST / network config (PRODUCTION §10.1); until then deploy-supabase fails at link.
+
+### Done: cutover actions (2026-10-08)
+
+| Item | Evidence |
+|---|---|
+| Sign-ups off, email confirmations on (V-DB-23) | `[remotes.production]` in `supabase/config.toml`, verified with `/auth/v1/settings` |
+| Data API max rows 2000 (X-07) | `d9d3bcb`; a 2500-row request returns 2000 |
+| Members invited with sign-ups off | PRODUCTION §10 step 7 |
+| Repo and CI: `production` environment, `main`-only policy, secrets (V-X-12, except reviewers: not on the Free plan) | docs/ci-cd.md; `LEGACY_DEPLOYS_ENABLED` deleted |
+| Parser 2026.10.2 deployed; FAB and Mashreq re-parsed | PRODUCTION §10.1 steps 3–4 (FAB 20 ok, Mashreq 12 ok) |
+| Full rehearsal and post-import ENBD/FAB checks | Superseded by the real cutover: §10 step 8, `legacy_lines_missing = 0` |
+| TestFlight upload with the privacy manifests (V-IOS-08) | Builds 3–5 processed (§10.1 step 5) |
+| Gmail OAuth client carried over from Render (X-03) | PRODUCTION §5 |
 
 ---
 
@@ -125,7 +115,7 @@ None open. All five were done on 2026-10-09: see [Done: Edge Functions and CI pa
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
 | IOS-10 | OTP false negatives pass the filter ("Use 482913 as the code…", "authentication code", Arabic "رمز التحقق"); the server mirrors the same regex | Out of the P1 pass | Add `auth(entication)? code`, `secure code`, `3-?d ?secure`, code-near-digits patterns, `do not share`, `رمز`, `كلمة المرور`; one generated source or a parity test with the SQL regex | S |
-| IOS-11 | Filter tests use invented bodies, not the template examples; CI never compiles the app or extension targets | Out of the P1 pass (outbox failure tests were added) | Export `sms_templates` examples to a fixture with a drift check (the app and extension build was done: `ios-build.yml`, 2026-10-09) | M |
+| IOS-11 | SMS filter tests use invented bodies, not the `sms_templates` examples (CI now builds the app and extension: `ios-build.yml`) | Test fixture | Export template examples to a fixture with a drift check | M |
 | IOS-12r | `noProfile` still discards the SMS; the outbox isn't cleared on sign-out; nothing outside Settings shows a stuck outbox | Honest queued reasons and "Not sent" were done | Enqueue with a pending profile; confirm-and-clear outbox and pending PDFs on sign-out; Settings badge and an Overview strip when the outbox is older than 1 h | S |
 | IOS-13 | A failed Realtime subscribe ends the stream with no retry; foreground reloads only Overview; Insights never refreshes | Out of the P1 pass | Restart with backoff while the profile is selected; reload or mark stale every loaded tab on foreground; include Insights in the fan-out | M |
 | IOS-14 | Switching ledger briefly shows the previous ledger's numbers | Out of the P1 pass | Reset screen models to `.idle` on profile change, or key `previous` by profile code | S |
@@ -153,7 +143,6 @@ None open. X-16r was done on 2026-10-09: see [Done: Edge Functions and CI pass 2
 |---|---|---|---|---|
 | DB-40 | `add_profile_member` reveals whether an email has an account (`invited` vs `added`) and adds existing users without consent | Low risk for a two-person app; needs an accept step and UI, so it goes with NEW-1 | Return one status; optional accept step (with NEW-1) | M |
 | DP-20 | A FAB card replacement creates a second FAB account, splitting `statement_cycles` and utilisation history | Model change | Treat a new primary card on the same bank and holder as a replacement on the existing account, or offer "merge accounts" | M |
-| X-33r | Contract nits: the `concat_ws` line-key hash drops nulls; iOS relies on Foundation's `spendAvg3M` key mapping (the parser now always sends `fx_rate` `"1"` for AED and null for a sub-1e-8 rate) | Minor | Use `format('%s|%s', …)` for the key (re-keys every line: pair with a re-parse), explicit `CodingKeys` on iOS | S |
 
 ### Edge Functions
 
@@ -179,7 +168,7 @@ None open (SRV-12, SRV-17 and X-25r are done).
 | WEB-39 | Deep links are lost on sign-in | UX | Carry a same-origin `redirect` through `/signin` | S |
 | WEB-40 | First-run "Key … X-Profile-Key header" jargon; "one person's cards" copy vs a "Household" example | UX copy | Move "Key" under Advanced with a generated default; fix the copy | S |
 | WEB-41 | Disabled-until-valid primary buttons are ~2:1 and give no reason | UX | Keep enabled and validate on submit, or explain | S |
-| WEB-42 | "2 statements couldn't be read. Check its password"; revoked tokens listed forever (the last axe nodes) | UX | Fix pluralisation; collapse revoked tokens | S |
+| WEB-42 | Revoked tokens are listed forever (the pluralisation is fixed) | UX | Collapse revoked tokens behind a "Show revoked" toggle | S |
 | WEB-43 | Back after closing the drawer reopens it | UX | `replace: true` when opening and closing | S |
 | WEB-44 | Nine Insights tabs scroll on mobile with no affordance | UX | Edge fade and scroll hint, or a Select | S |
 | WEB-46 | The drawer loads a `txn=` from another profile (no `profile_code` filter) | RLS still applies; confusing only | `.eq('profile_code', …)` and a "belongs to another ledger" state | S |
@@ -187,11 +176,10 @@ None open (SRV-12, SRV-17 and X-25r are done).
 | WEB-48 | "Up to 10 files" vs the server's 20 with no client count check; input not reset; concurrent drops | Polish | `MAX_FILES = 20` (and 40 MB) in `checkUploadFiles`, reset the input, ignore drops while pending | S |
 | WEB-49 | Notes stay dirty after saving padded text; preview shows "1,000+" though counts are exact | Polish | Compare trimmed; drop the cap text | S |
 | WEB-50 | New token plaintext and PDF passwords linger in the MutationCache ~5 min | Hygiene | `gcTime: 0` on those mutations | S |
-| WEB-51 | Session in `localStorage`; `window.open('about:blank')` leaves `opener` set | Accepted with the strict CSP | Keep the CSP strict; `noopener` after navigation | S |
 | WEB-52 | `<a>` directly in `<dl>`, unnamed `role=meter`, 404 outside the shell, no skip link | a11y polish | `<div><dt/><dd/></div>`, `aria-label`, 404 in the shell, "Skip to content" | S |
 | WEB-53 | Overview loads the 285 kB Recharts chunk for one donut | Perf | Hand-rolled SVG ring | S |
 | WEB-54 | Two pager components, duplicated helpers, `ConfirmDialog` under `rules/`, 480-line `email-section.tsx`, 470-line `data/rules.ts` | Readability | Consolidate and split | M |
-| WEB-55 | No tests for `slicePage`/`usePager` reset, `domainsFor`, `placeMarks`/`labelLanes`, member error mappers | Test gap | Unit tests for those pure helpers | S |
+| WEB-55 | The `usePager` page reset on filter change is untested (the other helpers have tests) | Test gap | One unit test for the reset | S |
 | WEB-56 | Netted refunds show as AED 0.00 top merchants; columns not sortable; no per-merchant trend | UX | Gross and refund columns, sorting, a trend link | M |
 
 ### iOS
@@ -199,7 +187,6 @@ None open (SRV-12, SRV-17 and X-25r are done).
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
 | IOS-07r | No deep link from a Shortcut result to the Review screen | The Review screen shipped | `ledger://review` URL handled by the app; use it in the intent's result | S |
-| IOS-08r | The privacy manifest declares crash data only | Correct for personal use | If distributed beyond personal use, add Financial Info, Email Address and Performance Data | S |
 | IOS-24 | App and share extension can refresh the same rotating refresh token concurrently (10 s reuse window) | Needs device testing | Extension: `autoRefreshToken: false` and re-read storage before each request, or an App Group file lock | M |
 | IOS-25r | Two Swift 6 warnings remain (`nonisolated(unsafe)` in `LedgerDates`, deprecated `Breadcrumb.data` setter) | Reentrancy part fixed (flushes chained) | Fix both warnings | S |
 | IOS-26 | `ActivityModel.sections` re-sorts on every body evaluation; an `ISO8601DateFormatter` per timestamp | Perf | Cache sections on state change; static formatters | S |
@@ -207,7 +194,6 @@ None open (SRV-12, SRV-17 and X-25r are done).
 | IOS-28 | Insights draws the partial month like a full one; no average line, values or budget rule; rows not drillable | UX | Hatched current month with projection, `RuleMark` average, `chartXSelection`, rows link to filtered Activity | M |
 | IOS-29 | Small presentation decisions in views (`prefix(4)`, `prefix(10)`, fallbacks) | Readability | Move into LedgerKit presentation extensions with tests | S |
 | IOS-30 | Sentry failed-request capture can carry Activity search text in the PostgREST URL; `NSAllowsLocalNetworking` ships in Release | Hygiene | Strip query strings in `beforeSend`; set the ATS key in Debug only | S |
-| IOS-31 | Filter edges: a merchant named "OTP …" is dropped; "payment received … via transfer from account" is sent (server classifies it) | Accepted | Document both in the tests | S |
 | X-33r | iOS relies on Foundation's `spend_avg_3m` → `spendAvg3M` key mapping (the DB parts of X-33 were fixed on 2026-10-09) | Minor | Explicit `CodingKeys` on the overview model | S |
 
 ### Scraper
@@ -221,7 +207,6 @@ None open (SRV-12, SRV-17 and X-25r are done).
 
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
-| DP-22 | A rehearsal on the shared local stack also categorises the demo profiles' merchants and drains their `sms_fallback` queue (demo SMS sent to Claude) | Local ops only | Rehearse on a stack without seed data, or scope `enqueue_llm_categorize` by profile when run by hand | S |
 
 ---
 
@@ -328,6 +313,16 @@ CHANGELOG.
 
 ---
 
+## Closed without change (2026-10-08)
+
+| ID | Why |
+|---|---|
+| DP-22 | Only mattered for cutover rehearsals on the shared stack |
+| X-33r (database row) | Decided: the `concat_ws` line key stays (re-keying every line is worse); the iOS half stays open |
+| WEB-51 | Accepted: strict CSP; nothing to change |
+| IOS-08r | Accepted: personal use; revisit only if distributed |
+| IOS-31 | Accepted filter edge cases |
+
 ## Needs verification
 
 Checks that only a real device or the production project can answer. Each is fixed in code or
@@ -336,8 +331,5 @@ docs, but unproven where it matters.
 | ID | What to verify | Where / how | Effort |
 |---|---|---|---|
 | V-IOS-06 | The single *Message contains "Card"* automation fires once per alert on a locked phone, with alphanumeric senders, and passes body and sender; **whether "contains" is case-insensitive** (the ENBD refund says "card"). If it isn't, add a second automation on "card" | Real iPhone, one alert per bank format | S |
-| V-IOS-08 | The first TestFlight upload with both `PrivacyInfo.xcprivacy` files passes App Store Connect (no ITMS-91053) | `publish-build.sh --upload` | S |
 | V-IOS-09 | A signed Release build on a device saves the session to the shared keychain and App Group, so the App Intent and the share extension see it | TestFlight build, sign in, run Send test and a share | S |
 | V-DB-13 | Which `statement_timeout` applies to the worker's `ingest_parsed_document` call in prod (PostgREST as `service_role`, possibly the `authenticator` 8 s). With the function-level timeout gone, a very large re-ingest could hit `57014` and retry to the DLQ | `select rolname, rolconfig from pg_roles where rolname in ('authenticator','service_role');` on prod; time the largest statement during the canary | S |
-| V-DB-23 | Production Auth settings: email confirmations on, password sign-up off, sign-ups off, so an unconfirmed address can't claim an invite | Dashboard → Authentication | S |
-| V-X-12 | The GitHub `production` environment exists with required reviewers, a `main`-only branch policy and the `SUPABASE_*` / `GCP_*` secrets (the auditor had no repo access) | GitHub → Settings → Environments | S |

@@ -66,6 +66,6 @@ cd apps/ios && xcodebuild -project Ledger.xcodeproj -scheme Ledger -sdk iphonesi
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath build/DerivedData build
 ```
 
-CI never compiles the app, intent or extension targets (BACKLOG IOS-11), so build them yourself
+CI builds the app and extension unsigned only weekly and on iOS changes (`ios-build.yml`), so build them yourself
 when you touch them, then run the change in the simulator and look at it (README "Run in the
 simulator"). A screen can build and test green and still be wrong on the device.

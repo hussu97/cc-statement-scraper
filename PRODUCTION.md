@@ -192,7 +192,7 @@ reads a key it doesn't list.
 | `ANTHROPIC_API_KEY`, `LLM_MODEL` | Anthropic console | yes |
 | `SENTRY_DSN`, `SENTRY_ENVIRONMENT` | Sentry `credit-card-ledger-backend` DSN; `production` | yes |
 | `SENTRY_RELEASE` | the commit being deployed: pass `--sentry-release "$(git rev-parse --short HEAD)"` (the Deploy Supabase workflow also sets it) | placeholder |
-| `GMAIL_OAUTH_CLIENT_ID`, `GMAIL_OAUTH_CLIENT_SECRET` | the Google OAuth client (§5) | missing |
+| `GMAIL_OAUTH_CLIENT_ID`, `GMAIL_OAUTH_CLIENT_SECRET` | the Google OAuth client (§5) | set (legacy client); a new client in `credit-card-scraper-ht` is pending (§5) |
 | `MS_OAUTH_CLIENT_ID`, `MS_OAUTH_CLIENT_SECRET` | the Azure app registration (§6); moved from the legacy DB at cutover | missing |
 | `GMAIL_PUSH_AUDIENCE` | `https://nkmylznisjcnmqbxosey.supabase.co/functions/v1/gmail-push` | missing |
 | `GMAIL_PUSH_SA_EMAIL`, `GMAIL_PUBSUB_TOPIC` | §5: `ccs-gmail-push@credit-card-scraper-ht.iam.gserviceaccount.com` (or the reused relay SA), `projects/credit-card-scraper-ht/topics/ccs-gmail-push` | missing |
@@ -704,8 +704,7 @@ service-account key secret), optional `GCP_PROJECT_ID`; `ASC_KEY_ID`,
 `ASC_ISSUER_ID`, `ASC_KEY_P8` (App Store Connect); optional `AUTO_DEPLOY`. The deployer SA
 needs `run.admin`, `artifactregistry.writer` and `iam.serviceAccountUser` on `ccs-parser@`.
 
-The legacy repository variable `LEGACY_DEPLOYS_ENABLED` is no longer read by any workflow and
-can be deleted: `gh variable delete LEGACY_DEPLOYS_ENABLED`.
+The legacy repository variable `LEGACY_DEPLOYS_ENABLED` is gone (no workflow read it).
 
 ---
 
@@ -748,7 +747,7 @@ steps by number:
       it first if you want a cold copy). Until then keep Render **Auto-Deploy off** and the
       legacy Vercel project **disconnected from Git**: both would now try to build a `main`
       without `backend/` or `frontend/` and fail.
-    - [ ] `gh variable delete LEGACY_DEPLOYS_ENABLED` (nothing reads it any more).
+    - [x] `LEGACY_DEPLOYS_ENABLED` deleted (nothing read it).
     - [ ] Shred the cutover-only secrets: `rm -P .env.cutover` and the legacy GCS reader SA key.
       Keep `supabase/functions/.env.production` (or move it to a password manager); it is the
       only place `CRON_SECRET` is readable.
