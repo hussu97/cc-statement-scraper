@@ -16,6 +16,8 @@ _SCRAPER_KEYS = [
     "CCS_SCRAPER_BROWSER_TIMEZONE_ID",
     "CCS_SCRAPER_BROWSER_LOCALE",
     "CCS_SCRAPER_DOWNLOAD_DIR",
+    "CCS_SCRAPER_UPLOAD_PATH",
+    "CCS_SCRAPER_SUPABASE_ANON_KEY",
 ]
 
 _CREDENTIAL_KEYS = [
@@ -40,7 +42,9 @@ def _clear_scraper_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     _clear_scraper_env(monkeypatch)
     cfg = ScraperConfig()
-    assert cfg.target_url == "http://127.0.0.1:8000"
+    assert cfg.target_url == "http://127.0.0.1:8040"
+    assert cfg.upload_path == "/api/v1/jobs/upload"
+    assert cfg.supabase_anon_key is None
     assert cfg.api_token == ""
     assert cfg.profile_key == ""
     assert cfg.headless is True
@@ -71,6 +75,30 @@ def test_env_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
     assert cfg.browser_geo_longitude == 54.0
     assert cfg.browser_timezone_id == "UTC"
     assert cfg.browser_locale == "en-US"
+
+
+def test_upload_path_and_anon_key_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_scraper_env(monkeypatch)
+    monkeypatch.setenv("CCS_SCRAPER_TARGET_URL", "https://abc.supabase.co")
+    monkeypatch.setenv("CCS_SCRAPER_UPLOAD_PATH", "/functions/v1/statements-upload")
+    monkeypatch.setenv("CCS_SCRAPER_SUPABASE_ANON_KEY", "anon_123")
+
+    cfg = ScraperConfig()
+    assert cfg.target_url == "https://abc.supabase.co"
+    assert cfg.upload_path == "/functions/v1/statements-upload"
+    assert cfg.supabase_anon_key == "anon_123"
+
+
+def test_blank_upload_settings_fall_back_to_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_scraper_env(monkeypatch)
+    monkeypatch.setenv("CCS_SCRAPER_TARGET_URL", "")
+    monkeypatch.setenv("CCS_SCRAPER_UPLOAD_PATH", "")
+    monkeypatch.setenv("CCS_SCRAPER_SUPABASE_ANON_KEY", "")
+
+    cfg = ScraperConfig()
+    assert cfg.target_url == "http://127.0.0.1:8040"
+    assert cfg.upload_path == "/api/v1/jobs/upload"
+    assert cfg.supabase_anon_key is None
 
 
 @pytest.mark.parametrize("value", ["false", "False", "FALSE"])
