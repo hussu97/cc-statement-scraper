@@ -173,6 +173,8 @@ mode_remote() {
   scratch="$(mktemp -d)"
   mkdir -p "$scratch/supabase"
   cp supabase/config.toml "$scratch/supabase/"
+  # config.toml references files (auth email templates); the CLI refuses to load it without them.
+  [ -d supabase/templates ] && cp -R supabase/templates "$scratch/supabase/"
   [ -d supabase/.temp ] && cp -R supabase/.temp "$scratch/supabase/"
   if ! (cd "$scratch" && supabase migration fetch "$flag" --yes >/dev/null 2>&1); then
     rm -rf "$scratch"
