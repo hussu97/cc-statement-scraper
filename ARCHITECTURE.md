@@ -411,7 +411,7 @@ set-based `UPDATE … WHERE … IS DISTINCT FROM` applies the results.
 
 **Cron:**
 - `ledger-recategorize-sweep` (every 3 h at :17) recomputes rows whose `rules_version` is stale.
-- `ledger-llm-enqueue` (22:30 UTC nightly) batches uncovered merchants in groups of 100 into
+- `ledger-llm-enqueue` (18:00 UTC nightly) batches uncovered merchants in groups of 100 into
   `llm_categorize`. After a category-set change, an existing suggestion is re-asked only if its
   category was archived or edited after the suggestion, or its confidence is below 0.8. Merchants in
   `merchant_category_skips` are left out: `declined` until the category set changes,
@@ -540,7 +540,7 @@ all-profiles run, purges `document_events` older than 90 days first):
 | `ledger-recategorize-sweep` | `17 */3 * * *` | `private.recategorize_stale()` |
 | `ledger-fx-rates` | `0 21 * * *` | `fx-rates` function |
 | `ledger-nightly` | `0 22 * * *` | `private.nightly()` |
-| `ledger-llm-enqueue` | `30 22 * * *` | `private.enqueue_llm_categorize()` |
+| `ledger-llm-enqueue` | `0 18 * * *` | `private.enqueue_llm_categorize()` |
 | `ledger-legacy-choices` | `45 22 * * *` | `private.legacy_choices_cron()`: applies staged legacy category choices once per transaction (never over a later user edit), then unschedules itself when nothing is pending or 30 days after staging. Leftovers: `private.legacy_unmatched_choices()` |
 | `ledger-cron-history-purge` | `50 23 * * *` | deletes `cron.job_run_details` older than 7 days |
 | `ledger-ops-monitor` | `*/15 * * * *` | `ops-monitor` function |

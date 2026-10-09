@@ -256,7 +256,7 @@ curl -s -X POST https://<project-ref>.supabase.co/functions/v1/worker \
 | `ledger-recategorize-sweep` | `17 */3 * * *` | stale `rules_version` sweep |
 | `ledger-fx-rates` | `0 21 * * *` | `fx-rates` function |
 | `ledger-nightly` | `0 22 * * *` (02:00 Dubai) | purge `document_events` older than 90 days, void released authorisations, recurring detection, insights |
-| `ledger-llm-enqueue` | `30 22 * * *` | queue uncategorised merchants for the LLM |
+| `ledger-llm-enqueue` | `0 18 * * *` | queue uncategorised merchants for the LLM |
 | `ledger-legacy-choices` | `45 22 * * *` | apply staged legacy category choices once per transaction (cutover helper); unschedules itself when nothing is pending or 30 days after staging |
 | `ledger-ops-monitor` | `*/15 * * * *` | `ops-monitor` → Sentry plus the `ops-heartbeat` check-in |
 | `ledger-gmail-watch-renew` | `0 3 * * *` | `gmail-watch-renew` |
