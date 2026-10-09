@@ -11,12 +11,9 @@ on:
   pull_request:
   push:
     branches: [main]
+  # No macOS job here: LedgerKit tests, the app compile and the signed release
+  # build run on the Mac in the pre-push hook (docs/ci-cd.md).
   workflow_dispatch:
-    inputs:
-      include_ios:
-        description: "Also run the macOS LedgerKit tests (10x-billed runner)"
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -57,7 +54,6 @@ jobs:
       web: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.web == 'true' }}
       scraper: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.scraper == 'true' }}
       tooling: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.tooling == 'true' }}
-      ios: ${{ (github.event_name == 'workflow_dispatch' && inputs.include_ios) || (github.event_name != 'workflow_dispatch' && steps.filter.outputs.ios == 'true') }}
     steps:
       - uses: actions/checkout@v4
         if: github.event_name != 'workflow_dispatch'
@@ -101,9 +97,6 @@ jobs:
               - 'scripts/install-hooks.sh'
               - 'scripts/cutover/*.sh'
               - 'apps/ios/scripts/*.sh'
-            ios:
-              - 'apps/ios/LedgerKit/**'
-              - 'packages/tokens/**'
 
   # ------------------------------------------------------------------
   # Workflows + shell: actionlint (with shellcheck on run: blocks) and
@@ -314,44 +307,13 @@ jobs:
         run: .venv/bin/pytest -q
 
   # ------------------------------------------------------------------
-  # iOS: LedgerKit unit tests on macOS. macOS minutes bill at 10x, so
-  # this runs only when LedgerKit/tokens change or on request (the
-  # pre-push hook runs the same `swift test` locally for free).
-  # ------------------------------------------------------------------
-  ios:
-    name: iOS (LedgerKit swift test)
-    needs: changes
-    if: needs.changes.outputs.ios == 'true'
-    runs-on: macos-26
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: latest-stable
-
-      - name: Cache SwiftPM
-        uses: actions/cache@v4
-        with:
-          path: |
-            apps/ios/LedgerKit/.build
-            ~/Library/Caches/org.swift.swiftpm
-          key: spm-${{ runner.os }}-${{ hashFiles('apps/ios/LedgerKit/Package.resolved') }}
-          restore-keys: spm-${{ runner.os }}-
-
-      - name: swift test (LedgerKit)
-        working-directory: apps/ios/LedgerKit
-        run: swift test
-
-  # ------------------------------------------------------------------
   # The single required check. Skipped jobs (area unchanged) count as
   # passing; a failed or cancelled job fails this one.
   # ------------------------------------------------------------------
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [changes, tooling, supabase, edge, parser, web, scraper, ios]
+    needs: [changes, tooling, supabase, edge, parser, web, scraper]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}

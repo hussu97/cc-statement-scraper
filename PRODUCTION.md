@@ -681,13 +681,14 @@ setup, branch protection, rollbacks). Summary:
 
 | Workflow | Trigger | What |
 |---|---|---|
-| `ci.yml` | PRs, pushes to `main`, manual (`include_ios`) | Path-filtered jobs `tooling` (actionlint, shellcheck), `supabase` (append-only migration check, `db reset`, pgTAP, DB types drift), `edge` (`deno lint`, `deno fmt --check`, `deno check` and `deno test` against the frozen `deno.lock`), `parser` (ruff, pytest), `web` (tokens, lint, typecheck, test, build), `scraper`, `ios` (`swift test` on LedgerKit, macOS, only on LedgerKit/tokens changes or manual), and the aggregator **`ci-ok`**, the only required check |
+| `ci.yml` | PRs, pushes to `main`, manual | Path-filtered jobs `tooling` (actionlint, shellcheck), `supabase` (append-only migration check, `db reset`, pgTAP, DB types drift), `edge` (`deno lint`, `deno fmt --check`, `deno check` and `deno test` against the frozen `deno.lock`), `parser` (ruff, pytest), `web` (tokens, lint, typecheck, test, build), `scraper`, and the aggregator **`ci-ok`**, the only required check |
 | `deploy-supabase.yml` | push to `main` touching `supabase/migrations/**`, `supabase/functions/**` or `config.toml`; manual (type the project ref, optional `dry_run`) | pgTAP + deno → `production` env → migration history check (`scripts/ci/check-migrations.sh remote linked`) → `db push --dry-run` → destructive-statement guard → `db push` → `functions deploy` |
 | `deploy-parser.yml` | push to `main` touching `services/parser/**`; manual (type `deploy`) | ruff + pytest → `production` env → build/push image → no-traffic tagged revision → `/health` smoke on the tag → 100% traffic |
 | `web-smoke.yml` | Vercel Production deployment success; daily; manual | Probes the production web app (title, CSP, security headers, SPA deep link, assets). Vercel's Git integration does the deploy |
 | `ios-testflight.yml` | push to `main` touching `apps/ios/**` (not `build-number.json`); manual | Uploads the IPA the pre-push hook staged on `ios-ledger-staged` to App Store Connect, then distributes to "Friends & Family" (§7) |
 | `security.yml` | weekly, manual | pip-audit and bandit (parser) |
-| `ios-build.yml` | weekly, PRs/pushes touching `apps/ios/**`, manual | `xcodegen generate` + unsigned simulator `xcodebuild build` of the app and share extension (macOS) |
+
+No workflow runs on macOS: LedgerKit tests, the app compile and the signed release build run on the Mac in the pre-push hook (docs/ci-cd.md).
 
 **Deploys.** Pushes to `main` deploy Supabase and the parser after the `production`
 environment's approval (required reviewers need GitHub Pro/Team on a private repo). Set the

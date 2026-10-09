@@ -25,13 +25,12 @@ TestFlight by a Linux runner).
 
 | Workflow | Triggers | What it does |
 |---|---|---|
-| `ci.yml` | every PR, push to `main`, manual (`include_ios` input) | Path-filtered jobs (below) + `ci-ok` aggregator. PRs cancel superseded runs; `main` runs always finish. |
+| `ci.yml` | every PR, push to `main`, manual | Path-filtered jobs (below) + `ci-ok` aggregator. PRs cancel superseded runs; `main` runs always finish. |
 | `deploy-supabase.yml` | push to `main` touching `supabase/migrations/**`, `supabase/functions/**` (not `_tests/`), `supabase/config.toml`; manual (type the project ref) | pgTAP + deno → `production` env → migration history check → dry run → destructive guard → `db push` → `functions deploy`. |
 | `deploy-parser.yml` | push to `main` touching `services/parser/**` (not tests/docs); manual (type `deploy`) | ruff + pytest → `production` env → build/push image → deploy a **no-traffic tagged revision** → smoke `/health` on the tag URL → promote to 100%. |
 | `web-smoke.yml` | push to `main` touching the web app (waits for that commit's Vercel Production deployment); daily 05:17 UTC; manual (any URL) | `scripts/ci/web-smoke.sh` against https://<web-host>. Does not deploy. |
 | `ios-testflight.yml` | push to `main` touching `apps/ios/**` except `build-number.json` / `*.md`; manual | Linux only: verify the staged IPA matches this source → upload to App Store Connect → `testflight-distribute.mjs` to "Friends & Family". |
 | `security.yml` | Mondays 03:00 UTC; manual | pip-audit + bandit on the parser. |
-| `ios-build.yml` | Mondays 04:23 UTC; PRs and pushes to `main` touching `apps/ios/**` (not docs or `build-number.json`) or `packages/tokens/**`; manual | `xcodegen generate` → `xcodebuild build` of the app and share extension for the simulator, unsigned (`CODE_SIGNING_ALLOWED=NO`), no secrets. macOS (10x), hence not per push. Not part of `ci-ok`. |
 
 Deleted with the legacy code: `deploy-backend.yml`, `deploy-frontend.yml`,
 `deploy-gmail-relay.yml`, `email-ingest-microsoft.yml`, and the legacy jobs in `ci.yml` and
@@ -48,20 +47,20 @@ Deleted with the legacy code: `deploy-backend.yml`, `deploy-frontend.yml`,
 | `parser` | `services/parser/**`, `docs/contracts/**` | uv venv → `ruff check` → `pytest` | Linux |
 | `web` | `apps/web/**`, `packages/**`, root `package.json`, lockfile, workspace | tokens check → lint → typecheck → test → build | Linux |
 | `scraper` | `scraper/**` | uv venv → `pytest` | Linux |
-| `ios` | `apps/ios/LedgerKit/**`, `packages/tokens/**`, or manual with `include_ios` | `swift test` on LedgerKit | **macOS (10x)** |
 | `ci-ok` | always | fails if any job failed or was cancelled; skipped = passed; writes a results table to the job summary | Linux |
 
-Editing `ci.yml` itself re-runs every Linux job. A manual run runs every Linux job, plus iOS
-when asked.
+Editing `ci.yml` itself re-runs every job. A manual run runs every job.
 
 **Caching:** pnpm store (`setup-node cache: pnpm`), uv (`setup-uv enable-cache`, keyed on the
-requirements/pyproject), Deno (`setup-deno cache: true`, keyed on `deno.lock`), SwiftPM
-(`.build` + `~/Library/Caches/org.swift.swiftpm`, keyed on `Package.resolved`), Docker layers
+requirements/pyproject), Deno (`setup-deno cache: true`, keyed on `deno.lock`), Docker layers
 for the parser image (`type=gha`).
 
-**Cost:** everything is Linux except the `ios` job, which only runs when LedgerKit or tokens
-change, and `ios-build.yml` (app + extension compile), which runs weekly and on app changes.
-The pre-push hook already ran the same `swift test` locally for free.
+**Cost:** GitHub runs no macOS job at all (macOS minutes bill at 10x). Everything that needs a
+Mac runs in the pre-push hook on your Mac and must pass before the push leaves it: LedgerKit
+`swift test` (LedgerKit or tokens changed), the unsigned app + share extension compile (app code
+changed, on any push except one to `main`), and on a push to `main` that changes the app, the
+signed archive (§2.4). On a machine without Xcode these checks FAIL rather than skip, since no
+CI job backs them up: push iOS changes from a Mac. The TestFlight upload runs on Linux.
 
 ---
 
@@ -206,7 +205,7 @@ bash scripts/install-hooks.sh        # or: pnpm hooks:install — once per clone
 | Hook | What |
 |---|---|
 | `pre-commit` | Staged files only, seconds: refuses `.env*` (not `.env.example`), `*.p8`, `*.p12`, `*.mobileprovision`, `Secrets*.xcconfig` (not the example); refuses edits/deletes of migrations on `origin/main`; eslint on staged `apps/web` TS, `deno lint` on staged function TS, `ruff` on staged parser Python, `py_compile` on staged scraper Python, shellcheck/actionlint on staged scripts/workflows. |
-| `pre-push` | CI mirror for the areas the push changes (vs the remote branch, or `origin/main` for a new branch), cheapest first, then a PASS/FAIL/WARN/SKIP summary with timings. Then the iOS release step (§2.4). |
+| `pre-push` | CI mirror for the areas the push changes (vs the remote branch, or `origin/main` for a new branch), cheapest first, then a PASS/FAIL/WARN/SKIP summary with timings; plus the iOS checks CI no longer runs (`swift test`, the app compile). Then the iOS release step (§2.4). |
 | `prepare-commit-msg`, `commit-msg` | Commit author must be `Hussain Abbasi <h_abbasi97@hotmail.com>`; no `Co-Authored-By`. |
 
 Pre-push behaviour:

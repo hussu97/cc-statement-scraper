@@ -68,6 +68,7 @@ run_check() {
 
 skip() { echo "  ${DIM}skip${NC} $1 — $2"; record SKIP "$1" 0 "$2"; }
 warn() { echo "${YELLOW}warn${NC} $1 — $2"; record WARN "$1" 0 "$2"; WARNINGS=$((WARNINGS + 1)); }
+fail() { echo "${RED}FAIL${NC} $1 — $2"; record FAIL "$1" 0 "$2"; ERRORS=$((ERRORS + 1)); }
 have() { command -v "$1" >/dev/null 2>&1; }
 
 # ---------------------------------------------------------------------------
@@ -122,17 +123,18 @@ area_of() {
     supabase/config.toml) echo supabase; echo edge ;;
     supabase/functions/*) echo edge ;;
     services/parser/*|docs/contracts/*) echo parser ;;
-    packages/tokens/*) echo web; echo ios ;;
+    packages/tokens/*) echo web; echo ios; echo iosapp ;;
     apps/web/*|packages/*|package.json|pnpm-lock.yaml|pnpm-workspace.yaml) echo web ;;
     scraper/*) echo scraper ;;
-    apps/ios/LedgerKit/*) echo ios ;;
+    apps/ios/LedgerKit/*) echo ios; echo iosapp ;;
+    apps/ios/Ledger/*|apps/ios/ShareExtension/*|apps/ios/Ledger.xcodeproj/*|apps/ios/Config/*|apps/ios/project.yml) echo iosapp ;;
     .github/workflows/ci.yml) echo tooling; echo supabase; echo edge; echo parser; echo web; echo scraper ;;
     .github/workflows/*|scripts/hooks/*|scripts/ci/*|scripts/install-hooks.sh|scripts/cutover/*.sh|apps/ios/scripts/*.sh) echo tooling ;;
   esac
 }
 
 if [ -n "${PRE_PUSH_ALL:-}" ]; then
-  AREAS=" supabase migrations edge parser web scraper ios tooling "
+  AREAS=" supabase migrations edge parser web scraper ios iosapp tooling "
 elif [ -n "${PRE_PUSH_AREAS:-}" ]; then
   AREAS=" $(echo "$PRE_PUSH_AREAS" | tr ',' ' ') "
 else
@@ -257,12 +259,29 @@ if want supabase; then
   fi
 fi
 
+# iOS checks run only here, on the Mac: GitHub has no macOS job (its minutes
+# bill at 10x). Push iOS changes from a Mac with Xcode.
 if want ios; then
   section "iOS (LedgerKit)"
   if [ "$(uname -s)" = Darwin ] && have swift; then
     run_check "swift test (LedgerKit)" bash -c 'cd apps/ios/LedgerKit && swift test -q'
   else
-    warn "iOS" "swift test needs macOS + Xcode; CI runs it on macOS"
+    fail "swift test (LedgerKit)" "needs macOS + Xcode, and no CI job runs it: push iOS changes from a Mac"
+  fi
+fi
+
+# The app + share extension compile (unsigned, simulator). A push to main that
+# changes the app archives and signs it in publish-build.sh instead, which is stricter.
+if want iosapp && [ -z "$IOS_RELEASE" ]; then
+  section "iOS app (compile)"
+  if [ "$(uname -s)" = Darwin ] && have xcodebuild && have xcodegen; then
+    run_check "xcodebuild (app + share extension, simulator, unsigned)" bash -c '
+      cd apps/ios && xcodegen generate --quiet && set -o pipefail &&
+      xcodebuild build -project Ledger.xcodeproj -scheme Ledger -configuration Debug \
+        -destination "generic/platform=iOS Simulator" -derivedDataPath build/DerivedData-prepush \
+        CODE_SIGNING_ALLOWED=NO -quiet'
+  else
+    fail "xcodebuild (app + share extension)" "needs macOS + Xcode + xcodegen (brew install xcodegen), and no CI job runs it"
   fi
 fi
 
