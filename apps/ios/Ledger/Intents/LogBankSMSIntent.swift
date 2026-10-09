@@ -12,7 +12,7 @@ import LedgerKit
 struct LogBankSMSIntent: AppIntent {
     static let title: LocalizedStringResource = "Log Bank SMS"
     static let description = IntentDescription(
-        "Sends a bank SMS to Bank Ledger. One-time passcodes and debit-card or account alerts are dropped on this device.")
+        "Sends a bank SMS to Bank Ledger, which works out what it is. One-time passcodes are dropped on this device.")
     static let openAppWhenRun = false
     static let isDiscoverable = true
 

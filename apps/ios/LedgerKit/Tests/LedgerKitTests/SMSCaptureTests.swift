@@ -34,26 +34,22 @@ struct SMSCaptureTests {
         #expect(SMSCapture.classify(body: body) == .accept)
     }
 
-    @Test("debit-card and account alerts are dropped", arguments: [
+    // The phone used to guess "not a credit card" and drop these; a wrong guess
+    // lost the message for good. The server's templates now decide (stored as
+    // `ignored` or `unparsed`), so everything but an OTP leaves the phone.
+    @Test("everything that is not an OTP is sent for the server to classify", arguments: [
+        "Payment of AED 12.50 to noon one with Credit Card ending 0000. Avl Cr. Limit is AED 1,000.00.",
         "Your Debit Card ending 1234 was used for AED 45.00 at ENOC",
         "AED 12,000.00 salary credited to your a/c XXX9876. Avl bal AED 15,212.00",
         "Your account XXXX9876 has been debited AED 500.00 via transfer to JOHN",
-        "AED 300.00 transferred from Acct XXX9876 to IBAN AE07 0331 2345",
         "Funds transfer of AED 1,000.00 completed",
-        "AED 200.00 credited to your account 1234567 on 08-10-2026",
         "Your DC ending 1234 was used for AED 10.00",
-    ])
-    func dropsAccountAlerts(body: String) {
-        #expect(SMSCapture.classify(body: body) == .dropNotCreditCard(reason: "account_alert"))
-    }
-
-    @Test("messages with no amount are dropped", arguments: [
+        "Purchase of Rs. 500 on card ending 1234 at CAFE",
         "Your new card has been dispatched.",
-        "Get 5% cashback this weekend on dining!",
-        "Dear customer, your statement is ready.",
+        "EmiratesNBD",
     ])
-    func dropsNoAmount(body: String) {
-        #expect(SMSCapture.classify(body: body) == .dropNotCreditCard(reason: "no_amount"))
+    func sendsEverythingElse(body: String) {
+        #expect(SMSCapture.classify(body: body) == .accept)
     }
 
     @Test func dropsEmpty() {
@@ -93,7 +89,7 @@ struct SMSCaptureTests {
     func dialogsDoNotEcho() {
         let body = "Purchase of AED 45.10 with Credit Card ending 1234 at CARREFOUR"
         let outcomes: [SMSIntakeOutcome] = [
-            .dropped(.dropOTP), .dropped(.dropNotCreditCard(reason: "no_amount")), .noProfile,
+            .dropped(.dropOTP), .dropped(.dropEmpty), .noProfile,
             .delivered(status: "new"), .delivered(status: "unknown_card"), .queued(.offline), .queued(.signedOut),
             .parked(reason: "Ledger rejected this message (invalid)."), .failed("x"),
         ]

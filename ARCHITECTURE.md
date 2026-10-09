@@ -261,7 +261,8 @@ parse. `created_at` defaults to `clock_timestamp()` so events of one transaction
 processes **each message on its own**, so one bad message never fails the batch. Every message
 gets its own result status: the `process_sms` outcome (for example `unknown_card`, `held`,
 `ignored`, `unparsed`); `duplicate_delivery` for a `client_msg_id` already stored;
-`rejected_otp` (defence in depth: OTPs are dropped on the device); `invalid` with a `reason`
+`rejected_otp` (defence in depth: OTPs are dropped on the device, the only filtering the phone
+does); `invalid` with a `reason`
 when the shape is wrong (missing `client_msg_id`, empty or over-long body, bad `received_at`);
 or `failed` with `reason = error:<sqlstate>` when processing raised (the message is kept with
 `parse_status = failed`). Clients (the iOS outbox) park only that message. `process_sms`:

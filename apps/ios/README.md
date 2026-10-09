@@ -134,14 +134,17 @@ automation**: *Message → Message contains "Card" → Run Immediately (Notify W
 Log Bank SMS (Message = Shortcut Input's Content, Sender = Shortcut Input's Sender)*. Every
 credit-card alert of ADCB, FAB, Emirates NBD and SIB in the template seed contains "card";
 more keywords would fire the action two or three times per alert. Settings → *Set up SMS
-capture* walks through it, shows **Last captured** and has **Send test** (the intent's path
-with a synthetic non-transaction message, dropped on the phone, plus an outbox flush).
+capture* walks through it, shows **Last captured**, **Recent captures** (the last 20 runs:
+outcome, sender and message length, never the text, so a Shortcut passing the wrong field shows)
+and has **Send test** (the intent's path with a synthetic one-time passcode, dropped on the phone,
+plus an outbox flush).
 
 Messages go to the **SMS go to** ledger (Settings): owned ledgers only, defaulting to the
 first one you own — never simply the ledger on screen. PDFs shared to "Add to Bank Ledger" go there too.
 
 `LogBankSMSIntent` (`openAppWhenRun = false`) runs `SMSIntake`:
-1. `SMSCapture.classify` drops OTPs, debit-card/account alerts and messages with no amount — on the phone.
+1. `SMSCapture.classify` drops OTPs and empty input — on the phone. Everything else is sent; the
+   server's templates classify it (debit-card and account alerts are stored `ignored`).
 2. The message is written to the App Group outbox with a fresh `client_msg_id`.
 3. The outbox flushes through `rpc('ingest_sms')` with the session from the shared keychain.
    Transient failures (offline, timeouts, 5xx) back off (30 s doubling, capped at 1 h) for at

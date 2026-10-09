@@ -38,6 +38,9 @@ struct SettingsView: View {
                     Text(settings.lastCapture?.label() ?? "Not yet")
                         .multilineTextAlignment(.trailing)
                 }
+                if !settings.recentCaptures.isEmpty {
+                    NavigationLink("Recent captures") { RecentCapturesView(settings: settings) }
+                }
                 SendTestButton(settings: settings)
                 LabeledContent("Outbox", value: settings.outboxStatus.summary)
                 if let error = settings.outboxStatus.lastError, settings.outboxStatus.pending > 0 {
@@ -157,7 +160,34 @@ private struct ParkedRow: View {
     }
 }
 
-/// Runs the intent's path in-app with a synthetic non-transaction message.
+/// The last real runs of "Log Bank SMS": outcome, sender and length, never the text.
+private struct RecentCapturesView: View {
+    let settings: SettingsModel
+
+    var body: some View {
+        List {
+            Section {
+                ForEach(Array(settings.recentCaptures.enumerated()), id: \.offset) { _, record in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(record.label()).font(Typography.rowTitle)
+                        if let input = record.input {
+                            Text(input).font(Typography.caption).foregroundStyle(Palette.muted)
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+            } footer: {
+                Text("The last \(CaptureLog.recentLimit) messages the automation handed over. The text itself is never kept here.")
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .background(Palette.bg)
+        .navigationTitle("Recent captures")
+        .task { await settings.refresh() }
+    }
+}
+
+/// Runs the intent's path in-app with a synthetic one-time passcode.
 struct SendTestButton: View {
     let settings: SettingsModel
 
