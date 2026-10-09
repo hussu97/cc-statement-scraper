@@ -1,13 +1,16 @@
 # Bank Ledger for iPhone
 
 SwiftUI app (iOS 18+) for Ledger v2: Overview (with Needs attention → Review), Activity,
-Insights, Statements and Settings
-on top of the Supabase backend. Overview and Insights share a month switcher (back to the first
+Insights, Budgets and Settings (with Cards & statements → Statements)
+on top of the Supabase backend. Overview, Insights and Budgets share a month switcher (back to the first
 transaction's month, never past the current one); every long list scrolls page after page (100 rows
 per request, `Paginator`), plus the **Log Bank SMS** App Intent and the **Add to Bank Ledger**
 share extension.
 
-- **Statements**: the toolbar `+` uploads PDFs one request each into a live per-file log
+- **Budgets** (tab): the month's `budget_status` per budget (spent of limit, % used, pace, Over),
+  budgets not active that month, and create / edit / delete for owners (same table writes and
+  validation as the web). Insights' budgets card links here with "See all budgets".
+- **Statements** (Settings → Cards & statements → Statements): the toolbar `+` uploads PDFs one request each into a live per-file log
   (`document_events` over Realtime, plus a fetch and a slow poll): received → saved → waiting →
   reading → imported, or the failure with what to do (a wrong PDF password points at the web's
   Settings → Statement passwords). PDFs shared from another app that are still waiting show as

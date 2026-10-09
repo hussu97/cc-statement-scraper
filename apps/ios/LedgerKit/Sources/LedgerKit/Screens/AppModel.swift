@@ -37,13 +37,15 @@ public final class AppModel {
     public let services: LedgerServices
     public let session: SessionStore
     public let profiles: ProfileStore
-    /// Overview, Activity, Insights, Statements and Review for the selected ledger.
+    /// Overview, Activity, Insights, Budgets, Statements and Review for the selected ledger.
     public let screens: LedgerScreens
     public let settings: SettingsModel
     /// Bank names and logos for every screen (environment object).
     public let banks: BankCatalog
     /// Insights' Monthly spend split (environment object).
     public let spendSplit: SpendSplitModel
+    /// The selected tab.
+    public let tabs = TabRouter()
 
     private var lastPhase: SessionStore.Phase = .restoring
 
@@ -63,6 +65,7 @@ public final class AppModel {
     public var insights: InsightsModel { screens.insights }
     public var statements: StatementsModel { screens.statements }
     public var review: ReviewModel { screens.review }
+    public var budgets: BudgetsModel { screens.budgets }
     public var month: MonthSelection { screens.month }
 
     public var route: AppRoute {
@@ -97,6 +100,7 @@ public final class AppModel {
     /// Points every tab at the profile (clearing the previous ledger's data
     /// first) and follows Realtime changes.
     public func profileSelected(_ code: String) async {
+        if screens.activeProfile != code { tabs.reset() }
         async let logos: Void = banks.refresh()
         await screens.select(code)
         await logos
@@ -114,6 +118,7 @@ public final class AppModel {
 
     public func signOut() async {
         screens.stop()
+        tabs.reset()
         await session.signOut()
         profiles.reset()
     }

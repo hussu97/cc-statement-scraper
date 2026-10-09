@@ -341,10 +341,11 @@ Used for the production Edge Function secrets and Vault entries, and for secret 
 | Sign in / Profile picker | Email one-time code or passkey, then an offer to add a passkey; choose a ledger. Settings → Passkeys manages them |
 | Overview | Month spend posted so far (server comparisons), pending SMS, categories, dues ("Was due …"), Needs attention (reviews, uncategorised) (Realtime refresh) |
 | Activity | Ledger list, filters, transaction detail and categorisation |
-| Insights | Swift Charts views over the same RPCs |
-| Statements | Statements, recon, PDF upload (document picker) |
+| Insights | Swift Charts views over the same RPCs; the budgets card's "See all budgets" opens the Budgets tab |
+| Budgets | Month switcher, `budget_status` per budget (spent of limit, % used, pace; tone from the server's figures), budgets not active that month, create / edit / delete (owners; viewers read only) |
+| Settings → Statements | Statements, recon, uploads and their processing logs, PDF upload (document picker), PDFs waiting from the share sheet (the former Statements tab) |
 | Review | Open match reviews: link, keep as new, dismiss, register an unknown card (read-only for viewers) |
-| Settings | "SMS go to" ledger, SMS capture guide (one "Card" automation, Last captured, Send test), "Not sent" outbox list (Retry / Delete), profile |
+| Settings | Cards & statements → Statements, "SMS go to" ledger, SMS capture guide (one "Card" automation, Last captured, Send test), "Not sent" outbox list (Retry / Delete), profile |
 | **Log Bank SMS** (App Intent) | Called by the Shortcuts automation, with no UI |
 | **Add to Bank Ledger** (share extension) | Sends shared PDFs to `statements-upload` |
 

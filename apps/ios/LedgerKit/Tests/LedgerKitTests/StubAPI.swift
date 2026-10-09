@@ -115,13 +115,36 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         return []
     }
     private(set) var budgetMonths: [CalendarDay?] = []
+    /// `budget_status` rows; `budgetRows` is `public.budgets`.
+    var budgetStatusRows: [BudgetStatus] = []
+    var budgetRows: [Budget] = []
+    /// Thrown by `saveBudget` / `deleteBudget` when set.
+    var budgetWriteError: LedgerAPIError?
+    /// Thrown by `filterMeta` when set.
+    var filterMetaError: LedgerAPIError?
+    private(set) var savedBudgets: [(profile: String, draft: BudgetDraft)] = []
+    private(set) var deletedBudgets: [String] = []
     func budgetStatus(profileCode: String, month: CalendarDay?) async throws -> [BudgetStatus] {
         lock.withLock { budgetMonths.append(month) }
-        return []
+        count("budgetStatus")
+        return budgetStatusRows
+    }
+    func budgets(profileCode: String) async throws -> [Budget] {
+        count("budgets")
+        return budgetRows
+    }
+    func saveBudget(profileCode: String, draft: BudgetDraft) async throws {
+        if let budgetWriteError { throw budgetWriteError }
+        lock.withLock { savedBudgets.append((profileCode, draft)) }
+    }
+    func deleteBudget(budgetCode: String) async throws {
+        if let budgetWriteError { throw budgetWriteError }
+        lock.withLock { deletedBudgets.append(budgetCode) }
     }
     func recurringList(profileCode: String) async throws -> [RecurringCharge] { [] }
     func filterMeta(profileCode: String) async throws -> FilterMeta {
-        FilterMeta(accounts: [], cards: [], categories: categoryOptions, banks: [],
+        if let filterMetaError { throw filterMetaError }
+        return FilterMeta(accounts: [], cards: [], categories: categoryOptions, banks: [],
                    dateRange: FilterMeta.DateRange(min: firstTransactionDay, max: nil))
     }
     /// `activity_summary`'s answer, or the error it throws; nil answers zero rows.

@@ -1,5 +1,12 @@
 # Changelog
 
+## iOS: Budgets tab, Statements in Settings — 2026-10-09
+
+### iOS
+
+- **feat** A **Budgets** tab takes the Statements tab's place (tabs: Overview, Activity, Insights, Budgets, Settings), at parity with the web Budgets page: the shared month switcher, one card per `budget_status` row (spent of limit, meter, "% used", "On pace for …" / "Month closed", Over chip; every figure the server's), a "Not active in <month>" list ("Starts …", "Ended …", "Replaced by a newer budget"), and create / edit / delete on `public.budgets` the way the web writes it (all spending or a spend/fee category, amount sent as a decimal string, start month and optional end month; owners only, viewers see a note). Loading, failed and empty ("No budgets yet" + Create a budget / "No budgets apply to …") states. Insights' budgets card gains **See all budgets**, which switches to the tab, and refreshes after a budget is saved. LedgerKit: `Budget`, `BudgetDraft` (the web's `validateBudget` rules and wording, month choices), `BudgetCategoryChoice`, `BudgetStatus.tone(isCurrentMonth:)` (the web's `budgetTone`: over = danger, 80%+ or overspend pace this month = warning), `BudgetsModel`, `LedgerTab` / `TabRouter`; `LedgerAPI.budgets` / `saveBudget` / `deleteBudget`. Tests `BudgetsTests`.
+- **change** Statements moved to **Settings → Cards & statements → Statements**, unchanged: cycles and statement detail, uploads and their processing logs, the document picker, and PDFs waiting from the share sheet (the row shows the waiting count). The share sheet's confirmation now says "watch progress in Bank Ledger → Settings → Statements". No deep link, notification or App Shortcut selected the Statements tab, so nothing else needed re-routing.
+
 ## Insights spending filters — 2026-10-09
 
 ### Backend (Supabase)
