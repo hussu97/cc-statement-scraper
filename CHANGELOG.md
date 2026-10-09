@@ -1,5 +1,22 @@
 # Changelog
 
+## SMS: the phone sends, the server decides — 2026-10-09
+
+### iOS
+
+- **fix** "Log Bank SMS" dropped messages on the phone with a regex guess ("Skipped: not a credit-card transaction"), so three ENBD alerts on 2026-10-09 never reached Bank Ledger and production had no SMS at all. The phone now drops only one-time passcodes and empty input; every other message is sent and `process_sms` classifies it (debit-card/account alerts are stored `ignored`, unknown formats `unparsed` with the LLM fallback) (`SMSCapture`)
+- **feat** Settings → SMS → **Recent captures**: the last 20 runs with outcome, sender and message length (never the text), so a Shortcut passing the wrong field is visible (`CaptureLog.recent`)
+- **change** "Send test" uses a synthetic one-time passcode, the one kind of message still dropped on the phone; the SMS-shape patterns the old filter used now live in the Sentry scrubber, which still needs them (`SensitiveText`), and also catch `₹` and `Rs.` amounts
+- **test** `SMSCaptureTests` (debit, account, no-amount and the ENBD "Payment of AED … with Credit Card" shapes are sent), `OutboxTests` (recent-capture history, debit alert delivered as `ignored`)
+
+### Web
+
+- **docs** Settings → iPhone SMS guide: privacy note and banner meanings match the new behaviour
+
+### Docs
+
+- **docs** CLAUDE.md §5.5, `apps/ios/CLAUDE.md`, `apps/ios/README.md`, ARCHITECTURE.md SMS path
+
 ## Glued cities backfilled — 2026-10-09
 
 ### Backend (Supabase)

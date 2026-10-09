@@ -15,6 +15,18 @@ public enum SensitiveText {
     static let bearer = try! NSRegularExpression(pattern: #"(?i)bearer\s+[A-Za-z0-9._~+/=-]{8,}"#)
     static let email = try! NSRegularExpression(pattern: #"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"#)
     static let serviceToken = try! NSRegularExpression(pattern: #"\bccs_[A-Za-z0-9_-]{8,}"#)
+    // SMS shapes. These were the phone's "credit card or not" filter; the phone no
+    // longer filters (the server classifies), but the scrubber still needs them.
+    /// A currency code or symbol next to a number.
+    static let amountPattern = try! NSRegularExpression(
+        pattern: #"\b[A-Z]{3}\s?\d[\d,]*(\.\d+)?|\d[\d,]*(\.\d+)?\s?[A-Z]{3}\b|[$€£₹]\s?\d|\bRs\.?\s?\d"#,
+        options: [])
+    static let creditCardPattern = try! NSRegularExpression(
+        pattern: #"credit\s*card|\bcr\.?\s*card\b|\bcc\s+(ending|no)|covered\s+card"#,
+        options: [.caseInsensitive])
+    static let accountPattern = try! NSRegularExpression(
+        pattern: #"debit\s*card|\bdc\s+ending|\ba/c\b|\bacct?\b\.?\s*(no\.?\s*)?[x*\d]|\baccount\s*(no\.?|number)?\s*[x*\d]{3,}|\bsalary\b|\btransfer(red)?\b|\biban\b|\bcredited\s+to\s+your\s+(a/c|account)"#,
+        options: [.caseInsensitive])
 
     public static func isSensitiveKey(_ key: String) -> Bool {
         keyDenylist.contains(key.lowercased())
@@ -29,9 +41,9 @@ public enum SensitiveText {
     /// An amount next to a currency, card wording, or an OTP.
     public static func looksLikeSMS(_ text: String) -> Bool {
         SMSCapture.isOTP(text)
-            || matches(SMSCapture.amountPattern, text)
-            || matches(SMSCapture.creditCardPattern, text)
-            || matches(SMSCapture.accountPattern, text)
+            || matches(amountPattern, text)
+            || matches(creditCardPattern, text)
+            || matches(accountPattern, text)
             || text.range(of: #"(?i)card\s+(ending|no\.?)\s*[x*\d]"#, options: .regularExpression) != nil
     }
 

@@ -56,9 +56,10 @@ public struct SMSTargetStore: @unchecked Sendable {
     }
 }
 
-/// The last time "Log Bank SMS" ran, so Settings can show that the automation
-/// fires ("Last captured 14:05 · Logged to Personal"). Holds the outcome only,
-/// never the message.
+/// One run of "Log Bank SMS", so Settings can show that the automation fires
+/// and what it handed over ("Today 14:05 · Logged to Personal."). Holds the
+/// outcome, the sender and the text's length, never the text: an empty sender
+/// or a 10-character "message" shows a Shortcut passing the wrong field.
 public struct CaptureRecord: Codable, Sendable, Equatable {
     public let at: Date
     /// `SMSIntakeOutcome.telemetryOutcome` — an opaque word.
@@ -66,12 +67,25 @@ public struct CaptureRecord: Codable, Sendable, Equatable {
     /// The line Shortcuts showed.
     public let message: String
     public let isTest: Bool
+    /// The Sender the Shortcut passed (nil in records saved before it was kept).
+    public let sender: String?
+    /// Characters in the trimmed Message the Shortcut passed.
+    public let length: Int?
 
-    public init(at: Date, outcome: String, message: String, isTest: Bool) {
+    public init(at: Date, outcome: String, message: String, isTest: Bool, sender: String? = nil, length: Int? = nil) {
         self.at = at
         self.outcome = outcome
         self.message = message
         self.isTest = isTest
+        self.sender = sender.map { String($0.trimmingCharacters(in: .whitespacesAndNewlines).prefix(64)) }
+        self.length = length
+    }
+
+    /// `"EmiratesNBD · 98 characters"`, or nil for a test or an old record.
+    public var input: String? {
+        guard let length else { return nil }
+        let who = sender.flatMap { $0.isEmpty ? nil : $0 } ?? "No sender"
+        return "\(who) · \(length) character\(length == 1 ? "" : "s")"
     }
 
     /// `"Today 14:05 · Logged to Personal."`
@@ -86,6 +100,9 @@ public struct CaptureLog: @unchecked Sendable {
     private let defaults: UserDefaults
     static let lastKey = "ledger.capture.last"
     static let testKey = "ledger.capture.lastTest"
+    static let recentKey = "ledger.capture.recent"
+    /// How many real captures Settings keeps.
+    public static let recentLimit = 20
 
     public init(defaults: UserDefaults) { self.defaults = defaults }
 
@@ -93,15 +110,24 @@ public struct CaptureLog: @unchecked Sendable {
     public var last: CaptureRecord? { read(Self.lastKey) }
     /// The last in-app "Send test".
     public var lastTest: CaptureRecord? { read(Self.testKey) }
+    /// The last `recentLimit` real captures, newest first.
+    public var recent: [CaptureRecord] {
+        guard let data = defaults.data(forKey: Self.recentKey) else { return last.map { [$0] } ?? [] }
+        return (try? JSONDecoder().decode([CaptureRecord].self, from: data)) ?? []
+    }
 
     public func record(_ record: CaptureRecord) {
         guard let data = try? JSONEncoder().encode(record) else { return }
         defaults.set(data, forKey: record.isTest ? Self.testKey : Self.lastKey)
+        guard !record.isTest else { return }
+        let list = Array(([record] + recent).prefix(Self.recentLimit))
+        if let encoded = try? JSONEncoder().encode(list) { defaults.set(encoded, forKey: Self.recentKey) }
     }
 
     public func clear() {
         defaults.removeObject(forKey: Self.lastKey)
         defaults.removeObject(forKey: Self.testKey)
+        defaults.removeObject(forKey: Self.recentKey)
     }
 
     private func read(_ key: String) -> CaptureRecord? {

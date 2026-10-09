@@ -9,6 +9,8 @@ public final class SettingsModel {
     public private(set) var outboxStatus = OutboxStatus()
     public private(set) var parked: [ParkedMessage] = []
     public private(set) var lastCapture: CaptureRecord?
+    /// The last `CaptureLog.recentLimit` real captures, newest first.
+    public private(set) var recentCaptures: [CaptureRecord] = []
     public private(set) var lastTest: CaptureRecord?
     public private(set) var isFlushing = false
     public private(set) var isTesting = false
@@ -27,6 +29,7 @@ public final class SettingsModel {
         outboxStatus = await outbox.status()
         parked = await outbox.parkedEntries().map(ParkedMessage.init)
         lastCapture = log?.last
+        recentCaptures = log?.recent ?? []
         lastTest = log?.lastTest
     }
 
@@ -39,7 +42,7 @@ public final class SettingsModel {
         await refresh()
     }
 
-    /// "Send test": the intent's path with a synthetic non-transaction message.
+    /// "Send test": the intent's path with a synthetic one-time passcode.
     public func runTest() async {
         guard let intake else { return }
         isTesting = true
@@ -137,11 +140,12 @@ public enum SMSAutomationGuide {
         Step(number: 5, title: "Pass the message",
              detail: "Tap Message and choose Shortcut Input, then Content. Set Sender to Shortcut Input's Sender."),
         Step(number: 6, title: "Check it",
-             detail: "Tap Send test below to check the action and your sign-in. After your next card purchase, “Last captured” shows what happened."),
+             detail: "Tap Send test below to check the action and your sign-in. After your next card purchase, “Last captured” shows what happened, and Recent captures shows the sender and length the Shortcut passed."),
     ]
 
     public static let privacyNote = """
-    Ledger drops one-time passcodes and debit-card or account alerts on the phone; \
-    they never leave it. Only credit-card messages are sent, over your signed-in session.
+    Bank Ledger drops one-time passcodes on the phone; they never leave it. Every other \
+    message the automation hands over is sent over your signed-in session, and Bank Ledger \
+    files debit-card, account and other non-purchase alerts as ignored.
     """
 }

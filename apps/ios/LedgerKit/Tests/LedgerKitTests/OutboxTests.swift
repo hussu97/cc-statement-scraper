@@ -227,9 +227,9 @@ struct SMSIntakeTests {
         #expect(await outbox.parkedEntries().first?.parkedReason == "Ledger rejected this message: body too long")
     }
 
-    @Test("OTP and debit alerts never reach the API or the outbox", arguments: [
+    @Test("OTPs and empty input never reach the API or the outbox", arguments: [
         "Your OTP for AED 250.00 on Credit Card ending 1234 is 482913",
-        "Your Debit Card ending 1234 was used for AED 45.00 at ENOC",
+        "  \n ",
     ])
     func dropped(body: String) async throws {
         let api = StubAPI()
@@ -240,6 +240,18 @@ struct SMSIntakeTests {
             return
         }
         #expect(api.calls.isEmpty)
+        #expect(await outbox.status().isEmpty)
+    }
+
+    @Test("a debit-card alert is sent; the server files it as ignored")
+    func debitSent() async throws {
+        let api = StubAPI(.succeed(status: "ignored"))
+        let (intake, outbox) = intake(api)
+        let (outcome, dialog) = await intake.handle(body: "Your Debit Card ending 1234 was used for AED 45.00 at ENOC",
+                                                    sender: "FAB")
+        #expect(outcome == .delivered(status: "ignored"))
+        #expect(dialog == "Logged to Personal as not a card purchase.")
+        #expect(api.calls.count == 1)
         #expect(await outbox.status().isEmpty)
     }
 
@@ -275,16 +287,38 @@ struct SMSIntakeTests {
         #expect(last.outcome == "delivered_created")
         #expect(last.message == "Logged to Personal.")
         #expect(!last.message.contains("CARREFOUR"))
+        #expect(last.sender == "FAB")
+        #expect(last.length == card.count)
+        #expect(last.input == "FAB · \(card.count) characters")
         #expect(log.lastTest == nil)
     }
 
-    @Test("Send test: a synthetic non-transaction message is dropped on the phone; nothing is sent")
+    @Test("Recent captures keeps the last 20 real runs, newest first, never the text")
+    func recentCaptures() async throws {
+        let defaults = try #require(UserDefaults(suiteName: "ledger-tests-\(UUID().uuidString)"))
+        let log = CaptureLog(defaults: defaults)
+        let (intake, _) = intake(StubAPI(.succeed(status: "created")), log: log)
+        _ = await intake.handle(body: "EmiratesNBD", sender: nil)
+        for _ in 0..<CaptureLog.recentLimit { _ = await intake.handle(body: card, sender: "FAB") }
+        _ = await intake.selfTest()
+        let recent = log.recent
+        #expect(recent.count == CaptureLog.recentLimit)
+        #expect(recent.allSatisfy { !$0.isTest && $0.sender == "FAB" })   // the oldest fell off; tests never enter
+        _ = await intake.handle(body: "EmiratesNBD", sender: "  ")
+        #expect(log.recent.first?.input == "No sender · 11 characters")
+        let stored = try #require(defaults.data(forKey: CaptureLog.recentKey))
+        #expect(!String(decoding: stored, as: UTF8.self).contains("CARREFOUR"))
+        log.clear()
+        #expect(log.recent.isEmpty)
+    }
+
+    @Test("Send test: a synthetic one-time passcode is dropped on the phone; nothing is sent")
     func selfTest() async throws {
         let defaults = try #require(UserDefaults(suiteName: "ledger-tests-\(UUID().uuidString)"))
         let log = CaptureLog(defaults: defaults)
         let api = StubAPI()
         let (subject, _) = intake(api, log: log)
-        #expect(!SMSCapture.classify(body: SMSSelfTest.message).isAccepted)
+        #expect(SMSCapture.classify(body: SMSSelfTest.message) == .dropOTP)
         let result = await subject.selfTest()
         #expect(result.passed)
         #expect(result.message.contains("files card alerts in Personal"))

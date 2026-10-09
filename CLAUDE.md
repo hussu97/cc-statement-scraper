@@ -67,7 +67,7 @@ Every rule below exists because the codebase once had several coexisting variant
 2. Files are ≤ ~350 lines, one screen or concern each.
 3. Money is `Decimal` parsed from strings; never `Double`. Date formatters pin `en_US_POSIX` and `Asia/Dubai`.
 4. `Theme/Tokens.swift` is generated from `packages/tokens`. Don't edit it by hand.
-5. The SMS App Intent drops OTPs and non-credit-card messages on the device. Never log SMS bodies.
+5. The SMS App Intent drops only OTPs (and empty input) on the device; the server classifies everything else (`process_sms`). Never log SMS bodies.
 6. App Intent and App Shortcut text never says "iPhone" (or another Apple trademark): App Store processing rejects the build (ITMS-90626).
 
 ## 6. Observability (Sentry)

@@ -23,8 +23,11 @@ and §11; layout and setup are in [README.md](README.md).
 
 ## SMS capture
 
-- The App Intent drops OTPs and non-credit-card messages on the device; the server mirrors the
-  same filter. Change both together.
+- The App Intent drops only OTPs and empty input on the device; everything else goes to the
+  server, whose templates classify it (debit/account alerts → `ignored`, unknown → `unparsed` +
+  LLM fallback). A guess on the phone loses the message for good when it is wrong (2026-10-09:
+  ENBD alerts skipped as "not a credit-card transaction"), so the phone doesn't guess. The OTP
+  pattern matches `ingest_sms`'s defence-in-depth check: change both together.
 - Never log, print, breadcrumb or persist an SMS body outside the App Group outbox. Sentry
   scrubbing is tested in `TelemetryScrubberTests`.
 

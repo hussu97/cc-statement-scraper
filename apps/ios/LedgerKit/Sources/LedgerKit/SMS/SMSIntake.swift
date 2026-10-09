@@ -48,7 +48,6 @@ public enum SMSIntakeOutcome: Equatable, Sendable {
             switch d {
             case .accept: "accepted"
             case .dropOTP: "dropped_otp"
-            case .dropNotCreditCard(let reason): "dropped_\(reason)"
             case .dropEmpty: "dropped_empty"
             }
         case .noProfile: "no_profile"
@@ -106,7 +105,8 @@ public struct SMSIntake: Sendable {
         let outcome = await decide(body: body, sender: sender, receivedAt: receivedAt, clientMsgId: clientMsgId,
                                    target: destination)
         let dialog = outcome.dialog(ledger: destination?.name)
-        log?.record(CaptureRecord(at: receivedAt, outcome: outcome.telemetryOutcome, message: dialog, isTest: isTest))
+        log?.record(CaptureRecord(at: receivedAt, outcome: outcome.telemetryOutcome, message: dialog, isTest: isTest,
+                                  sender: sender, length: body.trimmingCharacters(in: .whitespacesAndNewlines).count))
         return (outcome, dialog)
     }
 
@@ -139,27 +139,27 @@ public struct SMSIntake: Sendable {
         }
     }
 
-    /// The in-app "Send test": runs the same path with a synthetic message that
-    /// is not a transaction (so it is dropped on the phone and nothing is
+    /// The in-app "Send test": runs the same path with a synthetic one-time
+    /// passcode (the one kind of message the phone still drops, so nothing is
     /// stored), then sends anything waiting, to check the session and network.
     public func selfTest(now: Date = Date()) async -> SMSSelfTest {
         let destination = target()
         let outcome = await decide(body: SMSSelfTest.message, sender: "Ledger test", receivedAt: now,
                                    clientMsgId: UUID(), target: destination)
-        let filterOK: Bool = if case .dropped(let decision) = outcome { !decision.isAccepted } else { false }
+        let filterOK = outcome == .dropped(.dropOTP)
         let report = await outbox.flush(force: true)
         let result = SMSSelfTest(target: destination, filterOK: filterOK, flushError: report.error,
                                  parked: report.parked.count)
         log?.record(CaptureRecord(at: now, outcome: result.passed ? "test_ok" : "test_failed",
-                                  message: result.message, isTest: true))
+                                  message: result.message, isTest: true, sender: nil, length: nil))
         return result
     }
 }
 
 /// The result of "Send test", in words.
 public struct SMSSelfTest: Sendable, Equatable {
-    /// Contains no amount and no card wording, so the filter drops it.
-    public static let message = "Ledger test message. This is not a transaction."
+    /// Shaped like a one-time passcode, so the phone drops it and nothing leaves.
+    public static let message = "Ledger test message. Your one-time passcode is 000000. This is not a transaction."
 
     public let target: SMSTarget?
     public let filterOK: Bool
@@ -170,7 +170,7 @@ public struct SMSSelfTest: Sendable, Equatable {
 
     public var message: String {
         guard let target else { return "Test failed: no ledger is set for SMS. Choose one under “SMS go to”." }
-        guard filterOK else { return "Test failed: the on-device filter didn't run as expected." }
+        guard filterOK else { return "Test failed: the passcode filter didn't run as expected." }
         if let flushError {
             switch flushError.kind {
             case .signedOut: return "Test failed: you're signed out, so SMS would wait on this iPhone."
@@ -179,6 +179,6 @@ public struct SMSSelfTest: Sendable, Equatable {
             }
         }
         if parked > 0 { return "Log Bank SMS works and files card alerts in \(target.name). Some waiting messages couldn't be sent — see below." }
-        return "Log Bank SMS works and files card alerts in \(target.name). The test message was skipped on this iPhone, as non-card messages are."
+        return "Log Bank SMS works and files card alerts in \(target.name). The test message was skipped on this iPhone, as one-time passcodes are."
     }
 }
