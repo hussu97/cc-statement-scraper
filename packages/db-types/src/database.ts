@@ -2100,6 +2100,21 @@ export type Database = {
       }
     }
     Functions: {
+      activity_summary: {
+        Args: {
+          p_account_code?: string
+          p_card_code?: string
+          p_category_code?: string
+          p_from?: string
+          p_profile_code: string
+          p_q?: string
+          p_source?: string
+          p_status?: string
+          p_to?: string
+          p_uncategorized?: boolean
+        }
+        Returns: Json
+      }
       add_profile_member: {
         Args: { p_email: string; p_profile_code: string; p_role?: string }
         Returns: string
