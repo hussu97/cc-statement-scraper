@@ -1,5 +1,11 @@
 # Changelog
 
+## FAB cards on one account — 2026-10-09
+
+### Backend (Supabase)
+
+- **fix** `20261010001400_merge_accounts_and_fab_cards`: production's FAB relationship was split over two accounts, because statements from 2025-09 name the supplementary card and ingest made a new account for a card number it had not seen. The owner's account of it: 2132 replaced 6290, and 2777 is the supplementary card. The 2777 account (14 statements, 722 lines and transactions) is merged into the 6290/2132 account; 2132 is the primary card, 2777 supplementary, 6290 `replaced`. Guarded by the exact card codes, accounts and flags, so it is a no-op anywhere else and on a re-run. New `private.merge_accounts(profile, from, into)` moves cards, statements, statement lines, transactions, SMS and match reviews and closes the emptied account. pgTAP `28_merge_accounts`
+
 ## SIB "Statement details" export — 2026-10-09
 
 ### Parser
