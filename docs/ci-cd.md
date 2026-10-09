@@ -28,7 +28,7 @@ TestFlight by a Linux runner).
 | `ci.yml` | every PR, push to `main`, manual (`include_ios` input) | Path-filtered jobs (below) + `ci-ok` aggregator. PRs cancel superseded runs; `main` runs always finish. |
 | `deploy-supabase.yml` | push to `main` touching `supabase/migrations/**`, `supabase/functions/**` (not `_tests/`), `supabase/config.toml`; manual (type the project ref) | pgTAP + deno → `production` env → migration history check → dry run → destructive guard → `db push` → `functions deploy`. |
 | `deploy-parser.yml` | push to `main` touching `services/parser/**` (not tests/docs); manual (type `deploy`) | ruff + pytest → `production` env → build/push image → deploy a **no-traffic tagged revision** → smoke `/health` on the tag URL → promote to 100%. |
-| `web-smoke.yml` | Vercel's Production `deployment_status` = success; daily 05:17 UTC; manual (any URL) | `scripts/ci/web-smoke.sh` against https://<web-host>. Does not deploy. |
+| `web-smoke.yml` | push to `main` touching the web app (waits for that commit's Vercel Production deployment); daily 05:17 UTC; manual (any URL) | `scripts/ci/web-smoke.sh` against https://<web-host>. Does not deploy. |
 | `ios-testflight.yml` | push to `main` touching `apps/ios/**` except `build-number.json` / `*.md`; manual | Linux only: verify the staged IPA matches this source → upload to App Store Connect → `testflight-distribute.mjs` to "Friends & Family". |
 | `security.yml` | Mondays 03:00 UTC; manual | pip-audit + bandit on the parser. |
 | `ios-build.yml` | Mondays 04:23 UTC; PRs and pushes to `main` touching `apps/ios/**` (not docs or `build-number.json`) or `packages/tokens/**`; manual | `xcodegen generate` → `xcodebuild build` of the app and share extension for the simulator, unsigned (`CODE_SIGNING_ALLOWED=NO`), no secrets. macOS (10x), hence not per push. Not part of `ci-ok`. |
@@ -143,8 +143,10 @@ gcloud run services update-traffic ccs-parser --project <gcp-project> \
   redirects aren't allow-listed. Set in Vercel → Settings → Git → Ignored Build Step ("Only
   build production"); PRODUCTION.md §4 has the rationale. PRs are checked by `ci.yml` → `web`.
 - What the integration lacks is a check that what it shipped works. Vercel reports each
-  deployment back to GitHub as a Deployment; `web-smoke.yml` runs on the Production one's
-  `success` and checks the production URL: `/` is 200 with `<title>Bank Ledger</title>`, the CSP
+  deployment back to GitHub as a Deployment; `web-smoke.yml` runs once per push to `main`
+  that touches the web app, waits for that commit's Production deployment to succeed, and checks
+  the production URL (it no longer listens to `deployment_status`, which created a skipped run for
+  every state of every deployment): `/` is 200 with `<title>Bank Ledger</title>`, the CSP
   is present and allows `https://<project-ref>.supabase.co` with
   `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `nosniff`, HSTS, the SPA deep link
   `/activity` is 200 HTML, a hashed asset is 200 + `immutable`, a missing asset is 404.

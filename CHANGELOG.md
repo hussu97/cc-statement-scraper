@@ -1,5 +1,11 @@
 # Changelog
 
+## Web smoke runs once per push — 2026-10-09
+
+### Docs
+
+- **ci** `web-smoke.yml` runs on pushes to `main` that touch the web app, waits for Vercel's Production deployment of that commit, then smoke-tests; it no longer triggers on every `deployment_status` (dozens of skipped runs per release). Daily and manual runs unchanged (docs/ci-cd.md)
+
 ## SIB push login — 2026-10-08
 
 ### Scraper
