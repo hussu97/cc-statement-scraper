@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activeFilterCount, ilikePattern, listSearch, parseActivitySearch, withFilter } from "./activity-filters";
+import { activeFilterCount, listSearch, sanitizedSearch, searchOrFilter, parseActivitySearch, withFilter } from "./activity-filters";
 import { pageCount, pageRange, normalizePageSize } from "./pagination";
 
 const ACC = "acc_01hzzzzzzzzzzzzzzzzzzzzzzz";
@@ -32,9 +32,21 @@ describe("activity search codec", () => {
     expect(listSearch({ q: "x", txn: TXN })).toEqual({ q: "x" });
   });
 
-  it("escapes ilike wildcards and PostgREST separators", () => {
-    expect(ilikePattern("50%_off")).toBe("%50\\%\\_off%");
-    expect(ilikePattern("a,b(c)")).toBe("%a b c %");
+  it("cleans a search term exactly as iOS ActivityQuery.sanitizedSearch", () => {
+    expect(sanitizedSearch("  cafe  ")).toBe("cafe");
+    expect(sanitizedSearch("50%_off")).toBe("50\\%\\_off");
+    expect(sanitizedSearch("a\\b")).toBe("a\\\\b");
+    expect(sanitizedSearch('a,b(c)*d:e"f')).toBe("a_b_c__d_e_f");
+    expect(sanitizedSearch("x".repeat(100))).toBe("x".repeat(80));
+    // Counted in code points, like SQL left(…, 80).
+    expect(sanitizedSearch("😀".repeat(90))).toBe("😀".repeat(80));
+  });
+
+  it("searches description OR merchant name with a PostgREST or filter", () => {
+    expect(searchOrFilter("cafe")).toBe("description.ilike.*cafe*,merchant_name.ilike.*cafe*");
+    expect(searchOrFilter("a,b")).toBe("description.ilike.*a_b*,merchant_name.ilike.*a_b*");
+    expect(searchOrFilter("  ")).toBeNull();
+    expect(searchOrFilter(undefined)).toBeNull();
   });
 });
 

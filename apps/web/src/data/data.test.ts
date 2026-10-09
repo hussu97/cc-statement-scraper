@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyActivityFilters, evidenceBadge, groupByDay, sortEvidence, type EvidenceItem, type FilterBuilder } from "./transactions";
+import { activitySummaryArgs, applyActivityFilters, evidenceBadge, groupByDay, sortEvidence, type EvidenceItem, type FilterBuilder } from "./transactions";
 import { domainsFor } from "./realtime";
 import { chooseActiveProfile, profileKeyFromName, type ProfileSummary } from "./profile";
 import { candidatesOf, groupReviews, type Review } from "./reviews";
@@ -17,7 +17,7 @@ class FakeBuilder implements FilterBuilder<FakeBuilder> {
   gte(c: string, v: unknown) { return this.add(`gte ${c} ${String(v)}`); }
   lte(c: string, v: unknown) { return this.add(`lte ${c} ${String(v)}`); }
   is(c: string, v: null | boolean) { return this.add(`is ${c} ${String(v)}`); }
-  ilike(c: string, p: string) { return this.add(`ilike ${c} ${p}`); }
+  or(f: string) { return this.add(`or ${f}`); }
 }
 
 describe("activity query filters", () => {
@@ -34,12 +34,37 @@ describe("activity query filters", () => {
       "eq status pending",
       "eq has_sms true",
       "eq has_statement false",
-      "ilike description %cafe%",
+      "or description.ilike.*cafe*,merchant_name.ilike.*cafe*",
     ]);
   });
 
   it("source=both requires both kinds of evidence", () => {
     expect(applyActivityFilters(new FakeBuilder(), { source: "both", category: "cat_1" }).calls).toEqual(["eq category_code cat_1", "eq has_sms true", "eq has_statement true"]);
+  });
+
+  it("a blank search adds no filter", () => {
+    expect(applyActivityFilters(new FakeBuilder(), { q: "   " }).calls).toEqual([]);
+  });
+});
+
+describe("activity summary args", () => {
+  it("maps every filter and ignores paging and the drawer", () => {
+    expect(
+      activitySummaryArgs("prf_1", {
+        from: "2026-10-01", to: "2026-10-31", account: "acc_x", card: "crd_x", category: "cat_1", status: "posted", source: "both", q: "cafe", page: 3, size: 200, txn: "txn_x",
+      }),
+    ).toEqual({
+      p_profile_code: "prf_1", p_from: "2026-10-01", p_to: "2026-10-31", p_account_code: "acc_x", p_card_code: "crd_x", p_category_code: "cat_1", p_status: "posted", p_source: "both", p_q: "cafe",
+    });
+  });
+
+  it("uncategorized becomes p_uncategorized, not a category code", () => {
+    expect(activitySummaryArgs("prf_1", { category: "none" })).toEqual({ p_profile_code: "prf_1", p_uncategorized: true });
+  });
+
+  it("no filters is just the profile; a blank search is dropped", () => {
+    expect(activitySummaryArgs("prf_1", {})).toEqual({ p_profile_code: "prf_1" });
+    expect(activitySummaryArgs("prf_1", { q: "  " })).toEqual({ p_profile_code: "prf_1" });
   });
 });
 

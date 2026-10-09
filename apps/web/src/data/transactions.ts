@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase, type Views } from "@/lib/supabase";
-import { ilikePattern, UNCATEGORIZED, type ActivitySearch } from "@/lib/activity-filters";
+import { supabase, type Views, type RpcArgs } from "@/lib/supabase";
+import { searchOrFilter, UNCATEGORIZED, type ActivitySearch } from "@/lib/activity-filters";
+import type { ISODate } from "@/lib/dates";
 import { DEFAULT_PAGE_SIZE, pageRange } from "@/lib/pagination";
 import { keys, LEDGER_DOMAINS } from "./keys";
 import { fetchPage, must, mustList, type Page } from "./api";
@@ -14,7 +15,7 @@ export interface FilterBuilder<B> {
   gte(column: string, value: unknown): B;
   lte(column: string, value: unknown): B;
   is(column: string, value: null | boolean): B;
-  ilike(column: string, pattern: string): B;
+  or(filters: string): B;
 }
 
 /** Apply URL filters to a v_transactions query. Pure: unit-tested with a fake builder. */
@@ -30,8 +31,48 @@ export function applyActivityFilters<B extends FilterBuilder<B>>(query: B, s: Ac
   if (s.source === "sms") q = q.eq("has_sms", true).eq("has_statement", false);
   if (s.source === "statement") q = q.eq("has_statement", true).eq("has_sms", false);
   if (s.source === "both") q = q.eq("has_sms", true).eq("has_statement", true);
-  if (s.q) q = q.ilike("description", ilikePattern(s.q));
+  // Description OR merchant name, cleaned as iOS and activity_summary clean it.
+  const search = searchOrFilter(s.q);
+  if (search) q = q.or(search);
   return q;
+}
+
+/** The Activity header's numbers for the current filters (public.activity_summary). */
+export interface ActivitySummary {
+  txn_count: number;
+  /** Debits minus credits in AED, void excluded: a decimal string. */
+  net_aed: string;
+  /** Matching non-void rows with no AED amount yet (left out of net_aed). */
+  unpriced_count: number;
+  /** Some AED amounts use an estimated FX rate. */
+  has_estimate: boolean;
+  earliest_date: ISODate | null;
+  latest_date: ISODate | null;
+}
+
+/** ActivitySearch -> activity_summary args (paging and the drawer are ignored). Pure. */
+export function activitySummaryArgs(profileCode: string, s: ActivitySearch): RpcArgs<"activity_summary"> {
+  const args: RpcArgs<"activity_summary"> = { p_profile_code: profileCode };
+  if (s.from) args.p_from = s.from;
+  if (s.to) args.p_to = s.to;
+  if (s.account) args.p_account_code = s.account;
+  if (s.card) args.p_card_code = s.card;
+  if (s.category === UNCATEGORIZED) args.p_uncategorized = true;
+  else if (s.category) args.p_category_code = s.category;
+  if (s.status) args.p_status = s.status;
+  if (s.source) args.p_source = s.source;
+  if (s.q?.trim()) args.p_q = s.q;
+  return args;
+}
+
+/** Count, net AED and date span of every transaction matching the Activity filters. */
+export function useActivitySummary(profileCode: string, search: ActivitySearch) {
+  const filters = listFilters(search);
+  return useQuery({
+    queryKey: keys.activitySummary(profileCode, filters),
+    placeholderData: keepPreviousData,
+    queryFn: async () => must(await supabase.rpc("activity_summary", activitySummaryArgs(profileCode, filters))) as unknown as ActivitySummary,
+  });
 }
 
 /** Rows [from, to] of v_transactions for the filters, newest first, with the exact total. */

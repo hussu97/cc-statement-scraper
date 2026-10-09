@@ -79,6 +79,13 @@ export function formatDate(d: ISODate | null | undefined, style: "short" | "long
   return `${dm} ${x.getUTCFullYear()}`;
 }
 
+/** "1 Jun 2026 – 8 Oct 2026", one date when both ends agree, null when there are none. */
+export function formatDateSpan(from: ISODate | null | undefined, to: ISODate | null | undefined): string | null {
+  if (!from && !to) return null;
+  if (!from || !to || from === to) return formatDate(from ?? to);
+  return `${formatDate(from)} – ${formatDate(to)}`;
+}
+
 export function formatMonth(d: ISODate | null | undefined, style: "long" | "short" = "long"): string {
   if (!d) return "—";
   const x = toUTC(monthStart(d.slice(0, 10)));

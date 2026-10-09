@@ -21,3 +21,4 @@ export type DB = Database["public"];
 export type Tables<T extends keyof DB["Tables"]> = DB["Tables"][T]["Row"];
 export type Views<T extends keyof DB["Views"]> = DB["Views"][T]["Row"];
 export type RpcReturn<T extends keyof DB["Functions"]> = DB["Functions"][T]["Returns"];
+export type RpcArgs<T extends keyof DB["Functions"]> = DB["Functions"][T]["Args"];

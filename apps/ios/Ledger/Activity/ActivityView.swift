@@ -61,6 +61,7 @@ struct ActivityView: View {
         } else if let empty = model.emptyMessage {
             EmptyCard(systemImage: "tray", message: empty).listRowBackground(Color.clear).listRowSeparator(.hidden)
         } else {
+            ActivitySummaryRow(display: model.summaryDisplay)
             ForEach(model.sections) { section in
                 Section {
                     ForEach(section.rows) { txn in

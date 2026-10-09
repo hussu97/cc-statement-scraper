@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { addDays, addMonths, daysBetween, formatDate, formatDateTime, formatMonth, formatRelative, isISODate, matchPreset, monthEnd, monthStart, presetRange, todayDubai } from "./dates";
+import { addDays, addMonths, daysBetween, formatDate, formatDateSpan, formatDateTime, formatMonth, formatRelative, isISODate, matchPreset, monthEnd, monthStart, presetRange, todayDubai } from "./dates";
 
 describe("dates", () => {
+  it("formats a date span", () => {
+    expect(formatDateSpan("2026-06-01", "2026-10-08")).toBe("1 Jun 2026 – 8 Oct 2026");
+    expect(formatDateSpan("2026-10-08", "2026-10-08")).toBe("8 Oct 2026");
+    expect(formatDateSpan(null, "2026-10-08")).toBe("8 Oct 2026");
+    expect(formatDateSpan(null, null)).toBeNull();
+  });
+
   it("computes today in Dubai, not UTC", () => {
     // 21:30 UTC on 8 Oct is 01:30 on 9 Oct in Dubai (UTC+4).
     expect(todayDubai(new Date("2026-10-08T21:30:00Z"))).toBe("2026-10-09");

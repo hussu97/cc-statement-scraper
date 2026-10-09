@@ -27,6 +27,7 @@
 		9EBF5BFE77ECA1C47D23BAAC /* BankLogo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 565481D48090AF940C8DF22A /* BankLogo.swift */; };
 		AC6B124273C727CF4191CF2D /* PagingFooter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5F7B5FD1E6564824D0B7AB5 /* PagingFooter.swift */; };
 		ADA71066669326EC96C41A89 /* OverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A31E4CF859EB1BA241A2C0C1 /* OverviewView.swift */; };
+		AED0BA06AC058188E57F5191 /* ActivitySummaryRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D0F477A0B843C6F8017F998 /* ActivitySummaryRow.swift */; };
 		BEF2BF5B8FBECE13DEBF4631 /* UploadLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 582E2ECDA81AFDC1C9849F12 /* UploadLogView.swift */; };
 		C05BE17C5A3CB168D026EAAF /* LogBankSMSIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 306FF1BBB7DC9A30BCC65C13 /* LogBankSMSIntent.swift */; };
 		C7D2A9DBE9043F127D748D46 /* ChartDescriptor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 933BB97FFFA1958362EEA82B /* ChartDescriptor.swift */; };
@@ -78,6 +79,7 @@
 		582E2ECDA81AFDC1C9849F12 /* UploadLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadLogView.swift; sourceTree = "<group>"; };
 		5B4BB4BE741A2728C651F5B4 /* MonthSwitcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonthSwitcher.swift; sourceTree = "<group>"; };
 		73761BCB90A985F69998349F /* StatementDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatementDetailView.swift; sourceTree = "<group>"; };
+		7D0F477A0B843C6F8017F998 /* ActivitySummaryRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivitySummaryRow.swift; sourceTree = "<group>"; };
 		842801DBC37F9A8E31C6DFA8 /* ProfilePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilePickerView.swift; sourceTree = "<group>"; };
 		90DD295322C6F4844758D023 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
 		933BB97FFFA1958362EEA82B /* ChartDescriptor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChartDescriptor.swift; sourceTree = "<group>"; };
@@ -256,6 +258,7 @@
 			isa = PBXGroup;
 			children = (
 				0120325ABB16C928EB7D78A2 /* ActivitySheets.swift */,
+				7D0F477A0B843C6F8017F998 /* ActivitySummaryRow.swift */,
 				AAE2E3AE75D7627DDCE82B40 /* ActivityView.swift */,
 			);
 			path = Activity;
@@ -407,6 +410,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				88E22D6FB72866F27D8AE476 /* ActivitySheets.swift in Sources */,
+				AED0BA06AC058188E57F5191 /* ActivitySummaryRow.swift in Sources */,
 				748435885CB091FA9BFCACAA /* ActivityView.swift in Sources */,
 				9EBF5BFE77ECA1C47D23BAAC /* BankLogo.swift in Sources */,
 				C7D2A9DBE9043F127D748D46 /* ChartDescriptor.swift in Sources */,
