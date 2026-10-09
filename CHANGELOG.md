@@ -1,5 +1,12 @@
 # Changelog
 
+## One merchant per merchant — 2026-10-09
+
+### Backend (Supabase)
+
+- **fix** `public.merchant_key()` v2 (`20261010001200_merchant_key_v2`) strips the noise that split one merchant into many: a city glued to the name by statement column concatenation (`CAREEM RIDEDUBAI`, `ADNOC MAYSALOON 783SHARJAH`), reference tokens anywhere after the first word (`SPOTIFY AB P33F7BD2DC …`, `WIX COM 1198729259 …`), more country/state codes, foreign amounts (`… MYR 5 70 0`) and the website column (`WWW WIX COM`). On production's descriptions: 802 keys → 691, keys holding a reference 91 → 3. Branch and store names stay distinct (`MCDONALDS OASIS MALL`, `ADNOC AL SAFA 2`).
+- **feat** `private.rekey_merchants()` (service role / owner; re-runnable after any key change) merges merchants that now share a key onto a survivor that keeps its `merchant_code` (the key's holder, else an alias target, else the one with most transactions), records every old key in `merchant_aliases`, carries each profile's merchant category (manual beats llm), category skip and recurring series to the survivor, and repoints transactions through `refresh_transaction` so categories recompute. Merged-away rows that conflict stay inert; nothing is deleted. The migration runs it once. pgTAP `26_merchant_key_v2`.
+
 ## Category taxonomy v2 — 2026-10-09
 
 ### Backend (Supabase)
