@@ -9,6 +9,7 @@
 
 | When | Lesson |
 |---|---|
+| 2026-10-09 | [A filter on the phone loses data for good: send it, classify on the server](#a-filter-on-the-phone-loses-data-for-good-send-it-classify-on-the-server) |
 | 2026-10-08 | [`supabase config push` has no dry run and pushes the whole file](#supabase-config-push-has-no-dry-run-and-pushes-the-whole-file) |
 | 2026-10-08 | [A push to `main` is a production deploy](#a-push-to-main-is-a-production-deploy) |
 | 2026-10-08 | [Stage explicit paths; `git add -A` commits other people's work](#stage-explicit-paths-git-add--a-commits-other-peoples-work) |
@@ -27,6 +28,19 @@
 | 2026-10-08 | [Tooling defaults that don't work here: `gh` account, Supabase MCP, `localhost`, pip](#tooling-defaults-that-dont-work-here-gh-account-supabase-mcp-localhost-pip) |
 
 ## Lessons
+
+### A filter on the phone loses data for good: send it, classify on the server
+- **What went wrong**: "Log Bank SMS" ran a regex on the phone to decide "credit card or not"
+  before sending. Three ENBD purchase alerts on 2026-10-09 came back "Skipped: not a
+  credit-card transaction" and production `sms_messages` had 0 rows ever. Nothing was stored, so
+  there was nothing to audit: neither the text nor what the Shortcut had actually passed (the
+  real alert passes the filter, so the Shortcut most likely handed over the wrong field).
+- **Rule**: a client drops only what must never leave it (OTPs, empty input) and sends the rest;
+  the server stores every message first and classifies it from data (`process_sms` templates:
+  `ignored` / `unparsed` + LLM fallback). Keep a diagnostic trail on the device that holds no
+  content (Settings → Recent captures: outcome, sender, length).
+- **Enforced by**: `SMSCaptureTests` (debit, account, no-amount and junk inputs are sent),
+  `OutboxTests.recentCaptures`.
 
 ### `supabase config push` has no dry run and pushes the whole file
 - **What went wrong**: `supabase config push` sends the **whole** `supabase/config.toml` to the

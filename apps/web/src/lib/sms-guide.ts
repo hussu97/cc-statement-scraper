@@ -187,7 +187,8 @@ export const BANNERS: { says: string; means: string }[] = [
   { says: "Logged to <your ledger>.", means: "The purchase is recorded." },
   { says: "…doesn't know this card yet", means: "Logged, but add the card: Overview → Needs review." },
   { says: "Skipped: one-time passcode.", means: "Dropped on your phone. Never sent." },
-  { says: "Skipped: not a credit-card transaction.", means: "Debit-card, account and other messages are dropped on your phone." },
+  { says: "Logged to <your ledger> as not a card purchase.", means: "A debit-card, account or other alert: kept, not counted as spend." },
+  { says: "…can't read this message format yet", means: "Kept. Bank Ledger learns the format and files it; see Review." },
   { says: "Saved on this iPhone…", means: "You're offline or signed out. It sends by itself later." },
 ];
 
@@ -215,7 +216,8 @@ export const TROUBLESHOOTING: { problem: string; fix: string }[] = [
 ];
 
 export const PRIVACY_NOTE =
-  `One-time passcodes and debit-card or account alerts are dropped on your iPhone and never leave it. ` +
-  `Messages that mention “card” but aren't a card purchase are dropped too. Only credit-card alerts are sent, over your signed-in session.`;
+  `One-time passcodes are dropped on your iPhone and never leave it. ` +
+  `Every other message the automation hands over is sent over your signed-in session, and Bank Ledger files ` +
+  `debit-card, account and other non-purchase alerts as ignored.`;
 
 export const WHY_MANUAL = `iOS doesn't let apps create automations for you, so this is a one-time setup that takes about a minute.`;
