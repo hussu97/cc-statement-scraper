@@ -1,5 +1,11 @@
 # Changelog
 
+## Glued cities backfilled — 2026-10-09
+
+### Backend (Supabase)
+
+- **fix** `20261010001300_glued_place_backfill`: descriptions ingested before parser 2026.10.4 get the same space between merchant and city (`CAREEM HALA RIDEDUBAI` → `CAREEM HALA RIDE DUBAI`; production: 1,374 current statement lines). Only `statement_lines.description` changes (`description_raw`, `raw` and `line_key` stay as printed); transactions are refreshed from their evidence, keep their codes and merchants, and recategorise. Rule patterns written against the glued text (`KITOPIDUBAI`, `OSNDUBAI`, `CAREEMDUBAI` …: 11 seed rules per profile) get the space too, in `private.seed_rules` and in non-regex `category_rules`, so they match old and new statements alike. `private.backfill_glued_places()` is idempotent; `private.separate_glued_place()` is the SQL twin of the parser's helper. pgTAP `27_glued_place_backfill`; a parser test keeps the two place lists equal.
+
 ## Parser separates glued cities — 2026-10-09
 
 ### Parser
