@@ -1,5 +1,11 @@
 # Changelog
 
+## LLM categorisation runs at 18:00 UTC — 2026-10-10
+
+### Backend (Supabase)
+
+- **change** `20261010001700_llm_enqueue_schedule`: `ledger-llm-enqueue` runs at 18:00 UTC (22:00 Dubai) instead of 22:30 UTC, so the day's new merchants are categorised the same evening. ARCHITECTURE.md and PRODUCTION.md cron tables updated.
+
 ## iOS: Budgets tab, Statements in Settings — 2026-10-09
 
 ### iOS
