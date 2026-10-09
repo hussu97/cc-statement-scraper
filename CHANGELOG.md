@@ -1,5 +1,11 @@
 # Changelog
 
+## Parser separates glued cities — 2026-10-09
+
+### Parser
+
+- **fix** MASHREQ statements (1,144 of 1,233 production lines) and SIB history (193 of 227) print the city glued to the merchant (`careem hala ridedubai`; the PDF text run itself has no gap). `merchant_normalized`, which becomes the transaction description, now separates it (`CAREEM HALA RIDE DUBAI`) for any bank, using the place list of `public.merchant_key` (`ccs_parser/places.py`). `description_raw` and `legacy_fingerprint` are unchanged, so line identity (`line_key`) and re-parses are unaffected; lines already ingested keep their text. `PARSER_VERSION` 2026.10.4; MASHREQ golden snapshots updated.
+
 ## One merchant per merchant — 2026-10-09
 
 ### Backend (Supabase)

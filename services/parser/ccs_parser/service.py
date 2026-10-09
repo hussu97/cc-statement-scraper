@@ -22,6 +22,7 @@ from ccs_parser.domain.statements.types import ParsedLine, ParsedStatement
 from ccs_parser.kinds import map_kind
 from ccs_parser.limits import check_document_limits
 from ccs_parser.parser_adapter import parse_statement_pdf
+from ccs_parser.places import separate_glued_place
 from ccs_parser.totals import TOTAL_KEYS, TotalsResult, extract_totals, read_text_lines
 
 logger = logging.getLogger(__name__)
@@ -142,7 +143,7 @@ def _line_out(line: ParsedLine) -> dict[str, Any]:
         "txn_time": line.transaction_time.isoformat() if line.transaction_time else None,
         "posting_date": _iso(line.posting_date),
         "description_raw": line.merchant_raw,
-        "merchant_normalized": line.merchant_normalized,
+        "merchant_normalized": separate_glued_place(line.merchant_normalized),
         "amount_original": money(line.amount_original),
         "currency_original": line.currency_original,
         "amount_aed": money_or_none(line.amount_aed),

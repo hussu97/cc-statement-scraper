@@ -38,7 +38,7 @@ def test_foreign_rows(tmp_path: Path) -> None:
         "470.00",
         "0.94",
     )
-    assert debit["merchant_normalized"] == "NOODLE HOUSEKUALA LUMPUR"
+    assert debit["merchant_normalized"] == "NOODLE HOUSE KUALA LUMPUR"
     assert debit["direction"] == "debit"
     credit = by_desc["ticket officetokyo"]
     assert (credit["currency_original"], credit["amount_original"], credit["amount_aed"]) == (
