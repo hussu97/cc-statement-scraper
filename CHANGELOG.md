@@ -1,5 +1,12 @@
 # Changelog
 
+## Web smoke waits on Vercel's commit status too — 2026-10-09
+
+### Docs
+
+- **ci** `web-smoke.yml` waited for a GitHub Deployment from Vercel that Vercel did not create for build 8's counter commit (`12cfe0f`, deployed and reported only as a `Vercel` commit status), so the job ran into its 10-minute timeout and was cancelled. It now accepts either the Production Deployment or the `Vercel` commit status (`statuses: read`), and its wait (9 min) fits inside the job timeout, so a missing deploy fails with a message.
+- **data** The emptied FAB account left by `merge_accounts` (closed, no cards, statements or transactions) was deleted in production.
+
 ## FAB card type — 2026-10-09
 
 ### Parser
