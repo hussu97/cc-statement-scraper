@@ -2450,9 +2450,13 @@ export type Database = {
       }
       spend_breakdown: {
         Args: {
+          p_bank_codes?: string[]
+          p_card_codes?: string[]
+          p_category_codes?: string[]
           p_from: string
           p_group_by: string
           p_profile_code: string
+          p_q?: string
           p_to: string
           p_top_n?: number
         }
@@ -2460,10 +2464,14 @@ export type Database = {
       }
       spend_series: {
         Args: {
+          p_bank_codes?: string[]
+          p_card_codes?: string[]
+          p_category_codes?: string[]
           p_from: string
           p_grain?: string
           p_group?: string
           p_profile_code: string
+          p_q?: string
           p_to: string
           p_top?: number
         }
