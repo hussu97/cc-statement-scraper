@@ -18,6 +18,7 @@
 		67823B3F9665BD78F8BE1182 /* PasskeysView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62D21289B23718DD5F57954 /* PasskeysView.swift */; };
 		748435885CB091FA9BFCACAA /* ActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAE2E3AE75D7627DDCE82B40 /* ActivityView.swift */; };
 		7661F492311F61EFDB72CA0D /* LedgerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDC537589817A7B6C31CC447 /* LedgerApp.swift */; };
+		76C6B0E503A29FB340C66AAD /* SpendFilterSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 264DF1988B5FD484847487E6 /* SpendFilterSheet.swift */; };
 		77AED5C567C9D18DFED64501 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 496168FB383326D0481C9AC8 /* PrivacyInfo.xcprivacy */; };
 		7A19A23E1C8368E0F3EB5B51 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 4C249495FC88BB9133CB717E /* PrivacyInfo.xcprivacy */; };
 		7B056F939B7822BC41E88540 /* LedgerShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F8A491D8C79A061F71F857D7 /* LedgerShare.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -68,6 +69,7 @@
 		076A0083646CF5850906DE83 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		15C0186C1E6AFC4A04ACCC41 /* LedgerKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LedgerKit; path = LedgerKit; sourceTree = SOURCE_ROOT; };
 		18CF2690692498221A6F2653 /* LedgerShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LedgerShare.entitlements; sourceTree = "<group>"; };
+		264DF1988B5FD484847487E6 /* SpendFilterSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendFilterSheet.swift; sourceTree = "<group>"; };
 		29A5D1F13A9777F8DF1C1BCC /* Ledger.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Ledger.entitlements; sourceTree = "<group>"; };
 		306FF1BBB7DC9A30BCC65C13 /* LogBankSMSIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogBankSMSIntent.swift; sourceTree = "<group>"; };
 		41E5147D73DD93C7A015339F /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
@@ -276,6 +278,7 @@
 			isa = PBXGroup;
 			children = (
 				05EB2567DB0EA258329DBD95 /* InsightsView.swift */,
+				264DF1988B5FD484847487E6 /* SpendFilterSheet.swift */,
 				C85D8FFE075C3A5378BB0BEC /* SpendSplitCard.swift */,
 			);
 			path = Insights;
@@ -427,6 +430,7 @@
 				860158FF70A963842E055393 /* RootView.swift in Sources */,
 				1D830163AD6DCE4782E30CE8 /* SettingsView.swift in Sources */,
 				96964A46ECACE02F55F2E30D /* SignInView.swift in Sources */,
+				76C6B0E503A29FB340C66AAD /* SpendFilterSheet.swift in Sources */,
 				068354C0DAB42FC21BBB092A /* SpendSplitCard.swift in Sources */,
 				F47A3D77AFB9C697BC01AF1B /* StatementDetailView.swift in Sources */,
 				659B1CF789C0735789CC64EE /* StatementsView.swift in Sources */,

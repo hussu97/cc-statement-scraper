@@ -2,6 +2,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { supabase, type RpcReturn } from "@/lib/supabase";
 import type { DateRange } from "@/lib/dates";
 import type { Grain, SpendGroup } from "@/lib/search";
+import type { TrendFilters } from "@/lib/trend-filters";
 import { keys } from "./keys";
 import { must, mustList } from "./api";
 
@@ -12,13 +13,39 @@ function rangeArgs(profileCode: string, r: DateRange) {
   return { p_profile_code: profileCode, p_from: r.from, p_to: r.to };
 }
 
+/** Filter arguments shared by spend_series and spend_breakdown. All optional: omitted = everything. */
+export interface SpendFilterArgs {
+  p_category_codes?: string[];
+  p_bank_codes?: string[];
+  p_card_codes?: string[];
+  p_q?: string;
+}
+
+/**
+ * RPC filter arguments for the Trends filters. Empty lists and a blank search
+ * are left out, so an unfiltered call sends exactly what it did before. Lists
+ * are sorted: selection order does not change the result, so it must not change
+ * the query key either.
+ */
+export function spendFilterArgs(f: TrendFilters | undefined): SpendFilterArgs {
+  if (!f) return {};
+  const out: SpendFilterArgs = {};
+  if (f.categories.length) out.p_category_codes = [...f.categories].sort();
+  if (f.banks.length) out.p_bank_codes = [...f.banks].sort();
+  if (f.cards.length) out.p_card_codes = [...f.cards].sort();
+  const q = f.q?.trim();
+  if (q) out.p_q = q;
+  return out;
+}
+
 /**
  * Spend over time. With `top`, the server folds groups outside the top N (by
  * total over the whole range) into one "Other" group (group_key null).
  */
-export function useSpendSeries(profileCode: string, range: DateRange, grain: Grain, group: SpendGroup, top?: number, enabled = true) {
+export function useSpendSeries(profileCode: string, range: DateRange, grain: Grain, group: SpendGroup, top?: number, enabled = true, filters?: TrendFilters) {
+  const filterArgs = spendFilterArgs(filters);
   return useQuery({
-    queryKey: keys.analytics(profileCode, "series", range, grain, group, top ?? null),
+    queryKey: keys.analytics(profileCode, "series", range, grain, group, top ?? null, filterArgs),
     enabled,
     placeholderData: keepPreviousData,
     queryFn: async () =>
@@ -28,6 +55,7 @@ export function useSpendSeries(profileCode: string, range: DateRange, grain: Gra
           p_grain: grain,
           p_group: group,
           ...(top ? { p_top: top } : {}),
+          ...filterArgs,
         }),
       ),
   });
@@ -174,9 +202,10 @@ export interface SpendBreakdown {
 }
 
 /** Monthly spend split by category, bank or merchant: top N plus "Others", computed on the server from v_spend. */
-export function useSpendBreakdown(profileCode: string, range: DateRange, groupBy: BreakdownGroupBy, topN = BREAKDOWN_TOP_N) {
+export function useSpendBreakdown(profileCode: string, range: DateRange, groupBy: BreakdownGroupBy, topN = BREAKDOWN_TOP_N, filters?: TrendFilters) {
+  const filterArgs = spendFilterArgs(filters);
   return useQuery({
-    queryKey: keys.analytics(profileCode, "breakdown", range, groupBy, topN),
+    queryKey: keys.analytics(profileCode, "breakdown", range, groupBy, topN, filterArgs),
     placeholderData: keepPreviousData,
     queryFn: async () =>
       must(
@@ -184,6 +213,7 @@ export function useSpendBreakdown(profileCode: string, range: DateRange, groupBy
           ...rangeArgs(profileCode, range),
           p_group_by: groupBy,
           p_top_n: topN,
+          ...filterArgs,
         }),
       ) as unknown as SpendBreakdown,
   });

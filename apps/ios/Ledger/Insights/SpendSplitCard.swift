@@ -11,26 +11,41 @@ struct SpendSplitCard: View {
     let to: CalendarDay
     let profileCode: String
     @Environment(SpendSplitModel.self) private var split
+    @State private var showsFilter = false
 
     var body: some View {
         @Bindable var split = split
         Card {
-            SectionHeader(title: "Monthly spend")
+            HStack(alignment: .firstTextBaseline) {
+                SectionHeader(title: "Monthly spend")
+                FilterButton(count: split.filter.activeCount) { showsFilter = true }
+            }
+            if let summary = split.filterSummary {
+                FilterSummary(text: summary, clear: split.clearFilter)
+            }
             Picker("Split by", selection: $split.grouping) {
                 ForEach(SpendSplitGrouping.allCases) { Text($0.label).tag($0) }
             }
             .pickerStyle(.segmented)
             if split.grouping == .none {
-                TrendBars(points: trend)
+                TrendBody(state: split.trend(unfiltered: trend), empty: split.emptyMessage,
+                          retry: { Task { await load(force: true) } })
             } else {
                 BreakdownBody(split: split, retry: { Task { await load(force: true) } })
             }
         }
-        .task(id: Key(grouping: split.grouping, from: from, to: to, profile: profileCode)) { await load(force: false) }
+        .task(id: Key(grouping: split.grouping, filter: split.filter, from: from, to: to, profile: profileCode)) {
+            await load(force: false)
+        }
+        .sheet(isPresented: $showsFilter) {
+            SpendFilterSheet(initial: split.filter, options: split.options) { split.filter = $0 }
+                .task { await split.loadOptions(profileCode: profileCode) }
+        }
     }
 
     private struct Key: Hashable {
         let grouping: SpendSplitGrouping
+        let filter: SpendFilter
         let from: CalendarDay
         let to: CalendarDay
         let profile: String
@@ -41,13 +56,74 @@ struct SpendSplitCard: View {
     }
 }
 
-/// The unsplit bars.
+/// The filter button, with how many filters are on.
+private struct FilterButton: View {
+    let count: Int
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: count > 0 ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                Text(count > 0 ? "Filter · \(count)" : "Filter")
+            }
+            .font(Typography.caption)
+        }
+        .buttonStyle(.borderless)
+        .tint(Palette.accent)
+        .accessibilityLabel(count > 0 ? "Filter, \(count) on" : "Filter")
+    }
+}
+
+/// What the chart is filtered to, and a way back to all spend.
+private struct FilterSummary: View {
+    let text: String
+    let clear: () -> Void
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(text).font(Typography.caption).foregroundStyle(Palette.ink2).lineLimit(2)
+            Spacer(minLength: 4)
+            Button("Clear", action: clear).font(Typography.caption).buttonStyle(.borderless).tint(Palette.accent)
+                .accessibilityLabel("Clear filters")
+        }
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .background(Palette.accentSoft, in: RoundedRectangle(cornerRadius: Metrics.radiusSm))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// The unsplit bars: the screen's trend, or the filtered one with its own states.
+private struct TrendBody: View {
+    let state: LoadState<[SpendPoint]>
+    let empty: String
+    let retry: () -> Void
+
+    var body: some View {
+        if let points = state.value {
+            TrendBars(points: points, empty: empty).opacity(state.isLoading ? 0.5 : 1)
+        } else if let error = state.errorMessage {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(error).font(Typography.rowMeta).foregroundStyle(Palette.danger)
+                Button("Try again", action: retry).buttonStyle(.bordered).tint(Palette.accent)
+            }
+        } else {
+            HStack(spacing: 10) {
+                ProgressView()
+                Text("Loading…").font(Typography.rowMeta).foregroundStyle(Palette.muted)
+            }
+            .frame(height: 180)
+        }
+    }
+}
+
 private struct TrendBars: View {
     let points: [SpendPoint]
+    let empty: String
 
     var body: some View {
         if points.isEmpty {
-            Text("No spending in this period.").font(Typography.rowMeta).foregroundStyle(Palette.muted)
+            Text(empty).font(Typography.rowMeta).foregroundStyle(Palette.muted)
         } else {
             Chart(points) { point in
                 BarMark(x: .value("Month", point.monthLabel), y: .value("AED", point.amount.chartValue))
@@ -68,7 +144,7 @@ private struct BreakdownBody: View {
     var body: some View {
         if let b = split.state.value {
             if b.isEmpty {
-                Text("No spending in this period.").font(Typography.rowMeta).foregroundStyle(Palette.muted)
+                Text(split.emptyMessage).font(Typography.rowMeta).foregroundStyle(Palette.muted)
             } else {
                 if let callout = split.callout { CalloutBox(callout: callout) }
                 StackedChart(breakdown: b, selected: $split.selectedMonth)

@@ -4,7 +4,11 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import { insightsRoute } from "@/router";
 import { pivotSeries, useSpendSeries, type Grain, type SpendGroup, type SpendSeriesRow } from "@/data/analytics";
 import type { DateRange } from "@/lib/dates";
-import { DEFAULT_TREND_GROUP, withTrends } from "@/lib/search";
+import { DEFAULT_TREND_GROUP, withTrendFilters, withTrends } from "@/lib/search";
+import { trendFilterCount, trendFilters, type TrendFilters } from "@/lib/trend-filters";
+import { useFilterMeta } from "@/data/overview";
+import { Button } from "@/components/ui/button";
+import { TrendFilterBar } from "./trend-filters";
 import { Card, CardHeader } from "@/components/ui/display";
 import { Segmented } from "@/components/ui/primitives";
 import { EmptyState, LoadingBlock, QueryView } from "@/components/ui/states";
@@ -48,7 +52,29 @@ export function TrendsTab({ profileCode, range }: { profileCode: string; range: 
   const split = grain === "month" && isSplit(group) ? group : null;
   const setTrends = (patch: { group?: SpendGroup; grain?: Grain }) =>
     void navigate({ search: (s) => withTrends(s, patch), replace: true });
-  const q = useSpendSeries(profileCode, range, grain, group, TOP_GROUPS, split === null);
+  // Filters live in the URL too (?cat=&bank=&card=&q=); the server applies them.
+  const filters = useMemo(() => trendFilters(search), [search]);
+  const setFilters = (f: TrendFilters) => void navigate({ search: (s) => withTrendFilters(s, f), replace: true });
+  const filtered = trendFilterCount(filters) > 0;
+  const meta = useFilterMeta(profileCode);
+  const q = useSpendSeries(profileCode, range, grain, group, TOP_GROUPS, split === null, filters);
+  const empty = filtered ? (
+    <EmptyState
+      title="No spending matches these filters"
+      className="h-80"
+      action={
+        <Button size="sm" onClick={() => setFilters({ categories: [], banks: [], cards: [] })}>
+          Clear filters
+        </Button>
+      }
+    >
+      Nothing in this range matches every filter. Remove one, or pick a longer range.
+    </EmptyState>
+  ) : (
+    <EmptyState title="No spending in this range" className="h-80">
+      Pick a longer range, or check that your cards are syncing.
+    </EmptyState>
+  );
 
   return (
     <Card>
@@ -59,20 +85,17 @@ export function TrendsTab({ profileCode, range }: { profileCode: string; range: 
         </div>
         <Segmented ariaLabel="Bucket size" value={grain} onChange={(g) => setTrends({ grain: g })} options={group === "bank" ? GRAINS.filter((g) => g.value === "month") : GRAINS} />
       </div>
+      <TrendFilterBar filters={filters} meta={meta.data} onChange={setFilters} />
       {split !== null ? (
         <div className="px-3 pb-4 md:px-4">
-          <SpendSplitChart profileCode={profileCode} range={range} split={split} height="h-72 md:h-80" />
+          <SpendSplitChart profileCode={profileCode} range={range} split={split} height="h-72 md:h-80" filters={filters} empty={empty} />
         </div>
       ) : (
         <QueryView
           query={q}
           loading={<LoadingBlock className="h-80" />}
           isEmpty={(rows) => rows.length === 0}
-          empty={
-            <EmptyState title="No spending in this range" className="h-80">
-              Pick a longer range, or check that your cards are syncing.
-            </EmptyState>
-          }
+          empty={empty}
         >
           {(rows) => <TrendsChart rows={rows} grain={grain} byCategory={group === "category"} />}
         </QueryView>

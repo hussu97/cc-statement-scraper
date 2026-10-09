@@ -9,16 +9,18 @@ extension SupabaseLedgerAPI {
     }
 
     public func spendBreakdown(profileCode: String, from: CalendarDay, to: CalendarDay, groupBy: SpendSplitGrouping,
-                               topN: Int) async throws -> SpendBreakdown {
+                               topN: Int, filter: SpendFilter) async throws -> SpendBreakdown {
         guard groupBy != .none else {
             throw LedgerAPIError.server(status: nil, code: "22023", message: "Choose category, bank or merchant.")
         }
         let data: Data
         do {
-            data = try await client.rpc("spend_breakdown", params: [
-                "p_profile_code": AnyJSON.string(profileCode), "p_from": .string(from.iso), "p_to": .string(to.iso),
+            let params: [String: AnyJSON] = [
+                "p_profile_code": .string(profileCode), "p_from": .string(from.iso), "p_to": .string(to.iso),
                 "p_group_by": .string(groupBy.rawValue), "p_top_n": .integer(topN),
-            ]).execute().data
+            ]
+            data = try await client.rpc("spend_breakdown", params: params.merging(filter.rpcParams) { a, _ in a })
+                .execute().data
         } catch {
             throw Self.map(error)
         }

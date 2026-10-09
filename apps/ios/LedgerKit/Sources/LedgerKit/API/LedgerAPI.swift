@@ -18,7 +18,9 @@ public protocol LedgerAPI: SMSIngestAPI {
     // Analytics (SQL RPCs)
     func overview(profileCode: String, month: CalendarDay?) async throws -> Overview
     func categoryBreakdown(profileCode: String, from: CalendarDay, to: CalendarDay) async throws -> [CategorySpend]
-    func spendSeries(profileCode: String, from: CalendarDay, to: CalendarDay, grain: SpendGrain, group: SpendGroup) async throws -> [SpendPoint]
+    /// `rpc('spend_series')` over the spend `filter` keeps (empty: all spend).
+    func spendSeries(profileCode: String, from: CalendarDay, to: CalendarDay, grain: SpendGrain, group: SpendGroup,
+                     filter: SpendFilter) async throws -> [SpendPoint]
     func merchantLeaderboard(profileCode: String, from: CalendarDay, to: CalendarDay, limit: Int) async throws -> [MerchantSpend]
     func statementCycles(profileCode: String, limit: Int) async throws -> [StatementCycle]
     func budgetStatus(profileCode: String, month: CalendarDay?) async throws -> [BudgetStatus]
@@ -55,9 +57,9 @@ public protocol LedgerAPI: SMSIngestAPI {
     // Statement detail, spend split, banks, upload timeline (SupabaseLedgerAPI+Statements.swift)
     /// `rpc('statement_detail')`. P0002 when the statement is unknown to the profile.
     func statementDetail(profileCode: String, stmtCode: String) async throws -> StatementDetail
-    /// `rpc('spend_breakdown')`: top `topN` groups plus Others, by month.
+    /// `rpc('spend_breakdown')`: top `topN` groups plus Others, by month, of the spend `filter` keeps.
     func spendBreakdown(profileCode: String, from: CalendarDay, to: CalendarDay, groupBy: SpendSplitGrouping,
-                        topN: Int) async throws -> SpendBreakdown
+                        topN: Int, filter: SpendFilter) async throws -> SpendBreakdown
     /// `public.banks` (names, logos, SMS senders).
     func banks() async throws -> [BankInfo]
     /// `public.document_events` of these documents, in server order.
@@ -71,6 +73,19 @@ public protocol LedgerAPI: SMSIngestAPI {
 }
 
 extension LedgerAPI {
+    /// All spend, unfiltered.
+    public func spendSeries(profileCode: String, from: CalendarDay, to: CalendarDay, grain: SpendGrain,
+                            group: SpendGroup) async throws -> [SpendPoint] {
+        try await spendSeries(profileCode: profileCode, from: from, to: to, grain: grain, group: group, filter: SpendFilter())
+    }
+
+    /// All spend, unfiltered.
+    public func spendBreakdown(profileCode: String, from: CalendarDay, to: CalendarDay, groupBy: SpendSplitGrouping,
+                               topN: Int) async throws -> SpendBreakdown {
+        try await spendBreakdown(profileCode: profileCode, from: from, to: to, groupBy: groupBy, topN: topN,
+                                 filter: SpendFilter())
+    }
+
     /// The newest uploads, first page only.
     public func documents(profileCode: String, limit: Int) async throws -> [DocumentRecord] {
         try await documents(profileCode: profileCode, page: PageRequest(offset: 0, limit: limit)).items

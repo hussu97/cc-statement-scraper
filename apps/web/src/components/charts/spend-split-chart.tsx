@@ -1,10 +1,11 @@
-import { useId, useMemo } from "react";
+import { useId, useMemo, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { TooltipContentProps } from "recharts";
 import type { NameType, ValueType } from "recharts/types/component/DefaultTooltipContent";
 import { useSpendBreakdown } from "@/data/analytics";
 import { formatMonth, type DateRange } from "@/lib/dates";
+import type { TrendFilters } from "@/lib/trend-filters";
 import { formatMoney, formatPercent } from "@/lib/money";
 import { useMediaQuery } from "@/lib/hooks";
 import { cn } from "@/lib/cn";
@@ -24,16 +25,32 @@ export function SplitControl({ value, onChange, className }: { value: SpendSplit
 /**
  * Monthly spend bars, optionally stacked by category, bank or merchant (top 10
  * plus "Others"), with a totals list under the chart. Every amount and share
- * comes from spend_breakdown (CLAUDE.md §2.2).
+ * comes from spend_breakdown (CLAUDE.md §2.2). `filters` narrows it (Insights
+ * Trends); `empty` replaces the default empty state, e.g. to say a filter
+ * combination matched nothing.
  */
-export function SpendSplitChart({ profileCode, range, split, height = "h-64 md:h-72" }: { profileCode: string; range: DateRange; split: SpendSplit; height?: string }) {
+export function SpendSplitChart({
+  profileCode,
+  range,
+  split,
+  height = "h-64 md:h-72",
+  filters,
+  empty,
+}: {
+  profileCode: string;
+  range: DateRange;
+  split: SpendSplit;
+  height?: string;
+  filters?: TrendFilters;
+  empty?: ReactNode;
+}) {
   const groupBy = breakdownGroupFor(split);
-  const q = useSpendBreakdown(profileCode, range, groupBy);
+  const q = useSpendBreakdown(profileCode, range, groupBy, undefined, filters);
   const chart = useMemo(() => (q.data ? splitChart(q.data, split) : null), [q.data, split]);
   if (q.isLoading) return <LoadingBlock className={height} />;
   if (q.isError || !chart) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
   if (chart.empty)
-    return (
+    return empty ?? (
       <EmptyState title="No spending in this range" className={height}>
         Pick a longer range, or check that your cards are syncing.
       </EmptyState>
