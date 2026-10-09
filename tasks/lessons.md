@@ -9,6 +9,7 @@
 
 | When | Lesson |
 |---|---|
+| 2026-10-09 | [Golden parity is local-only: a worktree (and CI) skip it](#golden-parity-is-local-only-a-worktree-and-ci-skip-it) |
 | 2026-10-08 | [`supabase config push` has no dry run and pushes the whole file](#supabase-config-push-has-no-dry-run-and-pushes-the-whole-file) |
 | 2026-10-08 | [A push to `main` is a production deploy](#a-push-to-main-is-a-production-deploy) |
 | 2026-10-08 | [Stage explicit paths; `git add -A` commits other people's work](#stage-explicit-paths-git-add--a-commits-other-peoples-work) |
@@ -27,6 +28,19 @@
 | 2026-10-08 | [Tooling defaults that don't work here: `gh` account, Supabase MCP, `localhost`, pip](#tooling-defaults-that-dont-work-here-gh-account-supabase-mcp-localhost-pip) |
 
 ## Lessons
+
+### Golden parity is local-only: a worktree (and CI) skip it
+- **What went wrong**: parser 2026.10.4 (`b601b67`) changed `merchant_normalized` for glued
+  cities. It went to `main` with every check green, because `tests/test_golden_parity.py` skips
+  when `services/parser/tests/golden/` is absent, and that folder (private, gitignored) exists
+  only in the main checkout, not in worktrees or CI. The main checkout's pre-push then failed
+  for the next person who pushed a parser-area change.
+- **Rule**: a parser change that alters output runs golden parity against the real snapshots
+  before it is pushed: from the main checkout, or in a worktree with a temporary symlink
+  (`ln -s <main>/services/parser/tests/golden services/parser/tests/golden`, removed after).
+  An intended output change becomes a documented `ALLOWED_DELTAS` entry, never a loosened assert.
+- **Enforced by**: nothing yet. Candidate guard: pre-push warns when the parser area changed
+  and `tests/golden/` is missing but the main checkout has it.
 
 ### `supabase config push` has no dry run and pushes the whole file
 - **What went wrong**: `supabase config push` sends the **whole** `supabase/config.toml` to the

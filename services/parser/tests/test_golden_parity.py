@@ -17,6 +17,7 @@ import pytest
 from ccs_parser.contract import MAX_STATEMENT_PERIOD_DAYS
 from ccs_parser.domain.parsing.models import ParserError
 from ccs_parser.kinds import map_kind
+from ccs_parser.places import separate_glued_place
 from ccs_parser.service import money, money_or_none, parse_document
 
 GOLDEN_DIR = Path(__file__).parent / "golden"
@@ -32,9 +33,12 @@ KIND_FEE_TO_PURCHASE: dict[str, int] = {}
 #   * DP-03/04: ENBD prints the wrong year at the Dec/Jan boundary; legacy kept it.
 #   * DP-07: FAB rows whose original amount is "KWD 18.750" / "EUR 108,99" were
 #     skipped by legacy; they are accepted only if they make the debits reconcile.
+#   * 2026.10.4: merchant_normalized separates a city glued to the merchant
+#     ("SOCIETSHARJAH" -> "SOCIET SHARJAH"); description_raw and the fingerprint are unchanged.
 ALLOWED_DELTAS: dict[str, set[str]] = {
     "period year corrected (DP-03/04)": set(),
     "rows legacy skipped (DP-07)": set(),
+    "glued place separated (2026.10.4)": set(),
 }
 RECOVERED_LINES: dict[str, int] = {}
 
@@ -155,7 +159,9 @@ def test_golden_parity(golden_path: Path) -> None:
             assert ln_new["direction"] == ln_old["direction"], ctx
             assert ln_new["currency_original"] == ln_old["currency_original"], ctx
             assert ln_new["description_raw"] == ln_old["merchant_raw"], ctx
-            assert ln_new["merchant_normalized"] == ln_old["merchant_normalized"], ctx
+            if ln_new["merchant_normalized"] != ln_old["merchant_normalized"]:
+                assert ln_new["merchant_normalized"] == separate_glued_place(ln_old["merchant_normalized"]), ctx
+                ALLOWED_DELTAS["glued place separated (2026.10.4)"].add(golden_path.stem)
             assert ln_new["legacy_fingerprint"] == ln_old["fingerprint"], ctx
 
             expected_kind = map_kind(ln_old["kind"], ln_old["merchant_normalized"], ln_old["direction"])
