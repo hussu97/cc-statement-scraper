@@ -28,7 +28,7 @@ globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
 }) as typeof fetch;
 
 Deno.test("llm_categorize passes the batch's merchant codes to apply_llm_suggestions (DB-37)", async () => {
-  answer = { suggestions: [{ merchant_code: "mer_a", category_code: "cat_food", confidence: 0.9 }] };
+  answer = { suggestions: [{ merchant: "m1", category: "c1", confidence: 0.9 }] };
   const db = new FakeDb({
     rpcs: {
       worker_llm_context: () => ({
@@ -52,6 +52,28 @@ Deno.test("llm_categorize passes the batch's merchant codes to apply_llm_suggest
   const call = db.rpcCalls("apply_llm_suggestions")[0];
   assertEquals(call.p_merchant_codes, ["mer_a", "mer_b"], "mer_b (declined) is reported too");
   assertEquals(call.p_category_set_hash, "h1");
+  assertEquals(
+    call.p_suggestions,
+    [{ merchant_code: "mer_a", category_code: "cat_food", confidence: 0.9 }],
+    "refs are mapped back to codes",
+  );
+});
+
+Deno.test("llm_categorize asks about at most LLM_BATCH_MAX (100) merchants per call", async () => {
+  answer = { suggestions: [] };
+  const db = new FakeDb({
+    rpcs: {
+      worker_llm_context: () => ({ data: { categories: [], merchants: [], category_set_hash: "h1" }, error: null }),
+      queue_delete: () => ({ data: true, error: null }),
+    },
+  });
+  const codes = Array.from({ length: 150 }, (_, i) => `mer_${i}`);
+  await processLlmCategorize(db.asDb(), {
+    msg_id: 2,
+    read_ct: 1,
+    message: { profile_code: "prf_x", merchant_codes: codes },
+  });
+  assertEquals(db.rpcCalls("worker_llm_context")[0].p_merchant_codes, codes.slice(0, 100));
 });
 
 Deno.test("sms_fallback: propose_sms_template 22023 (sender not the bank's) dead-letters once", async () => {

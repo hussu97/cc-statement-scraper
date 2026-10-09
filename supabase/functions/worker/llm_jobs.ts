@@ -7,6 +7,7 @@ import {
   categorizeSchema,
   categorizeUserPrompt,
   isTransientLlmError,
+  LLM_BATCH_MAX,
   type LlmCategory,
   llmErrorReason,
   type LlmMerchant,
@@ -89,7 +90,7 @@ export async function processLlmCategorize(svc: Db, msg: QueueMessage): Promise<
   }
   const { data: ctx, error } = await svc.rpc("worker_llm_context", {
     p_profile_code: m.profile_code,
-    p_merchant_codes: m.merchant_codes.slice(0, 50),
+    p_merchant_codes: m.merchant_codes.slice(0, LLM_BATCH_MAX),
   });
   if (error) throw new Error(`worker_llm_context failed (${error.code})`);
   const categories = (ctx?.categories ?? []) as LlmCategory[];
@@ -104,7 +105,7 @@ export async function processLlmCategorize(svc: Db, msg: QueueMessage): Promise<
     const raw = await structuredCall({
       system: CATEGORIZE_SYSTEM,
       user: categorizeUserPrompt(categories, merchants),
-      schema: categorizeSchema(merchantCodes, categoryCodes),
+      schema: categorizeSchema(merchantCodes.length, categoryCodes.length),
     });
     const suggestions = validateSuggestions(raw, merchantCodes, categoryCodes);
     const { data: applied, error: applyErr } = await svc.rpc("apply_llm_suggestions", {

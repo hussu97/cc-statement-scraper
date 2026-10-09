@@ -116,12 +116,21 @@ export interface Suggestion {
   confidence: number;
 }
 
+/** Merchants per llm_categorize call; private.enqueue_llm_categorize batches the same way. */
+export const LLM_BATCH_MAX = 100;
+
 export const CATEGORIZE_SYSTEM = "You categorise credit-card merchants for a personal finance ledger in the UAE. " +
   "For each merchant, pick the single best category from the provided list, using the merchant name " +
-  "and example statement descriptions. Give a confidence between 0 and 1. If no category fits or you " +
-  "cannot tell what the merchant is, leave that merchant out instead of guessing.";
+  "and example statement descriptions. Answer with the merchant's ref and the category's ref. Give a " +
+  "confidence between 0 and 1. If no category fits or you cannot tell what the merchant is, leave that " +
+  "merchant out instead of guessing.";
 
-export function categorizeSchema(merchantCodes: string[], categoryCodes: string[]): Record<string, unknown> {
+// Prompt and output use short refs (m1…, c1…) instead of the 30-character codes: the model echoes
+// two of them per merchant, so codes were most of the output tokens. Ref i+1 is index i.
+const mRef = (i: number) => `m${i + 1}`;
+const cRef = (i: number) => `c${i + 1}`;
+
+export function categorizeSchema(merchantCount: number, categoryCount: number): Record<string, unknown> {
   return {
     type: "object",
     properties: {
@@ -130,11 +139,11 @@ export function categorizeSchema(merchantCodes: string[], categoryCodes: string[
         items: {
           type: "object",
           properties: {
-            merchant_code: { type: "string", enum: merchantCodes },
-            category_code: { type: "string", enum: categoryCodes },
+            merchant: { type: "string", enum: Array.from({ length: merchantCount }, (_, i) => mRef(i)) },
+            category: { type: "string", enum: Array.from({ length: categoryCount }, (_, i) => cRef(i)) },
             confidence: { type: "number" },
           },
-          required: ["merchant_code", "category_code", "confidence"],
+          required: ["merchant", "category", "confidence"],
           additionalProperties: false,
         },
       },
@@ -146,28 +155,29 @@ export function categorizeSchema(merchantCodes: string[], categoryCodes: string[
 
 export function categorizeUserPrompt(categories: LlmCategory[], merchants: LlmMerchant[]): string {
   return JSON.stringify({
-    categories: categories.map((c) => ({ category_code: c.category_code, name: c.name, kind: c.kind })),
-    merchants: merchants.map((m) => ({
-      merchant_code: m.merchant_code,
-      name: m.name,
-      examples: (m.examples ?? []).slice(0, 3),
-    })),
+    categories: categories.map((c, i) => ({ ref: cRef(i), name: c.name, kind: c.kind })),
+    merchants: merchants.map((m, i) => ({ ref: mRef(i), name: m.name, examples: (m.examples ?? []).slice(0, 3) })),
   });
 }
 
-/** Keep only well-formed suggestions for known merchants/categories; one per merchant (highest confidence). */
+/**
+ * Map the model's refs back to codes and keep only well-formed suggestions for known
+ * merchants/categories; one per merchant (highest confidence). `merchantCodes` and
+ * `categoryCodes` are in the order the prompt listed them.
+ */
 export function validateSuggestions(raw: unknown, merchantCodes: string[], categoryCodes: string[]): Suggestion[] {
   if (!raw || typeof raw !== "object") throw new LlmOutputError("output is not an object");
   const list = (raw as { suggestions?: unknown }).suggestions;
   if (!Array.isArray(list)) throw new LlmOutputError("suggestions is not an array");
-  const merchants = new Set(merchantCodes);
-  const categories = new Set(categoryCodes);
+  const merchants = new Map(merchantCodes.map((code, i) => [mRef(i), code]));
+  const categories = new Map(categoryCodes.map((code, i) => [cRef(i), code]));
   const best = new Map<string, Suggestion>();
   for (const s of list) {
     if (!s || typeof s !== "object") continue;
-    const { merchant_code, category_code, confidence } = s as Record<string, unknown>;
-    if (typeof merchant_code !== "string" || !merchants.has(merchant_code)) continue;
-    if (typeof category_code !== "string" || !categories.has(category_code)) continue;
+    const { merchant, category, confidence } = s as Record<string, unknown>;
+    const merchant_code = typeof merchant === "string" ? merchants.get(merchant) : undefined;
+    const category_code = typeof category === "string" ? categories.get(category) : undefined;
+    if (!merchant_code || !category_code) continue;
     const c = typeof confidence === "number" ? confidence : Number(confidence);
     if (!Number.isFinite(c)) continue;
     const conf = Math.round(Math.min(1, Math.max(0, c)) * 1000) / 1000;

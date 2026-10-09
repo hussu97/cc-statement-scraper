@@ -410,13 +410,15 @@ set-based `UPDATE … WHERE … IS DISTINCT FROM` applies the results.
 
 **Cron:**
 - `ledger-recategorize-sweep` (every 3 h at :17) recomputes rows whose `rules_version` is stale.
-- `ledger-llm-enqueue` (22:30 UTC nightly) batches uncovered merchants in groups of 25 into
-  `llm_categorize`, re-asking only when the category set hash changes. Merchants in
+- `ledger-llm-enqueue` (22:30 UTC nightly) batches uncovered merchants in groups of 100 into
+  `llm_categorize`. After a category-set change, an existing suggestion is re-asked only if its
+  category was archived or edited after the suggestion, or its confidence is below 0.8. Merchants in
   `merchant_category_skips` are left out: `declined` until the category set changes,
   `rejected` for good.
 
 **LLM.** Claude Haiku (`LLM_MODEL`, default `claude-haiku-5-5`) receives only merchant names, up to
-3 example descriptions per merchant and the category list. It never sees amounts or PDFs.
+3 distinct example descriptions per merchant and the category list, keyed by short refs (`m1`, `c1`)
+that the worker maps back to codes. It never sees amounts or PDFs.
 Suggestions below 0.5 confidence are dropped and never override a manual merchant choice. When
 `ANTHROPIC_API_KEY` is unset, the worker leaves the LLM queues alone and warns once.
 
