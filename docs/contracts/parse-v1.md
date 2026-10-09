@@ -120,6 +120,10 @@ Field rules:
 - MASHREQ foreign rows (`<merchant> <ref> MYR 500.00 @0.9400 470.00`) are split into
   `currency_original`, `amount_original` and `fx_rate` (the printed rate); `description_raw` is the
   merchant only. `legacy_fingerprint` is still computed from the unsplit text, as legacy did.
+- `merchant_normalized` is `description_raw` upper-cased with whitespace collapsed, plus (since
+  parser 2026.10.4) a space before a city that the statement glued to the name: MASHREQ PDFs and
+  SIB history print `careem hala ridedubai`, which becomes `CAREEM HALA RIDE DUBAI`
+  (`ccs_parser/places.py`). `description_raw` stays as printed: ingest hashes it into `line_key`.
 - `fx_rate` is AED per one unit of `currency_original`, as a decimal string, or null. An AED line is
   always `"1"`. A foreign line has the bank's printed rate (MASHREQ `@0.9400`, ADCB `[1 EUR=AED …]`)
   or the ratio of the two amounts; null when unknown or when it would round to zero at 8 places.
