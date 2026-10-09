@@ -1,5 +1,12 @@
 # Changelog
 
+## SIB "Statement details" export — 2026-10-09
+
+### Parser
+
+- **fix** The SIB app's "Statement details" PDF (card summary, then the rows since the last billing date) failed with `BANK_UNDETECTED`: none of the detection markers matched. It is now detected (`Statement details` + `Card issuer SIB`) and parsed by the transaction-history parser, whose row layout it shares; the card number comes from the bare `Card 5290 xxxx xxxx 4821` header and the card type from `Card issuer …`. A replaced card's opening "Balance Migration" row is an `adjustment`, not a purchase, so the old card's billed balance is not counted as spend twice. 2026.10.5
+- **test** `test_sib_statement_details_export_is_a_history`, `test_sib_app_statement_details_export_is_detected`
+
 ## SMS: the phone sends, the server decides — 2026-10-09
 
 ### iOS

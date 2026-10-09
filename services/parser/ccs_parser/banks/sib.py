@@ -49,6 +49,8 @@ _TH_DATE_FMT = "%d %b %Y"
 # The card number header of a history export: "Account no. 5290 xxxx xxxx 9218". Tolerates
 # "Card no." / "Card number" and a ':'; the number itself is read by _masked_card_last4.
 _ACCOUNT_NO_RE = re.compile(r"(?:Account|Card)\s+(?:no\.?|number)\s*[:.]?\s*(.+)", re.IGNORECASE)
+# The app's "Statement details" export prints the number with a bare label: "Card 5102 xxxx xxxx 9213".
+_BARE_CARD_RE = re.compile(r"^Card\s+(\d{4}\s.*\d{4})$", re.IGNORECASE)
 # A masked card number: "5290 xxxx xxxx 9218", "5290XXXXXXXX9218", "5290 **** **** 9218",
 # "xxxx xxxx xxxx 9218". A replaced card has a new number on the same layout.
 _MASKED_CARD_RE = re.compile(
@@ -69,10 +71,13 @@ def _header_card_last4(value: str) -> str | None:
         return masked
     digits = re.sub(r"[^0-9]", "", value or "")
     return digits[-4:] if len(digits) >= 4 else None
-_ACCOUNT_TYPE_RE = re.compile(r"Account\s+type\s+(.+)", re.IGNORECASE)
+_ACCOUNT_TYPE_RE = re.compile(r"(?:Account\s+type|Card\s+issuer)\s+(.+)", re.IGNORECASE)
 _STATEMENT_CUTOFF_DAY = 12
 _TH_PAYMENT_KEYWORDS = ("CREDIT CARD PAYMENT",)
 _TH_FEE_KEYWORDS = ("MURABAHA PROFIT", "FINANCE CHARGE", "SERVICE CHARGE")
+# A replaced card opens with the old card's billed balance moved onto it ("Balance Migration -
+# Retail POS"): not new spend, which the old card's rows already hold.
+_TH_ADJUSTMENT_KEYWORDS = ("BALANCE MIGRATION",)
 
 
 def _extract_statement_reference(lines: list[str]) -> str | None:
@@ -202,10 +207,21 @@ def parse_sib_statement(pdf_path: str | Path, pdf_password: str) -> StatementPar
     )
 
 
+# Titles of the app's history-shaped exports: "Transaction history" and "Statement details"
+# (card summary + transactions since the last billing date); both share the row layout.
+_HISTORY_TITLES = ("TRANSACTION HISTORY", "STATEMENT DETAILS")
+
+
+def _card_header_value(line: str) -> str | None:
+    """The card-number value of a history header line ("Account no. …", "Card …"), else None."""
+    match = _ACCOUNT_NO_RE.search(line) or _BARE_CARD_RE.match(line)
+    return match.group(1) if match else None
+
+
 def is_transaction_history(lines: list[str]) -> bool:
     """Return True if the PDF text looks like a SIB transaction history export."""
     for line in lines[:10]:
-        if "TRANSACTION HISTORY" in line.upper():
+        if any(title in line.upper() for title in _HISTORY_TITLES):
             return True
     return False
 
@@ -240,6 +256,8 @@ def _sib_history_platform_amount(source_amount: float) -> float:
 
 def _classify_sib_history_kind(merchant_normalized: str, source_amount: float, platform_amount: float) -> str:
     merchant = merchant_normalized.upper()
+    if any(keyword in merchant for keyword in _TH_ADJUSTMENT_KEYWORDS):
+        return "adjustment"
     if source_amount > 0:
         if any(keyword in merchant for keyword in _TH_PAYMENT_KEYWORDS):
             return "payment"
@@ -278,10 +296,10 @@ def parse_sib_transaction_history(pdf_path: str | Path, pdf_password: str | None
     card_type: str | None = None
 
     for line in lines[:15]:
-        acct_match = _ACCOUNT_NO_RE.search(line)
-        if acct_match:
+        card_value = _card_header_value(line)
+        if card_value:
             if card_last4 is None:
-                card_last4 = _header_card_last4(acct_match.group(1))
+                card_last4 = _header_card_last4(card_value)
             continue
         acct_type_match = _ACCOUNT_TYPE_RE.search(line)
         if acct_type_match:
@@ -313,9 +331,9 @@ def parse_sib_transaction_history(pdf_path: str | Path, pdf_password: str | None
 
     for line in lines:
         m = _TH_ROW_RE.match(line)
-        acct_match = None if m else _ACCOUNT_NO_RE.search(line)
-        if acct_match:
-            section_last4 = _masked_card_last4(acct_match.group(1))
+        card_value = None if m else _card_header_value(line)
+        if card_value:
+            section_last4 = _masked_card_last4(card_value)
             if section_last4:
                 card_last4 = section_last4
             continue

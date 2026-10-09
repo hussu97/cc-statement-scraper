@@ -204,3 +204,40 @@ def test_sib_statement_reads_a_lowercase_masked_card(monkeypatch: pytest.MonkeyP
     result = parse_sib_statement(Path("dummy-sib.pdf"), "pw")
     assert result.metadata["card_last4"] == "4821"
     assert result.transactions[0].card_last4 == "4821"
+
+
+_STATEMENT_DETAILS = "\n".join(
+    [
+        "Statement details",
+        "JANE Q SAMPLE",
+        "Card 5290 xxxx xxxx 4821",
+        "Card issuer SIB MC Cashback",
+        "Status Active",
+        "Credit limit AED 10,000.00",
+        "Billing date 14 Sep 2026",
+        "Purchases AED 1,520.50",
+        "Last payment AED 1,800.00",
+        "Date Details Amount",
+        "08 Oct 2026 CORNER GROCERY SHARJAH AED -120.50",
+        "15 Sep 2026 Credit Card Payment AED 1,800.00",
+        "15 Sep 2026 Balance Migration - Retail POS AED -1,400.00",
+    ]
+)
+
+
+def test_sib_statement_details_export_is_a_history(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The app's "Statement details" export: card summary, then history-layout rows."""
+    from ccs_parser.banks.sib import is_transaction_history  # noqa: PLC0415
+
+    assert is_transaction_history(_STATEMENT_DETAILS.splitlines())
+    _fake_pdf(monkeypatch, _STATEMENT_DETAILS)
+    results = parse_sib_transaction_history(Path("dummy-sib-details.pdf"))
+    txns = {tx.merchant_raw: tx for r in results for tx in r.transactions}
+    assert set(txns) == {"CORNER GROCERY SHARJAH", "Credit Card Payment", "Balance Migration - Retail POS"}
+    assert {tx.card_last4 for tx in txns.values()} == {"4821"}
+    assert results[0].metadata["card_holder"] == "JANE Q SAMPLE"
+    assert results[0].metadata["card_type"] == "SIB MC Cashback"
+    assert txns["CORNER GROCERY SHARJAH"].transaction_kind == "purchase"
+    assert txns["Credit Card Payment"].transaction_kind == "payment"
+    # The old card's billed balance moved onto the new card is not new spend.
+    assert txns["Balance Migration - Retail POS"].transaction_kind == "adjustment"
