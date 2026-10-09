@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { OTHER_KEY, pivotSeries, seriesKey, type SpendSeriesRow } from "./analytics";
+import { OTHER_KEY, pivotSeries, seriesKey, spendFilterArgs, type SpendSeriesRow } from "./analytics";
 
 const row = (bucket: string, group_key: string | null, group_label: string, amount: number, color_token: string | null = null) =>
   ({ bucket, group_key, group_label, color_token, amount, txn_count: 1 }) as SpendSeriesRow;
@@ -38,5 +38,32 @@ describe("pivotSeries", () => {
   it("handles string amounts and empty input", () => {
     expect(pivotSeries([row("2026-05-01", "x", "X", "12.50" as unknown as number)]).rows).toEqual([{ bucket: "2026-05-01", x: 12.5 }]);
     expect(pivotSeries([])).toEqual({ rows: [], groups: [] });
+  });
+});
+
+describe("spendFilterArgs", () => {
+  const CAT_A = `cat_${"a".repeat(26)}`;
+  const CAT_B = `cat_${"b".repeat(26)}`;
+  const CRD = `crd_${"0".repeat(26)}`;
+
+  it("sends nothing when unfiltered, so other callers' RPC calls are unchanged", () => {
+    expect(spendFilterArgs(undefined)).toEqual({});
+    expect(spendFilterArgs({ categories: [], banks: [], cards: [], q: "  " })).toEqual({});
+  });
+
+  it("maps each filter to its RPC argument, lists sorted for a stable query key", () => {
+    expect(spendFilterArgs({ categories: [CAT_B, "__uncategorized__", CAT_A], banks: ["FAB", "ADCB"], cards: [CRD], q: " noon " })).toEqual({
+      p_category_codes: ["__uncategorized__", CAT_A, CAT_B],
+      p_bank_codes: ["ADCB", "FAB"],
+      p_card_codes: [CRD],
+      p_q: "noon",
+    });
+    expect(spendFilterArgs({ categories: [], banks: ["FAB"], cards: [] })).toEqual({ p_bank_codes: ["FAB"] });
+  });
+
+  it("does not mutate the selection order", () => {
+    const f = { categories: [CAT_B, CAT_A], banks: [], cards: [] };
+    spendFilterArgs(f);
+    expect(f.categories).toEqual([CAT_B, CAT_A]);
   });
 });

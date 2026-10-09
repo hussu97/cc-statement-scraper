@@ -101,7 +101,14 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         count("categoryBreakdown")
         return []
     }
-    func spendSeries(profileCode: String, from: CalendarDay, to: CalendarDay, grain: SpendGrain, group: SpendGroup) async throws -> [SpendPoint] { [] }
+    /// `spend_series` answers (all spend when unset), and the filters it was asked for.
+    var seriesPoints: [SpendPoint] = []
+    private(set) var seriesFilters: [SpendFilter] = []
+    func spendSeries(profileCode: String, from: CalendarDay, to: CalendarDay, grain: SpendGrain, group: SpendGroup,
+                     filter: SpendFilter) async throws -> [SpendPoint] {
+        lock.withLock { seriesFilters.append(filter) }
+        return seriesPoints
+    }
     func merchantLeaderboard(profileCode: String, from: CalendarDay, to: CalendarDay, limit: Int) async throws -> [MerchantSpend] { [] }
     func statementCycles(profileCode: String, limit: Int) async throws -> [StatementCycle] {
         count("statementCycles")
@@ -168,6 +175,7 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
     var detailError: LedgerAPIError?
     var breakdown: SpendBreakdown?
     private(set) var breakdownCalls: [SpendSplitGrouping] = []
+    private(set) var breakdownFilters: [SpendFilter] = []
     var bankRows: [BankInfo] = []
     var categoryOptions: [FilterMeta.CategoryOption] = []
     /// `document_events` the initial fetch returns, by doc code.
@@ -184,8 +192,11 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         return detail
     }
     func spendBreakdown(profileCode: String, from: CalendarDay, to: CalendarDay, groupBy: SpendSplitGrouping,
-                        topN: Int) async throws -> SpendBreakdown {
-        lock.withLock { breakdownCalls.append(groupBy) }
+                        topN: Int, filter: SpendFilter) async throws -> SpendBreakdown {
+        lock.withLock {
+            breakdownCalls.append(groupBy)
+            breakdownFilters.append(filter)
+        }
         guard let breakdown else { throw LedgerAPIError.network("offline") }
         return breakdown
     }

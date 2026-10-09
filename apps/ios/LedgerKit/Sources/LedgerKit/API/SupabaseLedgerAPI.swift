@@ -46,11 +46,13 @@ public final class SupabaseLedgerAPI: LedgerAPI, @unchecked Sendable {
                       ["p_profile_code": .string(profileCode), "p_from": .string(from.iso), "p_to": .string(to.iso)])
     }
 
-    public func spendSeries(profileCode: String, from: CalendarDay, to: CalendarDay, grain: SpendGrain, group: SpendGroup) async throws -> [SpendPoint] {
-        try await rpc("spend_series", [SpendPoint].self, [
+    public func spendSeries(profileCode: String, from: CalendarDay, to: CalendarDay, grain: SpendGrain, group: SpendGroup,
+                            filter: SpendFilter) async throws -> [SpendPoint] {
+        let params: [String: AnyJSON] = [
             "p_profile_code": .string(profileCode), "p_from": .string(from.iso), "p_to": .string(to.iso),
             "p_grain": .string(grain.rawValue), "p_group": .string(group.rawValue),
-        ])
+        ]
+        return try await rpc("spend_series", [SpendPoint].self, params.merging(filter.rpcParams) { a, _ in a })
     }
 
     public func merchantLeaderboard(profileCode: String, from: CalendarDay, to: CalendarDay, limit: Int) async throws -> [MerchantSpend] {

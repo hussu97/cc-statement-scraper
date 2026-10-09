@@ -11,10 +11,22 @@ import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/primitives";
 import { BankLogo } from "@/components/bank-logo";
+import { cn } from "@/lib/cn";
 
 type Patch = (p: Partial<ActivitySearch>) => void;
 
-function SearchBox({ value, onChange }: { value: string | undefined; onChange: (v: string | undefined) => void }) {
+/** Debounced search box: writes `?q=` 350ms after typing stops, and follows `?q=` when it changes elsewhere. */
+export function SearchBox({
+  value,
+  onChange,
+  label = "Search description or merchant",
+  className,
+}: {
+  value: string | undefined;
+  onChange: (v: string | undefined) => void;
+  label?: string;
+  className?: string;
+}) {
   const [text, setText] = useState(value ?? "");
   const written = useRef<string | undefined>(value);
   const debounced = useDebouncedValue(text, 350);
@@ -35,9 +47,9 @@ function SearchBox({ value, onChange }: { value: string | undefined; onChange: (
     }
   }, [value]);
   return (
-    <div className="relative min-w-0 flex-1 sm:max-w-80">
+    <div className={cn("relative min-w-0 flex-1 sm:max-w-80", className)}>
       <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-subtle" aria-hidden />
-      <Input value={text} onChange={(e) => setText(e.target.value)} placeholder="Search description or merchant" aria-label="Search description or merchant" className="pl-9" />
+      <Input value={text} onChange={(e) => setText(e.target.value)} placeholder={label} aria-label={label} className="pl-9" />
       {text && (
         <button type="button" aria-label="Clear search" onClick={() => setText("")} className="absolute top-1/2 right-0.5 flex size-9 -translate-y-1/2 items-center justify-center rounded-sm text-subtle hover:text-ink">
           <X className="size-3.5" />
