@@ -59,3 +59,18 @@ def test_only_merchant_normalized_changes() -> None:
     assert out["description_raw"] == "careem hala ridedubai"
     assert out["merchant_normalized"] == "CAREEM HALA RIDE DUBAI"
     assert out["legacy_fingerprint"] == "a" * 64
+
+
+def test_places_match_the_database() -> None:
+    """The backfill migration's private.separate_glued_place knows exactly these places."""
+    import re
+    from pathlib import Path
+
+    from ccs_parser.places import PLACES
+
+    migration = Path(__file__).resolve().parents[3] / "supabase/migrations/20261010001300_glued_place_backfill.sql"
+    body = migration.read_text()
+    alternation = re.search(r"'\(\[\[:alnum:\]\]\)\((.*?)\)\$'", body, re.S)
+    assert alternation, "pattern not found in the migration"
+    sql_places = set("".join(re.findall(r"'([^']*)'", "'" + alternation.group(1) + "'")).split("|"))
+    assert sql_places == set(PLACES)

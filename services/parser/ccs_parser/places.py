@@ -10,8 +10,10 @@ the evidence, and ingest hashes it into the line's identity (``line_key``), so a
 overlapping history export still finds the same lines. The legacy fingerprint is computed by
 the bank parsers before this runs and is unchanged.
 
-The places mirror ``c_place`` in ``public.merchant_key`` (supabase migration
-20261010001200_merchant_key_v2), which strips them glued or not; add a place to both.
+The same places are in ``private.separate_glued_place`` (migration 20261010001300, which
+backfilled descriptions ingested before 2026.10.4; ``tests/test_places.py`` checks the two
+lists are equal) and ``c_place`` in ``public.merchant_key`` (20261010001200, which strips them
+glued or not; pgTAP 27 checks it knows every one). Add a place to all three.
 """
 
 from __future__ import annotations
