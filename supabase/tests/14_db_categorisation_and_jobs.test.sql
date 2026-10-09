@@ -41,20 +41,21 @@ insert into public.accounts (profile_code, bank_code) values (pg_temp.v('p'), 'F
 select pg_temp.set('acc', (select account_code from public.accounts where profile_code = pg_temp.v('p')));
 
 -- ═══ DB-24 / DP-09: seed rules ════════════════════════════════════════════
-select is((select count(*)::int from public.category_rules where profile_code = pg_temp.v('p')), 198,
-          'a new profile still gets 198 seed rules');
+select is((select count(*)::int from public.category_rules where profile_code = pg_temp.v('p')), 244,
+          'a new profile gets 244 seed rules (198 + taxonomy v2, 20261010001100)');
 select is((select match_type || ' ' || pattern from private.seed_rules where category_name = 'Dining' and match_type = 'regex'),
           'regex \mREST(AURANT[A-Z]*|O)?\M', 'the REST seed is a whole-word regex');
 select is((select name from public.category_rules where profile_code = pg_temp.v('p') and pattern = '\mNOON\M'),
           'seed: NOON', 'converted seed rules keep their readable name');
-select is(pg_temp.cat_of(pg_temp.txn('INTEREST CHARGES', 120, 'interest')), null, 'INTEREST CHARGES is not Dining (DB-24)');
+select is(pg_temp.cat_of(pg_temp.txn('INTEREST CHARGES', 120, 'interest')), 'Bank Fees & Interest',
+          'INTEREST CHARGES is not Dining (DB-24); it is a bank fee (taxonomy v2)');
 select is(pg_temp.cat_of(pg_temp.txn('THE RESTAURANT AT THE PARK')), 'Dining', 'RESTAURANT is Dining');
 select is(pg_temp.cat_of(pg_temp.txn('AFTERNOON TEA LOUNGE')), null, 'AFTERNOON is not Shopping');
-select is(pg_temp.cat_of(pg_temp.txn('NOON.COM ORDER')), 'Shopping', 'NOON.COM is Shopping');
+select is(pg_temp.cat_of(pg_temp.txn('NOON.COM ORDER')), 'Online Marketplaces', 'NOON.COM is an online marketplace (taxonomy v2)');
 select is(pg_temp.cat_of(pg_temp.txn('SUBLIME SPA')), null, 'SUBLIME is not Entertainment');
-select is(pg_temp.cat_of(pg_temp.txn('LIME RIDE DUBAI')), 'Entertainment', 'LIME is Entertainment');
-select is(pg_temp.cat_of(pg_temp.txn('MURABAHA PROFIT', 744, 'interest')), null,
-          'a MURABAHA PROFIT charge (debit) is not Cashback, so it counts as spend (DP-09)');
+select is(pg_temp.cat_of(pg_temp.txn('LIME RIDE DUBAI')), 'Transport', 'LIME is Transport (taxonomy v2)');
+select is(pg_temp.cat_of(pg_temp.txn('MURABAHA PROFIT', 744, 'interest')), 'Bank Fees & Interest',
+          'a MURABAHA PROFIT charge (debit) is not Cashback but a bank fee, so it counts as spend (DP-09, taxonomy v2)');
 select is(pg_temp.cat_of(pg_temp.txn('MURABAHA PROFIT', 10, 'refund', 'credit')), 'Cashback',
           'a MURABAHA PROFIT credit is still Cashback');
 select is(pg_temp.cat_of(pg_temp.txn('BONUS POINTS SHOP')), null, 'a BONUS purchase is not Cashback');

@@ -1,5 +1,13 @@
 # Changelog
 
+## Category taxonomy v2 — 2026-10-09
+
+### Backend (Supabase)
+
+- **feat** Ten new categories for every profile, so spend no longer piles into two or three (prod: Shopping 27% + Dining 18%; Transport 26% + Dining 17%): Food Delivery, Online Marketplaces, Fashion, Beauty & Personal Care, BNPL Instalments, Car & Fuel, Flights, Telecom & Internet, Bank Fees & Interest (`fee`), Education. Existing categories keep their codes and names (`20261010001100_category_taxonomy_v2.sql`)
+- **fix** Seed rules moved into them, and the over-broad ones fixed: `UBER` (Travel) caught rides and Uber Eats; `EMIRATES` (Travel) caught Emirates Hospital, Emirates Leisure Retail and Emirates Fast Food and is now an airline-only regex; cash-advance, membership and annual fees, finance/interest charges and Murabaha profit debits are Bank Fees & Interest; salons and spas are Beauty & Personal Care; Lime is Transport. 46 new seed rules (244 per profile). Guarded content migration: only rules still exactly as seeded are re-pointed
+- **test** `tests/25_category_taxonomy_v2.test.sql` (40 rule cases); the existing-profile path was replayed against production descriptions (3,136 transactions) before release
+
 ## LLM categorisation: fewer re-asks, bigger batches — 2026-10-09
 
 ### Backend (Supabase)
