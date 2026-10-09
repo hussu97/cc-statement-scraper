@@ -38,6 +38,7 @@ on:
 permissions:
   contents: read
   deployments: read
+  statuses: read
 
 concurrency:
   group: web-smoke
@@ -64,19 +65,29 @@ jobs:
           REPO: ${{ github.repository }}
           SHA: ${{ github.sha }}
         run: |
-          # Vercel creates a GitHub Deployment per commit; wait until its Production one is "success".
-          for attempt in $(seq 1 60); do
+          # Vercel reports a Production deploy of the commit as a GitHub Deployment and/or a
+          # "Vercel" commit status: it does not always create the Deployment (build 8's counter
+          # commit 12cfe0f had only the status, and this step waited out the job), so either
+          # one counts. 36 x 15 s stays inside the job's timeout, so a missing deploy fails
+          # with a message here instead of the job being cancelled.
+          for attempt in $(seq 1 36); do
             state=$(gh api "repos/$REPO/deployments?sha=$SHA&per_page=20" \
               --jq '[.[] | select(.environment | startswith("Production"))][0].statuses_url // ""' \
               | xargs -r -I{} gh api {} --jq '.[0].state // ""' || true)
-            echo "attempt $attempt: Production deployment state='${state:-none}'"
+            source=deployment
+            if [ -z "$state" ]; then
+              state=$(gh api "repos/$REPO/commits/$SHA/statuses?per_page=100" \
+                --jq '[.[] | select(.context == "Vercel")][0].state // ""' || true)
+              source=status
+            fi
+            echo "attempt $attempt: Vercel ${source} state='${state:-none}'"
             case "$state" in
               success) exit 0 ;;
               failure|error) echo "::error::Vercel's Production deployment of $SHA ended in '$state'"; exit 1 ;;
             esac
             sleep 15
           done
-          echo "::error::No successful Vercel Production deployment for $SHA after 15 minutes"; exit 1
+          echo "::error::No successful Vercel Production deployment for $SHA after 9 minutes"; exit 1
 
       - name: Smoke test
         env:
