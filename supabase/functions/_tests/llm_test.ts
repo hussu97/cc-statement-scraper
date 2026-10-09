@@ -1,6 +1,7 @@
 import { assert, assertEquals, assertThrows } from "jsr:@std/assert@1.0.13";
 import {
   categorizeSchema,
+  categorizeUserPrompt,
   countCaptureGroups,
   isTransientLlmError,
   LlmOutputError,
@@ -14,16 +15,17 @@ import {
 const M = ["mer_a", "mer_b"];
 const C = ["cat_food", "cat_travel"];
 
-Deno.test("validateSuggestions keeps known codes, clamps confidence, one per merchant", () => {
+Deno.test("validateSuggestions maps refs to codes, drops unknown refs, clamps confidence, one per merchant", () => {
   const out = validateSuggestions(
     {
       suggestions: [
-        { merchant_code: "mer_a", category_code: "cat_food", confidence: 0.7 },
-        { merchant_code: "mer_a", category_code: "cat_travel", confidence: 0.9 },
-        { merchant_code: "mer_b", category_code: "cat_food", confidence: 1.7 },
-        { merchant_code: "mer_x", category_code: "cat_food", confidence: 0.9 },
-        { merchant_code: "mer_b", category_code: "cat_unknown", confidence: 0.9 },
-        { merchant_code: "mer_b", category_code: "cat_food", confidence: "NaN" },
+        { merchant: "m1", category: "c1", confidence: 0.7 },
+        { merchant: "m1", category: "c2", confidence: 0.9 },
+        { merchant: "m2", category: "c1", confidence: 1.7 },
+        { merchant: "m3", category: "c1", confidence: 0.9 },
+        { merchant: "m2", category: "c9", confidence: 0.9 },
+        { merchant: "m2", category: "c1", confidence: "NaN" },
+        { merchant: "mer_a", category: "cat_food", confidence: 0.9 },
         "junk",
       ],
     },
@@ -38,11 +40,21 @@ Deno.test("validateSuggestions keeps known codes, clamps confidence, one per mer
   assertThrows(() => validateSuggestions("x", M, C), LlmOutputError);
 });
 
-Deno.test("categorizeSchema constrains codes with enums", () => {
+Deno.test("categorizeSchema constrains refs with enums; the prompt carries refs, not codes", () => {
   // deno-lint-ignore no-explicit-any
-  const s: any = categorizeSchema(M, C);
-  assertEquals(s.properties.suggestions.items.properties.merchant_code.enum, M);
+  const s: any = categorizeSchema(2, 3);
+  assertEquals(s.properties.suggestions.items.properties.merchant.enum, ["m1", "m2"]);
+  assertEquals(s.properties.suggestions.items.properties.category.enum, ["c1", "c2", "c3"]);
   assertEquals(s.properties.suggestions.items.additionalProperties, false);
+  const prompt = categorizeUserPrompt(
+    [{ category_code: "cat_food", name: "Dining", kind: "spend" }],
+    [{ merchant_code: "mer_a", name: "Cafe", examples: ["CAFE 1", "CAFE 2", "CAFE 3", "CAFE 4"] }],
+  );
+  assertEquals(JSON.parse(prompt), {
+    categories: [{ ref: "c1", name: "Dining", kind: "spend" }],
+    merchants: [{ ref: "m1", name: "Cafe", examples: ["CAFE 1", "CAFE 2", "CAFE 3"] }],
+  });
+  assert(!prompt.includes("mer_a") && !prompt.includes("cat_food"));
 });
 
 Deno.test("countCaptureGroups ignores non-capturing groups, escapes and classes", () => {

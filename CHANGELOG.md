@@ -1,5 +1,14 @@
 # Changelog
 
+## LLM categorisation: fewer re-asks, bigger batches — 2026-10-09
+
+### Backend (Supabase)
+
+- **perf** `llm_categorize` batches 100 merchants per call (was 25), and the prompt and structured output use short refs (`m1…`, `c1…`) instead of 30-character codes, which were most of the output tokens (`_shared/llm.ts`, `LLM_BATCH_MAX`)
+- **fix** A category change no longer re-asks every LLM-categorised merchant: a suggestion is re-asked only when its category was archived or edited after it, or its confidence is below 0.8; declined merchants are still re-asked (`private.enqueue_llm_categorize`)
+- **fix** `worker_llm_context` sends up to 3 distinct example descriptions (it often sent one description three times)
+- **test** `tests/24_llm_categorize_tuning.test.sql`; ref mapping and batch cap in `llm_test.ts` / `llm_jobs_test.ts`
+
 ## Bank logos visible in production — 2026-10-09
 
 ### Web
