@@ -807,6 +807,16 @@ network-restriction config. A fine-grained token for CI needs: Project read, **A
 (including secret keys)**, Database config read, Auth config read, Data API (PostgREST) config read,
 network restrictions read, Edge Functions read/write, Edge Function secrets read/write.
 
+### 10.2 Release 2026-10-09 (main `7358cde`, iOS build 6)
+
+Backup `data/backups/prerelease2-*-20261008T183529Z.sql`. Migrations `20261010000100`–`…0600` (37 in
+total) via `supabase db push --db-url`; all 9 functions deployed (smoke: 401 unauthenticated, worker
+202 with the cron secret); parser 2026.10.3 (`/health`); web on Vercel; bank logos uploaded
+(`scripts/brand/upload-bank-logos.sh`, all six 200 `image/png`); one private merchant mask inserted
+as `postgres` (0 client-visible matches afterwards, 28 transactions re-labelled) and the seed rule
+naming that merchant deleted; iOS build 6 uploaded and submitted to "Friends & Family". The CI
+Deploy Supabase job failed at `supabase migration fetch --linked` (investigate; nothing was pending).
+
 ---
 
 ## 11. Operations

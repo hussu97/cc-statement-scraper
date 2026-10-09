@@ -27,11 +27,11 @@ separately):
 | Database (Supabase SQL) | 0 | 2 | – | 1 | 3 |
 | Edge Functions | 0 | 0 | – | – | 0 |
 | Parser | 1 | – | – | – | 1 |
-| Web | 16 | 25 | 5 | – | 46 |
-| iOS | 14 | 9 | 7 | 2 | 32 |
+| Web | 12 | 19 | 5 | – | 36 |
+| iOS | 9 | 9 | 7 | 2 | 27 |
 | Scraper | – | 2 | – | – | 2 |
 | CI, config and ops | 0 | 0 | – | 0 | 0 |
-| **Total** | **31** | **38** | **12** | **3** | **84** |
+| **Total** | **22** | **32** | **12** | **3** | **69** |
 
 There are no open P0 or P1 findings. The last P1 remainders (WEB-02 statements beyond 500 and
 merchant search, WEB-07 "Retry AI") landed in `98f901c`. What is left of the P1s are the device
@@ -99,13 +99,9 @@ None open. All five were done on 2026-10-09: see [Done: Edge Functions and CI pa
 | WEB-11 | First load is 1.16 MB JS (≈ 365 kB gz): Sentry with Replay, supabase-js and Radix preloaded on every route | Perf | Lazy-load Replay and Sentry after first paint, keep `/signin` free of chart and Radix chunks, drop `chunkSizeWarningLimit: 1200`, budget ~200 kB gz | M |
 | WEB-12 | "Apply to merchant" stays ticked after a pick, so the next change silently rewrites the whole merchant | Out of the P1 pass | Reset `toMerchant` on pick and on popover close | S |
 | WEB-13 | Rule regex validated with JS `RegExp` but run as Postgres ARE; Save stays enabled when the preview errors | Server now validates on write (DB-09/13), the client still lets you try | Block Save on `preview.isError`, show the server's 22023 message | S |
-| WEB-15 | Calendar counts and draws future days ("135 days of 184"); heatmap uses ~35 % of the card on desktop | Out of the P1 pass | Clamp `to` at `todayDubai()` for display and counts; scale cells to the container | S |
 | WEB-16 | Anomalies show raw uppercase descriptions as separate rows, flag "Large first purchase" on a charge below usual, and use jargon | Partly server-side (`anomalies`) | Return `merchant_name`, require first purchase **and** above threshold, phrase as "about 4× your usual Shopping purchase", add a "this is fine" action | M |
 | WEB-17r | 18 categories over 12 hues still share colours (Medicine/Insurance, Forex Charge/Fines, Apple/Subscription/Cashback, Donation/Transport) | `…1900` moved the worst pairs; a full fix needs more hues or a policy | Extend the palette to ~16, or reserve unique hues for `kind = spend` categories; keep ΔE ≥ 15 | S |
-| WEB-19 | Closing the URL-driven drawer drops focus to `<body>` | Out of the P1 pass | Remember the opener by `txn_code` and focus it in `onCloseAutoFocus` | S |
-| WEB-20 | `<button role="cell">` strips button semantics from the main Activity row action (351 axe nodes) | Out of the P1 pass | `role="cell"` on a wrapper span with a real button inside, or a list of buttons | S |
-| WEB-22r | Calendar heat cells are 13×13 px on mobile | A 7×N grid can't take 44 px cells | Tap opens a day sheet, or a list view on mobile; keep the grid as a picture | S |
-| WEB-24 | Bulk bar has one state-like pill ("Uncategorised"), no exclude/export/selection total, and no bulk on mobile | Out of the P1 pass | "Categorise…", "Exclude", "Export CSV", server-computed total, long-press select on mobile | M |
+| WEB-24 | Bulk bar: phone selection and Categorise are done; still no Exclude, Export CSV or server-computed selection total | UX | Add those actions (server total via an RPC) | M |
 | WEB-26 | Pace rule compares month-to-date spend with the full-month 3-month average, so it reads "way under" all month | Needs a server field | `overview` returns `spend_avg_3m_to_date` and `projected_month_end`; pin those, "Projected AED X by 31 Oct" | M |
 | WEB-27 | Empty ledger shows AED 0.00, an empty ruler and four empty states; no first-run guidance | Out of the P1 pass | "Get your ledger going" checklist from server state: statement, mailbox, PDF passwords, SMS shortcut, member | M |
 | WEB-28 | Budget/category load errors render an empty state; `budgetAppliesTo` re-implements the server's selection (CLAUDE.md §2.2) | Needs an RPC flag | Render `isError`; return `is_effective` from the budget RPC and drop the client logic | S |
@@ -117,14 +113,9 @@ None open. All five were done on 2026-10-09: see [Done: Edge Functions and CI pa
 | IOS-10 | OTP false negatives pass the filter ("Use 482913 as the code…", "authentication code", Arabic "رمز التحقق"); the server mirrors the same regex | Out of the P1 pass | Add `auth(entication)? code`, `secure code`, `3-?d ?secure`, code-near-digits patterns, `do not share`, `رمز`, `كلمة المرور`; one generated source or a parity test with the SQL regex | S |
 | IOS-11 | SMS filter tests use invented bodies, not the `sms_templates` examples (CI now builds the app and extension: `ios-build.yml`) | Test fixture | Export template examples to a fixture with a drift check | M |
 | IOS-12r | `noProfile` still discards the SMS; the outbox isn't cleared on sign-out; nothing outside Settings shows a stuck outbox | Honest queued reasons and "Not sent" were done | Enqueue with a pending profile; confirm-and-clear outbox and pending PDFs on sign-out; Settings badge and an Overview strip when the outbox is older than 1 h | S |
-| IOS-13 | A failed Realtime subscribe ends the stream with no retry; foreground reloads only Overview; Insights never refreshes | Out of the P1 pass | Restart with backoff while the profile is selected; reload or mark stale every loaded tab on foreground; include Insights in the fan-out | M |
-| IOS-14 | Switching ledger briefly shows the previous ledger's numbers | Out of the P1 pass | Reset screen models to `.idle` on profile change, or key `previous` by profile code | S |
-| IOS-15 | Activity filters bind live (swipe-dismiss leaves them changed but unapplied), no date filter, `loadMore` ignores `loadToken`, recategorising resets to page 0 | Out of the P1 pass | Edit a local copy, add a month/range picker, guard `loadMore`, patch the edited row in place | M |
-| IOS-16r | One permanently rejected PDF still blocks the pending-upload queue; no count of waiting PDFs | Target ledger now follows "SMS go to" | Delete or quarantine on non-transient errors; "2 PDFs waiting" on Statements | S |
-| IOS-17 | Statement upload: no per-file progress or parse outcome, `parse_error` never shown, the explainer card always occupies the top, "Statements" twice | UX, out of the P1 pass | Toolbar `+`, per-file row that turns into the parse result via Realtime with Retry / "Set password on web", cycle detail with recon chips explained | M |
 | IOS-18 | Category sheet opens at `.medium` (3 categories), no search, no "None", merchant toggle defaults off, no notes or exclude-from-spend | UX, out of the P1 pass | `.large` + `.searchable`, merchant toggle on unless the category is manual, "Exclude from spend" and notes, swipe actions on rows | M |
 | IOS-19r | Contrast: the AA token change (WEB-06) regenerated `Tokens.swift`, but iOS still uses `subtle` for some caption text and the iOS pairs aren't declared in `tokens.json#contrast` | Token fix landed with the web pass | Use `muted` for text, keep `subtle` for glyphs and dividers; declare the iOS pairs (warn on warnSoft) in the contrast test | S |
-| IOS-20r | VoiceOver: the hero still reads "AED" and the number apart; charts have no `accessibilityChartDescriptor` or summary | Labels, 44 pt dismiss and combined rows were done | Combine the hero ("October spend, 860 dirhams"); chart descriptors for the ring and bars | S |
+| IOS-20r | VoiceOver: the Overview hero still reads "AED" and the number apart (chart descriptors are done) | a11y | Combine the hero ("October spend, 860 dirhams") | S |
 | IOS-21r | Release config still includes the local `Secrets.xcconfig` (one dropped key ships a local value); no assertion on the archived Info.plist; no Sentry releases; the token in `Secrets.Release.xcconfig` is an Xcode build setting (also X-28) | Only the token handling in `publish-build.sh` was done | Include `Secrets.xcconfig` from `Debug.xcconfig` only; `plutil` asserts on the archived app and `.appex` (https, `production`, non-empty keys); `sentry-cli releases new/set-commits/finalize`; keep the token in the shell or keychain | M |
 | IOS-22 | No privacy cover in the app switcher and no optional Face ID lock | Out of the P1 pass | Blur overlay when `scenePhase != .active`; optional "Require Face ID" with `NSFaceIDUsageDescription` | S |
 | IOS-23 | An empty ledger asserts "AED 0 · No 3-month history yet · Same as this time last month" | Out of the P1 pass | Three-step checklist (SMS capture, statement, invite) when there are no transactions and no cards | S |
@@ -156,10 +147,7 @@ None open (SRV-12, SRV-17 and X-25r are done).
 
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
-| WEB-30 | Italic "Uncategorised" in a truncated label clips its last glyph | Polish | `pr-0.5` or `not-italic` | S |
 | WEB-31 | "Uncategorised" vs "Uncategorized" across UI, Trends and the server name | Polish | UK spelling everywhere, server name included | S |
-| WEB-32 | The "Doesn't add up" badge shifts Statements row columns | Polish | Fixed grid column widths | S |
-| WEB-33 | Rules and Settings use a narrower, indented container | Polish | Same container as other pages | S |
 | WEB-34 | Mixed decimals for the same kind of figure | Polish | Two decimals for transactions, whole units for balances, limits and aggregates | S |
 | WEB-35 | "Pending from SMS" and "Recent activity" show largely the same rows | UX | Merge, or exclude pending from Recent | S |
 | WEB-36 | "Due in 0 d"; past dues show no paid/overdue state | Needs payment-matched status from the server (also iOS "Paid") | "Due today/tomorrow"; server flag for a payment covering the statement | M |
@@ -169,11 +157,8 @@ None open (SRV-12, SRV-17 and X-25r are done).
 | WEB-40 | First-run "Key … X-Profile-Key header" jargon; "one person's cards" copy vs a "Household" example | UX copy | Move "Key" under Advanced with a generated default; fix the copy | S |
 | WEB-41 | Disabled-until-valid primary buttons are ~2:1 and give no reason | UX | Keep enabled and validate on submit, or explain | S |
 | WEB-42 | Revoked tokens are listed forever (the pluralisation is fixed) | UX | Collapse revoked tokens behind a "Show revoked" toggle | S |
-| WEB-43 | Back after closing the drawer reopens it | UX | `replace: true` when opening and closing | S |
-| WEB-44 | Nine Insights tabs scroll on mobile with no affordance | UX | Edge fade and scroll hint, or a Select | S |
 | WEB-46 | The drawer loads a `txn=` from another profile (no `profile_code` filter) | RLS still applies; confusing only | `.eq('profile_code', …)` and a "belongs to another ledger" state | S |
 | WEB-47 | `timestamptz.slice(0,10)` / `toISOString()` show the UTC day, not the Dubai day | Polish | `todayDubai(new Date(ts))` | S |
-| WEB-48 | "Up to 10 files" vs the server's 20 with no client count check; input not reset; concurrent drops | Polish | `MAX_FILES = 20` (and 40 MB) in `checkUploadFiles`, reset the input, ignore drops while pending | S |
 | WEB-49 | Notes stay dirty after saving padded text; preview shows "1,000+" though counts are exact | Polish | Compare trimmed; drop the cap text | S |
 | WEB-50 | New token plaintext and PDF passwords linger in the MutationCache ~5 min | Hygiene | `gcTime: 0` on those mutations | S |
 | WEB-52 | `<a>` directly in `<dl>`, unnamed `role=meter`, 404 outside the shell, no skip link | a11y polish | `<div><dt/><dd/></div>`, `aria-label`, 404 in the shell, "Skip to content" | S |
@@ -312,6 +297,14 @@ CHANGELOG.
 (05's recommendations 3–5 are IOS-19r, IOS-20r, IOS-18, IOS-28 and IOS-17 above.)
 
 ---
+
+## Done: release 2026-10-09
+
+WEB-15, WEB-19, WEB-20, WEB-22r, WEB-30, WEB-32, WEB-33, WEB-43, WEB-44 (mobile web audit), WEB-48
+(upload limit), IOS-13, IOS-14, IOS-15 (iOS paging), IOS-16r, IOS-17 (upload queue and per-file log);
+WEB-24 and IOS-20r partly (rows reworded above). New features: statement detail, spend split, bank
+logos, upload/parse event log, infinite scroll, iOS month navigation, replacement cards, private
+merchant masks (PRODUCTION §10.2).
 
 ## Closed without change (2026-10-08)
 
