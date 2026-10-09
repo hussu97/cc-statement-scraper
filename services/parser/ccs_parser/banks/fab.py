@@ -50,6 +50,10 @@ _STATEMENT_DATE_RE = re.compile(
     r"\b(?:[A-Z][A-Z\s]+CARD)\s+(\d{2}-\d{2}-\d{4})\s+(\d{2}-\d{2}-\d{4})\b"
 )
 _SUPP_CARD_RE = re.compile(r"Supplementary Card\s*:\s*(.+)$")
+# "Main Card : 5492 84** **** 2777 CASHBACK CARD": the product printed after the number. The
+# header's product cell shares a text line with the address column ("1101 BUHAIRAH TOWER
+# CASHBACK CARD 01-09-2026 …"), so this line is the clean source of the card type.
+_MAIN_CARD_RE = re.compile(r"Main Card\s*:\s*(.+)$")
 _STATEMENT_REF_RE = re.compile(
     r"\b(?:Statement\s*(?:No|Number|Reference|Ref)|Ref(?:erence)?)\b\s*[:#-]?\s*([A-Z0-9\-/]*\d[A-Z0-9\-/]{5,})\b",
     re.IGNORECASE,
@@ -260,6 +264,15 @@ def parse_fab_statement(pdf_path: str | Path, pdf_password: str | None = None) -
             card_type_guess = line.split(statement_match.group(1))[0].strip()
             if card_type_guess:
                 current_card_type = card_type_guess
+
+        main_card_match = _MAIN_CARD_RE.search(line)
+        if main_card_match:
+            main_remainder = main_card_match.group(1)
+            main_card_last4 = extract_last4_masked(main_remainder)
+            main_card_type = main_remainder.split(main_card_last4)[-1].strip() if main_card_last4 else ""
+            if main_card_type:
+                card_type_by_last4[main_card_last4] = main_card_type
+                current_card_type = main_card_type
 
         supp_match = _SUPP_CARD_RE.search(line)
         if supp_match:
