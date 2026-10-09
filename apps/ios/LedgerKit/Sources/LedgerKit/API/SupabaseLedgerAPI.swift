@@ -76,6 +76,10 @@ public final class SupabaseLedgerAPI: LedgerAPI, @unchecked Sendable {
         try await rpc("filter_meta", FilterMeta.self, ["p_profile_code": .string(profileCode)])
     }
 
+    public func activitySummary(profileCode: String, query: ActivityQuery) async throws -> ActivitySummary {
+        try await rpc("activity_summary", ActivitySummary.self, query.summaryParams(profileCode: profileCode))
+    }
+
     // MARK: Tables
 
     public func transactions(profileCode: String, query: ActivityQuery, page: PageRequest) async throws -> TransactionPage {

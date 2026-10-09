@@ -24,6 +24,8 @@ public protocol LedgerAPI: SMSIngestAPI {
     func budgetStatus(profileCode: String, month: CalendarDay?) async throws -> [BudgetStatus]
     func recurringList(profileCode: String) async throws -> [RecurringCharge]
     func filterMeta(profileCode: String) async throws -> FilterMeta
+    /// `rpc('activity_summary')`: count, net AED and date span of the rows Activity lists for `query`.
+    func activitySummary(profileCode: String, query: ActivityQuery) async throws -> ActivitySummary
 
     // Tables / views
     /// One page of `v_transactions`, newest first, with the exact total.

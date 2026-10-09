@@ -117,6 +117,17 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         FilterMeta(accounts: [], cards: [], categories: categoryOptions, banks: [],
                    dateRange: FilterMeta.DateRange(min: firstTransactionDay, max: nil))
     }
+    /// `activity_summary`'s answer, or the error it throws; nil answers zero rows.
+    var summaryResult: Result<ActivitySummary, LedgerAPIError>?
+    private(set) var summaryQueries: [ActivityQuery] = []
+    func activitySummary(profileCode: String, query: ActivityQuery) async throws -> ActivitySummary {
+        lock.withLock { summaryQueries.append(query) }
+        switch summaryResult {
+        case .success(let s)?: return s
+        case .failure(let e)?: throw e
+        case nil: return ActivitySummary(txnCount: 0, netAed: 0)
+        }
+    }
     func transactions(profileCode: String, query: ActivityQuery, page: PageRequest) async throws -> TransactionPage {
         count("transactions")
         let all = lock.withLock {

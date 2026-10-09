@@ -10,6 +10,23 @@
 
 - **data** Production accounts renamed: FAB → nickname "FAB Cashback Card", product "Cashback Card"; ADCB → "ADCB Infinite Card", product "Infinite Card" (ingest sets `product_name` only when it creates an account, so this sticks).
 
+## Activity summary — 2026-10-09
+
+### Backend (Supabase)
+
+- **feat** `20261010001500_activity_summary`: `public.activity_summary(profile, from, to, account, card, category, uncategorized, status, source, q)` returns `txn_count`, `net_aed` (debits − credits, void excluded, decimal string), `unpriced_count`, `has_estimate`, `earliest_date`, `latest_date` over `v_transactions` with the Activity list's filters. Search is description OR merchant name, cleaned by `private.activity_search_pattern` exactly as the clients clean it for PostgREST. pgTAP `29_activity_summary`
+
+### Web
+
+- **feat** Activity shows a summary line above the list for the current search and filters: transaction count, net AED (debits minus credits, void excluded), and the earliest–latest transaction date, all from `activity_summary` (`useActivitySummary`, `activitySummaryArgs`, `components/activity/summary.tsx`). An "AED estimated" badge marks a net that includes estimated FX rates, and "excl. N without AED amount" counts rows not yet priced. Loading, failed and empty (no date range) states. It replaces the header's count
+- **fix** The Activity search matched the description only; it now matches description OR merchant name through a PostgREST `or` filter, with the term cleaned exactly as iOS `ActivityQuery.sanitizedSearch` and the RPC clean it (`sanitizedSearch`, `searchOrFilter`; `ilikePattern` removed). Placeholder "Search description or merchant"
+- **test** `activitySummaryArgs`, `sanitizedSearch`/`searchOrFilter`, the `or` list filter, `formatDateSpan`
+
+### iOS
+
+- **feat** Activity shows a header row above the list for the current search and filters: transaction count, net AED (a net credit reads "+ AED …", "≈" when an FX estimate is in the sum), the earliest–latest transaction date ("1 Jun 2026 – 8 Oct 2026", one date when equal) and "excl. N without AED amount" when some rows are unpriced, all from `activity_summary` (`LedgerAPI.activitySummary`, `ActivityQuery.summaryParams`, `ActivitySummaryHeader`). It loads with the first page, on new filters or search, on pull-to-refresh, on realtime refresh and after a recategorise; a redacted placeholder shows while the first answer for these filters loads, and a failed summary hides the header without touching the list (`ActivityModel.summaryDisplay`, `ActivitySummaryRow`)
+- **test** `ActivitySummaryTests`: RPC params (raw search, uncategorised wins over a category, nulls), decoding (string money, null dates, malformed money), header wording, display states, model loading and failure isolation
+
 ## FAB cards on one account — 2026-10-09
 
 ### Backend (Supabase)

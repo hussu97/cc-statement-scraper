@@ -7,11 +7,10 @@ import { DEFAULT_PAGE_SIZE, pageCount } from "@/lib/pagination";
 import { useClampPage, useMediaQuery } from "@/lib/hooks";
 import { INFINITE_QUERY } from "@/lib/infinite";
 import { formatDate, formatTime } from "@/lib/dates";
-import { formatCount } from "@/lib/money";
 import { cn } from "@/lib/cn";
 import { useActiveProfile } from "@/data/profile";
 import { useFilterMeta } from "@/data/overview";
-import { evidenceBadge, groupByDay, useBulkSetCategory, useInfiniteTransactions, useSetCategory, useTransactions, type TxnRow } from "@/data/transactions";
+import { evidenceBadge, groupByDay, useBulkSetCategory, useInfiniteTransactions, useActivitySummary, useSetCategory, useTransactions, type TxnRow } from "@/data/transactions";
 import { errorMessage } from "@/data/api";
 import { PageHeader, Card } from "@/components/ui/display";
 import { Checkbox } from "@/components/ui/primitives";
@@ -22,6 +21,7 @@ import { CategoryPicker, EvidenceBadge, StatusBadge, TxnAmount } from "@/compone
 import { Pagination } from "@/components/pagination";
 import { InfiniteFooter } from "@/components/infinite-footer";
 import { ActivityFilters } from "@/components/activity/filters";
+import { ActivitySummaryStrip } from "@/components/activity/summary";
 import { TransactionDrawer } from "@/components/activity/drawer";
 import { CardRef } from "@/components/bank-logo";
 
@@ -38,6 +38,7 @@ export function ActivityPage() {
     ? { ...infinite, data: infinite.data ? { rows: infinite.items, total: infinite.total ?? infinite.items.length } : undefined, isError: infinite.isError && !infinite.isFetchNextPageError }
     : paged;
   const meta = useFilterMeta(profile_code);
+  const summary = useActivitySummary(profile_code, list);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   // Phones have no checkbox column: "Select" turns it on (WEB-24).
   const [selecting, setSelecting] = useState(false);
@@ -78,28 +79,24 @@ export function ActivityPage() {
         title="Activity"
         description="Every card transaction from SMS alerts and statements, matched into one ledger."
         actions={
-          q.data ? (
-            <>
-              <span className="tabular text-sm text-muted">{formatCount(q.data.total)} transactions</span>
-              {isOwner && rows.length > 0 && (
-                <Button
-                  size="sm"
-                  variant={selecting ? "primary" : "secondary"}
-                  className="md:hidden"
-                  aria-pressed={selecting}
-                  onClick={() => {
-                    setSelecting((s) => !s);
-                    setSelected(new Set());
-                  }}
-                >
-                  {selecting ? "Done" : "Select"}
-                </Button>
-              )}
-            </>
+          isOwner && rows.length > 0 ? (
+            <Button
+              size="sm"
+              variant={selecting ? "primary" : "secondary"}
+              className="md:hidden"
+              aria-pressed={selecting}
+              onClick={() => {
+                setSelecting((s) => !s);
+                setSelected(new Set());
+              }}
+            >
+              {selecting ? "Done" : "Select"}
+            </Button>
           ) : null
         }
       />
       <ActivityFilters search={search} patch={patch} meta={meta.data} onClear={() => go({})} />
+      <ActivitySummaryStrip data={summary.data} isLoading={summary.isLoading} isError={summary.isError} isFetching={summary.isFetching && !summary.isLoading} />
 
       <Card className={cn("mt-4", q.isFetching && !q.isLoading && "opacity-80 transition-opacity")}>
         {q.isLoading || outOfRange ? (

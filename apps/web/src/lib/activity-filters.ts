@@ -92,9 +92,26 @@ export function withFilter(s: ActivitySearch, patch: Partial<ActivitySearch>): A
   return parseActivitySearch(next as Record<string, unknown>);
 }
 
-/** Escape a user search term for a PostgREST ilike pattern. */
-export function ilikePattern(q: string): string {
-  return `%${q.replace(/[\\%_]/g, (c) => `\\${c}`).replace(/[,()]/g, " ")}%`;
+/**
+ * Clean a search term for PostgREST's `or=(…)` filter, exactly as iOS
+ * `ActivityQuery.sanitizedSearch` and SQL `private.activity_search_pattern` do:
+ * trimmed, first 80 characters, `, ( ) * : "` become the one-character
+ * wildcard `_`, and `\ % _` are escaped.
+ */
+export function sanitizedSearch(raw: string): string {
+  let out = "";
+  for (const ch of Array.from(raw.trim()).slice(0, 80)) {
+    if (",()*:\"".includes(ch)) out += "_";
+    else if (ch === "%" || ch === "_" || ch === "\\") out += `\\${ch}`;
+    else out += ch;
+  }
+  return out;
+}
+
+/** The Activity search as a PostgREST `or` filter: description OR merchant name. Null when blank. */
+export function searchOrFilter(q: string | undefined): string | null {
+  const term = sanitizedSearch(q ?? "");
+  return term ? `description.ilike.*${term}*,merchant_name.ilike.*${term}*` : null;
 }
 
 /** The part of the search that determines the list (drops the drawer param). */

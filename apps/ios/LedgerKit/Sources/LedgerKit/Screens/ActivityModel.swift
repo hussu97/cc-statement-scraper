@@ -19,11 +19,19 @@ public final class ActivityModel {
     public var query = ActivityQuery()
     public let list = Paginator<LedgerTransaction>()
     public private(set) var meta: FilterMeta?
+    /// `activity_summary` for the rows listed. Its failure only hides the header.
+    public private(set) var summary: LoadState<ActivitySummary> = .idle
     public var errorMessage: String?
 
     private let api: any LedgerAPI
     /// The ledger and filters the rows on screen were loaded for.
     private var loadedFor: (profileCode: String, query: ActivityQuery)?
+    /// Drops summaries a newer search or filter superseded.
+    private var summaryGate = RequestGate<SummaryKey>()
+    private struct SummaryKey: Hashable, Sendable {
+        let profileCode: String
+        let query: ActivityQuery
+    }
 
     public init(api: any LedgerAPI) { self.api = api }
 
@@ -33,6 +41,7 @@ public final class ActivityModel {
     public var footer: ListFooter { list.footer }
     public var sections: [DaySection] { Self.sections(rows) }
     public var hasLoaded: Bool { loadedFor != nil }
+    public var summaryDisplay: ActivitySummaryDisplay { .of(summary) }
 
     /// A failed load with nothing cached shows the error; an empty result shows
     /// "no transactions" only when the server said so.
@@ -57,11 +66,13 @@ public final class ActivityModel {
         loadedFor = (profileCode, query)
         let api = self.api
         async let metaLoad: Void = loadMetaIfNeeded(profileCode: profileCode)
+        async let summaryLoad: Void = loadSummary(profileCode: profileCode, query: query)
         await list.reload(keepingRows: same) { page in
             let result = try await api.transactions(profileCode: profileCode, query: query, page: page)
             return ListPage(items: result.rows, total: result.total)
         }
         await metaLoad
+        await summaryLoad
     }
 
     /// Loads unless these filters of this ledger are already on screen
@@ -84,7 +95,9 @@ public final class ActivityModel {
     /// Realtime / foreground: refresh the newest page, keep the scrolled pages.
     public func refresh(profileCode: String) async {
         guard let loadedFor, loadedFor.profileCode == profileCode else { return }
+        async let summaryLoad: Void = loadSummary(profileCode: profileCode, query: loadedFor.query)
         await list.refreshHead()
+        await summaryLoad
     }
 
     public func rowAppeared(_ txn: LedgerTransaction) async { await list.rowAppeared(txn.id) }
@@ -98,6 +111,8 @@ public final class ActivityModel {
         list.reset()
         loadedFor = nil
         meta = nil
+        summary = .idle
+        summaryGate.reset()
         query = ActivityQuery()
         errorMessage = nil
     }
@@ -126,6 +141,7 @@ public final class ActivityModel {
             // Saved, but the re-read failed: refresh the head rather than show stale rows.
             await list.refreshHead()
         }
+        if let loadedFor { await loadSummary(profileCode: loadedFor.profileCode, query: loadedFor.query) }
         return true
     }
 
@@ -133,6 +149,24 @@ public final class ActivityModel {
         guard meta == nil else { return }
         let fetched = try? await api.filterMeta(profileCode: profileCode)
         if loadedFor?.profileCode == profileCode { meta = fetched }
+    }
+
+    /// The same ledger and filters keep their figures while refreshing; new
+    /// filters show the placeholder rather than the old figures under them.
+    private func loadSummary(profileCode: String, query: ActivityQuery) async {
+        let key = SummaryKey(profileCode: profileCode, query: query)
+        let (ticket, same) = summaryGate.begin(key)
+        summary = .loading(previous: same ? summary.value : nil)
+        let api = self.api
+        do {
+            let fetched = try await api.activitySummary(profileCode: profileCode, query: query)
+            guard summaryGate.isCurrent(ticket) else { return }
+            summary = .loaded(fetched)
+            summaryGate.finish(key)
+        } catch {
+            guard summaryGate.isCurrent(ticket) else { return }
+            summary = .failed(LoadState<ActivitySummary>.message(for: error), previous: nil)
+        }
     }
 
     // MARK: Pure
