@@ -1,5 +1,15 @@
 # Changelog
 
+## FAB card type — 2026-10-09
+
+### Parser
+
+- **fix** FAB's card type came from the header's product cell, which shares a text line with the address column, so every FAB statement read `100 SAMPLE TOWER CASHBACK CARD` (the street address glued to the product). The type now comes from the `Main Card : 5300 00** **** 9022 CASHBACK CARD` line; the header is the fallback. The synthetic FAB case prints an address on the product line, as the real layout does. 2026.10.6
+
+### Backend (Supabase)
+
+- **data** Production accounts renamed: FAB → nickname "FAB Cashback Card", product "Cashback Card"; ADCB → "ADCB Infinite Card", product "Infinite Card" (ingest sets `product_name` only when it creates an account, so this sticks).
+
 ## FAB cards on one account — 2026-10-09
 
 ### Backend (Supabase)

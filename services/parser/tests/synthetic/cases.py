@@ -111,7 +111,8 @@ def _fab_row(dates: str, description: str, original: str, aed: str, *, credit: b
 _FAB_PAGES: list[list[Line]] = [
     [
         "MS JANE Q SAMPLE Main Card Product Statement Date Payment Due Date",
-        "SAMPLE CASHBACK CARD 01-02-2026 26-02-2026",
+        # The address column shares the product line (real layout): "12 SAMPLE TOWER" is not the product.
+        "12 SAMPLE TOWER SAMPLE CASHBACK CARD 01-02-2026 26-02-2026",
         "Main Card Number Current Balance Minimum Payment Due",
         "4000 12** **** 2468 1,000.00 100.00",
         "Summary Details",
