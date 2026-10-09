@@ -2,9 +2,9 @@ import LedgerKit
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Statements tab: the live upload log (toolbar `+`), PDFs waiting from the
-/// share sheet, statement cycles (each opens its detail) and uploads (each
-/// opens its processing log).
+/// Settings → Statements (a tab until Budgets took its place): the live
+/// upload log (toolbar `+`), PDFs waiting from the share sheet, statement
+/// cycles (each opens its detail) and uploads (each opens its processing log).
 struct StatementsView: View {
     let model: StatementsModel
     let profileCode: String

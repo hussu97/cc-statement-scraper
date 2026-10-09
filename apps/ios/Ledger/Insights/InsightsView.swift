@@ -6,6 +6,8 @@ struct InsightsView: View {
     @Bindable var model: InsightsModel
     let month: MonthSelection
     let profileCode: String
+    /// Switches to the Budgets tab.
+    let showBudgets: () -> Void
 
     var body: some View {
         Page {
@@ -22,7 +24,10 @@ struct InsightsView: View {
             StateContainer(state: model.state, retry: reload) { content in
                 let range = InsightsModel.range(for: model.period, month: month.requestMonth)
                 SpendSplitCard(trend: content.trend, from: range.from, to: range.to, profileCode: profileCode)
-                if !content.budgets.isEmpty { BudgetsCard(budgets: content.budgets, scope: model.budgetsScope()) }
+                if !content.budgets.isEmpty {
+                    BudgetsCard(budgets: content.budgets, scope: model.budgetsScope(), isCurrentMonth: month.isCurrent,
+                                seeAll: showBudgets)
+                }
                 CategoriesCard(categories: content.categories)
                 MerchantsCard(merchants: content.merchants)
                 RecurringCard(recurring: content.activeRecurring, annualTotal: content.recurringAnnualTotal)
@@ -129,6 +134,8 @@ private struct RecurringCard: View {
 private struct BudgetsCard: View {
     let budgets: [BudgetStatus]
     let scope: String
+    let isCurrentMonth: Bool
+    let seeAll: () -> Void
 
     var body: some View {
         Card {
@@ -140,9 +147,28 @@ private struct BudgetsCard: View {
                         Spacer()
                         Text(budget.progressLabel).font(Typography.rowMeta).monospacedDigit()
                     }
-                    ProgressView(value: budget.progressFraction).tint(budget.tone.color)
+                    ProgressView(value: budget.progressFraction).tint(budget.tone(isCurrentMonth: isCurrentMonth).color)
+                        .accessibilityLabel(budget.meterAccessibilityLabel)
                 }
             }
+            Button(action: seeAll) {
+                Label("See all budgets", systemImage: "chevron.right").labelStyle(TrailingIconLabelStyle())
+                    .font(Typography.rowMeta)
+                    .frame(maxWidth: .infinity, minHeight: Metrics.tapMin, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Palette.accent)
+        }
+    }
+}
+
+/// Title first, icon after: `See all budgets ›`.
+private struct TrailingIconLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 4) {
+            configuration.title
+            configuration.icon.font(.caption.weight(.semibold))
         }
     }
 }

@@ -134,7 +134,7 @@ public enum ShareOutcome: Equatable, Sendable {
         switch self {
         case let .uploaded(queued, duplicates):
             var parts: [String] = []
-            if queued > 0 { parts.append(queued == 1 ? "Sent: watch progress in Bank Ledger → Statements" : "Sent \(queued) PDFs: watch progress in Bank Ledger → Statements") }
+            if queued > 0 { parts.append(queued == 1 ? "Sent: watch progress in Bank Ledger → Settings → Statements" : "Sent \(queued) PDFs: watch progress in Bank Ledger → Settings → Statements") }
             if duplicates > 0 { parts.append(duplicates == 1 ? "1 already in Bank Ledger" : "\(duplicates) already in Bank Ledger") }
             return parts.isEmpty ? "Nothing to upload." : parts.joined(separator: ". ") + "."
         case .savedForLater(let n):

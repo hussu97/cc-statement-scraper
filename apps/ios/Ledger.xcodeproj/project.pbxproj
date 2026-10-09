@@ -20,11 +20,13 @@
 		7661F492311F61EFDB72CA0D /* LedgerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDC537589817A7B6C31CC447 /* LedgerApp.swift */; };
 		76C6B0E503A29FB340C66AAD /* SpendFilterSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 264DF1988B5FD484847487E6 /* SpendFilterSheet.swift */; };
 		77AED5C567C9D18DFED64501 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 496168FB383326D0481C9AC8 /* PrivacyInfo.xcprivacy */; };
+		79BE1EC1E38ED7C29DE21E5C /* BudgetEditSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A25D970A4511B5531978319 /* BudgetEditSheet.swift */; };
 		7A19A23E1C8368E0F3EB5B51 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 4C249495FC88BB9133CB717E /* PrivacyInfo.xcprivacy */; };
 		7B056F939B7822BC41E88540 /* LedgerShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F8A491D8C79A061F71F857D7 /* LedgerShare.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		860158FF70A963842E055393 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCE4248BBC6E6FA967938803 /* RootView.swift */; };
 		88E22D6FB72866F27D8AE476 /* ActivitySheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0120325ABB16C928EB7D78A2 /* ActivitySheets.swift */; };
 		96964A46ECACE02F55F2E30D /* SignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFDA37FE8678FA89D04F3841 /* SignInView.swift */; };
+		9E4B8F2E603C9B778DFE42A7 /* BudgetsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1D9A6F55EDEC6633699FC7B /* BudgetsView.swift */; };
 		9EBF5BFE77ECA1C47D23BAAC /* BankLogo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 565481D48090AF940C8DF22A /* BankLogo.swift */; };
 		AC6B124273C727CF4191CF2D /* PagingFooter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5F7B5FD1E6564824D0B7AB5 /* PagingFooter.swift */; };
 		ADA71066669326EC96C41A89 /* OverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A31E4CF859EB1BA241A2C0C1 /* OverviewView.swift */; };
@@ -67,6 +69,7 @@
 		0120325ABB16C928EB7D78A2 /* ActivitySheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivitySheets.swift; sourceTree = "<group>"; };
 		05EB2567DB0EA258329DBD95 /* InsightsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsightsView.swift; sourceTree = "<group>"; };
 		076A0083646CF5850906DE83 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
+		0A25D970A4511B5531978319 /* BudgetEditSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetEditSheet.swift; sourceTree = "<group>"; };
 		15C0186C1E6AFC4A04ACCC41 /* LedgerKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LedgerKit; path = LedgerKit; sourceTree = SOURCE_ROOT; };
 		18CF2690692498221A6F2653 /* LedgerShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LedgerShare.entitlements; sourceTree = "<group>"; };
 		264DF1988B5FD484847487E6 /* SpendFilterSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendFilterSheet.swift; sourceTree = "<group>"; };
@@ -95,6 +98,7 @@
 		E7DE35B2ABB9AA3A980FD35D /* ReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewView.swift; sourceTree = "<group>"; };
 		EFDA37FE8678FA89D04F3841 /* SignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInView.swift; sourceTree = "<group>"; };
 		F190BDC9EB8084E38F344EE7 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		F1D9A6F55EDEC6633699FC7B /* BudgetsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetsView.swift; sourceTree = "<group>"; };
 		F1E4A856AC27772DBFEAAA57 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		F52CAA6FE73B46EFE59439A4 /* StatementsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatementsView.swift; sourceTree = "<group>"; };
 		F62D21289B23718DD5F57954 /* PasskeysView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasskeysView.swift; sourceTree = "<group>"; };
@@ -127,6 +131,7 @@
 			children = (
 				DB1D1603FFAD1F3A7BCACE44 /* Activity */,
 				3A9060CD6CF2FD406CFEB9FD /* App */,
+				92831103A0F0271328A9729A /* Budgets */,
 				70B7A106562AC9DE924B57DE /* Components */,
 				EBFBF1ABEFB6004D629B4CF6 /* Insights */,
 				FD9612D2EC0D00E696282BA1 /* Intents */,
@@ -226,6 +231,15 @@
 				B5F7B5FD1E6564824D0B7AB5 /* PagingFooter.swift */,
 			);
 			path = Components;
+			sourceTree = "<group>";
+		};
+		92831103A0F0271328A9729A /* Budgets */ = {
+			isa = PBXGroup;
+			children = (
+				0A25D970A4511B5531978319 /* BudgetEditSheet.swift */,
+				F1D9A6F55EDEC6633699FC7B /* BudgetsView.swift */,
+			);
+			path = Budgets;
 			sourceTree = "<group>";
 		};
 		AA228B2B5C90296C345ECEED /* Resources */ = {
@@ -416,6 +430,8 @@
 				AED0BA06AC058188E57F5191 /* ActivitySummaryRow.swift in Sources */,
 				748435885CB091FA9BFCACAA /* ActivityView.swift in Sources */,
 				9EBF5BFE77ECA1C47D23BAAC /* BankLogo.swift in Sources */,
+				79BE1EC1E38ED7C29DE21E5C /* BudgetEditSheet.swift in Sources */,
+				9E4B8F2E603C9B778DFE42A7 /* BudgetsView.swift in Sources */,
 				C7D2A9DBE9043F127D748D46 /* ChartDescriptor.swift in Sources */,
 				2AF7A777F5554D6851F1C5F0 /* Components.swift in Sources */,
 				4F5F815454811A4ECF4C88FF /* InsightsView.swift in Sources */,

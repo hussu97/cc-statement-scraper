@@ -166,15 +166,6 @@ extension DocumentRecord {
     }
 }
 
-extension BudgetStatus {
-    public var tone: Tone { isOver ? .danger : isProjectedOver ? .warn : .positive }
-    public var progressFraction: Double { min(max(shareUsed.chartValue, 0), 1) }
-    /// `"AED 1,200 of AED 2,000"`.
-    public var progressLabel: String {
-        "\(MoneyFormat.aed(spentAed, fractionDigits: 0)) of \(MoneyFormat.aed(budgetAed, fractionDigits: 0))"
-    }
-}
-
 extension EvidenceBadge {
     public var tone: Tone {
         switch self {

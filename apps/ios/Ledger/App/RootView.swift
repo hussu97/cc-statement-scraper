@@ -43,28 +43,34 @@ struct MainTabs: View {
     let profileCode: String
 
     var body: some View {
-        TabView {
-            Tab("Overview", systemImage: "circle.grid.2x2") {
+        @Bindable var tabs = model.tabs
+        TabView(selection: $tabs.tab) {
+            Tab(LedgerTab.overview.title, systemImage: LedgerTab.overview.systemImage, value: .overview) {
                 NavigationStack {
                     OverviewView(model: model.overview, month: model.month, review: model.review,
                                  profileCode: profileCode, canResolve: model.profiles.canWrite)
                 }
             }
-            Tab("Activity", systemImage: "list.bullet.rectangle") {
+            Tab(LedgerTab.activity.title, systemImage: LedgerTab.activity.systemImage, value: .activity) {
                 NavigationStack {
                     ActivityView(model: model.activity, months: model.month.range, profileCode: profileCode)
                 }
             }
-            Tab("Insights", systemImage: "chart.bar.xaxis") {
-                NavigationStack { InsightsView(model: model.insights, month: model.month, profileCode: profileCode) }
-            }
-            Tab("Statements", systemImage: "doc.text") {
+            Tab(LedgerTab.insights.title, systemImage: LedgerTab.insights.systemImage, value: .insights) {
                 NavigationStack {
-                    StatementsView(model: model.statements, profileCode: profileCode, canUpload: model.profiles.canWrite)
+                    InsightsView(model: model.insights, month: model.month, profileCode: profileCode,
+                                 showBudgets: { model.tabs.show(.budgets) })
                 }
             }
-            Tab("Settings", systemImage: "gearshape") {
-                NavigationStack { SettingsView(model: model) }
+            Tab(LedgerTab.budgets.title, systemImage: LedgerTab.budgets.systemImage, value: .budgets) {
+                NavigationStack {
+                    BudgetsView(model: model.budgets, month: model.month, profileCode: profileCode,
+                                canEdit: model.profiles.canWrite)
+                }
+            }
+            // Statements (cycles, uploads, share-sheet queue, processing logs) live under Settings.
+            Tab(LedgerTab.settings.title, systemImage: LedgerTab.settings.systemImage, value: .settings) {
+                NavigationStack { SettingsView(model: model, profileCode: profileCode) }
             }
         }
         .environment(model.banks)

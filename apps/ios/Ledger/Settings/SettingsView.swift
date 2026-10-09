@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SettingsView: View {
     let model: AppModel
+    let profileCode: String
     @State private var confirmClear = false
 
     private var settings: SettingsModel { model.settings }
@@ -17,6 +18,24 @@ struct SettingsView: View {
                 if profiles.canSwitch {
                     Button("Switch ledger") { profiles.select(nil) }
                 }
+            }
+
+            // The former Statements tab: cycles, uploads, PDFs waiting from the share sheet, logs.
+            Section {
+                NavigationLink(value: SettingsRoute.statements) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Label("Statements", systemImage: "doc.text")
+                        if let waiting = model.statements.waitingLabel {
+                            Text(waiting).font(Typography.caption).foregroundStyle(Palette.warn)
+                        }
+                    }
+                }
+            } header: {
+                Text("Cards & statements")
+            } footer: {
+                Text(profiles.canWrite
+                     ? "Statement cycles, PDF uploads and their processing logs. Add PDFs with + there, or share them to “Add to Bank Ledger”."
+                     : "Statement cycles, PDF uploads and their processing logs.")
             }
 
             Section("Account") {
@@ -103,7 +122,16 @@ struct SettingsView: View {
         .scrollContentBackground(.hidden)
         .background(Palette.bg)
         .ledgerNavigation("Settings")
-        .task { await settings.refresh() }
+        .navigationDestination(for: SettingsRoute.self) { route in
+            switch route {
+            case .statements:
+                StatementsView(model: model.statements, profileCode: profileCode, canUpload: profiles.canWrite)
+            }
+        }
+        .task {
+            model.statements.refreshWaiting()
+            await settings.refresh()
+        }
         .confirmationDialog("Discard messages that haven't reached Bank Ledger?", isPresented: $confirmClear,
                             titleVisibility: .visible) {
             Button("Discard", role: .destructive) { Task { await settings.clearOutbox() } }

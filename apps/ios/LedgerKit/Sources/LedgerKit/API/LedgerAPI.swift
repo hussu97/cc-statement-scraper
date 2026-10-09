@@ -67,6 +67,13 @@ public protocol LedgerAPI: SMSIngestAPI {
     /// New `document_events` rows of the profile, live (Realtime INSERTs).
     func documentEventStream(profileCode: String) -> AsyncStream<DocumentEvent>
 
+    // Budgets (SupabaseLedgerAPI+Budgets.swift)
+    /// `public.budgets` of the profile, newest start first.
+    func budgets(profileCode: String) async throws -> [Budget]
+    /// Inserts a new budget (no `budgetCode`) or updates one. Owners only (RLS).
+    func saveBudget(profileCode: String, draft: BudgetDraft) async throws
+    func deleteBudget(budgetCode: String) async throws
+
     /// Fires whenever a row the screens show changes (transactions, SMS,
     /// documents, insights) for the profile. Ends when the caller stops iterating.
     func changes(profileCode: String) -> AsyncStream<LedgerChange>

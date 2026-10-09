@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// The five data tabs of one ledger, kept pointed at the selected profile:
+/// The data screens of one ledger (four data tabs, plus Statements under Settings and Review), kept pointed at the selected profile:
 /// switching ledger clears every tab before anything of the new one shows
 /// (BACKLOG IOS-14), Realtime and the foreground refresh every tab the reader
 /// has opened (IOS-13), and the month on screen is shared by Overview and
@@ -12,6 +12,7 @@ public final class LedgerScreens {
     public let overview: OverviewModel
     public let activity: ActivityModel
     public let insights: InsightsModel
+    public let budgets: BudgetsModel
     public let statements: StatementsModel
     public let review: ReviewModel
     public let month: MonthSelection
@@ -28,10 +29,13 @@ public final class LedgerScreens {
         overview = OverviewModel(api: api)
         activity = ActivityModel(api: api)
         insights = InsightsModel(api: api)
+        budgets = BudgetsModel(api: api)
         statements = StatementsModel(api: api, pendingUploads: pendingUploads, flushPending: flushPending)
         review = ReviewModel(api: api)
         month = MonthSelection(today: today)
         self.live = live ?? LiveUpdates(api: api)
+        // A budget written on the Budgets tab changes Insights' budgets card.
+        budgets.onChange = { [insights] code in await insights.refresh(profileCode: code) }
     }
 
     /// Points every tab at `code` (clearing them first when it is another
@@ -65,12 +69,13 @@ public final class LedgerScreens {
         let txns = tables.contains("transactions")
         let docs = tables.contains("documents")
         let reviews = !tables.isDisjoint(with: ["transactions", "sms_messages", "documents"])
-        let (overview, activity, insights, statements, review) = (overview, activity, insights, statements, review)
+        let (overview, activity, insights, budgets, statements, review) = (overview, activity, insights, budgets, statements, review)
         await withDiscardingTaskGroup { group in
             if money { group.addTask { await overview.refresh(profileCode: code) } }
             if txns {
                 group.addTask { await activity.refresh(profileCode: code) }
                 group.addTask { await insights.refresh(profileCode: code) }
+                group.addTask { await budgets.refresh(profileCode: code) }
             }
             if docs || txns { group.addTask { await statements.refresh(profileCode: code) } }
             if reviews { group.addTask { await review.refresh(profileCode: code) } }
@@ -86,6 +91,7 @@ public final class LedgerScreens {
         overview.reset()
         activity.reset()
         insights.reset()
+        budgets.reset()
         statements.reset()
         review.reset()
         month.reset()
