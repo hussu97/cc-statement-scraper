@@ -146,6 +146,8 @@ def _layout_scores(text: str) -> dict[str, int]:
         vote("SIB", 3)
     if "TRANSACTION HISTORY" in text and "ACCOUNT NO." in text and "ACCOUNT TYPE" in text:
         vote("SIB", 3)
+    if "STATEMENT DETAILS" in text and "CARD ISSUER SIB" in text:
+        vote("SIB", 3)
     if _word("SIB", text) and "ISLAMIC BANK" in text:
         vote("SIB", 1)
     return scores

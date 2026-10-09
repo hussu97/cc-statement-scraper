@@ -120,3 +120,14 @@ def test_layout_only_text_still_detected() -> None:
 def test_falls_back_to_legacy_rules_when_nothing_scores() -> None:
     assert _infer_bank_code_from_text("MASHREQ something") is None
     assert _infer_bank_code_from_text("SIB something ISLAMIC BANK") == "SIB"
+
+
+def test_sib_app_statement_details_export_is_detected() -> None:
+    text = """Statement details
+    JANE Q SAMPLE
+    Card 5290 xxxx xxxx 4821
+    Card issuer SIB MC Cashback
+    Billing date 14 Sep 2026
+    Date Details Amount
+    08 Oct 2026 CORNER GROCERY SHARJAH AED -105.75"""
+    assert _infer_bank_code_from_text(text) == "SIB"
