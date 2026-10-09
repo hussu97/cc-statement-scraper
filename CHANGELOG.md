@@ -1,5 +1,11 @@
 # Changelog
 
+## Insights spending filters — 2026-10-09
+
+### Backend (Supabase)
+
+- **feat** `20261010001600_spend_filters`: `spend_series` and `spend_breakdown` take optional `p_category_codes`, `p_bank_codes`, `p_card_codes` (text arrays; `'__uncategorized__'` = no category) and `p_q` (merchant name OR description, cleaned like the Activity search). One definition, `private.filtered_spend`, over `v_spend`, so chart and totals agree. Both functions are dropped and recreated (an overload would make PostgREST's named calls ambiguous); `spend_series` is now SECURITY DEFINER with `assert_member` and an explicit profile filter, like `spend_breakdown`, since clients cannot use `private`. pgTAP `30_spend_filters`
+
 ## Web smoke waits on Vercel's commit status too — 2026-10-09
 
 ### Docs
