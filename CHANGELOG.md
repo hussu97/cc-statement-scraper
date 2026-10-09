@@ -1,5 +1,12 @@
 # Changelog
 
+## iOS: SMS saved with no data are sent once a connection is back — 2026-10-10
+
+### iOS
+
+- **fix** Being offline (no mobile data, airplane mode, roaming off, DNS/connect failure, timeout: `LedgerAPIError.isUnreachable`) no longer uses up the outbox's 8 attempts, so a day without data no longer parks messages under Settings → Not sent. It stops the flush (other ledgers would fail too) and the message waits; anything unsent 7 days after capture (`Outbox.maxAge`) is parked, except while signed out. Server outages keep the 8-attempt cap. Tests `OutboxOfflineTests`; `OutboxTests` backoff case now uses a 503.
+- **feat** Waiting messages are sent without opening the app. LedgerKit `OutboxSync`: `pathChanged` force-sends the queue when an `NWPathMonitor` reports the connection is back (app or intent process), and `plan` decides the background request. The app registers a `BGProcessingTask` requiring network connectivity (`com.example.ledger.outbox-send`) and a `BGAppRefreshTask` (`com.example.ledger.outbox-refresh`), submitted when the intent queues a message and when the app goes to the background, resubmitted after each run while anything waits. `project.yml`/Info.plist: `UIBackgroundModes` fetch + processing, `BGTaskSchedulerPermittedIdentifiers` (a test checks they match the code). The `received_at` captured when the Shortcut ran is unchanged.
+
 ## LLM categorisation runs at 18:00 UTC — 2026-10-10
 
 ### Backend (Supabase)

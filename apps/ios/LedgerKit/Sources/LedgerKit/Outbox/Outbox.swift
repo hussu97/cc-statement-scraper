@@ -28,7 +28,11 @@ public struct OutboxEntry: Codable, Sendable, Hashable, Identifiable {
 /// server side exactly-once.
 ///
 /// Failures are classified (`LedgerAPIError.kind`):
-/// * transient (offline, timeout, 5xx): retried with backoff, at most
+/// * unreachable (no data, airplane mode, DNS, timeout): the phone, not the
+///   message, so it is not counted as an attempt and the flush stops; the
+///   entry waits until a connection is back (`OutboxSync`), however long that
+///   takes, and is parked only after `maxAge`;
+/// * other transient (5xx, a busy database): retried with backoff, at most
 ///   `maxAttempts` times, then parked;
 /// * permanent (42501 permission, 22023 validation, 4xx): a batch is split in
 ///   halves until the bad message is alone, which is parked — the others go
@@ -42,6 +46,9 @@ public actor Outbox {
     public static let batchLimit = 200
     /// Automatic attempts before an entry is parked for the user.
     public static let maxAttempts = 8
+    /// A message still unsent this long after it was captured is parked for
+    /// the user, whatever the reason (a week without data is not normal).
+    public static let maxAge: TimeInterval = 7 * 24 * 3600
 
     private let fileURL: URL
     private let api: any SMSIngestAPI
@@ -160,6 +167,11 @@ public actor Outbox {
                         report.failed += batch.count
                         recordFailure(batch, error: apiError, countsAsAttempt: false, report: &report)
                         break outer
+                    case .transient where apiError.isUnreachable:
+                        // No connection: every other profile would fail too.
+                        report.failed += batch.count
+                        recordFailure(batch, error: apiError, countsAsAttempt: false, report: &report)
+                        break outer
                     case .transient:
                         // The rest of this profile would most likely fail the same
                         // way right now; leave it for the next flush.
@@ -242,8 +254,15 @@ public actor Outbox {
             for i in entries.indices where ids.contains(entries[i].id) {
                 if countsAsAttempt { entries[i].attempts += 1 }
                 entries[i].lastError = error.description
-                if countsAsAttempt && entries[i].attempts >= Self.maxAttempts {
-                    let reason = "Gave up after \(entries[i].attempts) tries: \(error.description)"
+                let reason: String? =
+                    if countsAsAttempt && entries[i].attempts >= Self.maxAttempts {
+                        "Gave up after \(entries[i].attempts) tries: \(error.description)"
+                    } else if error.kind != .signedOut && at.timeIntervalSince(entries[i].enqueuedAt) >= Self.maxAge {
+                        "Not sent for 7 days: \(error.description)"
+                    } else {
+                        nil
+                    }
+                if let reason {
                     entries[i].parkedAt = at
                     entries[i].parkedReason = reason
                     parkedNow[entries[i].id] = reason

@@ -173,6 +173,20 @@ public enum LedgerAPIError: Error, Equatable, CustomStringConvertible {
     /// Worth retrying later without user action.
     public var isTransient: Bool { kind == .transient }
 
+    /// The request never reached Ledger because the phone has no usable
+    /// connection (no data, airplane mode, roaming off, DNS or connect
+    /// failure, timeout). Says nothing about the message, so the outbox does
+    /// not count it as an attempt.
+    public var isUnreachable: Bool {
+        guard case let .network(code) = self, let raw = Int(code) else { return false }
+        return Self.unreachableURLErrorCodes.contains(URLError.Code(rawValue: raw))
+    }
+
+    static let unreachableURLErrorCodes: Set<URLError.Code> = [
+        .notConnectedToInternet, .networkConnectionLost, .cannotFindHost, .cannotConnectToHost,
+        .dnsLookupFailed, .timedOut, .internationalRoamingOff, .callIsActive, .dataNotAllowed,
+    ]
+
     /// `42501` (insufficient privilege, e.g. a viewer calling `ingest_sms`) or HTTP 403.
     public var isPermission: Bool {
         if case let .server(status, code, _) = self { return Self.isPermission(status: status, code: code) }

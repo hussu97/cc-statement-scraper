@@ -150,12 +150,17 @@ first one you own — never simply the ledger on screen. PDFs shared to "Add to 
    server's templates classify it (debit-card and account alerts are stored `ignored`).
 2. The message is written to the App Group outbox with a fresh `client_msg_id`.
 3. The outbox flushes through `rpc('ingest_sms')` with the session from the shared keychain.
-   Transient failures (offline, timeouts, 5xx) back off (30 s doubling, capped at 1 h) for at
-   most 8 attempts; permanent ones (42501 not an owner, 22023 invalid, 4xx) and per-message
+   No connection (no data, airplane mode, timeouts) is not an attempt: the message waits until
+   a connection is back (parked only after 7 days). Other transient failures (5xx, a busy
+   database) back off (30 s doubling, capped at 1 h) for at most 8 attempts; permanent ones (42501 not an owner, 22023 invalid, 4xx) and per-message
    `invalid` statuses park only the affected messages (a failing batch is split until the bad
    one is alone). Parked messages wait under Settings → **Not sent** (Retry / Delete).
    `client_msg_id` makes retries idempotent server-side.
-4. Shortcuts shows a one-line result naming the ledger and, for unknown cards or held
+4. Saved but unsent, it is sent later without opening the app: the moment the connection
+   returns while the process runs (`NWPathMonitor`), or by a background task iOS starts once
+   there is a network (`OutboxSync`; Info.plist `BGTaskSchedulerPermittedIdentifiers`,
+   `UIBackgroundModes` fetch + processing). `received_at` stays the time the Shortcut ran.
+5. Shortcuts shows a one-line result naming the ledger and, for unknown cards or held
    matches, pointing to Overview → Needs review. The body is never logged, echoed or sent to Sentry.
 
 ## TestFlight
