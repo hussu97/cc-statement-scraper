@@ -53,7 +53,8 @@ struct OutboxTests {
 
     @Test("a failed flush keeps entries and backs off exponentially")
     func backoff() async throws {
-        let api = StubAPI(.fail(.network("-1009")))
+        // A server outage; being offline is not an attempt (OutboxOfflineTests).
+        let api = StubAPI(.fail(.server(status: 503, code: nil, message: "Service Unavailable")))
         let clock = TestClock()
         let outbox = Outbox(fileURL: temporaryOutboxURL(), api: api, backoff: Backoff(base: 30, cap: 3600),
                             now: { clock.now })
@@ -65,7 +66,7 @@ struct OutboxTests {
         var entry = try #require(try await outbox.entries().first)
         #expect(entry.attempts == 1)
         #expect(entry.nextAttemptAt == clock.now.addingTimeInterval(30))
-        #expect(entry.lastError == "No connection to Ledger.")
+        #expect(entry.lastError == "Service Unavailable")
 
         // Not due yet: nothing is sent.
         clock.advance(10)

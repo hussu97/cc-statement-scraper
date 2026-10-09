@@ -648,12 +648,20 @@ Bank SMS → Shortcuts automation → LogBankSMSIntent (openAppWhenRun = false, 
 - **"SMS go to" ledger.** An explicit setting in the App Group, limited to ledgers the user
   owns (default: the first owned one). The App Intent, the share extension and queued PDF
   uploads use it, never the ledger currently on screen.
-- **Outbox.** Errors are classified by SQLSTATE / PGRST code, then HTTP status. Transient ones
-  (offline, 5xx, `57014`, `08`/`40`/`53` classes) retry with backoff for up to 8 attempts, then
-  park; signed-out never uses up attempts. A permanent batch error is split until the bad
+- **Outbox.** Errors are classified by SQLSTATE / PGRST code, then HTTP status. No connection
+  (no mobile data, airplane mode, DNS, timeout: `URLError` connectivity codes) never uses up
+  attempts and stops the flush; such a message waits however long it takes, parked only after 7
+  days unsent. Other transient ones (5xx, `57014`, `08`/`40`/`53` classes) retry with backoff for
+  up to 8 attempts, then park; signed-out never uses up attempts or ages out. A permanent batch error is split until the bad
   message is alone; a `42501` parks that ledger's batch; a per-message `invalid`/`failed`
   status parks only that message. Parked messages are listed in Settings → "Not sent" with
   Retry and Delete, and Shortcut results say why a message waits.
+- **Sending without the user** (`OutboxSync`): besides the intent's own attempt and the app
+  coming to the foreground, an `NWPathMonitor` sends everything waiting the moment the
+  connection returns while the process runs, and whenever something waits the app submits a
+  `BGProcessingTask` that requires network connectivity (`com.hussu97.ledger.outbox-send`) plus
+  a `BGAppRefreshTask` (`…outbox-refresh`), so iOS sends it after data comes back even with the
+  app closed. The message keeps the `received_at` captured when the Shortcut ran.
 
 - **Server-side parsing is data-driven** through `sms_templates`. Seed templates for ADCB, FAB,
   ENBD and SIB are built from real alerts.

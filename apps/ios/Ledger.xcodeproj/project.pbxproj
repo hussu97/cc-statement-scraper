@@ -16,6 +16,7 @@
 		4F5F815454811A4ECF4C88FF /* InsightsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05EB2567DB0EA258329DBD95 /* InsightsView.swift */; };
 		659B1CF789C0735789CC64EE /* StatementsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F52CAA6FE73B46EFE59439A4 /* StatementsView.swift */; };
 		67823B3F9665BD78F8BE1182 /* PasskeysView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62D21289B23718DD5F57954 /* PasskeysView.swift */; };
+		738FC2230617C85A8AC57684 /* BackgroundSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 577A951513B717E3C3EB9347 /* BackgroundSync.swift */; };
 		748435885CB091FA9BFCACAA /* ActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAE2E3AE75D7627DDCE82B40 /* ActivityView.swift */; };
 		7661F492311F61EFDB72CA0D /* LedgerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDC537589817A7B6C31CC447 /* LedgerApp.swift */; };
 		76C6B0E503A29FB340C66AAD /* SpendFilterSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 264DF1988B5FD484847487E6 /* SpendFilterSheet.swift */; };
@@ -81,6 +82,7 @@
 		4C249495FC88BB9133CB717E /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		4FCEADD59EE2BBF22D5B715A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		565481D48090AF940C8DF22A /* BankLogo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BankLogo.swift; sourceTree = "<group>"; };
+		577A951513B717E3C3EB9347 /* BackgroundSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundSync.swift; sourceTree = "<group>"; };
 		582E2ECDA81AFDC1C9849F12 /* UploadLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadLogView.swift; sourceTree = "<group>"; };
 		5B4BB4BE741A2728C651F5B4 /* MonthSwitcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonthSwitcher.swift; sourceTree = "<group>"; };
 		73761BCB90A985F69998349F /* StatementDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatementDetailView.swift; sourceTree = "<group>"; };
@@ -160,6 +162,7 @@
 		3A9060CD6CF2FD406CFEB9FD /* App */ = {
 			isa = PBXGroup;
 			children = (
+				577A951513B717E3C3EB9347 /* BackgroundSync.swift */,
 				BDC537589817A7B6C31CC447 /* LedgerApp.swift */,
 				FCE4248BBC6E6FA967938803 /* RootView.swift */,
 			);
@@ -429,6 +432,7 @@
 				88E22D6FB72866F27D8AE476 /* ActivitySheets.swift in Sources */,
 				AED0BA06AC058188E57F5191 /* ActivitySummaryRow.swift in Sources */,
 				748435885CB091FA9BFCACAA /* ActivityView.swift in Sources */,
+				738FC2230617C85A8AC57684 /* BackgroundSync.swift in Sources */,
 				9EBF5BFE77ECA1C47D23BAAC /* BankLogo.swift in Sources */,
 				79BE1EC1E38ED7C29DE21E5C /* BudgetEditSheet.swift in Sources */,
 				9E4B8F2E603C9B778DFE42A7 /* BudgetsView.swift in Sources */,

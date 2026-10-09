@@ -9,6 +9,9 @@ enum AppServices {
         try LedgerServices.fromBundle(debugSessionFallback: BuildFlavor.isDebug)
     }
     static var shared: LedgerServices? { try? result.get() }
+
+    /// Watches connectivity for the life of the process (app or intent).
+    static let connectivity: ConnectivityWatcher? = shared.map(ConnectivityWatcher.init)
 }
 
 /// This target's own build flavour (LedgerKit is compiled separately).
@@ -28,6 +31,10 @@ struct LedgerApp: App {
     init() {
         Telemetry.start(target: .app, config: AppServices.shared?.config, isDebugBuild: BuildFlavor.isDebug)
         _model = State(initialValue: AppServices.shared.map { AppModel(services: $0) })
+        if let services = AppServices.shared {
+            BackgroundSync.register(services)
+            _ = AppServices.connectivity
+        }
     }
 
     var body: some Scene {
@@ -42,8 +49,13 @@ struct LedgerApp: App {
             .tint(Palette.accent)
         }
         .onChange(of: scenePhase) { _, phase in
-            guard phase == .active, let model else { return }
-            Task { await model.becameActive() }
+            guard let model else { return }
+            switch phase {
+            case .active: Task { await model.becameActive() }
+            // Leaving with messages waiting: let iOS send them later.
+            case .background: Task { await BackgroundSync.schedule(model.services) }
+            default: break
+            }
         }
     }
 }

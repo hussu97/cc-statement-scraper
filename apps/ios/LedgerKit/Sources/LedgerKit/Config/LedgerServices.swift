@@ -24,6 +24,7 @@ public final class LedgerServices: Sendable {
     public let client: SupabaseClient
     public let api: SupabaseLedgerAPI
     public let outbox: Outbox
+    public let outboxSync: OutboxSync
     public let selection: ProfileSelection
     public let smsTargets: SMSTargetStore
     public let captureLog: CaptureLog
@@ -45,6 +46,7 @@ public final class LedgerServices: Sendable {
                 global: .init(session: session)))
         api = SupabaseLedgerAPI(client: client, config: config, session: session)
         outbox = Outbox(fileURL: Outbox.defaultURL(container: config.sharedContainerURL), api: api)
+        outboxSync = OutboxSync(outbox: outbox)
         selection = ProfileSelection(defaults: config.sharedDefaults)
         smsTargets = SMSTargetStore(defaults: config.sharedDefaults)
         captureLog = CaptureLog(defaults: config.sharedDefaults)

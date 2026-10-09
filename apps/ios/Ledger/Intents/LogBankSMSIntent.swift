@@ -34,6 +34,8 @@ struct LogBankSMSIntent: AppIntent {
         Telemetry.start(target: .intent, config: services.config, isDebugBuild: BuildFlavor.isDebug)
         let (outcome, dialog) = await services.smsIntake().handle(body: message, sender: sender)
         Telemetry.breadcrumb("sms_ingest", outcome: outcome.telemetryOutcome, data: ["entry": "intent"])
+        // Saved but not sent (e.g. no data): ask iOS to send it once a connection is back.
+        if case .queued = outcome { await BackgroundSync.schedule(services) }
         return .result(value: outcome.telemetryOutcome, dialog: IntentDialog(stringLiteral: dialog))
     }
 }

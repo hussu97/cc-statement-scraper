@@ -52,6 +52,12 @@ targets:
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UIApplicationSupportsIndirectInputEvents: true
         ITSAppUsesNonExemptEncryption: false
+        # SMS saved with no data are sent from background tasks once a
+        # connection is back (LedgerKit OutboxSync; IDs must match).
+        UIBackgroundModes: [fetch, processing]
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.hussu97.ledger.outbox-refresh
+          - com.hussu97.ledger.outbox-send
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         LedgerSupabaseURL: $(LEDGER_SUPABASE_URL)
