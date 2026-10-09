@@ -50,6 +50,8 @@ else
   ok "CSP present"
   grep -q "default-src 'self'" <<<"$csp" || bad "CSP lacks default-src 'self'"
   grep -q "https://$PROJECT_REF.supabase.co" <<<"$csp" || bad "CSP connect-src does not allow https://$PROJECT_REF.supabase.co"
+# Bank logos load from the public bank-logos Storage bucket.
+grep -Eq "img-src[^;]*https://$PROJECT_REF\.supabase\.co" <<<"$csp" || bad "CSP img-src does not allow https://$PROJECT_REF.supabase.co (bank logos)"
   grep -q "frame-ancestors 'none'" <<<"$csp" || bad "CSP lacks frame-ancestors 'none'"
 fi
 [ "$(header index x-frame-options)" = DENY ] && ok "X-Frame-Options DENY" || bad "X-Frame-Options is not DENY"

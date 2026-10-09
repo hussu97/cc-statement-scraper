@@ -1,5 +1,11 @@
 # Changelog
 
+## Bank logos visible in production — 2026-10-09
+
+### Web
+
+- **fix** The production CSP (`apps/web/vercel.json`) allowed images only from the site itself, so every bank logo from the `bank-logos` Storage bucket was blocked and the code fallback showed. `img-src` now allows `https://nkmylznisjcnmqbxosey.supabase.co`, and `scripts/ci/web-smoke.sh` asserts it
+
 ## Web smoke runs once per push — 2026-10-09
 
 ### Docs
