@@ -16,6 +16,7 @@
 ### Docs
 
 - **docs** CLAUDE.md §5.5, `apps/ios/CLAUDE.md`, `apps/ios/README.md`, ARCHITECTURE.md SMS path
+- **ci** No macOS jobs on GitHub: `ios-build.yml` is deleted and `ci.yml`'s `ios` job removed (together ~30 billed minutes on every iOS PR and again on the `main` push). The pre-push hook does that work on the Mac: `swift test` as before, and now the unsigned app + share extension compile when app code changes (a push to `main` archives and signs instead). Without Xcode these checks fail rather than skip (docs/ci-cd.md)
 
 ## Glued cities backfilled — 2026-10-09
 

@@ -192,7 +192,7 @@ Create a service token in web Settings → Sources & health → Tokens, or with
 | Parser | `cd services/parser && .venv/bin/ruff check . && .venv/bin/pytest -q` (golden parity needs private PDFs; skipped otherwise) |
 | Web | `pnpm web:test`, `pnpm --filter @ledger/web lint`, `pnpm web:build` |
 | Tokens | `pnpm --filter @ledger/tokens check` (fails if the committed `Tokens.swift` drifts from `tokens.json`; the gitignored `dist/` is regenerated in memory only, so it works from a clean clone) |
-| iOS | `cd apps/ios/LedgerKit && swift test`; app + share extension compile: `cd apps/ios && xcodegen generate && xcodebuild build -project Ledger.xcodeproj -scheme Ledger -destination "generic/platform=iOS Simulator" CODE_SIGNING_ALLOWED=NO` (CI: `ios-build.yml`, weekly and on app changes) |
+| iOS | `cd apps/ios/LedgerKit && swift test`; app + share extension compile: `cd apps/ios && xcodegen generate && xcodebuild build -project Ledger.xcodeproj -scheme Ledger -destination "generic/platform=iOS Simulator" CODE_SIGNING_ALLOWED=NO` (no CI job: the pre-push hook runs both on the Mac) |
 | Scraper | `cd scraper && .venv/bin/pytest -q` |
 
 `bash scripts/install-hooks.sh` (or `pnpm hooks:install`) installs the git hooks; details in
