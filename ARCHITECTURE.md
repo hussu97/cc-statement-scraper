@@ -135,7 +135,7 @@ fx_rates (global)
 | `budgets`, `recurring_series`, `insights`, `audit_events` | Monthly budgets (total or per category), detected subscriptions, the nightly insight feed, and an audit trail of user edits. |
 | `email_mailboxes`, `email_routes`, `email_events` | Mailbox (gmail/outlook, `sync_state` cursor), per-bank routing rules, and per-attachment idempotency log. |
 | `document_events` | A document's timeline for the apps (`event_code` `dev_…`, `doc_code`, `stage` received/stored/duplicate/queued/parsing/parsed/ingested/failed/retry, `level` info/warn/error, `message` a sentence for end users, `detail` codes and counts only). Member read, in the Realtime publication; written only by the service role and SQL functions (§4). No FK on `doc_code`: `received`/`stored` precede the documents row. Kept 90 days. |
-| `fx_rates` | Global AED-per-unit market rates (fallback estimate only). |
+| `fx_rates` | Global AED-per-unit market rates (fallback estimate only). `private.bank_fx_fees` holds each bank's markup over them. |
 
 Queues (pgmq): `parse_document`, `llm_categorize`, `sms_fallback` and `storage_cleanup`, each with a `_dlq`;
 `storage_cleanup` carries `{bucket, paths[]}` from `delete_profile` (Storage objects can only be removed
@@ -159,7 +159,10 @@ the transaction's facts:
   date and real `fx_rate` win. When an SMS is also linked, the SMS amount is kept as
   `auth_amount` if it differs and the SMS time becomes `txn_at`.
 - With only an SMS, it is `pending`. A foreign amount gets an **estimated** AED value
-  (`amount_aed_is_estimate`).
+  (`amount_aed_is_estimate`) from `private.estimate_fx(profile, currency, bank)`: the card's own
+  bank's latest statement rate, else the USD peg or `fx_rates` mid rate × (1 + the bank's
+  all-in markup in `private.bank_fx_fees`, e.g. SIB 3.65%). Another bank's rate is never used.
+  A posted line without a printed AED amount (SIB history foreign rows) is estimated the same way.
 - With no evidence, it is `orphaned`. The transaction is never deleted, so its manual category
   and notes survive, and an `orphaned` review opens.
 
