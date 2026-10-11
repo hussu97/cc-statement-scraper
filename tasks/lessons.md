@@ -54,7 +54,9 @@
   (USD peg or `fx_rates`) times the bank's all-in markup (`private.bank_fx_fees`: network
   charge + bank fee). Derive it from the bank's published fee and check it against a real billed
   amount (the SIB model reproduces its bill to AED 0.03). Use the mid rate of the transaction's
-  own (posting) date, not today's: a week of rupee drift was worth 0.65%.
+  own (posting) date, not today's: a week of rupee drift was worth 0.65%. A fee table's wording
+  ("including any processing fee") is not evidence: ADCB's "all-in" 2.99% bills as 4.17%. Check
+  each markup against the bank's printed USD rows (peg × markup) before trusting it.
 - **Enforced by**: `estimate_fx` takes the bank (the bank-blind overload is dropped);
   pgTAP `05_fx_rates` (SIB ignores the ADCB rate on the same profile; the real SIB case;
   every bank has a markup row).
