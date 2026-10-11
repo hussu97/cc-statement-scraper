@@ -1,5 +1,11 @@
 # Changelog
 
+## Destructive migration guard ignores function bodies — 2026-10-11
+
+### Docs
+
+- **fix** CI tooling: the deploy's destructive guard (`scripts/ci/check-migrations.sh`) now flags only `DROP TABLE/SCHEMA/COLUMN`, `TRUNCATE` and `DELETE FROM` that run when a migration is applied. `scripts/ci/sql_executed_text.py` blanks comments and `create function|procedure` bodies first (line numbers kept); `DO` blocks, cron commands and string literals still count. `20261011000100_bank_fx_fees` was blocked only because it redefines `refresh_transaction` and `match_sms`, whose bodies delete when called. Over all migrations: 45 matches before, 2 real ones after (a top-level `drop table _seed_fix` and the cron history purge). New mode `check-migrations.sh destructive <file>…`; tests `scripts/ci/sql_executed_text_test.py` (CI tooling job, pre-push). docs/ci-cd.md and supabase/CLAUDE.md updated.
+
 ## FX estimates are per bank, with each bank's FX markup — 2026-10-11
 
 ### Backend (Supabase)

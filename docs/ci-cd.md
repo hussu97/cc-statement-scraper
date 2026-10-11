@@ -88,9 +88,13 @@ still deploys.
      production recorded when it ran it** (`supabase migration fetch`, whitespace-insensitive).
      Migrations are append-only: fix forward with a new migration.
    - `supabase db push --dry-run` (pending list also in the job summary)
-   - **Destructive guard**: `DROP TABLE|SCHEMA|COLUMN`, `TRUNCATE` or `DELETE FROM` in a pending
-     migration stops a push-triggered run. Take a backup (Dashboard → Database → Backups, or
-     `supabase db dump --linked`), then dispatch manually with `allow_destructive`.
+   - **Destructive guard**: `DROP TABLE|SCHEMA|COLUMN`, `TRUNCATE` or `DELETE FROM` that *runs* when a
+     pending migration is applied stops a push-triggered run. Comments and the bodies of
+     `create function|procedure` don't count (a redefined function deletes only when called);
+     top-level statements, `DO` blocks and `cron.schedule($$…$$)` commands do
+     (`scripts/ci/sql_executed_text.py`, tests `sql_executed_text_test.py`; check a file with
+     `bash scripts/ci/check-migrations.sh destructive <file>`). Take a backup (Dashboard → Database →
+     Backups, or `supabase db dump --linked`), then dispatch manually with `allow_destructive`.
    - `supabase db push`, then verify nothing is still pending
    - `SENTRY_RELEASE` secret + `supabase functions deploy --use-api` (all functions;
      `verify_jwt` from `config.toml`)
