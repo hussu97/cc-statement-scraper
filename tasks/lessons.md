@@ -9,6 +9,7 @@
 
 | When | Lesson |
 |---|---|
+| 2026-10-11 | [Only a purchase line's two amounts are a conversion rate](#only-a-purchase-lines-two-amounts-are-a-conversion-rate) |
 | 2026-10-11 | [An FX estimate uses the card's own bank, never another bank's rate](#an-fx-estimate-uses-the-cards-own-bank-never-another-banks-rate) |
 | 2026-10-09 | [A filter on the phone loses data for good: send it, classify on the server](#a-filter-on-the-phone-loses-data-for-good-send-it-classify-on-the-server) |
 | 2026-10-09 | [Golden parity is local-only: a worktree (and CI) skip it](#golden-parity-is-local-only-a-worktree-and-ci-skip-it) |
@@ -30,6 +31,19 @@
 | 2026-10-08 | [Tooling defaults that don't work here: `gh` account, Supabase MCP, `localhost`, pip](#tooling-defaults-that-dont-work-here-gh-account-supabase-mcp-localhost-pip) |
 
 ## Lessons
+
+### Only a purchase line's two amounts are a conversion rate
+- **What went wrong**: FAB prints "VAT ON SERVICE CHARGES" beside the foreign purchase's
+  currency and amount (USD 23.20) with only the VAT in AED (0.16). The parser took the pair as a
+  conversion (0.00689655 AED/USD), and `estimate_fx` used the latest USD statement rate as the
+  truth: three SIB USD purchases (USD 266.47) showed as AED 1.83. Found by listing a year of
+  foreign transactions with their rates, not by any test.
+- **Rule**: a rate comes only from a current purchase, refund or cash-advance line. A fee row's
+  foreign amount is the purchase it belongs to; parse VAT as AED. When checking FX, eyeball
+  the implied rate per currency: anything far off the mid rate is a parsing bug.
+- **Enforced by**: parser 2026.10.7 (`fab.py` `_VAT_ROW_RE`, synthetic `fab_statement` VAT row);
+  `estimate_fx` filters `kind` and `is_current`; pgTAP `05_fx_rates` (a FAB fee line's rate is
+  ignored; the posted SIB estimate stores its rate).
 
 ### An FX estimate uses the card's own bank, never another bank's rate
 - **What went wrong**: an SIB INR 28,400.00 purchase showed AED 1,147.83; SIB billed AED

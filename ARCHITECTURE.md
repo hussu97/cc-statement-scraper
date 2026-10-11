@@ -160,7 +160,7 @@ the transaction's facts:
   `auth_amount` if it differs and the SMS time becomes `txn_at`.
 - With only an SMS, it is `pending`. A foreign amount gets an **estimated** AED value
   (`amount_aed_is_estimate`) from `private.estimate_fx(profile, currency, bank)`: the card's own
-  bank's latest statement rate, else the USD peg or `fx_rates` mid rate × (1 + the bank's
+  bank's latest purchase statement rate, else the USD peg or `fx_rates` mid rate × (1 + the bank's
   all-in markup in `private.bank_fx_fees`: published bank fee × the ≈ 1.15% Visa/Mastercard
   charge, e.g. SIB 3.68%, ADCB 2.99%). Another bank's rate is never used; every bank has a markup.
   A posted line without a printed AED amount (SIB history foreign rows) is estimated the same way.
@@ -352,15 +352,18 @@ pending reversal once a later real statement closes at least 3 days after both w
 appearing (`void_released_authorisations`). If a line arrives later, refresh re-opens the
 transaction.
 
-**FX** (`private.estimate_fx`, used for pending SMS and lines without an AED amount). Sources
-are tried in order:
-1. The profile's most recent statement `fx_rate` for that currency. It includes the card's real
-   markup.
-2. The AED/USD peg, 3.6725.
-3. `public.fx_rates`, the daily market rate from the `fx-rates` function.
+**FX** (`private.estimate_fx(profile, currency, bank)`, used for pending SMS and lines without an
+AED amount). Sources are tried in order:
+1. That bank's most recent current statement `fx_rate` for the currency on this profile, from a
+   `purchase`, `refund` or `cash_advance` line only (a fee row such as FAB's VAT can carry a
+   foreign amount that is not a conversion). It includes the card's real markup. Another bank's
+   rate is never used.
+2. The AED/USD peg, 3.6725, else `public.fx_rates` (the daily mid rate from the `fx-rates`
+   function), × (1 + the bank's markup in `private.bank_fx_fees`).
 
-After each FX update, pending SMS transactions are re-estimated. All three stay
-`amount_aed_is_estimate = true` until a statement posts the real amount.
+After each FX update, pending SMS transactions are re-estimated. Estimates stay
+`amount_aed_is_estimate = true`, with the rate used in `fx_rate`, until a statement posts the
+real amount.
 
 ### Reconciliation
 

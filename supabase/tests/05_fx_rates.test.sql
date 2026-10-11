@@ -2,7 +2,8 @@
 -- card's bank has no statement rate for a currency, upsert_fx_rates re-estimates
 -- pending SMS transactions, the bank's own statement rates and the USD peg still
 -- win, a bank's markup (private.bank_fx_fees) applies to the peg and market rate,
--- another bank's rate is never used, and only the service role may write rates.
+-- another bank's rate is never used, only purchase-like lines give a rate, a posted
+-- estimate stores its rate, and only the service role may write rates.
 begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
@@ -162,6 +163,53 @@ select results_eq(
   $$ select status, amount_aed, fx_rate, amount_aed_is_estimate from pg_temp.txn('sib') $$,
   $$ values ('pending'::text, 1123.69::numeric(14,2), 0.03956639::numeric, true) $$,
   'a pending SIB INR SMS lands within AED 0.03 of what SIB billed (1,123.72)');
+
+-- ── only purchase rates teach an estimate; a posted estimate keeps its rate ──
+-- FAB prints "VAT ON SERVICE CHARGES" beside the foreign purchase's currency and amount
+-- (USD 23.20 … AED 0.16). Parsers up to 2026.10.6 stored that pair (rate 0.00689655), and it
+-- priced an SIB USD 249.99 history row at AED 1.72.
+create function pg_temp.ingest_lines(p_bank text, p_kind text, p_last4 text, p_ref text, p_date date, p_lines jsonb)
+returns jsonb language plpgsql as $$
+declare v_doc text;
+begin
+  insert into public.documents (profile_code, storage_path, original_filename, sha256, size_bytes, source)
+  values (pg_temp.v('p'), 'x/' || gen_random_uuid(), 'test.pdf', encode(sha256(gen_random_uuid()::text::bytea), 'hex'), 100, 'upload')
+  returning doc_code into v_doc;
+  return public.ingest_parsed_document(v_doc, jsonb_build_object('contract_version', 1, 'parser_version', 'test',
+    'bank_code', p_bank, 'document_kind', case when p_kind = 'statement' then 'statement_pdf' else 'history_pdf' end,
+    'statements', jsonb_build_array(jsonb_build_object(
+      'kind', p_kind, 'bank_code', p_bank, 'statement_reference', p_ref, 'reference_source', 'explicit',
+      'statement_date', p_date, 'period_start', p_date - 30, 'period_end', p_date, 'due_date', null,
+      'primary_card_last4', p_last4, 'card_holder', 'TEST', 'card_type', 'CASHBACK',
+      'totals', '{}'::jsonb, 'warnings', '[]'::jsonb, 'metadata', '{}'::jsonb,
+      'lines', (select jsonb_agg(jsonb_build_object('line_no', o, 'txn_date', r->>'d', 'txn_time', null,
+        'posting_date', r->>'d', 'description_raw', r->>'m', 'merchant_normalized', r->>'m',
+        'amount_original', r->>'a', 'currency_original', r->>'c', 'amount_aed', r->>'aed', 'fx_rate', r->>'fx',
+        'direction', 'debit', 'kind', r->>'k', 'country_code', null, 'card_last4', p_last4, 'card_holder', null,
+        'legacy_fingerprint', md5(p_ref || o)) order by o)
+        from jsonb_array_elements(p_lines) with ordinality x(r, o))))));
+end $$;
+
+with a as (
+  insert into public.accounts (profile_code, bank_code, product_name)
+  values (pg_temp.v('p'), 'FAB', 'FAB cashback') returning account_code, profile_code
+)
+insert into public.cards (profile_code, account_code, bank_code, last4)
+select profile_code, account_code, 'FAB', '2777' from a;
+select lives_ok($$ select pg_temp.ingest_lines('FAB', 'statement', '2777', 'REF-FAB-VAT', '2026-09-30',
+  '[{"d": "2026-09-07", "m": "VAT ON SERVICE CHARGES", "a": "23.20", "c": "USD", "aed": "0.16", "fx": "0.00689655", "k": "fee"}]'::jsonb) $$,
+  'a FAB statement whose only USD line is a legacy-parsed VAT row ingests');
+select is(private.estimate_fx(pg_temp.v('p'), 'USD', 'FAB'), 3.81168775::numeric,
+          'a fee line''s rate is ignored: FAB USD is the peg × 1.0379');
+
+select lives_ok($$ select pg_temp.ingest_lines('SIB', 'history_extract', '5052', 'REF-SIB-H', '2026-07-12',
+  '[{"d": "2026-06-22", "m": "PLEXINC PASS LIFETIME", "a": "249.99", "c": "USD", "aed": null, "fx": null, "k": "purchase"}]'::jsonb) $$,
+  'an SIB history row without an AED amount ingests');
+select results_eq(
+  $$ select t.status, t.amount_aed, t.fx_rate, t.amount_aed_is_estimate from public.transactions t
+     where t.profile_code = pg_temp.v('p') and t.description = 'PLEXINC PASS LIFETIME' $$,
+  $$ values ('posted'::text, 951.86::numeric(14,2), 3.80760393::numeric(18,8), true) $$,
+  'the posted SIB estimate is the peg × 1.036788 and stores the rate it used');
 
 -- ── input validation and authorisation ─────────────────────────────────────
 select throws_ok($$ select public.upsert_fx_rates('[]'::jsonb, 'test', '2026-10-08') $$, '22023', null,

@@ -6,6 +6,11 @@
 
 - **fix** 2026.10.7: a FAB "VAT ON SERVICE CHARGES" row is an AED line. FAB prints it under each foreign purchase with that purchase's currency and original amount beside the AED VAT ("KES 5000.00 … 0.27"); up to 2026.10.6 it became a KES 5,000.00 line at 0.000054 AED/KES (124 such lines in production). `amount_aed` and the legacy fingerprint are unchanged. Synthetic FAB case gains a VAT row; golden parity allows the delta (41 FAB PDFs).
 
+### Backend (Supabase)
+
+- **fix** `20261011163506_fx_estimate_purchase_rates`: `private.estimate_fx` step 1 (the bank's own statement rate) reads only current `purchase` / `refund` / `cash_advance` lines, latest by date then `line_code`. A FAB VAT row's rate (0.00689655 AED/USD) priced SIB USD history rows (USD 249.99 → AED 1.72) and, with per-bank estimates, would have priced FAB's own pending USD SMS. A superseded line no longer counts.
+- **fix** `refresh_transaction`: a posted line without a printed AED amount (SIB history rows) stores the rate its estimate used in `fx_rate`, as a pending SMS row does; it was null. Every estimate is re-derived once. pgTAP `05_fx_rates`.
+
 ## Destructive migration guard ignores function bodies — 2026-10-11
 
 ### Docs
