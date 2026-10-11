@@ -80,24 +80,24 @@ select results_eq($$ select currency, aed_per_unit, source, as_of from public.fx
 
 select results_eq(
   $$ select status, amount_aed, fx_rate, amount_aed_is_estimate from pg_temp.txn('egp') $$,
-  $$ values ('pending'::text, 5.45::numeric(14,2), 0.07786044::numeric, true) $$,
-  'pending EGP transaction now carries an estimate from fx_rates plus ADCB''s 2.99% (69.94 × 0.0756 × 1.0299)');
+  $$ values ('pending'::text, 5.51::numeric(14,2), 0.07875585::numeric, true) $$,
+  'pending EGP transaction now carries an estimate from fx_rates plus ADCB''s 4.1744% (69.94 × 0.0756 × 1.041744)');
 
 -- a newer rate re-estimates again; an older one never overwrites it
 select is(public.upsert_fx_rates('{"EGP": 0.08}'::jsonb, 'test', '2026-10-08')->>'upserted', '1', 'a newer rate replaces the old');
-select is((select amount_aed from pg_temp.txn('egp')), 5.76::numeric(14,2), 'the estimate follows the newer rate');
+select is((select amount_aed from pg_temp.txn('egp')), 5.83::numeric(14,2), 'the estimate follows the newer rate');
 select is(public.upsert_fx_rates('{"EGP": 0.01}'::jsonb, 'stale', '2026-10-01')->>'upserted', '0', 'an older rate is ignored');
 select results_eq($$ select as_of, aed_per_unit from private.fx_rate_history where currency = 'EGP' order by as_of $$,
   $$ values ('2026-10-01'::date, 0.01::numeric(18,8)), ('2026-10-07', 0.0756), ('2026-10-08', 0.08) $$,
   'every update is kept in the history under its own date (an older one too)');
-select is((select amount_aed from pg_temp.txn('egp')), 5.76::numeric(14,2),
+select is((select amount_aed from pg_temp.txn('egp')), 5.83::numeric(14,2),
           'an SMS older than every history row uses the newest rate');
 select is((select aed_per_unit from public.fx_rates where currency = 'EGP'), 0.08::numeric(18,8), 'EGP keeps the newer rate');
 
 -- ── precedence: statement rate > peg > fx_rates (peg and market × the bank's markup) ──
-select is(private.estimate_fx(pg_temp.v('p'), 'USD', 'ADCB', null), 3.78230775::numeric, 'the USD peg (× 1.0299) beats a market quote');
+select is(private.estimate_fx(pg_temp.v('p'), 'USD', 'ADCB', null), 3.82580484::numeric, 'the USD peg (× 1.041744) beats a market quote');
 select is(private.estimate_fx(pg_temp.v('p'), 'AED', 'ADCB', null), 1::numeric, 'AED is 1');
-select is(private.estimate_fx(pg_temp.v('p'), 'INR', 'ADCB', null), 0.04541859::numeric, 'INR falls back to fx_rates × 1.0299');
+select is(private.estimate_fx(pg_temp.v('p'), 'INR', 'ADCB', null), 0.04594091::numeric, 'INR falls back to fx_rates × 1.041744');
 select is(private.estimate_fx(pg_temp.v('p'), 'INR', null, null), 0.0441::numeric, 'with no known bank it is the bare mid rate');
 select is(private.estimate_fx(pg_temp.v('p'), 'CHF', 'ADCB', null), null::numeric, 'an unknown currency has no estimate');
 
@@ -139,7 +139,7 @@ select is((select amount_aed from pg_temp.txn('inr')), 42.05::numeric(14,2), 're
 -- ── bank-aware estimates: SIB's markup, never another bank's rate ───────────
 -- Real case: SIB billed INR 28,400.00 as AED 1,123.72 on 2026-10-03 (mid ≈ 0.03816247).
 select results_eq($$ select bank_code, markup from private.bank_fx_fees order by bank_code $$,
-  $$ values ('ADCB'::text, 0.029900::numeric(8,6)), ('EIB', 0.037192), ('ENBD', 0.031629), ('FAB', 0.037900),
+  $$ values ('ADCB'::text, 0.041744::numeric(8,6)), ('EIB', 0.037192), ('ENBD', 0.031629), ('FAB', 0.037900),
             ('MASHREQ', 0.040732), ('SIB', 0.036788) $$,
   'each bank carries its all-in FX markup');
 select is((select count(*)::int from public.banks b

@@ -163,7 +163,7 @@ the transaction's facts:
   own bank's latest purchase statement rate, else the USD peg or the mid rate of that date
   (`private.fx_rate_history`, the latest day on or before it; else `fx_rates`) × (1 + the bank's
   all-in markup in `private.bank_fx_fees`: published bank fee × the ≈ 1.15% Visa/Mastercard
-  charge, e.g. SIB 3.68%, ADCB 2.99%). Another bank's rate is never used; every bank has a markup.
+  charge, e.g. SIB 3.68%, ADCB 4.17%, checked against billed USD rows). Another bank's rate is never used; every bank has a markup.
   A posted line without a printed AED amount (SIB history foreign rows) is estimated the same way.
 - With no evidence, it is `orphaned`. The transaction is never deleted, so its manual category
   and notes survive, and an `orphaned` review opens.

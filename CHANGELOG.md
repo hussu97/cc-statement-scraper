@@ -1,5 +1,11 @@
 # Changelog
 
+## ADCB FX markup is 2.99% + scheme — 2026-10-11
+
+### Backend (Supabase)
+
+- **fix** `20261011171500_adcb_fx_markup`: ADCB's markup is 4.1744% ((1 + 2.99%) × 1.0115 − 1), not 2.99% all-in. Checked against production's billed foreign rows: ADCB's 20 USD purchases ran at peg × 1.0402–1.0420 (median 1.0418), while FAB USD (51 rows, 3.79%) and Mashreq USD (4 rows, 4.07%) already matched their markups. Guarded update; ADCB estimates re-derived. pgTAP `05_fx_rates`, `02_ledger`.
+
 ## FX estimates use the rate of the transaction's own date — 2026-10-11
 
 ### Backend (Supabase)
