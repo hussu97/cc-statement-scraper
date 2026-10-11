@@ -1,5 +1,11 @@
 # Changelog
 
+## A re-parse after an account merge no longer re-creates transactions — 2026-10-11
+
+### Backend (Supabase)
+
+- **fix** `20261011172405_merge_accounts_rekey_lines`: `private.merge_accounts` re-keys the lines it moves. `line_key` hashes the account, and `20261010001400` moved the FAB 9206 account's lines onto the kept account without re-keying them, so re-parsing those documents for parser 2026.10.7 superseded 115 lines and orphaned their transactions, re-creating them with the same facts (no manual category, note or exclusion was on any of them). New `private.statement_line_key` is ingest's expression; masked lines hash their original text, as ingest did. Production keys already match after the re-parse, so no backfill. pgTAP `28_merge_accounts` (re-parse after a merge supersedes and adds nothing; every key equals the helper's).
+
 ## ADCB FX markup is 2.99% + scheme — 2026-10-11
 
 ### Backend (Supabase)

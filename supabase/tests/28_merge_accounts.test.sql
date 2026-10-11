@@ -1,4 +1,5 @@
 -- private.merge_accounts (20261010001400): two accounts of one card relationship become one.
+-- 20261011172405: it re-keys the moved lines, so a re-parse after a merge changes nothing.
 begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
@@ -81,6 +82,26 @@ select pg_temp.ingest(pg_temp.history('4821', 'SIB PLATINUM', '[
   {"d":"2026-09-02","m":"FUEL STATION SHARJAH","a":"120.25"}]'::jsonb));
 select is((select count(*)::int from public.accounts where profile_code = pg_temp.v('p') and bank_code = 'SIB' and status = 'active'), 1,
           'a later statement for the merged card does not recreate an account');
+
+-- A re-parse of a moved document after the merge finds every line unchanged (20261011172405):
+-- line_key hashes the account, and merge_accounts re-keys the moved lines. Without it the lines
+-- were superseded and their transactions orphaned and re-created (FAB, 2026-10-11).
+select is((select count(*)::int from public.statement_lines l
+            where l.profile_code = pg_temp.v('p') and l.line_key is distinct from private.statement_line_key(
+              l.account_code, l.txn_date, l.posting_date, l.amount_original, l.currency_original, l.amount_aed,
+              l.direction, l.description_raw)), 0,
+          'every line''s key is ingest''s key for its account (moved lines re-keyed; the helper matches ingest)');
+select pg_temp.set('moved_doc', (select s.doc_code from public.statements s join public.statement_lines l using (stmt_code)
+                                  where l.profile_code = pg_temp.v('p') and l.description_raw = 'PHARMACY SHARJAH'));
+select pg_temp.set('txns_before', (select count(*)::text from public.transactions where profile_code = pg_temp.v('p')));
+select pg_temp.set('reparse', public.ingest_parsed_document(pg_temp.v('moved_doc'), pg_temp.history('4821', 'SIB PLATINUM', '[
+  {"d":"2026-08-18","m":"PHARMACY SHARJAH","a":"60.00"}]'::jsonb))::text);
+select is((pg_temp.v('reparse')::jsonb #>> '{statements,0,lines_superseded}')::int, 0, 're-parse after a merge supersedes no line');
+select is((pg_temp.v('reparse')::jsonb #>> '{statements,0,lines_new}')::int, 0, 're-parse after a merge adds no line');
+select is((select count(*)::int from public.transactions where profile_code = pg_temp.v('p')), pg_temp.v('txns_before')::int,
+          'no transaction is re-created');
+select is((select count(*)::int from public.transactions where profile_code = pg_temp.v('p') and status = 'orphaned'), 0,
+          'no transaction is orphaned');
 
 -- Guards.
 select throws_ok(format($$ select private.merge_accounts(%L, %L, %L) $$, pg_temp.v('p'), pg_temp.v('into'), pg_temp.v('into')),

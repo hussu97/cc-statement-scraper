@@ -9,6 +9,7 @@
 
 | When | Lesson |
 |---|---|
+| 2026-10-11 | [A row's identity hash names its parent: moving the row means re-keying it](#a-rows-identity-hash-names-its-parent-moving-the-row-means-re-keying-it) |
 | 2026-10-11 | [Only a purchase line's two amounts are a conversion rate](#only-a-purchase-lines-two-amounts-are-a-conversion-rate) |
 | 2026-10-11 | [An FX estimate uses the card's own bank, never another bank's rate](#an-fx-estimate-uses-the-cards-own-bank-never-another-banks-rate) |
 | 2026-10-09 | [A filter on the phone loses data for good: send it, classify on the server](#a-filter-on-the-phone-loses-data-for-good-send-it-classify-on-the-server) |
@@ -31,6 +32,19 @@
 | 2026-10-08 | [Tooling defaults that don't work here: `gh` account, Supabase MCP, `localhost`, pip](#tooling-defaults-that-dont-work-here-gh-account-supabase-mcp-localhost-pip) |
 
 ## Lessons
+
+### A row's identity hash names its parent: moving the row means re-keying it
+- **What went wrong**: `statement_lines.line_key` hashes the account. `merge_accounts` moved a
+  FAB account's lines without re-keying them, so the first re-parse afterwards (parser
+  2026.10.7) saw every moved line as new: 115 lines superseded, their transactions orphaned and
+  re-created, 5 VAT lines held as ambiguous. A local re-parse test passed because it never
+  merged accounts first.
+- **Rule**: before moving rows between parents, check whether any stored key or hash includes
+  the parent; recompute it in the same statement. Before a production re-parse, check that every
+  current line's key equals `private.statement_line_key(...)` for its account (masked lines hash
+  `private.masked_originals.original`).
+- **Enforced by**: `merge_accounts` re-keys (`20261011172405`); pgTAP `28_merge_accounts`
+  (re-parse after a merge supersedes and adds nothing; every key equals the helper's).
 
 ### Only a purchase line's two amounts are a conversion rate
 - **What went wrong**: FAB prints "VAT ON SERVICE CHARGES" beside the foreign purchase's
