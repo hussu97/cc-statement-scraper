@@ -127,6 +127,9 @@ Field rules:
 - `fx_rate` is AED per one unit of `currency_original`, as a decimal string, or null. An AED line is
   always `"1"`. A foreign line has the bank's printed rate (MASHREQ `@0.9400`, ADCB `[1 EUR=AED …]`)
   or the ratio of the two amounts; null when unknown or when it would round to zero at 8 places.
+- FAB prints a `VAT ON SERVICE CHARGES` row under each foreign purchase with that purchase's
+  currency and amount beside the AED VAT. Since parser 2026.10.7 it is an AED line
+  (`amount_original` = `amount_aed`, `fx_rate` `"1"`); earlier versions emitted the foreign pair.
 - `legacy_fingerprint` is `domain.parsing.utils.fingerprint_for(...)`, computed exactly as the legacy backend did. It is used to carry legacy category overrides across.
 - `country_code` is an **ISO 3166-1 alpha-2** code or null. Statements print a trailing token in
   several forms; the parser maps ISO alpha-3 (`ARE` → `AE`, `IRL` → `IE`), `UAE` and the UAE emirate

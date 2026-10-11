@@ -30,6 +30,13 @@ _THREE_DP_AMOUNT_RE = re.compile(r"^[\d,]+\.\d{3}$")
 _DECIMAL_COMMA_AMOUNT_RE = re.compile(r"^\d{1,3}(?:\.\d{3})*,\d{2}$")
 
 
+# FAB prints a "VAT ON SERVICE CHARGES" row under each foreign purchase with that purchase's
+# currency and original amount in the Amount column ("KES 5000.00") and only the VAT itself, in
+# AED, in the Debit column ("0.27"). VAT is charged in AED, so the row is an AED line: taking the
+# printed pair as a conversion gave rates like 0.000054 AED/KES, which the FX estimate then used.
+_VAT_ROW_RE = re.compile(r"^VAT\b")
+
+
 def _is_amount(token: str) -> bool:
     return bool(
         _AMOUNT_RE.match(token) or _THREE_DP_AMOUNT_RE.match(token) or _DECIMAL_COMMA_AMOUNT_RE.match(token)
@@ -359,6 +366,8 @@ def parse_fab_statement(pdf_path: str | Path, pdf_password: str | None = None) -
                 currency = row_data["currency"]
                 amount_original = parse_amount(row_data["amount_original_str"])
                 amount_aed = parse_amount(row_data["amount_aed_str"])
+                if currency != "AED" and _VAT_ROW_RE.match(description):
+                    currency, amount_original = "AED", amount_aed
 
                 # Apply debit/credit sign from column position first; then
                 # let classify_transaction_kind refine the *kind* label.

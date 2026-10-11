@@ -99,7 +99,8 @@ def _enbd_template(bank_line: str, period: str, card: str, product: str) -> list
 
 # ---------------------------------------------------------------- FAB
 # Column layout (Debit/Credit by x position), a foreign row, a supplementary card, and a
-# rewards redemption the summary's Payments/Credits column leaves out (DP-10).
+# rewards redemption the summary's Payments/Credits column leaves out (DP-10), and the VAT row FAB
+# prints under a foreign purchase with that purchase's currency and amount (an AED line, 2026.10.7).
 
 _DEBIT_X, _CREDIT_X = 470, 530
 
@@ -114,17 +115,18 @@ _FAB_PAGES: list[list[Line]] = [
         # The address column shares the product line (real layout): "12 SAMPLE TOWER" is not the product.
         "12 SAMPLE TOWER SAMPLE CASHBACK CARD 01-02-2026 26-02-2026",
         "Main Card Number Current Balance Minimum Payment Due",
-        "4000 12** **** 2468 1,000.00 100.00",
+        "4000 12** **** 2468 1,000.92 100.00",
         "Summary Details",
         "Previous Balance + Purchases/Debits + Cash Advances + Finance Charges - Payments/Credits Total Payment Due",
-        "1,500.00 1,200.00 0.00 0.00 1,500.00 1,000.00",
+        "1,500.00 1,200.92 0.00 0.00 1,500.00 1,000.92",
         "Total Credit Limit Available Credit Limit",
-        "25,000.00 24,000.00",
+        "25,000.00 23,999.08",
         "Transaction Details",
         [(30, "Date"), (80, "Date"), (330, "Amount"), (_DEBIT_X, "Debit"), (_CREDIT_X, "Credit")],
         "Main Card : 4000 12** **** 2468 SAMPLE CASHBACK CARD",
         _fab_row("03-01-2026 03-01-2026", "CORNER GROCERY Dubai ARE", "AED 700.00", "700.00"),
         _fab_row("05-01-2026 05-01-2026", "ONLINE SHOP Dublin IRL", "USD 100.00", "367.50"),
+        _fab_row("05-01-2026 05-01-2026", "VAT ON SERVICE CHARGES", "USD 100.00", "0.92"),
         _fab_row("12-01-2026 12-01-2026", "FAB REWARDS REDEMPTION - CASHBACK", "AED 200.00", "200.00", credit=True),
         _fab_row("15-01-2026 15-01-2026", "PAYMENT RECEIVED - THANK YOU", "AED 1,500.00", "1,500.00", credit=True),
         "Supplementary Card : 4000 12** **** 1357 SAMPLE CASHBACK CARD",

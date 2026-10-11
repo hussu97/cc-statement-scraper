@@ -35,10 +35,13 @@ KIND_FEE_TO_PURCHASE: dict[str, int] = {}
 #     skipped by legacy; they are accepted only if they make the debits reconcile.
 #   * 2026.10.4: merchant_normalized separates a city glued to the merchant
 #     ("SOCIETSHARJAH" -> "SOCIET SHARJAH"); description_raw and the fingerprint are unchanged.
+#   * 2026.10.7: a FAB "VAT ON ..." row is an AED line; legacy kept the foreign purchase's
+#     currency and amount that FAB prints beside it. amount_aed and the fingerprint are unchanged.
 ALLOWED_DELTAS: dict[str, set[str]] = {
     "period year corrected (DP-03/04)": set(),
     "rows legacy skipped (DP-07)": set(),
     "glued place separated (2026.10.4)": set(),
+    "FAB VAT row is AED (2026.10.7)": set(),
 }
 RECOVERED_LINES: dict[str, int] = {}
 
@@ -154,10 +157,15 @@ def test_golden_parity(golden_path: Path) -> None:
                 assert ln_new["line_no"] == ln_old["line_no"], ctx
             assert ln_new["txn_date"] == ln_old["txn_date"], ctx
             assert ln_new["posting_date"] == ln_old["posting_date"], ctx
-            assert ln_new["amount_original"] == money(ln_old["amount_original"]), ctx
             assert ln_new["amount_aed"] == money_or_none(ln_old["amount_aed"]), ctx
             assert ln_new["direction"] == ln_old["direction"], ctx
-            assert ln_new["currency_original"] == ln_old["currency_original"], ctx
+            if ln_new["currency_original"] != ln_old["currency_original"]:
+                assert golden["bank_code"] == "FAB" and ln_old["merchant_raw"].startswith("VAT "), ctx
+                assert ln_new["currency_original"] == "AED", ctx
+                assert ln_new["amount_original"] == ln_new["amount_aed"], ctx
+                ALLOWED_DELTAS["FAB VAT row is AED (2026.10.7)"].add(golden_path.stem)
+            else:
+                assert ln_new["amount_original"] == money(ln_old["amount_original"]), ctx
             assert ln_new["description_raw"] == ln_old["merchant_raw"], ctx
             if ln_new["merchant_normalized"] != ln_old["merchant_normalized"]:
                 assert ln_new["merchant_normalized"] == separate_glued_place(ln_old["merchant_normalized"]), ctx

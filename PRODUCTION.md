@@ -881,6 +881,9 @@ Deploy Supabase job failed at `supabase migration fetch --linked` (investigate; 
 - **Re-parse after a parser fix:** deploy the parser, then `select requeue_documents('<prf_…>')`
   as an owner (or from Cards & Statements → documents in the web app). Re-ingest is in place, so codes, categories and
   notes survive.
+  - Parser 2026.10.7 (FAB VAT rows become AED lines): requeue every profile with FAB documents.
+    Check, expect 0: `select count(*) from public.statement_lines l join public.accounts a using (account_code)
+    where a.bank_code = 'FAB' and l.is_current and l.kind = 'fee' and l.currency_original <> 'AED';`
 - **DLQ:** inspect with `select msg_id, message from pgmq.q_parse_document_dlq;` (`dlq_reason`
   is inside `message`). Fix the cause, then (service role, e.g. the SQL editor):
   - `select public.requeue_dlq('<queue>', 100);` moves messages back with a fresh attempt
