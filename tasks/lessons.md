@@ -9,6 +9,7 @@
 
 | When | Lesson |
 |---|---|
+| 2026-10-11 | [An FX estimate uses the card's own bank, never another bank's rate](#an-fx-estimate-uses-the-cards-own-bank-never-another-banks-rate) |
 | 2026-10-09 | [A filter on the phone loses data for good: send it, classify on the server](#a-filter-on-the-phone-loses-data-for-good-send-it-classify-on-the-server) |
 | 2026-10-09 | [Golden parity is local-only: a worktree (and CI) skip it](#golden-parity-is-local-only-a-worktree-and-ci-skip-it) |
 | 2026-10-08 | [`supabase config push` has no dry run and pushes the whole file](#supabase-config-push-has-no-dry-run-and-pushes-the-whole-file) |
@@ -29,6 +30,17 @@
 | 2026-10-08 | [Tooling defaults that don't work here: `gh` account, Supabase MCP, `localhost`, pip](#tooling-defaults-that-dont-work-here-gh-account-supabase-mcp-localhost-pip) |
 
 ## Lessons
+
+### An FX estimate uses the card's own bank, never another bank's rate
+- **What went wrong**: an SIB INR 28,400.00 purchase showed AED 1,147.83; SIB billed AED
+  1,123.72. `private.estimate_fx` took the profile's latest INR statement rate from any bank, so
+  another card's markup (and date) priced the SIB transaction. SIB prints no rate anywhere, so
+  its foreign rows always fall through to the estimate.
+- **Rule**: an FX estimate is per bank: that bank's own statement rate, else the mid-market rate
+  (USD peg or `fx_rates`) times the bank's all-in markup (`private.bank_fx_fees`: network
+  spread + bank fee + VAT). Calibrate a markup from a real billed amount, not from a fee table.
+- **Enforced by**: `estimate_fx` takes the bank (the bank-blind overload is dropped);
+  pgTAP `05_fx_rates` (SIB ignores the ADCB rate on the same profile; the real SIB case).
 
 ### A filter on the phone loses data for good: send it, classify on the server
 - **What went wrong**: "Log Bank SMS" ran a regex on the phone to decide "credit card or not"

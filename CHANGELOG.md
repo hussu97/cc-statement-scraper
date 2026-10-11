@@ -1,5 +1,11 @@
 # Changelog
 
+## FX estimates are per bank; SIB carries its markup — 2026-10-11
+
+### Backend (Supabase)
+
+- **fix** `20261011000100_bank_fx_fees`: `private.estimate_fx(profile, currency, bank)` no longer uses another bank's statement rate. An SIB INR 28,400.00 purchase showed AED 1,147.83 (another bank's marked-up INR rate on the same profile) while SIB billed AED 1,123.72. Order now: AED = 1; the bank's own latest statement rate; else the USD peg or `fx_rates` mid rate × (1 + `private.bank_fx_fees.markup`). SIB's markup is 0.0365 (Mastercard ≈ 1% over mid × 2.5% non-AED fee + 5% VAT), calibrated on that transaction: the estimate is now AED 1,123.37. Banks without a fee row get the bare mid rate. The two-argument overload is dropped; `new_transaction_from_line`/`_sms`, `refresh_transaction` and `match_sms` pass the bank (bodies otherwise unchanged). Every existing estimate (pending SMS and posted SIB history rows) is re-derived once. pgTAP `05_fx_rates`.
+
 ## iOS: SMS saved with no data are sent once a connection is back — 2026-10-10
 
 ### iOS
