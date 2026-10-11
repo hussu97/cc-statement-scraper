@@ -6,15 +6,31 @@
 -- SIB never prints a rate (history exports carry only the foreign amount, monthly statements
 -- only AED), so its foreign rows always fall through to the estimate.
 --
--- The INR/AED mid-market rate that day was ≈ 0.038176 (USD/INR ≈ 96.2 at the 3.6725 peg), so SIB
--- billed mid × 1.0365: Mastercard's conversion (≈ 1% over mid) × SIB's 2.5% non-AED
--- administration fee with 5% VAT on the fee (× 1.02625), folded into the billed amount.
+-- The INR/AED mid-market rate that day was ≈ 0.03816247 (USD/INR ≈ 96.23 at the 3.6725 peg), so
+-- SIB billed mid × ≈ 1.0368: its 2.5% non-AED fee on top of the card scheme's charge.
+--
+-- Markup model, from each bank's published fee (2026 schedules / key facts statements):
+--   fee charged on top of scheme charges → (1 + fee) × 1.0115 − 1
+--     (Visa/Mastercard ≈ 1.15% incl. VAT: Mastercard 0.9% cross-border + 0.2% conversion, as the
+--      ENBD and Emirates Islamic KFS state "approximately 1.15%")
+--   margin quoted on the wholesale rate including processing fees → the margin itself
+-- It reproduces the SIB bill: 28,400 × 0.03816247 × 1.036788 = AED 1,123.69 (billed 1,123.72).
+--   SIB      2.50% + scheme  (covered cards tariff, Cashback/Smiles)          → 0.036788
+--   FAB      2.61% + scheme  (Cashback KFS: 2.49% + 5% VAT, scheme ≈ 1%)      → 0.037900
+--   ENBD     1.99% + scheme  (credit card KFS, "approximately 1.15%")         → 0.031629
+--   EIB      2.54% + scheme  (cards SoC, non-AED; Emarati/Skywards Black 2.30%) → 0.037192
+--   MASHREQ  2.89% + scheme  (cards KFS 05/2026 spread, noon card; VAT n/a)   → 0.040732
+--   ADCB     2.99% all-in    (margin on wholesale rate incl. processing fee,
+--                             VAT inclusive; Traveller card 0%)              → 0.029900
+-- These are per bank, not per card product: a card with its own FX rate (ADCB Traveller,
+-- EIB Emarati) is over-estimated until its first statement prints a rate (step 1 below).
 --
 -- private.estimate_fx(profile, currency, bank) now:
 --   AED                    → 1
 --   1. that bank's latest statement rate for the currency on this profile (already marked up)
 --   2. the USD peg, else public.fx_rates (mid-market), × (1 + private.bank_fx_fees.markup)
--- Another bank's statement rate is never used. A bank without a fee row gets the bare mid rate.
+-- Another bank's statement rate is never used. Every bank has a fee row (pgTAP 05_fx_rates);
+-- an SMS with no known bank gets the bare mid rate.
 -- The bank-blind two-argument estimate_fx is dropped so no caller keeps using it; its callers
 -- (new_transaction_from_line/_sms, refresh_transaction, match_sms) are redefined unchanged
 -- except for passing the bank. Existing estimates are re-derived at the end.
@@ -32,9 +48,13 @@ comment on table private.bank_fx_fees is
 alter table private.bank_fx_fees enable row level security;
 revoke all on private.bank_fx_fees from public, anon, authenticated, service_role;
 
-insert into private.bank_fx_fees (bank_code, markup, note)
-values ('SIB', 0.036500,
-        'Mastercard rate (~1% over mid) x 2.5% non-AED admin fee + 5% VAT; fits INR 28,400.00 -> AED 1,123.72 on 2026-10-03')
+insert into private.bank_fx_fees (bank_code, markup, note) values
+  ('SIB',     0.036788, '2.5% non-AED admin fee + scheme ~1.15%; INR 28,400.00 billed AED 1,123.72 on 2026-10-03 (model 1,123.69)'),
+  ('FAB',     0.037900, 'Cashback card: 2.49% + 5% VAT (2.61%) + scheme ~1.15%'),
+  ('ENBD',    0.031629, '1.99% currency conversion fee + scheme ~1.15% (KFS)'),
+  ('EIB',     0.037192, '2.54% non-AED fee + scheme ~1.15% (SoC); Emarati/Skywards Black 2.30%, Amazon 2.34%'),
+  ('MASHREQ', 0.040732, '2.89% FX spread (KFS 05/2026, VAT n/a) + scheme ~1.15%'),
+  ('ADCB',    0.029900, '2.99% margin on wholesale rate incl. processing fee, VAT inclusive; Traveller 0%')
 on conflict (bank_code) do nothing;
 
 -- ── estimate ────────────────────────────────────────────────────────────────

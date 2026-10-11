@@ -161,7 +161,8 @@ the transaction's facts:
 - With only an SMS, it is `pending`. A foreign amount gets an **estimated** AED value
   (`amount_aed_is_estimate`) from `private.estimate_fx(profile, currency, bank)`: the card's own
   bank's latest statement rate, else the USD peg or `fx_rates` mid rate × (1 + the bank's
-  all-in markup in `private.bank_fx_fees`, e.g. SIB 3.65%). Another bank's rate is never used.
+  all-in markup in `private.bank_fx_fees`: published bank fee × the ≈ 1.15% Visa/Mastercard
+  charge, e.g. SIB 3.68%, ADCB 2.99%). Another bank's rate is never used; every bank has a markup.
   A posted line without a printed AED amount (SIB history foreign rows) is estimated the same way.
 - With no evidence, it is `orphaned`. The transaction is never deleted, so its manual category
   and notes survive, and an `orphaned` review opens.
