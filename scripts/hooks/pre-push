@@ -173,6 +173,7 @@ if want tooling; then
   else
     skip "shellcheck" "not installed (brew install shellcheck)"
   fi
+  run_check "destructive migration guard tests" python3 scripts/ci/sql_executed_text_test.py
 fi
 
 if want migrations; then

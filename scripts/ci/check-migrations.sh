@@ -22,10 +22,15 @@
 #           the statements the database recorded when it ran it
 #           (`supabase migration fetch`)                                  -> fail
 #       Then prints the pending migrations and flags destructive statements
-#       (DROP TABLE/SCHEMA/COLUMN, TRUNCATE, DELETE FROM) in them.
+#       (DROP TABLE/SCHEMA/COLUMN, TRUNCATE, DELETE FROM) that run when they are
+#       applied: comments and `create function|procedure` bodies don't count,
+#       DO blocks and other dollar-quoted text do.
 #       `linked` needs `supabase link` and SUPABASE_DB_PASSWORD in the
 #       environment; `local` needs the local stack (and reports any migration
 #       you edited after applying it locally).
+#
+#   check-migrations.sh destructive <file>...
+#       Prints the destructive statements those files run; exit 1 if any.
 #
 # When $GITHUB_OUTPUT is set, `remote` writes pending_count, pending (space
 # separated versions) and destructive (true|false) to it, and a Markdown report
@@ -41,7 +46,7 @@ die() { echo "::error::$*" >&2; exit 1; }
 note() { echo "$*"; }
 
 usage() {
-  sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,37p' "$0" | sed 's/^# \{0,1\}//'
   exit 2
 }
 
@@ -61,6 +66,16 @@ output() {
 normalize() {
   [ -f "$1" ] || { echo "<missing>"; return 0; }
   tr -d '[:space:]' < "$1" | sed 's/;*$//'
+}
+
+# destructive_hits <file>: "line:text" for each DROP TABLE/SCHEMA/COLUMN, TRUNCATE or DELETE FROM
+# that runs when the migration is applied. Comments and the bodies of `create function` /
+# `create procedure` are blanked first (sql_executed_text.py): a redefined function that
+# deletes when it is *called* destroys nothing at deploy time. DO blocks still count.
+destructive_hits() {
+  python3 "$REPO_ROOT/scripts/ci/sql_executed_text.py" "$1" \
+    | grep -inE '\b(drop[[:space:]]+(table|schema|column)|truncate|delete[[:space:]]+from)\b' \
+    | sed -E 's/[[:space:]]+$//' || true
 }
 
 # mig_file <version>: path of the migration file for a version, or nothing.
@@ -195,13 +210,12 @@ mode_remote() {
     errors=$((errors + 1))
   fi
 
-  # Destructive statements in what is about to run (comment lines ignored).
+  # Destructive statements in what is about to run (see destructive_hits).
   local destructive=false hits=() hit line
   for v in $pending; do
     f="$(mig_file "$v")"
     [ -n "$f" ] || continue
-    hit="$(grep -inE '\b(drop[[:space:]]+(table|schema|column)|truncate|delete[[:space:]]+from)\b' "$f" \
-      | grep -vE '^[0-9]+:[[:space:]]*--' || true)"
+    hit="$(destructive_hits "$f")"
     if [ -n "$hit" ]; then
       destructive=true
       while IFS= read -r line; do hits+=("$(basename "$f"):$line"); done <<<"$hit"
@@ -243,8 +257,24 @@ mode_remote() {
   note "check-migrations: history OK"
 }
 
+# destructive <file>...: print the destructive statements each file runs; exit 1 if any.
+mode_destructive() {
+  [ "$#" -gt 0 ] || usage
+  local f hit found=0
+  for f in "$@"; do
+    [ -f "$f" ] || die "no such file: $f"
+    hit="$(destructive_hits "$f")"
+    if [ -n "$hit" ]; then
+      found=1
+      while IFS= read -r line; do echo "$f:$line"; done <<<"$hit"
+    fi
+  done
+  return "$found"
+}
+
 case "${1:-}" in
   diff) shift; mode_diff "$@" ;;
   remote) shift; mode_remote "$@" ;;
+  destructive) shift; mode_destructive "$@" ;;
   *) usage ;;
 esac

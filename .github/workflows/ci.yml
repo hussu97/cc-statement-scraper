@@ -121,6 +121,9 @@ jobs:
           shellcheck --version | head -2
           shellcheck -x scripts/hooks/* scripts/ci/*.sh scripts/install-hooks.sh
 
+      - name: Destructive migration guard tests
+        run: python3 scripts/ci/sql_executed_text_test.py
+
   # ------------------------------------------------------------------
   # Supabase: append-only migrations, migrations from scratch, pgTAP,
   # generated-types drift.

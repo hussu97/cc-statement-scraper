@@ -28,9 +28,12 @@ pre-push hook (with a warning) when Docker or the stack is down; then run it you
   privileges (`GRANT ALL ON TABLES TO anon, authenticated`); the quarantine migration revokes them
   before any table exists. Grant clients exactly what they need, per column for updates, and
   update the matrix in `tests/11_privileges.test.sql` in the same commit (FV-01).
-- **Destructive statements** (`DROP TABLE|SCHEMA|COLUMN`, `TRUNCATE`, `DELETE FROM`) stop a
-  push-triggered deploy. They need a backup and a manual `allow_destructive` dispatch: a
-  production action to ask about, not a flag to set.
+- **Destructive statements** (`DROP TABLE|SCHEMA|COLUMN`, `TRUNCATE`, `DELETE FROM`) that run when
+  the migration is applied stop a push-triggered deploy; inside a `create function|procedure`
+  body they don't count, in a `DO` block or cron command they do
+  (`bash scripts/ci/check-migrations.sh destructive <file>` shows what the guard sees). They need
+  a backup and a manual `allow_destructive` dispatch: a production action to ask about, not a
+  flag to set.
 - **Content migrations** (seed rules, categories, templates) are guarded: insert when absent,
   update only rows still holding the exact old value, so a user's edit makes them a no-op.
 - `config.toml` is not deployed by any workflow. `max_rows` is 2000 to match the largest page
