@@ -38,9 +38,11 @@
   its foreign rows always fall through to the estimate.
 - **Rule**: an FX estimate is per bank: that bank's own statement rate, else the mid-market rate
   (USD peg or `fx_rates`) times the bank's all-in markup (`private.bank_fx_fees`: network
-  spread + bank fee + VAT). Calibrate a markup from a real billed amount, not from a fee table.
+  charge + bank fee). Derive it from the bank's published fee and check it against a real billed
+  amount (the SIB model reproduces its bill to AED 0.03).
 - **Enforced by**: `estimate_fx` takes the bank (the bank-blind overload is dropped);
-  pgTAP `05_fx_rates` (SIB ignores the ADCB rate on the same profile; the real SIB case).
+  pgTAP `05_fx_rates` (SIB ignores the ADCB rate on the same profile; the real SIB case;
+  every bank has a markup row).
 
 ### A filter on the phone loses data for good: send it, classify on the server
 - **What went wrong**: "Log Bank SMS" ran a regex on the phone to decide "credit card or not"

@@ -103,8 +103,8 @@ select is(pg_temp.sms('Your Cr.Card XXX9208 was used for AED18.00 on 03/07/2026 
                       '2026-07-03 04:05:05+00')->>'status', 'created', 'a second identical coffee 5 minutes later is a new purchase');
 select pg_temp.set('netflix_sms', pg_temp.sms('Your Cr.Card XXX9208 was used for USD10.00 on 05/07/2026 10:00:00 at NETFLIX.COM. Avl Cr. limit is AED 1.00',
                       '2026-07-05 06:00:05+00', 'aaaaaaaa-0000-0000-0000-000000000001')->>'txn_code');
-select is((select amount_aed from public.transactions where txn_code = pg_temp.v('netflix_sms')), 36.73::numeric(14,2),
-          'USD SMS gets an AED estimate from the peg');
+select is((select amount_aed from public.transactions where txn_code = pg_temp.v('netflix_sms')), 37.82::numeric(14,2),
+          'USD SMS gets an AED estimate from the peg × ADCB''s 2.99% FX margin');
 select ok((select amount_aed_is_estimate and status = 'pending' from public.transactions where txn_code = pg_temp.v('netflix_sms')),
           'flagged as estimate and pending');
 select is(pg_temp.sms('Your Cr.Card XXX9208 was used for USD10.00 on 05/07/2026 10:00:00 at NETFLIX.COM. Avl Cr. limit is AED 1.00',

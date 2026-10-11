@@ -1,10 +1,11 @@
 # Changelog
 
-## FX estimates are per bank; SIB carries its markup — 2026-10-11
+## FX estimates are per bank, with each bank's FX markup — 2026-10-11
 
 ### Backend (Supabase)
 
-- **fix** `20261011000100_bank_fx_fees`: `private.estimate_fx(profile, currency, bank)` no longer uses another bank's statement rate. An SIB INR 28,400.00 purchase showed AED 1,147.83 (another bank's marked-up INR rate on the same profile) while SIB billed AED 1,123.72. Order now: AED = 1; the bank's own latest statement rate; else the USD peg or `fx_rates` mid rate × (1 + `private.bank_fx_fees.markup`). SIB's markup is 0.0365 (Mastercard ≈ 1% over mid × 2.5% non-AED fee + 5% VAT), calibrated on that transaction: the estimate is now AED 1,123.37. Banks without a fee row get the bare mid rate. The two-argument overload is dropped; `new_transaction_from_line`/`_sms`, `refresh_transaction` and `match_sms` pass the bank (bodies otherwise unchanged). Every existing estimate (pending SMS and posted SIB history rows) is re-derived once. pgTAP `05_fx_rates`.
+- **fix** `20261011000100_bank_fx_fees`: `private.estimate_fx(profile, currency, bank)` no longer uses another bank's statement rate. An SIB INR 28,400.00 purchase showed AED 1,147.83 (another bank's marked-up INR rate on the same profile) while SIB billed AED 1,123.72. Order now: AED = 1; the bank's own latest statement rate; else the USD peg or `fx_rates` mid rate × (1 + `private.bank_fx_fees.markup`). The two-argument overload is dropped; `new_transaction_from_line`/`_sms`, `refresh_transaction` and `match_sms` pass the bank (bodies otherwise unchanged). Every existing estimate (pending SMS and posted SIB history rows) is re-derived once. pgTAP `05_fx_rates` (also: every bank has a markup), `02_ledger`.
+- **feat** All-in FX markups from each bank's published fee: a fee on top of scheme charges is (1 + fee) × 1.0115 − 1 (Visa/Mastercard ≈ 1.15%, as the ENBD and Emirates Islamic KFS state); a margin quoted on the wholesale rate including processing fees is taken as is. SIB 2.50% + scheme → 3.6788% (reproduces the real bill: AED 1,123.69 vs 1,123.72); FAB Cashback 2.61% (2.49% + VAT) + scheme → 3.79%; ENBD 1.99% + scheme → 3.1629%; Emirates Islamic 2.54% + scheme → 3.7192%; Mashreq 2.89% + scheme → 4.0732%; ADCB 2.99% all-in. Per bank, not per product: ADCB Traveller (0%) and EIB Emarati/Skywards Black (2.30%) are over-estimated until a statement prints their rate.
 
 ## iOS: SMS saved with no data are sent once a connection is back — 2026-10-10
 
