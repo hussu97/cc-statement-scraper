@@ -135,7 +135,7 @@ fx_rates (global)
 | `budgets`, `recurring_series`, `insights`, `audit_events` | Monthly budgets (total or per category), detected subscriptions, the nightly insight feed, and an audit trail of user edits. |
 | `email_mailboxes`, `email_routes`, `email_events` | Mailbox (gmail/outlook, `sync_state` cursor), per-bank routing rules, and per-attachment idempotency log. |
 | `document_events` | A document's timeline for the apps (`event_code` `dev_…`, `doc_code`, `stage` received/stored/duplicate/queued/parsing/parsed/ingested/failed/retry, `level` info/warn/error, `message` a sentence for end users, `detail` codes and counts only). Member read, in the Realtime publication; written only by the service role and SQL functions (§4). No FK on `doc_code`: `received`/`stored` precede the documents row. Kept 90 days. |
-| `fx_rates` | Global AED-per-unit market rates (fallback estimate only). `private.bank_fx_fees` holds each bank's markup over them. |
+| `fx_rates` | Global AED-per-unit market rates (fallback estimate only). `private.bank_fx_fees` holds each bank's markup over them; `private.fx_rate_history` keeps every day's rate (backfilled from 2025-01-11). |
 
 Queues (pgmq): `parse_document`, `llm_categorize`, `sms_fallback` and `storage_cleanup`, each with a `_dlq`;
 `storage_cleanup` carries `{bucket, paths[]}` from `delete_profile` (Storage objects can only be removed
@@ -159,8 +159,9 @@ the transaction's facts:
   date and real `fx_rate` win. When an SMS is also linked, the SMS amount is kept as
   `auth_amount` if it differs and the SMS time becomes `txn_at`.
 - With only an SMS, it is `pending`. A foreign amount gets an **estimated** AED value
-  (`amount_aed_is_estimate`) from `private.estimate_fx(profile, currency, bank)`: the card's own
-  bank's latest purchase statement rate, else the USD peg or `fx_rates` mid rate × (1 + the bank's
+  (`amount_aed_is_estimate`) from `private.estimate_fx(profile, currency, bank, date)`: the card's
+  own bank's latest purchase statement rate, else the USD peg or the mid rate of that date
+  (`private.fx_rate_history`, the latest day on or before it; else `fx_rates`) × (1 + the bank's
   all-in markup in `private.bank_fx_fees`: published bank fee × the ≈ 1.15% Visa/Mastercard
   charge, e.g. SIB 3.68%, ADCB 2.99%). Another bank's rate is never used; every bank has a markup.
   A posted line without a printed AED amount (SIB history foreign rows) is estimated the same way.
