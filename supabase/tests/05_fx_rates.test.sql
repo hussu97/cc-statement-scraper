@@ -37,8 +37,16 @@ with a as (
 insert into public.cards (profile_code, account_code, bank_code, last4)
 select profile_code, account_code, 'ADCB', '9208' from a;
 
+-- The migration backfills real daily rates (20261011170000).
+select is((select count(*)::int from private.fx_rate_history where source = 'currency-api'), 6360,
+          'backfill: 10 currencies × 636 days');
+select is((select aed_per_unit from private.fx_rate_history where currency = 'INR' and as_of = '2026-10-03'),
+          0.03818088::numeric(18,8), 'backfill: INR on 2026-10-03 (SIB posting date)');
+select ok((select relrowsecurity from pg_class where oid = 'private.fx_rate_history'::regclass), 'fx_rate_history has RLS');
+
 -- Start from a known table state (the local stack may hold real rates).
 delete from public.fx_rates;
+delete from private.fx_rate_history;
 
 -- ── table shape ─────────────────────────────────────────────────────────────
 select ok((select relrowsecurity from pg_class where oid = 'public.fx_rates'::regclass), 'fx_rates has RLS');
@@ -79,14 +87,19 @@ select results_eq(
 select is(public.upsert_fx_rates('{"EGP": 0.08}'::jsonb, 'test', '2026-10-08')->>'upserted', '1', 'a newer rate replaces the old');
 select is((select amount_aed from pg_temp.txn('egp')), 5.76::numeric(14,2), 'the estimate follows the newer rate');
 select is(public.upsert_fx_rates('{"EGP": 0.01}'::jsonb, 'stale', '2026-10-01')->>'upserted', '0', 'an older rate is ignored');
+select results_eq($$ select as_of, aed_per_unit from private.fx_rate_history where currency = 'EGP' order by as_of $$,
+  $$ values ('2026-10-01'::date, 0.01::numeric(18,8)), ('2026-10-07', 0.0756), ('2026-10-08', 0.08) $$,
+  'every update is kept in the history under its own date (an older one too)');
+select is((select amount_aed from pg_temp.txn('egp')), 5.76::numeric(14,2),
+          'an SMS older than every history row uses the newest rate');
 select is((select aed_per_unit from public.fx_rates where currency = 'EGP'), 0.08::numeric(18,8), 'EGP keeps the newer rate');
 
 -- ── precedence: statement rate > peg > fx_rates (peg and market × the bank's markup) ──
-select is(private.estimate_fx(pg_temp.v('p'), 'USD', 'ADCB'), 3.78230775::numeric, 'the USD peg (× 1.0299) beats a market quote');
-select is(private.estimate_fx(pg_temp.v('p'), 'AED', 'ADCB'), 1::numeric, 'AED is 1');
-select is(private.estimate_fx(pg_temp.v('p'), 'INR', 'ADCB'), 0.04541859::numeric, 'INR falls back to fx_rates × 1.0299');
-select is(private.estimate_fx(pg_temp.v('p'), 'INR', null), 0.0441::numeric, 'with no known bank it is the bare mid rate');
-select is(private.estimate_fx(pg_temp.v('p'), 'CHF', 'ADCB'), null::numeric, 'an unknown currency has no estimate');
+select is(private.estimate_fx(pg_temp.v('p'), 'USD', 'ADCB', null), 3.78230775::numeric, 'the USD peg (× 1.0299) beats a market quote');
+select is(private.estimate_fx(pg_temp.v('p'), 'AED', 'ADCB', null), 1::numeric, 'AED is 1');
+select is(private.estimate_fx(pg_temp.v('p'), 'INR', 'ADCB', null), 0.04541859::numeric, 'INR falls back to fx_rates × 1.0299');
+select is(private.estimate_fx(pg_temp.v('p'), 'INR', null, null), 0.0441::numeric, 'with no known bank it is the bare mid rate');
+select is(private.estimate_fx(pg_temp.v('p'), 'CHF', 'ADCB', null), null::numeric, 'an unknown currency has no estimate');
 
 -- a statement line in INR with the card's own (marked-up) rate
 create function pg_temp.ingest_inr_statement() returns jsonb language plpgsql as $$
@@ -111,7 +124,7 @@ begin
         'legacy_fingerprint', md5('fx-air-india')))))));
 end $$;
 select lives_ok($$ select pg_temp.ingest_inr_statement() $$, 'INR statement ingests');
-select is(private.estimate_fx(pg_temp.v('p'), 'INR', 'ADCB'), 0.05::numeric, 'the bank''s own statement rate beats fx_rates');
+select is(private.estimate_fx(pg_temp.v('p'), 'INR', 'ADCB', null), 0.05::numeric, 'the bank''s own statement rate beats fx_rates');
 
 select pg_temp.set('inr', pg_temp.sms(
   'Credit Card XX9208 was used for INR840.96 on 06/10/2026 12:43:13 at UBER * PENDING, help.uber.com-NL. Available limit AED26967.39',
@@ -134,8 +147,8 @@ select is((select count(*)::int from public.banks b
           'every bank has an FX markup (a new bank needs one)');
 select ok((select relrowsecurity from pg_class where oid = 'private.bank_fx_fees'::regclass), 'bank_fx_fees has RLS');
 select is((select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-            where n.nspname = 'private' and p.proname = 'estimate_fx' and p.pronargs = 2), 0,
-          'the bank-blind estimate_fx is gone');
+            where n.nspname = 'private' and p.proname = 'estimate_fx' and p.pronargs <> 4), 0,
+          'only the bank- and date-aware estimate_fx exists');
 
 with a as (
   insert into public.accounts (profile_code, bank_code, product_name)
@@ -145,15 +158,15 @@ insert into public.cards (profile_code, account_code, bank_code, last4)
 select profile_code, account_code, 'SIB', '9213' from a;
 select lives_ok($$ select public.upsert_fx_rates('{"INR": "0.03816247"}'::jsonb, 'test', '2026-10-09') $$, 'INR mid rate');
 
-select is(private.estimate_fx(pg_temp.v('p'), 'INR', 'SIB'), 0.03956639::numeric,
+select is(private.estimate_fx(pg_temp.v('p'), 'INR', 'SIB', null), 0.03956639::numeric,
           'SIB INR is mid × 1.036788, not the ADCB statement rate on the same profile');
-select is(private.estimate_fx(pg_temp.v('p'), 'USD', 'SIB'), 3.80760393::numeric, 'SIB USD is the peg × 1.036788');
-select is(private.estimate_fx(pg_temp.v('p'), 'AED', 'SIB'), 1::numeric, 'SIB AED is 1');
-select is(private.estimate_fx(pg_temp.v('p'), 'INR', 'FAB'), 0.03960883::numeric, 'FAB INR is mid × 1.0379');
-select is(private.estimate_fx(pg_temp.v('p'), 'INR', 'ENBD'), 0.03936951::numeric, 'ENBD INR is mid × 1.031629');
-select is(private.estimate_fx(pg_temp.v('p'), 'INR', 'EIB'), 0.03958181::numeric, 'EIB INR is mid × 1.037192');
-select is(private.estimate_fx(pg_temp.v('p'), 'INR', 'MASHREQ'), 0.03971690::numeric, 'MASHREQ INR is mid × 1.040732');
-select is(private.estimate_fx(pg_temp.v('p'), 'INR', 'ADCB'), 0.05::numeric, 'ADCB keeps its own statement rate');
+select is(private.estimate_fx(pg_temp.v('p'), 'USD', 'SIB', null), 3.80760393::numeric, 'SIB USD is the peg × 1.036788');
+select is(private.estimate_fx(pg_temp.v('p'), 'AED', 'SIB', null), 1::numeric, 'SIB AED is 1');
+select is(private.estimate_fx(pg_temp.v('p'), 'INR', 'FAB', null), 0.03960883::numeric, 'FAB INR is mid × 1.0379');
+select is(private.estimate_fx(pg_temp.v('p'), 'INR', 'ENBD', null), 0.03936951::numeric, 'ENBD INR is mid × 1.031629');
+select is(private.estimate_fx(pg_temp.v('p'), 'INR', 'EIB', null), 0.03958181::numeric, 'EIB INR is mid × 1.037192');
+select is(private.estimate_fx(pg_temp.v('p'), 'INR', 'MASHREQ', null), 0.03971690::numeric, 'MASHREQ INR is mid × 1.040732');
+select is(private.estimate_fx(pg_temp.v('p'), 'INR', 'ADCB', null), 0.05::numeric, 'ADCB keeps its own statement rate');
 
 select pg_temp.set('sib', (public.ingest_sms(pg_temp.v('p'), jsonb_build_array(jsonb_build_object(
   'client_msg_id', gen_random_uuid(), 'received_at', '2026-10-02 05:36:30+00', 'sender', 'SIB',
@@ -199,7 +212,7 @@ select profile_code, account_code, 'FAB', '9206' from a;
 select lives_ok($$ select pg_temp.ingest_lines('FAB', 'statement', '9206', 'REF-FAB-VAT', '2026-09-30',
   '[{"d": "2026-09-07", "m": "VAT ON SERVICE CHARGES", "a": "23.20", "c": "USD", "aed": "0.16", "fx": "0.00689655", "k": "fee"}]'::jsonb) $$,
   'a FAB statement whose only USD line is a legacy-parsed VAT row ingests');
-select is(private.estimate_fx(pg_temp.v('p'), 'USD', 'FAB'), 3.81168775::numeric,
+select is(private.estimate_fx(pg_temp.v('p'), 'USD', 'FAB', null), 3.81168775::numeric,
           'a fee line''s rate is ignored: FAB USD is the peg × 1.0379');
 
 select lives_ok($$ select pg_temp.ingest_lines('SIB', 'history_extract', '9213', 'REF-SIB-H', '2026-07-12',
@@ -210,6 +223,20 @@ select results_eq(
      where t.profile_code = pg_temp.v('p') and t.description = 'PLEXINC PASS LIFETIME' $$,
   $$ values ('posted'::text, 951.86::numeric(14,2), 3.80760393::numeric(18,8), true) $$,
   'the posted SIB estimate is the peg × 1.036788 and stores the rate it used');
+
+-- ── the rate of the transaction's own date (private.fx_rate_history) ───────
+insert into private.fx_rate_history (currency, as_of, aed_per_unit, source)
+values ('INR', '2026-10-02', 0.03814140, 'test'), ('INR', '2026-10-03', 0.03818088, 'test');
+select is(private.estimate_fx(pg_temp.v('p'), 'INR', 'SIB', '2026-10-03'), 0.03958548::numeric,
+          'the posting date''s mid rate × SIB''s markup');
+select is(private.estimate_fx(pg_temp.v('p'), 'INR', 'SIB', '2026-10-05'), 0.03958548::numeric,
+          'a day without a rate uses the latest one before it');
+select is(private.estimate_fx(pg_temp.v('p'), 'INR', 'SIB', '2020-01-01'), 0.03956639::numeric,
+          'a date before any history uses the newest rate');
+select is(private.estimate_fx(pg_temp.v('p'), 'USD', 'SIB', '2026-10-03'), 3.80760393::numeric, 'USD stays on the peg');
+select lives_ok($$ select private.refresh_transaction(pg_temp.v('sib')::jsonb->>'txn_code') $$, 're-derive the SIB SMS');
+select is((select amount_aed from pg_temp.txn('sib')), 1123.07::numeric(14,2),
+          'the SIB SMS (2026-10-02) now uses that day''s rate: 28,400 × 0.03814140 × 1.036788');
 
 -- ── input validation and authorisation ─────────────────────────────────────
 select throws_ok($$ select public.upsert_fx_rates('[]'::jsonb, 'test', '2026-10-08') $$, '22023', null,

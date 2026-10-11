@@ -110,4 +110,5 @@ Read-only: `supabase migration list --linked`, `supabase db push --dry-run`,
 `bash scripts/ci/check-migrations.sh remote linked`. Everything else (db push, functions deploy,
 `config push`, secrets, Vault via `scripts/cutover/set-vault-secrets.sql`, SQL writes) is a production action
 (root §11.1), and a push to `main` that touches `supabase/` deploys on its own (§11.2). The
-Supabase MCP connector can't see this project; use the CLI.
+Supabase MCP connector, when connected to this project's organisation (`list_projects` shows
+`<project-ref>`), is fine for read-only `execute_sql`; otherwise use the CLI.

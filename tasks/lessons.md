@@ -53,7 +53,8 @@
 - **Rule**: an FX estimate is per bank: that bank's own statement rate, else the mid-market rate
   (USD peg or `fx_rates`) times the bank's all-in markup (`private.bank_fx_fees`: network
   charge + bank fee). Derive it from the bank's published fee and check it against a real billed
-  amount (the SIB model reproduces its bill to AED 0.03).
+  amount (the SIB model reproduces its bill to AED 0.03). Use the mid rate of the transaction's
+  own (posting) date, not today's: a week of rupee drift was worth 0.65%.
 - **Enforced by**: `estimate_fx` takes the bank (the bank-blind overload is dropped);
   pgTAP `05_fx_rates` (SIB ignores the ADCB rate on the same profile; the real SIB case;
   every bank has a markup row).
@@ -236,9 +237,10 @@
 ### Tooling defaults that don't work here: `gh` account, Supabase MCP, `localhost`, pip
 - **`gh`**: the active account (`h-abbasi`) cannot see `hussu97/cc-statement-scraper`. Use
   `GH_TOKEN=$(gh auth token --user hussu97) gh …`, inline, never printing the token.
-- **Supabase MCP**: the connector is scoped to a different organisation and cannot see
-  `cc-statement-scraper`. Use the Supabase CLI (linked to `<project-ref>`) for read-only
-  inspection, and ask before anything that writes.
+- **Supabase MCP**: the connector sees only the organisation it was connected with; it once
+  showed another project. Run `list_projects` first: if `<project-ref>` is listed,
+  read-only `execute_sql` is fine (2026-10-11, after a reconnect); otherwise use the Supabase CLI
+  (linked to `<project-ref>`). Ask before anything that writes, either way.
 - **`localhost`**: curl local services at `127.0.0.1` (`http://127.0.0.1:54321/…`); the parser's
   local allow-list and the docs use `127.0.0.1`.
 - **Python**: environments are made with `uv` (`uv venv --python 3.12 .venv`, then

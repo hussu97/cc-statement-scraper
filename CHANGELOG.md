@@ -1,5 +1,15 @@
 # Changelog
 
+## FX estimates use the rate of the transaction's own date — 2026-10-11
+
+### Backend (Supabase)
+
+- **fix** `20261011170000_fx_rate_history`: estimates used the newest market rate (`fx_rates` is overwritten nightly), so the SIB INR 28,400.00 purchase posted 2026-10-03 (billed AED 1,123.72) read AED 1,116.32 a week later. New `private.fx_rate_history (currency, as_of)` keeps every daily rate; `upsert_fx_rates` writes each nightly update there too; `private.market_rate(currency, on_date)` is the latest row on or before the date, else `fx_rates`. `private.estimate_fx(profile, currency, bank, on_date)` takes the line's posting date (else txn date) or the SMS's Dubai date; the order (bank statement rate → USD peg / market × bank markup) is unchanged and the three-argument overload is dropped. Backfill: 6,360 daily rates 2025-01-11 .. 2026-10-10 for EGP EUR GBP INR JPY KES KWD MYR PKR THB (every non-AED, non-USD currency in production) from the fawazahmed0 currency-api, inverted to AED per unit; the SIB case becomes AED 1,124.23. Every estimate is re-derived once. pgTAP `05_fx_rates`.
+
+### Docs
+
+- **change** CLAUDE.md §11.1, supabase/CLAUDE.md and lessons: the Supabase MCP connector reaches this project when connected to its organisation (check `list_projects`); read-only `execute_sql` is inspection.
+
 ## FAB VAT rows are AED; FX estimates learn only from purchase rates — 2026-10-11
 
 ### Parser
