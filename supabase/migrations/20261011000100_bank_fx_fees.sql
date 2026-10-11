@@ -16,13 +16,16 @@
 --   margin quoted on the wholesale rate including processing fees → the margin itself
 -- It reproduces the SIB bill: 28,400 × 0.03816247 × 1.036788 = AED 1,123.69 (billed 1,123.72).
 --   SIB      2.50% + scheme  (covered cards tariff, Cashback/Smiles)          → 0.036788
---   FAB      2.61% + scheme  (Cashback KFS: 2.49% + 5% VAT, scheme ≈ 1%)      → 0.037900
---   ENBD     1.99% + scheme  (credit card KFS, "approximately 1.15%")         → 0.031629
+--   FAB      2.61% + scheme  (Cashback Mastercard World: SoF 07/2026 "up to 2.61%",
+--                             = KFS 2.49% + 5% VAT; scheme ≈ 1%)                → 0.037900
+--   ENBD     1.99% + scheme  (noon One Visa; credit card KFS, "approx. 1.15%") → 0.031629
 --   EIB      2.54% + scheme  (cards SoC, non-AED; Emarati/Skywards Black 2.30%) → 0.037192
---   MASHREQ  2.89% + scheme  (cards KFS 05/2026 spread, noon card; VAT n/a)   → 0.040732
---   ADCB     2.99% all-in    (margin on wholesale rate incl. processing fee,
---                             VAT inclusive; Traveller card 0%)              → 0.029900
--- These are per bank, not per card product: a card with its own FX rate (ADCB Traveller,
+--   MASHREQ  2.89% + scheme  (cards KFS 05/2026 spread; VAT n/a)              → 0.040732
+--   ADCB     2.99% all-in    (Infinite Visa: margin on the wholesale rate incl. the
+--                             processing fee, VAT inclusive; Traveller card 0%) → 0.029900
+-- Checked against the cards in use: SIB Cashback covered card, FAB Cashback Mastercard World,
+-- ENBD noon One Visa, ADCB Infinite Visa. EIB and MASHREQ use the bank's standard non-AED fee.
+-- The table is per bank, not per product: another product with its own FX rate (ADCB Traveller,
 -- EIB Emarati) is over-estimated until its first statement prints a rate (step 1 below).
 --
 -- private.estimate_fx(profile, currency, bank) now:
@@ -50,11 +53,11 @@ revoke all on private.bank_fx_fees from public, anon, authenticated, service_rol
 
 insert into private.bank_fx_fees (bank_code, markup, note) values
   ('SIB',     0.036788, '2.5% non-AED admin fee + scheme ~1.15%; INR 28,400.00 billed AED 1,123.72 on 2026-10-03 (model 1,123.69)'),
-  ('FAB',     0.037900, 'Cashback card: 2.49% + 5% VAT (2.61%) + scheme ~1.15%'),
-  ('ENBD',    0.031629, '1.99% currency conversion fee + scheme ~1.15% (KFS)'),
+  ('FAB',     0.037900, 'Cashback Mastercard World: 2.61% (2.49% + 5% VAT, SoF 07/2026) + scheme ~1.15%'),
+  ('ENBD',    0.031629, 'noon One Visa: 1.99% currency conversion fee + Visa ~1.15% (KFS)'),
   ('EIB',     0.037192, '2.54% non-AED fee + scheme ~1.15% (SoC); Emarati/Skywards Black 2.30%, Amazon 2.34%'),
-  ('MASHREQ', 0.040732, '2.89% FX spread (KFS 05/2026, VAT n/a) + scheme ~1.15%'),
-  ('ADCB',    0.029900, '2.99% margin on wholesale rate incl. processing fee, VAT inclusive; Traveller 0%')
+  ('MASHREQ', 0.040732, 'standard cards: 2.89% FX spread (KFS 05/2026, VAT n/a) + scheme ~1.15%'),
+  ('ADCB',    0.029900, 'Infinite Visa: 2.99% margin on wholesale rate incl. processing fee, VAT inclusive; Traveller 0%')
 on conflict (bank_code) do nothing;
 
 -- ── estimate ────────────────────────────────────────────────────────────────
