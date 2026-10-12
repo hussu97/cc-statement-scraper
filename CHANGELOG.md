@@ -10,6 +10,10 @@
 
 - **add** Budgets: the budget dialog has an optional **Card** picker ("All cards" by default, then each active card with its logo and last digits). A card budget's card reads "Daily card" (all its spending) or "Dining · Daily card" (`budgetTitle`), with the bank logo; only the every-card total is the full-width hero. Budgets not active this month name the card too.
 
+### iOS
+
+- **add** Budgets: the edit sheet has an optional **Card** picker before Category ("All cards", then each active card; a closed card stays offered when it is the budget's own). Card budgets show the bank logo and read "Daily card" or "Dining · Daily card" (`BudgetScope.title`, same rule as the web), on the month's cards, the not-active list, the delete prompt, VoiceOver and the Insights budgets card. Card names follow the server's `AccountLabel.make`. Cards load from `public.accounts`; if that fails the form still offers "All cards".
+
 ## Docs: Wio is a credit card that pays other credit cards — 2026-10-12
 
 ### Docs

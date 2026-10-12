@@ -141,6 +141,14 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         if let budgetWriteError { throw budgetWriteError }
         lock.withLock { deletedBudgets.append(budgetCode) }
     }
+    /// `public.accounts` rows; `accountsError` is thrown by `accounts` when set.
+    var accountRows: [LedgerAccount] = []
+    var accountsError: LedgerAPIError?
+    func accounts(profileCode: String) async throws -> [LedgerAccount] {
+        count("accounts")
+        if let accountsError { throw accountsError }
+        return accountRows
+    }
     func recurringList(profileCode: String) async throws -> [RecurringCharge] { [] }
     func filterMeta(profileCode: String) async throws -> FilterMeta {
         if let filterMetaError { throw filterMetaError }

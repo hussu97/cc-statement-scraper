@@ -13,9 +13,9 @@ private func status(_ code: String, category: String? = nil, budget: String = "2
 }
 
 private func budget(_ code: String, category: String? = nil, amount: String = "2000", from: String = "2026-09-01",
-                    to: String? = nil) -> Budget {
+                    to: String? = nil, account: String? = nil) -> Budget {
     Budget(budgetCode: code, categoryCode: category, amountAed: dec(amount), effectiveFrom: day(from),
-           effectiveTo: to.map(day))
+           effectiveTo: to.map(day), accountCode: account)
 }
 
 private func category(_ code: String, kind: String = "spend", parent: String? = nil, archived: Bool = false) -> FilterMeta.CategoryOption {
@@ -203,7 +203,7 @@ struct BudgetsModelTests {
         let draft = BudgetDraft(amount: "100", effectiveFrom: day("2026-10-01"))
         api.budgetWriteError = .server(status: nil, code: "23505", message: "duplicate key")
         #expect(await model.save(draft, profileCode: "prf_a")
-                == "There is already a budget for this category starting that month. Edit that one instead.")
+                == "There is already a budget for this card and category starting that month. Edit that one instead.")
         api.budgetWriteError = .server(status: nil, code: "42501", message: "rls")
         #expect(await model.save(draft, profileCode: "prf_a")
                 == "You don't have permission to change this ledger (only owners can).")
@@ -235,6 +235,92 @@ struct BudgetsModelTests {
         await screens.select("prf_b")
         #expect(!screens.budgets.hasLoaded)
         screens.stop()
+    }
+}
+
+@MainActor
+@Suite("Budgets: one card (card × category scope)")
+struct CardBudgetTests {
+    let accounts = [
+        LedgerAccount(accountCode: "acc_adcb", bankCode: "ADCB", productName: "Lulu Platinum", status: "active"),
+        LedgerAccount(accountCode: "acc_fab", bankCode: "FAB", nickname: "  Daily card ", productName: "Cashback",
+                      status: "active"),
+        LedgerAccount(accountCode: "acc_old", bankCode: "FAB", nickname: "Old card", status: "closed"),
+    ]
+
+    @Test("budget_status decodes the card fields; rows without them are every-card budgets")
+    func decode() throws {
+        let rows = try LedgerJSON.decode([BudgetStatus].self, from: try fixture("budget_status"))
+        #expect(rows.map(\.accountCode) == [nil, "acc_fab", "acc_adcb", nil])
+        #expect(rows[1].accountName == "Daily card" && rows[1].bankCode == "FAB" && rows[1].isCardBudget)
+        #expect(rows[0].spentAed == dec("1234.5") && !rows[0].isCardBudget)
+        #expect(rows.map(\.title) == ["All spending", "Daily card", "Dining · ADCB · Lulu Platinum", "Groceries"])
+        #expect(rows[2].meterAccessibilityLabel == "114% of Dining · ADCB · Lulu Platinum budget used")
+    }
+
+    @Test("title: category, card, or both (web budgetTitle parity)")
+    func title() {
+        #expect(BudgetScope.title(categoryName: nil, accountName: nil) == "All spending")
+        #expect(BudgetScope.title(categoryName: "Dining", accountName: nil) == "Dining")
+        #expect(BudgetScope.title(categoryName: nil, accountName: "Daily card") == "Daily card")
+        #expect(BudgetScope.title(categoryName: "Dining", accountName: "Daily card") == "Dining · Daily card")
+        let unnamed = BudgetStatus(budgetCode: "b", categoryCode: nil, categoryName: "All spending", colorToken: nil,
+                                   budgetAed: 1, spentAed: 0, projectedAed: 0, shareUsed: 0, accountCode: "acc_x")
+        #expect(unnamed.title == "Card")
+    }
+
+    @Test("account labels match the server: trimmed nickname, else 'BANK · product', else the bank")
+    func labels() {
+        #expect(accounts.map(\.label) == ["ADCB · Lulu Platinum", "Daily card", "Old card"])
+        #expect(LedgerAccount(accountCode: "a", bankCode: "WIO", nickname: " ").label == "WIO")
+    }
+
+    @Test("card choices: active cards in the server's order, plus a closed card the budget already uses")
+    func choices() {
+        #expect(BudgetCardChoice.choices(from: accounts, keeping: nil).map(\.accountCode) == ["acc_adcb", "acc_fab"])
+        let kept = BudgetCardChoice.choices(from: accounts, keeping: "acc_old")
+        #expect(kept.map(\.accountCode) == ["acc_adcb", "acc_fab", "acc_old"])
+        #expect(kept.last?.label == "Old card" && kept.last?.bankCode == "FAB")
+        // A read without `status` (e.g. Review's) treats every account as active.
+        #expect(LedgerAccount(accountCode: "a", bankCode: "FAB").isActive)
+    }
+
+    @Test("the draft carries the card from the budget, and a new draft is for every card")
+    func draft() {
+        let d = BudgetDraft(budget: budget("bud_1", category: "cat_d", account: "acc_fab"))
+        #expect(d.accountCode == "acc_fab" && d.categoryCode == "cat_d")
+        #expect(BudgetDraft.new(month: day("2026-10-01"), today: day("2026-10-09")).accountCode == nil)
+    }
+
+    @Test("the model loads cards; inactive card budgets are named with their card; save sends the card")
+    func model() async throws {
+        let api = StubAPI()
+        api.accountRows = accounts
+        api.categoryOptions = [category("cat_d")]
+        api.budgetRows = [budget("bud_a", category: "cat_d", from: "2026-12-01", account: "acc_fab"),
+                          budget("bud_b", from: "2026-12-01", account: "acc_old"),
+                          budget("bud_c", from: "2026-12-01", account: "acc_gone")]
+        let model = BudgetsModel(api: api)
+        await model.load(profileCode: "prf_a", month: day("2026-10-01"))
+        let content = try #require(model.state.value)
+        #expect(content.inactive.map { content.name(of: $0) } == ["Name cat_d · Daily card", "Old card", "Card"])
+        #expect(content.inactive.map { content.bankCode(of: $0) } == ["FAB", "FAB", nil])
+        #expect(content.bankCode(of: budget("x")) == nil)
+        #expect(content.cardChoices(keeping: "acc_old").count == 3 && !content.accountsFailed)
+
+        let draft = BudgetDraft(accountCode: "acc_fab", amount: "500", effectiveFrom: day("2026-10-01"))
+        #expect(await model.save(draft, profileCode: "prf_a") == nil)
+        #expect(api.savedBudgets.map(\.draft.accountCode) == ["acc_fab"])
+    }
+
+    @Test("cards failing to load doesn't fail the tab; the form still offers every card")
+    func accountsFail() async throws {
+        let api = StubAPI()
+        api.accountsError = .network("offline")
+        let model = BudgetsModel(api: api)
+        await model.load(profileCode: "prf_a", month: nil)
+        let content = try #require(model.state.value)
+        #expect(content.accountsFailed && content.cardChoices(keeping: nil).isEmpty)
     }
 }
 

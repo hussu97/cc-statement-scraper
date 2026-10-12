@@ -93,7 +93,9 @@ private struct BudgetStatusCard: View {
     var body: some View {
         Card {
             HStack(spacing: 8) {
-                if row.categoryCode == nil {
+                if let bank = row.bankCode, row.categoryCode == nil {
+                    BankLogo(bankCode: bank, size: 18)
+                } else if row.categoryCode == nil {
                     Circle().fill(Palette.ink).frame(width: 8, height: 8)
                 } else {
                     CategoryDot(token: row.colorToken, size: 10)
@@ -149,6 +151,7 @@ private struct InactiveBudgetsCard: View {
                         } else {
                             CategoryDot(token: content.colorToken(of: budget))
                         }
+                        if let bank = content.bankCode(of: budget) { BankLogo(bankCode: bank, size: 16) }
                         Text(content.name(of: budget)).font(Typography.rowTitle).foregroundStyle(Palette.ink)
                         Spacer()
                         Text(MoneyFormat.aed(budget.amountAed)).font(Typography.amount).foregroundStyle(Palette.ink2)
