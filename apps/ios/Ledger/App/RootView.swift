@@ -53,7 +53,8 @@ struct MainTabs: View {
             }
             Tab(LedgerTab.activity.title, systemImage: LedgerTab.activity.systemImage, value: .activity) {
                 NavigationStack {
-                    ActivityView(model: model.activity, months: model.month.range, profileCode: profileCode)
+                    ActivityView(model: model.activity, months: model.month.range, profileCode: profileCode,
+                                 canEdit: model.profiles.canWrite)
                 }
             }
             Tab(LedgerTab.insights.title, systemImage: LedgerTab.insights.systemImage, value: .insights) {

@@ -27,9 +27,10 @@ struct OverviewView: View {
                 AccountsCard(accounts: content.accounts, owedNow: content.overview.owedNowText,
                              owedNowCaveat: content.overview.owedNowCaveat)
                 if !content.insights.isEmpty {
-                    InsightsCard(insights: content.insights) { insight in
+                    // Dismissing is an owner write (`insights_owner_dismiss`).
+                    InsightsCard(insights: content.insights, dismiss: canResolve ? { insight in
                         Task { await model.dismiss(insight, profileCode: profileCode) }
-                    }
+                    } : nil)
                 }
                 if overview.showsLiveSections() { RecentCard(recent: overview.recent) }
             }
@@ -284,7 +285,8 @@ private struct AccountsCard: View {
 
 private struct InsightsCard: View {
     let insights: [Insight]
-    let dismiss: (Insight) -> Void
+    /// Nil when the user may not dismiss (not an owner).
+    let dismiss: ((Insight) -> Void)?
 
     var body: some View {
         Card {
@@ -297,11 +299,13 @@ private struct InsightsCard: View {
                         Text(insight.body).font(Typography.rowMeta).foregroundStyle(Palette.muted)
                     }
                     Spacer()
-                    Button { dismiss(insight) } label: {
-                        Image(systemName: "xmark").font(.caption).frame(minWidth: 44, minHeight: 44)
+                    if let dismiss {
+                        Button { dismiss(insight) } label: {
+                            Image(systemName: "xmark").font(.caption).frame(minWidth: 44, minHeight: 44)
+                        }
+                        .foregroundStyle(Palette.muted)
+                        .accessibilityLabel("Dismiss insight")
                     }
-                    .foregroundStyle(Palette.muted)
-                    .accessibilityLabel("Dismiss insight")
                 }
             }
         }

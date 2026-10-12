@@ -5,6 +5,8 @@ struct ActivityView: View {
     @Bindable var model: ActivityModel
     let months: MonthRange
     let profileCode: String
+    /// Owners recategorise; viewers and view-only ledgers just read.
+    let canEdit: Bool
     @State private var editing: LedgerTransaction?
     @State private var showFilters = false
 
@@ -65,7 +67,7 @@ struct ActivityView: View {
             ForEach(model.sections) { section in
                 Section {
                     ForEach(section.rows) { txn in
-                        Button { editing = txn } label: { TransactionRow(txn: txn) }
+                        row(txn)
                             .listRowBackground(Palette.bg)
                             .listRowSeparatorTint(Palette.border)
                             .onAppear { Task { await model.rowAppeared(txn) } }
@@ -77,6 +79,14 @@ struct ActivityView: View {
             PagingFooter(footer: model.footer, endMessage: model.endMessage) { await model.loadMore() }
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
+        }
+    }
+
+    @ViewBuilder private func row(_ txn: LedgerTransaction) -> some View {
+        if canEdit {
+            Button { editing = txn } label: { TransactionRow(txn: txn) }
+        } else {
+            TransactionRow(txn: txn)
         }
     }
 
