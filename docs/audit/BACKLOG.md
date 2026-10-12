@@ -27,11 +27,11 @@ separately):
 | Database (Supabase SQL) | 0 | 2 | – | 1 | 3 |
 | Edge Functions | 0 | 0 | – | – | 0 |
 | Parser | 1 | – | – | – | 1 |
-| Web | 7 | 20 | 5 | – | 32 |
-| iOS | 6 | 10 | 7 | 2 | 25 |
+| Web | 4 | 20 | 5 | – | 29 |
+| iOS | 3 | 9 | 7 | 2 | 21 |
 | Scraper | – | 2 | – | – | 2 |
-| CI, config and ops | 0 | 0 | – | 0 | 0 |
-| **Total** | **14** | **34** | **12** | **3** | **63** |
+| CI, config and ops | 0 | 1 | – | 0 | 1 |
+| **Total** | **8** | **34** | **12** | **3** | **57** |
 
 There are no open P0 or P1 findings. The last P1 remainders (WEB-02 statements beyond 500 and
 merchant search, WEB-07 "Retry AI") landed in `98f901c`. What is left of the P1s are the device
@@ -94,11 +94,8 @@ None open. All five were done on 2026-10-09: see [Done: Edge Functions and CI pa
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
 | WEB-10r | Each review card runs 1–3 context queries, and every `transactions` event invalidates all review contexts | The badge part is fixed (head count) | One `review_context` RPC per list; invalidate only `["p", code, "reviews", "open"]` on txn events | M |
-| WEB-11 | First load is 1.16 MB JS (≈ 365 kB gz): Sentry with Replay, supabase-js and Radix preloaded on every route | Perf | Lazy-load Replay and Sentry after first paint, keep `/signin` free of chart and Radix chunks, drop `chunkSizeWarningLimit: 1200`, budget ~200 kB gz | M |
 | WEB-16 | Anomalies show raw uppercase descriptions as separate rows, flag "Large first purchase" on a charge below usual, and use jargon | Partly server-side (`anomalies`) | Return `merchant_name`, require first purchase **and** above threshold, phrase as "about 4× your usual Shopping purchase", add a "this is fine" action | M |
-| WEB-17r | 18 categories over 12 hues still share colours (Medicine/Insurance, Forex Charge/Fines, Apple/Subscription/Cashback, Donation/Transport) | `…1900` moved the worst pairs; a full fix needs more hues or a policy | Extend the palette to ~16, or reserve unique hues for `kind = spend` categories; keep ΔE ≥ 15 | S |
 | WEB-24 | Bulk bar: phone selection and Categorise are done; still no Exclude, Export CSV or server-computed selection total | UX | Add those actions (server total via an RPC) | M |
-| WEB-26 | Pace rule compares month-to-date spend with the full-month 3-month average, so it reads "way under" all month | Needs a server field | `overview` returns `spend_avg_3m_to_date` and `projected_month_end`; pin those, "Projected AED X by 31 Oct" | M |
 | WEB-27 | Empty ledger shows AED 0.00, an empty ruler and four empty states; no first-run guidance | Out of the P1 pass | "Get your ledger going" checklist from server state: statement, mailbox, PDF passwords, SMS shortcut, member | M |
 
 ### iOS
@@ -106,11 +103,8 @@ None open. All five were done on 2026-10-09: see [Done: Edge Functions and CI pa
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
 | IOS-11 | SMS filter tests use invented bodies, not the `sms_templates` examples (the pre-push hook compiles the app and extension; no macOS CI) | Test fixture | Export template examples to a fixture with a drift check | M |
-| IOS-12r | `noProfile` still discards the SMS; the outbox isn't cleared on sign-out; nothing outside Settings shows a stuck outbox | Honest queued reasons and "Not sent" were done | Enqueue with a pending profile; confirm-and-clear outbox and pending PDFs on sign-out; Settings badge and an Overview strip when the outbox is older than 1 h | S |
 | IOS-18 | Category sheet opens at `.medium` (3 categories), no search, no "None", merchant toggle defaults off, no notes or exclude-from-spend | UX, out of the P1 pass | `.large` + `.searchable`, merchant toggle on unless the category is manual, "Exclude from spend" and notes, swipe actions on rows | M |
 | IOS-21r | Release config still includes the local `Secrets.xcconfig` (one dropped key ships a local value); no assertion on the archived Info.plist; no Sentry releases; the token in `Secrets.Release.xcconfig` is an Xcode build setting (also X-28) | Only the token handling in `publish-build.sh` was done | Include `Secrets.xcconfig` from `Debug.xcconfig` only; `plutil` asserts on the archived app and `.appex` (https, `production`, non-empty keys); `sentry-cli releases new/set-commits/finalize`; keep the token in the shell or keychain | M |
-| IOS-22 | No privacy cover in the app switcher and no optional Face ID lock | Out of the P1 pass | Blur overlay when `scenePhase != .active`; optional "Require Face ID" with `NSFaceIDUsageDescription` | S |
-| IOS-23 | An empty ledger asserts "AED 0 · No 3-month history yet · Same as this time last month" | Out of the P1 pass | Three-step checklist (SMS capture, statement, invite) when there are no transactions and no cards | S |
 
 ### CI, config and ops
 
@@ -165,7 +159,6 @@ None open (SRV-12, SRV-17 and X-25r are done).
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
 | IOS-07r | No deep link from a Shortcut result to the Review screen | The Review screen shipped | `ledger://review` URL handled by the app; use it in the intent's result | S |
-| WEB-28i | iOS Budgets still works out which budget applies on the device (`BudgetsModel.inactive`, `Budget.applies(to:)`) | WEB-28 added `is_effective` to `budget_status`; the iOS half needs a TestFlight build | Call `budget_status` with `p_include_inactive: true` and split on `is_effective`, as the web does | S |
 | IOS-24 | App and share extension can refresh the same rotating refresh token concurrently (10 s reuse window) | Needs device testing | Extension: `autoRefreshToken: false` and re-read storage before each request, or an App Group file lock | M |
 | IOS-25r | Two Swift 6 warnings remain (`nonisolated(unsafe)` in `LedgerDates`, deprecated `Breadcrumb.data` setter) | Reentrancy part fixed (flushes chained) | Fix both warnings | S |
 | IOS-26 | `ActivityModel.sections` re-sorts on every body evaluation; an `ISO8601DateFormatter` per timestamp | Perf | Cache sections on state change; static formatters | S |
@@ -186,6 +179,7 @@ None open (SRV-12, SRV-17 and X-25r are done).
 
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
+| X-34 | `pnpm db:types:check` can flip between resets: two `v_transactions` relationships share the FK name `accounts_bank_code_fkey` and the generator orders them nondeterministically | Seen during batch 2; CI has passed so far | Normalise the generated file (stable sort of `Relationships`) in `db:types` and `db:types:check`, or give the view's second bank join a distinct FK-backed name | S |
 
 ---
 
@@ -291,6 +285,23 @@ CHANGELOG.
 (05's recommendations 3–5 are IOS-19r, IOS-20r, IOS-18, IOS-28 and IOS-17 above.)
 
 ---
+
+## Done: backlog batch 2 (2026-10-13)
+
+Branch `batch/backlog-2`, migrations `20261012215047_overview_pace` and
+`20261012220834_category_palette_16`, pgTAP `40` and `41`. Audited after merge (three review
+passes); the projection was corrected for ledgers with under three months of history. The iOS
+work was rebased onto the Wallet outbox refactor (`OutboxItem`).
+
+| ID | Outcome |
+|---|---|
+| WEB-26 | Done: `overview` returns `spend_avg_3m_to_date` and `projected_month_end` (`spend_pace`, `month_to_date_end`); the web pace rule pins "3-month average by the Nth" and "Projected AED X by 31 Oct" |
+| WEB-17r | Done: 16 categorical hues (ΔE ≥ 15, ≥ 3:1 in both themes); ten seeded categories recoloured by a guarded migration. 26 spend categories over 16 hues still share ten hues, each pairing a frequent with a rare category |
+| WEB-11 | Done: first load 377 → 177 kB gz; Sentry and Replay load after first paint (deployed builds only); `/signin` and `/privacy` carry no Radix or charts; a bundle budget runs in every `vite build` |
+| IOS-12r | Done: SMS and card payments captured with no ledger wait in the outbox and are adopted by the "SMS go to" ledger; sign-out confirms and clears the device queue; stuck-outbox Settings badge and Overview strip |
+| IOS-22 | Done: privacy cover when not active; optional Require Face ID (device check pending) |
+| IOS-23 | Done: an empty ledger shows a set-up checklist (SMS capture, a statement, a member), each step proven by server data |
+| WEB-28i | Done: iOS Budgets split `budget_status(p_include_inactive)` on `is_effective`; the device selection logic is gone |
 
 ## Done: backlog batch 1 (2026-10-13)
 
