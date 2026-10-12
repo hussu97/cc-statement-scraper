@@ -1,9 +1,8 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FunctionsHttpError } from "@supabase/supabase-js";
 import { supabase, type RpcReturn } from "@/lib/supabase";
 import { keys } from "./keys";
 import { useInfiniteList } from "./infinite";
-import { ApiError, fetchPage, must, mustList, toApiError, type Page } from "./api";
+import { ApiError, fetchPage, functionError, must, mustList, toApiError, type Page } from "./api";
 import { pageRange } from "@/lib/pagination";
 
 export type StatementCycle = RpcReturn<"statement_cycles">[number];
@@ -253,18 +252,7 @@ export function useUploadStatements(profileCode: string) {
       const { data, error } = await supabase.functions.invoke<{ uploads: UploadResult[] }>("statements-upload", {
         body: form,
       });
-      if (error) {
-        let message = error.message;
-        if (error instanceof FunctionsHttpError) {
-          try {
-            const body = (await error.context.json()) as { error?: { message?: string; code?: string } };
-            message = body.error?.message ?? message;
-          } catch {
-            /* keep generic message */
-          }
-        }
-        throw new ApiError(message);
-      }
+      if (error) throw await functionError(error);
       return data?.uploads ?? [];
     },
     onSettled: () => qc.invalidateQueries({ queryKey: keys.documents(profileCode) }),
