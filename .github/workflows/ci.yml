@@ -97,6 +97,7 @@ jobs:
               - 'scripts/install-hooks.sh'
               - 'scripts/cutover/*.sh'
               - 'apps/ios/scripts/*.sh'
+              - '.claude/hooks/**'
 
   # ------------------------------------------------------------------
   # Workflows + shell: actionlint (with shellcheck on run: blocks) and
@@ -123,6 +124,9 @@ jobs:
 
       - name: Destructive migration guard tests
         run: python3 scripts/ci/sql_executed_text_test.py
+
+      - name: Claude Code guard tests
+        run: python3 .claude/hooks/guard_test.py
 
   # ------------------------------------------------------------------
   # Supabase: append-only migrations, migrations from scratch, pgTAP,
