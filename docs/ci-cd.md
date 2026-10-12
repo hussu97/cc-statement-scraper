@@ -41,7 +41,7 @@ Deleted with the legacy code: `deploy-backend.yml`, `deploy-frontend.yml`,
 
 | Job | Runs when these change | Steps | Runner |
 |---|---|---|---|
-| `tooling` | `.github/workflows/**`, `scripts/hooks/**`, `scripts/ci/**`, `scripts/install-hooks.sh`, `scripts/cutover/*.sh`, `apps/ios/scripts/*.sh` | actionlint (incl. shellcheck of `run:` blocks), shellcheck | Linux |
+| `tooling` | `.github/workflows/**`, `scripts/hooks/**`, `scripts/ci/**`, `scripts/install-hooks.sh`, `scripts/cutover/*.sh`, `apps/ios/scripts/*.sh`, `.claude/hooks/**` | actionlint (incl. shellcheck of `run:` blocks), shellcheck, `sql_executed_text_test.py`, `.claude/hooks/guard_test.py` | Linux |
 | `supabase` | `supabase/migrations|tests/**`, `seed.sql`, `config.toml`, `packages/db-types/**`, `check-migrations.sh` | append-only check vs PR base / previous `main` (only if migrations changed) → `supabase start` → `db reset` → `test db` (pgTAP) → types drift vs `packages/db-types` | Linux |
 | `edge` | `supabase/functions/**`, `config.toml` | `deno lint` → `deno fmt --check` → `deno check --frozen` → `deno test --frozen -A` (the frozen `deno.lock` must match the sources) | Linux |
 | `parser` | `services/parser/**`, `docs/contracts/**` | uv venv → `ruff check` → `pytest` | Linux |
