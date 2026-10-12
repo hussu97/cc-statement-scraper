@@ -13,7 +13,14 @@ struct SettingsView: View {
         List {
             Section("Ledger") {
                 if let profile = profiles.selected {
-                    LabeledContent("Showing", value: profile.name)
+                    LabeledContent("Showing") {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(profile.name)
+                            if let label = profiles.access(of: profile.profileCode).label {
+                                Text(label).font(Typography.caption).foregroundStyle(Palette.muted)
+                            }
+                        }
+                    }
                 }
                 if profiles.canSwitch {
                     Button("Switch ledger") { profiles.select(nil) }

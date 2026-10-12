@@ -69,9 +69,11 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
     var profilesError: LedgerAPIError?
     func profiles() async throws -> [LedgerProfile] {
         if let profilesError { throw profilesError }
-        return []
+        return stubProfiles
     }
-    func memberships() async throws -> [ProfileMembership] { [] }
+    var stubProfiles: [LedgerProfile] = []
+    var stubMemberships: [ProfileMembership] = []
+    func memberships() async throws -> [ProfileMembership] { stubMemberships }
     func createProfile(key: String, name: String) async throws -> String { "prf_x" }
 
     // MARK: Screens (paging, months, refresh fan-out)

@@ -59,7 +59,8 @@ struct StatementsView: View {
             Task { await model.upload(urls: urls, profileCode: profileCode) }
         }
         .navigationDestination(for: StatementCycle.self) { cycle in
-            StatementDetailScreen(make: { model.detailModel(for: cycle) }, profileCode: profileCode)
+            StatementDetailScreen(make: { model.detailModel(for: cycle) }, profileCode: profileCode,
+                                  canEdit: canUpload)
         }
         .sheet(item: $logFor) { doc in
             DocumentLogView(model: model.documentLog(for: doc), profileCode: profileCode)

@@ -34,11 +34,19 @@ public final class ProfileStore {
     /// Offer "Switch ledger" only when there is another one to switch to.
     public var canSwitch: Bool { profiles.count > 1 }
 
-    /// SMS ingest, statement uploads and review decisions need the owner role.
-    public var canWrite: Bool { isOwner(of: selectedCode) }
+    /// SMS ingest, statement uploads, review decisions, categories, budgets and
+    /// insight dismissals need the owner role; a non-member (super admin) only reads.
+    public var canWrite: Bool { access(of: selectedCode).canWrite }
 
-    public func isOwner(of code: String?) -> Bool {
-        memberships.first { $0.profileCode == code }?.isOwner ?? false
+    public func isOwner(of code: String?) -> Bool { access(of: code) == .owner }
+
+    public func access(of code: String?) -> ProfileAccess {
+        ProfileAccess.of(code, memberships: memberships)
+    }
+
+    /// The picker's order: own ledgers first, view-only ones last.
+    public func ordered(_ list: [LedgerProfile]) -> [LedgerProfile] {
+        ProfileAccess.ordered(list, memberships: memberships)
     }
 
     /// Ledgers the user may file SMS in (owned only).

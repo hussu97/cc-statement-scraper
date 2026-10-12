@@ -15,8 +15,9 @@ struct ProfilePickerView: View {
                     if list.isEmpty {
                         EmptyCard(systemImage: "tray", message: "You don't have a ledger yet. Create one below.")
                     } else {
+                        let ordered = profiles.ordered(list)
                         Card(padding: 0) {
-                            ForEach(list) { profile in
+                            ForEach(ordered) { profile in
                                 Button {
                                     profiles.select(profile.profileCode)
                                 } label: {
@@ -26,11 +27,14 @@ struct ProfilePickerView: View {
                                             Text(profile.baseCurrency).font(Typography.rowMeta).foregroundStyle(Palette.muted)
                                         }
                                         Spacer()
+                                        if let label = profiles.access(of: profile.profileCode).label {
+                                            Chip(label: label, tone: .info)
+                                        }
                                         Image(systemName: "chevron.right").foregroundStyle(Palette.subtle)
                                     }
                                     .padding(Metrics.gutter)
                                 }
-                                if profile.id != list.last?.id { Divider().overlay(Palette.border) }
+                                if profile.id != ordered.last?.id { Divider().overlay(Palette.border) }
                             }
                         }
                     }

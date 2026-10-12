@@ -12,6 +12,10 @@
 
 - **change** The ledger list reads `profiles` (RLS: your ledgers, or every active one for a super admin) with your own membership embedded. Ledgers you are not a member of are listed under **Other ledgers** as **View only**, and every edit control is off there (`isOwner` is false). Onboarding and the default ledger consider only your memberships.
 
+### iOS
+
+- **change** LedgerKit `ProfileAccess` (owner / viewer / view only) drives `canWrite` and the ledger order. The ledger picker and Settings mark ledgers you are not a member of **View only**; category editing in Activity and statement detail, and dismissing insights, now need an owner (the server already refused them).
+
 ### Docs
 
 - **change** ARCHITECTURE §3/§8, PRODUCTION runbook and README RPC table: archive semantics, `restore_profile`, super admin.
