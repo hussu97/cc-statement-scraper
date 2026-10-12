@@ -22,6 +22,7 @@ import { errorMessage } from "@/data/api";
 import { formatDate, formatDateTime } from "@/lib/dates";
 import { displayAmount, formatMoney, formatRate } from "@/lib/money";
 import { cn } from "@/lib/cn";
+import { transferPeer } from "@/lib/transfers";
 import { Sheet } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -156,6 +157,7 @@ function DrawerBody({ t, meta }: { t: TxnRow; meta: FilterMeta | undefined }) {
         )}
       </dl>
 
+      <CardTransfer t={t} />
       <RelatedReversal t={t} />
 
       <section className="flex flex-col gap-3">
@@ -205,6 +207,22 @@ function DrawerBody({ t, meta }: { t: TxnRow; meta: FilterMeta | undefined }) {
 
       <EvidenceTimeline txnCode={t.txn_code!} />
     </div>
+  );
+}
+
+/** The other card of a card transfer (public.card_transfers), linked to its row. */
+function CardTransfer({ t }: { t: TxnRow }) {
+  const peer = transferPeer(t);
+  if (!peer) return null;
+  return (
+    <section className="rounded-md border border-border bg-bg p-3">
+      <p className="mb-2 flex items-center gap-1.5 text-[12px] font-medium text-ink-2">
+        <ArrowLeftRight className="size-3.5" /> Card transfer
+      </p>
+      <Link to="/activity" replace search={(s) => ({ ...s, txn: peer.txnCode })} className="flex items-center gap-1.5 text-[13px] hover:text-accent">
+        {peer.prefix} <CardRef bankCode={peer.bankCode} last4={peer.last4} size="sm" />
+      </Link>
+    </section>
   );
 }
 
