@@ -61,6 +61,10 @@ export interface Overview {
   spend_prev_month: string;
   spend_prev_month_to_date: string;
   spend_avg_3m: string;
+  /** The previous 3 months' spend up to the same day of the month, over 3 (WEB-26). Optional: an older server omits it. */
+  spend_avg_3m_to_date?: string;
+  /** Server projection for the month end (public.spend_pace); null for a future month. Optional: an older server omits it. */
+  projected_month_end?: string | null;
   /** (spend − base) / base as a decimal string; base is last month to the same day (whole month for past months). Null when the base is 0. */
   change_vs_prev_month_to_date: string | null;
   /** (spend − 3-month average) / average as a decimal string; null when the average is 0. */
