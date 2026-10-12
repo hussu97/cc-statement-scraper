@@ -1,8 +1,11 @@
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Plus, Target } from "lucide-react";
 import { useActiveProfile } from "@/data/profile";
-import { budgetAppliesTo, monthPhase, useBudgetStatus, useBudgets, useDeleteBudget, type BudgetInput } from "@/data/budgets";
+import { budgetAppliesTo, budgetTitle, monthPhase, useBudgetStatus, useBudgets, useDeleteBudget, type BudgetInput } from "@/data/budgets";
 import { useCategories } from "@/data/rules";
+import { useAccounts } from "@/data/cards";
+import { accountLabel } from "@/data/overview";
+import { BankLogo } from "@/components/bank-logo";
 import { errorMessage } from "@/data/api";
 import { addMonths, formatMonth, monthStart, todayDubai } from "@/lib/dates";
 import { PageHeader, Card, Dot, Badge } from "@/components/ui/display";
@@ -19,6 +22,7 @@ type Budget = NonNullable<ReturnType<typeof useBudgets>["data"]>[number];
 function toDraft(b: Budget): BudgetInput {
   return {
     budget_code: b.budget_code,
+    account_code: b.account_code,
     category_code: b.category_code,
     amount_aed: String(b.amount_aed),
     effective_from: b.effective_from,
@@ -36,6 +40,7 @@ export function BudgetsPage() {
   const status = useBudgetStatus(profileCode, month);
   const budgets = useBudgets(profileCode);
   const cats = useCategories(profileCode);
+  const accounts = useAccounts(profileCode);
   const del = useDeleteBudget(profileCode);
   const toast = useToast();
 
@@ -43,16 +48,24 @@ export function BudgetsPage() {
   const [deleting, setDeleting] = useState<{ code: string; name: string } | null>(null);
 
   const byCode = useMemo(() => new Map((budgets.data ?? []).map((b) => [b.budget_code, b])), [budgets.data]);
+  const accountOf = useMemo(() => new Map((accounts.data ?? []).map((a) => [a.account_code, a])), [accounts.data]);
   const catOf = useMemo(() => new Map((cats.data ?? []).map((c) => [c.category_code, c])), [cats.data]);
   const shown = useMemo(() => new Set((status.data ?? []).map((r) => r.budget_code)), [status.data]);
   const others = useMemo(() => (budgets.data ?? []).filter((b) => !shown.has(b.budget_code)), [budgets.data, shown]);
 
-  const newDraft = (): BudgetInput => ({ category_code: null, amount_aed: "", effective_from: phase === "past" ? thisMonth : month, effective_to: null });
+  const newDraft = (): BudgetInput => ({ account_code: null, category_code: null, amount_aed: "", effective_from: phase === "past" ? thisMonth : month, effective_to: null });
   const edit = (code: string) => {
     const b = byCode.get(code);
     if (b) setEditing(toDraft(b));
   };
-  const nameOf = (b: Budget) => (b.category_code ? (catOf.get(b.category_code)?.name ?? "Category") : "All spending");
+  const nameOf = (b: Budget) => {
+    const acc = b.account_code ? accountOf.get(b.account_code) : null;
+    return budgetTitle({
+      category_code: b.category_code,
+      category_name: b.category_code ? (catOf.get(b.category_code)?.name ?? "Category") : "All spending",
+      account_name: b.account_code ? (acc ? accountLabel(acc) : "Card") : null,
+    });
+  };
 
   return (
     <div className="animate-fade-in">
@@ -105,7 +118,7 @@ export function BudgetsPage() {
                   )
                 }
               >
-                Set a monthly limit for all spending or for a category, and Bank Ledger will track it as the month goes.
+                Set a monthly limit for all spending or for a category, on every card or just one, and Bank Ledger will track it as the month goes.
               </EmptyState>
             ) : (
               <EmptyState icon={<Target />} title={`No budgets apply to ${formatMonth(month)}`}>
@@ -118,14 +131,14 @@ export function BudgetsPage() {
         {(rows) => (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {rows.map((r) => (
-              <div key={r.budget_code} className={r.category_code === null ? "md:col-span-2 xl:col-span-3" : undefined}>
+              <div key={r.budget_code} className={r.category_code === null && r.account_code === null ? "md:col-span-2 xl:col-span-3" : undefined}>
                 <BudgetCard
                   row={r}
                   phase={phase}
-                  hero={r.category_code === null}
+                  hero={r.category_code === null && r.account_code === null}
                   canEdit={isOwner && byCode.has(r.budget_code)}
                   onEdit={() => edit(r.budget_code)}
-                  onDelete={() => setDeleting({ code: r.budget_code, name: r.category_name })}
+                  onDelete={() => setDeleting({ code: r.budget_code, name: budgetTitle(r) })}
                 />
               </div>
             ))}
@@ -151,6 +164,7 @@ export function BudgetsPage() {
                 return (
                   <li key={b.budget_code} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-3">
                     {b.category_code ? <Dot token={cat?.color_token} /> : <span aria-hidden className="inline-block size-2 rounded-pill bg-ink" />}
+                    {b.account_code && <BankLogo bankCode={accountOf.get(b.account_code)?.bank_code} size="xs" decorative />}
                     <span className="min-w-0 flex-1 truncate text-sm text-ink">{nameOf(b)}</span>
                     <Badge>{when}</Badge>
                     <Money value={b.amount_aed} className="text-sm text-ink-2" />

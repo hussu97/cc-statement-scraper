@@ -1,5 +1,6 @@
 import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
-import { budgetTone, type BudgetStatusRow } from "@/data/budgets";
+import { budgetTitle, budgetTone, type BudgetStatusRow } from "@/data/budgets";
+import { BankLogo } from "@/components/bank-logo";
 import { formatMoney, formatPercent, toAmount } from "@/lib/money";
 import { cn } from "@/lib/cn";
 import { Money } from "@/components/ledger";
@@ -30,19 +31,26 @@ export function BudgetCard({
   const budget = toAmount(row.budget_aed);
   const overPace = phase === "current" && projected !== null && budget !== null && projected > budget;
   const isTotal = row.category_code === null;
+  const title = budgetTitle(row);
 
   return (
     <Card className={cn("flex flex-col gap-4 p-5", hero && "md:p-6")}>
       <header className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
-          {isTotal ? <span aria-hidden className="inline-block size-2 shrink-0 rounded-pill bg-ink" /> : <Dot token={row.color_token} className="size-2.5" />}
-          <h2 className={cn("truncate font-medium text-ink", hero ? "text-[15px]" : "text-sm")}>{row.category_name}</h2>
+          {row.account_code && isTotal ? (
+            <BankLogo bankCode={row.bank_code} size="sm" decorative />
+          ) : isTotal ? (
+            <span aria-hidden className="inline-block size-2 shrink-0 rounded-pill bg-ink" />
+          ) : (
+            <Dot token={row.color_token} className="size-2.5" />
+          )}
+          <h2 className={cn("truncate font-medium text-ink", hero ? "text-[15px]" : "text-sm")}>{title}</h2>
           {share > 1 && <Badge tone="danger">Over</Badge>}
         </div>
         {canEdit && (
           <Menu modal={false}>
             <MenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" aria-label={`Actions for ${row.category_name}`} icon={<MoreHorizontal className="size-4" />} />
+              <Button variant="ghost" size="icon-sm" aria-label={`Actions for ${title}`} icon={<MoreHorizontal className="size-4" />} />
             </MenuTrigger>
             <MenuContent>
               <MenuItem onSelect={onEdit}>
@@ -70,7 +78,7 @@ export function BudgetCard({
             of <Money value={row.budget_aed} />
           </span>
         </p>
-        <Meter value={share} tone={tone} className={cn("mt-3", hero && "h-2")} label={`${formatPercent(share)} of ${row.category_name} budget used`} />
+        <Meter value={share} tone={tone} className={cn("mt-3", hero && "h-2")} label={`${formatPercent(share)} of ${title} budget used`} />
       </div>
 
       <footer className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[12px]">
