@@ -30,7 +30,9 @@ public protocol LedgerAPI: SMSIngestAPI {
                      filter: SpendFilter) async throws -> [SpendPoint]
     func merchantLeaderboard(profileCode: String, from: CalendarDay, to: CalendarDay, limit: Int) async throws -> [MerchantSpend]
     func statementCycles(profileCode: String, limit: Int) async throws -> [StatementCycle]
-    func budgetStatus(profileCode: String, month: CalendarDay?) async throws -> [BudgetStatus]
+    /// `rpc('budget_status')`: the budgets that count for the month, and with
+    /// `includeInactive` every other budget of the ledger after them (`isEffective` false).
+    func budgetStatus(profileCode: String, month: CalendarDay?, includeInactive: Bool) async throws -> [BudgetStatus]
     func recurringList(profileCode: String) async throws -> [RecurringCharge]
     func filterMeta(profileCode: String) async throws -> FilterMeta
     /// `rpc('activity_summary')`: count, net AED and date span of the rows Activity lists for `query`.
@@ -75,8 +77,6 @@ public protocol LedgerAPI: SMSIngestAPI {
     func documentEventStream(profileCode: String) -> AsyncStream<DocumentEvent>
 
     // Budgets (SupabaseLedgerAPI+Budgets.swift)
-    /// `public.budgets` of the profile, newest start first.
-    func budgets(profileCode: String) async throws -> [Budget]
     /// Inserts a new budget (no `budgetCode`) or updates one. Owners only (RLS).
     func saveBudget(profileCode: String, draft: BudgetDraft) async throws
     func deleteBudget(budgetCode: String) async throws
@@ -96,6 +96,11 @@ public protocol LedgerAPI: SMSIngestAPI {
 }
 
 extension LedgerAPI {
+    /// The budgets that count for the month only (Insights' budgets card).
+    public func budgetStatus(profileCode: String, month: CalendarDay?) async throws -> [BudgetStatus] {
+        try await budgetStatus(profileCode: profileCode, month: month, includeInactive: false)
+    }
+
     /// All spend, unfiltered.
     public func spendSeries(profileCode: String, from: CalendarDay, to: CalendarDay, grain: SpendGrain,
                             group: SpendGroup) async throws -> [SpendPoint] {

@@ -5,17 +5,15 @@ import Testing
 private func day(_ iso: String) -> CalendarDay { CalendarDay(iso: iso)! }
 private func dec(_ s: String) -> Decimal { LedgerDecimal.parse(s)! }
 
+/// A `budget_status` row; `effective` false is one `p_include_inactive` adds.
 private func status(_ code: String, category: String? = nil, budget: String = "2000", spent: String = "500",
-                    projected: String = "1500", share: String = "0.25") -> BudgetStatus {
+                    projected: String = "1500", share: String = "0.25", effective: Bool = true,
+                    from: String = "2026-09-01", to: String? = nil, account: String? = nil,
+                    accountName: String? = nil, bank: String? = nil) -> BudgetStatus {
     BudgetStatus(budgetCode: code, categoryCode: category, categoryName: category == nil ? "All spending" : "Groceries",
                  colorToken: category == nil ? nil : "cat-2", budgetAed: dec(budget), spentAed: dec(spent),
-                 projectedAed: dec(projected), shareUsed: dec(share))
-}
-
-private func budget(_ code: String, category: String? = nil, amount: String = "2000", from: String = "2026-09-01",
-                    to: String? = nil, account: String? = nil) -> Budget {
-    Budget(budgetCode: code, categoryCode: category, amountAed: dec(amount), effectiveFrom: day(from),
-           effectiveTo: to.map(day), accountCode: account)
+                 projectedAed: dec(projected), shareUsed: dec(share), accountCode: account, accountName: accountName,
+                 bankCode: bank, isEffective: effective, effectiveFrom: day(from), effectiveTo: to.map(day))
 }
 
 private func category(_ code: String, kind: String = "spend", parent: String? = nil, archived: Bool = false) -> FilterMeta.CategoryOption {
@@ -58,10 +56,12 @@ struct BudgetPresentationTests {
     @Test("why a budget isn't active in a month")
     func inactiveLabel() {
         let oct = day("2026-10-01")
-        #expect(budget("b", from: "2026-11-01").inactiveLabel(month: oct) == "Starts November 2026")
-        #expect(budget("b", from: "2026-01-01", to: "2026-08-01").inactiveLabel(month: oct) == "Ended August 2026")
-        #expect(budget("b", from: "2026-01-01").inactiveLabel(month: oct) == "Replaced by a newer budget")
-        #expect(budget("b", from: "2026-10-01", to: "2026-10-01").applies(to: day("2026-10-31")))
+        #expect(status("b", from: "2026-11-01").inactiveLabel(month: oct) == "Starts November 2026")
+        #expect(status("b", from: "2026-01-01", to: "2026-08-01").inactiveLabel(month: oct) == "Ended August 2026")
+        // Its own range covers the month, yet the server says it doesn't count: replaced.
+        #expect(status("b", from: "2026-01-01").inactiveLabel(month: oct) == "Replaced by a newer budget")
+        #expect(status("b", from: "2026-10-01", to: "2026-10-01").inactiveLabel(month: day("2026-10-31"))
+                == "Replaced by a newer budget")
     }
 }
 
@@ -104,8 +104,8 @@ struct BudgetDraftTests {
     }
 
     @Test("editing keeps the stored amount exactly, as plain digits")
-    func edit() {
-        let d = BudgetDraft(budget: budget("bud_1", category: "cat_g", amount: "1234567.89", to: "2027-01-01"))
+    func edit() throws {
+        let d = try #require(BudgetDraft(status: status("bud_1", category: "cat_g", budget: "1234567.89", to: "2027-01-01")))
         #expect(d.amount == "1234567.89" && d.budgetCode == "bud_1" && d.title == "Edit budget")
         #expect(d.saveLabel == "Save changes" && d.effectiveTo == day("2027-01-01"))
         #expect(d.savedMessage == "Budget updated. Applies from September 2026.")
@@ -140,21 +140,41 @@ struct BudgetDraftTests {
 @MainActor
 @Suite("Budgets tab: load, write, refresh")
 struct BudgetsModelTests {
-    @Test("loads the month's status, every budget and the categories; inactive budgets listed apart")
+    @Test("one budget_status call with p_include_inactive, split on the server's is_effective, order kept")
     func load() async throws {
         let api = StubAPI()
-        api.budgetStatusRows = [status("bud_total")]
-        api.budgetRows = [budget("bud_future", category: "food", from: "2026-12-01"), budget("bud_total")]
+        // The server's order: effective first (total first), then the others.
+        api.budgetStatusRows = [status("bud_total"), status("bud_food", category: "food"),
+                                status("bud_future", category: "food", effective: false, from: "2026-12-01"),
+                                status("bud_replaced", effective: false, from: "2026-01-01")]
         api.categoryOptions = [category("food")]
         let model = BudgetsModel(api: api)
         await model.load(profileCode: "prf_a", month: day("2026-09-01"))
         let content = try #require(model.state.value)
-        #expect(api.budgetMonths == [day("2026-09-01")])
-        #expect(content.inactive.map(\.budgetCode) == ["bud_future"])
-        #expect(content.name(of: content.inactive[0]) == "Name food")
-        #expect(content.name(of: budget("x")) == "All spending")
+        #expect(api.budgetMonths == [day("2026-09-01")] && api.budgetIncludeInactive == [true])
+        #expect(api.calls("budgetStatus") == 1)
+        #expect(content.status.map(\.budgetCode) == ["bud_total", "bud_food"])
+        #expect(content.inactive.map(\.budgetCode) == ["bud_future", "bud_replaced"])
+        #expect(content.inactive.map { $0.inactiveLabel(month: day("2026-09-01")) }
+                == ["Starts December 2026", "Replaced by a newer budget"])
+        #expect(content.inactive[0].title == "Groceries")   // the server's name
         #expect(content.draft(for: "bud_total")?.amount == "2000")
+        #expect(content.draft(for: "bud_future")?.effectiveFrom == day("2026-12-01"))
         #expect(!content.categoriesFailed)
+    }
+
+    @Test("a row from a server without is_effective counts; without its range it can't be edited")
+    func olderServer() throws {
+        let rows = try LedgerJSON.decode([BudgetStatus].self, from: try fixture("budget_status"))
+        #expect(rows.allSatisfy { $0.isEffective })
+        #expect(rows[0].effectiveFrom == day("2026-01-01") && BudgetDraft(status: rows[0]) != nil)
+        #expect(rows[3].effectiveFrom == nil && BudgetDraft(status: rows[3]) == nil)
+        let inactive = try LedgerJSON.decode([BudgetStatus].self, from: Data("""
+        [{"budget_code": "b", "category_code": null, "category_name": "All spending", "color_token": null,
+          "budget_aed": "10", "spent_aed": "0", "projected_aed": "0", "share_used": "0",
+          "is_effective": false, "effective_from": "2026-11-01", "effective_to": "2027-01-01"}]
+        """.utf8))
+        #expect(!inactive[0].isEffective && inactive[0].effectiveTo == day("2027-01-01"))
     }
 
     @Test("empty: 'No budgets yet' only when the ledger has none at all")
@@ -164,7 +184,7 @@ struct BudgetsModelTests {
         await model.load(profileCode: "prf_a", month: nil)
         var content = try #require(model.state.value)
         #expect(content.emptyTitle(month: day("2026-10-01")) == "No budgets yet")
-        api.budgetRows = [budget("bud_x", from: "2026-12-01")]
+        api.budgetStatusRows = [status("bud_x", effective: false, from: "2026-12-01")]
         await model.load(profileCode: "prf_a", month: nil)
         content = try #require(model.state.value)
         #expect(content.emptyTitle(month: day("2026-10-01")) == "No budgets apply to October 2026")
@@ -286,26 +306,29 @@ struct CardBudgetTests {
     }
 
     @Test("the draft carries the card from the budget, and a new draft is for every card")
-    func draft() {
-        let d = BudgetDraft(budget: budget("bud_1", category: "cat_d", account: "acc_fab"))
+    func draft() throws {
+        let d = try #require(BudgetDraft(status: status("bud_1", category: "cat_d", account: "acc_fab")))
         #expect(d.accountCode == "acc_fab" && d.categoryCode == "cat_d")
         #expect(BudgetDraft.new(month: day("2026-10-01"), today: day("2026-10-09")).accountCode == nil)
     }
 
-    @Test("the model loads cards; inactive card budgets are named with their card; save sends the card")
+    @Test("the model loads cards; inactive card budgets carry the server's card name; save sends the card")
     func model() async throws {
         let api = StubAPI()
         api.accountRows = accounts
         api.categoryOptions = [category("cat_d")]
-        api.budgetRows = [budget("bud_a", category: "cat_d", from: "2026-12-01", account: "acc_fab"),
-                          budget("bud_b", from: "2026-12-01", account: "acc_old"),
-                          budget("bud_c", from: "2026-12-01", account: "acc_gone")]
+        api.budgetStatusRows = [
+            status("bud_a", category: "cat_d", effective: false, from: "2026-12-01", account: "acc_fab",
+                   accountName: "Daily card", bank: "FAB"),
+            status("bud_b", effective: false, from: "2026-12-01", account: "acc_old", accountName: "Old card", bank: "FAB"),
+            status("bud_c", effective: false, from: "2026-12-01", account: "acc_gone"),
+        ]
         let model = BudgetsModel(api: api)
         await model.load(profileCode: "prf_a", month: day("2026-10-01"))
         let content = try #require(model.state.value)
-        #expect(content.inactive.map { content.name(of: $0) } == ["Name cat_d · Daily card", "Old card", "Card"])
-        #expect(content.inactive.map { content.bankCode(of: $0) } == ["FAB", "FAB", nil])
-        #expect(content.bankCode(of: budget("x")) == nil)
+        #expect(content.status.isEmpty)
+        #expect(content.inactive.map(\.title) == ["Groceries · Daily card", "Old card", "Card"])
+        #expect(content.inactive.map(\.bankCode) == ["FAB", "FAB", nil])
         #expect(content.cardChoices(keeping: "acc_old").count == 3 && !content.accountsFailed)
 
         let draft = BudgetDraft(accountCode: "acc_fab", amount: "500", effectiveFrom: day("2026-10-01"))

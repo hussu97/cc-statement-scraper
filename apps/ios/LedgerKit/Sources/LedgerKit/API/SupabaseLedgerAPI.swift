@@ -75,8 +75,9 @@ public final class SupabaseLedgerAPI: LedgerAPI, @unchecked Sendable {
         try await rpc("statement_cycles", [StatementCycle].self, ["p_profile_code": .string(profileCode), "p_limit": .integer(limit)])
     }
 
-    public func budgetStatus(profileCode: String, month: CalendarDay?) async throws -> [BudgetStatus] {
-        try await rpc("budget_status", [BudgetStatus].self, ["p_profile_code": .string(profileCode), "p_month": month.json])
+    public func budgetStatus(profileCode: String, month: CalendarDay?, includeInactive: Bool) async throws -> [BudgetStatus] {
+        try await rpc("budget_status", [BudgetStatus].self, ["p_profile_code": .string(profileCode), "p_month": month.json,
+                                                             "p_include_inactive": .bool(includeInactive)])
     }
 
     public func recurringList(profileCode: String) async throws -> [RecurringCharge] {

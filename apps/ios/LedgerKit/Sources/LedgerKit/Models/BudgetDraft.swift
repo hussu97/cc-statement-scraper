@@ -27,11 +27,12 @@ public struct BudgetDraft: Sendable, Hashable, Identifiable {
         self.effectiveTo = effectiveTo
     }
 
-    /// Editing an existing budget: the stored amount as plain digits.
-    public init(budget: Budget) {
-        self.init(budgetCode: budget.budgetCode, accountCode: budget.accountCode, categoryCode: budget.categoryCode,
-                  amount: MoneyFormat.plain(budget.amountAed), effectiveFrom: budget.effectiveFrom,
-                  effectiveTo: budget.effectiveTo)
+    /// Editing a budget `budget_status` returned: the stored amount as plain
+    /// digits. Nil for a row without its range (a server before 20261012210407).
+    public init?(status row: BudgetStatus) {
+        guard let from = row.effectiveFrom else { return nil }
+        self.init(budgetCode: row.budgetCode, accountCode: row.accountCode, categoryCode: row.categoryCode,
+                  amount: MoneyFormat.plain(row.budgetAed), effectiveFrom: from, effectiveTo: row.effectiveTo)
     }
 
     /// A new budget for the month on screen; a past month's budget would only

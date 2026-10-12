@@ -42,9 +42,9 @@ struct BudgetsView: View {
                                      delete: { deleting = Deletion(code: row.budgetCode, name: row.title) })
                 }
                 if !content.inactive.isEmpty {
-                    InactiveBudgetsCard(content: content, month: month.month, canEdit: canEdit,
-                                        edit: { editing = BudgetDraft(budget: $0) },
-                                        delete: { deleting = Deletion(code: $0.budgetCode, name: content.name(of: $0)) })
+                    InactiveBudgetsCard(rows: content.inactive, month: month.month, canEdit: canEdit,
+                                        edit: { editing = content.draft(for: $0.budgetCode) },
+                                        delete: { deleting = Deletion(code: $0.budgetCode, name: $0.title) })
                 }
             }
         }
@@ -132,42 +132,42 @@ private struct BudgetStatusCard: View {
     }
 }
 
-/// Budgets that don't apply to the month on screen, and why.
+/// Budgets that don't count for the month on screen (`is_effective` false), and why.
 private struct InactiveBudgetsCard: View {
-    let content: BudgetsModel.Content
+    let rows: [BudgetStatus]
     let month: CalendarDay
     let canEdit: Bool
-    let edit: (Budget) -> Void
-    let delete: (Budget) -> Void
+    let edit: (BudgetStatus) -> Void
+    let delete: (BudgetStatus) -> Void
 
     var body: some View {
         Card {
             SectionHeader(title: "Not active in \(LedgerDates.monthTitle(month))")
-            ForEach(content.inactive) { budget in
+            ForEach(rows) { row in
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
-                        if budget.isTotal {
+                        if row.categoryCode == nil {
                             Circle().fill(Palette.ink).frame(width: 8, height: 8)
                         } else {
-                            CategoryDot(token: content.colorToken(of: budget))
+                            CategoryDot(token: row.colorToken)
                         }
-                        if let bank = content.bankCode(of: budget) { BankLogo(bankCode: bank, size: 16) }
-                        Text(content.name(of: budget)).font(Typography.rowTitle).foregroundStyle(Palette.ink)
+                        if let bank = row.bankCode { BankLogo(bankCode: bank, size: 16) }
+                        Text(row.title).font(Typography.rowTitle).foregroundStyle(Palette.ink)
                         Spacer()
-                        Text(MoneyFormat.aed(budget.amountAed)).font(Typography.amount).foregroundStyle(Palette.ink2)
+                        Text(MoneyFormat.aed(row.budgetAed)).font(Typography.amount).foregroundStyle(Palette.ink2)
                     }
                     HStack {
-                        Chip(label: budget.inactiveLabel(month: month))
+                        Chip(label: row.inactiveLabel(month: month))
                         Spacer()
                         if canEdit {
-                            Button("Edit") { edit(budget) }.frame(minHeight: Metrics.tapMin)
-                            Button("Delete", role: .destructive) { delete(budget) }.frame(minHeight: Metrics.tapMin)
+                            Button("Edit") { edit(row) }.frame(minHeight: Metrics.tapMin)
+                            Button("Delete", role: .destructive) { delete(row) }.frame(minHeight: Metrics.tapMin)
                         }
                     }
                     .font(Typography.rowMeta)
                     .buttonStyle(.borderless)
                 }
-                if budget.id != content.inactive.last?.id { Divider().overlay(Palette.border) }
+                if row.id != rows.last?.id { Divider().overlay(Palette.border) }
             }
         }
     }

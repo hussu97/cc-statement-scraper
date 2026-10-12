@@ -172,23 +172,23 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         return []
     }
     private(set) var budgetMonths: [CalendarDay?] = []
-    /// `budget_status` rows; `budgetRows` is `public.budgets`.
+    /// `budget_status` rows, effective and not: like the server, a call without
+    /// `p_include_inactive` gets only the effective ones.
     var budgetStatusRows: [BudgetStatus] = []
-    var budgetRows: [Budget] = []
+    private(set) var budgetIncludeInactive: [Bool] = []
     /// Thrown by `saveBudget` / `deleteBudget` when set.
     var budgetWriteError: LedgerAPIError?
     /// Thrown by `filterMeta` when set.
     var filterMetaError: LedgerAPIError?
     private(set) var savedBudgets: [(profile: String, draft: BudgetDraft)] = []
     private(set) var deletedBudgets: [String] = []
-    func budgetStatus(profileCode: String, month: CalendarDay?) async throws -> [BudgetStatus] {
-        lock.withLock { budgetMonths.append(month) }
+    func budgetStatus(profileCode: String, month: CalendarDay?, includeInactive: Bool) async throws -> [BudgetStatus] {
+        lock.withLock {
+            budgetMonths.append(month)
+            budgetIncludeInactive.append(includeInactive)
+        }
         count("budgetStatus")
-        return budgetStatusRows
-    }
-    func budgets(profileCode: String) async throws -> [Budget] {
-        count("budgets")
-        return budgetRows
+        return includeInactive ? budgetStatusRows : budgetStatusRows.filter(\.isEffective)
     }
     func saveBudget(profileCode: String, draft: BudgetDraft) async throws {
         if let budgetWriteError { throw budgetWriteError }
