@@ -545,7 +545,7 @@ SECURITY DEFINER with an explicit member check and filter by profile themselves)
 
 | Group | RPCs |
 |---|---|
-| Overview and trends | `overview`, `spend_series` (grain, group_by, optional `p_top` with an "Other" fold), `spend_breakdown`* |
+| Overview and trends | `overview`, `spend_pace`, `spend_series` (grain, group_by, optional `p_top` with an "Other" fold), `spend_breakdown`* |
 | Breakdowns | `category_breakdown`, `merchant_leaderboard`, `daily_spend`, `hour_weekday_pattern` |
 | Currency and cycles | `fx_spend`, `statement_cycles`, `statement_detail`*, `yoy_compare` |
 | Exceptions and metadata | `anomalies`, `filter_meta` |
@@ -579,6 +579,12 @@ rows a page returns), bank and last4.
 `overview` compares month-to-date with the same days of last month, never past its last day
 (`prev_month_to_date_end`), reports `pending_unpriced_count` (pending foreign charges with no
 rate yet, which spend cannot include), and computes utilisation from `greatest(closing_balance, 0)`.
+Its pace figures come from `spend_pace(profile, month, today)`: `spend_avg_3m_to_date` is the
+previous 3 months' `v_spend` up to the same day of the month, over 3 (`month_to_date_end`: day d
+covers days 1..d clamped to each month's length; the viewed month's last day covers whole months,
+so 31 Oct covers all of September), and `projected_month_end` is
+`spend + (spend_avg_3m − spend_avg_3m_to_date)`, or the run rate `spend / d × days_in_month`
+when the 3 months before hold no spend; a past month projects to its spend, a future one to null.
 Business dates stay `Asia/Dubai`: `profiles.timezone` and `base_currency` are reserved, not used.
 
 The nightly job `private.nightly()` (22:00 UTC = 02:00 Dubai) runs three steps (and, for the
