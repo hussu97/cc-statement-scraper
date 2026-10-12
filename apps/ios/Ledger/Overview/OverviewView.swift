@@ -11,6 +11,9 @@ struct OverviewView: View {
     /// SMS stuck on this phone for over an hour, nil when none.
     let outboxAlert: StaleOutboxAlert?
     let openSettings: () -> Void
+    /// The empty-ledger checklist's links: the SMS guide and Statements.
+    let settings: SettingsModel
+    let statements: StatementsModel
 
     var body: some View {
         Page {
@@ -18,7 +21,13 @@ struct OverviewView: View {
             if let outboxAlert { OutboxStrip(alert: outboxAlert, open: openSettings) }
             StateContainer(state: model.state, retry: reload) { content in
                 let overview = content.overview
-                HeroCard(overview: overview)
+                // An empty ledger: first steps instead of "AED 0" and empty cards (IOS-23).
+                if let setup = content.setup {
+                    SetupChecklistCard(checklist: setup, settings: settings, statements: statements,
+                                       profileCode: profileCode, canWrite: canResolve)
+                } else {
+                    HeroCard(overview: overview)
+                }
                 if overview.showsLiveSections(), let pending = overview.pendingSummary {
                     PendingStrip(summary: pending, lastSMS: overview.lastSMSLabel())
                 }
@@ -26,17 +35,19 @@ struct OverviewView: View {
                     AttentionCard(items: overview.attention(), review: review, profileCode: profileCode,
                                   canResolve: canResolve)
                 }
-                CategoryRingCard(categories: overview.ringCategories, total: overview.spend,
-                                 scope: overview.scopeLabel(), emptyMessage: overview.emptyCategoriesMessage())
-                AccountsCard(accounts: content.accounts, owedNow: content.overview.owedNowText,
-                             owedNowCaveat: content.overview.owedNowCaveat)
+                if content.setup == nil {
+                    CategoryRingCard(categories: overview.ringCategories, total: overview.spend,
+                                     scope: overview.scopeLabel(), emptyMessage: overview.emptyCategoriesMessage())
+                    AccountsCard(accounts: content.accounts, owedNow: content.overview.owedNowText,
+                                 owedNowCaveat: content.overview.owedNowCaveat)
+                }
                 if !content.insights.isEmpty {
                     // Dismissing is an owner write (`insights_owner_dismiss`).
                     InsightsCard(insights: content.insights, dismiss: canResolve ? { insight in
                         Task { await model.dismiss(insight, profileCode: profileCode) }
                     } : nil)
                 }
-                if overview.showsLiveSections() { RecentCard(recent: overview.recent) }
+                if overview.showsLiveSections() && content.setup == nil { RecentCard(recent: overview.recent) }
             }
         }
         .ledgerNavigation("Overview")

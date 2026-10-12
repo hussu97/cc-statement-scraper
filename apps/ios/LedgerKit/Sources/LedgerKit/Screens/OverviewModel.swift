@@ -9,6 +9,8 @@ public final class OverviewModel {
         public let overview: Overview
         public let accounts: [AccountSummary]
         public let insights: [Insight]
+        /// The empty-ledger checklist, shown instead of the hero; nil for a ledger with data.
+        public let setup: SetupChecklist?
     }
 
     public private(set) var state: LoadState<Content> = .idle
@@ -36,16 +38,30 @@ public final class OverviewModel {
             async let overview = api.overview(profileCode: profileCode, month: month)
             async let insights = api.insights(profileCode: profileCode)
             let (o, i) = try await (overview, insights)
+            let setup = await Self.setupChecklist(for: o, profileCode: profileCode, api: api)
             guard gate.isCurrent(ticket) else { return }
             gate.finish(key)
             state = .loaded(Content(
                 overview: o,
                 accounts: o.accounts.map { AccountSummary(account: $0) },
-                insights: i))
+                insights: i,
+                setup: setup))
         } catch {
             guard gate.isCurrent(ticket) else { return }
             state = state.fail(error)
         }
+    }
+
+    /// The checklist of an empty ledger. Its two extra reads (any upload, how
+    /// many members) run only for an empty ledger; a failed one leaves that
+    /// step unknown rather than failing Overview.
+    static func setupChecklist(for overview: Overview, profileCode: String,
+                               api: any LedgerAPI) async -> SetupChecklist? {
+        guard SetupChecklist.isEmptyLedger(overview) else { return nil }
+        async let firstUpload = try? api.documents(profileCode: profileCode, page: PageRequest(offset: 0, limit: 1))
+        async let members = try? api.memberCount(profileCode: profileCode)
+        let (page, count) = await (firstUpload, members)
+        return SetupChecklist.make(overview: overview, uploads: page.map { $0.total ?? $0.items.count }, members: count)
     }
 
     /// Loads unless this ledger and month are already on screen or loading
