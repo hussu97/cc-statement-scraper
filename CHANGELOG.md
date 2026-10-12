@@ -1,5 +1,19 @@
 # Changelog
 
+## Card transfers: Wio's payments onto other cards are linked to those cards' credits — 2026-10-12
+
+### Backend (Supabase)
+
+- **add** Migration `card_transfers`: `public.card_transfers` pairs a debit `payment` on one card (Wio paying a card from its credit line: "ENBD payment", "EIB AZ payment") with the credit `payment` it became on the paid card ("TRANSFER PAYMENT RECEIVED THANK YOU", "INWARD IPP CC"). `private.link_card_transfer` runs from a trigger on every insert/update of a payment's matching facts: same AED amount, opposite directions, different accounts, at most 3 days apart, neither side already linked, and each the other's only candidate (an ambiguous pair stays unlinked). A side that is voided or orphaned drops its link and its partner looks again. `transactions.related_txn_code` keeps meaning "reverses". `v_transactions` gains `transfer_txn_code`, `transfer_bank_code` and `transfer_card_last4`. Backfilled for every profile. RLS: members read, no client writes (privilege matrix updated). Spend is unchanged (payments were never spend). pgTAP `33_card_transfers`. DB types regenerated.
+
+### Web
+
+- **add** Activity rows of a card transfer say "Paid to EIB •6177" (the payer's debit) or "From WIO •2010" (the paid card's credit); the drawer's "Card transfer" section opens the other side.
+
+### iOS
+
+- **add** The same "Paid to" / "From" line on Activity rows and in the category sheet's header (`LedgerTransaction.transferPeer`).
+
 ## Pushing from a worktree builds the iOS release again — 2026-10-12
 
 ### Docs
