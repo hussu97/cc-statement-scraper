@@ -535,3 +535,6 @@ Fixed on `ledger-v2` (uncommitted), 2026-10-08. `swift test`: 103 tests in 19 su
 Everything still open, including the UX and iOS-native recommendations and the device checks
 (Shortcuts case sensitivity, TestFlight privacy manifest, Release keychain), is in
 [BACKLOG.md](BACKLOG.md).
+
+**Backlog batch 1 (2026-10-13):** IOS-10, IOS-19r and IOS-20r are fixed; outcomes in
+[BACKLOG.md](BACKLOG.md#done-backlog-batch-1-2026-10-13).

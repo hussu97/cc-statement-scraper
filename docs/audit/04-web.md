@@ -329,3 +329,6 @@ deferred P2/P3 items and the "Missing analytics" recommendations, is in [BACKLOG
 p_merchant_code)` deletes the LLM suggestion and records `merchant_category_skips.reason =
 'rejected'`, which `enqueue_llm_categorize` never re-queues (`20261009000200`). The Merchants tab
 still has to call it instead of deleting the row.
+
+**Backlog batch 1 (2026-10-13):** WEB-09, WEB-12, WEB-13, WEB-28 (web) and NEW-1r are fixed; outcomes in
+[BACKLOG.md](BACKLOG.md#done-backlog-batch-1-2026-10-13).

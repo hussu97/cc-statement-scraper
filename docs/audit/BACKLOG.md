@@ -27,11 +27,11 @@ separately):
 | Database (Supabase SQL) | 0 | 2 | – | 1 | 3 |
 | Edge Functions | 0 | 0 | – | – | 0 |
 | Parser | 1 | – | – | – | 1 |
-| Web | 12 | 19 | 5 | – | 36 |
-| iOS | 9 | 9 | 7 | 2 | 27 |
+| Web | 7 | 20 | 5 | – | 32 |
+| iOS | 6 | 10 | 7 | 2 | 25 |
 | Scraper | – | 2 | – | – | 2 |
 | CI, config and ops | 0 | 0 | – | 0 | 0 |
-| **Total** | **22** | **32** | **12** | **3** | **69** |
+| **Total** | **14** | **34** | **12** | **3** | **63** |
 
 There are no open P0 or P1 findings. The last P1 remainders (WEB-02 statements beyond 500 and
 merchant search, WEB-07 "Retry AI") landed in `98f901c`. What is left of the P1s are the device
@@ -93,29 +93,21 @@ None open. All five were done on 2026-10-09: see [Done: Edge Functions and CI pa
 
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
-| NEW-1r | Settings → Members still calls `add_profile_member` directly, so a new member gets no email | The `member-invite` Edge Function (owner-only, rate-limited, same-origin redirect) landed; the UI is a follow-up | "Invite" calls `member-invite` (`action: invite`) and shows `invite_sent` / `invite_error`; "Resend invite" on pending members (`action: resend`; handle `INVITE_COOLDOWN` / `ALREADY_ACTIVE`). iOS later | S |
-| WEB-09 | Realtime channel topic reused while the old channel is still leaving can silently kill live updates (verified in source, not reproduced) | Out of the P1 pass | Unique topic per effect run (`ledger:${code}:${uuid}`) | S |
 | WEB-10r | Each review card runs 1–3 context queries, and every `transactions` event invalidates all review contexts | The badge part is fixed (head count) | One `review_context` RPC per list; invalidate only `["p", code, "reviews", "open"]` on txn events | M |
 | WEB-11 | First load is 1.16 MB JS (≈ 365 kB gz): Sentry with Replay, supabase-js and Radix preloaded on every route | Perf | Lazy-load Replay and Sentry after first paint, keep `/signin` free of chart and Radix chunks, drop `chunkSizeWarningLimit: 1200`, budget ~200 kB gz | M |
-| WEB-12 | "Apply to merchant" stays ticked after a pick, so the next change silently rewrites the whole merchant | Out of the P1 pass | Reset `toMerchant` on pick and on popover close | S |
-| WEB-13 | Rule regex validated with JS `RegExp` but run as Postgres ARE; Save stays enabled when the preview errors | Server now validates on write (DB-09/13), the client still lets you try | Block Save on `preview.isError`, show the server's 22023 message | S |
 | WEB-16 | Anomalies show raw uppercase descriptions as separate rows, flag "Large first purchase" on a charge below usual, and use jargon | Partly server-side (`anomalies`) | Return `merchant_name`, require first purchase **and** above threshold, phrase as "about 4× your usual Shopping purchase", add a "this is fine" action | M |
 | WEB-17r | 18 categories over 12 hues still share colours (Medicine/Insurance, Forex Charge/Fines, Apple/Subscription/Cashback, Donation/Transport) | `…1900` moved the worst pairs; a full fix needs more hues or a policy | Extend the palette to ~16, or reserve unique hues for `kind = spend` categories; keep ΔE ≥ 15 | S |
 | WEB-24 | Bulk bar: phone selection and Categorise are done; still no Exclude, Export CSV or server-computed selection total | UX | Add those actions (server total via an RPC) | M |
 | WEB-26 | Pace rule compares month-to-date spend with the full-month 3-month average, so it reads "way under" all month | Needs a server field | `overview` returns `spend_avg_3m_to_date` and `projected_month_end`; pin those, "Projected AED X by 31 Oct" | M |
 | WEB-27 | Empty ledger shows AED 0.00, an empty ruler and four empty states; no first-run guidance | Out of the P1 pass | "Get your ledger going" checklist from server state: statement, mailbox, PDF passwords, SMS shortcut, member | M |
-| WEB-28 | Budget/category load errors render an empty state; `budgetAppliesTo` re-implements the server's selection (CLAUDE.md §2.2) | Needs an RPC flag | Render `isError`; return `is_effective` from the budget RPC and drop the client logic | S |
 
 ### iOS
 
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
-| IOS-10 | OTP false negatives pass the filter ("Use 482913 as the code…", "authentication code", Arabic "رمز التحقق"); the server mirrors the same regex | Out of the P1 pass | Add `auth(entication)? code`, `secure code`, `3-?d ?secure`, code-near-digits patterns, `do not share`, `رمز`, `كلمة المرور`; one generated source or a parity test with the SQL regex | S |
 | IOS-11 | SMS filter tests use invented bodies, not the `sms_templates` examples (the pre-push hook compiles the app and extension; no macOS CI) | Test fixture | Export template examples to a fixture with a drift check | M |
 | IOS-12r | `noProfile` still discards the SMS; the outbox isn't cleared on sign-out; nothing outside Settings shows a stuck outbox | Honest queued reasons and "Not sent" were done | Enqueue with a pending profile; confirm-and-clear outbox and pending PDFs on sign-out; Settings badge and an Overview strip when the outbox is older than 1 h | S |
 | IOS-18 | Category sheet opens at `.medium` (3 categories), no search, no "None", merchant toggle defaults off, no notes or exclude-from-spend | UX, out of the P1 pass | `.large` + `.searchable`, merchant toggle on unless the category is manual, "Exclude from spend" and notes, swipe actions on rows | M |
-| IOS-19r | Contrast: the AA token change (WEB-06) regenerated `Tokens.swift`, but iOS still uses `subtle` for some caption text and the iOS pairs aren't declared in `tokens.json#contrast` | Token fix landed with the web pass | Use `muted` for text, keep `subtle` for glyphs and dividers; declare the iOS pairs (warn on warnSoft) in the contrast test | S |
-| IOS-20r | VoiceOver: the Overview hero still reads "AED" and the number apart (chart descriptors are done) | a11y | Combine the hero ("October spend, 860 dirhams") | S |
 | IOS-21r | Release config still includes the local `Secrets.xcconfig` (one dropped key ships a local value); no assertion on the archived Info.plist; no Sentry releases; the token in `Secrets.Release.xcconfig` is an Xcode build setting (also X-28) | Only the token handling in `publish-build.sh` was done | Include `Secrets.xcconfig` from `Debug.xcconfig` only; `plutil` asserts on the archived app and `.appex` (https, `production`, non-empty keys); `sentry-cli releases new/set-commits/finalize`; keep the token in the shell or keychain | M |
 | IOS-22 | No privacy cover in the app switcher and no optional Face ID lock | Out of the P1 pass | Blur overlay when `scenePhase != .active`; optional "Require Face ID" with `NSFaceIDUsageDescription` | S |
 | IOS-23 | An empty ledger asserts "AED 0 · No 3-month history yet · Same as this time last month" | Out of the P1 pass | Three-step checklist (SMS capture, statement, invite) when there are no transactions and no cards | S |
@@ -147,6 +139,7 @@ None open (SRV-12, SRV-17 and X-25r are done).
 
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
+| WEB-13r | The rule editor still pre-checks regex syntax with JS `RegExp`, so Postgres-only syntax (embedded options such as `(?b)…`) is blocked on the client | Found in the batch-1 WEB-13 fix; only the opposite direction was in scope | Drop the JS pre-check and let `preview_rule` (22023) judge | S |
 | WEB-31 | "Uncategorised" vs "Uncategorized" across UI, Trends and the server name | Polish | UK spelling everywhere, server name included | S |
 | WEB-34 | Mixed decimals for the same kind of figure | Polish | Two decimals for transactions, whole units for balances, limits and aggregates | S |
 | WEB-35 | "Pending from SMS" and "Recent activity" show largely the same rows | UX | Merge, or exclude pending from Recent | S |
@@ -172,6 +165,7 @@ None open (SRV-12, SRV-17 and X-25r are done).
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
 | IOS-07r | No deep link from a Shortcut result to the Review screen | The Review screen shipped | `ledger://review` URL handled by the app; use it in the intent's result | S |
+| WEB-28i | iOS Budgets still works out which budget applies on the device (`BudgetsModel.inactive`, `Budget.applies(to:)`) | WEB-28 added `is_effective` to `budget_status`; the iOS half needs a TestFlight build | Call `budget_status` with `p_include_inactive: true` and split on `is_effective`, as the web does | S |
 | IOS-24 | App and share extension can refresh the same rotating refresh token concurrently (10 s reuse window) | Needs device testing | Extension: `autoRefreshToken: false` and re-read storage before each request, or an App Group file lock | M |
 | IOS-25r | Two Swift 6 warnings remain (`nonisolated(unsafe)` in `LedgerDates`, deprecated `Breadcrumb.data` setter) | Reentrancy part fixed (flushes chained) | Fix both warnings | S |
 | IOS-26 | `ActivityModel.sections` re-sorts on every body evaluation; an `ISO8601DateFormatter` per timestamp | Perf | Cache sections on state change; static formatters | S |
@@ -297,6 +291,23 @@ CHANGELOG.
 (05's recommendations 3–5 are IOS-19r, IOS-20r, IOS-18, IOS-28 and IOS-17 above.)
 
 ---
+
+## Done: backlog batch 1 (2026-10-13)
+
+Branch `batch/backlog-1`, migrations `20261012210407_budget_status_is_effective` and
+`20261012212011_sms_otp_filter`, pgTAP `37` and `38`. Audited after merge (two review passes);
+the OTP pattern was also run read-only against every production SMS (0 of 123 matched).
+
+| ID | Outcome |
+|---|---|
+| NEW-1r | Done (web): Settings → Members invites through `member-invite`, "Resend invite" on pending members with cooldown / already-active messages. iOS has no Members screen |
+| WEB-09 | Done: a fresh Realtime topic per effect run (`channelTopic`), also for the document-events channel |
+| WEB-12 | Done: "Apply to merchant" resets on pick, Escape and outside click |
+| WEB-13 | Done: Save is blocked while `preview_rule` rejects the rule (22023) and shows the server's reason; other preview failures offer Try again. The JS pre-check remainder is WEB-13r |
+| WEB-28 | Done (web): `budget_status` returns `is_effective` (and `p_include_inactive`); Budgets render errors and use the server flag. iOS remainder is WEB-28i |
+| IOS-10 | Done: one OTP pattern, `private.sms_otp_pattern()` = `SMSCapture.otpPatternSource`, pinned by the shared fixture in `38_sms_otp_filter` and `SMSOTPParityTests`; every `sms_templates` example is must-send |
+| IOS-19r | Done: caption text uses `muted`; iOS pairs in `tokens.json#contrast.ios`; `PaletteUsageTests` fails on `subtle` text |
+| IOS-20r | Done: the Overview hero is one VoiceOver element ("October spend, posted so far, 860 dirhams") |
 
 ## Done: release 2026-10-09
 

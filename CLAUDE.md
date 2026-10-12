@@ -148,6 +148,8 @@ The production project is Supabase `cc-statement-scraper` (ref `nkmylznisjcnmqbx
 | No hex colours (§4.2) | `apps/web/src/test/no-hex-colors.test.ts` |
 | Publishable key only in clients (§11.5) | `supabase-key.test.ts`, iOS `LedgerConfig`, `api_keys_test.ts` |
 | Generated tokens and icons (§5.4) | `pnpm tokens:check`, `pnpm brand:icons:check` |
+| iOS text never uses the `subtle` colour; iOS contrast pairs | LedgerKit `PaletteUsageTests`, `packages/tokens` contrast test |
+| One SMS OTP pattern on the phone and the server (§5.5) | `supabase/tests/38_sms_otp_filter.test.sql` + LedgerKit `SMSOTPParityTests` (shared fixture) |
 | No secret files committed (§11.4) | pre-commit secrets guard |
 | Commit author, no co-author trailer (§9) | `prepare-commit-msg`, `commit-msg`, `.claude/hooks/guard.py` |
 | Explicit staging, production confirmation, no secret printing, `legacy`/`backend/` kept (§9, §11) | `.claude/hooks/guard.py` (Claude Code PreToolUse), tested by `guard_test.py` |
