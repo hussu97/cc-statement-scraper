@@ -624,9 +624,11 @@ Realtime publishes `transactions`, `sms_messages`, `documents`, `match_reviews`,
   dashboard setting in production. The email-code request uses `shouldCreateUser: false` (web and iOS), so an
   unknown email gets "Ask the ledger's owner to invite you". A member is added by an owner with
   `add_profile_member` (an existing user is added at once; otherwise a pending invite is
-  stored), and the person's Auth user is created by an Auth invite (Dashboard → Authentication
-  → Users → Invite user, or the admin API), which works with sign-ups off. The insert trigger
-  then claims the pending invite. The legacy import refuses to adopt a profile key it did not
+  stored), and the person's Auth user is created by an Auth invite, which works with sign-ups
+  off. The web app's Settings → Members does both through the `member-invite` Edge Function
+  ("Invite", and "Resend invite" on pending members); elsewhere the invite is sent from the
+  Dashboard (Authentication → Users → Invite user) or the admin API. The trigger then claims
+  the pending invite once the address is confirmed. The legacy import refuses to adopt a profile key it did not
   create (`private.legacy_import_profiles`), so a squatted key can't capture migrated data.
 - **API keys.** Clients (web, iOS, scraper `apikey`) ship only the publishable key
   (`sb_publishable_…`); RLS applies and the signed-in user's JWT carries identity (Realtime

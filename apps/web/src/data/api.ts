@@ -1,5 +1,7 @@
 // Shared helpers for the data layer. Components never import supabase; they
 // use the hooks in this folder.
+import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from "@supabase/supabase-js";
+
 export class ApiError extends Error {
   code?: string;
   status?: number;
@@ -66,6 +68,37 @@ export function errorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
   if (typeof e === "object" && e && "message" in e) return String((e as { message: unknown }).message);
   return String(e);
+}
+
+/**
+ * An Edge Function error body (`{error: {code, message}}`, see `_shared/http.ts`) as an
+ * ApiError carrying the function's own code (`INVITE_COOLDOWN`, `FORBIDDEN`, ...).
+ */
+export function functionErrorFromBody(body: unknown, status: number | undefined, fallback: string): ApiError {
+  const e = body && typeof body === "object" ? (body as { error?: { code?: unknown; message?: unknown } }).error : undefined;
+  const code = typeof e?.code === "string" ? e.code : undefined;
+  const message = typeof e?.message === "string" && e.message ? e.message : fallback;
+  return new ApiError(message, { code, status });
+}
+
+export const NETWORK_ERROR_MESSAGE = "Couldn't reach Bank Ledger. Check your connection and try again.";
+
+/** Turn a `supabase.functions.invoke` error into an ApiError (reads the JSON error body). */
+export async function functionError(error: unknown): Promise<ApiError> {
+  if (error instanceof FunctionsHttpError) {
+    const res = error.context as Response | undefined;
+    let body: unknown = null;
+    try {
+      body = await res?.json();
+    } catch {
+      /* not JSON: keep the generic message */
+    }
+    return functionErrorFromBody(body, res?.status, error.message);
+  }
+  if (error instanceof FunctionsFetchError || error instanceof FunctionsRelayError) {
+    return new ApiError(NETWORK_ERROR_MESSAGE, { code: "NETWORK" });
+  }
+  return new ApiError(errorMessage(error) || "Something went wrong.");
 }
 
 /** One server-side page of rows plus the exact total for the same filters. */
