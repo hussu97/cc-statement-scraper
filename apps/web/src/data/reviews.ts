@@ -29,7 +29,7 @@ export const REVIEW_REASONS: Record<string, { title: string; help: string }> = {
   },
   orphaned: {
     title: "Orphaned transactions",
-    help: "Their only evidence was removed (for example, a statement was re-parsed). Dismiss once checked.",
+    help: "Their only evidence was removed (for example, a statement was re-parsed), so they count in no total. Void them once checked.",
   },
   missing_from_statement: {
     title: "Missing from statement",

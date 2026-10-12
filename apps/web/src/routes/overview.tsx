@@ -6,6 +6,7 @@ import { accountLabel, insightTarget, sortInsights, useDismissInsight, useInsigh
 import { evidenceBadge, useTransactions } from "@/data/transactions";
 import { addMonths, daysBetween, formatDate, formatDateTime, formatMonth, formatRelative, formatTime, monthEnd, monthStart, todayDubai } from "@/lib/dates";
 import { formatChange, formatMoney, formatPercent, toAmount } from "@/lib/money";
+import { balanceAnchorNote, formatOutstanding, outstandingCaveat } from "@/lib/balances";
 import { cn } from "@/lib/cn";
 import { Card, CardHeader, Badge, Dot, Meter, Skeleton } from "@/components/ui/display";
 import { Button } from "@/components/ui/button";
@@ -315,6 +316,7 @@ function AccountsPanel({ overview, loading, error, retry }: { overview: Overview
         <h2 id="cards-title" className="text-[15px] font-semibold text-ink">Cards</h2>
         <Link to="/cards" className="tap text-[13px] text-accent hover:underline">Cards & statements</Link>
       </div>
+      {overview && overview.accounts.length > 0 && <OwedNow overview={overview} />}
       {loading ? (
         <div className="grid gap-4 md:grid-cols-2"><Skeleton className="h-40 rounded-lg" /><Skeleton className="h-40 rounded-lg" /></div>
       ) : error || !overview ? (
@@ -336,6 +338,17 @@ function AccountsPanel({ overview, loading, error, retry }: { overview: Overview
   );
 }
 
+function OwedNow({ overview: o }: { overview: Overview }) {
+  const caveat = outstandingCaveat(o.outstanding_complete, o.accounts.reduce((n, a) => n + a.balance_unpriced_count, 0));
+  return (
+    <p className="mb-3 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm text-muted">
+      <span>Owed now</span>
+      <span className="tabular font-medium text-ink">{formatOutstanding(o.outstanding, o.outstanding_has_estimate)}</span>
+      {caveat && <span className="text-[12px] text-subtle">{caveat}</span>}
+    </p>
+  );
+}
+
 function AccountCard({ account: a }: { account: OverviewAccount }) {
   const st = a.latest_statement;
   const today = todayDubai();
@@ -350,6 +363,11 @@ function AccountCard({ account: a }: { account: OverviewAccount }) {
           <p className="text-[12px] text-subtle">{a.last4 ? a.last4.split(",").map((l) => `•${l}`).join("  ") : "No card yet"}</p>
         </div>
         {dueIn !== null && dueIn >= 0 && dueIn <= 7 && <Badge tone={dueIn <= 2 ? "danger" : "warn"}>Due in {dueIn} d</Badge>}
+      </div>
+      <div>
+        <p className="text-[12px] text-subtle">Owed now</p>
+        <p className="tabular mt-0.5 text-lg font-medium text-ink">{formatOutstanding(a.outstanding_aed, a.balance_has_estimate)}</p>
+        <p className="text-[11px] text-subtle">{balanceAnchorNote(a.balance_anchor, a.balance_anchor_date)}</p>
       </div>
       <dl className="grid grid-cols-3 gap-3 text-[12px]">
         <div>
