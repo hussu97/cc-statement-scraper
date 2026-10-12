@@ -1,5 +1,11 @@
 # Changelog
 
+## The guard refuses recursive searches over secret files — 2026-10-12
+
+### Docs
+
+- **fix** Claude Code tooling: `.claude/hooks/guard.py` denied printing a secret file named on the command line but not a recursive search over the directory holding it, so `grep -rniE "gmail|oauth" supabase/functions …` printed values from `supabase/functions/.env` and `.env.production`. New `check_recursive_search` denies `grep -r`/`-R`, `rg -uu` (or `--no-ignore` with `--hidden`) and `find … -exec cat`/`| xargs grep` when a search root holds a gitignored secret file (`.env*` except `.env.example`, `.env.cutover`, `Secrets*.xcconfig`; the §11.4 directories count even on a clean clone) that the command does not exclude; its message points at `rg PATTERN DIR` or `--exclude='.env*'`. Plain `rg`, `grep -rl`/`-c`, and searches of directories without secrets stay allowed; quoted `|` in a pattern and heredoc bodies are not mistaken for commands. Cases in `guard_test.py`; lesson in `tasks/lessons.md`.
+
 ## Outstanding balance per card; orphaned duplicates out of the net — 2026-10-12
 
 ### Backend (Supabase)
