@@ -3,9 +3,11 @@ import Foundation
 import Observation
 @_spi(Experimental) import Supabase
 
-/// Sign-in state for the app: an emailed one-time code or a passkey. There is
-/// no password and no magic link. After a code sign-in the app offers to add a
-/// passkey (`passkeyOffer`); "Not now" is remembered per user on this device.
+/// Sign-in state for the app: an emailed one-time code or a passkey, plus a
+/// password for accounts that have one (only the App Review demo account does;
+/// everyone else has no password, so the form can't sign them in). No magic link.
+/// After a code sign-in the app offers to add a passkey (`passkeyOffer`); "Not
+/// now" is remembered per user on this device.
 @MainActor
 @Observable
 public final class SessionStore {
@@ -168,13 +170,23 @@ public final class SessionStore {
         passkeyOffer = .none
     }
 
-    #if DEBUG
-    /// Local development only: the seeded demo user via `DevSignIn` launch
-    /// environment variables. Compiled out of Release; there is no password UI.
+    /// Password sign-in. Production accounts sign in with a code or a passkey and
+    /// have no password; this exists for the App Review demo account (Guideline
+    /// 2.1(a): the reviewer needs a username and password) and the local seed users.
     public func signIn(email: String, password: String) async {
-        await run { _ = try await self.auth.signIn(email: email, password: password) }
+        let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard Self.canSubmitPassword(email: trimmed, password: password) else {
+            errorMessage = "Enter your email and password."
+            return
+        }
+        await run { _ = try await self.auth.signIn(email: trimmed, password: password) }
     }
-    #endif
+
+    /// The password form's Sign in button is enabled only for a plausible email
+    /// and a non-empty password.
+    public nonisolated static func canSubmitPassword(email: String, password: String) -> Bool {
+        isPlausibleEmail(email.trimmingCharacters(in: .whitespacesAndNewlines)) && !password.isEmpty
+    }
 
     public func cancelCode() {
         phase = .signedOut

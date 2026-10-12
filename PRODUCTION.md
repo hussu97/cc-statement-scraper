@@ -63,7 +63,9 @@ Dashboard → Authentication:
 - **URL Configuration.** Site URL is the Vercel production URL (the invite email's *Open Bank
   Ledger* button points there). There are no sign-in links, so no extra redirect URLs are needed.
 - **Sign-in is code-only.** Providers → Email enabled; every email template carries a one-time
-  code (`{{ .Token }}`, 8 digits in production) and **no sign-in link**; there are no passwords.
+  code (`{{ .Token }}`, 8 digits in production) and **no sign-in link**. No one has a password
+  except the App Review demo account (§7, step 5), which the iOS app's *Sign in with a password*
+  exists for; an account without a password can't sign in that way.
   The templates live in `supabase/templates/*.html` and `[auth.email.template.*]` in
   `supabase/config.toml`, and were pushed to production on 2026-10-08 (§2.7).
 - **Passkeys** (Authentication → Passkeys, beta): enabled. Relying party: display name
@@ -634,6 +636,21 @@ it. `PROJECT=<gcp-project>`, `URL=https://<project-ref>.supabase.co/functions/v1
    - On a real card alert, confirm a pending transaction appears on the web app. Also check
      once that an alert with lowercase "card" (the ENBD refund wording) triggers the
      automation: Shortcuts' case sensitivity is not yet verified (BACKLOG).
+5. **App Review demo account** (Guideline 2.1(a): Beta App Review rejected builds 3 and 6
+   because it couldn't sign in). Once, after the `review_demo_ledger` migration is in production:
+   ```bash
+   scripts/cutover/create-review-demo.sh            # reads .env.cutover; asks before writing
+   set -a; . .env.review-demo; set +a
+   node apps/ios/scripts/testflight-distribute.mjs --review-account
+   ```
+   The script creates `app-review@<web-host>` with a generated password
+   through the Auth admin API, runs `private.create_review_demo` (an `app-review` ledger it
+   alone owns, filled with synthetic statements and SMS dated relative to that day through the
+   real ingest paths), and writes the credentials to the gitignored `.env.review-demo` (mode
+   600). `--review-account` saves them in Test Information → Beta App Review Information with
+   "Sign-in required" on and notes that point the reviewer at *Sign in with a password*.
+   Re-running resets the password to the saved one and leaves an existing ledger alone.
+   `testflight-distribute.mjs` refuses to submit a build for review while no demo account is set.
 
 ---
 

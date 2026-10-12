@@ -1,11 +1,14 @@
 import LedgerKit
 import SwiftUI
 
-/// Sign in with an emailed one-time code or a passkey. No password, no link.
+/// Sign in with an emailed one-time code or a passkey. "Sign in with a password"
+/// is for the App Review demo account, the only production account with one.
 struct SignInView: View {
     let session: SessionStore
     @State private var email = ""
     @State private var code = ""
+    @State private var password = ""
+    @State private var usesPassword = false
 
     var body: some View {
         ScrollView {
@@ -22,8 +25,19 @@ struct SignInView: View {
                 case .awaitingCode(let address):
                     codeForm(address)
                 default:
-                    emailForm
-                    passkeyButton
+                    if usesPassword {
+                        passwordForm
+                    } else {
+                        emailForm
+                        passkeyButton
+                        Button("Sign in with a password") {
+                            session.errorMessage = nil
+                            usesPassword = true
+                        }
+                        .font(Typography.rowMeta)
+                        .frame(maxWidth: .infinity)
+                        .disabled(session.isWorking)
+                    }
                 }
 
                 if let error = session.errorMessage {
@@ -68,6 +82,38 @@ struct SignInView: View {
         }
         .buttonStyle(.bordered)
         .disabled(session.isWorking)
+    }
+
+    private var passwordForm: some View {
+        Card {
+            Text("Sign in with a password").font(Typography.cardTitle)
+            TextField("you@example.com", text: $email)
+                .textContentType(.username)
+                .keyboardType(.emailAddress)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .padding(12)
+                .background(Palette.surface2, in: RoundedRectangle(cornerRadius: Metrics.radiusMd))
+            SecureField("Password", text: $password)
+                .textContentType(.password)
+                .submitLabel(.go)
+                .onSubmit { Task { await session.signIn(email: email, password: password) } }
+                .padding(12)
+                .background(Palette.surface2, in: RoundedRectangle(cornerRadius: Metrics.radiusMd))
+            Button {
+                Task { await session.signIn(email: email, password: password) }
+            } label: {
+                Text(session.isWorking ? "Signing in…" : "Sign in").frame(maxWidth: .infinity, minHeight: Metrics.tapMin)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(session.isWorking || !SessionStore.canSubmitPassword(email: email, password: password))
+            Button("Use an email code instead") {
+                password = ""
+                session.errorMessage = nil
+                usesPassword = false
+            }
+            .font(Typography.rowMeta)
+        }
     }
 
     private func codeForm(_ address: String) -> some View {

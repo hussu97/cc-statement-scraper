@@ -1,5 +1,20 @@
 # Changelog
 
+## App Review can sign in: a demo account with a synthetic ledger — 2026-10-12
+
+### Backend (Supabase)
+
+- **add** `20261012130000_review_demo_ledger`: `private.create_review_demo(user_id, today)` creates the `app-review` ledger, makes that user its only owner (refusing a user who already has a ledger, a second demo ledger and any client role), and `private.seed_review_demo` fills it with synthetic data dated relative to `today` through the real ingest paths: two cards (ADCB •4821, FAB •7310), six reconciled statements each via `ingest_parsed_document`, alerts in the formats the production ADCB/FAB templates already parse via `ingest_sms` (about 40% of billed purchases, then everything after each card's last statement stays pending), profile category rules, budgets, recurring series and insights. Nothing global is written beyond merchants; no SMS templates, no parse or LLM-fallback jobs are left behind. Run as `postgres` by `scripts/cutover/create-review-demo.sh` (Auth admin API user with a generated password, credentials in the gitignored `.env.review-demo`). pgTAP `32_review_demo`.
+
+### iOS
+
+- **fix** Beta App Review rejected builds 3 and 6 under Guideline 2.1(a): the reviewer could not sign in (email code or passkey only). The sign-in screen gains *Sign in with a password* (email + password, back to *Use an email code instead*); `SessionStore.signIn(email:password:)` now ships in Release, with `canSubmitPassword` deciding when Sign in is enabled (`PasswordSignInTests`). Only the App Review demo account has a password, so the form signs no one else in.
+- **add** `testflight-distribute.mjs --review-account` saves `LEDGER_REVIEW_EMAIL` / `LEDGER_REVIEW_PASSWORD` in Beta App Review Information ("Sign-in required" on, notes pointing at the password option); the password is never printed. A normal run now refuses to submit a build for Beta App Review while no demo account is set, instead of submitting one that is bound to bounce.
+
+### Docs
+
+- **change** PRODUCTION §2.2 and §7 step 5 (the review account), ARCHITECTURE §8, README (iPhone screens, TestFlight env), `supabase/CLAUDE.md` and `apps/ios/CLAUDE.md` auth facts; lesson in `tasks/lessons.md`.
+
 ## Wio Bank credit statements — 2026-10-12
 
 ### Parser

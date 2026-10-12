@@ -56,7 +56,8 @@ had to be restored by hand.
 
 Auth facts that a push must not break:
 - **Email sign-in is code-only.** The templates in `supabase/templates/` carry `{{ .Token }}`:
-  no magic links, no passwords.
+  no magic links. Password sign-in stays enabled (it is GoTrue's email provider) for the one
+  account that has a password, the App Review demo (`private.create_review_demo`).
 - **Passkeys** use `rp_id = <web-host>`, with the AASA file at
   `apps/web/public/.well-known/apple-app-site-association`. Changing `rp_id` strands every
   existing passkey.

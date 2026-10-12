@@ -46,6 +46,10 @@ and §11; layout and setup are in [README.md](README.md).
 - **No "iPhone", "iPad" or "Siri" in App Intent titles, descriptions, parameter text or App
   Shortcut phrases.** Build 2 was rejected in processing for that (ITMS-90626). Say "this
   device" or "your phone".
+- **Beta App Review signs in with a username and password** (Guideline 2.1(a); builds 3 and 6
+  were rejected without one). Keep *Sign in with a password* on the sign-in screen and the demo
+  account in Beta App Review Information (PRODUCTION §7 step 5); `testflight-distribute.mjs`
+  refuses to submit without it.
 - Both the app and the share extension ship a `PrivacyInfo.xcprivacy`; keep them when adding
   required-reason APIs (ITMS-91053).
 - **Releasing is a production action.** A push to `main` that changes the app makes the pre-push

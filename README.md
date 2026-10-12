@@ -290,6 +290,9 @@ JWTs. The service client logs which source it used (never the value).
   from the environment or else `Secrets.Release.xcconfig`; the token is never printed
 - `ASC_KEY_ID` and `ASC_ISSUER_ID` (with the AuthKey `.p8`) for the TestFlight upload and
   `testflight-distribute.mjs`; both default to the single key in `~/.appstoreconnect/private_keys`
+- `LEDGER_REVIEW_EMAIL` and `LEDGER_REVIEW_PASSWORD` for `testflight-distribute.mjs --review-account`
+  (the App Review demo account), from the gitignored `.env.review-demo` that
+  `scripts/cutover/create-review-demo.sh` writes (PRODUCTION §7)
 
 ### Scraper (`scraper/.env`)
 
@@ -338,7 +341,7 @@ Used for the production Edge Function secrets and Vault entries, and for secret 
 
 | Screen | Contents |
 |---|---|
-| Sign in / Profile picker | Email one-time code or passkey, then an offer to add a passkey; choose a ledger. Settings → Passkeys manages them |
+| Sign in / Profile picker | Email one-time code or passkey, then an offer to add a passkey; choose a ledger. Settings → Passkeys manages them. *Sign in with a password* is for the App Review demo account, the only account with a password |
 | Overview | Month spend posted so far (server comparisons), pending SMS, categories, dues ("Was due …"), Needs attention (reviews, uncategorised) (Realtime refresh) |
 | Activity | Ledger list, filters, transaction detail and categorisation |
 | Insights | Swift Charts views over the same RPCs; the budgets card's "See all budgets" opens the Budgets tab |
