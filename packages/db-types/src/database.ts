@@ -2558,6 +2558,10 @@ export type Database = {
           txn_count: number
         }[]
       }
+      month_to_date_end: {
+        Args: { p_month: string; p_today: string; p_viewed_month: string }
+        Returns: string
+      }
       ops_health: { Args: never; Returns: Json }
       overview: {
         Args: { p_month?: string; p_profile_code: string }
@@ -2708,6 +2712,10 @@ export type Database = {
           p_to: string
           p_top_n?: number
         }
+        Returns: Json
+      }
+      spend_pace: {
+        Args: { p_month?: string; p_profile_code: string; p_today?: string }
         Returns: Json
       }
       spend_series: {
