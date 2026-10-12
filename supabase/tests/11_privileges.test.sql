@@ -93,7 +93,7 @@ select set_eq(
     'audit_events:authenticated:SELECT', 'banks:authenticated:SELECT', 'budgets:authenticated:DELETE',
     'budgets:authenticated:INSERT', 'budgets:authenticated:SELECT', 'budgets:authenticated:UPDATE',
     'cards.holder_name:authenticated:UPDATE', 'cards.is_supplementary:authenticated:UPDATE', 'cards.status:authenticated:UPDATE',
-    'cards:authenticated:SELECT', 'categories.archived_at:authenticated:UPDATE', 'categories.color_token:authenticated:UPDATE',
+    'card_transfers:authenticated:SELECT', 'cards:authenticated:SELECT', 'categories.archived_at:authenticated:UPDATE', 'categories.color_token:authenticated:UPDATE',
     'categories.icon:authenticated:UPDATE', 'categories.kind:authenticated:UPDATE', 'categories.name:authenticated:UPDATE',
     'categories.parent_code:authenticated:UPDATE', 'categories.sort_order:authenticated:UPDATE', 'categories:authenticated:INSERT',
     'categories:authenticated:SELECT', 'category_rules:authenticated:DELETE', 'category_rules:authenticated:INSERT',
