@@ -208,8 +208,8 @@
 }
 
 /*
- * Bank logo chip: a light rounded square in every theme. The ENBD, SIB, EIB and
- * FAB marks are navy or purple and vanish on the dark surface
+ * Bank logo chip: a light rounded square in every theme. The ENBD, SIB, EIB, WIO
+ * and FAB marks are navy or purple and vanish on the dark surface
  * (assets/banks/README.md). Same selectors as packages/tokens' theme switch.
  */
 .bank-chip {

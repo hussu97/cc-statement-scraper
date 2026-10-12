@@ -849,7 +849,7 @@ Deploy Supabase job failed at `supabase migration fetch --linked` (investigate; 
 - **Bank logos:** migration `20261010000100` creates the public `bank-logos` bucket and sets
   `banks.logo_path = '<bank_code>.png'`; the images themselves are uploaded by hand (no client
   can write the bucket). From the repo root, after a yes in chat (it writes to production):
-  `for b in ADCB EIB ENBD FAB MASHREQ SIB; do supabase storage cp assets/banks/$b.png ss:///bank-logos/$b.png --experimental --linked; done`
+  `for b in ADCB EIB ENBD FAB MASHREQ SIB WIO; do supabase storage cp assets/banks/$b.png ss:///bank-logos/$b.png --experimental --linked; done`
   (or Dashboard → Storage → `bank-logos` → Upload). Check one at
   `https://<ref>.supabase.co/storage/v1/object/public/bank-logos/FAB.png`. A bank without an
   image just shows the client's fallback; to change a file name, update `banks.logo_path`.
