@@ -4,7 +4,7 @@ import SwiftUI
 /// Choose (or create) the ledger the app and the SMS automation post to.
 struct ProfilePickerView: View {
     let profiles: ProfileStore
-    var onSignOut: () -> Void
+    let model: AppModel
     @State private var newName = ""
 
     var body: some View {
@@ -51,7 +51,7 @@ struct ProfilePickerView: View {
                         Text(error).font(Typography.caption).foregroundStyle(Palette.danger)
                     }
                 }
-                Button("Sign out", role: .destructive, action: onSignOut).font(Typography.rowMeta)
+                SignOutButton(model: model).font(Typography.rowMeta)
             }
             .ledgerNavigation("")
         }

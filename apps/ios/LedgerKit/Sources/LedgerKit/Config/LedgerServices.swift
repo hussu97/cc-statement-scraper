@@ -45,10 +45,13 @@ public final class LedgerServices: Sendable {
                 auth: .init(storage: storage, storageKey: "ledger.auth", emitLocalSessionAsInitialSession: true),
                 global: .init(session: session)))
         api = SupabaseLedgerAPI(client: client, config: config, session: session)
-        outbox = Outbox(fileURL: Outbox.defaultURL(container: config.sharedContainerURL), api: api)
+        let targets = SMSTargetStore(defaults: config.sharedDefaults)
+        smsTargets = targets
+        // SMS saved while no ledger was known go to the "SMS go to" ledger as soon as one is.
+        outbox = Outbox(fileURL: Outbox.defaultURL(container: config.sharedContainerURL), api: api,
+                        pendingTarget: { targets.target?.profileCode })
         outboxSync = OutboxSync(outbox: outbox)
         selection = ProfileSelection(defaults: config.sharedDefaults)
-        smsTargets = SMSTargetStore(defaults: config.sharedDefaults)
         captureLog = CaptureLog(defaults: config.sharedDefaults)
     }
 
@@ -69,6 +72,23 @@ public final class LedgerServices: Sendable {
     public func walletIntake() -> WalletIntake {
         let targets = smsTargets
         return WalletIntake(outbox: outbox, target: { targets.target }, log: captureLog)
+    }
+
+    /// What sign-out would delete from this phone: SMS and card payments in
+    /// the outbox (sent or not yet), and the share extension's PDFs.
+    public func deviceQueue() async -> DeviceQueue {
+        let entries = (try? await outbox.entries()) ?? []
+        let uploads = pendingUploads
+        return DeviceQueue(messages: entries.filter { $0.kind == .sms }.count,
+                           payments: entries.filter { $0.kind == .wallet }.count,
+                           pdfs: uploads.count + uploads.rejected().count)
+    }
+
+    /// Sign-out, after the person confirmed: the outbox and the share
+    /// extension's PDFs go, so nothing is sent under whoever signs in next.
+    public func clearDeviceQueue() async {
+        try? await outbox.removeAll()
+        pendingUploads.removeAll()
     }
 
     /// The share extension's upload to the "SMS go to" ledger, using the shared session.

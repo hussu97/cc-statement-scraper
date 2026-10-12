@@ -6,14 +6,16 @@ public enum SMSIntakeOutcome: Equatable, Sendable {
     /// Why a message is still waiting on the phone.
     public enum QueueReason: String, Sendable, Equatable {
         case offline, signedOut, serverUnavailable, pending
+        /// No ledger is set for SMS (signed out, or the user owns none yet):
+        /// saved, and sent to the "SMS go to" ledger once one is known. It used
+        /// to be discarded (BACKLOG IOS-12r).
+        case noLedger
     }
 
     case dropped(SMSCapture.Decision)
     /// The phone refused the input before queueing it (a payment with no
     /// amount, merchant or card). `code` is opaque; `message` is shown.
     case refused(code: String, message: String)
-    /// No ledger is set for SMS (signed out, or the user owns none).
-    case noProfile
     /// Reached the server; `status` is `ingest_sms`'s per-message status.
     case delivered(status: String)
     /// Saved in the outbox; it will be retried automatically.
@@ -30,19 +32,20 @@ public enum SMSIntakeOutcome: Equatable, Sendable {
         switch self {
         case .dropped(let decision): return decision.userMessage
         case .refused(_, let message): return message
-        case .noProfile:
-            return "Not logged: Ledger has no ledger set for SMS. Open Ledger → Settings and sign in or choose “SMS go to”."
         case .delivered(let status): return Self.statusMessage(status, to: to)
+        // App Intent text: "this phone", never "iPhone" (CLAUDE.md §5.6).
         case .queued(let reason):
             switch reason {
-            case .offline: return "Saved on this iPhone. It will be sent \(to) when you're back online."
-            case .signedOut: return "Saved on this iPhone, but you're signed out. Open Ledger and sign in to send it."
-            case .serverUnavailable: return "Saved on this iPhone. Ledger didn't respond; it will retry automatically."
-            case .pending: return "Saved on this iPhone. It will be sent \(to) shortly."
+            case .offline: return "Saved on this phone. It will be sent \(to) when you're back online."
+            case .signedOut: return "Saved on this phone, but you're signed out. Open Ledger and sign in to send it."
+            case .serverUnavailable: return "Saved on this phone. Ledger didn't respond; it will retry automatically."
+            case .pending: return "Saved on this phone. It will be sent \(to) shortly."
+            case .noLedger:
+                return "Saved on this phone, but no ledger is set for SMS. Open Ledger, sign in and choose “SMS go to” to send it."
             }
         case .parked(let reason):
             return "Not logged. \(reason) Open Ledger → Settings → SMS to retry or delete it."
-        case .failed: return "Couldn't save the message on this iPhone."
+        case .failed: return "Couldn't save the message on this phone."
         }
     }
 
@@ -56,7 +59,6 @@ public enum SMSIntakeOutcome: Equatable, Sendable {
             case .dropEmpty: "dropped_empty"
             }
         case .refused(let code, _): "refused_\(code)"
-        case .noProfile: "no_profile"
         case .delivered(let status): "delivered_\(status)"
         case .queued(let reason): "queued_\(reason.rawValue)"
         case .parked: "parked"
@@ -67,8 +69,8 @@ public enum SMSIntakeOutcome: Equatable, Sendable {
     /// Outcomes the user should act on (shown in red in Settings).
     public var needsAttention: Bool {
         switch self {
-        case .noProfile, .parked, .failed, .refused: true
-        case .queued(let reason): reason == .signedOut
+        case .parked, .failed, .refused: true
+        case .queued(let reason): reason == .signedOut || reason == .noLedger
         case .delivered(let status): ["unknown_card", "held", "unparsed"].contains(status)
         case .dropped: false
         }
@@ -121,18 +123,20 @@ public struct SMSIntake: Sendable {
         let (decision, payload) = SMSCapture.payload(body: body, sender: sender, receivedAt: receivedAt,
                                                      clientMsgId: clientMsgId)
         guard let payload else { return .dropped(decision) }
-        guard let target else { return .noProfile }
         return await Self.deliver(.sms(payload), to: target, outbox: outbox)
     }
 
     /// Persist first, then try to send now: the item is in the outbox before
-    /// any network call. Shared with `WalletIntake`.
-    static func deliver(_ item: OutboxItem, to target: SMSTarget, outbox: Outbox) async -> SMSIntakeOutcome {
+    /// any network call. Shared with `WalletIntake`. With no ledger known the
+    /// item is saved all the same, without one; the first flush that knows
+    /// the "SMS go to" ledger files it there (IOS-12r).
+    static func deliver(_ item: OutboxItem, to target: SMSTarget?, outbox: Outbox) async -> SMSIntakeOutcome {
         do {
-            try await outbox.enqueue(items: [item], profileCode: target.profileCode)
+            try await outbox.enqueue(items: [item], profileCode: target?.profileCode)
         } catch {
             return .failed(String(describing: type(of: error)))
         }
+        guard target != nil else { return .queued(.noLedger) }
         let report = await outbox.flush()
         if let reason = report.parked[item.clientMsgId] { return .parked(reason: reason) }
         let wanted = item.clientMsgId.uuidString.lowercased()

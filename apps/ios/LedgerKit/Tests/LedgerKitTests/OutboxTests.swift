@@ -178,7 +178,7 @@ struct SMSIntakeTests {
         let (intake, _) = intake(api, url: url)
         let (outcome, dialog) = await intake.handle(body: card, sender: nil)
         #expect(outcome == .queued(.offline))
-        #expect(dialog == "Saved on this iPhone. It will be sent to Personal when you're back online.")
+        #expect(dialog == "Saved on this phone. It will be sent to Personal when you're back online.")
 
         // The app later flushes the same file with the same client_msg_id.
         let appOutbox = Outbox(fileURL: url, api: StubAPI(.succeed(status: "linked")))
@@ -256,14 +256,43 @@ struct SMSIntakeTests {
         #expect(await outbox.status().isEmpty)
     }
 
-    @Test("no SMS ledger set: nothing is sent and the dialog says where to set it")
-    func noProfile() async {
+    @Test("no SMS ledger set: the message is saved without one, nothing is sent, the dialog says where to set it")
+    func noLedgerIsSaved() async throws {
         let api = StubAPI()
-        let (intake, _) = intake(api, target: nil)
+        let url = temporaryOutboxURL()
+        let (intake, outbox) = intake(api, target: nil, url: url)
         let (outcome, dialog) = await intake.handle(body: card, sender: "FAB")
-        #expect(outcome == .noProfile)
-        #expect(dialog.contains("SMS go to"))
+        #expect(outcome == .queued(.noLedger))
+        #expect(outcome.needsAttention)
+        #expect(dialog.contains("SMS go to") && !dialog.contains("iPhone"))
         #expect(api.calls.isEmpty)
+        let entry = try #require(try await outbox.entries().first)
+        #expect(entry.profileCode == nil && entry.awaitsLedger)
+        let status = await outbox.status()
+        #expect(status.awaitingLedger == 1 && status.pending == 0 && status.waiting == 1)
+        #expect(status.summary == "1 message waiting")
+        #expect(OutboxSync.plan(status) == nil)   // nothing iOS could send in the background
+
+        // A flush with no ledger known still sends nothing.
+        await outbox.flush(force: true)
+        #expect(api.calls.isEmpty)
+
+        // Once the "SMS go to" ledger is known, the next flush (the app's) files it there.
+        let app = Outbox(fileURL: url, api: api, pendingTarget: { Self.personal.profileCode })
+        let report = await app.flush()
+        #expect(report.sent == 1)
+        #expect(api.calls.map(\.profile) == [Self.personal.profileCode])
+        #expect(api.calls[0].messages[0].clientMsgId == entry.id)
+        #expect(await app.status().isEmpty)
+    }
+
+    @Test("adopting pending entries leaves entries that already have a ledger alone")
+    func adoptOnlyPending() async throws {
+        let outbox = Outbox(fileURL: temporaryOutboxURL(), api: StubAPI())
+        try await outbox.enqueue(SMSPayload(receivedAt: Date(), sender: "FAB", body: card), profileCode: nil)
+        try await outbox.enqueue(SMSPayload(receivedAt: Date(), sender: "FAB", body: card), profileCode: "prf_old")
+        #expect(try await outbox.adoptPending(profileCode: "prf_new") == 1)
+        #expect(try await outbox.entries().map(\.profileCode).sorted { ($0 ?? "") < ($1 ?? "") } == ["prf_new", "prf_old"])
     }
 
     @Test("server statuses map to short dialogs that point at Review")
