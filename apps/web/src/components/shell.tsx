@@ -8,13 +8,10 @@ import {
   LayoutGrid,
   LogOut,
   Menu as MenuIcon,
-  Monitor,
-  Moon,
   Plus,
   ReceiptText,
   Settings2,
   Shapes,
-  Sun,
   Target,
   Check,
 } from "lucide-react";
@@ -24,12 +21,12 @@ import { useAuth, signOut } from "@/data/auth";
 import { memberProfiles, useProfileContext, type ProfileSummary } from "@/data/profile";
 import { useRealtimeInvalidation } from "@/data/realtime";
 import { useOpenReviewCount } from "@/data/reviews";
-import { applyTheme, readTheme, type ThemePref } from "@/lib/theme";
-import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger, Segmented } from "./ui/primitives";
+import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger, TooltipProvider } from "./ui/primitives";
+import { Toaster } from "./ui/toast";
 import { Sheet } from "./ui/dialog";
 import { ErrorState } from "./ui/states";
-import { BrandLockup, BrandMark } from "./brand/brand";
-import { BRAND_NAME } from "@/lib/brand";
+import { BrandLockup } from "./brand/brand";
+import { Splash, ThemeToggle } from "./chrome";
 
 interface NavItem {
   to: string;
@@ -57,26 +54,6 @@ function useIsActive() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   // A statement page belongs to "Cards & statements".
   return (to: string) => (to === "/" ? path === "/" : path === to || path.startsWith(`${to}/`) || (to === "/cards" && path.startsWith("/statements/")));
-}
-
-export function ThemeToggle({ className }: { className?: string }) {
-  const [pref, setPref] = useState<ThemePref>(() => readTheme());
-  return (
-    <Segmented<ThemePref>
-      ariaLabel="Theme"
-      className={className}
-      value={pref}
-      onChange={(v) => {
-        setPref(v);
-        applyTheme(v);
-      }}
-      options={[
-        { value: "light", label: <Sun className="size-3.5" aria-label="Light" /> },
-        { value: "system", label: <Monitor className="size-3.5" aria-label="System" /> },
-        { value: "dark", label: <Moon className="size-3.5" aria-label="Dark" /> },
-      ]}
-    />
-  );
 }
 
 function profileRoleLabel(p: ProfileSummary | null): string {
@@ -245,17 +222,6 @@ function MobileNav({ nav }: { nav: NavItem[] }) {
   );
 }
 
-export function Splash() {
-  return (
-    <div className="flex min-h-dvh items-center justify-center" role="status" aria-label="Loading">
-      <span className="flex items-center gap-3 animate-pulse">
-        <BrandMark className="size-8" />
-        <span className="font-display text-2xl text-subtle">{BRAND_NAME}</span>
-      </span>
-    </div>
-  );
-}
-
 /** Authenticated layout: guards, realtime, navigation. */
 export function AppShell() {
   const { session, loading } = useAuth();
@@ -271,15 +237,20 @@ export function AppShell() {
   // still starts at /welcome even though RLS shows them every ledger.
   if (memberProfiles(profiles).length === 0 || !profile) return <Navigate to="/welcome" />;
 
+  // Toasts and tooltips live only inside the app, so the public pages load no Radix (WEB-11).
   return (
-    <div className="flex min-h-dvh">
-      <Sidebar nav={nav} />
-      <div className="min-w-0 flex-1">
-        <MobileNav nav={nav} />
-        <main key={profile.profile_code} className="mx-auto w-full max-w-[1240px] pt-6 pr-[max(var(--space-gutter),env(safe-area-inset-right))] pb-[calc(7rem+env(safe-area-inset-bottom))] pl-[max(var(--space-gutter),env(safe-area-inset-left))] md:pt-10 md:pr-[max(var(--space-gutter-lg),env(safe-area-inset-right))] md:pl-[max(var(--space-gutter-lg),env(safe-area-inset-left))] lg:pb-16">
-          <Outlet />
-        </main>
-      </div>
-    </div>
+    <TooltipProvider>
+      <Toaster>
+        <div className="flex min-h-dvh">
+          <Sidebar nav={nav} />
+          <div className="min-w-0 flex-1">
+            <MobileNav nav={nav} />
+            <main key={profile.profile_code} className="mx-auto w-full max-w-[1240px] pt-6 pr-[max(var(--space-gutter),env(safe-area-inset-right))] pb-[calc(7rem+env(safe-area-inset-bottom))] pl-[max(var(--space-gutter),env(safe-area-inset-left))] md:pt-10 md:pr-[max(var(--space-gutter-lg),env(safe-area-inset-right))] md:pl-[max(var(--space-gutter-lg),env(safe-area-inset-left))] lg:pb-16">
+              <Outlet />
+            </main>
+          </div>
+        </div>
+      </Toaster>
+    </TooltipProvider>
   );
 }

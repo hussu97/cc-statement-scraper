@@ -1,5 +1,4 @@
 import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Outlet, Link } from "@tanstack/react-router";
-import { AppShell } from "@/components/shell";
 import { parseActivitySearch } from "@/lib/activity-filters";
 import { parseInsightsSearch, parseTabSearch } from "@/lib/search";
 import { parsePageSearch } from "@/lib/infinite";
@@ -34,8 +33,15 @@ const privacyRoute = createRoute({
   component: lazyRouteComponent(() => import("@/routes/privacy"), "PrivacyPage"),
 });
 
-/** Authenticated layout: AppShell redirects to /signin without a session. */
-export const appRoute = createRoute({ getParentRoute: () => rootRoute, id: "app", component: AppShell });
+/**
+ * Authenticated layout: AppShell redirects to /signin without a session. Lazy, like every
+ * screen, so /signin and /privacy load neither the shell nor its Radix menus (WEB-11).
+ */
+export const appRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  id: "app",
+  component: lazyRouteComponent(() => import("@/components/shell"), "AppShell"),
+});
 
 const overviewRoute = createRoute({
   getParentRoute: () => appRoute,
