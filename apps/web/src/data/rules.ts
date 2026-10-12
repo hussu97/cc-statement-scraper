@@ -3,7 +3,7 @@ import { supabase, type RpcReturn, type Tables } from "@/lib/supabase";
 import type { Json } from "@ledger/db-types";
 import { addMonths, todayDubai } from "@/lib/dates";
 import { keys, LEDGER_DOMAINS } from "./keys";
-import { must, mustList } from "./api";
+import { errorMessage, must, mustList } from "./api";
 
 export type Category = Tables<"categories">;
 export type Rule = Tables<"category_rules">;
@@ -61,6 +61,19 @@ export function validateRule(d: { pattern: string; match_type: string; category_
     if (v && !/^\d+(\.\d{1,2})?$/.test(v)) return "Amounts must be numbers like 50 or 49.99.";
   }
   return null;
+}
+
+/**
+ * The server's verdict on a rule, as a sentence. Rules run as Postgres AREs, so
+ * a pattern JS `RegExp` accepts (lookbehind, named groups) can still be
+ * rejected: preview_rule and the save trigger raise 22023
+ * "invalid rule: <problem>" (WEB-13). Other errors pass through unchanged.
+ */
+export function ruleErrorMessage(e: unknown): string {
+  const msg = errorMessage(e);
+  if ((e as { code?: string } | null)?.code !== "22023") return msg;
+  const problem = msg.replace(/^invalid rule:\s*/i, "").replace(/^invalid regex:\s*(?=invalid regular expression)/i, "");
+  return problem ? problem.charAt(0).toUpperCase() + problem.slice(1) : msg;
 }
 
 /** Categories in display order with children under their parent. */
