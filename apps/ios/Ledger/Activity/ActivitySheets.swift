@@ -25,7 +25,7 @@ struct CategorySheet: View {
                             TransferPeerLabel(peer: peer, size: 18, font: Typography.rowMeta)
                         }
                         if let source = transaction.categorySource {
-                            Text("Category from \(source)").font(Typography.caption).foregroundStyle(Palette.subtle)
+                            Text("Category from \(source)").font(Typography.caption).foregroundStyle(Palette.muted)
                         }
                     }
                     if transaction.merchantCode != nil {
