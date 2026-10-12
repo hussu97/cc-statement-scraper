@@ -102,6 +102,15 @@ extension Overview {
         isCurrentMonth(today: today) ? "\(monthTitle) · posted so far" : monthTitle
     }
 
+    /// The hero (eyebrow, "AED" and the number) as one VoiceOver element:
+    /// `"October spend, posted so far, 860 dirhams"`; a past month
+    /// `"September spend, 8,450 dirhams"`, with the year outside this one.
+    public func heroAccessibilityLabel(today: CalendarDay = LedgerDates.today()) -> String {
+        let name = month.year == today.year ? LedgerDates.monthName(month) : monthTitle
+        let scope = isCurrentMonth(today: today) ? "\(name) spend, posted so far" : "\(name) spend"
+        return "\(scope), \(MoneyFormat.spokenDirhams(spend))"
+    }
+
     public func isCurrentMonth(today: CalendarDay = LedgerDates.today()) -> Bool {
         month.year == today.year && month.month == today.month
     }

@@ -138,6 +138,15 @@ struct PresentationTests {
         #expect(o.heroEyebrow(today: CalendarDay(iso: "2026-11-02")!) == "October 2026")
     }
 
+    @Test("VoiceOver reads the hero as one sentence, not \"AED\" and a number")
+    func heroAccessibilityLabel() throws {
+        let o = try LedgerJSON.decode(Overview.self, from: try fixture("overview"))
+        #expect(o.heroAccessibilityLabel(today: CalendarDay(iso: "2026-10-08")!)
+                == "October spend, posted so far, 1,234,568 dirhams")
+        #expect(o.heroAccessibilityLabel(today: CalendarDay(iso: "2026-11-02")!) == "October spend, 1,234,568 dirhams")
+        #expect(o.heroAccessibilityLabel(today: CalendarDay(iso: "2027-01-02")!) == "October 2026 spend, 1,234,568 dirhams")
+    }
+
     @Test("Needs attention lists open reviews first, then uncategorised")
     func attention() throws {
         let o = try LedgerJSON.decode(Overview.self, from: try fixture("overview"))
