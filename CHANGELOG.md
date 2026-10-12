@@ -1,5 +1,11 @@
 # Changelog
 
+## Docs: Wio is a credit card that pays other credit cards — 2026-10-12
+
+### Docs
+
+- **change** Parser, contract and ARCHITECTURE wording: Wio Personal is a credit card only (no debit card); its "ENBD payment" / "EIB AZ payment" rows are the card paying other credit cards from its credit line. "Debit" in those notes is the ledger direction of a charge, never a debit card.
+
 ## Card transfers: Wio's payments onto other cards are linked to those cards' credits — 2026-10-12
 
 ### Backend (Supabase)

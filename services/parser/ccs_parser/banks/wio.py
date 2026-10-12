@@ -5,11 +5,13 @@ Page 1 carries the header and the "Account summary"; every page then lists rows 
     08/06/2026 P877005080 Noon ****2010 -47.26
 
 one date, a reference, the description, the card (absent on payments) and a signed AED
-amount: negative is spend, positive is a credit. A foreign purchase is followed by
+amount: negative is a charge, positive is a credit. Wio Personal is a credit card only (no
+debit card); "debit" below is the ledger direction of a charge. A foreign purchase is followed by
 "Rate: 3.70 (AED/USD)" and a separate "Foreign Exchange Fee" row with the same reference.
 The foreign amount itself is never printed and the rate has two decimals (EGP shows 0.07),
-so the row stays an AED line. Rows like "ENBD payment" or "EIB AZ payment" (no card) pay
-another bank's card out of the Wio credit line: debits that move a balance, not spend.
+so the row stays an AED line. Rows like "ENBD payment" or "EIB AZ payment" (no card) are
+the credit card's "pay other credit cards" feature: Wio pays another bank's card from its
+credit line, a charge that moves a balance, not spend.
 Totals come from ``ccs_parser.totals._extract_wio``.
 """
 

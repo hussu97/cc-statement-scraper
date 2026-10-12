@@ -134,8 +134,9 @@ Field rules:
 - WIO (since parser 2026.10.11) prints one signed AED amount per row and no foreign amount: a
   foreign purchase is followed by `Rate: 3.70 (AED/USD)` (two decimals) and a separate
   `Foreign Exchange Fee` row (`kind = fee`), so every WIO line is AED. A row with no card number
-  whose description ends in `payment` (`ENBD payment`, `EIB AZ payment`) pays another bank's card
-  from the Wio credit line: `direction = debit`, `kind = payment` (not spend). WIO's summary block
+  whose description ends in `payment` (`ENBD payment`, `EIB AZ payment`) is the Wio credit card
+  paying another bank's credit card from its credit line (Wio Personal is a credit card only;
+  it can pay other cards): a charge, `direction = debit`, `kind = payment` (not spend). WIO's summary block
   is used only when it adds up.
 - `legacy_fingerprint` is `domain.parsing.utils.fingerprint_for(...)`, computed exactly as the legacy backend did. It is used to carry legacy category overrides across.
 - `country_code` is an **ISO 3166-1 alpha-2** code or null. Statements print a trailing token in
