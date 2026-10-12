@@ -324,7 +324,7 @@ Used for the production Edge Function secrets and Vault entries, and for secret 
 | Route | Screen |
 |---|---|
 | `/signin`, `/welcome` | Sign-in (emailed one-time code or passkey; existing users only; offers to add a passkey after a code sign-in) and first-profile setup |
-| `/` | **Overview**: month hero with pace rule, live pending SMS, category ring, monthly spend bars (split by category / bank / merchant, with totals), cards and dues with bank logos, utilisation, insights |
+| `/` | **Overview**: month hero with pace rule, live pending SMS, category ring, monthly spend bars (split by category / bank / merchant, with totals), cards and dues with bank logos, what each card owes now and the total, utilisation, insights |
 | `/activity` | **Activity**: unified ledger with URL-synced filters, a summary line (count, net AED, date span) for the current filters, search over description or merchant, evidence badges, drawer with evidence timeline, inline, bulk and "apply to merchant" categorisation, notes. Numbered pages (100–2000, in the URL) on wide screens; infinite scroll below 768 px |
 | `/insights` | **Insights**: trends (monthly bars split by category / bank / merchant, top 10 + Others, with a totals table; filter by categories, banks, cards and a merchant search), categories, merchants, subscriptions, FX, calendar heatmap, time of day, YoY, anomalies |
 | `/budgets` | **Budgets**: total and per category, with progress |

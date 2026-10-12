@@ -3,6 +3,7 @@ import { supabase, type Tables } from "@/lib/supabase";
 import { keys } from "./keys";
 import { must, mustList } from "./api";
 import { todayDubai } from "@/lib/dates";
+import type { BalanceAnchor } from "@/lib/balances";
 
 export interface OverviewCategory {
   category_code: string | null;
@@ -29,6 +30,12 @@ export interface OverviewAccount {
   /** Latest statement balance / credit limit, 4dp decimal string (server-computed). */
   utilisation: string | null;
   unbilled_aed: string;
+  /** What the card owes now (server-computed, v_account_balances); negative is a credit balance; null without an anchor. */
+  outstanding_aed: string | null;
+  balance_anchor: BalanceAnchor;
+  balance_anchor_date: string | null;
+  balance_has_estimate: boolean;
+  balance_unpriced_count: number;
 }
 
 export interface OverviewRecent {
@@ -59,6 +66,11 @@ export interface Overview {
   /** (spend − 3-month average) / average as a decimal string; null when the average is 0. */
   change_vs_avg_3m: string | null;
   payments: string;
+  /** What the active cards owe now; negative is a credit balance. */
+  outstanding: string;
+  /** Every active card has a balance anchor and every AED amount is known. */
+  outstanding_complete: boolean;
+  outstanding_has_estimate: boolean;
   pending_count: number;
   pending_amount: string;
   uncategorized_count: number;

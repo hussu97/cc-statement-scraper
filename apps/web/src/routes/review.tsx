@@ -212,7 +212,7 @@ function ReviewCard({ review }: { review: Review }) {
               )}
               {footer.includes("dismiss") && (
                 <Button size="sm" variant="ghost" icon={<X className="size-3.5" />} disabled={busy} onClick={() => act({ dismiss: true }, "Dismissed")}>
-                  {review.reason === "orphaned" || review.reason === "missing_from_statement" ? "Mark as checked" : "Dismiss"}
+                  {review.reason === "orphaned" ? "Void transaction" : review.reason === "missing_from_statement" ? "Mark as checked" : "Dismiss"}
                 </Button>
               )}
             </div>

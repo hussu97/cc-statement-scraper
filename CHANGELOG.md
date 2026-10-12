@@ -7,9 +7,14 @@
 - **fix** `20261012043206_outstanding_balance`: the Activity net for the main profile read AED 796.13 in credit while the cards owed about AED 3,568. The 2026-10-11 FAB re-parse left 110 orphaned transactions beside their re-created twins (net AED -2,996.20); their reviews were dismissed, which closed the review but left the rows counted. `activity_summary` now counts pending and posted rows only, like `v_spend`; dismissing an orphaned-transaction review voids the transaction (`orphan_dismissed`); new `private.void_orphan_duplicates()` voids orphans with a live twin on the same statement (same date, direction, kind, AED amount, description), paired one to one, skipping annotated rows, and runs once here (production: the 110 FAB rows).
 - **add** `public.v_account_balances` (security invoker): what each card owes now, anchored on the latest printed balance, which a transaction sum cannot know (ENBD's first statement opened at 404.07, FAB's at 64.38): the latest statement's closing balance plus live activity not on it, or for SIB the replacement card's "BALANCE MIGRATION" (the old card's balance) plus activity from that day. `overview` gains per-account `outstanding_aed`, `balance_anchor`, `balance_anchor_date`, `balance_has_estimate`, `balance_unpriced_count`, and profile `outstanding`, `outstanding_complete`, `outstanding_has_estimate`. Production on 2026-10-12: ADCB -0.84, ENBD 83.78, FAB 515.26, SIB 2,969.79. pgTAP `31_outstanding_balance`; `11_privileges` adds the view's SELECT.
 
+### Web
+
+- **add** Overview → Cards: "Owed now" per card (with what it is anchored on: "Statement of 1 Oct + activity since", "Card replaced 15 Sep + activity since") and the total over active cards; a credit balance reads "AED 0.84 in credit", estimates "≈", and the total says when it excludes unpriced charges or a card has no anchor. Pure helpers in `lib/balances.ts`, unit-tested.
+- **change** Review → Orphaned transactions: the button reads "Void transaction" (dismissing now voids it) and the help says orphans count in no total.
+
 ### Docs
 
-- **change** ARCHITECTURE §6: one definition of what a card owes; orphaned rows count in no total.
+- **change** ARCHITECTURE §6: one definition of what a card owes; orphaned rows count in no total. README: the Overview screen row.
 
 ## A re-parse after an account merge no longer re-creates transactions — 2026-10-11
 
