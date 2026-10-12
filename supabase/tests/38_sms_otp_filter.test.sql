@@ -15,7 +15,7 @@ create extension if not exists pgtap with schema extensions;
 select no_plan();
 
 create temp table fx as select $sms_otp_fixture${
- "pattern": "(^|[^a-zA-Z0-9_])otp([^a-zA-Z_]|$)|one[^a-zA-Z0-9]{0,3}time[^a-zA-Z0-9]{0,3}(password|pin|code)|verification[^a-zA-Z0-9]{0,3}(code|pin)|pass[^a-zA-Z0-9]?code|security[^a-zA-Z0-9]{0,3}code|authentication[^a-zA-Z0-9]{0,3}(code|pin|password)|secure[^a-zA-Z0-9]{0,3}code|3[^a-zA-Z0-9]?d[^a-zA-Z0-9]?secure[^a-zA-Z0-9]{1,3}(password|pin)|(^|[^a-zA-Z0-9.,])[0-9]{4,8}[^a-zA-Z0-9]{1,3}(is|as)[^a-zA-Z0-9]{1,3}(your|the)[^a-zA-Z0-9]{1,3}([a-zA-Z-]{1,20}[^a-zA-Z0-9]{1,3}){0,3}(code|pin|password|passcode)([^a-zA-Z]|$)|(do[^a-zA-Z0-9]{1,3}not|don[^a-zA-Z0-9]{0,2}t|never)[^a-zA-Z0-9]{1,3}share[^a-zA-Z0-9]{1,3}((this|the|your|it)[^a-zA-Z0-9]{1,3})?(otp|code|password|passcode)|رمز (ال)?تحقق|رمز (ال)?مرور|كلمة (ال)?مرور|كلمة (ال)?سر|لمرة واحدة",
+ "pattern": "(^|[^a-zA-Z0-9_])otp([^a-zA-Z_]|$)|one[^a-zA-Z0-9]{0,3}time[^a-zA-Z0-9]{0,3}(password|pin|code)|verification[^a-zA-Z0-9]{0,3}(code|pin)|pass[^a-zA-Z0-9]?code|security[^a-zA-Z0-9]{0,3}code|authentication[^a-zA-Z0-9]{0,3}(code|pin|password)|secure[^a-zA-Z0-9]{0,3}code|3[^a-zA-Z0-9]?d[^a-zA-Z0-9]?secure[^a-zA-Z0-9]{1,3}(password|pin)|(^|[^a-zA-Z0-9.,])[0-9]{4,8}[^a-zA-Z0-9]{1,3}(is|as)[^a-zA-Z0-9]{1,3}(your|the)[^a-zA-Z0-9]{1,3}([a-zA-Z-]{1,20}[^a-zA-Z0-9]{1,3}){0,3}(code|pin|password|passcode)([^a-zA-Z]|$)|(do[^a-zA-Z0-9]{1,3}not|don[^a-zA-Z0-9]{0,2}t|never)[^a-zA-Z0-9]{1,3}share[^a-zA-Z0-9]{1,3}((this|the|your|it)[^a-zA-Z0-9]{1,3})?(otp|code|password|passcode)|رمز (ال)?تحقق|رمز (ال)?مرور|كلمة (ال)?مرور|كلمة (ال)?سر|(رمز|كود) لمرة واحدة",
  "otp": [
   "Your OTP for AED 250.00 at AMAZON on card ending 1234 is 482913.",
   "482913 is your One-Time Password for the transaction of AED 12.00 on Credit Card XXX1234",
@@ -31,6 +31,7 @@ create temp table fx as select $sms_otp_fixture${
   "رمز التحقق الخاص بك هو 482913 لعملية شراء بقيمة 99.00 درهم على البطاقة المنتهية بـ 9219",
   "كلمة المرور لمرة واحدة هي 482913. لا تشاركها مع أحد",
   "رمز المرور 5521 لإتمام عملية الدفع",
+  "رمز لمرة واحدة 5521 لإتمام عملية الشراء",
   "Your 3-D Secure password for the purchase of AED 120.00 at NOON is 7781",
   "Your 3D Secure code is 448812",
   "Your secure code for the transaction of AED 50.00 at CAREEM is 991234",
@@ -44,6 +45,7 @@ create temp table fx as select $sms_otp_fixture${
   "Dear Customer, to complete adding your card ending 9212 to the digital wallet, retrieve the OTP from the EI + App. If you don’t have the app, please download and register to view the OTP. Do not share your OTP !"
  ],
  "not_otp": [
+  "تم تحصيل رسوم بقيمة 50.00 درهم لمرة واحدة على بطاقتك المنتهية بـ 1234",
   "A Cr. transaction of AED 1100.00 on your account number XXX310001 was successful.Available balance is 1105.04.",
   "A new login to Mobile/Online Banking has been authorised on your device.",
   "A payment on your card needs confirmation. Please check your Emirates NBD app.",

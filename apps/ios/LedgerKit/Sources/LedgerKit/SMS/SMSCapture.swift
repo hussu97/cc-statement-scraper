@@ -77,8 +77,9 @@ public enum SMSCapture {
         // "Never share this code", "Do not share your OTP"
         + #"|(do[^a-zA-Z0-9]{1,3}not|don[^a-zA-Z0-9]{0,2}t|never)[^a-zA-Z0-9]{1,3}share[^a-zA-Z0-9]{1,3}"#
         + #"((this|the|your|it)[^a-zA-Z0-9]{1,3})?(otp|code|password|passcode)"#
-        // Arabic: verification code, passcode, password, secret word, one-time.
-        + #"|رمز (ال)?تحقق|رمز (ال)?مرور|كلمة (ال)?مرور|كلمة (ال)?سر|لمرة واحدة"#
+        // Arabic: verification code, passcode, password, secret word, one-time code (never bare
+        // "one time": a one-off fee alert says it).
+        + #"|رمز (ال)?تحقق|رمز (ال)?مرور|كلمة (ال)?مرور|كلمة (ال)?سر|(رمز|كود) لمرة واحدة"#
 
     static let otpPattern = try! NSRegularExpression(pattern: otpPatternSource, options: [.caseInsensitive])
 
