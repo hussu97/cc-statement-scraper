@@ -236,20 +236,26 @@ def _record_uploaded(uploaded_state, files: list[Path], result: dict, bank_code:
     """Record successfully uploaded *files* in uploaded.json (keyed by sha256).
 
     With a v2 response, only files echoed back in ``uploads`` are recorded (with
-    their doc_code/status). A legacy response has no per-file detail, so every
-    file in the accepted batch is recorded with status ``uploaded``.
+    their doc_code/status). The server echoes its sanitised filename (trimmed,
+    at most 200 characters), so local names are normalised the same way before
+    matching; same-named files match the echoed entries in order. A legacy
+    response has no per-file detail, so every file in the accepted batch is
+    recorded with status ``uploaded``.
     """
     from scraper.client import parse_upload_response
-    from scraper.upload_state import sha256_file
+    from scraper.upload_state import server_filename, sha256_file
 
     uploads = parse_upload_response(result)
-    by_name = {u.get("filename"): u for u in uploads}
+    by_name: dict[object, list[dict]] = {}
+    for u in uploads:
+        by_name.setdefault(u.get("filename"), []).append(u)
     entries: dict[str, dict] = {}
     for pdf in files:
         if uploads:
-            item = by_name.get(pdf.name)
-            if item is None:
+            matches = by_name.get(server_filename(pdf.name))
+            if not matches:
                 continue
+            item = matches.pop(0)
             info = {"doc_code": item.get("doc_code"), "status": item.get("status")}
         else:
             info = {"doc_code": None, "status": "uploaded"}
