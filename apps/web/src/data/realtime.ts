@@ -20,6 +20,17 @@ export function domainsFor(tables: Iterable<string>): Domain[] {
 }
 
 /**
+ * A fresh channel topic for each subscription. `supabase.channel(topic)`
+ * returns the existing channel while a previous `removeChannel` is still
+ * leaving, so a reused topic makes `subscribe()` a no-op and the pending leave
+ * then tears it down (StrictMode, or an A→B→A profile switch). A unique suffix
+ * per effect run keeps every subscription on its own channel.
+ */
+export function channelTopic(profileCode: string, nonce: string = crypto.randomUUID()): string {
+  return `ledger:${profileCode}:${nonce}`;
+}
+
+/**
  * Subscribe to Postgres changes for the active profile and invalidate the
  * affected queries (debounced). Returns the last transaction insert time so
  * the UI can highlight live arrivals.
@@ -38,7 +49,7 @@ export function useRealtimeInvalidation(profileCode: string | null): { lastInser
       pending.current.clear();
       for (const d of domainsFor(tables)) void qc.invalidateQueries({ queryKey: ["p", profileCode, d] });
     };
-    const channel = supabase.channel(`ledger:${profileCode}`);
+    const channel = supabase.channel(channelTopic(profileCode));
     for (const table of Object.keys(REALTIME_TABLES)) {
       channel.on(
         "postgres_changes",
