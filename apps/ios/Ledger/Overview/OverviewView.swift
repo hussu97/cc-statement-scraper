@@ -49,15 +49,19 @@ private struct HeroCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(overview.heroEyebrow().uppercased())
-                .font(Typography.caption).tracking(1.2).foregroundStyle(Palette.muted)
-            // Side by side while it fits; the unit goes above the number at
-            // large sizes rather than the number shrinking below the unit.
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) { unit; amount }
-                VStack(alignment: .leading, spacing: 0) { unit; amount }
+            // One VoiceOver element: "October spend, posted so far, 860 dirhams".
+            VStack(alignment: .leading, spacing: 10) {
+                Text(overview.heroEyebrow().uppercased())
+                    .font(Typography.caption).tracking(1.2).foregroundStyle(Palette.muted)
+                // Side by side while it fits; the unit goes above the number at
+                // large sizes rather than the number shrinking below the unit.
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) { unit; amount }
+                    VStack(alignment: .leading, spacing: 0) { unit; amount }
+                }
             }
-            .accessibilityElement(children: .combine)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(overview.heroAccessibilityLabel())
             if let comparison = overview.comparison() {
                 Chip(label: comparison.text, tone: comparison.tone)
             }
