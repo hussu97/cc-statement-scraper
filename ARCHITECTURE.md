@@ -120,12 +120,12 @@ fx_rates (global)
 | `profile_members` | `(profile_code, user_id)`, role `owner` or `viewer`. Pending invites live in `private.pending_members` and are claimed by `auth.users` triggers once the user's email is **confirmed** (on insert when already confirmed, or on the confirmation / email change); `add_profile_member` also treats an unconfirmed account as not signed up. Self sign-up is disabled (§8), so that user is created by an Auth invite. An owner removes a whole profile with `delete_profile(p_profile_code, p_confirm_key)`, which **archives** it: `profiles.archived_at` is set, nothing is deleted (data, PDFs and Vault secrets stay), its active service tokens are revoked and its mailboxes disabled (recorded in `archive_state`). Archived profiles drop out of every membership check, so no client sees them; `restore_profile` (service role) undoes exactly that. |
 | `service_tokens` | `ccs_<hex>` tokens. Only the sha256 is stored. Scopes are `statements:upload` and `sms:ingest`, each tied to one profile. |
 | `banks` | FAB, ADCB, ENBD, EIB, SIB, MASHREQ, WIO (Wio Bank, no SMS sender: its alerts are app notifications), plus their SMS sender ids. `logo_path` names the bank's image in the public `bank-logos` bucket (`<bank_code>.png`); clients build `<SUPABASE_URL>/storage/v1/object/public/bank-logos/<logo_path>`. |
-| `accounts`, `cards` | Credit-card accounts (kind `credit_card` only) and their cards by `last4`. A replacement card is a new card on the same account: the old card becomes `replaced` and keeps its transactions. It joins the account either by the owner (`add_replacement_card(profile, old card_code, new last4)`) or automatically for a history extract (§4, statement path step 1). |
+| `accounts`, `cards` | Credit-card accounts (kind `credit_card` only) and their cards by `last4`. `cards.wallet_name` is the name the phone's wallet shows for the card (owner-editable, unique per profile ignoring case); Wallet payments find their card by it. A replacement card is a new card on the same account: the old card becomes `replaced` and keeps its transactions. It joins the account either by the owner (`add_replacement_card(profile, old card_code, new last4)`) or automatically for a history extract (§4, statement path step 1). |
 | `documents` | One PDF as received: `sha256` unique per profile, `source` scraper/upload/ios/gmail/outlook/legacy, `parse_status` queued/parsing/parsed/failed. Stored at `statements/<profile_code>/<doc_code>.pdf`. |
 | `statements` | `kind` is `statement` or `history_extract` (SIB history exports). Identity is `(account, statement_date)` per kind among active rows. Holds totals, due date, min due and credit limit. `doc_code` is the document that currently evidences it; several documents can evidence one statement (§4). |
 | `statement_lines` | **Immutable evidence.** `line_key` is a sha256 of the account and the raw facts (`private.statement_line_key`) and `occurrence` is the ordinal among identical keys, so two identical coffees are two lines. Only `is_current`, `superseded_at` and `source_doc_codes` change (and `account_code` with `line_key` when `private.merge_accounts` moves a line, so a re-parse still finds it) (and the text, when a private merchant mask applies: §5). `source_doc_codes` lists the documents whose parse contains the line; it stays current while any of them does. Carries `fx_rate` and `legacy_fingerprint`. |
 | `sms_templates` | Data-driven regex per bank (sender and body patterns, `field_groups`, `msg_kind`, `priority`, `examples`). A BEFORE trigger rejects a template unless every example parses to its `expect`, `field_groups` are valid, and patterns are bounded (≤ 1000/200 chars, no back-references). Every template has at least one example. Members see only templates for their banks, their messages or their proposals; `examples` is not readable by clients. `scope_profile_code` limits an LLM proposal to the profile it was made for (its sender pattern is built from the bank's `sms_senders`) until an operator runs `promote_sms_template`. |
-| `sms_messages` | Raw SMS (OTPs never arrive), body ≤ 2000 chars. `client_msg_id` is unique per profile. Parsed fields, `parse_status` pending/parsed/ignored/unparsed/failed (`ignore_reason = error:<sqlstate>` when processing raised; declined, debit-card and other alerts are `ignored` with the kind as reason). |
+| `sms_messages` | Raw SMS (OTPs never arrive), body ≤ 2000 chars. `client_msg_id` is unique per profile. Parsed fields, `parse_status` pending/parsed/ignored/unparsed/failed (`ignore_reason = error:<sqlstate>` when processing raised; declined, debit-card and other alerts are `ignored` with the kind as reason). `source` is `sms` or `wallet` (a card payment logged by the phone's payment automation, see the Wallet path in §4); a `wallet` row, and only one, carries `wallet_pass_name`. |
 | `transactions` | The canonical ledger. Derived facts (status pending/posted/void/orphaned, dates, amounts, FX, merchant) come from evidence via `private.refresh_transaction()`. User fields: `manual_category_code`, `notes`, `exclude_from_spend`. |
 | `card_transfers` | A payment from one credit card to another (Wio's credit card pays other cards from its credit line, e.g. an EIB card): `from_txn_code` is the paying card's charge (`direction = debit`, `kind = payment`), `to_txn_code` the paid card's credit `payment`. `private.link_card_transfer` pairs them on every insert/update of a payment (trigger `transactions_card_transfer`): same AED amount, opposite directions, different accounts, at most 3 days apart, each the other's only candidate; a side that stops qualifying drops the link. `v_transactions` carries the other side (`transfer_txn_code`, `transfer_bank_code`, `transfer_card_last4`). Members read; no client writes. |
 | `transaction_evidence` | Links a transaction to a statement line, history line or SMS. `role` primary/auth/post/reversal/duplicate, `method` new/exact/scored/tie/manual/legacy, `is_active`, `is_locked`. A line or SMS has at most one active link, and a transaction has at most one active statement line and one active history line. |
@@ -299,6 +299,36 @@ Adding a live template, activating one, or changing an active one's pattern, pri
 re-runs the unparsed/failed messages its sender pattern (and scope) reaches, newest first, 500 at
 most (`trg_sms_templates_reprocess`). A rename or deactivation re-runs nothing. A new bank format
 needs an INSERT, not a deploy.
+
+### Wallet path
+
+Wio sends app notifications rather than SMS for most purchases, and a shortcut cannot read
+another app's notifications. The Shortcuts **Transaction** automation fires on each tap-to-pay
+payment with the amount, merchant and the card's display name (no card number); the iOS
+"Log Card Payment" intent sends them to
+`ingest_wallet_transactions(profile, [{client_msg_id, occurred_at, amount, currency, merchant, pass_name}])`
+(owner only, at most 200 items; `amount` is a decimal string > 0, `currency` three capitals,
+`merchant` 1–200 and `pass_name` 1–64 characters). Each item becomes an `sms_messages` row with
+`source = 'wallet'`, sender `Wallet`, the synthetic body `<CUR> <amount> at <merchant> (<pass name>)`
+(so the `body_hash` duplicate rule and the SMS screens apply unchanged) and the submitted fields in
+`parsed_fields`. Results use the SMS statuses, with `invalid` reasons `invalid_amount`,
+`invalid_currency`, `invalid_merchant`, `invalid_pass_name`, `invalid_occurred_at`,
+`invalid_client_msg_id` and `not_an_object`.
+
+`process_sms` sends Wallet rows down their own branch: the card is the one whose `wallet_name`
+equals the pass name ignoring case, the row becomes a parsed `purchase` dated at `occurred_at`,
+and no template is consulted. With no such card an `unknown_card` review opens with candidates
+`[{"wallet_name": …}]`; setting that name on a card (trigger `cards_wallet_name_reprocess`)
+re-processes the waiting rows and resolves their reviews (`{"auto": "card_registered"}`). The
+review's register-card action needs a card number, so for a Wallet row it fails with 22023.
+
+A bank SMS and a Wallet event for the same purchase carry different merchant texts, and
+`match_sms` never links two alerts. So before `match_sms`, any parsed purchase alert first looks
+for its twin from the **other** source: same account, amount and currency, `event_at` within 30
+minutes, on a transaction with no evidence from this alert's source yet (nearest first, so two
+same-amount purchases pair one to one). It joins that transaction as `duplicate` evidence
+(status `duplicate`). Either order works, and the statement line later posts the one
+transaction. Profiles without Wallet rows are unaffected.
 
 ### Matcher
 

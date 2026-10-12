@@ -1,5 +1,15 @@
 # Changelog
 
+## Card payments logged from the phone's wallet — 2026-10-13
+
+### Backend (Supabase)
+
+- **add** `20261012211020_wallet_transactions`: `ingest_wallet_transactions(p_profile_code, p_items)` (owner only, ≤ 200 items of `{client_msg_id, occurred_at, amount, currency, merchant, pass_name}`, amount as a decimal string) stores each payment as an `sms_messages` row with the new `source = 'wallet'` and `wallet_pass_name` (sender `Wallet`, body `<CUR> <amount> at <merchant> (<pass name>)`) and returns the `ingest_sms` result shape and statuses. `process_sms` resolves a Wallet row's card by the new owner-editable `cards.wallet_name` (unique per profile, case-insensitive; column grant to `authenticated`). An unknown name opens an `unknown_card` review (candidates `[{wallet_name}]`) that resolves itself when the name is set on a card; `resolve_review`'s register-card action refuses Wallet rows (22023). A bank SMS and a Wallet event for the same purchase (same account, amount and currency, within 30 minutes, either order) become one transaction with two evidence rows; SMS-only profiles are unaffected. pgTAP `37_wallet_transactions`.
+
+### Docs
+
+- **change** ARCHITECTURE §3 (`sms_messages.source`, `cards.wallet_name`) and §4 Wallet path.
+
 ## Backlog batch 1: invites, OTP filter, budgets, rule editor, iOS contrast and VoiceOver — 2026-10-13
 
 ### Backend (Supabase)

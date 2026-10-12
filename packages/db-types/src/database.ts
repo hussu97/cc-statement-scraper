@@ -324,6 +324,7 @@ export type Database = {
           profile_code: string
           status: string
           updated_at: string
+          wallet_name: string | null
         }
         Insert: {
           account_code: string
@@ -336,6 +337,7 @@ export type Database = {
           profile_code: string
           status?: string
           updated_at?: string
+          wallet_name?: string | null
         }
         Update: {
           account_code?: string
@@ -348,6 +350,7 @@ export type Database = {
           profile_code?: string
           status?: string
           updated_at?: string
+          wallet_name?: string | null
         }
         Relationships: [
           {
@@ -1322,9 +1325,11 @@ export type Database = {
           received_at: string
           sender: string
           sms_code: string
+          source: string
           template_code: string | null
           template_version: number | null
           updated_at: string
+          wallet_pass_name: string | null
         }
         Insert: {
           account_code?: string | null
@@ -1349,9 +1354,11 @@ export type Database = {
           received_at: string
           sender: string
           sms_code?: string
+          source?: string
           template_code?: string | null
           template_version?: number | null
           updated_at?: string
+          wallet_pass_name?: string | null
         }
         Update: {
           account_code?: string | null
@@ -1376,9 +1383,11 @@ export type Database = {
           received_at?: string
           sender?: string
           sms_code?: string
+          source?: string
           template_code?: string | null
           template_version?: number | null
           updated_at?: string
+          wallet_pass_name?: string | null
         }
         Relationships: [
           {
@@ -2480,6 +2489,10 @@ export type Database = {
       }
       ingest_sms: {
         Args: { p_messages: Json; p_profile_code: string }
+        Returns: Json
+      }
+      ingest_wallet_transactions: {
+        Args: { p_items: Json; p_profile_code: string }
         Returns: Json
       }
       list_profile_members: {
