@@ -1,5 +1,17 @@
 # Changelog
 
+## Archive instead of delete; a read-only super admin — 2026-10-12
+
+### Backend (Supabase)
+
+- **change** `20261012180000_archive_and_super_admin`: queue messages are archived, never deleted. `queue_delete`, `queue_to_dlq`, `requeue_dlq` and `drain_dlq` use `pgmq.archive` (same signatures), so every message and its `dlq_reason` stay in `pgmq.a_<queue>`.
+- **change** `delete_profile` archives the profile (`profiles.archived_at`, `archived_by`, `archive_state`). Nothing cascades: data, PDFs and Vault secrets stay, and no PDFs are queued for `storage_cleanup`. Its active service tokens are revoked and its mailboxes disabled. Archived profiles drop out of `my_profile_codes`, `my_owned_profile_codes` and `assert_member`, so no client sees them. **add** `restore_profile` (service role) undoes exactly what archiving turned off.
+- **add** Super admin: `private.super_admins` (seeded with `h_abbasi97@hotmail.com`, matched once the email is confirmed) and `authz.is_super_admin()`. A super admin reads every active profile (data, members, secret names, tokens) through `my_profile_codes` and member-level RPCs, and writes only where it is an owner, enforced by RLS and owner checks. pgTAP `36_archive_and_super_admin`; `17_db_identity_and_legacy` asserts archiving and restore.
+
+### Docs
+
+- **change** ARCHITECTURE §3/§8, PRODUCTION runbook and README RPC table: archive semantics, `restore_profile`, super admin.
+
 ## Web smoke reads the deployed commit off production — 2026-10-12
 
 ### Web

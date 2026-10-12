@@ -1148,6 +1148,9 @@ export type Database = {
       }
       profiles: {
         Row: {
+          archive_state: Json | null
+          archived_at: string | null
+          archived_by: string | null
           base_currency: string
           created_at: string
           key: string
@@ -1157,6 +1160,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          archive_state?: Json | null
+          archived_at?: string | null
+          archived_by?: string | null
           base_currency?: string
           created_at?: string
           key: string
@@ -1166,6 +1172,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          archive_state?: Json | null
+          archived_at?: string | null
+          archived_by?: string | null
           base_currency?: string
           created_at?: string
           key?: string
@@ -2621,6 +2630,7 @@ export type Database = {
         Args: { p_action: Json; p_review_code: string }
         Returns: Json
       }
+      restore_profile: { Args: { p_profile_code: string }; Returns: Json }
       resubmit_document: {
         Args: { p_doc_code: string; p_profile_code: string }
         Returns: Json

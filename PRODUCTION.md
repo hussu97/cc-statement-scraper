@@ -906,17 +906,20 @@ Deploy Supabase job failed at `supabase migration fetch --linked` (investigate; 
   - `select public.requeue_dlq('<queue>', 100);` moves messages back with a fresh attempt
     count; for `parse_document` it also re-opens the failed documents. (`requeue_documents`
     still works per profile.)
-  - `select public.drain_dlq('<queue>');` deletes them instead.
+  - `select public.drain_dlq('<queue>');` archives them instead (kept in `pgmq.a_<queue>_dlq`).
+    Never `pgmq.delete` or purge a queue by hand: archive (`pgmq.archive`).
   - `<queue>` is `parse_document`, `llm_categorize`, `sms_fallback` or `storage_cleanup`.
 - **Batch job errors:** `select * from private.job_errors order by created_at desc limit 50;`
   (per-profile failures of `nightly`, `enqueue_llm_categorize`, `recategorize_stale`,
   `reestimate_pending_fx`; kept 30 days, counted in `ops_health.job_errors_24h`).
 - **Promote an LLM SMS template:** an approved proposal parses only its own profile's messages.
   To make it global: `select public.promote_sms_template('<tpl_…>');`.
-- **Delete a profile:** an owner calls `select public.delete_profile('<prf_…>', '<profile key>');`.
-  Vault secrets go with it; its PDFs are queued on `storage_cleanup` (`{bucket, paths[]}`) for
-  the worker to remove through the Storage API (on its next run; `kick_worker` wakes it for
-  them). A batch that keeps failing lands in `storage_cleanup_dlq` and raises a `dlq:` issue.
+- **Archive a profile:** an owner calls `select public.delete_profile('<prf_…>', '<profile key>');`.
+  It archives: nothing is deleted (data, PDFs and Vault secrets stay), its service tokens are
+  revoked and its mailboxes disabled, and it disappears from every client. Undo with
+  `select public.restore_profile('<prf_…>');` (service role).
+- **Super admins:** `select * from private.super_admins;` (emails, matched once confirmed in
+  Auth). They read every active ledger and write only their own.
 - **New SMS format:** add a template row in a guarded content migration (CLAUDE.md §1.9) with
   at least one `examples` entry (required). The validation trigger proves it parses, and the
   unparsed messages from its senders re-run automatically. Or approve an LLM proposal in the Review inbox.
