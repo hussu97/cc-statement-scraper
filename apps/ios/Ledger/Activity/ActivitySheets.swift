@@ -21,6 +21,9 @@ struct CategorySheet: View {
                             .font(Typography.rowMeta).monospacedDigit().foregroundStyle(Palette.muted)
                         BankCardLabel(bankCode: transaction.bankCode, label: transaction.cardSuffix, size: 18,
                                       font: Typography.rowMeta)
+                        if let peer = transaction.transferPeer {
+                            TransferPeerLabel(peer: peer, size: 18, font: Typography.rowMeta)
+                        }
                         if let source = transaction.categorySource {
                             Text("Category from \(source)").font(Typography.caption).foregroundStyle(Palette.subtle)
                         }

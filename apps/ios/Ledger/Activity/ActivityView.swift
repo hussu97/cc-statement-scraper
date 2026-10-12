@@ -95,6 +95,7 @@ struct TransactionRow: View {
                     Text(txn.title).font(Typography.rowTitle).foregroundStyle(Palette.ink)
                         .lineLimit(typeSize.prefersStackedRows ? 3 : 1)
                     meta
+                    if let peer = txn.transferPeer { TransferPeerLabel(peer: peer) }
                 }
             } trailing: {
                 if typeSize.prefersStackedRows {
@@ -137,5 +138,22 @@ struct TransactionRow: View {
                 Text(original).font(Typography.caption).moneyLine().foregroundStyle(Palette.muted)
             }
         }
+    }
+}
+
+/// "Paid to [EIB logo] •9216" / "From [WIO logo] •9202" on a card-transfer row.
+struct TransferPeerLabel: View {
+    let peer: CardTransferPeer
+    var size: CGFloat = 16
+    var font: Font = Typography.caption
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(peer.prefix)
+            BankCardLabel(bankCode: peer.bankCode, label: peer.cardSuffix, size: size, font: font)
+        }
+        .font(font)
+        .foregroundStyle(Palette.muted)
+        .lineLimit(1)
     }
 }
