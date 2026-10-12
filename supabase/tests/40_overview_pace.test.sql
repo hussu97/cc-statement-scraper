@@ -125,8 +125,14 @@ select is(pg_temp.pace('2025-09-01', '2025-09-30', 'spend_avg_3m_to_date'), '416
 -- 29 Sep: August to the 29th only.
 select is(pg_temp.pace('2025-09-01', '2025-09-29', 'spend_avg_3m_to_date'), '200.00',
           '29 Sep: (0 + 400 + 200) / 3 to the 29th');
-select is(pg_temp.pace('2025-09-01', '2025-09-29', 'projected_month_end'), '1416.67',
-          '29 Sep: projected = 1200 + (416.67 - 200.00)');
+select is(pg_temp.pace('2025-09-01', '2025-09-29', 'projected_month_end'), '1525.00',
+          '29 Sep: only July and August have spend, so the rest of the month is averaged over 2: 1200 + (1250 - 600) / 2');
+-- 5 Aug: only July has history. The to-date average still divides by 3 (like spend_avg_3m),
+-- but the projection averages the rest of the month over the one month that has data.
+select is(pg_temp.pace('2025-08-01', '2025-08-05', 'spend_avg_3m_to_date'), '33.33',
+          '5 Aug: 100 / 3 to the 5th');
+select is(pg_temp.pace('2025-08-01', '2025-08-05', 'projected_month_end'), '1150.00',
+          '5 Aug: one month of history: 850 + (400 - 100) / 1, not / 3');
 
 -- A completed month and a future month.
 select is(pg_temp.pace('2025-10-01', '2025-11-13', 'spend_avg_3m_to_date'), '816.67',
