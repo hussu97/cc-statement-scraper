@@ -1,27 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, type RpcReturn } from "@/lib/supabase";
 import { toAmount } from "@/lib/money";
+import { formatMonth } from "@/lib/dates";
 import { keys } from "./keys";
 import { must, mustList } from "./api";
 
-export function useBudgets(profileCode: string) {
-  return useQuery({
-    queryKey: keys.budgets(profileCode),
-    queryFn: async () =>
-      mustList(
-        await supabase
-          .from("budgets")
-          .select("*")
-          .eq("profile_code", profileCode)
-          .order("effective_from", { ascending: false }),
-      ),
-  });
-}
-
+/**
+ * Every budget of the ledger as it stands in `month`: the ones that count
+ * (`is_effective`, total first) and, after them, the ones that don't
+ * (upcoming, ended, or replaced by a newer budget of the same scope). Which
+ * budget counts is the server's call (CLAUDE.md §2.2).
+ */
 export function useBudgetStatus(profileCode: string, month: string) {
   return useQuery({
     queryKey: keys.budgetStatus(profileCode, month),
-    queryFn: async () => mustList(await supabase.rpc("budget_status", { p_profile_code: profileCode, p_month: month })),
+    queryFn: async () =>
+      mustList(await supabase.rpc("budget_status", { p_profile_code: profileCode, p_month: month, p_include_inactive: true })),
   });
 }
 
@@ -117,7 +111,41 @@ export function budgetTitle(b: { category_code: string | null; category_name: st
   return b.category_code === null ? b.account_name : `${b.category_name} · ${b.account_name}`;
 }
 
-/** Whether a budget row applies to a month (first-of-month date). */
-export function budgetAppliesTo(b: { effective_from: string; effective_to: string | null }, month: string): boolean {
-  return b.effective_from <= month && (b.effective_to === null || b.effective_to >= month);
+/** Splits `budget_status` rows by the server's `is_effective`, keeping its order. */
+export function splitByEffective<T extends { is_effective: boolean }>(rows: readonly T[]): { effective: T[]; inactive: T[] } {
+  return { effective: rows.filter((r) => r.is_effective), inactive: rows.filter((r) => !r.is_effective) };
+}
+
+/**
+ * Why a budget the server marked not effective for `month` (a first-of-month
+ * date) doesn't count: it starts later, it ended, or, when its own range does
+ * cover the month, a newer budget of the same scope replaced it.
+ */
+export function inactiveBudgetLabel(b: { effective_from: string; effective_to: string | null }, month: string): string {
+  if (b.effective_from > month) return `Starts ${formatMonth(b.effective_from)}`;
+  if (b.effective_to && b.effective_to < month) return `Ended ${formatMonth(b.effective_to)}`;
+  return "Replaced by a newer budget";
+}
+
+/**
+ * The edit form's starting values for a `budget_status` row. The generated
+ * row type can't say so, but the codes and `effective_to` are null for an
+ * every-card, all-spending or open-ended budget.
+ */
+export function budgetDraft(b: {
+  budget_code: string;
+  account_code: string | null;
+  category_code: string | null;
+  budget_aed: number | string;
+  effective_from: string;
+  effective_to: string | null;
+}): BudgetInput {
+  return {
+    budget_code: b.budget_code,
+    account_code: b.account_code ?? null,
+    category_code: b.category_code ?? null,
+    amount_aed: String(b.budget_aed),
+    effective_from: b.effective_from,
+    effective_to: b.effective_to ?? null,
+  };
 }
