@@ -25,6 +25,11 @@ public struct PendingUploads: Sendable {
 
     public var count: Int { list().count }
 
+    /// Every saved PDF, waiting or refused (sign-out, after the person confirmed).
+    public func removeAll() {
+        try? FileManager.default.removeItem(at: directory)
+    }
+
     static func originalName(_ url: URL) -> String {
         let name = url.lastPathComponent
         guard let range = name.range(of: "__") else { return name }

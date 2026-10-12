@@ -91,13 +91,21 @@ struct WalletIntakeTests {
         #expect(await outbox.status().isEmpty)
     }
 
-    @Test("no ledger set: nothing queued, the dialog says where to set it")
-    func noProfile() async {
-        let api = StubAPI()
+    @Test("no ledger set: saved without one (like an SMS), nothing sent, sent once the ledger is known (IOS-12r)")
+    func noLedgerIsSaved() async throws {
+        let api = StubAPI(.succeed(status: "created"))
         let (intake, outbox) = intake(api, target: .some(nil))
         let (outcome, dialog) = await intake.handle(amount: amount, currency: "AED", merchant: "Shop", card: "Wio")
-        #expect(outcome == .noProfile)
-        #expect(dialog.contains("SMS go to"))
+        #expect(outcome == .queued(.noLedger) && outcome.needsAttention)
+        #expect(dialog.contains("SMS go to") && dialog.hasPrefix("Saved on this phone") && !dialog.contains("iPhone"))
+        #expect(api.walletCalls.isEmpty)
+        let status = await outbox.status()
+        #expect(status.awaitingLedger == 1 && status.pending == 0)
+        let entry = try #require(try await outbox.entries().first)
+        #expect(entry.kind == .wallet && entry.profileCode == nil)
+        #expect(try await outbox.adoptPending(profileCode: "prf_personal") == 1)
+        await outbox.flush()
+        #expect(api.walletCalls.map(\.profile) == ["prf_personal"])
         #expect(await outbox.status().isEmpty)
     }
 

@@ -89,7 +89,7 @@ struct SMSCaptureTests {
     func dialogsDoNotEcho() {
         let body = "Purchase of AED 45.10 with Credit Card ending 1234 at CARREFOUR"
         let outcomes: [SMSIntakeOutcome] = [
-            .dropped(.dropOTP), .dropped(.dropEmpty), .noProfile,
+            .dropped(.dropOTP), .dropped(.dropEmpty), .queued(.noLedger),
             .delivered(status: "new"), .delivered(status: "unknown_card"), .queued(.offline), .queued(.signedOut),
             .parked(reason: "Ledger rejected this message (invalid)."), .failed("x"),
         ]

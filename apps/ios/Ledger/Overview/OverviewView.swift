@@ -8,10 +8,14 @@ struct OverviewView: View {
     let review: ReviewModel
     let profileCode: String
     let canResolve: Bool
+    /// SMS stuck on this phone for over an hour, nil when none.
+    let outboxAlert: StaleOutboxAlert?
+    let openSettings: () -> Void
 
     var body: some View {
         Page {
             MonthSwitcher(month: month).padding(.top, 8)
+            if let outboxAlert { OutboxStrip(alert: outboxAlert, open: openSettings) }
             StateContainer(state: model.state, retry: reload) { content in
                 let overview = content.overview
                 HeroCard(overview: overview)
@@ -79,38 +83,6 @@ private struct HeroCard: View {
     private var amount: some View {
         Text(overview.heroAmount).font(Typography.hero(size: heroSize)).foregroundStyle(Palette.ink)
             .lineLimit(1).minimumScaleFactor(0.4)
-    }
-}
-
-private struct PendingStrip: View {
-    let summary: String
-    let lastSMS: String?
-
-    var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 10) {
-                dot
-                summaryText
-                Spacer()
-                if let lastSMS { lastText(lastSMS) }
-            }
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .firstTextBaseline, spacing: 10) { dot; summaryText }
-                if let lastSMS { lastText(lastSMS) }
-            }
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Palette.warnSoft, in: RoundedRectangle(cornerRadius: Metrics.radiusMd))
-    }
-
-    private var dot: some View { Circle().fill(Palette.warn).frame(width: 8, height: 8) }
-    private var summaryText: some View {
-        Text(summary).font(Typography.rowTitle).monospacedDigit().foregroundStyle(Palette.ink)
-            .fixedSize(horizontal: false, vertical: true)
-    }
-    private func lastText(_ text: String) -> some View {
-        Text(text).font(Typography.caption).foregroundStyle(Palette.muted)
     }
 }
 
