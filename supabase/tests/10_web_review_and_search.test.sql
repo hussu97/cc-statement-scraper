@@ -32,8 +32,8 @@ insert into public.profile_members (profile_code, user_id, role) values (pg_temp
 select results_eq(
   $$ select name, color_token from public.categories where profile_code = pg_temp.v('p')
      and name in ('Apple in-app purchase', 'Forex Charge', 'Medicine') order by name $$,
-  $$ values ('Apple in-app purchase'::text, 'cat-3'::text), ('Forex Charge', 'cat-11'), ('Medicine', 'cat-9') $$,
-  'new profiles get the distinct seed colours');
+  $$ values ('Apple in-app purchase'::text, 'cat-15'::text), ('Forex Charge', 'cat-8'), ('Medicine', 'cat-9') $$,
+  'new profiles get the distinct seed colours (16-hue palette, WEB-17r)');
 
 -- ── retry_sms_fallback ──────────────────────────────────────────────────────
 select pg_temp.set('sms', (pg_temp.sms('XYZ alert: nothing any template knows'))->>'sms_code');
