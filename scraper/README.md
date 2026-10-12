@@ -109,6 +109,7 @@ Uploads are a multipart `POST {CCS_SCRAPER_TARGET_URL}{CCS_SCRAPER_UPLOAD_PATH}`
 - The Ledger v2 response lists each file as `queued` or `duplicate` (already ingested, same sha256); the CLI prints the counts and logs each file.
 - `scrape` uploads one batch per bank. If one bank's upload fails the others still run; failures are listed at the end and the command exits non-zero.
 - Successful uploads are recorded in `<download_dir>/<profile>/state/uploaded.json` (sha256 → filename, bank, doc_code, status). The bank map (`state/bank_map.json`) keeps every scraped PDF's bank, so `upload-pending` can re-send any PDF in `incoming/` with its bank hint. It skips files already in `uploaded.json` unless `--force` is passed. Re-sending is safe because the server dedupes by sha256.
+- Both state files are written atomically (temp file + rename). A file that no longer parses is moved aside to `<name>.<timestamp>.corrupt` with a warning, and the state starts empty, so the next `upload-pending` may re-send files the server already has (reported as `duplicate`). Files are matched to the server's response by the name it echoes back (trimmed, last 200 characters), so long or padded filenames are recorded too.
 
 ### Pointing at Ledger v2 (Supabase)
 
