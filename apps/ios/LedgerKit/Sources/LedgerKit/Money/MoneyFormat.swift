@@ -30,6 +30,15 @@ public enum MoneyFormat {
         grouped(value, fractionDigits: 0)
     }
 
+    /// The hero number as VoiceOver should say it, rounded like `hero`:
+    /// `"860 dirhams"`, `"1 dirham"`, `"minus 50 dirhams"`.
+    public static func spokenDirhams(_ value: Decimal) -> String {
+        let whole = rounded(value, scale: 0)
+        let magnitude = whole < 0 ? -whole : whole
+        let unit = magnitude == 1 ? "dirham" : "dirhams"
+        return (whole < 0 ? "minus " : "") + "\(grouped(magnitude, fractionDigits: 0)) \(unit)"
+    }
+
     /// Short axis/chip labels: `"950"`, `"12.5k"`, `"1.2M"`. One decimal is kept
     /// so 12,500 and 13,500 do not both become "13k" through half-even rounding.
     public static func compact(_ value: Decimal) -> String {
