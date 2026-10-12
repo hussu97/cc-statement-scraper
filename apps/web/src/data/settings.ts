@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { keys } from "./keys";
-import { must, mustList } from "./api";
+import { ApiError, functionError, must, mustList } from "./api";
 
 // ── members ────────────────────────────────────────────────────────────────
 /** A row of list_profile_members: a member, or a pending invite (user_id null). */
@@ -21,14 +21,44 @@ export function useMembers(profileCode: string) {
   });
 }
 
-export function useAddMember(profileCode: string) {
+/** What the `member-invite` Edge Function answers (`supabase/functions/member-invite`). */
+export interface MemberInviteResult {
+  status: "added" | "invited" | "resent";
+  invite_sent: boolean;
+  /** Why the email was not sent although the member was saved (`INVITE_COOLDOWN`, ...). */
+  invite_error?: string;
+}
+
+async function memberInvite(body: {
+  profile_code: string;
+  email: string;
+  role?: "owner" | "viewer";
+  action: "invite" | "resend";
+}): Promise<MemberInviteResult> {
+  const { data, error } = await supabase.functions.invoke<MemberInviteResult>("member-invite", { body });
+  if (error) throw await functionError(error);
+  if (!data) throw new ApiError("The server sent an empty answer. Refresh to check the list.");
+  return data;
+}
+
+/**
+ * Add a member, and email an invite when they have no account yet (NEW-1r). The
+ * function adds through add_profile_member as the caller, then sends the Auth invite.
+ */
+export function useInviteMember(profileCode: string) {
   const qc = useQueryClient();
   return useMutation({
-    /** Resolves to "added" (existing user) or "invited" (access granted on their first sign-in). */
-    mutationFn: async (v: { email: string; role: "owner" | "viewer" }) =>
-      must(await supabase.rpc("add_profile_member", { p_profile_code: profileCode, p_email: v.email.trim(), p_role: v.role })) as
-        | "added"
-        | "invited",
+    mutationFn: (v: { email: string; role: "owner" | "viewer" }) =>
+      memberInvite({ profile_code: profileCode, email: v.email.trim(), role: v.role, action: "invite" }),
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.members(profileCode) }),
+  });
+}
+
+/** Email the invite again to a pending member. The variable is their email. */
+export function useResendInvite(profileCode: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (email: string) => memberInvite({ profile_code: profileCode, email, action: "resend" }),
     onSettled: () => qc.invalidateQueries({ queryKey: keys.members(profileCode) }),
   });
 }
@@ -303,16 +333,118 @@ export function memberActionError(e: unknown): string {
   return err?.message || "Couldn't update access. Try again.";
 }
 
-/** Friendly sentence for add_profile_member failures. */
-export function addMemberError(e: unknown): string {
-  const err = e as { code?: string; message?: string } | null;
-  // Older backends refused unknown emails instead of saving an invite.
-  if (err?.code === "P0002" || /no user with that email/i.test(err?.message ?? "")) {
-    return "There's no Bank Ledger account with that email. They need to sign in to Bank Ledger once first.";
+export interface Notice {
+  title: string;
+  description: string;
+  tone: "positive" | "neutral" | "danger";
+}
+
+/** Why an invite email could not go out, as a sentence (codes from member-invite). */
+function inviteEmailReason(code: string | undefined): string {
+  switch (code) {
+    case "INVITE_COOLDOWN":
+      return "An invite went to this address less than 10 minutes ago, so we didn't send another yet.";
+    case "ALREADY_ACTIVE":
+      return "They already have a Bank Ledger account, so there's no invite to send. They get access the next time they sign in.";
+    case "EMAIL_RATE_LIMITED":
+      return "Too many emails have gone out recently.";
+    case "RATE_LIMITED":
+      return "You've sent a lot of invites in the last hour.";
+    default:
+      return "The invite email couldn't be sent.";
   }
-  if (err?.code === "42501") return "Only owners can add people to this ledger.";
-  if (err?.code === "22023") return "Choose Owner or Viewer.";
-  return err?.message || "Couldn't add them. Try again.";
+}
+
+/** The toast after "Invite": who was added, and whether the email went out. */
+export function inviteNotice(r: MemberInviteResult, email: string, ledgerName: string): Notice {
+  const who = email.trim();
+  if (r.status === "added") {
+    return { title: "Member added", description: `${who} can now open ${ledgerName}.`, tone: "positive" };
+  }
+  if (r.invite_sent) {
+    return {
+      title: "Invite sent",
+      description: `We emailed ${who} an invite to ${ledgerName}. They get access when they accept it.`,
+      tone: "positive",
+    };
+  }
+  const later = r.invite_error === "ALREADY_ACTIVE" ? "" : " Use Resend invite on their row later.";
+  return {
+    title: "Invite saved, email not sent",
+    description: `${inviteEmailReason(r.invite_error)}${later}`,
+    tone: "neutral",
+  };
+}
+
+/** The toast after "Resend invite" succeeds. */
+export function resendNotice(email: string): Notice {
+  return { title: "Invite sent again", description: `We emailed ${email} a new invite link.`, tone: "positive" };
+}
+
+function errCode(e: unknown): { code?: string; message?: string } {
+  return (e ?? {}) as { code?: string; message?: string };
+}
+
+/** Sentences shared by "Invite" and "Resend invite" failures, or null. */
+function commonInviteError(code: string | undefined): string | null {
+  switch (code) {
+    case "UNAUTHORIZED":
+      return "Your session expired. Sign in again.";
+    case "RATE_LIMITED":
+      return "You've sent a lot of invites in the last hour. Try again later.";
+    case "EMAIL_RATE_LIMITED":
+      return "Too many emails have gone out recently. Try again in a while.";
+    case "INVITE_FAILED":
+      return "The invite email couldn't be sent. Try again in a few minutes.";
+    case "ORIGIN_NOT_ALLOWED":
+      return "Invites can only be sent from Bank Ledger's usual web address.";
+    case "INVALID_EMAIL":
+      return "Enter an email address like them@example.com.";
+    default:
+      return null;
+  }
+}
+
+/** Friendly sentence for a failed "Invite" (member-invite, action invite). */
+export function inviteMemberError(e: unknown): string {
+  const err = errCode(e);
+  const common = commonInviteError(err.code);
+  if (common) return common;
+  switch (err.code) {
+    case "FORBIDDEN":
+      return "Only owners can add people to this ledger.";
+    case "INVALID_ROLE":
+      return "Choose Owner or Viewer.";
+    case "INVALID_PARAMETER":
+      return /last owner/i.test(err.message ?? "")
+        ? "A ledger needs at least one owner. Make someone else an owner first."
+        : "Choose Owner or Viewer.";
+    case "INVITE_COOLDOWN":
+      return "An invite went to this address less than 10 minutes ago. Try again in a few minutes.";
+    case "ALREADY_ACTIVE":
+      return "They already have a Bank Ledger account.";
+    default:
+      return err.message || "Couldn't add them. Try again.";
+  }
+}
+
+/** Friendly sentence for a failed "Resend invite" (member-invite, action resend). */
+export function resendInviteError(e: unknown): string {
+  const err = errCode(e);
+  const common = commonInviteError(err.code);
+  if (common) return common;
+  switch (err.code) {
+    case "INVITE_COOLDOWN":
+      return "An invite went to them less than 10 minutes ago. Give it a few minutes, then resend.";
+    case "ALREADY_ACTIVE":
+      return "They already have an active Bank Ledger account, so there's nothing to resend. They get access the next time they sign in.";
+    case "NOT_A_MEMBER":
+      return "This invite was cancelled, so there's nothing to resend. The list has been refreshed.";
+    case "FORBIDDEN":
+      return "Only owners can resend invites.";
+    default:
+      return err.message || "Couldn't resend the invite. Try again.";
+  }
 }
 
 export function isEmail(v: string): boolean {

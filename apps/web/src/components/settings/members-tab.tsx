@@ -3,17 +3,21 @@ import { MailQuestionMark, UserPlus, Users } from "lucide-react";
 import { useActiveProfile } from "@/data/profile";
 import { useAuth } from "@/data/auth";
 import {
-  addMemberError,
   canRemoveMember,
+  inviteMemberError,
+  inviteNotice,
   isEmail,
   memberActionError,
   memberInitials,
   memberKey,
   memberName,
-  useAddMember,
+  resendInviteError,
+  resendNotice,
   useCancelInvite,
+  useInviteMember,
   useMembers,
   useRemoveMember,
+  useResendInvite,
   type ProfileMember,
 } from "@/data/settings";
 import { formatDate } from "@/lib/dates";
@@ -36,9 +40,16 @@ export function MembersTab() {
   const members = useMembers(profileCode);
   const remove = useRemoveMember(profileCode);
   const cancel = useCancelInvite(profileCode);
+  const resend = useResendInvite(profileCode);
   const toast = useToast();
   const [removing, setRemoving] = useState<ProfileMember | null>(null);
   const [cancelling, setCancelling] = useState<ProfileMember | null>(null);
+
+  const resendTo = (email: string) =>
+    resend.mutate(email, {
+      onSuccess: () => toast(resendNotice(email)),
+      onError: (e) => toast({ title: "Invite not sent", description: resendInviteError(e), tone: "danger" }),
+    });
 
   return (
     <div className="flex flex-col gap-4">
@@ -68,13 +79,24 @@ export function MembersTab() {
                       </p>
                       <p className="text-[12px] text-muted">
                         {m.pending
-                          ? `Invited ${formatDate(m.created_at.slice(0, 10))} · gets access on first sign-in`
+                          ? `Invited ${formatDate(m.created_at.slice(0, 10))} · gets access when they accept`
                           : `Joined ${formatDate(m.created_at.slice(0, 10))}`}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
                       {m.pending && <Badge tone="warn">Pending</Badge>}
                       <Badge tone={m.role === "owner" ? "accent" : "neutral"}>{m.role === "owner" ? "Owner" : "Viewer"}</Badge>
+                      {isOwner && m.pending && m.email && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          loading={resend.isPending && resend.variables === m.email}
+                          disabled={resend.isPending}
+                          onClick={() => m.email && resendTo(m.email)}
+                        >
+                          Resend invite
+                        </Button>
+                      )}
                       {isOwner && m.pending && (
                         <Button size="sm" variant="ghost" onClick={() => setCancelling(m)}>
                           Cancel invite
@@ -151,7 +173,7 @@ export function MembersTab() {
 
 function AddMember({ ledgerName }: { ledgerName: string }) {
   const { profile_code: profileCode } = useActiveProfile();
-  const add = useAddMember(profileCode);
+  const add = useInviteMember(profileCode);
   const toast = useToast();
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"owner" | "viewer">("viewer");
@@ -165,11 +187,7 @@ function AddMember({ ledgerName }: { ledgerName: string }) {
       { email, role },
       {
         onSuccess: (result) => {
-          toast(
-            result === "invited"
-              ? { title: "Invite saved", description: `${email.trim()} will get access to ${ledgerName} the first time they sign in to Bank Ledger.`, tone: "positive" }
-              : { title: "Member added", description: `${email.trim()} can now open ${ledgerName}.`, tone: "positive" },
-          );
+          toast(inviteNotice(result, email, ledgerName));
           setEmail("");
           setTouched(false);
         },
@@ -179,7 +197,7 @@ function AddMember({ ledgerName }: { ledgerName: string }) {
 
   return (
     <Card>
-      <CardHeader title="Add someone" />
+      <CardHeader title="Invite someone" />
       <form
         className="flex flex-col gap-3 px-5 pb-5"
         onSubmit={(e) => {
@@ -187,7 +205,7 @@ function AddMember({ ledgerName }: { ledgerName: string }) {
           submit();
         }}
       >
-        <p className="text-[13px] text-muted">If they haven't used Bank Ledger yet, they get access the first time they sign in with this email. Adding someone who's already a member changes their role.</p>
+        <p className="text-[13px] text-muted">If they don't have a Bank Ledger account yet, we email them an invite. Inviting someone who's already a member changes their role.</p>
         <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_16rem_auto] sm:items-end">
           <Field label="Email" error={touched && invalid ? "Enter an email address like them@example.com." : null}>
             {(id, d) => (
@@ -207,10 +225,10 @@ function AddMember({ ledgerName }: { ledgerName: string }) {
           </Field>
           <Field label="Role">{() => <Select ariaLabel="Role" value={role} onValueChange={(v) => setRole(v as "owner" | "viewer")} options={ROLES} className="w-full" />}</Field>
           <Button type="submit" variant="primary" icon={<UserPlus className="size-4" />} loading={add.isPending}>
-            Add
+            Invite
           </Button>
         </div>
-        {add.error ? <p className="text-[13px] text-danger" role="alert">{addMemberError(add.error)}</p> : null}
+        {add.error ? <p className="text-[13px] text-danger" role="alert">{inviteMemberError(add.error)}</p> : null}
       </form>
     </Card>
   );

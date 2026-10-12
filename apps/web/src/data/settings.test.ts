@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  addMemberError,
   canRemoveMember,
+  inviteMemberError,
+  inviteNotice,
   isEmail,
   joinList,
   memberActionError,
@@ -9,6 +10,8 @@ import {
   memberKey,
   memberName,
   regexError,
+  resendInviteError,
+  resendNotice,
   routedBanks,
   secretStatus,
   settingsTab,
@@ -32,11 +35,58 @@ describe("members", () => {
     expect(shortUserId("1b2c3d4e-0000-4000-8000-000000000000")).toBe("1b2c3d4e");
   });
 
-  it("explains unknown emails", () => {
-    expect(addMemberError({ code: "P0002", message: "no user with that email has signed up yet" })).toMatch(/sign in to Bank Ledger once first/);
-    expect(addMemberError(new Error("no user with that email has signed up yet"))).toMatch(/sign in to Bank Ledger once first/);
-    expect(addMemberError({ code: "42501", message: "x" })).toMatch(/Only owners/);
-    expect(addMemberError({ message: "boom" })).toBe("boom");
+  describe("invites (member-invite)", () => {
+    it("says whether an existing user was added or an invite was emailed", () => {
+      expect(inviteNotice({ status: "added", invite_sent: false }, " sara@x.com ", "Home")).toEqual({
+        title: "Member added",
+        description: "sara@x.com can now open Home.",
+        tone: "positive",
+      });
+      const sent = inviteNotice({ status: "invited", invite_sent: true }, "sara@x.com", "Home");
+      expect(sent.title).toBe("Invite sent");
+      expect(sent.description).toMatch(/emailed sara@x\.com an invite to Home/);
+      expect(sent.tone).toBe("positive");
+    });
+
+    it("explains a saved invite whose email did not go out, and points at Resend", () => {
+      const notice = (invite_error?: string) => inviteNotice({ status: "invited", invite_sent: false, invite_error }, "sara@x.com", "Home");
+      for (const n of [notice("INVITE_COOLDOWN"), notice("EMAIL_RATE_LIMITED"), notice("INVITE_FAILED"), notice(undefined)]) {
+        expect(n.title).toBe("Invite saved, email not sent");
+        expect(n.tone).toBe("neutral");
+        expect(n.description).toMatch(/Resend invite/);
+      }
+      expect(notice("INVITE_COOLDOWN").description).toMatch(/less than 10 minutes ago/);
+      expect(notice("EMAIL_RATE_LIMITED").description).toMatch(/Too many emails/);
+      expect(notice("INVITE_FAILED").description).toMatch(/couldn't be sent/);
+      expect(notice("ALREADY_ACTIVE").description).toMatch(/already have a Bank Ledger account/);
+      expect(notice("ALREADY_ACTIVE").description).not.toMatch(/Resend/);
+    });
+
+    it("maps invite failures to sentences", () => {
+      expect(inviteMemberError({ code: "FORBIDDEN", message: "x" })).toMatch(/Only owners can add/);
+      expect(inviteMemberError({ code: "RATE_LIMITED", message: "too many invites" })).toMatch(/last hour/);
+      expect(inviteMemberError({ code: "EMAIL_RATE_LIMITED" })).toMatch(/Too many emails/);
+      expect(inviteMemberError({ code: "INVALID_EMAIL" })).toMatch(/them@example\.com/);
+      expect(inviteMemberError({ code: "INVALID_ROLE" })).toMatch(/Owner or Viewer/);
+      expect(inviteMemberError({ code: "INVALID_PARAMETER", message: "cannot demote the last owner of profile prf_x" })).toMatch(/at least one owner/);
+      expect(inviteMemberError({ code: "INVALID_PARAMETER", message: "invalid role x" })).toMatch(/Owner or Viewer/);
+      expect(inviteMemberError({ code: "UNAUTHORIZED" })).toMatch(/Sign in again/);
+      expect(inviteMemberError({ code: "ORIGIN_NOT_ALLOWED" })).toMatch(/usual web address/);
+      expect(inviteMemberError({ message: "boom" })).toBe("boom");
+      expect(inviteMemberError(null)).toMatch(/Try again/);
+    });
+
+    it("maps resend failures, including cooldown and already active", () => {
+      expect(resendInviteError({ code: "INVITE_COOLDOWN", message: "x" })).toMatch(/less than 10 minutes ago/);
+      expect(resendInviteError({ code: "ALREADY_ACTIVE", message: "x" })).toMatch(/already have an active Bank Ledger account.*nothing to resend/);
+      expect(resendInviteError({ code: "NOT_A_MEMBER" })).toMatch(/cancelled/);
+      expect(resendInviteError({ code: "FORBIDDEN" })).toMatch(/Only owners can resend/);
+      expect(resendInviteError({ code: "INVITE_FAILED" })).toMatch(/couldn't be sent/);
+      expect(resendInviteError({ code: "RATE_LIMITED" })).toMatch(/last hour/);
+      expect(resendInviteError({ message: "boom" })).toBe("boom");
+      expect(resendInviteError(undefined)).toMatch(/Couldn't resend/);
+      expect(resendNotice("sara@x.com")).toEqual({ title: "Invite sent again", description: "We emailed sara@x.com a new invite link.", tone: "positive" });
+    });
   });
 
   const member = (p: Partial<ProfileMember>): ProfileMember => ({
