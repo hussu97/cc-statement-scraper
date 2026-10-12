@@ -76,7 +76,11 @@ public final class AppLock {
     public var unlockTitle: String { "Unlock with \(method.name)" }
     public static let footer = "Bank Ledger always hides its screen in the app switcher. With this on, it also locks when you leave it and asks for Face ID (or your passcode) when you come back."
 
-    public func phaseChanged(_ phase: Phase) async {
+    /// Synchronous, so the cover is set in the same turn as the phase change,
+    /// before iOS takes the app-switcher snapshot. Coming back to a locked app
+    /// starts the prompt and returns its task (tests await it; the app doesn't).
+    @discardableResult
+    public func phaseChanged(_ phase: Phase) -> Task<Void, Never>? {
         switch phase {
         case .inactive:
             isInactive = true
@@ -90,18 +94,35 @@ public final class AppLock {
             isInactive = false
             if isLocked && !prompted {
                 prompted = true
-                await unlock()
+                return Task { await self.unlock() }
             }
         }
+        return nil
     }
 
     /// The prompt (automatic on return, or the Unlock button).
     public func unlock() async {
         guard isLocked, !isAuthenticating else { return }
+        // The device no longer has Face ID or a passcode (the owner removed
+        // it): no prompt can ever pass, so the lock turns itself off rather
+        // than strand the owner and the outbox behind it.
+        guard authenticator.availableMethod() != nil else {
+            setRequired(false)
+            isLocked = false
+            message = Self.turnedOffMessage
+            return
+        }
         isAuthenticating = true
         defer { isAuthenticating = false }
         // Cancelling is not an error: the lock screen and its Unlock button stay.
         if await authenticator.authenticate(reason: "Unlock Bank Ledger") { isLocked = false }
+    }
+
+    static let turnedOffMessage = "Require Face ID was turned off: this phone no longer has Face ID or a passcode set up."
+
+    private func setRequired(_ on: Bool) {
+        requireAuth = on
+        defaults.set(on, forKey: Self.requireKey)
     }
 
     /// Turning it on proves the owner can pass the check first, so nobody is
@@ -123,7 +144,6 @@ public final class AppLock {
                 return
             }
         }
-        requireAuth = on
-        defaults.set(on, forKey: Self.requireKey)
+        setRequired(on)
     }
 }

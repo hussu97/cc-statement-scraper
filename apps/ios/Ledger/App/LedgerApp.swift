@@ -51,7 +51,8 @@ struct LedgerApp: App {
         }
         .onChange(of: scenePhase) { _, phase in
             guard let model else { return }
-            Task { await model.lock.phaseChanged(AppLock.Phase(phase)) }
+            // Synchronous: the cover is up in this turn, before the app-switcher snapshot.
+            model.lock.phaseChanged(AppLock.Phase(phase))
             switch phase {
             case .active: Task { await model.becameActive() }
             // Leaving with messages waiting: let iOS send them later.
