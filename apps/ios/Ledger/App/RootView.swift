@@ -15,7 +15,7 @@ struct RootView: View {
             case .offerPasskey:
                 PasskeyOfferView(session: model.session)
             case .pickProfile:
-                ProfilePickerView(profiles: model.profiles, onSignOut: { Task { await model.signOut() } })
+                ProfilePickerView(profiles: model.profiles, model: model)
             case .main(let code):
                 Group {
                     // Until the tabs point at this ledger, nothing of the previous one shows.
@@ -29,6 +29,8 @@ struct RootView: View {
             }
         }
         .task { model.start() }
+        // SMS saved while no ledger was set go as soon as "SMS go to" is known.
+        .task(id: model.profiles.smsTarget?.profileCode) { await model.smsTargetChanged() }
         .task(id: model.session.phase) {
             await model.sessionChanged()
             #if DEBUG
@@ -48,7 +50,10 @@ struct MainTabs: View {
             Tab(LedgerTab.overview.title, systemImage: LedgerTab.overview.systemImage, value: .overview) {
                 NavigationStack {
                     OverviewView(model: model.overview, month: model.month, review: model.review,
-                                 profileCode: profileCode, canResolve: model.profiles.canWrite)
+                                 profileCode: profileCode, canResolve: model.profiles.canWrite,
+                                 outboxAlert: model.settings.outboxStatus.staleAlert,
+                                 openSettings: { model.tabs.show(.settings) },
+                                 settings: model.settings, statements: model.statements)
                 }
             }
             Tab(LedgerTab.activity.title, systemImage: LedgerTab.activity.systemImage, value: .activity) {
@@ -73,6 +78,8 @@ struct MainTabs: View {
             Tab(LedgerTab.settings.title, systemImage: LedgerTab.settings.systemImage, value: .settings) {
                 NavigationStack { SettingsView(model: model, profileCode: profileCode) }
             }
+            // SMS that haven't reached the server for an hour (BACKLOG IOS-12r).
+            .badge(model.settings.outboxStatus.badgeCount)
         }
         .environment(model.banks)
         .environment(model.spendSplit)

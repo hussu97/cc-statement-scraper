@@ -8,13 +8,26 @@ struct OverviewView: View {
     let review: ReviewModel
     let profileCode: String
     let canResolve: Bool
+    /// SMS stuck on this phone for over an hour, nil when none.
+    let outboxAlert: StaleOutboxAlert?
+    let openSettings: () -> Void
+    /// The empty-ledger checklist's links: the SMS guide and Statements.
+    let settings: SettingsModel
+    let statements: StatementsModel
 
     var body: some View {
         Page {
             MonthSwitcher(month: month).padding(.top, 8)
+            if let outboxAlert { OutboxStrip(alert: outboxAlert, open: openSettings) }
             StateContainer(state: model.state, retry: reload) { content in
                 let overview = content.overview
-                HeroCard(overview: overview)
+                // An empty ledger: first steps instead of "AED 0" and empty cards (IOS-23).
+                if let setup = content.setup {
+                    SetupChecklistCard(checklist: setup, settings: settings, statements: statements,
+                                       profileCode: profileCode, canWrite: canResolve)
+                } else {
+                    HeroCard(overview: overview)
+                }
                 if overview.showsLiveSections(), let pending = overview.pendingSummary {
                     PendingStrip(summary: pending, lastSMS: overview.lastSMSLabel())
                 }
@@ -22,17 +35,19 @@ struct OverviewView: View {
                     AttentionCard(items: overview.attention(), review: review, profileCode: profileCode,
                                   canResolve: canResolve)
                 }
-                CategoryRingCard(categories: overview.ringCategories, total: overview.spend,
-                                 scope: overview.scopeLabel(), emptyMessage: overview.emptyCategoriesMessage())
-                AccountsCard(accounts: content.accounts, owedNow: content.overview.owedNowText,
-                             owedNowCaveat: content.overview.owedNowCaveat)
+                if content.setup == nil {
+                    CategoryRingCard(categories: overview.ringCategories, total: overview.spend,
+                                     scope: overview.scopeLabel(), emptyMessage: overview.emptyCategoriesMessage())
+                    AccountsCard(accounts: content.accounts, owedNow: content.overview.owedNowText,
+                                 owedNowCaveat: content.overview.owedNowCaveat)
+                }
                 if !content.insights.isEmpty {
                     // Dismissing is an owner write (`insights_owner_dismiss`).
                     InsightsCard(insights: content.insights, dismiss: canResolve ? { insight in
                         Task { await model.dismiss(insight, profileCode: profileCode) }
                     } : nil)
                 }
-                if overview.showsLiveSections() { RecentCard(recent: overview.recent) }
+                if overview.showsLiveSections() && content.setup == nil { RecentCard(recent: overview.recent) }
             }
         }
         .ledgerNavigation("Overview")
@@ -79,38 +94,6 @@ private struct HeroCard: View {
     private var amount: some View {
         Text(overview.heroAmount).font(Typography.hero(size: heroSize)).foregroundStyle(Palette.ink)
             .lineLimit(1).minimumScaleFactor(0.4)
-    }
-}
-
-private struct PendingStrip: View {
-    let summary: String
-    let lastSMS: String?
-
-    var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 10) {
-                dot
-                summaryText
-                Spacer()
-                if let lastSMS { lastText(lastSMS) }
-            }
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .firstTextBaseline, spacing: 10) { dot; summaryText }
-                if let lastSMS { lastText(lastSMS) }
-            }
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Palette.warnSoft, in: RoundedRectangle(cornerRadius: Metrics.radiusMd))
-    }
-
-    private var dot: some View { Circle().fill(Palette.warn).frame(width: 8, height: 8) }
-    private var summaryText: some View {
-        Text(summary).font(Typography.rowTitle).monospacedDigit().foregroundStyle(Palette.ink)
-            .fixedSize(horizontal: false, vertical: true)
-    }
-    private func lastText(_ text: String) -> some View {
-        Text(text).font(Typography.caption).foregroundStyle(Palette.muted)
     }
 }
 

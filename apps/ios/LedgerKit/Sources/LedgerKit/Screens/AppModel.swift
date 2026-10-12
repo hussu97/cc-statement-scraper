@@ -46,6 +46,8 @@ public final class AppModel {
     public let spendSplit: SpendSplitModel
     /// The selected tab.
     public let tabs = TabRouter()
+    /// The app-switcher cover and the optional Face ID lock (this device only).
+    public let lock = AppLock(defaults: .standard, authenticator: LocalDeviceAuthenticator())
 
     private var lastPhase: SessionStore.Phase = .restoring
 
@@ -89,7 +91,10 @@ public final class AppModel {
                 await session.signOut()
                 return
             }
+            // Sends what waited for the sign-in, including SMS saved before a
+            // ledger was known (the outbox files them in "SMS go to").
             await services.outbox.flush()
+            await settings.refresh()
         case .signedOut:
             screens.stop()
         default:
@@ -116,7 +121,27 @@ public final class AppModel {
         await screens.refreshAll()
     }
 
+    /// The "SMS go to" ledger changed (loaded, created or picked): SMS saved
+    /// while there was none can go now.
+    public func smsTargetChanged() async {
+        guard profiles.smsTarget != nil else { return }
+        await services.outbox.flush()
+        await settings.refresh()
+    }
+
+    /// Step one of signing out: the confirmation naming what would be deleted
+    /// from this phone, or nil when nothing would be (sign out straight away).
+    public func signOutWarning() async -> String? {
+        await services.deviceQueue().signOutWarning
+    }
+
+    /// Signs out and deletes the SMS outbox and the share extension's PDFs
+    /// (after the person confirmed `signOutWarning`), so nothing is sent under
+    /// whoever signs in next (BACKLOG IOS-12r). A session the server rejects
+    /// signs out without this and keeps them.
     public func signOut() async {
+        await services.clearDeviceQueue()
+        await settings.refresh()
         screens.stop()
         tabs.reset()
         await session.signOut()

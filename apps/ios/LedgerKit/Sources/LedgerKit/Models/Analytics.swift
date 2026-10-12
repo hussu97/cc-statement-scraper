@@ -46,7 +46,8 @@ public struct MerchantSpend: Decodable, Sendable, Hashable, Identifiable {
     public let lastDate: CalendarDay
 }
 
-/// `rpc('budget_status')`.
+/// `rpc('budget_status')`: a budget and its figures for the month. With
+/// `p_include_inactive` the ledger's other budgets come too, `isEffective` false.
 public struct BudgetStatus: Decodable, Sendable, Hashable, Identifiable {
     public var id: String { budgetCode }
     public let budgetCode: String
@@ -62,10 +63,28 @@ public struct BudgetStatus: Decodable, Sendable, Hashable, Identifiable {
     public let accountCode: String?
     public let accountName: String?
     public let bankCode: String?
+    /// The budget's own range: from the first of a month through the last
+    /// month it applies (nil: open-ended). Nil from a server before
+    /// 20261012210407 (`effectiveFrom` too).
+    public let effectiveFrom: CalendarDay?
+    public let effectiveTo: CalendarDay?
+    /// The server's `is_effective`; absent from an older server, whose rows all count.
+    let effectiveFlag: Bool?
+
+    /// This budget counts for the month (the server's call, CLAUDE.md §2.2): the
+    /// newest of its scope (card × category) whose range covers the month.
+    public var isEffective: Bool { effectiveFlag ?? true }
+
+    enum CodingKeys: String, CodingKey {
+        case budgetCode, categoryCode, categoryName, colorToken, budgetAed, spentAed, projectedAed, shareUsed
+        case accountCode, accountName, bankCode, effectiveFrom, effectiveTo
+        case effectiveFlag = "isEffective"
+    }
 
     public init(budgetCode: String, categoryCode: String?, categoryName: String?, colorToken: String?,
                 budgetAed: Decimal, spentAed: Decimal, projectedAed: Decimal, shareUsed: Decimal,
-                accountCode: String? = nil, accountName: String? = nil, bankCode: String? = nil) {
+                accountCode: String? = nil, accountName: String? = nil, bankCode: String? = nil,
+                isEffective: Bool = true, effectiveFrom: CalendarDay? = nil, effectiveTo: CalendarDay? = nil) {
         self.budgetCode = budgetCode
         self.categoryCode = categoryCode
         self.categoryName = categoryName
@@ -77,6 +96,9 @@ public struct BudgetStatus: Decodable, Sendable, Hashable, Identifiable {
         self.accountCode = accountCode
         self.accountName = accountName
         self.bankCode = bankCode
+        self.effectiveFlag = isEffective
+        self.effectiveFrom = effectiveFrom
+        self.effectiveTo = effectiveTo
     }
 
     /// `"All spending"`, `"Dining"`, `"Daily card"` or `"Dining · Daily card"` (see `BudgetScope`).

@@ -21,10 +21,18 @@ extension Outbox {
 
     func runFlush(force: Bool) async -> FlushReport {
         var report = FlushReport()
-        let all = (try? OutboxFile.read(fileURL)) ?? []
-        let due = all.filter { !$0.isParked && (force || $0.nextAttemptAt <= now()) }
-            .sorted { $0.enqueuedAt < $1.enqueuedAt }
-        let groups = Dictionary(grouping: due, by: { BatchKey(profileCode: $0.profileCode, kind: $0.kind) })
+        var all = (try? OutboxFile.read(fileURL)) ?? []
+        // Items saved before a ledger was known go to the "SMS go to" ledger now (IOS-12r).
+        if all.contains(where: \.awaitsLedger), let target = pendingTarget(),
+           (try? adoptPending(profileCode: target)) != nil {
+            all = (try? OutboxFile.read(fileURL)) ?? []
+        }
+        var groups: [BatchKey: [OutboxEntry]] = [:]
+        for entry in all.sorted(by: { $0.enqueuedAt < $1.enqueuedAt })
+        where !entry.isParked && (force || entry.nextAttemptAt <= now()) {
+            guard let code = entry.profileCode else { continue }   // no ledger yet: waits
+            groups[BatchKey(profileCode: code, kind: entry.kind), default: []].append(entry)
+        }
 
         outer: for key in groups.keys.sorted() {
             let profileCode = key.profileCode

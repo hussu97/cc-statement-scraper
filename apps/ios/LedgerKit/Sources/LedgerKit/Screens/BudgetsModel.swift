@@ -1,17 +1,18 @@
 import Foundation
 import Observation
 
-/// Budgets tab: the month's `budget_status` rows (every figure the server's),
-/// the budgets not active that month, and create / edit / delete on
-/// `public.budgets` for owners. Parity with the web Budgets page.
+/// Budgets tab: every budget of the ledger as `budget_status` reports it for
+/// the month (`p_include_inactive`), split on the server's `is_effective`
+/// (CLAUDE.md §2.2: the device never works out which budget applies), and
+/// create / edit / delete on `public.budgets` for owners. Parity with the web
+/// Budgets page.
 @MainActor
 @Observable
 public final class BudgetsModel {
     public struct Content: Sendable {
-        /// `budget_status` for the month, total first.
-        public let status: [BudgetStatus]
-        /// Every budget of the ledger, newest start first.
-        public let budgets: [Budget]
+        /// `budget_status` for the month in the server's order: the budgets
+        /// that count (total first), then the ledger's others.
+        public let rows: [BudgetStatus]
         /// `filter_meta.categories`; empty when they couldn't load.
         public let categories: [FilterMeta.CategoryOption]
         /// Categories failed to load: the form can still budget all spending.
@@ -21,10 +22,9 @@ public final class BudgetsModel {
         /// Cards failed to load: the form can still budget every card.
         public let accountsFailed: Bool
 
-        public init(status: [BudgetStatus], budgets: [Budget], categories: [FilterMeta.CategoryOption],
+        public init(rows: [BudgetStatus], categories: [FilterMeta.CategoryOption],
                     categoriesFailed: Bool = false, accounts: [LedgerAccount] = [], accountsFailed: Bool = false) {
-            self.status = status
-            self.budgets = budgets
+            self.rows = rows
             self.categories = categories
             self.categoriesFailed = categoriesFailed
             self.accounts = accounts
@@ -65,14 +65,13 @@ public final class BudgetsModel {
         state = sameKey ? state.startLoading() : .loading(previous: nil)
         let api = self.api
         do {
-            async let status = api.budgetStatus(profileCode: profileCode, month: month)
-            async let budgets = api.budgets(profileCode: profileCode)
+            async let status = api.budgetStatus(profileCode: profileCode, month: month, includeInactive: true)
             async let meta: FilterMeta? = try? api.filterMeta(profileCode: profileCode)
             async let accounts: [LedgerAccount]? = try? api.accounts(profileCode: profileCode)
-            let (s, b, m, a) = try await (status, budgets, meta, accounts)
+            let (s, m, a) = try await (status, meta, accounts)
             guard gate.isCurrent(ticket) else { return }
             gate.finish(key)
-            state = .loaded(Content(status: s, budgets: b, categories: m?.categories ?? [], categoriesFailed: m == nil,
+            state = .loaded(Content(rows: s, categories: m?.categories ?? [], categoriesFailed: m == nil,
                                     accounts: a ?? [], accountsFailed: a == nil))
         } catch {
             guard gate.isCurrent(ticket) else { return }
@@ -148,45 +147,23 @@ public final class BudgetsModel {
 }
 
 extension BudgetsModel.Content {
+    /// The budgets that count for the month (the server's `is_effective`), total first.
+    public var status: [BudgetStatus] { rows.filter(\.isEffective) }
+
+    /// The ledger's other budgets (upcoming, ended, replaced), in the server's order.
+    public var inactive: [BudgetStatus] { rows.filter { !$0.isEffective } }
+
     /// The ledger has no budgets at all (not just none this month).
-    public var hasNoBudgets: Bool { budgets.isEmpty }
+    public var hasNoBudgets: Bool { rows.isEmpty }
 
-    /// Budgets that `budget_status` didn't return for the month.
-    public var inactive: [Budget] {
-        let shown = Set(status.map(\.budgetCode))
-        return budgets.filter { !shown.contains($0.budgetCode) }
-    }
-
-    /// The edit form for a budget on screen, when it is still in the table.
+    /// The edit form for a budget on screen.
     public func draft(for budgetCode: String) -> BudgetDraft? {
-        budgets.first { $0.budgetCode == budgetCode }.map(BudgetDraft.init(budget:))
+        rows.first { $0.budgetCode == budgetCode }.flatMap(BudgetDraft.init(status:))
     }
-
-    /// The budget's name as `budget_status` rows read (`BudgetScope`): `"All spending"`,
-    /// the category's name, and for a card budget the card (`"Dining · Daily card"`).
-    /// `"Category"` / `"Card"` when unknown.
-    public func name(of budget: Budget) -> String {
-        let category = budget.categoryCode.map { code in
-            categories.first { $0.categoryCode == code }?.name ?? "Category"
-        }
-        let card = budget.accountCode.map { code in account(code)?.label ?? "Card" }
-        return BudgetScope.title(categoryName: category, accountName: card)
-    }
-
-    /// The bank of a card budget's card (its logo), nil for an every-card budget.
-    public func bankCode(of budget: Budget) -> String? {
-        budget.accountCode.flatMap { account($0)?.bankCode }
-    }
-
-    private func account(_ code: String) -> LedgerAccount? { accounts.first { $0.accountCode == code } }
 
     /// The form's card list (see `BudgetCardChoice`); `"All cards"` comes before it.
     public func cardChoices(keeping current: String?) -> [BudgetCardChoice] {
         BudgetCardChoice.choices(from: accounts, keeping: current)
-    }
-
-    public func colorToken(of budget: Budget) -> String? {
-        budget.categoryCode.flatMap { code in categories.first { $0.categoryCode == code }?.colorToken }
     }
 
     /// The form's category list (see `BudgetCategoryChoice`).
