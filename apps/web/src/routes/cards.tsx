@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { Pencil } from "lucide-react";
 import { useActiveProfile } from "@/data/profile";
 import { accountLabel } from "@/data/overview";
-import { useAccounts, useUpdateAccount } from "@/data/cards";
+import { normalizeWalletName, useAccounts, useUpdateAccount, useUpdateCard, WALLET_NAME_MAX } from "@/data/cards";
 import { errorMessage } from "@/data/api";
 import { formatMoney } from "@/lib/money";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
@@ -98,9 +98,12 @@ function AccountsTab({ profileCode, isOwner }: { profileCode: string; isOwner: b
           </dl>
           <ul className="mt-4 flex flex-col gap-1.5 border-t border-border pt-3">
             {(a.cards ?? []).map((c) => (
-              <li key={c.card_code} className="flex items-center justify-between text-[13px]">
-                <span className="tabular text-ink">•{c.last4}</span>
-                <span className="text-muted">
+              <li key={c.card_code} className="flex items-center justify-between gap-3 text-[13px]">
+                <span className="min-w-0 truncate text-ink">
+                  <span className="tabular">•{c.last4}</span>
+                  {c.wallet_name && <span className="ml-2 text-muted" title="Wallet name">{c.wallet_name}</span>}
+                </span>
+                <span className="shrink-0 text-muted">
                   {c.is_supplementary ? "Supplementary" : "Primary"}
                   {c.status !== "active" && ` · ${c.status}`}
                 </span>
@@ -118,9 +121,26 @@ function AccountsTab({ profileCode, isOwner }: { profileCode: string; isOwner: b
 function EditAccountDialog({ profileCode, account, onClose }: { profileCode: string; account: AccountRow; onClose: () => void }) {
   const [nickname, setNickname] = useState(account.nickname ?? "");
   const [limit, setLimit] = useState(account.credit_limit !== null ? String(account.credit_limit) : "");
+  const cards = account.cards ?? [];
+  const [wallet, setWallet] = useState<Record<string, string>>(() => Object.fromEntries(cards.map((c) => [c.card_code, c.wallet_name ?? ""])));
   const update = useUpdateAccount(profileCode);
+  const updateCard = useUpdateCard(profileCode);
   const toast = useToast();
   const limitValid = limit.trim() === "" || /^\d+(\.\d{1,2})?$/.test(limit.trim());
+  const save = async () => {
+    try {
+      await update.mutateAsync({ accountCode: account.account_code, nickname, creditLimit: limit });
+      // Only the cards whose Wallet name changed: each one re-processes waiting Wallet payments.
+      for (const c of cards) {
+        const next = normalizeWalletName(wallet[c.card_code]);
+        if (next !== (c.wallet_name ?? null)) await updateCard.mutateAsync({ cardCode: c.card_code, walletName: next });
+      }
+      toast({ title: "Card account saved", tone: "positive" });
+      onClose();
+    } catch (e) {
+      toast({ title: "Couldn't save", description: errorMessage(e), tone: "danger" });
+    }
+  };
   return (
     <Dialog
       open
@@ -133,19 +153,8 @@ function EditAccountDialog({ profileCode, account, onClose }: { profileCode: str
           <Button
             variant="primary"
             disabled={!limitValid}
-            loading={update.isPending}
-            onClick={() =>
-              update.mutate(
-                { accountCode: account.account_code, nickname, creditLimit: limit },
-                {
-                  onSuccess: () => {
-                    toast({ title: "Card account saved", tone: "positive" });
-                    onClose();
-                  },
-                  onError: (e) => toast({ title: "Couldn't save", description: errorMessage(e), tone: "danger" }),
-                },
-              )
-            }
+            loading={update.isPending || updateCard.isPending}
+            onClick={() => void save()}
           >
             Save
           </Button>
@@ -159,6 +168,21 @@ function EditAccountDialog({ profileCode, account, onClose }: { profileCode: str
         <Field label="Credit limit (AED)" hint="Updated automatically from each statement." error={!limitValid ? "Enter a number like 30000 or 30000.00." : undefined}>
           {(id, d) => <Input id={id} aria-describedby={d} aria-invalid={!limitValid} inputMode="decimal" value={limit} onChange={(e) => setLimit(e.target.value)} className="tabular" />}
         </Field>
+        {cards.map((c) => (
+          <Field key={c.card_code} label={<>Wallet name <span className="tabular font-normal text-muted">•{c.last4}</span></>} hint="This card's name as the Wallet app shows it. The payment shortcut uses it to find the card.">
+            {(id, d) => (
+              <Input
+                id={id}
+                aria-describedby={d}
+                value={wallet[c.card_code] ?? ""}
+                maxLength={WALLET_NAME_MAX}
+                autoComplete="off"
+                onChange={(e) => setWallet((w) => ({ ...w, [c.card_code]: e.target.value }))}
+                placeholder="e.g. Wio Credit"
+              />
+            )}
+          </Field>
+        ))}
       </div>
     </Dialog>
   );
