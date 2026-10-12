@@ -662,10 +662,10 @@ Realtime publishes `transactions`, `sms_messages`, `documents`, `match_reviews`,
 iOS gives apps no access to SMS. The supported route is **one** Shortcuts personal automation:
 *Message → Message contains "Card" → Run Immediately, Notify When Run **on** → Log Bank SMS*
 (Message = Shortcut Input's Content, Sender = Shortcut Input's Sender). "Card" appears in every
-ADCB, FAB, ENBD and SIB credit-card purchase, refund and decline format in the template seed;
-a single keyword means each alert fires once. Settings → *Set up SMS capture* walks through it
+ADCB, FAB, ENBD, SIB and EIB credit-card purchase, refund and decline format in the template
+seed, and Wio's says "card" in lower case; a single keyword means each alert fires once. Settings → *Set up SMS capture* walks through it
 and shows "Last captured" and a "Send test" button. Whether Shortcuts' "contains" is
-case-insensitive (the ENBD refund says "card") still needs a real-device check.
+case-insensitive (the ENBD refund and every Wio payment say "card") still needs a real-device check.
 
 ```
 Bank SMS → Shortcuts automation → LogBankSMSIntent (openAppWhenRun = false, separate process)
