@@ -86,7 +86,7 @@ private struct MerchantsCard: View {
             }
             ForEach(Array(merchants.enumerated()), id: \.element.id) { index, merchant in
                 HStack {
-                    Text("\(index + 1)").font(Typography.caption).monospacedDigit().foregroundStyle(Palette.subtle)
+                    Text("\(index + 1)").font(Typography.caption).monospacedDigit().foregroundStyle(Palette.muted)
                         .frame(width: 18, alignment: .leading)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(merchant.merchantName).font(Typography.rowTitle).lineLimit(1)
