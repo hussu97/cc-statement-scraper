@@ -128,10 +128,27 @@ select is(pg_temp.v('w1b')::jsonb->>'sms_code', pg_temp.v('w1_sms'), 'pointing a
 select is((select count(*)::int from public.sms_messages
            where profile_code = pg_temp.v('p') and client_msg_id = pg_temp.v('id1')::uuid), 1, 'nothing new is stored');
 
--- The automation firing twice for one tap (new id, same fields) is a duplicate of it.
-select pg_temp.set('w1c', pg_temp.wallet(pg_temp.item('18.50', 'Starbucks Mall', 'Wio Personal', 0, '10:00:20'))::text);
-select is(pg_temp.v('w1c')::jsonb->>'status', 'duplicate', 'a double-fired Wallet event is a duplicate');
-select is(pg_temp.v('w1c')::jsonb->>'txn_code', pg_temp.v('w1_txn'), 'of the same transaction');
+-- Two genuine identical taps (same card, amount, merchant, pass name) are two payments: a
+-- Wallet row is never a duplicate of another Wallet row (redelivery is deduped by client_msg_id).
+select pg_temp.set('w1c', pg_temp.wallet(pg_temp.item('18.50', 'Starbucks Mall', 'Wio Personal', 0, '10:00:40'))::text);
+select is(pg_temp.v('w1c')::jsonb->>'status', 'created', 'an identical Wallet payment 40 s later is a new transaction');
+select isnt(pg_temp.v('w1c')::jsonb->>'txn_code', pg_temp.v('w1_txn'), 'not the first one');
+select pg_temp.set('w1d', pg_temp.wallet(pg_temp.item('18.50', 'Starbucks Mall', 'Wio Personal', 0, '10:10'))::text);
+select is(pg_temp.v('w1d')::jsonb->>'status', 'created', 'an identical Wallet payment 10 minutes later is a new transaction');
+select is((select count(distinct e.txn_code)::int from public.transaction_evidence e
+           where e.is_active and e.sms_code in (pg_temp.v('w1_sms'), pg_temp.v('w1c')::jsonb->>'sms_code',
+                                                pg_temp.v('w1d')::jsonb->>'sms_code')), 3,
+          'three identical taps are three transactions');
+select is((select count(*)::int from public.transaction_evidence e
+           where e.is_active and e.role = 'duplicate' and e.sms_code in (pg_temp.v('w1_sms'),
+             pg_temp.v('w1c')::jsonb->>'sms_code', pg_temp.v('w1d')::jsonb->>'sms_code')), 0,
+          'none of them is duplicate evidence');
+
+-- SMS↔SMS duplicate detection is unchanged: the same bank alert twice is still a duplicate.
+select pg_temp.set('sd1', pg_temp.wio_sms('33.00', 'Zoom Market', 7, '18:00')::text);
+select pg_temp.set('sd2', pg_temp.wio_sms('33.00', 'Zoom Market', 7, '18:01')::text);
+select is(pg_temp.v('sd2')::jsonb->>'status', 'duplicate', 'a resent bank SMS is still a duplicate');
+select is(pg_temp.v('sd2')::jsonb->>'txn_code', pg_temp.v('sd1')::jsonb->>'txn_code', 'of the first SMS''s transaction');
 
 -- ═══ the name match ignores case ════════════════════════════════════════════
 select pg_temp.set('w2', pg_temp.wallet(pg_temp.item('77.00', 'Noon', 'WIO PERSONAL', 3, '19:30'))::text);

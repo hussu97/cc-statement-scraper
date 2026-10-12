@@ -310,8 +310,10 @@ payment with the amount, merchant and the card's display name (no card number); 
 (owner only, at most 200 items; `amount` is a decimal string > 0, `currency` three capitals,
 `merchant` 1–200 and `pass_name` 1–64 characters). Each item becomes an `sms_messages` row with
 `source = 'wallet'`, sender `Wallet`, the synthetic body `<CUR> <amount> at <merchant> (<pass name>)`
-(so the `body_hash` duplicate rule and the SMS screens apply unchanged) and the submitted fields in
-`parsed_fields`. Results use the SMS statuses, with `invalid` reasons `invalid_amount`,
+(so the SMS screens show it unchanged) and the submitted fields in `parsed_fields`. Each event
+is a separate tap: a redelivery is caught by `client_msg_id`, and `match_sms`'s duplicate-alert
+step (same `body_hash`, or near-identical text within 180 s) never pairs two Wallet rows, so two
+identical payments minutes apart are two transactions. Results use the SMS statuses, with `invalid` reasons `invalid_amount`,
 `invalid_currency`, `invalid_merchant`, `invalid_pass_name`, `invalid_occurred_at`,
 `invalid_client_msg_id` and `not_an_object`.
 
