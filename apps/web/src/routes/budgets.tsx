@@ -1,10 +1,17 @@
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Plus, Target } from "lucide-react";
 import { useActiveProfile } from "@/data/profile";
-import { budgetAppliesTo, budgetTitle, monthPhase, useBudgetStatus, useBudgets, useDeleteBudget, type BudgetInput } from "@/data/budgets";
-import { useCategories } from "@/data/rules";
-import { useAccounts } from "@/data/cards";
-import { accountLabel } from "@/data/overview";
+import {
+  budgetDraft,
+  budgetTitle,
+  inactiveBudgetLabel,
+  monthPhase,
+  splitByEffective,
+  useBudgetStatus,
+  useDeleteBudget,
+  type BudgetInput,
+  type BudgetStatusRow,
+} from "@/data/budgets";
 import { BankLogo } from "@/components/bank-logo";
 import { errorMessage } from "@/data/api";
 import { addMonths, formatMonth, monthStart, todayDubai } from "@/lib/dates";
@@ -17,19 +24,6 @@ import { Money } from "@/components/ledger";
 import { BudgetCard } from "@/components/budgets/budget-card";
 import { BudgetDialog } from "@/components/budgets/budget-dialog";
 
-type Budget = NonNullable<ReturnType<typeof useBudgets>["data"]>[number];
-
-function toDraft(b: Budget): BudgetInput {
-  return {
-    budget_code: b.budget_code,
-    account_code: b.account_code,
-    category_code: b.category_code,
-    amount_aed: String(b.amount_aed),
-    effective_from: b.effective_from,
-    effective_to: b.effective_to,
-  };
-}
-
 export function BudgetsPage() {
   const { profile_code: profileCode, isOwner } = useActiveProfile();
   const today = todayDubai();
@@ -37,35 +31,19 @@ export function BudgetsPage() {
   const [month, setMonth] = useState(thisMonth);
   const phase = monthPhase(month, today);
 
+  // One request: every budget of the ledger, with the server's word on which ones count this
+  // month. Names, colours and card logos come on the rows, so nothing else has to load.
   const status = useBudgetStatus(profileCode, month);
-  const budgets = useBudgets(profileCode);
-  const cats = useCategories(profileCode);
-  const accounts = useAccounts(profileCode);
   const del = useDeleteBudget(profileCode);
   const toast = useToast();
 
   const [editing, setEditing] = useState<BudgetInput | null>(null);
   const [deleting, setDeleting] = useState<{ code: string; name: string } | null>(null);
 
-  const byCode = useMemo(() => new Map((budgets.data ?? []).map((b) => [b.budget_code, b])), [budgets.data]);
-  const accountOf = useMemo(() => new Map((accounts.data ?? []).map((a) => [a.account_code, a])), [accounts.data]);
-  const catOf = useMemo(() => new Map((cats.data ?? []).map((c) => [c.category_code, c])), [cats.data]);
-  const shown = useMemo(() => new Set((status.data ?? []).map((r) => r.budget_code)), [status.data]);
-  const others = useMemo(() => (budgets.data ?? []).filter((b) => !shown.has(b.budget_code)), [budgets.data, shown]);
+  const split = useMemo(() => splitByEffective(status.data ?? []), [status.data]);
 
   const newDraft = (): BudgetInput => ({ account_code: null, category_code: null, amount_aed: "", effective_from: phase === "past" ? thisMonth : month, effective_to: null });
-  const edit = (code: string) => {
-    const b = byCode.get(code);
-    if (b) setEditing(toDraft(b));
-  };
-  const nameOf = (b: Budget) => {
-    const acc = b.account_code ? accountOf.get(b.account_code) : null;
-    return budgetTitle({
-      category_code: b.category_code,
-      category_name: b.category_code ? (catOf.get(b.category_code)?.name ?? "Category") : "All spending",
-      account_name: b.account_code ? (acc ? accountLabel(acc) : "Card") : null,
-    });
-  };
+  const edit = (r: BudgetStatusRow) => setEditing(budgetDraft(r));
 
   return (
     <div className="animate-fade-in">
@@ -94,6 +72,7 @@ export function BudgetsPage() {
         )}
       </div>
 
+      {/* A failed load shows QueryView's error state with a retry, never an empty state. */}
       <QueryView
         query={status}
         loading={
@@ -103,10 +82,10 @@ export function BudgetsPage() {
             <LoadingBlock className="h-40 p-0" />
           </div>
         }
-        isEmpty={(rows) => rows.length === 0}
+        isEmpty={(rows) => splitByEffective(rows).effective.length === 0}
         empty={
           <Card>
-            {budgets.data && budgets.data.length === 0 ? (
+            {split.inactive.length === 0 ? (
               <EmptyState
                 icon={<Target />}
                 title="No budgets yet"
@@ -122,7 +101,7 @@ export function BudgetsPage() {
               </EmptyState>
             ) : (
               <EmptyState icon={<Target />} title={`No budgets apply to ${formatMonth(month)}`}>
-                {budgets.isLoading ? "Checking your budgets…" : "Your budgets start later or ended earlier. They're listed below."}
+                Your budgets start later or ended earlier. They're listed below.
               </EmptyState>
             )}
           </Card>
@@ -130,14 +109,14 @@ export function BudgetsPage() {
       >
         {(rows) => (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {rows.map((r) => (
+            {splitByEffective(rows).effective.map((r) => (
               <div key={r.budget_code} className={r.category_code === null && r.account_code === null ? "md:col-span-2 xl:col-span-3" : undefined}>
                 <BudgetCard
                   row={r}
                   phase={phase}
                   hero={r.category_code === null && r.account_code === null}
-                  canEdit={isOwner && byCode.has(r.budget_code)}
-                  onEdit={() => edit(r.budget_code)}
+                  canEdit={isOwner}
+                  onEdit={() => edit(r)}
                   onDelete={() => setDeleting({ code: r.budget_code, name: budgetTitle(r) })}
                 />
               </div>
@@ -146,41 +125,30 @@ export function BudgetsPage() {
         )}
       </QueryView>
 
-      {others.length > 0 && (
+      {status.isSuccess && split.inactive.length > 0 && (
         <section className="mt-8">
           <h2 className="mb-2 text-[11px] font-medium tracking-[0.08em] text-subtle uppercase">Not active in {formatMonth(month)}</h2>
           <Card>
             <ul className="divide-y divide-border">
-              {others.map((b) => {
-                const cat = b.category_code ? catOf.get(b.category_code) : null;
-                const when =
-                  b.effective_from > month
-                    ? `Starts ${formatMonth(b.effective_from)}`
-                    : b.effective_to && b.effective_to < month
-                      ? `Ended ${formatMonth(b.effective_to)}`
-                      : budgetAppliesTo(b, month)
-                        ? "Replaced by a newer budget"
-                        : "";
-                return (
-                  <li key={b.budget_code} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-3">
-                    {b.category_code ? <Dot token={cat?.color_token} /> : <span aria-hidden className="inline-block size-2 rounded-pill bg-ink" />}
-                    {b.account_code && <BankLogo bankCode={accountOf.get(b.account_code)?.bank_code} size="xs" decorative />}
-                    <span className="min-w-0 flex-1 truncate text-sm text-ink">{nameOf(b)}</span>
-                    <Badge>{when}</Badge>
-                    <Money value={b.amount_aed} className="text-sm text-ink-2" />
-                    {isOwner && (
-                      <span className="flex gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => setEditing(toDraft(b))}>
-                          Edit
-                        </Button>
-                        <Button variant="ghost" size="sm" className="text-danger" onClick={() => setDeleting({ code: b.budget_code, name: nameOf(b) })}>
-                          Delete
-                        </Button>
-                      </span>
-                    )}
-                  </li>
-                );
-              })}
+              {split.inactive.map((b) => (
+                <li key={b.budget_code} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-3">
+                  {b.category_code ? <Dot token={b.color_token} /> : <span aria-hidden className="inline-block size-2 rounded-pill bg-ink" />}
+                  {b.account_code && <BankLogo bankCode={b.bank_code} size="xs" decorative />}
+                  <span className="min-w-0 flex-1 truncate text-sm text-ink">{budgetTitle(b)}</span>
+                  <Badge>{inactiveBudgetLabel(b, month)}</Badge>
+                  <Money value={b.budget_aed} className="text-sm text-ink-2" />
+                  {isOwner && (
+                    <span className="flex gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => edit(b)}>
+                        Edit
+                      </Button>
+                      <Button variant="ghost" size="sm" className="text-danger" onClick={() => setDeleting({ code: b.budget_code, name: budgetTitle(b) })}>
+                        Delete
+                      </Button>
+                    </span>
+                  )}
+                </li>
+              ))}
             </ul>
           </Card>
         </section>

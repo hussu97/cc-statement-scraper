@@ -23,7 +23,6 @@ export const keys = {
 
   analytics: (p: string, name: string, ...args: unknown[]) => ["p", p, "analytics", name, ...args] as const,
 
-  budgets: (p: string) => ["p", p, "budgets", "list"] as const,
   budgetStatus: (p: string, month: string) => ["p", p, "budgets", "status", month] as const,
 
   accounts: (p: string) => ["p", p, "accounts"] as const,

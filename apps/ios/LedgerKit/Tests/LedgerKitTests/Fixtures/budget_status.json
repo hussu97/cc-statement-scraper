@@ -1,7 +1,8 @@
 [
   {"budget_code": "bud_total", "category_code": null, "category_name": "All spending", "color_token": null,
    "budget_aed": 5000, "spent_aed": 1234.5, "projected_aed": 3826.95, "share_used": 0.2469,
-   "account_code": null, "account_name": null, "bank_code": null},
+   "account_code": null, "account_name": null, "bank_code": null,
+   "is_effective": true, "effective_from": "2026-01-01", "effective_to": null},
   {"budget_code": "bud_card", "category_code": null, "category_name": "All spending", "color_token": null,
    "budget_aed": "1500.00", "spent_aed": "320.10", "projected_aed": "992.31", "share_used": "0.2134",
    "account_code": "acc_fab", "account_name": "Daily card", "bank_code": "FAB"},

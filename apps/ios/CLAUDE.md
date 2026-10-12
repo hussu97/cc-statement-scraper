@@ -27,7 +27,11 @@ and §11; layout and setup are in [README.md](README.md).
   server, whose templates classify it (debit/account alerts → `ignored`, unknown → `unparsed` +
   LLM fallback). A guess on the phone loses the message for good when it is wrong (2026-10-09:
   ENBD alerts skipped as "not a credit-card transaction"), so the phone doesn't guess. The OTP
-  pattern matches `ingest_sms`'s defence-in-depth check: change both together.
+  pattern (`SMSCapture.otpPatternSource`) is the server's `private.sms_otp_pattern()`, which
+  `ingest_sms` uses as its defence-in-depth check, character for character. The fixture in
+  `supabase/tests/38_sms_otp_filter.test.sql` pins both (pgTAP and `SMSOTPParityTests` read it)
+  and lists every SMS template example as must-send: change all three together, in syntax both
+  ICU and Postgres read the same way (no `\b`, `\d`, `\s` or `.`).
 - Never log, print, breadcrumb or persist an SMS body outside the App Group outbox. Sentry
   scrubbing is tested in `TelemetryScrubberTests`.
 
