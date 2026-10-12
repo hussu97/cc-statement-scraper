@@ -1,5 +1,11 @@
 # Changelog
 
+## Web smoke reads the deployed commit off production — 2026-10-12
+
+### Web
+
+- **fix** Each build stamps its commit in `<meta name="ledger-build">` (`vite.config.ts`, from `VERCEL_GIT_COMMIT_SHA`). `web-smoke.yml` now waits until production serves that commit or a newer one containing it, instead of waiting for a Vercel GitHub Deployment or status: Vercel often posts neither (`a346956`, `f683280` shipped with none), so the job waited 9 minutes and failed on deploys that had shipped. A "Vercel" failure/error status still fails fast; production not serving the push after 9 minutes still fails. Lesson in `tasks/lessons.md`.
+
 ## SMS fallback skips messages without a sender — 2026-10-12
 
 ### Backend (Supabase)
