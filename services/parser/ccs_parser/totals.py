@@ -229,6 +229,7 @@ _EIB_SUMMARY_ROW_RE = re.compile(
     rf"(?P<current>{_DECIMAL_AMOUNT_RE}(?:\s*CR)?)$"
 )
 _EIB_OPENING_RE = re.compile(rf"^OPENING BALANCE\s+(?P<amount>{_DECIMAL_AMOUNT_RE}(?:\s*CR)?)$", re.IGNORECASE)
+_EIB_CARD_SECTION_RE = re.compile(r"^[A-Z][A-Z\- ]*CARD NO\s*[:.]?\s*[\dX* ]*\d{4}$")
 
 
 def _extract_eib(lines: list[str], result: TotalsResult) -> None:
@@ -257,6 +258,10 @@ def _extract_eib(lines: list[str], result: TotalsResult) -> None:
                     break
     if v["closing_balance"] is None:
         result.warnings.append("EIB: statement summary row not found; balance totals left null")
+    elif v["opening_balance"] is None and not any(_EIB_CARD_SECTION_RE.match(ln.strip()) for ln in lines):
+        # EIB leaves out the OPENING BALANCE line (and the card section) only in a month
+        # with no activity, where the balance carried over unchanged.
+        v["opening_balance"] = v["closing_balance"]
 
 
 # -------------------------------------------------------------------- ADCB

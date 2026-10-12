@@ -1,0 +1,43 @@
+{
+  "bank_code": "EIB",
+  "contract_version": 1,
+  "document_kind": "statement_pdf",
+  "statements": [
+    {
+      "bank_code": "EIB",
+      "card_holder": "JANE Q SAMPLE",
+      "card_type": null,
+      "due_date": "2026-08-05",
+      "kind": "statement",
+      "lines": [],
+      "metadata": {
+        "card_holder": "JANE Q SAMPLE",
+        "card_last4": "2222",
+        "card_type": null,
+        "pdf_sha256": "<pdf_sha256>",
+        "statement_date": "2026-07-10",
+        "statement_month": "2026-07",
+        "statement_period_end": "2026-07-10",
+        "statement_period_start": "2026-06-11",
+        "statement_reference": null
+      },
+      "period_end": "2026-07-10",
+      "period_start": "2026-06-11",
+      "primary_card_last4": "2222",
+      "reference_source": "fallback",
+      "statement_date": "2026-07-10",
+      "statement_reference": "AUTO-EIB-2026-07-10-2222",
+      "totals": {
+        "closing_balance": "-0.50",
+        "credit_limit": "20000.00",
+        "min_due": "0.00",
+        "opening_balance": "-0.50",
+        "total_credits": null,
+        "total_debits": null
+      },
+      "warnings": [
+        "EIB: no activity this period (no opening balance or card section printed)"
+      ]
+    }
+  ]
+}
