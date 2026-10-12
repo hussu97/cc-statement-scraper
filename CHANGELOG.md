@@ -1,5 +1,11 @@
 # Changelog
 
+## Card budgets: a monthly limit for one card, or one card and one category — 2026-10-12
+
+### Backend (Supabase)
+
+- **add** Migration `card_budgets`: `budgets.account_code` (optional, composite FK to the profile's own accounts, cascades with the account). A budget with a card counts only that card's spend in the month (all of it, or one category's); without one it counts every card, as before. The unique scope is now card × category × start month. `budget_status` returns `account_code`, `account_name` (nickname, else "BANK · product") and `bank_code`, and narrows spend by card. `budget_risk` insights key on the card too (an all-cards budget keeps its old key) and name it ("Dining on Daily card budget at risk"). `merge_accounts` moves a merged card's budgets unless the surviving card already has one for that scope. pgTAP `34_card_budgets`. DB types regenerated.
+
 ## Docs: Wio is a credit card that pays other credit cards — 2026-10-12
 
 ### Docs

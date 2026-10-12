@@ -161,6 +161,7 @@ export type Database = {
       }
       budgets: {
         Row: {
+          account_code: string | null
           amount_aed: number
           budget_code: string
           category_code: string | null
@@ -171,6 +172,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          account_code?: string | null
           amount_aed: number
           budget_code?: string
           category_code?: string | null
@@ -181,6 +183,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          account_code?: string | null
           amount_aed?: number
           budget_code?: string
           category_code?: string | null
@@ -191,6 +194,20 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "budgets_account_fk"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "budgets_account_fk"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "v_account_balances"
+            referencedColumns: ["profile_code", "account_code"]
+          },
           {
             foreignKeyName: "budgets_profile_code_category_code_fkey"
             columns: ["profile_code", "category_code"]
@@ -2358,6 +2375,9 @@ export type Database = {
       budget_status: {
         Args: { p_month?: string; p_profile_code: string }
         Returns: {
+          account_code: string
+          account_name: string
+          bank_code: string
           budget_aed: number
           budget_code: string
           category_code: string
