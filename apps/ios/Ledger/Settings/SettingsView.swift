@@ -93,6 +93,18 @@ struct SettingsView: View {
                 Text(SMSAutomationGuide.privacyNote)
             }
 
+            Section {
+                NavigationLink {
+                    CardWalletNamesView(api: model.services.api, profileCode: profileCode, canEdit: profiles.canWrite)
+                } label: {
+                    Label("Card names", systemImage: "creditcard")
+                }
+            } header: {
+                Text("Card names for payment shortcut")
+            } footer: {
+                Text("“Log Card Payment” files a tap-to-pay payment on the card with the name the shortcut passes. Payments go to the “SMS go to” ledger.")
+            }
+
             if !settings.parked.isEmpty {
                 Section {
                     ForEach(settings.parked) { message in

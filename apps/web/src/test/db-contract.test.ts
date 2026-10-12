@@ -1,10 +1,11 @@
 // Client side of the 42a95f1 DB contract changes (resolve_review errors and
 // not_a_transaction, recon 'n/a', merchant_search paging, statement_cycles
-// 5000, documents.parse_warnings).
+// 5000, documents.parse_warnings), and of 8834f76 (cards.wallet_name, Wallet
+// rows in unknown_card reviews).
 import { describe, expect, it } from "vitest";
-import { NOT_A_TRANSACTION, reviewActionError, reviewFooterActions } from "@/data/reviews";
+import { NOT_A_TRANSACTION, reviewActionError, reviewFooterActions, walletPassNameOf } from "@/data/reviews";
 import { reconBadge, reconChecks, reconNote } from "@/lib/recon";
-import { docWarnings, STATEMENT_CYCLES_MAX } from "@/data/cards";
+import { docWarnings, normalizeWalletName, STATEMENT_CYCLES_MAX, WALLET_NAME_MAX, walletNameError } from "@/data/cards";
 import { MERCHANT_SEARCH_MAX, mergeSearchRows, merchantSearchArgs, merchantSearchPage, type MerchantRow, type MerchantSearchRow } from "@/data/rules";
 
 describe("resolve_review: not a card transaction", () => {
@@ -127,5 +128,53 @@ describe("merchant_search paging", () => {
     const rows = mergeSearchRows([hit("mer_a", "CARREFOUR"), hit("mer_b", "Old Shop", "cat_x")], [known]);
     expect(rows[0]).toMatchObject({ merchant_name: "Carrefour", amount: 1200, category_code: "cat_groc", txn_count: 7, last_date: "2026-09-30" });
     expect(rows[1]).toMatchObject({ merchant_name: "Old Shop", amount: null, category_code: "cat_x", assignment: null });
+  });
+});
+
+describe("cards.wallet_name", () => {
+  it("normalises to what the CHECK accepts: trimmed, single spaces, 1-64 chars, empty is null", () => {
+    expect(normalizeWalletName("  Wio   Credit\tCard ")).toBe("Wio Credit Card");
+    expect(normalizeWalletName("")).toBeNull();
+    expect(normalizeWalletName("   \n ")).toBeNull();
+    expect(normalizeWalletName(null)).toBeNull();
+    expect(normalizeWalletName(undefined)).toBeNull();
+    expect(WALLET_NAME_MAX).toBe(64);
+    expect(normalizeWalletName("x".repeat(80))).toHaveLength(64);
+    // Cut at 64 then trimmed again, so a space at the cut never survives.
+    expect(normalizeWalletName(`${"x".repeat(63)} yz`)).toBe("x".repeat(63));
+  });
+
+  it("23505 (unique per ledger, ignoring case) reads as a clash with another card", () => {
+    expect(walletNameError({ code: "23505", message: 'duplicate key value violates unique constraint "cards_wallet_name_uq"' })).toBe(
+      "Another card already uses this Wallet name.",
+    );
+    expect(walletNameError({ code: "23514", message: "check" })).toMatch(/1 to 64 characters/);
+    expect(walletNameError({ code: "42501", message: "You don't have permission to do that in this ledger." })).toBe("You don't have permission to do that in this ledger.");
+    expect(walletNameError(null)).toBe("Something went wrong.");
+  });
+});
+
+describe("unknown_card reviews for Wallet payments", () => {
+  const review = (candidates: unknown, reason = "unknown_card", subject_type = "sms") =>
+    ({ reason, subject_type, candidates }) as Parameters<typeof walletPassNameOf>[0];
+
+  it("reads the pass name from the candidates", () => {
+    expect(walletPassNameOf(review([{ wallet_name: "Wio Credit" }]))).toBe("Wio Credit");
+  });
+
+  it("falls back to the loaded SMS row when it is a Wallet row", () => {
+    expect(walletPassNameOf(review([]), { source: "wallet", wallet_pass_name: " Travel " })).toBe("Travel");
+    expect(walletPassNameOf(review(null), { source: "wallet", wallet_pass_name: null })).toBe("");
+  });
+
+  it("is null for bank SMS and other reasons, so the register-card action stays", () => {
+    expect(walletPassNameOf(review([{ bank_code: "FAB", last4: "1234" }]), { source: "sms", wallet_pass_name: null })).toBeNull();
+    expect(walletPassNameOf(review([{ bank_code: "FAB", last4: "1234" }]))).toBeNull();
+    expect(walletPassNameOf(review([{ wallet_name: "Wio" }], "ambiguous"))).toBeNull();
+    expect(walletPassNameOf(review([{ wallet_name: "Wio" }], "unknown_card", "statement_line"))).toBeNull();
+  });
+
+  it("keeps dismiss and not-a-card-transaction (the card action is refused server-side)", () => {
+    expect(reviewFooterActions({ reason: "unknown_card", subject_type: "sms" }, false)).toEqual(["not_a_transaction", "dismiss"]);
   });
 });

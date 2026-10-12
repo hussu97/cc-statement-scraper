@@ -1,6 +1,7 @@
 import Foundation
 
-/// What happened to one message handed to "Log Bank SMS".
+/// What happened to one message handed to "Log Bank SMS" (or one payment
+/// handed to "Log Card Payment", `WalletIntake`).
 public enum SMSIntakeOutcome: Equatable, Sendable {
     /// Why a message is still waiting on the phone.
     public enum QueueReason: String, Sendable, Equatable {
@@ -8,6 +9,9 @@ public enum SMSIntakeOutcome: Equatable, Sendable {
     }
 
     case dropped(SMSCapture.Decision)
+    /// The phone refused the input before queueing it (a payment with no
+    /// amount, merchant or card). `code` is opaque; `message` is shown.
+    case refused(code: String, message: String)
     /// No ledger is set for SMS (signed out, or the user owns none).
     case noProfile
     /// Reached the server; `status` is `ingest_sms`'s per-message status.
@@ -25,6 +29,7 @@ public enum SMSIntakeOutcome: Equatable, Sendable {
         let to = ledger.map { "to \($0)" } ?? "to Ledger"
         switch self {
         case .dropped(let decision): return decision.userMessage
+        case .refused(_, let message): return message
         case .noProfile:
             return "Not logged: Ledger has no ledger set for SMS. Open Ledger → Settings and sign in or choose “SMS go to”."
         case .delivered(let status): return Self.statusMessage(status, to: to)
@@ -50,6 +55,7 @@ public enum SMSIntakeOutcome: Equatable, Sendable {
             case .dropOTP: "dropped_otp"
             case .dropEmpty: "dropped_empty"
             }
+        case .refused(let code, _): "refused_\(code)"
         case .noProfile: "no_profile"
         case .delivered(let status): "delivered_\(status)"
         case .queued(let reason): "queued_\(reason.rawValue)"
@@ -61,7 +67,7 @@ public enum SMSIntakeOutcome: Equatable, Sendable {
     /// Outcomes the user should act on (shown in red in Settings).
     public var needsAttention: Bool {
         switch self {
-        case .noProfile, .parked, .failed: true
+        case .noProfile, .parked, .failed, .refused: true
         case .queued(let reason): reason == .signedOut
         case .delivered(let status): ["unknown_card", "held", "unparsed"].contains(status)
         case .dropped: false
@@ -116,18 +122,24 @@ public struct SMSIntake: Sendable {
                                                      clientMsgId: clientMsgId)
         guard let payload else { return .dropped(decision) }
         guard let target else { return .noProfile }
+        return await Self.deliver(.sms(payload), to: target, outbox: outbox)
+    }
+
+    /// Persist first, then try to send now: the item is in the outbox before
+    /// any network call. Shared with `WalletIntake`.
+    static func deliver(_ item: OutboxItem, to target: SMSTarget, outbox: Outbox) async -> SMSIntakeOutcome {
         do {
-            try await outbox.enqueue(payload, profileCode: target.profileCode)
+            try await outbox.enqueue(items: [item], profileCode: target.profileCode)
         } catch {
             return .failed(String(describing: type(of: error)))
         }
         let report = await outbox.flush()
-        if let reason = report.parked[payload.clientMsgId] { return .parked(reason: reason) }
-        let wanted = payload.clientMsgId.uuidString.lowercased()
+        if let reason = report.parked[item.clientMsgId] { return .parked(reason: reason) }
+        let wanted = item.clientMsgId.uuidString.lowercased()
         if let result = report.results.first(where: { $0.clientMsgId.lowercased() == wanted }) {
             return .delivered(status: result.status)
         }
-        return .queued(Self.queueReason(report.error))
+        return .queued(queueReason(report.error))
     }
 
     static func queueReason(_ error: LedgerAPIError?) -> SMSIntakeOutcome.QueueReason {

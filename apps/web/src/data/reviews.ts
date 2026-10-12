@@ -21,7 +21,7 @@ export const REVIEW_REASONS: Record<string, { title: string; help: string }> = {
   amount_drift: { title: "Amount changed", help: "The posted amount differs from the alert." },
   unknown_card: {
     title: "Unknown cards",
-    help: "An SMS mentions a card Bank Ledger doesn't know. Tell it which account the card belongs to.",
+    help: "An SMS or Wallet payment mentions a card Bank Ledger doesn't know. Tell it which account the card belongs to.",
   },
   unparsed_sms: {
     title: "New SMS formats",
@@ -163,10 +163,32 @@ export interface ReviewCandidate {
   template_code?: string;
   stmt_code?: string;
   statement_date?: string;
+  /** unknown_card on a Wallet row: the pass name the shortcut sent. */
+  wallet_name?: string;
 }
 
 export function candidatesOf(r: Pick<Review, "candidates">): ReviewCandidate[] {
   return Array.isArray(r.candidates) ? (r.candidates as unknown as ReviewCandidate[]) : [];
+}
+
+/**
+ * The Wallet pass name behind an unknown_card review, or null when the review
+ * is about a bank SMS (or anything else). A Wallet row is matched to a card by
+ * cards.wallet_name, never by registering a card number, so resolve_review's
+ * card action refuses it (22023): the UI points to the Cards page instead.
+ * Reads the review's candidates first, then the loaded SMS row. A Wallet row
+ * without a pass name gives "" (still a Wallet row, still not a card number).
+ * Pure, unit-tested.
+ */
+export function walletPassNameOf(
+  r: Pick<Review, "reason" | "subject_type" | "candidates">,
+  sms?: { source?: string | null; wallet_pass_name?: string | null } | null,
+): string | null {
+  if (r.reason !== "unknown_card" || r.subject_type !== "sms") return null;
+  const fromCandidates = candidatesOf(r).find((c) => typeof c.wallet_name === "string" && c.wallet_name.trim())?.wallet_name;
+  if (fromCandidates) return fromCandidates.trim();
+  if (sms?.source === "wallet") return sms.wallet_pass_name?.trim() || "";
+  return null;
 }
 
 export interface ReviewContext {
@@ -179,7 +201,7 @@ export interface ReviewContext {
 }
 
 const SMS_META =
-  "sms_code, profile_code, client_msg_id, received_at, sender, body_hash, parse_status, ignore_reason, template_code, template_version, bank_code, msg_kind, card_last4, card_code, account_code, amount, currency, merchant_raw, description, available_limit, event_at, parsed_fields, created_at, updated_at";
+  "sms_code, profile_code, client_msg_id, received_at, sender, source, wallet_pass_name, body_hash, parse_status, ignore_reason, template_code, template_version, bank_code, msg_kind, card_last4, card_code, account_code, amount, currency, merchant_raw, description, available_limit, event_at, parsed_fields, created_at, updated_at";
 
 export function useReviewContext(profileCode: string, review: Review) {
   return useQuery({
