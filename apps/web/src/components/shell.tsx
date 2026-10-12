@@ -21,7 +21,7 @@ import {
 import { cn } from "@/lib/cn";
 import { formatBadgeCount } from "@/lib/money";
 import { useAuth, signOut } from "@/data/auth";
-import { useProfileContext } from "@/data/profile";
+import { memberProfiles, useProfileContext, type ProfileSummary } from "@/data/profile";
 import { useRealtimeInvalidation } from "@/data/realtime";
 import { useOpenReviewCount } from "@/data/reviews";
 import { applyTheme, readTheme, type ThemePref } from "@/lib/theme";
@@ -79,9 +79,24 @@ export function ThemeToggle({ className }: { className?: string }) {
   );
 }
 
+function profileRoleLabel(p: ProfileSummary | null): string {
+  if (!p) return "";
+  if (!p.isMember) return "View only";
+  return p.role === "owner" ? "Owner" : "Viewer";
+}
+
 function ProfileSwitcher({ compact }: { compact?: boolean }) {
   const { profile, profiles, setActive } = useProfileContext();
   const { email } = useAuth();
+  const mine = memberProfiles(profiles);
+  const others = profiles.filter((p) => !p.isMember);
+  const item = (p: ProfileSummary) => (
+    <MenuItem key={p.profile_code} onSelect={() => setActive(p.profile_code)}>
+      <span className="flex-1 truncate">{p.name}</span>
+      {(p.role === "viewer" || !p.isMember) && <span className="text-[11px] text-subtle">{p.isMember ? "viewer" : "view only"}</span>}
+      {p.profile_code === profile?.profile_code && <Check className="size-3.5 text-accent" />}
+    </MenuItem>
+  );
   return (
     <Menu>
       <MenuTrigger asChild>
@@ -98,20 +113,21 @@ function ProfileSwitcher({ compact }: { compact?: boolean }) {
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[13px] font-medium text-ink">{profile?.name}</span>
-            {!compact && <span className="block truncate text-[11px] text-subtle">{profile?.role === "viewer" ? "Viewer" : "Owner"}</span>}
+            {!compact && <span className="block truncate text-[11px] text-subtle">{profileRoleLabel(profile)}</span>}
           </span>
           <ChevronsUpDown className="size-3.5 shrink-0 text-subtle" aria-hidden />
         </button>
       </MenuTrigger>
       <MenuContent align="start" className="w-60">
         <MenuLabel>Ledgers</MenuLabel>
-        {profiles.map((p) => (
-          <MenuItem key={p.profile_code} onSelect={() => setActive(p.profile_code)}>
-            <span className="flex-1 truncate">{p.name}</span>
-            {p.role === "viewer" && <span className="text-[11px] text-subtle">viewer</span>}
-            {p.profile_code === profile?.profile_code && <Check className="size-3.5 text-accent" />}
-          </MenuItem>
-        ))}
+        {mine.map(item)}
+        {others.length > 0 && (
+          <>
+            <MenuSeparator />
+            <MenuLabel>Other ledgers</MenuLabel>
+            {others.map(item)}
+          </>
+        )}
         <MenuItem asChild>
           <Link to="/welcome" search={{ new: 1 }}>
             <Plus className="size-3.5" /> Create another ledger
@@ -251,7 +267,9 @@ export function AppShell() {
   if (!session) return <Navigate to="/signin" />;
   if (profilesLoading) return <Splash />;
   if (error) return <ErrorState error={error} title="Couldn't load your ledgers" className="min-h-dvh" />;
-  if (profiles.length === 0 || !profile) return <Navigate to="/welcome" />;
+  // Onboarding is about memberships: a super admin who belongs to no ledger
+  // still starts at /welcome even though RLS shows them every ledger.
+  if (memberProfiles(profiles).length === 0 || !profile) return <Navigate to="/welcome" />;
 
   return (
     <div className="flex min-h-dvh">

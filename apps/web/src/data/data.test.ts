@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { activitySummaryArgs, applyActivityFilters, evidenceBadge, groupByDay, sortEvidence, type EvidenceItem, type FilterBuilder } from "./transactions";
 import { domainsFor } from "./realtime";
-import { chooseActiveProfile, profileKeyFromName, type ProfileSummary } from "./profile";
+import { chooseActiveProfile, memberProfiles, profileKeyFromName, toProfileSummaries, type ProfileRow, type ProfileSummary } from "./profile";
 import { candidatesOf, groupReviews, type Review } from "./reviews";
 import { checkUploadFiles } from "./cards";
 import { friendlyMessage } from "./api";
@@ -105,11 +105,37 @@ describe("realtime invalidation", () => {
 });
 
 describe("profiles", () => {
-  const p = (code: string): ProfileSummary => ({ profile_code: code, key: code, name: code, base_currency: "AED", role: "owner" });
+  const p = (code: string): ProfileSummary => ({ profile_code: code, key: code, name: code, base_currency: "AED", role: "owner", isMember: true });
   it("restores the stored profile when still accessible", () => {
     expect(chooseActiveProfile([p("a"), p("b")], "b")?.profile_code).toBe("b");
     expect(chooseActiveProfile([p("a"), p("b")], "gone")?.profile_code).toBe("a");
     expect(chooseActiveProfile([], "a")).toBeNull();
+  });
+  it("falls back to a membership before a super-admin view", () => {
+    const other = { ...p("a"), role: "viewer" as const, isMember: false };
+    expect(chooseActiveProfile([other, p("b")], null)?.profile_code).toBe("b");
+    expect(chooseActiveProfile([other], null)?.profile_code).toBe("a");
+  });
+  it("maps rows to summaries: own role, super-admin view, members first", () => {
+    const row = (code: string, name: string, members: ProfileRow["profile_members"]): ProfileRow => ({ profile_code: code, key: code, name, base_currency: "AED", profile_members: members });
+    const out = toProfileSummaries(
+      [
+        row("p1", "Zeta", [{ role: "viewer", user_id: "u1" }]),
+        row("p2", "Alpha", []),
+        row("p3", "Mid", [{ role: "owner", user_id: "u1" }]),
+        row("p4", "Beta", null),
+        row("p5", "Aaa", [{ role: "owner", user_id: "someone-else" }]),
+      ],
+      "u1",
+    );
+    expect(out.map((x) => [x.profile_code, x.role, x.isMember])).toEqual([
+      ["p3", "owner", true],
+      ["p1", "viewer", true],
+      ["p5", "viewer", false],
+      ["p2", "viewer", false],
+      ["p4", "viewer", false],
+    ]);
+    expect(memberProfiles(out).map((x) => x.profile_code)).toEqual(["p3", "p1"]);
   });
   it("derives a valid key from a name", () => {
     expect(profileKeyFromName("Hussain's Cards")).toBe("hussain-s-cards");
