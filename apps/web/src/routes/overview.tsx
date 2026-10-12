@@ -7,6 +7,7 @@ import { evidenceBadge, useTransactions } from "@/data/transactions";
 import { addMonths, daysBetween, formatDate, formatDateTime, formatMonth, formatRelative, formatTime, monthEnd, monthStart, todayDubai } from "@/lib/dates";
 import { formatChange, formatMoney, formatPercent, toAmount } from "@/lib/money";
 import { balanceAnchorNote, formatOutstanding, outstandingCaveat } from "@/lib/balances";
+import { pacePins, projectionLabel } from "@/lib/pace";
 import { cn } from "@/lib/cn";
 import { Card, CardHeader, Badge, Dot, Meter, Skeleton } from "@/components/ui/display";
 import { Button } from "@/components/ui/button";
@@ -171,7 +172,7 @@ function Hero({ data, isCurrent, today }: { data: Overview; isCurrent: boolean; 
       </div>
       {isCurrent && (
         <div className="mt-6">
-          <PaceRule spend={data.spend} prevToDate={data.spend_prev_month_to_date} avg3m={data.spend_avg_3m} dayLabel={dayLabel} />
+          <PaceRule spend={data.spend} pins={pacePins(data, dayLabel)} projection={projectionLabel(data.projected_month_end, monthEnd(data.month))} />
         </div>
       )}
     </div>
