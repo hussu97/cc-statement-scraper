@@ -12,7 +12,7 @@ import {
   shouldOfferPasskey,
 } from "@/data/passkeys";
 import { supabase } from "@/lib/supabase";
-import { profileKeyFromName, useCreateProfile, useProfileContext } from "@/data/profile";
+import { memberProfiles, profileKeyFromName, useCreateProfile, useProfileContext } from "@/data/profile";
 import { errorMessage } from "@/data/api";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/input";
@@ -234,7 +234,9 @@ function PasskeyOffer({ busy, error, onAdd, onSkip }: { busy: boolean; error: st
 
 export function WelcomePage() {
   const { session, loading } = useAuth();
-  const { profiles, loading: pLoading, setActive } = useProfileContext();
+  const { profiles: visible, loading: pLoading, setActive } = useProfileContext();
+  // Only memberships count: a super admin sees every ledger but still onboards.
+  const profiles = memberProfiles(visible);
   const search = useSearch({ from: "/welcome" });
   const navigate = useNavigate();
   const create = useCreateProfile();

@@ -12,15 +12,53 @@ export interface ProfileSummary {
   key: string;
   name: string;
   base_currency: string;
+  /** The caller's role; "viewer" when they are not a member (super-admin view). */
   role: "owner" | "viewer";
+  /** False when the ledger is visible only because the caller is a super admin. */
+  isMember: boolean;
+}
+
+/** A `profiles` row with its `profile_members` embed filtered to the caller. */
+export interface ProfileRow {
+  profile_code: string;
+  key: string;
+  name: string;
+  base_currency: string;
+  profile_members: { role: string; user_id: string }[] | null;
 }
 
 const STORAGE_KEY = "ledger.profile";
 
-/** Pick the active profile: the stored one if still accessible, else the first. */
+/**
+ * Map visible profiles to summaries: the caller's own membership gives the
+ * role; without one (a super admin seeing every ledger) it is a read-only
+ * "viewer" with `isMember: false`. Member ledgers come first, then by name.
+ */
+export function toProfileSummaries(rows: ProfileRow[], userId: string): ProfileSummary[] {
+  return rows
+    .map((r): ProfileSummary => {
+      const mine = (r.profile_members ?? []).find((m) => m.user_id === userId);
+      return {
+        profile_code: r.profile_code,
+        key: r.key,
+        name: r.name,
+        base_currency: r.base_currency,
+        role: mine?.role === "owner" ? "owner" : "viewer",
+        isMember: !!mine,
+      };
+    })
+    .sort((a, b) => Number(b.isMember) - Number(a.isMember) || a.name.localeCompare(b.name));
+}
+
+/** Ledgers the caller belongs to; onboarding and "my ledger" consider only these. */
+export function memberProfiles(profiles: ProfileSummary[]): ProfileSummary[] {
+  return profiles.filter((p) => p.isMember);
+}
+
+/** Pick the active profile: the stored one if still accessible, else the first (a membership when there is one). */
 export function chooseActiveProfile(profiles: ProfileSummary[], stored: string | null): ProfileSummary | null {
   if (profiles.length === 0) return null;
-  return profiles.find((p) => p.profile_code === stored) ?? profiles[0] ?? null;
+  return profiles.find((p) => p.profile_code === stored) ?? profiles.find((p) => p.isMember) ?? profiles[0] ?? null;
 }
 
 export function useProfiles() {
@@ -29,18 +67,16 @@ export function useProfiles() {
     queryKey: [...keys.profiles, userId],
     enabled: !!userId,
     queryFn: async (): Promise<ProfileSummary[]> => {
+      // RLS returns the caller's ledgers (every active ledger for a super admin);
+      // the embed is filtered to the caller's own membership row, if any.
       const rows = mustList(
         await supabase
-          .from("profile_members")
-          .select("role, profiles!inner(profile_code, key, name, base_currency)")
-          .eq("user_id", userId!),
+          .from("profiles")
+          .select("profile_code, key, name, base_currency, profile_members(role, user_id)")
+          .is("archived_at", null)
+          .eq("profile_members.user_id", userId!),
       );
-      return rows
-        .map((r) => {
-          const p = r.profiles as unknown as Omit<ProfileSummary, "role">;
-          return { ...p, role: r.role as ProfileSummary["role"] };
-        })
-        .sort((a, b) => a.name.localeCompare(b.name));
+      return toProfileSummaries(rows as ProfileRow[], userId!);
     },
   });
 }

@@ -8,6 +8,10 @@
 - **change** `delete_profile` archives the profile (`profiles.archived_at`, `archived_by`, `archive_state`). Nothing cascades: data, PDFs and Vault secrets stay, and no PDFs are queued for `storage_cleanup`. Its active service tokens are revoked and its mailboxes disabled. Archived profiles drop out of `my_profile_codes`, `my_owned_profile_codes` and `assert_member`, so no client sees them. **add** `restore_profile` (service role) undoes exactly what archiving turned off.
 - **add** Super admin: `private.super_admins` (seeded with `h_abbasi97@hotmail.com`, matched once the email is confirmed) and `authz.is_super_admin()`. A super admin reads every active profile (data, members, secret names, tokens) through `my_profile_codes` and member-level RPCs, and writes only where it is an owner, enforced by RLS and owner checks. pgTAP `36_archive_and_super_admin`; `17_db_identity_and_legacy` asserts archiving and restore.
 
+### Web
+
+- **change** The ledger list reads `profiles` (RLS: your ledgers, or every active one for a super admin) with your own membership embedded. Ledgers you are not a member of are listed under **Other ledgers** as **View only**, and every edit control is off there (`isOwner` is false). Onboarding and the default ledger consider only your memberships.
+
 ### Docs
 
 - **change** ARCHITECTURE §3/§8, PRODUCTION runbook and README RPC table: archive semantics, `restore_profile`, super admin.
