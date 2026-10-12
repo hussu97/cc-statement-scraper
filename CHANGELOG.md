@@ -1,5 +1,11 @@
 # Changelog
 
+## SMS fallback skips messages without a sender — 2026-10-12
+
+### Backend (Supabase)
+
+- **fix** `worker` `sms_fallback`: a message with an empty sender (a hand-typed test, or a Shortcut not passing Sender) is skipped before the LLM call and stays `unparsed` for review. It used to call the model, fail `propose_sms_template` (22023: every template is anchored on the bank's senders) and dead-letter, alerting Sentry (`sms_fallback_dlq`).
+
 ## SMS alerts from Emirates Islamic and Wio become transactions — 2026-10-12
 
 ### Backend (Supabase)
