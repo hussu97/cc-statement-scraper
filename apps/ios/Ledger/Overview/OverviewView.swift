@@ -24,7 +24,8 @@ struct OverviewView: View {
                 }
                 CategoryRingCard(categories: overview.ringCategories, total: overview.spend,
                                  scope: overview.scopeLabel(), emptyMessage: overview.emptyCategoriesMessage())
-                AccountsCard(accounts: content.accounts)
+                AccountsCard(accounts: content.accounts, owedNow: content.overview.owedNowText,
+                             owedNowCaveat: content.overview.owedNowCaveat)
                 if !content.insights.isEmpty {
                     InsightsCard(insights: content.insights) { insight in
                         Task { await model.dismiss(insight, profileCode: profileCode) }
@@ -211,10 +212,26 @@ private struct CategoryRingCard: View {
 
 private struct AccountsCard: View {
     let accounts: [AccountSummary]
+    let owedNow: String?
+    let owedNowCaveat: String?
 
     var body: some View {
         Card {
             SectionHeader(title: "Cards")
+            if let owedNow, !accounts.isEmpty {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Owed now").font(Typography.rowMeta).foregroundStyle(Palette.muted)
+                        Spacer()
+                        Text(owedNow).font(Typography.amount).moneyLine()
+                    }
+                    if let owedNowCaveat {
+                        Text(owedNowCaveat).font(Typography.caption).foregroundStyle(Palette.muted)
+                    }
+                }
+                .accessibilityElement(children: .combine)
+                Divider().overlay(Palette.border)
+            }
             if accounts.isEmpty {
                 Text("Cards appear after the first statement or SMS.").font(Typography.rowMeta).foregroundStyle(Palette.muted)
             }
@@ -239,6 +256,17 @@ private struct AccountsCard: View {
                             if let due = summary.due() {
                                 Text(due.text).font(Typography.caption).foregroundStyle(due.tone.color)
                             }
+                        }
+                    }
+                    if let owed = summary.owedNowText {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text("Owed now").font(Typography.caption).foregroundStyle(Palette.muted)
+                            Spacer()
+                            Text(owed).font(Typography.rowTitle).moneyLine()
+                        }
+                        .accessibilityElement(children: .combine)
+                        if let note = summary.owedNowNote() {
+                            Text(note).font(Typography.caption).foregroundStyle(Palette.muted)
                         }
                     }
                     if let used = summary.utilisationLabel {
