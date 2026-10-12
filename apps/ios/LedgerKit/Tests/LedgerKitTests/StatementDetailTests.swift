@@ -155,6 +155,7 @@ struct BankDirectoryTests {
 
     @Test func sources() {
         #expect(BankDirectory.source(bankCode: "FAB", logoPath: "FAB.png", supabaseURL: base) == .bundled(assetName: "Bank/FAB"))
+        #expect(BankDirectory.source(bankCode: "WIO", logoPath: "WIO.png", supabaseURL: base) == .bundled(assetName: "Bank/WIO"))
         #expect(BankDirectory.source(bankCode: "RAKBANK", logoPath: "RAKBANK.png", supabaseURL: base)
                 == .remote(URL(string: "http://127.0.0.1:54321/storage/v1/object/public/bank-logos/RAKBANK.png")!))
         #expect(BankDirectory.source(bankCode: "CBD", logoPath: nil, supabaseURL: base) == .monogram("CB"))
@@ -166,6 +167,7 @@ struct BankDirectoryTests {
     func chip() {
         #expect(BankDirectory.needsLightChip(bankCode: "ENBD", darkMode: true))
         #expect(BankDirectory.needsLightChip(bankCode: "fab", darkMode: true))
+        #expect(BankDirectory.needsLightChip(bankCode: "WIO", darkMode: true))  // purple wordmark
         #expect(!BankDirectory.needsLightChip(bankCode: "ENBD", darkMode: false))
         #expect(!BankDirectory.needsLightChip(bankCode: "ADCB", darkMode: true))
         #expect(!BankDirectory.needsLightChip(bankCode: "MASHREQ", darkMode: true))

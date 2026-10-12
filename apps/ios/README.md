@@ -22,9 +22,9 @@ share extension.
   10 + Others): stacked bars, legend, tap a month for its callout (AED and share of the month), and
   each group's total and share for the range. Charts carry VoiceOver chart descriptors.
 - **Bank logos** replace bank codes on every screen (`BankLogo`, accessibility label = the bank's
-  name). The six launch banks are bundled (`Assets.xcassets/Bank/<CODE>`, from `assets/banks/`);
+  name). Every seeded bank is bundled (`Assets.xcassets/Bank/<CODE>`, from `assets/banks/`);
   any other bank loads `banks.logo_path` from the public `bank-logos` bucket, else a monogram. The
-  navy/blue/purple marks (ENBD, SIB, EIB, FAB) sit on a light chip in dark mode.
+  navy/blue/purple marks (ENBD, SIB, EIB, FAB, WIO) sit on a light chip in dark mode.
 
 ## Layout
 
