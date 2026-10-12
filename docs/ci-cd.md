@@ -147,7 +147,8 @@ gcloud run services update-traffic ccs-parser --project credit-card-scraper-ht \
   build production"); PRODUCTION.md §4 has the rationale. PRs are checked by `ci.yml` → `web`.
 - What the integration lacks is a check that what it shipped works. Vercel reports each
   deployment back to GitHub as a Deployment; `web-smoke.yml` runs once per push to `main`
-  that touches the web app, waits for that commit's Production deployment to succeed, and checks
+  that touches the web app, waits until production serves that commit or a newer one (each build stamps its commit in
+  `<meta name="ledger-build">`; Vercel doesn't always report its deployments to GitHub), and checks
   the production URL (it no longer listens to `deployment_status`, which created a skipped run for
   every state of every deployment): `/` is 200 with `<title>Bank Ledger</title>`, the CSP
   is present and allows `https://nkmylznisjcnmqbxosey.supabase.co` with

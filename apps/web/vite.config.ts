@@ -20,8 +20,18 @@ const sentryPlugins: PluginOption[] = process.env.SENTRY_AUTH_TOKEN
     ]
   : [];
 
+// The commit a build came from, as <meta name="ledger-build">: web-smoke.yml reads it off
+// production to know Vercel shipped a push, since Vercel doesn't always report its
+// deployments back to GitHub. Not a secret: the repository's own commit id.
+const buildStamp: PluginOption = {
+  name: "ledger-build-stamp",
+  transformIndexHtml: () => [
+    { tag: "meta", attrs: { name: "ledger-build", content: process.env.VERCEL_GIT_COMMIT_SHA ?? "local" }, injectTo: "head" },
+  ],
+};
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), ...sentryPlugins],
+  plugins: [react(), tailwindcss(), buildStamp, ...sentryPlugins],
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   build: {
     sourcemap: process.env.SENTRY_AUTH_TOKEN ? "hidden" : false,

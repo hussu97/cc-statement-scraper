@@ -58,36 +58,38 @@ jobs:
           sparse-checkout: scripts/ci
           ref: ${{ github.event.repository.default_branch }}
 
-      - name: Wait for Vercel's Production deployment of this commit
+      - name: Wait for production to serve this commit
         if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           SHA: ${{ github.sha }}
+          URL: ${{ env.PRODUCTION_URL }}
         run: |
-          # Vercel reports a Production deploy of the commit as a GitHub Deployment and/or a
-          # "Vercel" commit status: it does not always create the Deployment (build 8's counter
-          # commit 12cfe0f had only the status, and this step waited out the job), so either
-          # one counts. 36 x 15 s stays inside the job's timeout, so a missing deploy fails
-          # with a message here instead of the job being cancelled.
+          # Every build stamps its commit in <meta name="ledger-build"> (apps/web/vite.config.ts),
+          # so this asks production what it serves instead of trusting Vercel's GitHub reports:
+          # Vercel often posts neither a Deployment nor a "Vercel" status (a346956, f683280 shipped
+          # with none, and this step used to wait them out and fail). Production serving this
+          # commit, or a newer one that contains it, is a pass. A "Vercel" status of failure/error
+          # still fails fast. 36 x 15 s stays inside the job's timeout.
           for attempt in $(seq 1 36); do
-            state=$(gh api "repos/$REPO/deployments?sha=$SHA&per_page=20" \
-              --jq '[.[] | select(.environment | startswith("Production"))][0].statuses_url // ""' \
-              | xargs -r -I{} gh api {} --jq '.[0].state // ""' || true)
-            source=deployment
-            if [ -z "$state" ]; then
-              state=$(gh api "repos/$REPO/commits/$SHA/statuses?per_page=100" \
-                --jq '[.[] | select(.context == "Vercel")][0].state // ""' || true)
-              source=status
+            served=$(curl -fsS --max-time 20 "$URL/" | grep -o '<meta name="ledger-build" content="[0-9a-f]*"' \
+              | sed 's/.*content="//; s/"$//' || true)
+            if [ -n "$served" ]; then
+              rel=$(gh api "repos/$REPO/compare/$SHA...$served" --jq .status 2>/dev/null || true)
+              case "$rel" in
+                identical|ahead) echo "production serves ${served::7} (contains ${SHA::7}: $rel)"; exit 0 ;;
+              esac
             fi
-            echo "attempt $attempt: Vercel ${source} state='${state:-none}'"
-            case "$state" in
-              success) exit 0 ;;
-              failure|error) echo "::error::Vercel's Production deployment of $SHA ended in '$state'"; exit 1 ;;
+            vercel=$(gh api "repos/$REPO/commits/$SHA/statuses?per_page=100" \
+              --jq '[.[] | select(.context == "Vercel")][0].state // ""' || true)
+            echo "attempt $attempt: production serves '${served:-unknown}', Vercel status '${vercel:-none}'"
+            case "$vercel" in
+              failure|error) echo "::error::Vercel's Production deployment of $SHA ended in '$vercel'"; exit 1 ;;
             esac
             sleep 15
           done
-          echo "::error::No successful Vercel Production deployment for $SHA after 9 minutes"; exit 1
+          echo "::error::Production still doesn't serve $SHA after 9 minutes (serves '${served:-unknown}'): Vercel didn't ship this push"; exit 1
 
       - name: Smoke test
         env:

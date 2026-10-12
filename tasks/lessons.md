@@ -9,6 +9,7 @@
 
 | When | Lesson |
 |---|---|
+| 2026-10-12 | [Check what production serves, not what Vercel says it shipped](#check-what-production-serves-not-what-vercel-says-it-shipped) |
 | 2026-10-12 | [Git hooks export `GIT_DIR`: in a worktree, every child git uses the wrong repository](#git-hooks-export-git_dir-in-a-worktree-every-child-git-uses-the-wrong-repository) |
 | 2026-10-12 | [Beta App Review must be able to sign in: keep a demo account](#beta-app-review-must-be-able-to-sign-in-keep-a-demo-account) |
 | 2026-10-12 | [A bank logo is the bank's own file, downloaded, never drawn](#a-bank-logo-is-the-banks-own-file-downloaded-never-drawn) |
@@ -37,6 +38,19 @@
 | 2026-10-08 | [Tooling defaults that don't work here: `gh` account, Supabase MCP, `localhost`, pip](#tooling-defaults-that-dont-work-here-gh-account-supabase-mcp-localhost-pip) |
 
 ## Lessons
+
+### Check what production serves, not what Vercel says it shipped
+- **What went wrong**: `web-smoke.yml` failed after 9 minutes on `e9f74af`/`a346956` and again on
+  `f683280` ("No successful Vercel Production deployment"), and both times an empty "redeploy"
+  commit was pushed to fix a deploy that hadn't failed: the production `budgets` chunk already had
+  the new code. Vercel's Git integration had built it but posted no GitHub Deployment or "Vercel"
+  status for the commit, so the wait loop saw `none` until it timed out.
+- **Rule**: verify a deploy by asking the deployed thing which commit it is. Each web build stamps
+  `<meta name="ledger-build">`; the smoke job passes when production serves the pushed commit or a
+  newer one. Before pushing a "redeploy", check the live site (the stamp, or grep a chunk for the
+  new code).
+- **Enforced by**: `web-smoke.yml` "Wait for production to serve this commit"; `apps/web/vite.config.ts`
+  `buildStamp`.
 
 ### Git hooks export `GIT_DIR`: in a worktree, every child git uses the wrong repository
 - **What went wrong**: pushing the App Review change to `main` from a worktree, the pre-push
