@@ -66,12 +66,19 @@ def _extract_statement_reference(lines: list[str]) -> str | None:
 #   *(1 AED = EGP 13.20746)                           (the rate of the row above)
 #   20 SEP 19 SEP AMAZON RETAIL DUBAI ARE 5,259.00CR
 # Rows carry no year; it comes from the period end.
+# The bilingual header extracts in a varying order (same card, different months):
+#   "VEMURI SAMBRAJYA Card Account Number.: 5424 XXXX XXXX 6177" or the number on the name
+#   line ("SESHADRI VENKATARAMANA <arabic> 5424 XXXX XXXX 6177 PAGE 1 OF 3") with a bare
+#   "Card Account Number.:"; "To:30th Jun 2026" or "30th Jun 2026" followed by "To:".
+# A month with no activity has no OPENING BALANCE line and no card section.
 
 _CARD_ACCOUNT_MARKER = "Card Account Number"
+_HEADER_LINES = 15
 _CA_PERIOD_RE = re.compile(
-    r"^(?P<label>From|To):\s*(?P<day>\d{1,2})(?:st|nd|rd|th)?\s+(?P<month>[A-Za-z]{3})[A-Za-z]*\s+(?P<year>\d{4})",
+    r"^(?:(?P<label>From|To):\s*)?(?P<day>\d{1,2})(?:st|nd|rd|th)\s+(?P<month>[A-Za-z]{3})[A-Za-z]*\s+(?P<year>\d{4})$",
 )
 _CA_ACCOUNT_RE = re.compile(r"Card Account Number\.?:\s*([\dX ]*\d{4})\b")
+_CA_MASKED_RE = re.compile(r"\b\d{4} ?X{4} ?X{4} ?(\d{4})\b")
 _CA_SECTION_RE = re.compile(r"^(?P<role>[A-Z][A-Z\- ]*?)\s*CARD NO\s*[:.]?\s*[\dX* ]*?(?P<last4>\d{4})$")
 _CA_OPENING_RE = re.compile(r"^OPENING BALANCE\s+(?P<amount>[\d,]+\.\d{2})(?P<cr>\s*CR)?$", re.IGNORECASE)
 _CA_ROW_RE = re.compile(
@@ -85,7 +92,36 @@ _CA_RATE_RE = re.compile(r"^\*?\(\s*1 AED\s*=\s*(?P<currency>[A-Z]{3})\s+(?P<rat
 
 
 def _is_card_account_layout(lines: list[str]) -> bool:
-    return any(_CARD_ACCOUNT_MARKER in line for line in lines[:15])
+    return any(_CARD_ACCOUNT_MARKER in line for line in lines[:_HEADER_LINES])
+
+
+def _ca_period(lines: list[str]) -> tuple[date | None, date | None]:
+    """(start, end): the "From:" date, then the next printed date (labelled "To:" or not)."""
+    start: date | None = None
+    end: date | None = None
+    for line in lines[: _HEADER_LINES + 10]:
+        match = _CA_PERIOD_RE.match(line)
+        if not match:
+            continue
+        value = _ca_period_date(match)
+        if match["label"] == "From" and start is None:
+            start = value
+        elif match["label"] != "From" and end is None:
+            end = value
+    return start, end
+
+
+def _ca_account_last4(lines: list[str]) -> str | None:
+    header = lines[:_HEADER_LINES]
+    for line in header:
+        match = _CA_ACCOUNT_RE.search(line)
+        if match:
+            return match.group(1)[-4:]
+    for line in header:
+        match = _CA_MASKED_RE.search(line)
+        if match:
+            return match.group(1)
+    return None
 
 
 def _ca_period_date(match: re.Match[str]) -> date | None:
@@ -110,13 +146,14 @@ def _ca_row_date(token: str, period_end: date) -> date | None:
 
 
 def _ca_card_holder(lines: list[str]) -> str | None:
-    """The name printed over two lines: "<first part> <arabic> PAGE 1 OF n" and
-    "<second part> Card Account Number.: ...". Only the leading ASCII words count."""
-    for idx, line in enumerate(lines[:15]):
-        if _CARD_ACCOUNT_MARKER not in line or idx == 0:
+    """The name, printed over the two lines after "Statement of Card Account" with the
+    account label, the card number or the address between its parts. Only the leading
+    upper-case words of each of the next three lines count; at most two parts."""
+    for idx, line in enumerate(lines[:_HEADER_LINES]):
+        if "Statement of Card Account" not in line:
             continue
-        parts = [_leading_name(lines[idx - 1]), _leading_name(line.split(_CARD_ACCOUNT_MARKER, 1)[0])]
-        name = " ".join(p for p in parts if p)
+        parts = [_leading_name(nxt) for nxt in lines[idx + 1 : idx + 4]]
+        name = " ".join([p for p in parts if p][:2])
         return name or None
     return None
 
@@ -131,16 +168,7 @@ def _leading_name(text: str) -> str:
 
 
 def _parse_card_account_layout(path: Path, lines: list[str]) -> StatementParseResult:
-    period_start: date | None = None
-    period_end: date | None = None
-    for line in lines:
-        match = _CA_PERIOD_RE.match(line)
-        if match:
-            value = _ca_period_date(match)
-            if match["label"] == "From" and period_start is None:
-                period_start = value
-            elif match["label"] == "To" and period_end is None:
-                period_end = value
+    period_start, period_end = _ca_period(lines)
     if period_end is None:
         # No year anywhere else: without the period end no row date can be placed.
         return StatementParseResult(
@@ -153,12 +181,7 @@ def _parse_card_account_layout(path: Path, lines: list[str]) -> StatementParseRe
             metadata={"card_last4": None},
         )
 
-    account_last4: str | None = None
-    for line in lines:
-        match = _CA_ACCOUNT_RE.search(line)
-        if match:
-            account_last4 = match.group(1)[-4:]
-            break
+    account_last4 = _ca_account_last4(lines)
     card_holder = _ca_card_holder(lines)
     statement_month = statement_month_from_date(period_end)
 
@@ -229,7 +252,14 @@ def _parse_card_account_layout(path: Path, lines: list[str]) -> StatementParseRe
         )
 
     if not transactions:
-        warnings.append("No EIB transaction rows matched expected pattern")
+        # A month without activity prints neither an opening balance nor a card section;
+        # anything else without rows is a layout the parser does not read.
+        has_activity_markers = any(_CA_SECTION_RE.match(ln) or _CA_OPENING_RE.match(ln) for ln in lines)
+        warnings.append(
+            "No EIB transaction rows matched expected pattern"
+            if has_activity_markers
+            else "EIB: no activity this period (no opening balance or card section printed)"
+        )
 
     return StatementParseResult(
         bank_code=BANK_CODE,

@@ -130,6 +130,31 @@ _EIB_CARD_ACCOUNT_PAGES: list[list[Line]] = [
     ]
 ]
 
+# The same layout in another month's extraction order: the card number on the name line
+# with a bare "Card Account Number.:", the period end before its "To:" label, and no
+# activity (no OPENING BALANCE line, no card section; the balance carries over).
+_EIB_CARD_ACCOUNT_QUIET_PAGES: list[list[Line]] = [
+    [
+        "Statement of Card Account",
+        "JANE Q 4000 XXXX XXXX 2222 PAGE 1 OF 1",
+        "Card Account Number.:",
+        "SAMPLE",
+        "1 SAMPLE TOWER",
+        "DUBAI Statement Period:",
+        "From:11th Jun 2026",
+        "10th Jul 2026",
+        "To:",
+        "Description Amount",
+        "Post Date Trxn. Date",
+        "Rewards Summary",
+        "CASHBACK OPENING BALANCE 0",
+        "Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Due"
+        " Profit/Other Charges (AED) Current Balance (AED)",
+        "20,000.00 20,000.50 0.00 05/08/26 0.00 0.00 -0.50",
+        "Emirates Islamic Bank (P.J.S.C.) is licensed by the Central Bank of the UAE.",
+    ]
+]
+
 # ---------------------------------------------------------------- FAB
 # Column layout (Debit/Credit by x position), a foreign row, a supplementary card, and a
 # rewards redemption the summary's Payments/Credits column leaves out (DP-10), and the VAT row FAB
@@ -250,6 +275,12 @@ CASES: dict[str, Case] = {
     ),
     "eib_card_account": Case(
         _EIB_CARD_ACCOUNT_PAGES,
+        password=PASSWORD,
+        settings={"EIB_PDF_PASSWORD": PASSWORD},
+        bank_code_hint="EIB",
+    ),
+    "eib_card_account_quiet": Case(
+        _EIB_CARD_ACCOUNT_QUIET_PAGES,
         password=PASSWORD,
         settings={"EIB_PDF_PASSWORD": PASSWORD},
         bank_code_hint="EIB",

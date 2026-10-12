@@ -1,5 +1,11 @@
 # Changelog
 
+## Emirates Islamic: every month and both cards parse — 2026-10-12
+
+### Parser
+
+- **fix** EIB (`2026.10.9`): 5 of Tejasvie's 10 EIB statements (two primary cards: Amazon World 6177 and RTA 4557) still failed or came back empty, because the bilingual header extracts in a different order from month to month. The card number is now also read from the name line ("... 5424 XXXX XXXX 6177 PAGE 1 OF 3") when "Card Account Number.:" stands alone, the period end is read with or without its "To:" label in front, and the card holder from the three lines after "Statement of Card Account". A month with no activity prints no OPENING BALANCE line and no card section: its opening balance is its closing balance (the balance carried over), and the warning says "no activity" instead of "no rows matched". All 10 reconcile; each card gets its own account (an unknown last4 on a statement creates one). Synthetic case `eib_card_account_quiet`.
+
 ## Gmail ingest runs on a Google OAuth client in the parser's GCP project — 2026-10-12
 
 ### Docs
