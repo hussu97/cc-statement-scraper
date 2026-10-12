@@ -1,5 +1,11 @@
 # Changelog
 
+## Pushing from a worktree builds the iOS release again — 2026-10-12
+
+### Docs
+
+- **fix** Tooling: `scripts/hooks/pre-push` unsets `GIT_DIR` (and `GIT_WORK_TREE`, `GIT_INDEX_FILE`, `GIT_COMMON_DIR`), which git exports to hooks. In a worktree it pointed every child `git` at `.git/worktrees/<name>`, so SwiftPM's package checkouts in `swift test`, `xcodebuild` and `publish-build.sh` failed with "unable to read tree" and a push to `main` couldn't stage its TestFlight build. Lesson in `tasks/lessons.md`.
+
 ## App Review can sign in: a demo account with a synthetic ledger — 2026-10-12
 
 ### Backend (Supabase)
