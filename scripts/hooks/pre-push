@@ -27,6 +27,11 @@ set -uo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT" || exit 1
+# Git exports GIT_DIR to hooks; in a worktree it is the absolute .git/worktrees/<name>.
+# Every child git then uses this repository, so SwiftPM's package checkouts (swift test,
+# xcodebuild, publish-build.sh) fail with "unable to read tree". From the repo root git
+# finds the same repository on its own.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR
 
 if [ -t 1 ]; then
   RED=$'\033[0;31m'; GREEN=$'\033[0;32m'; YELLOW=$'\033[1;33m'; BLUE=$'\033[0;34m'; DIM=$'\033[2m'; NC=$'\033[0m'

@@ -9,6 +9,7 @@
 
 | When | Lesson |
 |---|---|
+| 2026-10-12 | [Git hooks export `GIT_DIR`: in a worktree, every child git uses the wrong repository](#git-hooks-export-git_dir-in-a-worktree-every-child-git-uses-the-wrong-repository) |
 | 2026-10-12 | [Beta App Review must be able to sign in: keep a demo account](#beta-app-review-must-be-able-to-sign-in-keep-a-demo-account) |
 | 2026-10-12 | [A bank logo is the bank's own file, downloaded, never drawn](#a-bank-logo-is-the-banks-own-file-downloaded-never-drawn) |
 | 2026-10-12 | [A recursive search reads every file under its root, secret files included](#a-recursive-search-reads-every-file-under-its-root-secret-files-included) |
@@ -36,6 +37,23 @@
 | 2026-10-08 | [Tooling defaults that don't work here: `gh` account, Supabase MCP, `localhost`, pip](#tooling-defaults-that-dont-work-here-gh-account-supabase-mcp-localhost-pip) |
 
 ## Lessons
+
+### Git hooks export `GIT_DIR`: in a worktree, every child git uses the wrong repository
+- **What went wrong**: pushing the App Review change to `main` from a worktree, the pre-push
+  release step (`publish-build.sh`) failed twice with "Couldn't check out revision …: unable to
+  read tree" for every Swift package. Git runs hooks with `GIT_DIR` set, and in a worktree it is
+  the absolute `.git/worktrees/<name>`, so SwiftPM's own `git` calls inside its package cache
+  read this repository instead. From the main checkout `GIT_DIR` is a relative `.git`, which
+  happens to resolve inside each package clone, so it never showed there. Reproduced with
+  `GIT_DIR=$(git rev-parse --absolute-git-dir) xcodebuild -resolvePackageDependencies` (9 errors;
+  0 without it).
+- **Rule**: a hook that runs tools which use git themselves (SwiftPM, xcodebuild, npm, uv)
+  unsets `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE` and `GIT_COMMON_DIR` after `cd`-ing to
+  the repo root. Don't work around a hook failure with `SKIP_RELEASE=1`; find what the hook's
+  environment changes.
+- **Enforced by**: `scripts/hooks/pre-push` unsets them at the top; verified by running the hook
+  with `GIT_DIR` set and a cold `LedgerKit/.build`.
+
 
 ### Beta App Review must be able to sign in: keep a demo account
 - **What went wrong**: TestFlight builds 3 and 6 were rejected under Guideline 2.1(a) ("unable
