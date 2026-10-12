@@ -1,6 +1,6 @@
 # Bank Ledger
 
-A personal credit-card ledger for FAB, ADCB, ENBD, EIB, SIB and Mashreq cards:
+A personal credit-card ledger for FAB, ADCB, ENBD, EIB, SIB, Mashreq and Wio cards:
 
 - **Real time from bank SMS.** An iPhone Shortcuts automation hands each alert to the Bank Ledger
   app's App Intent.

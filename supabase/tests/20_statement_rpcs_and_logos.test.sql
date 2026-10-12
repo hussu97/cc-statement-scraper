@@ -39,9 +39,10 @@ create function pg_temp.new_doc() returns text language sql as $$
 
 -- ── logos ───────────────────────────────────────────────────────────────────
 select is((select array_agg(bank_code || '=' || logo_path order by bank_code) from public.banks
-           where bank_code in ('ADCB', 'EIB', 'ENBD', 'FAB', 'MASHREQ', 'SIB')),
-          array['ADCB=ADCB.png', 'EIB=EIB.png', 'ENBD=ENBD.png', 'FAB=FAB.png', 'MASHREQ=MASHREQ.png', 'SIB=SIB.png'],
-          'the six banks carry logo_path = <bank_code>.png');
+           where bank_code in ('ADCB', 'EIB', 'ENBD', 'FAB', 'MASHREQ', 'SIB', 'WIO')),
+          array['ADCB=ADCB.png', 'EIB=EIB.png', 'ENBD=ENBD.png', 'FAB=FAB.png', 'MASHREQ=MASHREQ.png', 'SIB=SIB.png',
+                'WIO=WIO.png'],
+          'the seeded banks carry logo_path = <bank_code>.png');
 select is((select public from storage.buckets where id = 'bank-logos'), true, 'the bank-logos bucket is public');
 select ok(not exists (select 1 from pg_policies where schemaname = 'storage' and tablename = 'objects'
                       and cmd in ('INSERT', 'UPDATE', 'DELETE', 'ALL') and qual::text || coalesce(with_check::text, '') ~ 'bank-logos'),
