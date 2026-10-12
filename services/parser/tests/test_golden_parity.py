@@ -8,6 +8,7 @@ rebuilt from this repo. The test is skipped when ``tests/golden/`` is empty.
 from __future__ import annotations
 
 import json
+import re
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -37,11 +38,16 @@ KIND_FEE_TO_PURCHASE: dict[str, int] = {}
 #     ("SOCIETSHARJAH" -> "SOCIET SHARJAH"); description_raw and the fingerprint are unchanged.
 #   * 2026.10.7: a FAB "VAT ON ..." row is an AED line; legacy kept the foreign purchase's
 #     currency and amount that FAB prints beside it. amount_aed and the fingerprint are unchanged.
+#   * 2026.10.10: an ENBD foreign row ("*RL360 DOUGLAS GBR 2,000.00 USD", then "(1 AED = USD
+#     0.26398)") carries its original amount, currency and rate, and the description loses the
+#     amount; the Credit Shield premium and "VAT ON ..." are fees. amount_aed and the fingerprint
+#     are unchanged.
 ALLOWED_DELTAS: dict[str, set[str]] = {
     "period year corrected (DP-03/04)": set(),
     "rows legacy skipped (DP-07)": set(),
     "glued place separated (2026.10.4)": set(),
     "FAB VAT row is AED (2026.10.7)": set(),
+    "ENBD foreign row and bank charges (2026.10.10)": set(),
 }
 RECOVERED_LINES: dict[str, int] = {}
 
@@ -91,6 +97,11 @@ def _assert_year_corrected(st_new: dict, st_old: dict) -> None:
 
 def _debits(lines: list[dict], amount_key: str) -> Decimal:
     return sum((Decimal(str(abs(float(ln[amount_key])))) for ln in lines if ln["direction"] == "debit"), Decimal(0))
+
+
+def _printed(amount: str) -> str:
+    """An amount as ENBD prints it in a description: thousands separators, two places."""
+    return f"{Decimal(amount):,.2f}"
 
 
 def _pair_lines(st_new: dict, st_old: dict) -> tuple[list[tuple[dict, dict]], list[dict]]:
@@ -159,21 +170,36 @@ def test_golden_parity(golden_path: Path) -> None:
             assert ln_new["posting_date"] == ln_old["posting_date"], ctx
             assert ln_new["amount_aed"] == money_or_none(ln_old["amount_aed"]), ctx
             assert ln_new["direction"] == ln_old["direction"], ctx
-            if ln_new["currency_original"] != ln_old["currency_original"]:
+            enbd_foreign = (
+                golden["bank_code"] == "ENBD"
+                and ln_new["currency_original"] != "AED"
+                and ln_old["merchant_raw"] == f"{ln_new['description_raw']} {_printed(ln_new['amount_original'])} "
+                f"{ln_new['currency_original']}"
+            )
+            if enbd_foreign:
+                assert ln_old["currency_original"] == "AED", ctx
+                assert ln_new["merchant_normalized"] != ln_old["merchant_normalized"], ctx
+                ALLOWED_DELTAS["ENBD foreign row and bank charges (2026.10.10)"].add(golden_path.stem)
+            elif ln_new["currency_original"] != ln_old["currency_original"]:
                 assert golden["bank_code"] == "FAB" and ln_old["merchant_raw"].startswith("VAT "), ctx
                 assert ln_new["currency_original"] == "AED", ctx
                 assert ln_new["amount_original"] == ln_new["amount_aed"], ctx
                 ALLOWED_DELTAS["FAB VAT row is AED (2026.10.7)"].add(golden_path.stem)
             else:
                 assert ln_new["amount_original"] == money(ln_old["amount_original"]), ctx
-            assert ln_new["description_raw"] == ln_old["merchant_raw"], ctx
-            if ln_new["merchant_normalized"] != ln_old["merchant_normalized"]:
+            if not enbd_foreign:
+                assert ln_new["description_raw"] == ln_old["merchant_raw"], ctx
+            if not enbd_foreign and ln_new["merchant_normalized"] != ln_old["merchant_normalized"]:
                 assert ln_new["merchant_normalized"] == separate_glued_place(ln_old["merchant_normalized"]), ctx
                 ALLOWED_DELTAS["glued place separated (2026.10.4)"].add(golden_path.stem)
             assert ln_new["legacy_fingerprint"] == ln_old["fingerprint"], ctx
 
             expected_kind = map_kind(ln_old["kind"], ln_old["merchant_normalized"], ln_old["direction"])
-            if ln_new["kind"] != expected_kind:
+            if ln_new["kind"] != expected_kind and golden["bank_code"] == "ENBD" and ln_new["kind"] == "fee":
+                assert expected_kind == "purchase", ctx
+                assert re.match(r"^(?:CREDIT SHIELD\b|VAT ON\b)", ln_old["merchant_raw"]), ctx
+                ALLOWED_DELTAS["ENBD foreign row and bank charges (2026.10.10)"].add(golden_path.stem)
+            elif ln_new["kind"] != expected_kind:
                 assert (ln_old["kind"], ln_new["kind"]) == ("fee", "purchase"), ctx
                 KIND_FEE_TO_PURCHASE[golden_path.stem] = KIND_FEE_TO_PURCHASE.get(golden_path.stem, 0) + 1
 

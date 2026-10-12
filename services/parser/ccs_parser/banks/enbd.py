@@ -29,6 +29,17 @@ _ROW_RE = re.compile(
     re.IGNORECASE,
 )
 
+# A foreign row ends its description with the original amount and currency, and the
+# next line prints the rate (dnata Platinum, 2026):
+#   29/06/2026 30/06/2026 *RL360 DOUGLAS GBR 2,000.00 USD 7,574.25
+#   (1 AED = USD 0.26405)
+# The rate line confirms the currency, so a description ending "... 24 ARE" stays text.
+_FOREIGN_TAIL_RE = re.compile(r"^(?P<merchant>.+?)\s+(?P<amount>[\d,]+(?:\.\d{1,3})?)\s+(?P<currency>[A-Z]{3})$")
+_RATE_RE = re.compile(r"^\*?\(\s*1 AED\s*=\s*(?P<currency>[A-Z]{3})\s+(?P<rate>\d+(?:\.\d+)?)\s*\)$")
+# Charges the bank adds itself (the summary counts them under "Interest/Other Charges"):
+# the Credit Shield insurance premium and the VAT on it.
+_BANK_CHARGE_RE = re.compile(r"^(?:CREDIT SHIELD\b|VAT ON\b)")
+
 _STATEMENT_PERIOD_RE = re.compile(
     r"Statement Period:\s*(\d{2}-[A-Za-z]{3}-\d{2})\s+to\s+(\d{2}-[A-Za-z]{3}-\d{2})"
 )
@@ -109,7 +120,7 @@ def parse_enbd_statement(pdf_path: str | Path, pdf_password: str | None = None) 
     warnings: list[str] = []
     transactions: list[TransactionRecord] = []
 
-    for line in lines:
+    for idx, line in enumerate(lines):
         if line.startswith("Card Number:"):
             possible_last4 = extract_last4_masked(line)
             if possible_last4:
@@ -150,10 +161,30 @@ def parse_enbd_statement(pdf_path: str | Path, pdf_password: str | None = None) 
         if amount_suffix == "CR" and amount_aed > 0:
             amount_aed = -amount_aed
 
+        # The fingerprint keeps the printed text, foreign tail included, as before 2026.10.10.
+        fingerprint_merchant = merchant_normalize(description)
+        currency = "AED"
+        amount_original = amount_aed
+        fx_rate_to_aed = 1.0
+        rate = _RATE_RE.match(lines[idx + 1]) if idx + 1 < len(lines) else None
+        tail = _FOREIGN_TAIL_RE.match(description) if rate else None
+        if rate and tail and tail["currency"] == rate["currency"] and float(rate["rate"]) > 0:
+            description = tail["merchant"].strip()
+            currency = tail["currency"]
+            original = parse_amount(tail["amount"])
+            amount_original = -original if amount_aed < 0 else original
+            # Printed as "1 AED = <CUR> <rate>"; the contract wants AED per unit.
+            fx_rate_to_aed = 1 / float(rate["rate"])
+        elif rate:
+            warnings.append(f"ENBD: rate line for {rate['currency']} did not match its row; kept as AED")
+
         merchant_norm = merchant_normalize(description)
         kind = classify_transaction_kind(merchant_norm, amount_aed)
         if kind == "refund" and amount_aed > 0:
             amount_aed = -amount_aed
+            amount_original = -abs(amount_original)
+        if kind == "purchase" and _BANK_CHARGE_RE.match(merchant_norm.upper()):
+            kind = "fee"
 
         tx_statement_month = statement_month or statement_month_from_date(posting_date)
         fingerprint = fingerprint_for(
@@ -161,7 +192,7 @@ def parse_enbd_statement(pdf_path: str | Path, pdf_password: str | None = None) 
             card_last4,
             posting_date,
             amount_aed,
-            merchant_norm,
+            fingerprint_merchant,
         )
 
         transactions.append(
@@ -176,10 +207,10 @@ def parse_enbd_statement(pdf_path: str | Path, pdf_password: str | None = None) 
                 merchant_raw=description,
                 merchant_normalized=merchant_norm,
                 country_code=_extract_country_code(description),
-                amount_original=amount_aed,
-                currency_original="AED",
+                amount_original=amount_original,
+                currency_original=currency,
                 amount_aed=amount_aed,
-                fx_rate_to_aed=1.0,
+                fx_rate_to_aed=fx_rate_to_aed,
                 transaction_kind=kind,
                 source_pdf=str(path),
                 fingerprint=fingerprint,
