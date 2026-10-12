@@ -303,7 +303,7 @@ JWTs. The service client logs which source it used (never the value).
 | `{PROFILE}_CCS_SCRAPER_API_TOKEN` | — | Per-profile service token (v2 tokens are profile-scoped; scope `statements:upload`). Wins over the global token |
 | `CCS_SCRAPER_API_TOKEN` | — | Global fallback token for profiles without their own |
 | `CCS_SCRAPER_SUPABASE_PUBLISHABLE_KEY` | — | Optional publishable key (`sb_publishable_…`), sent as `apikey`. `CCS_SCRAPER_SUPABASE_ANON_KEY` is read as a deprecated fallback |
-| `CCS_SCRAPER_UPLOAD_MAX_FILES`, `CCS_SCRAPER_UPLOAD_MAX_MB` | `20`, `32` | Upload batching: files and MB of PDF per request, clamped to the server's limits (20 files, 40 MB). A 413 halves the batch; batches that succeeded are recorded, so `upload-pending` retries only the rest |
+| `CCS_SCRAPER_UPLOAD_MAX_FILES`, `CCS_SCRAPER_UPLOAD_MAX_MB` | `20`, `32` | Upload batching: files and MB of PDF per request; they can only lower the defaults (the server accepts 20 files / 40 MB per request). A 413 halves the batch; batches that succeeded are recorded, so `upload-pending` retries only the rest |
 | `CCS_SCRAPER_HEADLESS`, `CCS_SCRAPER_DOWNLOAD_DIR`, `CCS_SCRAPER_BROWSER_*` | `true`, `./downloads`, Dubai | Browser settings |
 | `{PROFILE}_{BANK}_*` | — | Bank portal credentials per profile (see `scraper/.env.example`) |
 | `SIB_CARD_LAST4S` | every card the portal's Credit Card section lists | SIB cards to export, e.g. `4821` or `4821,9218` (also `card_last4s:` under `SIB` in `config/banks.yaml`). One export per card; a replaced card stays listed next to its successor |
