@@ -5,8 +5,8 @@
 -- 1. sms_messages.source ('sms' | 'wallet') and wallet_pass_name. A Wallet event is a row in
 --    sms_messages with source 'wallet', sender 'Wallet' and a synthetic body
 --    '<CUR> <amount> at <merchant> (<pass name>)', so match_sms, new_transaction_from_sms,
---    refresh_transaction, the duplicate rule (body_hash), the reviews and the
---    evidence_type = 'sms' CHECK all apply unchanged. The submitted fields are kept in
+--    refresh_transaction, the reviews and the evidence_type = 'sms' CHECK all apply
+--    (match_sms's duplicate-alert step excepted, see 6). The submitted fields are kept in
 --    parsed_fields {amount, currency, merchant, pass_name}.
 -- 2. cards.wallet_name: the user-set name the phone shows for the card (unique per profile,
 --    case-insensitive). Owners may update it (column grant). Setting it re-processes the
@@ -23,6 +23,9 @@
 --    Rows of one source never pair with each other here, so SMS-only profiles are unchanged.
 -- 5. public.resolve_review: the {"card": …} action needs a card number; for a Wallet row it
 --    raises 22023 asking for the card's Wallet name instead.
+-- 6. private.match_sms: its duplicate-alert step never pairs two Wallet rows. Their synthetic
+--    bodies carry no time, so two genuine identical taps (same card, amount, merchant) would
+--    otherwise share a body_hash; a redelivery is already deduped by client_msg_id.
 
 -- ── 1. sms_messages: source and pass name ───────────────────────────────────
 alter table public.sms_messages
@@ -266,6 +269,130 @@ begin
   return v_result;
 end;
 $$;
+
+-- ── 4b. match_sms: unchanged from 20261011170000 except that the duplicate-alert step
+-- (same body_hash, or near-identical text within 180 s) never pairs two Wallet rows.
+create or replace function private.match_sms(p_sms_code text)
+returns text   -- 'linked' | 'duplicate' | 'created' | 'held' | 'skipped'
+language plpgsql
+set search_path = ''
+as $$
+declare
+  s public.sms_messages%rowtype;
+  v_txn text;
+  v_best record;
+  v_conflict boolean;
+  v_desc_merchant text;
+  v_amount_aed numeric;
+  v_original text;
+begin
+  select * into s from public.sms_messages where sms_code = p_sms_code;
+  if s.parse_status <> 'parsed' or s.account_code is null
+     or s.msg_kind not in ('purchase', 'preauth', 'refund', 'reversal', 'payment') then
+    return 'skipped';
+  end if;
+  if exists (select 1 from public.transaction_evidence e where e.sms_code = s.sms_code and e.is_active) then
+    return 'skipped';
+  end if;
+
+  -- 1. Same alert delivered twice (bank resend / automation double-fire). Two
+  --    alerts that print different available limits are two purchases (DB-15).
+  --    Two Wallet events are never the same alert: each is a separate tap, and a
+  --    redelivery is already caught by client_msg_id at ingest.
+  select e.txn_code into v_txn
+  from public.sms_messages o
+  join public.transaction_evidence e on e.sms_code = o.sms_code and e.is_active
+  where o.profile_code = s.profile_code and o.sms_code <> s.sms_code
+    and not (o.source = 'wallet' and s.source = 'wallet')
+    and o.account_code = s.account_code and o.msg_kind = s.msg_kind
+    and o.amount = s.amount and o.currency = s.currency
+    and (o.body_hash = s.body_hash
+         or (abs(extract(epoch from o.event_at - s.event_at)) <= 180
+             and extensions.similarity(coalesce(o.description, ''), coalesce(s.description, '')) >= 0.8
+             and (o.available_limit is null or s.available_limit is null or o.available_limit = s.available_limit)))
+    and abs(extract(epoch from o.received_at - s.received_at)) <= 600
+  order by o.received_at
+  limit 1;
+  if v_txn is not null then
+    insert into public.transaction_evidence (txn_code, profile_code, evidence_type, sms_code, role, method)
+    values (v_txn, s.profile_code, 'sms', s.sms_code, 'duplicate', 'exact');
+    return 'duplicate';
+  end if;
+
+  -- 2. A late SMS for a transaction a statement already posted.
+  v_desc_merchant := private.resolve_merchant(s.description);
+  v_amount_aed := case when s.currency = 'AED' then s.amount
+                       else round(s.amount * private.estimate_fx(s.profile_code, s.currency, coalesce(s.bank_code, private.account_bank(s.account_code)),
+                                                                 public.dubai_date(s.event_at)), 2) end;
+  create temp table if not exists _sx_cand (txn_code text, score numeric, sig text, created timestamptz, maff numeric)
+    on commit drop;
+  truncate _sx_cand;
+  insert into _sx_cand
+  select t.txn_code,
+         private.match_score(
+           s.amount, s.currency, v_amount_aed, public.dubai_date(s.event_at), null,
+           s.description, v_desc_merchant, s.card_last4,
+           t.amount_original, t.currency_original, t.amount_aed, t.txn_date, t.posting_date,
+           t.description, t.merchant_code, cd.last4, coalesce(mr.variable_amount, false) or s.msg_kind = 'preauth'
+         ),
+         concat_ws('|', t.amount_original, t.currency_original, t.txn_date, t.merchant_code),
+         t.created_at,
+         private.merchant_affinity(s.description, t.description, v_desc_merchant, t.merchant_code)
+  from public.transactions t
+  left join public.cards cd on cd.card_code = t.card_code
+  left join public.merchants mr on mr.merchant_code = t.merchant_code
+  where t.profile_code = s.profile_code
+    and t.account_code = s.account_code
+    and t.direction = case when s.msg_kind in ('refund', 'reversal', 'payment') then 'credit' else 'debit' end
+    and abs(t.txn_date - public.dubai_date(s.event_at)) <= 3
+    and not exists (select 1 from public.transaction_evidence e
+                    where e.txn_code = t.txn_code and e.is_active and e.evidence_type = 'sms');
+  delete from _sx_cand where score is null or score < 55;
+
+  select * into v_best from _sx_cand order by score desc, created, txn_code limit 1;
+  if v_best.txn_code is not null then
+    v_conflict := exists (select 1 from _sx_cand x
+                          where x.txn_code <> v_best.txn_code and x.score >= v_best.score - 15 and x.sig <> v_best.sig
+                            and x.maff > v_best.maff - 0.3);
+    if v_conflict or v_best.score < 75 then
+      insert into public.match_reviews (profile_code, account_code, subject_type, subject_code, reason, candidates)
+      values (s.profile_code, s.account_code, 'sms', s.sms_code,
+              case when v_conflict then 'ambiguous' else 'low_score' end,
+              (select coalesce(jsonb_agg(jsonb_build_object('txn_code', x.txn_code, 'score', x.score) order by x.score desc), '[]'::jsonb)
+                 from (select * from _sx_cand order by score desc limit 5) x))
+      on conflict do nothing;
+      return 'held';
+    end if;
+    insert into public.transaction_evidence (txn_code, profile_code, evidence_type, sms_code, role, score, method)
+    values (v_best.txn_code, s.profile_code, 'sms', s.sms_code, 'auth', v_best.score,
+            case when v_best.score >= 85 then 'exact' else 'scored' end);
+    perform private.refresh_transaction(v_best.txn_code);
+    return 'linked';
+  end if;
+
+  -- 3. A brand-new (pending) transaction.
+  v_txn := private.new_transaction_from_sms(s.sms_code);
+
+  -- A reversal points at the purchase it reverses.
+  if s.msg_kind = 'reversal' then
+    select t.txn_code into v_original
+    from public.transactions t
+    where t.profile_code = s.profile_code and t.account_code = s.account_code
+      and t.direction = 'debit' and t.txn_code <> v_txn
+      and t.amount_original = s.amount and t.currency_original = s.currency
+      and t.txn_date between public.dubai_date(s.event_at) - 30 and public.dubai_date(s.event_at)
+      and not exists (select 1 from public.transactions r
+                      where r.profile_code = s.profile_code and r.related_txn_code = t.txn_code)
+    order by extensions.similarity(t.description, coalesce(s.description, '')) desc, t.txn_date desc
+    limit 1;
+    if v_original is not null then
+      update public.transactions set related_txn_code = v_original where txn_code = v_txn;
+    end if;
+  end if;
+  return 'created';
+end;
+$$;
+
 
 -- process_sms: unchanged from 20261009000300 except the Wallet branch at the top and the
 -- Wallet twin check before match_sms.
