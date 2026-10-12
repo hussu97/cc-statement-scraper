@@ -69,3 +69,8 @@ def load_versions() -> dict[str, str]:
 
 def dump(value: Any) -> str:
     return json.dumps(value, indent=2, sort_keys=True, ensure_ascii=True) + "\n"
+
+
+def dump_versions(versions: dict[str, str]) -> str:
+    """versions.json in release order: sorting would put "2026.10.10" before "2026.10.2"."""
+    return json.dumps(versions, indent=2, ensure_ascii=True) + "\n"

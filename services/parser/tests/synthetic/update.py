@@ -13,7 +13,16 @@ from __future__ import annotations
 import sys
 
 from ccs_parser import PARSER_VERSION
-from tests.synthetic.golden import EXPECTED_DIR, VERSIONS_FILE, digest, dump, load_expected, load_versions, run_all
+from tests.synthetic.golden import (
+    EXPECTED_DIR,
+    VERSIONS_FILE,
+    digest,
+    dump,
+    dump_versions,
+    load_expected,
+    load_versions,
+    run_all,
+)
 
 
 def main() -> int:
@@ -37,7 +46,7 @@ def main() -> int:
     for name in changed:
         (EXPECTED_DIR / f"{name}.json").write_text(dump(results[name]))
     versions[PARSER_VERSION] = new_digest
-    VERSIONS_FILE.write_text(dump(versions))
+    VERSIONS_FILE.write_text(dump_versions(versions))
     print(f"{len(changed)} snapshot(s) written; {PARSER_VERSION} -> {new_digest[:12]}")
     return 0
 

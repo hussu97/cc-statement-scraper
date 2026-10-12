@@ -1,5 +1,12 @@
 # Changelog
 
+## Emirates NBD dnata Platinum: foreign rows and Credit Shield charges — 2026-10-12
+
+### Parser
+
+- **fix** ENBD (`2026.10.10`): a foreign row ("*SAMPLE INSURER GBR 1,000.00 USD 3,672.50", then "(1 AED = USD 0.26405)") was an AED line whose description kept the original amount and currency, and its country was read as the currency. The rate line now confirms the currency: the description ends at the merchant and place, the line carries the original amount, currency and rate (AED per unit), and the country comes from the place. The Credit Shield premium and its "VAT ON INSURANCE" row are fees (the summary counts them under Interest/Other Charges), not purchases. amount_aed and the legacy fingerprint are unchanged (golden parity delta `2026.10.10`). Bob's four dnata Platinum statements (card 9201, May and Jul–Sep 2026) reconcile. Synthetic case `enbd_fx_and_charges`.
+- **fix** `tests/synthetic/versions.json` is written in release order: sorted keys put `2026.10.10` before `2026.10.2`, which failed the "ends with the current version" check.
+
 ## Emirates Islamic: every month and both cards parse — 2026-10-12
 
 ### Parser

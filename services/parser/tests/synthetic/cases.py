@@ -97,6 +97,37 @@ def _enbd_template(bank_line: str, period: str, card: str, product: str) -> list
     ]
 
 
+# ENBD dnata Platinum (2026): foreign rows end with the original amount and currency, and the
+# next line prints the rate; the Credit Shield premium and its VAT are bank charges (fees).
+_ENBD_FX_PAGES: list[list[Line]] = [
+    [
+        "Credit Card Statement",
+        "JANE Q For queries, please call 600 54 0000",
+        "Card Number: 5000 XXXX XXXX 2468",
+        "DUBAI, Card Type: dnata Platinum",
+        "UAE Page 1 of 4 Statement Period: 13-Jul-26 to 12-Aug-26",
+        "Credit Limit Available Credit Limit (AED) Statement Date Payment Due Date Minimum Payment Due",
+        "13000 4,992.58 12/08/2026 06/09/2026 474.91",
+        "Transaction Date Posting Date Description Amount",
+        "Primary Card Number",
+        "JANE Q: 5000 XXXX XXXX 2468",
+        "14/07/2026 15/07/2026 *AIRPORT KIOSK CAIRO EGY 505.00 EGP 38.13",
+        "(1 AED = EGP 13.24416)",
+        "25/07/2026 25/07/2026 TRANSFER PAYMENT RECEIVED THANK YOU 8,044.00CR",
+        "29/07/2026 30/07/2026 *SAMPLE INSURER DOUGLAS GBR 2,000.00 USD 7,575.08",
+        "(1 AED = USD 0.26402)",
+        "03/08/2026 04/08/2026 CORNER GROCERY DUBAI ARE 350.10",
+        "12/08/2026 12/08/2026 CREDIT SHIELD PRO PREMIUM 78.46",
+        "12/08/2026 12/08/2026 VAT ON INSURANCE 3.92",
+        "Previous Statement Purchase / Cash Interest/Other Payments/Credits (AED) Total Payment Due (AED)"
+        " Current Balance (AED)",
+        "Due (AED) Advance (AED) Charges (AED)",
+        "8,005.73 7,963.31 82.38 8,044.00 8,007.42 8,007.42",
+        "Emirates NBD Bank (P.J.S.C.) is licensed by the Central Bank of the UAE",
+    ]
+]
+
+
 # ---------------------------------------------------------------- EIB card account
 # The layout EIB sends: the period on two lines, "DD MON" rows (post date first) with no
 # year (this period crosses Dec/Jan), a foreign row and its "*(1 AED = GBP x)" rate line,
@@ -262,6 +293,11 @@ CASES: dict[str, Case] = {
             "4000 XXXX XXXX 5678",
             "Sample One Visa Credit Card",
         )
+    ),
+    "enbd_fx_and_charges": Case(
+        _ENBD_FX_PAGES,
+        password=PASSWORD,
+        settings={"ENBD_PDF_PASSWORD": PASSWORD},
     ),
     "eib_encrypted": Case(
         _enbd_template(
