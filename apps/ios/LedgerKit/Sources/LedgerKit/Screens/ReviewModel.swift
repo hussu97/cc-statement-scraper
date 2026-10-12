@@ -67,7 +67,7 @@ public enum ReviewPresentation {
         case "amount_drift": "The posted amount differs from the alert."
         case "unknown_card": "An SMS mentions a card Ledger doesn't know. Choose the account it belongs to; waiting messages from it are then processed."
         case "unparsed_sms": "A bank message didn't match any format. Ask the AI to try again, or mark it as not a card transaction. Proposed formats are accepted on the web."
-        case "orphaned": "Their only evidence was removed. Dismiss once checked."
+        case "orphaned": "Their only evidence was removed, so they count in no total. Void them once checked."
         case "missing_from_statement": "An SMS purchase never appeared on its statement. It may have been released."
         case "period_overlap": "Two statements of the same card cover the same days. Resolve it on the web."
         default: ""
@@ -97,6 +97,7 @@ public enum ReviewPresentation {
         let (subject, detail) = describeSubject(review, inbox: inbox)
         var options: [ReviewItem.Option] = []
         var note: String?
+        var dismissLabel = "Dismiss"
         let canMatch = review.subjectType == "sms" || review.subjectType == "statement_line"
 
         switch review.reason {
@@ -134,10 +135,13 @@ public enum ReviewPresentation {
                 options.append(.init(label: "Same as \(txn.title) · \(txn.amountLabel) · \(day)", action: .link(txnCode: code)))
             }
             options.append(.init(label: "Keep as a new transaction", action: .createNew))
+        case "orphaned" where review.subjectType == "transaction":
+            // resolve_review voids the transaction when its orphan review is dismissed.
+            dismissLabel = "Void transaction"
         default:
             note = "More options for this are on the web."
         }
-        options.append(.init(label: "Dismiss", action: .dismiss))
+        options.append(.init(label: dismissLabel, action: .dismiss))
         let bank = inbox.sms[review.subjectCode]?.bankCode
             ?? (inbox.lines[review.subjectCode] == nil && inbox.transactions[review.subjectCode] == nil
                 ? review.candidates.first?.bankCode : nil)

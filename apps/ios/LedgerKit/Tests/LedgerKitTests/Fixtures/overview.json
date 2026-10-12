@@ -7,6 +7,7 @@
   "change_vs_prev_month_to_date": "-0.1805",
   "change_vs_avg_3m": null,
   "payments": "0",
+  "outstanding": "4722.55", "outstanding_complete": false, "outstanding_has_estimate": true,
   "pending_count": 2,
   "pending_amount": "145.30",
   "uncategorized_count": 3,
@@ -22,11 +23,15 @@
       "product_name": "Cashback Card", "credit_limit": "30000.00", "last4": "1234,5678",
       "latest_statement": {"stmt_code": "stm_01hzy3k8w9m2n4p6q8r0s2t4v6", "statement_date": "2026-09-25",
         "due_date": "2026-10-20", "closing_balance": "4210.55", "min_due": "210.53"},
-      "unbilled_aed": "512.00", "utilisation": "0.1404"
+      "unbilled_aed": "512.00", "utilisation": "0.1404",
+      "outstanding_aed": "4722.55", "balance_anchor": "statement", "balance_anchor_date": "2026-09-25",
+      "balance_has_estimate": true, "balance_unpriced_count": 1
     },
     {
       "account_code": "acc_01hzy3k8w9m2n4p6q8r0s2t4v7", "bank_code": "ADCB", "nickname": null,
-      "product_name": null, "credit_limit": null, "last4": null, "latest_statement": null, "unbilled_aed": "0"
+      "product_name": null, "credit_limit": null, "last4": null, "latest_statement": null, "unbilled_aed": "0",
+      "outstanding_aed": null, "balance_anchor": "none", "balance_anchor_date": null,
+      "balance_has_estimate": false, "balance_unpriced_count": 0
     }
   ],
   "recent": [

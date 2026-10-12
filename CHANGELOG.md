@@ -12,6 +12,11 @@
 - **add** Overview → Cards: "Owed now" per card (with what it is anchored on: "Statement of 1 Oct + activity since", "Card replaced 15 Sep + activity since") and the total over active cards; a credit balance reads "AED 0.84 in credit", estimates "≈", and the total says when it excludes unpriced charges or a card has no anchor. Pure helpers in `lib/balances.ts`, unit-tested.
 - **change** Review → Orphaned transactions: the button reads "Void transaction" (dismissing now voids it) and the help says orphans count in no total.
 
+### iOS
+
+- **add** Overview → Cards: "Owed now" for the active cards in total, and per card with what it is anchored on ("Statement of 25 Sep + activity since", "Card replaced 15 Sep + activity since"), from `overview`'s server-computed balances. A credit balance reads "AED 0.84 in credit", estimates "≈", and the total says when it excludes unpriced charges or a card has no anchor. A server without the fields shows nothing. Wording in LedgerKit `OutstandingBalance`, mirroring the web's `lib/balances.ts`; `OutstandingBalanceTests`.
+- **change** Review → Orphaned transactions: the button reads "Void transaction" (dismissing now voids it) instead of "Dismiss" with a "More options are on the web" note, and the help says orphans count in no total.
+
 ### Docs
 
 - **change** ARCHITECTURE §6: one definition of what a card owes; orphaned rows count in no total. README: the Overview screen row.
