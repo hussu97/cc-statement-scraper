@@ -1,5 +1,5 @@
 -- Wio Bank (Wio Personal credit card): reference data for the parser's new WIO layout
--- (services/parser/ccs_parser/banks/wio.py, parser 2026.10.10).
+-- (services/parser/ccs_parser/banks/wio.py, parser 2026.10.11).
 --
 -- Statements arrive by email from communications@mail.wio.io ("Your Wio Credit statement for
 -- this month"), unencrypted, so no WIO_PDF_PASSWORD exists. No SMS sender is seeded: Wio
