@@ -55,10 +55,32 @@ public enum SMSCapture {
         }
     }
 
-    // Same alternation as the server's defence-in-depth check in `ingest_sms`.
-    static let otpPattern = try! NSRegularExpression(
-        pattern: #"\botp\b|one[- ]?time\s+(password|passcode|pin)|verification\s+code|pass\s?code|security\s+code"#,
-        options: [.caseInsensitive])
+    /// The OTP pattern, character for character the server's `private.sms_otp_pattern()`
+    /// (`ingest_sms` drops OTPs again with it). It uses only syntax that ICU and Postgres read
+    /// the same way (no `\b`, `\d`, `\s` or `.`), and both match it case-insensitively.
+    /// `SMSOTPParityTests` pins it to the fixture shared with pgTAP
+    /// (`supabase/tests/38_sms_otp_filter.test.sql`), which also lists every server SMS template
+    /// example as a message that must be sent: change all three together.
+    static let otpPatternSource: String =
+        // "OTP" as a word; `_` counts as part of a word, as in `\b`, so "dropped_otp" is not one.
+        #"(^|[^a-zA-Z0-9_])otp([^a-zA-Z_]|$)"#
+        + #"|one[^a-zA-Z0-9]{0,3}time[^a-zA-Z0-9]{0,3}(password|pin|code)"#
+        + #"|verification[^a-zA-Z0-9]{0,3}(code|pin)"#
+        + #"|pass[^a-zA-Z0-9]?code"#
+        + #"|security[^a-zA-Z0-9]{0,3}code"#
+        + #"|authentication[^a-zA-Z0-9]{0,3}(code|pin|password)"#
+        + #"|secure[^a-zA-Z0-9]{0,3}code"#
+        + #"|3[^a-zA-Z0-9]?d[^a-zA-Z0-9]?secure[^a-zA-Z0-9]{1,3}(password|pin)"#
+        // "Use 482913 as the code…", "482913 is your one-time password"
+        + #"|(^|[^a-zA-Z0-9.,])[0-9]{4,8}[^a-zA-Z0-9]{1,3}(is|as)[^a-zA-Z0-9]{1,3}(your|the)[^a-zA-Z0-9]{1,3}"#
+        + #"([a-zA-Z-]{1,20}[^a-zA-Z0-9]{1,3}){0,3}(code|pin|password|passcode)([^a-zA-Z]|$)"#
+        // "Never share this code", "Do not share your OTP"
+        + #"|(do[^a-zA-Z0-9]{1,3}not|don[^a-zA-Z0-9]{0,2}t|never)[^a-zA-Z0-9]{1,3}share[^a-zA-Z0-9]{1,3}"#
+        + #"((this|the|your|it)[^a-zA-Z0-9]{1,3})?(otp|code|password|passcode)"#
+        // Arabic: verification code, passcode, password, secret word, one-time.
+        + #"|رمز (ال)?تحقق|رمز (ال)?مرور|كلمة (ال)?مرور|كلمة (ال)?سر|لمرة واحدة"#
+
+    static let otpPattern = try! NSRegularExpression(pattern: otpPatternSource, options: [.caseInsensitive])
 
     public static func isOTP(_ body: String) -> Bool { matches(otpPattern, body) }
 
