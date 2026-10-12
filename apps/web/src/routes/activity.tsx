@@ -24,6 +24,7 @@ import { ActivityFilters } from "@/components/activity/filters";
 import { ActivitySummaryStrip } from "@/components/activity/summary";
 import { TransactionDrawer } from "@/components/activity/drawer";
 import { CardRef } from "@/components/bank-logo";
+import { transferPeer } from "@/lib/transfers";
 
 export function ActivityPage() {
   const { profile_code, isOwner } = useActiveProfile();
@@ -285,6 +286,7 @@ function TxnLine({
             {t.txn_at && <span className="tabular">{formatTime(t.txn_at)}</span>}
             <CardRef bankCode={t.bank_code} last4={t.card_last4} className="md:hidden" />
             <EvidenceBadge kind={evidenceBadge(t)} />
+            <TransferRef t={t} />
             <StatusBadge status={t.status} />
             {t.exclude_from_spend && <span>excluded</span>}
           </span>
@@ -309,5 +311,16 @@ function TxnLine({
         <TxnAmount t={t} className="text-sm" />
       </span>
     </div>
+  );
+}
+
+/** "Paid to EIB •9216" / "From WIO •9202" under a card-transfer row. */
+function TransferRef({ t }: { t: TxnRow }) {
+  const peer = transferPeer(t);
+  if (!peer) return null;
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1">
+      {peer.prefix} <CardRef bankCode={peer.bankCode} last4={peer.last4} />
+    </span>
   );
 }
