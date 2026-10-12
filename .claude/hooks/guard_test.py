@@ -106,6 +106,31 @@ class Secrets(unittest.TestCase):
                     "git check-ignore -v supabase/functions/.env"]:
             self.assertEqual(bash(cmd), "allow", cmd)
 
+    def test_denies_recursive_search_over_secret_dirs(self):
+        for cmd in ["grep -rn foo supabase/functions", 'grep -rniE "gmail|oauth" supabase/functions apps/web/src',
+                    "grep -R foo .", "grep -rn foo", "grep --recursive foo services/parser",
+                    "grep -rn foo supabase", "grep -rn foo apps/ios", "grep -rn -e foo scraper",
+                    "cd supabase && grep -rn foo functions", "grep -rn foo supabase/functions --include='.env*'",
+                    "rg -uu foo supabase/functions", "rg --no-ignore --hidden foo .", "rg -u -. foo scraper",
+                    "find supabase/functions -type f -exec cat {} +", "find . -exec grep -H foo {} \\;",
+                    "find services/parser -type f | xargs grep foo", "egrep -r foo apps/web"]:
+            self.assertEqual(bash(cmd), "deny", cmd)
+
+    def test_allows_recursive_search_that_skips_secrets(self):
+        for cmd in ["grep -rn foo supabase/functions --exclude='.env*'", "grep -rn --exclude=.env* foo scraper",
+                    "grep -rn foo apps/ios --exclude='Secrets*.xcconfig'", "grep -rn foo supabase --exclude='.env*'",
+                    "grep -rn foo apps/web/src", "grep -rn foo supabase/functions/_shared supabase/migrations",
+                    "grep -rn foo supabase/functions --include='*.ts'", "grep -rl foo supabase/functions",
+                    "grep -rc foo .", "rg foo supabase/functions", "rg -u foo supabase/functions",
+                    "rg --hidden foo .", "rg -uu foo supabase/functions -g '!.env*'", "rg -uu -l foo .",
+                    "grep -n foo supabase/functions/worker/index.ts", "grep foo -r docs",
+                    "find supabase/functions -name '*.ts' -exec grep -H foo {} +",
+                    "find . -type f -not -name '.env*' -not -name 'Secrets*' -exec cat {} +",
+                    "find supabase/functions -type f", "find . -name '.env*'",
+                    'grep -rniE "gmail|oauth" apps/web/src | head -5',
+                    "python3 - <<'EOF'\nprint('grep -rn foo supabase/functions')\nEOF"]:
+            self.assertEqual(bash(cmd), "allow", cmd)
+
     def test_read_tool(self):
         self.assertEqual(read("/repo/supabase/functions/.env.production"), "deny")
         self.assertEqual(read("/repo/apps/ios/Config/Secrets.xcconfig"), "deny")

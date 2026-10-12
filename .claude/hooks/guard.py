@@ -7,6 +7,7 @@ enforced ones, so they don't depend on being remembered:
   deny  `git add -A` / `.` / `-u`, `git commit -a`      (CLAUDE.md §9: stage explicit paths)
   deny  `git commit` without the exact --author, or with a Co-Authored-By trailer (§9)
   deny  printing a secret file, env dump or token       (§11.4: never print secrets)
+  deny  recursive grep -r / rg -uu / find -exec cat over a directory holding one, unless excluded
   deny  dropping the `legacy` schema, `rm -r` of backend/ or data/, `db reset --linked` (§11.3)
   ask   every production action: push to main, db push, functions deploy, secrets,
         Vault, Cloud Run, Vercel, gh secrets/workflows, TestFlight, prod SQL (§11.1-11.2)
@@ -19,6 +20,8 @@ Tests: python3 .claude/hooks/guard_test.py
 
 from __future__ import annotations
 
+import fnmatch
+import glob
 import json
 import os
 import re
@@ -185,6 +188,209 @@ def check_secret_read(seg: str) -> tuple[str, str] | None:
     return None
 
 
+# Where the gitignored secret files of CLAUDE.md §11.4 live, relative to the repo root, with
+# example names. A clean clone has none of them, so these are known statically; secrets_under()
+# adds whatever is actually on disk under a search root.
+SECRET_DIRS = {
+    ".": [".env", ".env.cutover", ".env.production"],
+    "supabase/functions": [".env", ".env.production"],
+    "services/parser": [".env", ".env.production"],
+    "apps/web": [".env.local", ".env.production.local"],
+    "apps/ios/Config": ["Secrets.xcconfig", "Secrets.Release.xcconfig"],
+    "scraper": [".env"],
+}
+PRUNE = {".git", "node_modules", ".venv", "venv", "dist", "build", ".build", "Pods", "DerivedData"}
+GLOB = re.compile(r"[*?\[]")
+
+
+def repo_top(cwd: str) -> str:
+    try:
+        out = subprocess.run(["git", "-C", cwd or ".", "rev-parse", "--show-toplevel"],
+                             capture_output=True, text=True, timeout=3)
+        return out.stdout.strip() or cwd
+    except Exception:
+        return cwd
+
+
+def secrets_under(roots: list[str], cwd: str, top: str) -> list[str]:
+    """Names of secret files a recursive walk of `roots` (relative to cwd) would open."""
+    found: set[str] = set()
+    for root in roots:
+        if GLOB.search(root):
+            matches = glob.glob(os.path.join(cwd, root)) if os.path.isdir(cwd or "") else []
+            if not matches:  # can't expand here: assume the directory part before the glob
+                matches = [os.path.join(cwd, root[:GLOB.search(root).start()].rpartition("/")[0] or ".")]
+            paths = matches
+        else:
+            paths = [os.path.join(cwd, root)]
+        for path in (os.path.normpath(p) for p in paths):
+            if is_secret(path):
+                found.add(os.path.basename(path))
+            for rel, names in SECRET_DIRS.items():
+                d = os.path.normpath(os.path.join(top, rel))
+                if d == path or d.startswith(path.rstrip("/") + "/"):
+                    found.update(names)
+            if os.path.isdir(path):
+                for n, (dirpath, dirnames, filenames) in enumerate(os.walk(path)):
+                    dirnames[:] = [x for x in dirnames if x not in PRUNE]
+                    found.update(f for f in filenames if is_secret(os.path.join(dirpath, f)))
+                    if n > 5000:
+                        break
+    return sorted(found)
+
+
+def short_opts(w: str, with_value: str) -> tuple[str, bool]:
+    """Flags of a short-option cluster like -rniE, and whether the next word is a flag's value."""
+    flags = ""
+    for i, ch in enumerate(w[1:]):
+        flags += ch
+        if ch in with_value:
+            return flags, i == len(w) - 2
+    return flags, False
+
+
+def grep_like(ws: list[str], value_short: str, value_long: set[str]) -> tuple[list[str], list[str], list[str]]:
+    """(flags, long options as 'name=value', positional args) of a grep/rg command line."""
+    flags, longs, pos, i, explicit_pattern = [], [], [], 1, False
+    while i < len(ws):
+        w = ws[i]
+        if w == "--":
+            pos += ws[i + 1:]
+            break
+        if w.startswith("--"):
+            name = w.split("=", 1)[0]
+            if "=" not in w and name in value_long and i + 1 < len(ws):
+                w, i = f"{w}={ws[i + 1]}", i + 1
+            longs.append(w)
+            explicit_pattern |= name in ("--regexp", "--file")
+        elif w.startswith("-") and len(w) > 1:
+            f, takes_next = short_opts(w, value_short)
+            flags.append(f)
+            explicit_pattern |= bool(set(f) & set("ef"))
+            if takes_next and i + 1 < len(ws):
+                if f[-1] == "g":
+                    longs.append(f"--glob={ws[i + 1]}")
+                i += 1
+            elif f and f[-1] == "g" and len(w) > 2:
+                longs.append("--glob=" + w[w.index("g") + 1:])
+        else:
+            pos.append(w)
+        i += 1
+    return list("".join(flags)), longs, pos[0 if explicit_pattern else 1:]
+
+
+def long_values(longs: list[str], *names: str) -> list[str]:
+    return [l.split("=", 1)[1].strip("'\"") for l in longs if "=" in l and l.split("=", 1)[0] in names]
+
+
+def unexcluded(names: list[str], include: list[str], exclude: list[str]) -> list[str]:
+    return [n for n in names if not any(fnmatch.fnmatch(n, p) for p in exclude)
+            and (not include or any(fnmatch.fnmatch(n, p) for p in include))]
+
+
+GREP_LONG = {"--regexp", "--file", "--include", "--exclude", "--exclude-dir", "--exclude-from",
+             "--max-count", "--context", "--after-context", "--before-context", "--label",
+             "--devices", "--directories", "--binary-files"}
+RG_LONG = {"--regexp", "--file", "--glob", "--iglob", "--type", "--type-not", "--max-count",
+           "--context", "--after-context", "--before-context", "--max-depth", "--replace",
+           "--threads", "--max-filesize", "--type-add", "--encoding", "--sort", "--sortr"}
+NAMES_ONLY = {"--files-with-matches", "--files-without-match", "--count", "--count-matches",
+              "--quiet", "--silent", "--files"}
+
+
+def recursive_secrets(pipeline: list[str], cwd: str, top: str) -> list[str]:
+    """Secret files a recursive grep / rg / find in this pipeline would print, after its excludes."""
+    for k, stage in enumerate(pipeline):
+        ws = words(stage)
+        while ws and re.match(r"^[A-Z_][A-Z0-9_]*=", ws[0]):
+            ws = ws[1:]
+        cmd = os.path.basename(ws[0]) if ws else ""
+        if cmd in ("grep", "egrep", "fgrep"):
+            flags, longs, roots = grep_like(ws, "ABCDdefm", GREP_LONG)
+            recursive = bool(set(flags) & {"r", "R"}) or \
+                any(l in ("--recursive", "--dereference-recursive", "--directories=recurse") for l in longs)
+            if not recursive or set(flags) & set("lLcq") or set(longs) & NAMES_ONLY:
+                continue
+            names = secrets_under(roots or ["."], cwd, top)
+            return unexcluded(names, long_values(longs, "--include"), long_values(longs, "--exclude"))
+        if cmd == "rg":
+            flags, longs, roots = grep_like(ws, "ABCdEefgjMmrTt", RG_LONG)
+            u = flags.count("u")
+            no_ignore = u >= 1 or any(l in ("--no-ignore", "--no-ignore-vcs") for l in longs)
+            hidden = u >= 2 or "." in flags or "--hidden" in longs
+            if not (no_ignore and hidden) or set(flags) & set("lcq") or set(longs) & NAMES_ONLY:
+                continue
+            globs = long_values(longs, "--glob", "--iglob")
+            names = secrets_under(roots or ["."], cwd, top)
+            return unexcluded(names, [g for g in globs if not g.startswith("!")],
+                              [g[1:] for g in globs if g.startswith("!")])
+        if cmd == "find":
+            i = 1
+            while i < len(ws) and ws[i] in ("-H", "-L", "-P", "-D", "-O"):
+                i += 2 if ws[i] in ("-D", "-O") else 1
+            roots = []
+            while i < len(ws) and not ws[i].startswith("-") and ws[i] not in ("(", "!", ")"):
+                roots.append(ws[i])
+                i += 1
+            execs = [ws[j + 1] for j in range(i, len(ws) - 1) if ws[j] in ("-exec", "-execdir", "-ok", "-okdir")]
+            if k + 1 < len(pipeline):  # find … | xargs cat
+                xs = [w for w in words(pipeline[k + 1]) if not w.startswith("-")]
+                if xs and os.path.basename(xs[0]) == "xargs":
+                    execs += xs[1:]
+            if not any(os.path.basename(e) in READERS for e in execs):
+                continue
+            include, exclude = [], []
+            for j in range(i, len(ws) - 1):
+                if ws[j] in ("-name", "-iname"):
+                    (exclude if j > 0 and ws[j - 1] in ("!", "-not") else include).append(ws[j + 1])
+            return unexcluded(secrets_under(roots or ["."], cwd, top), include, exclude)
+    return []
+
+
+def pipelines(command: str) -> list[list[str]]:
+    """Split on ; && || and newlines into pipelines of | stages, keeping quoted text whole so a
+    pattern like "a|b" stays one argument, and dropping heredoc bodies (they are data)."""
+    command = re.sub(r"<<-?\s*(['\"]?)(\w+)\1.*?\n\s*\2\b", "<<DOC", command, flags=re.S)
+    chains, stages, cur, quote, i = [], [], "", "", 0
+    while i < len(command):
+        c, two = command[i], command[i:i + 2]
+        if quote:
+            quote = "" if c == quote else quote
+        elif c in "'\"":
+            quote = c
+        elif two in ("&&", "||") or c in ";\n|":
+            stages.append(cur)
+            cur = ""
+            if c != "|" or two == "||":
+                chains.append(stages)
+                stages = []
+            i += 2 if two in ("&&", "||") else 1
+            continue
+        cur += c
+        i += 1
+    chains.append(stages + [cur])
+    return [[s.strip() for s in st if s.strip()] for st in chains]
+
+
+def check_recursive_search(command: str, cwd: str) -> tuple[str, str] | None:
+    start, top = cwd, None
+    for stages in pipelines(command):
+        chain = " | ".join(stages)
+        ws = words(stages[0]) if stages else []
+        if len(ws) == 2 and ws[0] == "cd":  # `cd dir && grep -r …` searches from dir
+            cwd = os.path.normpath(os.path.join(cwd, os.path.expanduser(ws[1])))
+            continue
+        if top is None and re.search(r"\b(grep|egrep|fgrep|rg|find)\b", chain):
+            top = os.path.normpath(repo_top(start) or "/")
+        names = recursive_secrets(stages, cwd, top) if top else []
+        if names:
+            return "deny", (f"This recursive search covers gitignored secret files ({', '.join(names)}) and "
+                            "would print their values (CLAUDE.md §11.4). Use `rg PATTERN DIR` (skips "
+                            "gitignored files), or exclude them: `grep -rn PATTERN DIR --exclude='.env*' "
+                            "--exclude='Secrets*.xcconfig'`, `find DIR -not -name '.env*' …`.")
+    return None
+
+
 def decide_bash(raw: str, cwd: str) -> tuple[str, str] | None:
     command = strip_messages(raw)
     for pat, reason in DENY:
@@ -200,6 +406,9 @@ def decide_bash(raw: str, cwd: str) -> tuple[str, str] | None:
         hit = check_git(seg, raw, cwd) or check_secret_read(seg)
         if hit:
             return hit
+    hit = check_recursive_search(command, cwd)
+    if hit:
+        return hit
     for pat, reason in ASK_PROD:
         if re.search(pat, command, re.I):
             return "ask", f"Production action: {reason}. Needs an explicit yes in chat (CLAUDE.md §11.1)."

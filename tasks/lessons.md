@@ -9,6 +9,7 @@
 
 | When | Lesson |
 |---|---|
+| 2026-10-12 | [A recursive search reads every file under its root, secret files included](#a-recursive-search-reads-every-file-under-its-root-secret-files-included) |
 | 2026-10-12 | [Closing a review is not fixing the data: a total counts what the review was about](#closing-a-review-is-not-fixing-the-data-a-total-counts-what-the-review-was-about) |
 | 2026-10-11 | [A row's identity hash names its parent: moving the row means re-keying it](#a-rows-identity-hash-names-its-parent-moving-the-row-means-re-keying-it) |
 | 2026-10-11 | [Only a purchase line's two amounts are a conversion rate](#only-a-purchase-lines-two-amounts-are-a-conversion-rate) |
@@ -33,6 +34,22 @@
 | 2026-10-08 | [Tooling defaults that don't work here: `gh` account, Supabase MCP, `localhost`, pip](#tooling-defaults-that-dont-work-here-gh-account-supabase-mcp-localhost-pip) |
 
 ## Lessons
+
+### A recursive search reads every file under its root, secret files included
+- **What went wrong**: looking for Gmail OAuth code, `grep -rniE "gmail|oauth" supabase/functions …`
+  printed values from `supabase/functions/.env` and `.env.production`. The guard denied `cat`,
+  `grep` and `Read` of a secret file named on the command line, but a recursive search names
+  only a directory, so it went through.
+- **Rule**: search code with `rg PATTERN DIR` (it skips gitignored files, so every secret file of
+  CLAUDE.md §11.4). `grep -r` and `find … -exec cat` over a directory that holds a `.env*`
+  (other than `.env.example`), `.env.cutover` or `Secrets*.xcconfig` must exclude them:
+  `--exclude='.env*' --exclude='Secrets*.xcconfig'`, `find DIR -not -name '.env*' …`. Never
+  `rg -uu`/`--no-ignore --hidden` over such a directory. If a value did print, it is leaked:
+  ask the user to rotate it.
+- **Enforced by**: `.claude/hooks/guard.py` (`check_recursive_search`: denies recursive
+  `grep`/`egrep`, `rg` that searches ignored hidden files, and `find` with `-exec`/`xargs` into a
+  reader when a search root contains a secret file that the command does not exclude; the known
+  secret directories count even on a clean clone), tested by `guard_test.py`.
 
 ### Closing a review is not fixing the data: a total counts what the review was about
 - **What went wrong**: after the FAB re-parse incident the 110 orphaned-transaction reviews were
