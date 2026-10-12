@@ -1,5 +1,11 @@
 # Changelog
 
+## Gmail ingest runs on a Google OAuth client in the parser's GCP project — 2026-10-12
+
+### Docs
+
+- **change** PRODUCTION §5: the Gmail OAuth client `ledger-gmail` now lives in `credit-card-scraper-ht`, beside the `gmail-statements` topic (Gmail's watch rejected the topic for the legacy client: `GMAIL_400`). The rebuild steps say to leave the home page and logo empty and keep the app in *Testing* (publishing needs a verified domain), and the weekly refresh-token renewal is written down. §2.5's secrets table shows what is set today, with the real push service account and topic names; `GMAIL_SENTRY_ALERTS=on` in production.
+
 ## Emirates Islamic statements parse — 2026-10-12
 
 ### Parser
