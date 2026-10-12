@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from datetime import date, datetime
 from pathlib import Path
 
 import pdfplumber
@@ -29,14 +30,11 @@ _ROW_RE = re.compile(
     re.IGNORECASE,
 )
 
-_STATEMENT_PERIOD_RE = re.compile(
-    r"Statement Period:\s*(\d{2}-[A-Za-z]{3}-\d{2})\s+to\s+(\d{2}-[A-Za-z]{3}-\d{2})"
-)
+_STATEMENT_PERIOD_RE = re.compile(r"Statement Period:\s*(\d{2}-[A-Za-z]{3}-\d{2})\s+to\s+(\d{2}-[A-Za-z]{3}-\d{2})")
 _STATEMENT_REF_RE = re.compile(
     r"\b(?:Statement\s*(?:No|Number|Reference|Ref)|Ref(?:erence)?)\b\s*[:#-]?\s*([A-Z0-9\-/]*\d[A-Z0-9\-/]{5,})\b",
     re.IGNORECASE,
 )
-
 
 
 def _extract_country_code(description: str) -> str | None:
@@ -57,6 +55,201 @@ def _extract_statement_reference(lines: list[str]) -> str | None:
     return None
 
 
+# ------------------------------------------------- "Statement of Card Account" layout
+# The layout EIB actually sends (first real sample: an Amazon World Mastercard, Sep 2026).
+# Bilingual pages; pdfplumber yields the English text with the Arabic interleaved.
+#   From:1st Sep 2026 / To:30th Sep 2026              (period, on separate lines)
+#   Card Account Number.: 5424 XXXX XXXX 6177
+#   OPENING BALANCE 42.72
+#   PRIMARY CARD NO:5424XXXXXXXX6177                  (a card section; supplementary too)
+#   01 SEP 31 AUG *UBER DOWNTOWN EGY 169.98 EGP 12.87 (POST date first, then TRXN date)
+#   *(1 AED = EGP 13.20746)                           (the rate of the row above)
+#   20 SEP 19 SEP AMAZON RETAIL DUBAI ARE 5,259.00CR
+# Rows carry no year; it comes from the period end.
+
+_CARD_ACCOUNT_MARKER = "Card Account Number"
+_CA_PERIOD_RE = re.compile(
+    r"^(?P<label>From|To):\s*(?P<day>\d{1,2})(?:st|nd|rd|th)?\s+(?P<month>[A-Za-z]{3})[A-Za-z]*\s+(?P<year>\d{4})",
+)
+_CA_ACCOUNT_RE = re.compile(r"Card Account Number\.?:\s*([\dX ]*\d{4})\b")
+_CA_SECTION_RE = re.compile(r"^(?P<role>[A-Z][A-Z\- ]*?)\s*CARD NO\s*[:.]?\s*[\dX* ]*?(?P<last4>\d{4})$")
+_CA_OPENING_RE = re.compile(r"^OPENING BALANCE\s+(?P<amount>[\d,]+\.\d{2})(?P<cr>\s*CR)?$", re.IGNORECASE)
+_CA_ROW_RE = re.compile(
+    r"^(?P<post>\d{2} [A-Z]{3})\s+(?P<txn>\d{2} [A-Z]{3})\s+(?P<description>.+?)\s+"
+    r"(?P<amount>[\d,]+\.\d{2})(?P<cr>\s*CR)?$"
+)
+# The original amount and currency close the description of a foreign row; the next
+# line's rate confirms the currency, so a description ending "... 24 ARE" stays text.
+_CA_FOREIGN_TAIL_RE = re.compile(r"^(?P<merchant>.+?)\s+(?P<amount>[\d,]+(?:\.\d{1,3})?)\s+(?P<currency>[A-Z]{3})$")
+_CA_RATE_RE = re.compile(r"^\*?\(\s*1 AED\s*=\s*(?P<currency>[A-Z]{3})\s+(?P<rate>\d+(?:\.\d+)?)\s*\)$")
+
+
+def _is_card_account_layout(lines: list[str]) -> bool:
+    return any(_CARD_ACCOUNT_MARKER in line for line in lines[:15])
+
+
+def _ca_period_date(match: re.Match[str]) -> date | None:
+    try:
+        return datetime.strptime(f"{match['day']} {match['month']} {match['year']}", "%d %b %Y").date()
+    except ValueError:
+        return None
+
+
+def _ca_row_date(token: str, period_end: date) -> date | None:
+    """A "DD MON" row date in the year that puts it on or before the period end."""
+    try:
+        parsed = datetime.strptime(f"{token} {period_end.year}", "%d %b %Y").date()
+    except ValueError:
+        return None
+    if parsed > period_end:
+        try:
+            parsed = parsed.replace(year=parsed.year - 1)
+        except ValueError:
+            return None
+    return parsed
+
+
+def _ca_card_holder(lines: list[str]) -> str | None:
+    """The name printed over two lines: "<first part> <arabic> PAGE 1 OF n" and
+    "<second part> Card Account Number.: ...". Only the leading ASCII words count."""
+    for idx, line in enumerate(lines[:15]):
+        if _CARD_ACCOUNT_MARKER not in line or idx == 0:
+            continue
+        parts = [_leading_name(lines[idx - 1]), _leading_name(line.split(_CARD_ACCOUNT_MARKER, 1)[0])]
+        name = " ".join(p for p in parts if p)
+        return name or None
+    return None
+
+
+def _leading_name(text: str) -> str:
+    words: list[str] = []
+    for word in text.split():
+        if not re.fullmatch(r"[A-Z][A-Z.'\-]*", word) or word in {"PAGE", "STATEMENT"}:
+            break
+        words.append(word)
+    return " ".join(words)
+
+
+def _parse_card_account_layout(path: Path, lines: list[str]) -> StatementParseResult:
+    period_start: date | None = None
+    period_end: date | None = None
+    for line in lines:
+        match = _CA_PERIOD_RE.match(line)
+        if match:
+            value = _ca_period_date(match)
+            if match["label"] == "From" and period_start is None:
+                period_start = value
+            elif match["label"] == "To" and period_end is None:
+                period_end = value
+    if period_end is None:
+        # No year anywhere else: without the period end no row date can be placed.
+        return StatementParseResult(
+            bank_code=BANK_CODE,
+            bank_name=BANK_NAME,
+            source_pdf=path,
+            statement_month="1970-01",
+            transactions=[],
+            warnings=["EIB: statement period not found"],
+            metadata={"card_last4": None},
+        )
+
+    account_last4: str | None = None
+    for line in lines:
+        match = _CA_ACCOUNT_RE.search(line)
+        if match:
+            account_last4 = match.group(1)[-4:]
+            break
+    card_holder = _ca_card_holder(lines)
+    statement_month = statement_month_from_date(period_end)
+
+    warnings: list[str] = []
+    transactions: list[TransactionRecord] = []
+    current_last4 = account_last4 or "0000"
+    for idx, line in enumerate(lines):
+        section = _CA_SECTION_RE.match(line)
+        if section:
+            current_last4 = section["last4"]
+            continue
+        row = _CA_ROW_RE.match(line)
+        if not row:
+            continue
+        posting_date = _ca_row_date(row["post"], period_end)
+        txn_date = _ca_row_date(row["txn"], period_end)
+        if posting_date is None or txn_date is None:
+            warnings.append(f"EIB: unreadable row date skipped ({row['post']} / {row['txn']})")
+            continue
+
+        description = row["description"].strip()
+        amount_aed = parse_amount(row["amount"])
+        if row["cr"]:
+            amount_aed = -amount_aed
+
+        currency = "AED"
+        amount_original = amount_aed
+        fx_rate_to_aed = 1.0
+        rate = _CA_RATE_RE.match(lines[idx + 1]) if idx + 1 < len(lines) else None
+        tail = _CA_FOREIGN_TAIL_RE.match(description) if rate else None
+        if rate and tail and tail["currency"] == rate["currency"] and float(rate["rate"]) > 0:
+            description = tail["merchant"].strip()
+            currency = tail["currency"]
+            original = parse_amount(tail["amount"])
+            amount_original = -original if amount_aed < 0 else original
+            # Printed as "1 AED = <rate> <CUR>"; the contract wants AED per unit.
+            fx_rate_to_aed = 1 / float(rate["rate"])
+        elif rate:
+            warnings.append(f"EIB: rate line for {rate['currency']} did not match its row; kept as AED")
+
+        merchant_norm = merchant_normalize(description)
+        kind = classify_transaction_kind(merchant_norm, amount_aed)
+        # The shared rule calls every unlabelled credit a payment (other banks' history
+        # depends on it). Here a merchant credit ("AMAZON RETAIL DUBAI ARE 5,259.00CR")
+        # is a refund; only a row that says PAYMENT is a payment. No legacy EIB data exists.
+        if kind == "payment" and "PAYMENT" not in merchant_norm.upper():
+            kind = "refund"
+        transactions.append(
+            TransactionRecord(
+                bank_name=BANK_NAME,
+                card_last4=current_last4,
+                card_holder=card_holder,
+                card_type=None,
+                statement_month=statement_month,
+                transaction_date=txn_date,
+                posting_date=posting_date,
+                merchant_raw=description,
+                merchant_normalized=merchant_norm,
+                country_code=_extract_country_code(description),
+                amount_original=amount_original,
+                currency_original=currency,
+                amount_aed=amount_aed,
+                fx_rate_to_aed=fx_rate_to_aed,
+                transaction_kind=kind,
+                source_pdf=str(path),
+                fingerprint=fingerprint_for(BANK_NAME, current_last4, posting_date, amount_aed, merchant_norm),
+            )
+        )
+
+    if not transactions:
+        warnings.append("No EIB transaction rows matched expected pattern")
+
+    return StatementParseResult(
+        bank_code=BANK_CODE,
+        bank_name=BANK_NAME,
+        source_pdf=path,
+        statement_month=statement_month,
+        transactions=transactions,
+        warnings=warnings,
+        metadata={
+            "card_last4": account_last4,
+            "card_holder": card_holder,
+            "card_type": None,
+            "statement_period_start": period_start.isoformat() if period_start else None,
+            "statement_period_end": period_end.isoformat(),
+            "statement_date": period_end.isoformat(),
+            "statement_reference": None,
+        },
+    )
+
+
 def parse_eib_statement(pdf_path: str | Path, pdf_password: str | None = None) -> StatementParseResult:
     path = Path(pdf_path)
 
@@ -69,6 +262,10 @@ def parse_eib_statement(pdf_path: str | Path, pdf_password: str | None = None) -
             page_lines = [ln.strip() for ln in (page.extract_text() or "").splitlines() if ln.strip()]
             lines.extend(page_lines)
 
+    if _is_card_account_layout(lines):
+        return _parse_card_account_layout(path, lines)
+
+    # The Emirates NBD group template (never seen from EIB yet; kept for that layout).
     card_last4 = "0000"
     card_holder: str | None = None
     card_type: str | None = None

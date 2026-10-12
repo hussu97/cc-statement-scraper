@@ -97,6 +97,39 @@ def _enbd_template(bank_line: str, period: str, card: str, product: str) -> list
     ]
 
 
+# ---------------------------------------------------------------- EIB card account
+# The layout EIB sends: the period on two lines, "DD MON" rows (post date first) with no
+# year (this period crosses Dec/Jan), a foreign row and its "*(1 AED = GBP x)" rate line,
+# a supplementary card section, a merchant credit (a refund) and a payment.
+
+_EIB_CARD_ACCOUNT_PAGES: list[list[Line]] = [
+    [
+        "Statement of Card Account",
+        "JANE Q PAGE 1 OF 1",
+        "SAMPLE Card Account Number.: 4000 XXXX XXXX 1234",
+        "1 SAMPLE TOWER",
+        "DUBAI Statement Period:",
+        "From:16th Dec 2025",
+        "To:15th Jan 2026",
+        "Description Amount",
+        "Post Date Trxn. Date",
+        "OPENING BALANCE 1,000.00",
+        "PRIMARY CARD NO:4000XXXXXXXX1234",
+        "17 DEC 16 DEC CORNER GROCERY DUBAI ARE 250.00",
+        "02 JAN 30 DEC ONLINE SHOP LONDON GBR 100.00 GBP 470.00",
+        "*(1 AED = GBP 0.21277)",
+        "08 JAN 07 JAN AMAZON RETAIL DUBAI ARE 200.00CR",
+        "10 JAN 10 JAN TRANSFER PAYMENT RECEIVED THANK YOU 1,000.00CR",
+        "SUPPLEMENTARY CARD NO:4000XXXXXXXX8765",
+        "05 JAN 04 JAN FUEL STATION SHARJAH ARE 120.00",
+        "06 JAN 06 JAN CAFE 24 DUBAI ARE 15.00",
+        "Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Due"
+        " Profit/Other Charges (AED) Current Balance (AED)",
+        "20,000.00 19,345.00 100.00 09/02/26 655.00 0.00 655.00",
+        "Emirates Islamic Bank (P.J.S.C.) is licensed by the Central Bank of the UAE.",
+    ]
+]
+
 # ---------------------------------------------------------------- FAB
 # Column layout (Debit/Credit by x position), a foreign row, a supplementary card, and a
 # rewards redemption the summary's Payments/Credits column leaves out (DP-10), and the VAT row FAB
@@ -214,6 +247,12 @@ CASES: dict[str, Case] = {
         ),
         password=PASSWORD,
         settings={"EIB_PDF_PASSWORD": PASSWORD},
+    ),
+    "eib_card_account": Case(
+        _EIB_CARD_ACCOUNT_PAGES,
+        password=PASSWORD,
+        settings={"EIB_PDF_PASSWORD": PASSWORD},
+        bank_code_hint="EIB",
     ),
     "fab_statement": Case(_FAB_PAGES),
     "adcb_encrypted": Case(_ADCB_PAGES, password=PASSWORD, settings={"ADCB_PDF_PASSWORD": PASSWORD}),

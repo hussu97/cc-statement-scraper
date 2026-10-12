@@ -14,8 +14,10 @@ Verified layouts (against real statements):
   * ENBD -- "Credit Limit / Available Credit Limit / Statement Date / Payment
             Due Date / Minimum Payment Due" row and the "STATEMENT SUMMARY" row.
   * MASHREQ -- the "Summary AED" block, one labelled amount per line (DP-12).
+  * EIB  -- "Statement of Card Account": the "OPENING BALANCE" line and the
+            "Card Limit ... Current Balance (AED)" summary row (2026-10).
 Unverified (no decryptable samples were available):
-  * EIB  -- same statement template family as ENBD; the ENBD rules are applied.
+  * EIB in the ENBD template -- the ENBD rules are applied.
   * ADCB -- "PREVIOUS/NEW BALANCE OUTSTANDING <amount>" lines.
 SIB statements have no extractor (all null).
 """
@@ -212,6 +214,51 @@ def _extract_enbd(lines: list[str], result: TotalsResult) -> None:
                     break
 
 
+# --------------------------------------------------------------------- EIB
+
+# The "Statement of Card Account" layout (banks/eib.py). The summary row under
+# "Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Due
+# Profit/Other Charges (AED) Current Balance (AED)" repeats on every page:
+#   38,000.00 37,938.21 61.79 25/10/26 61.79 0.00 61.79
+# The opening balance is its own line: "OPENING BALANCE 42.72". Debits and credits are
+# not printed; the ingest's balance equation checks the lines against these two.
+_EIB_SUMMARY_ROW_RE = re.compile(
+    rf"^(?P<limit>{_DECIMAL_AMOUNT_RE})\s+(?P<available>{_DECIMAL_AMOUNT_RE}(?:\s*CR)?)\s+"
+    rf"(?P<min>{_DECIMAL_AMOUNT_RE})\s+(?P<due_date>\d{{2}}/\d{{2}}/\d{{2}})\s+"
+    rf"(?P<total_due>{_DECIMAL_AMOUNT_RE})\s+(?P<charges>{_DECIMAL_AMOUNT_RE})\s+"
+    rf"(?P<current>{_DECIMAL_AMOUNT_RE}(?:\s*CR)?)$"
+)
+_EIB_OPENING_RE = re.compile(rf"^OPENING BALANCE\s+(?P<amount>{_DECIMAL_AMOUNT_RE}(?:\s*CR)?)$", re.IGNORECASE)
+
+
+def _extract_eib(lines: list[str], result: TotalsResult) -> None:
+    if not any("Card Account Number" in line for line in lines[:15]):
+        _extract_enbd(lines, result)
+        return
+    v = result.values
+    for idx, line in enumerate(lines):
+        stripped = line.strip()
+        opening = _EIB_OPENING_RE.match(stripped)
+        if opening and v["opening_balance"] is None:
+            v["opening_balance"] = _to_decimal(opening.group("amount"))
+            continue
+        upper = stripped.upper()
+        if "CARD LIMIT" in upper and "CURRENT BALANCE" in upper and v["closing_balance"] is None:
+            for nxt in _following(lines, idx):
+                m = _EIB_SUMMARY_ROW_RE.match(nxt.strip())
+                if m:
+                    v["credit_limit"] = _to_decimal(m.group("limit"))
+                    v["min_due"] = _to_decimal(m.group("min"))
+                    v["closing_balance"] = _to_decimal(m.group("current"))
+                    try:
+                        result.due_date = datetime.strptime(m.group("due_date"), "%d/%m/%y").date()
+                    except ValueError:
+                        result.warnings.append("EIB: payment due date unreadable")
+                    break
+    if v["closing_balance"] is None:
+        result.warnings.append("EIB: statement summary row not found; balance totals left null")
+
+
 # -------------------------------------------------------------------- ADCB
 
 _ADCB_BALANCE_RE = re.compile(
@@ -319,7 +366,7 @@ def _extract_mashreq(lines: list[str], result: TotalsResult) -> None:
 _EXTRACTORS = {
     "FAB": _extract_fab,
     "ENBD": _extract_enbd,
-    "EIB": _extract_enbd,
+    "EIB": _extract_eib,
     "ADCB": _extract_adcb,
     "MASHREQ": _extract_mashreq,
 }
