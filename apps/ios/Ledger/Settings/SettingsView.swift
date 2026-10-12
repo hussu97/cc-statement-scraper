@@ -56,6 +56,8 @@ struct SettingsView: View {
                 }
             }
 
+            PrivacySection(lock: model.lock)
+
             smsTargetSection
 
             Section {

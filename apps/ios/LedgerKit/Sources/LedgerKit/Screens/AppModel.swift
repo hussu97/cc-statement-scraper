@@ -46,6 +46,8 @@ public final class AppModel {
     public let spendSplit: SpendSplitModel
     /// The selected tab.
     public let tabs = TabRouter()
+    /// The app-switcher cover and the optional Face ID lock (this device only).
+    public let lock = AppLock(defaults: .standard, authenticator: LocalDeviceAuthenticator())
 
     private var lastPhase: SessionStore.Phase = .restoring
 
