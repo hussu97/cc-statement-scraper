@@ -9,6 +9,7 @@
 
 | When | Lesson |
 |---|---|
+| 2026-10-12 | [A bank logo is the bank's own file, downloaded, never drawn](#a-bank-logo-is-the-banks-own-file-downloaded-never-drawn) |
 | 2026-10-12 | [A recursive search reads every file under its root, secret files included](#a-recursive-search-reads-every-file-under-its-root-secret-files-included) |
 | 2026-10-12 | [Closing a review is not fixing the data: a total counts what the review was about](#closing-a-review-is-not-fixing-the-data-a-total-counts-what-the-review-was-about) |
 | 2026-10-11 | [A row's identity hash names its parent: moving the row means re-keying it](#a-rows-identity-hash-names-its-parent-moving-the-row-means-re-keying-it) |
@@ -34,6 +35,17 @@
 | 2026-10-08 | [Tooling defaults that don't work here: `gh` account, Supabase MCP, `localhost`, pip](#tooling-defaults-that-dont-work-here-gh-account-supabase-mcp-localhost-pip) |
 
 ## Lessons
+
+### A bank logo is the bank's own file, downloaded, never drawn
+- **What went wrong**: adding Wio, the logo was built by lifting the wordmark paths out of
+  wio.io's inline SVG, recolouring them and rasterising a new PNG with resvg. The user rejected
+  it: they wanted the bank's actual logo, found online and used as published.
+- **Rule**: search for the bank's published logo (its site's `logo.png`, `apple-touch-icon`,
+  press kit, or a Wikimedia file) and download that file. Don't redraw, recolour, re-render or
+  compose a mark. Record the source URL in `assets/banks/README.md`. If no usable file exists,
+  say so and ask; don't make one.
+- **Enforced by**: `assets/banks/README.md` ("Downloaded, never drawn"); not mechanically
+  checkable.
 
 ### A recursive search reads every file under its root, secret files included
 - **What went wrong**: looking for Gmail OAuth code, `grep -rniE "gmail|oauth" supabase/functions …`

@@ -46,7 +46,7 @@ public enum BankDirectory {
 
     /// Marks with too little contrast on a dark surface (navy, blue, purple):
     /// in dark mode they sit on a light chip (assets/banks/README.md).
-    public static let darkMarks: Set<String> = ["ENBD", "SIB", "EIB", "FAB", "WIO"]
+    public static let darkMarks: Set<String> = ["ENBD", "SIB", "EIB", "FAB"]
 
     /// Names from the seed (`public.banks`), used until the table has been read
     /// and when the phone is offline.
