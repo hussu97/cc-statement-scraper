@@ -47,15 +47,27 @@ struct LedgerApp: App {
                 }
             }
             .tint(Palette.accent)
+            .privacyCovered(by: model?.lock)
         }
         .onChange(of: scenePhase) { _, phase in
             guard let model else { return }
+            Task { await model.lock.phaseChanged(AppLock.Phase(phase)) }
             switch phase {
             case .active: Task { await model.becameActive() }
             // Leaving with messages waiting: let iOS send them later.
             case .background: Task { await BackgroundSync.schedule(model.services) }
             default: break
             }
+        }
+    }
+}
+
+extension AppLock.Phase {
+    init(_ phase: ScenePhase) {
+        switch phase {
+        case .active: self = .active
+        case .background: self = .background
+        default: self = .inactive
         }
     }
 }
