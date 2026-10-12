@@ -36,7 +36,7 @@ struct IngestTerminalStatusTests {
         #expect(report.remaining == 0)
         let parked = await outbox.parkedEntries()
         #expect(parked.count == 1)
-        #expect(parked[0].payload.body.contains("AED 1.00"))
+        #expect(parked[0].sms?.body.contains("AED 1.00") == true)
         let row = ParkedMessage(parked[0])
         #expect(row.reason == "Ledger rejected this message: it's longer than 2,000 characters.")
 

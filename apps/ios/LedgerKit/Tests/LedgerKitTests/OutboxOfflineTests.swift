@@ -37,7 +37,7 @@ struct OutboxOfflineTests {
         let entry = try #require(try await outbox.entries().first)
         #expect(entry.attempts == 0)
         #expect(!entry.isParked)
-        #expect(entry.payload.receivedAt == payload(1).receivedAt)
+        #expect(entry.sms?.receivedAt == payload(1).receivedAt)
     }
 
     @Test("offline stops the flush: other profiles are not tried")

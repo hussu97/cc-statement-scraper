@@ -62,7 +62,7 @@ struct OutboxFailureTests {
         #expect(status.pending == 0)
         #expect(status.parked == 1)
         let parked = try #require(await outbox.parkedEntries().first)
-        #expect(parked.payload.body == poison)
+        #expect(parked.sms?.body == poison)
         #expect(parked.parkedReason?.contains("invalid input syntax") == true)
 
         // New messages are no longer batched with the poison one.
