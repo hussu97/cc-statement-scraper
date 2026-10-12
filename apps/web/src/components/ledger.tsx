@@ -133,14 +133,22 @@ export function CategoryPicker({
     return needle ? ordered.filter((c) => c.name.toLowerCase().includes(needle)) : ordered;
   }, [categories, q]);
 
+  // Every close resets the search and "Apply to merchant", so a merchant-wide
+  // rewrite is always an explicit choice for that one pick (WEB-12).
+  const onOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (!next) {
+      setQ("");
+      setToMerchant(false);
+    }
+  };
   const pick = (code: string | null) => {
     onSelect(code, toMerchant);
-    setOpen(false);
-    setQ("");
+    onOpenChange(false);
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild disabled={disabled}>
         <button
           type="button"

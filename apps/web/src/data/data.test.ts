@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { activitySummaryArgs, applyActivityFilters, evidenceBadge, groupByDay, sortEvidence, type EvidenceItem, type FilterBuilder } from "./transactions";
-import { domainsFor } from "./realtime";
+import { channelTopic, domainsFor } from "./realtime";
 import { chooseActiveProfile, memberProfiles, profileKeyFromName, toProfileSummaries, type ProfileRow, type ProfileSummary } from "./profile";
 import { candidatesOf, groupReviews, type Review } from "./reviews";
 import { checkUploadFiles } from "./cards";
@@ -101,6 +101,14 @@ describe("realtime invalidation", () => {
     expect(d).toContain("reviews");
     expect(new Set(d).size).toBe(d.length);
     expect(domainsFor(["unknown"])).toEqual([]);
+  });
+
+  it("gives every subscription its own channel topic (WEB-09)", () => {
+    expect(channelTopic("PRF_1", "n")).toBe("ledger:PRF_1:n");
+    const a = channelTopic("PRF_1");
+    const b = channelTopic("PRF_1");
+    expect(a).toMatch(/^ledger:PRF_1:[0-9a-f-]{36}$/);
+    expect(a).not.toBe(b);
   });
 });
 

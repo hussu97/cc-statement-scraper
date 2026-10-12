@@ -8,6 +8,7 @@ import {
   TXN_KINDS,
   orderCategories,
   previewArgs,
+  ruleErrorMessage,
   useCategories,
   useRulePreview,
   useSaveRule,
@@ -59,10 +60,14 @@ export function RuleEditor({ initial, onClose }: { initial: RuleDraft; onClose: 
 
   const live = useMemo(() => previewArgs(d), [d]);
   const args = useDebouncedValue(live, 400);
+  const preview = useRulePreview(profileCode, live ? args : null);
+  // The server is the judge of a rule (Postgres ARE, not JS RegExp): while the
+  // preview rejects it, don't offer to save it (WEB-13).
+  const previewRejected = !!live && preview.isError;
 
   const submit = () => {
     setTouched(true);
-    if (error) return;
+    if (error || previewRejected) return;
     save.mutate(d, {
       onSuccess: () => {
         toast({ title: d.rule_code ? "Rule saved" : "Rule created", description: "Matching transactions are being updated.", tone: "positive" });
@@ -82,7 +87,7 @@ export function RuleEditor({ initial, onClose }: { initial: RuleDraft; onClose: 
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="primary" loading={save.isPending} onClick={submit}>
+          <Button variant="primary" loading={save.isPending} disabled={previewRejected} onClick={submit}>
             {d.rule_code ? "Save rule" : "Create rule"}
           </Button>
         </>
@@ -253,7 +258,7 @@ export function RuleEditor({ initial, onClose }: { initial: RuleDraft; onClose: 
         </label>
 
         <RulePreview
-          profileCode={profileCode}
+          preview={preview}
           args={live ? args : null}
           pending={!!live && live !== args}
           draftError={error}
@@ -264,7 +269,7 @@ export function RuleEditor({ initial, onClose }: { initial: RuleDraft; onClose: 
         />
 
         {touched && error && d.pattern.trim() && d.category_code ? <p className="text-[13px] text-danger">{error}</p> : null}
-        {save.error ? <p className="text-[13px] text-danger">{errorMessage(save.error)}</p> : null}
+        {save.error ? <p className="text-[13px] text-danger">{ruleErrorMessage(save.error)}</p> : null}
         <button type="submit" hidden />
       </form>
     </Sheet>
@@ -272,7 +277,7 @@ export function RuleEditor({ initial, onClose }: { initial: RuleDraft; onClose: 
 }
 
 function RulePreview({
-  profileCode,
+  preview,
   args,
   pending,
   draftError,
@@ -281,7 +286,7 @@ function RulePreview({
   targetCode,
   target,
 }: {
-  profileCode: string;
+  preview: ReturnType<typeof useRulePreview>;
   args: ReturnType<typeof previewArgs>;
   pending: boolean;
   draftError: string | null;
@@ -290,13 +295,23 @@ function RulePreview({
   targetCode: string;
   target: string;
 }) {
-  const preview = useRulePreview(profileCode, args);
   const busy = pending || preview.isFetching;
   let body;
   if (draftError || !args) {
     body = <p className="text-[13px] text-muted">{draftError && draftError !== "Choose a category." && draftError !== "Enter text to match." ? draftError : "Enter text and a category to see what this rule would change."}</p>;
   } else if (preview.isError) {
-    body = <p className="text-[13px] text-danger">{/regular expression|regex/i.test(errorMessage(preview.error)) ? "That regular expression isn't valid." : `Couldn't preview: ${errorMessage(preview.error)}`}</p>;
+    const rejected = (preview.error as { code?: string }).code === "22023";
+    const sentence = (s: string) => s.replace(/\.$/, "");
+    body = (
+      <p className="text-[13px] text-danger">
+        {rejected ? `${sentence(ruleErrorMessage(preview.error))}. Fix it to save this rule.` : `Couldn't preview: ${sentence(errorMessage(preview.error))}. `}
+        {!rejected && (
+          <button type="button" onClick={() => void preview.refetch()} className="underline underline-offset-2 hover:text-ink">
+            Try again
+          </button>
+        )}
+      </p>
+    );
   } else if (!preview.data) {
     body = <p className="text-[13px] text-muted">Checking your transactions…</p>;
   } else {

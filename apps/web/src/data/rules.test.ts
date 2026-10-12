@@ -10,6 +10,7 @@ import {
   merchantState,
   parseConditions,
   previewArgs,
+  ruleErrorMessage,
   ruleTab,
   ruleToDraft,
   slicePage,
@@ -109,6 +110,17 @@ describe("drafts and preview args", () => {
       priority: 100,
     });
     expect(previewArgs({ ...emptyRuleDraft({ pattern: "tea", category_code: "cat_a" }), rule_code: "rul_x" })?.rule_code).toBe("rul_x");
+  });
+
+  it("shows the server's 22023 rule problem, not a generic error (WEB-13)", () => {
+    const err = (message: string, code?: string) => Object.assign(new Error(message), { code });
+    expect(ruleErrorMessage(err("invalid rule: invalid regex: invalid regular expression: quantifier operand invalid", "22023"))).toBe(
+      "Invalid regular expression: quantifier operand invalid",
+    );
+    expect(ruleErrorMessage(err("invalid rule: regex back-references are not allowed", "22023"))).toBe("Regex back-references are not allowed");
+    expect(ruleErrorMessage(err("invalid rule: unknown match type x", "22023"))).toBe("Unknown match type x");
+    expect(ruleErrorMessage(err("Failed to fetch"))).toBe("Failed to fetch");
+    expect(ruleErrorMessage(err("invalid rule: x", "42501"))).toBe("invalid rule: x");
   });
 
   it("validates amounts as decimal strings", () => {
