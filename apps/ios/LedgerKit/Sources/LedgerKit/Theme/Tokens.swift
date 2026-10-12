@@ -45,11 +45,19 @@ public enum ChartPalette {
     public static let cat10 = Color(light: (0.4784, 0.3098, 0.1961), dark: (0.7216, 0.5020, 0.2745))
     public static let cat11 = Color(light: (0.2471, 0.5412, 0.6157), dark: (0.2902, 0.8353, 0.9686))
     public static let cat12 = Color(light: (0.4824, 0.2941, 0.5725), dark: (0.8863, 0.7294, 0.8745))
+    public static let cat13 = Color(light: (0.0000, 0.3765, 0.2196), dark: (0.1255, 0.5961, 0.3137))
+    public static let cat14 = Color(light: (0.5961, 0.0000, 0.2824), dark: (1.0000, 0.5843, 0.6627))
+    public static let cat15 = Color(light: (0.3333, 0.5176, 0.9569), dark: (0.4863, 0.4706, 0.8784))
+    public static let cat16 = Color(light: (0.7216, 0.4078, 0.8196), dark: (0.8000, 0.5490, 0.9569))
     public static let uncategorized = Color(light: (0.5333, 0.4980, 0.4510), dark: (0.4980, 0.4706, 0.4235))
     public static let grid = Color(light: (0.9020, 0.8706, 0.8196), dark: (0.2078, 0.1922, 0.1686))
     public static let axis = Color(light: (0.4314, 0.4000, 0.3569), dark: (0.6039, 0.5686, 0.5176))
 
-    /// Resolve a category's stable colour token ("cat-1" … "cat-12").
+    /// The categorical palette's tokens, in order. A category keeps its own
+    /// `color_token`; banks and merchants take these by rank.
+    public static let categoryTokens: [String] = ["cat-1", "cat-2", "cat-3", "cat-4", "cat-5", "cat-6", "cat-7", "cat-8", "cat-9", "cat-10", "cat-11", "cat-12", "cat-13", "cat-14", "cat-15", "cat-16"]
+
+    /// Resolve a category's stable colour token ("cat-1" … "cat-16").
     public static func color(for token: String?) -> Color {
         switch token {
         case "cat-1": return cat1
@@ -64,6 +72,10 @@ public enum ChartPalette {
         case "cat-10": return cat10
         case "cat-11": return cat11
         case "cat-12": return cat12
+        case "cat-13": return cat13
+        case "cat-14": return cat14
+        case "cat-15": return cat15
+        case "cat-16": return cat16
         default: return uncategorized
         }
     }

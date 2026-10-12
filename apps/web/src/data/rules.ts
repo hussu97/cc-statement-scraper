@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, type RpcReturn, type Tables } from "@/lib/supabase";
 import type { Json } from "@ledger/db-types";
+import { categoryTokens } from "@ledger/tokens/chart";
 import { addMonths, todayDubai } from "@/lib/dates";
 import { keys, LEDGER_DOMAINS } from "./keys";
 import { errorMessage, must, mustList } from "./api";
@@ -23,7 +24,8 @@ export const MATCH_TYPES = [
   { value: "regex", label: "Regex" },
 ] as const;
 
-export const COLOR_TOKENS = Array.from({ length: 12 }, (_, i) => `cat-${i + 1}`);
+/** The colours a category can take: the whole categorical palette (packages/tokens). */
+export const COLOR_TOKENS: readonly string[] = categoryTokens;
 
 export interface RuleConditions {
   amount_min?: string;

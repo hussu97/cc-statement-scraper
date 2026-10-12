@@ -123,7 +123,7 @@ extension SpendBreakdown {
         if group.isOther { return Self.otherToken }
         if groupBy == "category" { return group.colorToken }
         let index = groups.firstIndex(of: group) ?? 0
-        return "cat-\(index % 12 + 1)"
+        return ChartPalette.categoryTokens[index % ChartPalette.categoryTokens.count]
     }
 
     /// `"Oct"`; `"Oct 25"` when the range repeats a month name.

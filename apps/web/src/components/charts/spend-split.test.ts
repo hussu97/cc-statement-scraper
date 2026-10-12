@@ -40,7 +40,8 @@ describe("splitChart", () => {
 
   it("gives banks and merchants the palette by rank", () => {
     expect(splitFill("bank", "FAB", null, 0)).toBe("var(--chart-cat-1)");
-    expect(splitFill("merchant", "mer_x", null, 13)).toBe("var(--chart-cat-2)");
+    expect(splitFill("merchant", "mer_x", null, 13)).toBe("var(--chart-cat-14)");
+    expect(splitFill("merchant", "mer_y", null, 17)).toBe("var(--chart-cat-2)");
     expect(splitFill("bank", "__other__", null, 3)).toBe(OTHER_FILL);
   });
 
