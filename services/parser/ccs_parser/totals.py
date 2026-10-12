@@ -16,6 +16,8 @@ Verified layouts (against real statements):
   * MASHREQ -- the "Summary AED" block, one labelled amount per line (DP-12).
   * EIB  -- "Statement of Card Account": the "OPENING BALANCE" line and the
             "Card Limit ... Current Balance (AED)" summary row (2026-10).
+  * WIO  -- "Credit Statement": the "Account summary" lines, the credit limit and the
+            payment due row (2026-10).
 Unverified (no decryptable samples were available):
   * EIB in the ENBD template -- the ENBD rules are applied.
   * ADCB -- "PREVIOUS/NEW BALANCE OUTSTANDING <amount>" lines.
@@ -368,12 +370,78 @@ def _extract_mashreq(lines: list[str], result: TotalsResult) -> None:
     v["total_credits"] = credits
 
 
+# --------------------------------------------------------------------- WIO
+
+# "Credit Statement" (banks/wio.py). Bilingual from Sep 2026: the Arabic labels are dropped
+# (non-ASCII) before matching. The "Account summary" prints one signed amount per line:
+#   Balance From Last Statement 0.00 / Purchases +14,805.66 / Interest +0.00 /
+#   Late payment fee +0.00 / Foreign exchange charges +2.14 / Payments and credits -14,807.80 /
+#   Closing balance (Total to pay) -407.59        (negative: the card is in credit)
+_WIO_SUMMARY: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
+    (key, re.compile(rf"^{label}\s+(?P<amount>[+-]?{_DECIMAL_AMOUNT_RE.lstrip('-?')})$", re.IGNORECASE))
+    for key, label in (
+        ("opening", r"Balance from last statement"),
+        ("purchases", r"Purchases"),
+        ("interest", r"Interest"),
+        ("late_fee", r"Late payment fee"),
+        ("fx", r"Foreign exchange charges"),
+        ("credits", r"Payments and credits"),
+        ("closing", r"Closing balance \(Total to pay\)"),
+    )
+)
+_WIO_DUE_ROW_RE = re.compile(
+    rf"(?P<due_date>\d{{2}}/\d{{2}}/\d{{4}})\s+(?P<min>{_DECIMAL_AMOUNT_RE})\s+(?P<total>{_DECIMAL_AMOUNT_RE})$"
+)
+_WIO_LOOKAHEAD = 6
+
+
+def _ascii_line(line: str) -> str:
+    return re.sub(r"\s+", " ", "".join(ch for ch in line if ord(ch) < 128)).strip()
+
+
+def _extract_wio(lines: list[str], result: TotalsResult) -> None:
+    text = [_ascii_line(ln) for ln in lines]
+    v = result.values
+    amounts: dict[str, Decimal | None] = {}
+    for idx, line in enumerate(text):
+        upper = line.upper()
+        for key, pattern in _WIO_SUMMARY:
+            if key not in amounts and (m := pattern.match(line)):
+                amounts[key] = _plain_decimal(m.group("amount").lstrip("+"))
+        if "CREDIT LIMIT" in upper and v["credit_limit"] is None:
+            for nxt in text[idx + 1 : idx + 1 + _WIO_LOOKAHEAD]:
+                row = _amount_row(nxt)
+                if row:
+                    v["credit_limit"] = row[0]
+                    break
+        if "PAYMENT DUE DATE" in upper and result.due_date is None:
+            for nxt in text[idx + 1 : idx + 1 + _WIO_LOOKAHEAD]:
+                m = _WIO_DUE_ROW_RE.search(nxt)
+                if m:
+                    result.due_date = _parse_dmy(m.group("due_date"))
+                    v["min_due"] = _to_decimal(m.group("min"))
+                    break
+    if len(amounts) < len(_WIO_SUMMARY) or any(a is None for a in amounts.values()):
+        result.warnings.append("WIO: account summary incomplete; balance totals left null")
+        return
+    debits = amounts["purchases"] + amounts["interest"] + amounts["late_fee"] + amounts["fx"]  # type: ignore[operator]
+    credits = abs(amounts["credits"])  # type: ignore[arg-type]
+    if amounts["opening"] + debits - credits != amounts["closing"]:  # type: ignore[operator]
+        result.warnings.append("WIO: account summary does not add up; balance totals left null")
+        return
+    v["opening_balance"] = amounts["opening"]
+    v["closing_balance"] = amounts["closing"]
+    v["total_debits"] = debits
+    v["total_credits"] = credits
+
+
 _EXTRACTORS = {
     "FAB": _extract_fab,
     "ENBD": _extract_enbd,
     "EIB": _extract_eib,
     "ADCB": _extract_adcb,
     "MASHREQ": _extract_mashreq,
+    "WIO": _extract_wio,
 }
 
 

@@ -1,9 +1,9 @@
 """Stateless credit-card statement parsing service (contract: docs/contracts/parse-v1.md)."""
 
 CONTRACT_VERSION = 1
-PARSER_VERSION = "2026.10.10"
+PARSER_VERSION = "2026.10.11"
 
-SUPPORTED_BANKS = ("FAB", "ADCB", "ENBD", "EIB", "SIB", "MASHREQ")
+SUPPORTED_BANKS = ("FAB", "ADCB", "ENBD", "EIB", "SIB", "MASHREQ", "WIO")
 
 # Runtime-setting keys whose values are PDF passwords: the keys `set_profile_secret` accepts.
 # Detection, page counting and totals try each of them; the bank parser uses its own key.

@@ -1,5 +1,22 @@
 # Changelog
 
+## Wio Bank credit statements — 2026-10-12
+
+### Parser
+
+- **add** WIO (`2026.10.11`): Wio Bank's "Credit Statement" (Wio Personal credit card). Rows are one date, a reference, the description, the card (`****2010`) and a signed AED amount (negative is spend). A foreign purchase is followed by `Rate: 3.70 (AED/USD)` and its own `Foreign Exchange Fee` row (`fee`); the foreign amount is never printed and the rate has two decimals (EGP prints 0.07), so every line stays AED. Rows without a card that end in `payment` (`ENBD payment`, `EIB AZ payment`, `Mashreq payment`) pay another bank's card from the Wio credit line: debit `payment`, kept out of spend. Totals come from the "Account summary" (opening, purchases + interest + late fee + FX charges, payments and credits, signed closing balance) only when it adds up, plus the credit limit, minimum due and due date; the Arabic labels of the bilingual layout (from Sep 2026) are dropped before matching. Detection: "Wio, PJSC" / "Wio Bank" outside transaction rows and the "Credit Statement … Tot. interest and fees" header, so rows naming ENBD or Mashreq don't vote. Tejasvie's Jun–Sep 2026 statements (67, 101, 110 and 66 rows) all reconcile line for line. Synthetic case `wio_statement`.
+
+### Backend (Supabase)
+
+- **add** Migration `wio_bank`: `public.banks` row `WIO` "Wio Bank" (`logo_path = 'WIO.png'`, no SMS sender: Wio alerts are app notifications) and its `private.bank_fx_fees` markup, 0.75%: the scheme rate alone (AED/USD 3.70 against the 3.6725 peg), because Wio bills its 2% FX fee as a separate statement row. Guarded inserts. pgTAP `05_fx_rates` and `20_statement_rpcs_and_logos` cover it.
+
+### iOS
+
+- **add** The Wio logo is bundled (`Bank/WIO`) and sits on the light chip in dark mode (purple wordmark).
+
+### Docs
+
+- **add** `assets/banks/WIO.png` (from wio.io's SVG wordmark, recoloured `#5700ff`) and its README row; contract notes for WIO rows and totals; ARCHITECTURE `banks`, README, PRODUCTION logo upload loop.
 ## Emirates NBD dnata Platinum: foreign rows and Credit Shield charges — 2026-10-12
 
 ### Parser
