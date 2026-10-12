@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { budgetAppliesTo, budgetTitle, budgetTone, dateToMonthInput, monthInputToDate, monthPhase, validateBudget } from "./budgets";
+import {
+  budgetDraft,
+  budgetTitle,
+  budgetTone,
+  dateToMonthInput,
+  inactiveBudgetLabel,
+  monthInputToDate,
+  monthPhase,
+  splitByEffective,
+  validateBudget,
+} from "./budgets";
 
 describe("budgetTone", () => {
   const b = (share_used: number, projected_aed: number, budget_aed = 1000) => ({ share_used, projected_aed, budget_aed });
@@ -32,12 +42,6 @@ describe("month helpers", () => {
     expect(dateToMonthInput("2026-10-01")).toBe("2026-10");
     expect(dateToMonthInput(null)).toBe("");
   });
-  it("checks whether a budget covers a month", () => {
-    expect(budgetAppliesTo({ effective_from: "2026-01-01", effective_to: null }, "2026-10-01")).toBe(true);
-    expect(budgetAppliesTo({ effective_from: "2026-01-01", effective_to: "2026-10-01" }, "2026-10-01")).toBe(true);
-    expect(budgetAppliesTo({ effective_from: "2026-01-01", effective_to: "2026-09-01" }, "2026-10-01")).toBe(false);
-    expect(budgetAppliesTo({ effective_from: "2026-11-01", effective_to: null }, "2026-10-01")).toBe(false);
-  });
   it("validates month-input dates through validateBudget", () => {
     const base = { account_code: null, category_code: null, amount_aed: "1500", effective_to: null };
     expect(validateBudget({ ...base, effective_from: monthInputToDate("2026-10") })).toBeNull();
@@ -53,5 +57,33 @@ describe("budgetTitle", () => {
   it("names card budgets by card, and by category on that card", () => {
     expect(budgetTitle({ category_code: null, category_name: "All spending", account_name: "FAB · Platinum" })).toBe("FAB · Platinum");
     expect(budgetTitle({ category_code: "cat_1", category_name: "Dining", account_name: "Daily card" })).toBe("Dining · Daily card");
+  });
+});
+
+describe("budgets the server says don't count", () => {
+  const row = (budget_code: string, is_effective: boolean) => ({ budget_code, is_effective });
+  it("splits rows by is_effective and keeps the server's order", () => {
+    const { effective, inactive } = splitByEffective([row("a", true), row("b", true), row("c", false), row("d", false)]);
+    expect(effective.map((r) => r.budget_code)).toEqual(["a", "b"]);
+    expect(inactive.map((r) => r.budget_code)).toEqual(["c", "d"]);
+    expect(splitByEffective([])).toEqual({ effective: [], inactive: [] });
+  });
+  it("labels an upcoming budget by its start month", () => {
+    expect(inactiveBudgetLabel({ effective_from: "2026-11-01", effective_to: null }, "2026-10-01")).toBe("Starts November 2026");
+  });
+  it("labels an ended budget by its last month", () => {
+    expect(inactiveBudgetLabel({ effective_from: "2026-01-01", effective_to: "2026-08-01" }, "2026-10-01")).toBe("Ended August 2026");
+  });
+  it("calls a not-effective budget whose range covers the month replaced (the server picked a newer one)", () => {
+    expect(inactiveBudgetLabel({ effective_from: "2026-01-01", effective_to: null }, "2026-10-01")).toBe("Replaced by a newer budget");
+    expect(inactiveBudgetLabel({ effective_from: "2026-01-01", effective_to: "2026-10-01" }, "2026-10-01")).toBe("Replaced by a newer budget");
+  });
+});
+
+describe("budgetDraft", () => {
+  it("starts the edit form from a budget_status row", () => {
+    expect(
+      budgetDraft({ budget_code: "bud_1", account_code: "acc_1", category_code: null, budget_aed: 1500.5, effective_from: "2026-10-01", effective_to: null }),
+    ).toEqual({ budget_code: "bud_1", account_code: "acc_1", category_code: null, amount_aed: "1500.5", effective_from: "2026-10-01", effective_to: null });
   });
 });
