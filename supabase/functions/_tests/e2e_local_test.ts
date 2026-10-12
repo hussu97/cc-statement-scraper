@@ -271,31 +271,14 @@ Deno.test({
       assertEquals(evil.status, 422);
       await evil.body?.cancel();
 
-      // ── delete_profile queues the PDFs on storage_cleanup; the worker removes them (DB-21e) ──
-      const cronSecret = Deno.env.get("CRON_SECRET") ?? "";
-      if (cronSecret) {
-        const del = await user.rpc("delete_profile", { p_profile_code: profileCode, p_confirm_key: `e2e${rand}` });
-        assert(!del.error, del.error?.message);
-        assertEquals((del.data as { storage_objects: number }).storage_objects, storedPaths.length);
-        profileCode = null;
-        const w = await fetch(`${fnUrl}/worker`, {
-          method: "POST",
-          headers: { "x-cron-secret": cronSecret, "content-type": "application/json" },
-          body: JSON.stringify({ sync: true }),
-        });
-        const summary = await w.json();
-        assertEquals(w.status, 200, JSON.stringify(summary));
-        assert(
-          (summary.storage as { outcome: string }[]).some((r) => r.outcome === "done"),
-          JSON.stringify(summary.storage),
-        );
-        for (const path of storedPaths) {
-          const gone = await svc.storage.from("statements").download(path);
-          assert(gone.error, `${path} should have been removed`);
-        }
-        storedPaths.length = 0;
-      } else {
-        console.warn("e2e: CRON_SECRET not set; skipping the delete_profile / storage_cleanup check");
+      // ── delete_profile archives: the profile disappears for its owner, its PDFs stay ──
+      const del = await user.rpc("delete_profile", { p_profile_code: profileCode, p_confirm_key: `e2e${rand}` });
+      assert(!del.error, del.error?.message);
+      const after = await user.from("profiles").select("profile_code").eq("profile_code", profileCode);
+      assertEquals(after.data?.length ?? 0, 0, "an archived profile is invisible to its owner");
+      for (const path of storedPaths) {
+        const kept = await svc.storage.from("statements").download(path);
+        assert(!kept.error, `${path} should be kept`);
       }
     } finally {
       if (storedPaths.length) await svc.storage.from("statements").remove(storedPaths);

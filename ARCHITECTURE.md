@@ -117,7 +117,7 @@ fx_rates (global)
 | Table | Notes |
 |---|---|
 | `profiles` | A ledger (`key` is the legacy `X-Profile-Key`, e.g. `hussain`). |
-| `profile_members` | `(profile_code, user_id)`, role `owner` or `viewer`. Pending invites live in `private.pending_members` and are claimed by `auth.users` triggers once the user's email is **confirmed** (on insert when already confirmed, or on the confirmation / email change); `add_profile_member` also treats an unconfirmed account as not signed up. Self sign-up is disabled (§8), so that user is created by an Auth invite. An owner deletes a whole profile with `delete_profile(p_profile_code, p_confirm_key)`: its Vault secrets go with it and its PDFs are queued on `storage_cleanup`. |
+| `profile_members` | `(profile_code, user_id)`, role `owner` or `viewer`. Pending invites live in `private.pending_members` and are claimed by `auth.users` triggers once the user's email is **confirmed** (on insert when already confirmed, or on the confirmation / email change); `add_profile_member` also treats an unconfirmed account as not signed up. Self sign-up is disabled (§8), so that user is created by an Auth invite. An owner removes a whole profile with `delete_profile(p_profile_code, p_confirm_key)`, which **archives** it: `profiles.archived_at` is set, nothing is deleted (data, PDFs and Vault secrets stay), its active service tokens are revoked and its mailboxes disabled (recorded in `archive_state`). Archived profiles drop out of every membership check, so no client sees them; `restore_profile` (service role) undoes exactly that. |
 | `service_tokens` | `ccs_<hex>` tokens. Only the sha256 is stored. Scopes are `statements:upload` and `sms:ingest`, each tied to one profile. |
 | `banks` | FAB, ADCB, ENBD, EIB, SIB, MASHREQ, WIO (Wio Bank, no SMS sender: its alerts are app notifications), plus their SMS sender ids. `logo_path` names the bank's image in the public `bank-logos` bucket (`<bank_code>.png`); clients build `<SUPABASE_URL>/storage/v1/object/public/bank-logos/<logo_path>`. |
 | `accounts`, `cards` | Credit-card accounts (kind `credit_card` only) and their cards by `last4`. A replacement card is a new card on the same account: the old card becomes `replaced` and keeps its transactions. It joins the account either by the owner (`add_replacement_card(profile, old card_code, new last4)`) or automatically for a history extract (§4, statement path step 1). |
@@ -139,8 +139,10 @@ fx_rates (global)
 | `fx_rates` | Global AED-per-unit market rates (fallback estimate only). `private.bank_fx_fees` holds each bank's markup over them; `private.fx_rate_history` keeps every day's rate (backfilled from 2025-01-11). |
 
 Queues (pgmq): `parse_document`, `llm_categorize`, `sms_fallback` and `storage_cleanup`, each with a `_dlq`;
-`storage_cleanup` carries `{bucket, paths[]}` from `delete_profile` (Storage objects can only be removed
-through the Storage API, so the worker removes them). `drain_dlq(queue)` and `requeue_dlq(queue, limit)` are the service-role
+Messages are never deleted: acknowledging (`queue_delete`), dead-lettering, `requeue_dlq` and
+`drain_dlq` all `pgmq.archive`, so each message and its `dlq_reason` stay in `pgmq.a_<queue>`.
+`storage_cleanup` carries `{bucket, paths[]}`; since `delete_profile` archives, nothing queues it any more
+(the worker still drains it). `drain_dlq(queue)` and `requeue_dlq(queue, limit)` are the service-role
 DLQ tools.
 Storage: private bucket `statements` (25 MB limit, `application/pdf`). Members can read their
 profile's folder. Only Edge Functions write to it. Public bucket `bank-logos` (1 MB, PNG/SVG/
@@ -590,7 +592,7 @@ Other Vault entries are named by convention:
 
 Clients can set and list secrets but never read values back. Only the worker reads them, via
 `worker_document_context` / `begin_document_parse` and `worker_mailbox_secret`.
-`delete_profile` removes both kinds with the profile.
+`delete_profile` archives the profile and keeps both kinds.
 
 `email_mailboxes.sync_state` is written through `save_mailbox_sync_state`: a key-wise jsonb merge
 under a row lock, so concurrent writers keep each other's keys, and `gmail_history_id`,
@@ -612,6 +614,12 @@ Realtime publishes `transactions`, `sms_messages`, `documents`, `match_reviews`,
   a password*. After a code sign-in, web and iOS offer to add a passkey; "Not now" is
   remembered per user on the device, and Settings manages passkeys. Membership in `profile_members`
   grants access, and a profile can have several owners and viewers.
+- **Super admin.** Emails in `private.super_admins` (`h_abbasi97@hotmail.com`), once confirmed
+  in Auth, make `authz.is_super_admin()` true: `my_profile_codes()` and the non-owner branch of
+  `assert_member` then include every active profile, so the super admin reads every ledger
+  (data, members, secret names, tokens) and switches to it as **View only**. Writes still need
+  owner membership (`my_owned_profile_codes()`, `assert_member(…, true)`), so another user's
+  ledger is read-only in the database, not just in the apps.
 - **No self sign-up.** Bank Ledger is private: `[auth] enable_signup = false` locally, and the same
   dashboard setting in production. The email-code request uses `shouldCreateUser: false` (web and iOS), so an
   unknown email gets "Ask the ledger's owner to invite you". A member is added by an owner with

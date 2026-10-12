@@ -85,7 +85,7 @@ select is((select count(*)::int from information_schema.role_table_grants
            where table_schema = 'legacy' and grantee in ('anon', 'authenticated')), 0,
           'anon / authenticated hold no grant on any legacy table (X-23)');
 
--- ═══ DB-21: delete_profile ════════════════════════════════════════════════
+-- ═══ DB-21: delete_profile archives ════════════════════════════════════════════════
 insert into public.documents (profile_code, storage_path, original_filename, sha256, size_bytes, source)
 values (pg_temp.v('p'), pg_temp.v('p') || '/t17.pdf', 't17.pdf', encode(sha256(gen_random_uuid()::text::bytea), 'hex'), 100, 'upload');
 insert into public.email_mailboxes (profile_code, provider, mailbox_email)
@@ -114,14 +114,34 @@ select throws_ok($$ select public.delete_profile(pg_temp.v('p'), 'wrong-key') $$
 select pg_temp.set('del', public.delete_profile(pg_temp.v('p'), 't17-' || pg_temp.v('run'))::text);
 reset role;
 select pg_temp.as_system();
-select is((pg_temp.v('del')::jsonb->>'vault_secrets')::int, 2, 'an owner deletes the profile with a user JWT (DB-21)');
-select is((select count(*)::int from public.profiles where profile_code = pg_temp.v('p')), 0, 'the profile is gone');
+select is((pg_temp.v('del')::jsonb->>'mailboxes_disabled')::int, 1, 'an owner archives the profile with a user JWT (DB-21)');
+select ok((select archived_at is not null from public.profiles where profile_code = pg_temp.v('p')),
+          'the profile is archived, not deleted');
+select is((select count(*)::int from public.documents where profile_code = pg_temp.v('p')), 1, 'its documents are kept');
+select is((select count(*)::int from public.budgets where profile_code = pg_temp.v('p')), 1, 'and its user rows');
 select is((select count(*)::int from vault.secrets where name like 'profile:' || pg_temp.v('p') || ':%'
-           or name like 'mailbox:' || pg_temp.v('mbx') || ':%'), 0, 'and so are its Vault secrets');
-select ok(exists (select 1 from pgmq.q_storage_cleanup
-                  where message->'paths' ? (pg_temp.v('p') || '/t17.pdf') and message->>'bucket' = 'statements'),
-          'its PDFs are queued for Storage cleanup');
-select is((select count(*)::int from public.audit_events where profile_code = pg_temp.v('p')), 0, 'no orphaned audit rows');
+           or name like 'mailbox:' || pg_temp.v('mbx') || ':%'), 2, 'and its Vault secrets');
+select ok(not exists (select 1 from pgmq.q_storage_cleanup where message->'paths' ? (pg_temp.v('p') || '/t17.pdf')),
+          'its PDFs are not queued for Storage cleanup');
+select ok(not (select enabled from public.email_mailboxes where mailbox_code = pg_temp.v('mbx')), 'its mailbox is disabled');
+
+select pg_temp.as_user(pg_temp.v('uo'));
+set local role authenticated;
+select is((select count(*)::int from public.profiles where profile_code = pg_temp.v('p')), 0,
+          'an archived profile is invisible to its owner');
+select throws_ok($$ select public.list_profile_members(pg_temp.v('p')) $$, '42501', null,
+                 'and its RPCs refuse');
+select throws_ok($$ select public.delete_profile(pg_temp.v('p'), 't17-' || pg_temp.v('run')) $$, '42501', null,
+                 'it cannot be archived twice');
+select throws_ok($$ select public.restore_profile(pg_temp.v('p')) $$, '42501', null,
+                 'a user cannot restore a profile');
+reset role;
+select pg_temp.as_system();
+select is((public.restore_profile(pg_temp.v('p'))->>'mailboxes_enabled')::int, 1, 'the service role restores it');
+select ok((select archived_at is null and archive_state is null from public.profiles where profile_code = pg_temp.v('p')),
+          'the profile is active again');
+select ok((select enabled from public.email_mailboxes where mailbox_code = pg_temp.v('mbx')), 'and its mailbox re-enabled');
+select throws_ok($$ select public.restore_profile(pg_temp.v('p')) $$, 'P0002', null, 'only an archived profile is restored');
 
 select * from finish();
 rollback;
