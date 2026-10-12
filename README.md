@@ -330,7 +330,7 @@ Used for the production Edge Function secrets and Vault entries, and for secret 
 | `/` | **Overview**: month hero with pace rule, live pending SMS, category ring, monthly spend bars (split by category / bank / merchant, with totals), cards and dues with bank logos, what each card owes now and the total, utilisation, insights |
 | `/activity` | **Activity**: unified ledger with URL-synced filters, a summary line (count, net AED, date span) for the current filters, search over description or merchant, evidence badges, drawer with evidence timeline, inline, bulk and "apply to merchant" categorisation, notes. Numbered pages (100–2000, in the URL) on wide screens; infinite scroll below 768 px |
 | `/insights` | **Insights**: trends (monthly bars split by category / bank / merchant, top 10 + Others, with a totals table; filter by categories, banks, cards and a merchant search), categories, merchants, subscriptions, FX, calendar heatmap, time of day, YoY, anomalies |
-| `/budgets` | **Budgets**: total and per category, with progress |
+| `/budgets` | **Budgets**: total and per category, on every card or one card, with progress |
 | `/cards` | **Cards & Statements**: accounts, cards, statements with recon status, upload with a live per-file processing log, documents (each with its processing log) |
 | `/statements/$stmtCode` | **Statement**: header (bank, cards, period, dates), balance / debit / credit / min-due / utilisation tiles, Debits and Credits with every line (opens the transaction drawer), reconciliation checks, PDF, processing log |
 | `/review` | **Review inbox**: match reviews, unknown cards, unparsed SMS ("not a card transaction") and LLM template proposals. On mobile it is a bottom tab with a count and scrolls forever |
@@ -345,7 +345,7 @@ Used for the production Edge Function secrets and Vault entries, and for secret 
 | Overview | Month spend posted so far (server comparisons), pending SMS, categories, dues ("Was due …"), Needs attention (reviews, uncategorised) (Realtime refresh) |
 | Activity | Ledger list, filters, transaction detail and categorisation |
 | Insights | Swift Charts views over the same RPCs; the budgets card's "See all budgets" opens the Budgets tab |
-| Budgets | Month switcher, `budget_status` per budget (spent of limit, % used, pace; tone from the server's figures), budgets not active that month, create / edit / delete (owners; viewers read only) |
+| Budgets | Month switcher, `budget_status` per budget (spent of limit, % used, pace; tone from the server's figures), budgets not active that month, create / edit / delete with an optional card (owners; viewers read only) |
 | Settings → Statements | Statements, recon, uploads and their processing logs, PDF upload (document picker), PDFs waiting from the share sheet (the former Statements tab) |
 | Review | Open match reviews: link, keep as new, dismiss, register an unknown card (read-only for viewers) |
 | Settings | Cards & statements → Statements, "SMS go to" ledger, SMS capture guide (one "Card" automation, Last captured, Send test), "Not sent" outbox list (Retry / Delete), profile |
