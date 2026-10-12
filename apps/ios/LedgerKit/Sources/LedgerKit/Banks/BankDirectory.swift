@@ -29,7 +29,7 @@ public struct BankInfo: Decodable, Sendable, Hashable, Identifiable {
     }
 }
 
-/// Where a bank's logo comes from. The app bundles the six launch banks
+/// Where a bank's logo comes from. The app bundles every seeded bank
 /// (`assets/banks/*.png`, asset names `Bank/<CODE>`) so logos draw offline and
 /// without a request; any other bank falls back to its `bank-logos` URL, and a
 /// bank with neither shows a monogram.
@@ -42,11 +42,11 @@ public enum BankLogoSource: Sendable, Hashable {
 /// Pure lookups: names, bundled assets, URLs and the dark-mode chip.
 public enum BankDirectory {
     /// Bank codes with a bundled asset in `Assets.xcassets/Bank/`.
-    public static let bundledCodes: Set<String> = ["ADCB", "EIB", "ENBD", "FAB", "MASHREQ", "SIB"]
+    public static let bundledCodes: Set<String> = ["ADCB", "EIB", "ENBD", "FAB", "MASHREQ", "SIB", "WIO"]
 
     /// Marks with too little contrast on a dark surface (navy, blue, purple):
     /// in dark mode they sit on a light chip (assets/banks/README.md).
-    public static let darkMarks: Set<String> = ["ENBD", "SIB", "EIB", "FAB"]
+    public static let darkMarks: Set<String> = ["ENBD", "SIB", "EIB", "FAB", "WIO"]
 
     /// Names from the seed (`public.banks`), used until the table has been read
     /// and when the phone is offline.
@@ -57,6 +57,7 @@ public enum BankDirectory {
         "EIB": "Emirates Islamic",
         "SIB": "Sharjah Islamic Bank",
         "MASHREQ": "Mashreq",
+        "WIO": "Wio Bank",
     ]
 
     /// `{supabaseURL}/storage/v1/object/public/bank-logos/{logo_path}`.
