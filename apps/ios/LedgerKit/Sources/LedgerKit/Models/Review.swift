@@ -91,15 +91,25 @@ public struct LedgerAccount: Decodable, Sendable, Hashable, Identifiable {
     public let bankCode: String
     public let nickname: String?
     public let productName: String?
+    /// `active` / `closed`; nil when the read didn't select it.
+    public let status: String?
 
-    public init(accountCode: String, bankCode: String, nickname: String? = nil, productName: String? = nil) {
+    public init(accountCode: String, bankCode: String, nickname: String? = nil, productName: String? = nil,
+                status: String? = nil) {
         self.accountCode = accountCode
         self.bankCode = bankCode
         self.nickname = nickname
         self.productName = productName
+        self.status = status
     }
 
     public var title: String { nickname ?? productName ?? bankCode }
+
+    /// The server's name for the card (`budget_status.account_name`, the web's `accountLabel`).
+    public var label: String { AccountLabel.make(bankCode: bankCode, nickname: nickname, productName: productName) }
+
+    /// Not closed (a merged-away account is closed). Unknown status counts as active.
+    public var isActive: Bool { status == nil || status == "active" }
 }
 
 /// Everything the Review screen shows, fetched together.

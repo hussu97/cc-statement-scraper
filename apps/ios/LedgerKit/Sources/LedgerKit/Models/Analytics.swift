@@ -57,8 +57,36 @@ public struct BudgetStatus: Decodable, Sendable, Hashable, Identifiable {
     public let spentAed: Decimal
     public let projectedAed: Decimal
     public let shareUsed: Decimal
+    /// The card a card budget counts (nil: every card), its server-made name
+    /// (nickname, else `"BANK · product"`) and bank.
+    public let accountCode: String?
+    public let accountName: String?
+    public let bankCode: String?
 
-    public var title: String { categoryName ?? "All spending" }
+    public init(budgetCode: String, categoryCode: String?, categoryName: String?, colorToken: String?,
+                budgetAed: Decimal, spentAed: Decimal, projectedAed: Decimal, shareUsed: Decimal,
+                accountCode: String? = nil, accountName: String? = nil, bankCode: String? = nil) {
+        self.budgetCode = budgetCode
+        self.categoryCode = categoryCode
+        self.categoryName = categoryName
+        self.colorToken = colorToken
+        self.budgetAed = budgetAed
+        self.spentAed = spentAed
+        self.projectedAed = projectedAed
+        self.shareUsed = shareUsed
+        self.accountCode = accountCode
+        self.accountName = accountName
+        self.bankCode = bankCode
+    }
+
+    /// `"All spending"`, `"Dining"`, `"Daily card"` or `"Dining · Daily card"` (see `BudgetScope`).
+    public var title: String {
+        BudgetScope.title(categoryName: categoryCode == nil ? nil : categoryName ?? "Category",
+                          accountName: accountCode == nil ? nil : accountName ?? "Card")
+    }
+
+    /// A budget for one card (its logo shows beside the title).
+    public var isCardBudget: Bool { accountCode != nil }
     /// The server's `share_used`; 1 = budget fully used.
     public var isOver: Bool { shareUsed > 1 }
     public var isProjectedOver: Bool { projectedAed > budgetAed }

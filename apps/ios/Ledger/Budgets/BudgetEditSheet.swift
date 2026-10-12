@@ -1,8 +1,9 @@
 import LedgerKit
 import SwiftUI
 
-/// New / edit budget: all spending or one category, a monthly amount (kept as
-/// typed, sent as a decimal string), the start month and an optional end.
+/// New / edit budget: every card or one, all spending or one category, a monthly
+/// amount (kept as typed, sent as a decimal string), the start month and an
+/// optional end.
 /// Validation and wording are `BudgetDraft`'s.
 struct BudgetEditSheet: View {
     let model: BudgetsModel
@@ -30,6 +31,21 @@ struct BudgetEditSheet: View {
                             .font(Typography.rowMeta).foregroundStyle(Palette.danger)
                     }
                 }
+                Section {
+                    Picker("Card", selection: $draft.accountCode) {
+                        Text("All cards").tag(String?.none)
+                        ForEach(content?.cardChoices(keeping: draft.accountCode) ?? []) { choice in
+                            Text(choice.label).tag(Optional(choice.accountCode))
+                        }
+                    }
+                } footer: {
+                    if content?.accountsFailed == true {
+                        Text("Couldn't load cards; you can still budget every card.")
+                    } else {
+                        Text("Optional: count only one card's spending.")
+                    }
+                }
+
                 Section {
                     Picker("Category", selection: $draft.categoryCode) {
                         Text("All spending").tag(String?.none)
@@ -67,7 +83,7 @@ struct BudgetEditSheet: View {
                         ForEach(draft.endChoices(), id: \.self) { Text(LedgerDates.monthTitle($0)).tag(Optional($0)) }
                     }
                 } footer: {
-                    Text("A monthly limit for all spending or one category. It ends after the last month you pick.")
+                    Text("A monthly limit for all spending or one category, on every card or one. It ends after the last month you pick.")
                 }
 
             }

@@ -7,6 +7,8 @@ public struct BudgetDraft: Sendable, Hashable, Identifiable {
     public var id: String { budgetCode ?? "new" }
     /// nil: a new budget.
     public let budgetCode: String?
+    /// nil: every card.
+    public var accountCode: String?
     /// nil: all spending.
     public var categoryCode: String?
     public var amount: String
@@ -15,9 +17,10 @@ public struct BudgetDraft: Sendable, Hashable, Identifiable {
     /// The last month it applies (first of that month); nil: no end.
     public var effectiveTo: CalendarDay?
 
-    public init(budgetCode: String? = nil, categoryCode: String? = nil, amount: String = "",
-                effectiveFrom: CalendarDay, effectiveTo: CalendarDay? = nil) {
+    public init(budgetCode: String? = nil, accountCode: String? = nil, categoryCode: String? = nil,
+                amount: String = "", effectiveFrom: CalendarDay, effectiveTo: CalendarDay? = nil) {
         self.budgetCode = budgetCode
+        self.accountCode = accountCode
         self.categoryCode = categoryCode
         self.amount = amount
         self.effectiveFrom = effectiveFrom
@@ -26,7 +29,7 @@ public struct BudgetDraft: Sendable, Hashable, Identifiable {
 
     /// Editing an existing budget: the stored amount as plain digits.
     public init(budget: Budget) {
-        self.init(budgetCode: budget.budgetCode, categoryCode: budget.categoryCode,
+        self.init(budgetCode: budget.budgetCode, accountCode: budget.accountCode, categoryCode: budget.categoryCode,
                   amount: MoneyFormat.plain(budget.amountAed), effectiveFrom: budget.effectiveFrom,
                   effectiveTo: budget.effectiveTo)
     }
@@ -100,6 +103,22 @@ public struct BudgetDraft: Sendable, Hashable, Identifiable {
     public mutating func setStart(_ month: CalendarDay) {
         effectiveFrom = month.startOfMonth
         if let to = effectiveTo, to < effectiveFrom { effectiveTo = nil }
+    }
+}
+
+/// A card the budget form offers: the profile's active accounts (plus the
+/// budget's own card, even if closed since), named as the server names them, in
+/// the server's order (by bank).
+public struct BudgetCardChoice: Sendable, Hashable, Identifiable {
+    public var id: String { accountCode }
+    public let accountCode: String
+    public let bankCode: String
+    public let label: String
+
+    public static func choices(from accounts: [LedgerAccount], keeping current: String?) -> [BudgetCardChoice] {
+        accounts.filter { $0.isActive || $0.accountCode == current }.map {
+            BudgetCardChoice(accountCode: $0.accountCode, bankCode: $0.bankCode, label: $0.label)
+        }
     }
 }
 

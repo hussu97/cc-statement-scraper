@@ -73,6 +73,8 @@ public protocol LedgerAPI: SMSIngestAPI {
     /// Inserts a new budget (no `budgetCode`) or updates one. Owners only (RLS).
     func saveBudget(profileCode: String, draft: BudgetDraft) async throws
     func deleteBudget(budgetCode: String) async throws
+    /// `public.accounts` of the profile (active and closed), by bank: the budget form's cards.
+    func accounts(profileCode: String) async throws -> [LedgerAccount]
 
     /// Fires whenever a row the screens show changes (transactions, SMS,
     /// documents, insights) for the profile. Ends when the caller stops iterating.

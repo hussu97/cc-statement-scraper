@@ -1,0 +1,13 @@
+[
+  {"budget_code": "bud_total", "category_code": null, "category_name": "All spending", "color_token": null,
+   "budget_aed": 5000, "spent_aed": 1234.5, "projected_aed": 3826.95, "share_used": 0.2469,
+   "account_code": null, "account_name": null, "bank_code": null},
+  {"budget_code": "bud_card", "category_code": null, "category_name": "All spending", "color_token": null,
+   "budget_aed": "1500.00", "spent_aed": "320.10", "projected_aed": "992.31", "share_used": "0.2134",
+   "account_code": "acc_fab", "account_name": "Daily card", "bank_code": "FAB"},
+  {"budget_code": "bud_card_dining", "category_code": "cat_dining", "category_name": "Dining", "color_token": "cat-3",
+   "budget_aed": "800.00", "spent_aed": "910.00", "projected_aed": "2821.00", "share_used": "1.1375",
+   "account_code": "acc_adcb", "account_name": "ADCB · Lulu Platinum", "bank_code": "ADCB"},
+  {"budget_code": "bud_old_shape", "category_code": "cat_groceries", "category_name": "Groceries", "color_token": "cat-2",
+   "budget_aed": "2000", "spent_aed": "0", "projected_aed": "0", "share_used": "0"}
+]

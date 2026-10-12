@@ -1,8 +1,9 @@
 import Foundation
 
 /// A row of `public.budgets`: a monthly limit for all spending (no category)
-/// or one category, from `effectiveFrom` (a first of month) through
-/// `effectiveTo` (the last month it applies; nil: open-ended).
+/// or one category, on every card (no account) or one card, from
+/// `effectiveFrom` (a first of month) through `effectiveTo` (the last month it
+/// applies; nil: open-ended).
 public struct Budget: Decodable, Sendable, Hashable, Identifiable {
     public var id: String { budgetCode }
     public let budgetCode: String
@@ -10,14 +11,17 @@ public struct Budget: Decodable, Sendable, Hashable, Identifiable {
     public let amountAed: Decimal
     public let effectiveFrom: CalendarDay
     public let effectiveTo: CalendarDay?
+    /// The one card (account) it counts; nil: every card.
+    public let accountCode: String?
 
     public init(budgetCode: String, categoryCode: String?, amountAed: Decimal, effectiveFrom: CalendarDay,
-                effectiveTo: CalendarDay?) {
+                effectiveTo: CalendarDay?, accountCode: String? = nil) {
         self.budgetCode = budgetCode
         self.categoryCode = categoryCode
         self.amountAed = amountAed
         self.effectiveFrom = effectiveFrom
         self.effectiveTo = effectiveTo
+        self.accountCode = accountCode
     }
 
     public var isTotal: Bool { categoryCode == nil }
@@ -36,6 +40,18 @@ public struct Budget: Decodable, Sendable, Hashable, Identifiable {
         if effectiveFrom > m { return "Starts \(LedgerDates.monthTitle(effectiveFrom))" }
         if let to = effectiveTo, to < m { return "Ended \(LedgerDates.monthTitle(to))" }
         return applies(to: m) ? "Replaced by a newer budget" : ""
+    }
+}
+
+/// A budget's name from its scope, the same rule as the web's `budgetTitle` and
+/// the server's budget insights: the category (nil: `"All spending"`), and for a
+/// card budget the card: `"Daily card"` for all its spending, else
+/// `"Dining · Daily card"`.
+public enum BudgetScope {
+    public static func title(categoryName: String?, accountName: String?) -> String {
+        guard let accountName else { return categoryName ?? "All spending" }
+        guard let categoryName else { return accountName }
+        return "\(categoryName) · \(accountName)"
     }
 }
 

@@ -40,3 +40,12 @@ extension Overview.OverviewAccount {
         cardsLabel ?? (title == bankCode ? nil : title)
     }
 }
+
+/// An account's display name, as the server makes it (`budget_status.account_name`) and the
+/// web's `accountLabel`: the nickname (trimmed, when not blank), else `"BANK · product"`, else the bank.
+public enum AccountLabel {
+    public static func make(bankCode: String, nickname: String?, productName: String?) -> String {
+        if let nick = nickname?.trimmingCharacters(in: .whitespacesAndNewlines), !nick.isEmpty { return nick }
+        return [bankCode, productName].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+}

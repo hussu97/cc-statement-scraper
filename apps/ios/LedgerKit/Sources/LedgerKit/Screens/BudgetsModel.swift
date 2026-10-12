@@ -16,13 +16,19 @@ public final class BudgetsModel {
         public let categories: [FilterMeta.CategoryOption]
         /// Categories failed to load: the form can still budget all spending.
         public let categoriesFailed: Bool
+        /// `public.accounts` (active and closed); empty when they couldn't load.
+        public let accounts: [LedgerAccount]
+        /// Cards failed to load: the form can still budget every card.
+        public let accountsFailed: Bool
 
         public init(status: [BudgetStatus], budgets: [Budget], categories: [FilterMeta.CategoryOption],
-                    categoriesFailed: Bool = false) {
+                    categoriesFailed: Bool = false, accounts: [LedgerAccount] = [], accountsFailed: Bool = false) {
             self.status = status
             self.budgets = budgets
             self.categories = categories
             self.categoriesFailed = categoriesFailed
+            self.accounts = accounts
+            self.accountsFailed = accountsFailed
         }
     }
 
@@ -62,10 +68,12 @@ public final class BudgetsModel {
             async let status = api.budgetStatus(profileCode: profileCode, month: month)
             async let budgets = api.budgets(profileCode: profileCode)
             async let meta: FilterMeta? = try? api.filterMeta(profileCode: profileCode)
-            let (s, b, m) = try await (status, budgets, meta)
+            async let accounts: [LedgerAccount]? = try? api.accounts(profileCode: profileCode)
+            let (s, b, m, a) = try await (status, budgets, meta, accounts)
             guard gate.isCurrent(ticket) else { return }
             gate.finish(key)
-            state = .loaded(Content(status: s, budgets: b, categories: m?.categories ?? [], categoriesFailed: m == nil))
+            state = .loaded(Content(status: s, budgets: b, categories: m?.categories ?? [], categoriesFailed: m == nil,
+                                    accounts: a ?? [], accountsFailed: a == nil))
         } catch {
             guard gate.isCurrent(ticket) else { return }
             state = state.fail(error)
@@ -130,10 +138,10 @@ public final class BudgetsModel {
         await onChange?(profileCode)
     }
 
-    /// `23505` is the one-budget-per-scope-and-start-month index (`budgets_uq`).
+    /// `23505` is the one-budget-per-scope-and-start-month index (`budgets_uq`: card × category).
     nonisolated static func writeError(_ error: any Error) -> String {
         if case LedgerAPIError.server(_, "23505", _)? = error as? LedgerAPIError {
-            return "There is already a budget for this category starting that month. Edit that one instead."
+            return "There is already a budget for this card and category starting that month. Edit that one instead."
         }
         return LoadState<Content>.message(for: error)
     }
@@ -154,10 +162,27 @@ extension BudgetsModel.Content {
         budgets.first { $0.budgetCode == budgetCode }.map(BudgetDraft.init(budget:))
     }
 
-    /// `"All spending"`, the category's name, or `"Category"` when unknown.
+    /// The budget's name as `budget_status` rows read (`BudgetScope`): `"All spending"`,
+    /// the category's name, and for a card budget the card (`"Dining · Daily card"`).
+    /// `"Category"` / `"Card"` when unknown.
     public func name(of budget: Budget) -> String {
-        guard let code = budget.categoryCode else { return "All spending" }
-        return categories.first { $0.categoryCode == code }?.name ?? "Category"
+        let category = budget.categoryCode.map { code in
+            categories.first { $0.categoryCode == code }?.name ?? "Category"
+        }
+        let card = budget.accountCode.map { code in account(code)?.label ?? "Card" }
+        return BudgetScope.title(categoryName: category, accountName: card)
+    }
+
+    /// The bank of a card budget's card (its logo), nil for an every-card budget.
+    public func bankCode(of budget: Budget) -> String? {
+        budget.accountCode.flatMap { account($0)?.bankCode }
+    }
+
+    private func account(_ code: String) -> LedgerAccount? { accounts.first { $0.accountCode == code } }
+
+    /// The form's card list (see `BudgetCardChoice`); `"All cards"` comes before it.
+    public func cardChoices(keeping current: String?) -> [BudgetCardChoice] {
+        BudgetCardChoice.choices(from: accounts, keeping: current)
     }
 
     public func colorToken(of budget: Budget) -> String? {
@@ -176,7 +201,7 @@ extension BudgetsModel.Content {
 
     public var emptyDetail: String {
         hasNoBudgets
-            ? "Set a monthly limit for all spending or for a category, and Bank Ledger will track it as the month goes."
+            ? "Set a monthly limit for all spending or for a category, on every card or just one, and Bank Ledger will track it as the month goes."
             : "Your budgets start later or ended earlier. They're listed below."
     }
 }
