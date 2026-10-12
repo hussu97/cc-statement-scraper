@@ -137,7 +137,8 @@ with `scripts/cutover/create-review-demo.sh --env-file <local env>` work there t
 iOS gives apps no access to messages. The supported route is ONE Shortcuts **personal
 automation**: *Message → Message contains "Card" → Run Immediately (Notify When Run on) →
 Log Bank SMS (Message = Shortcut Input's Content, Sender = Shortcut Input's Sender)*. Every
-credit-card alert of ADCB, FAB, Emirates NBD and SIB in the template seed contains "card";
+credit-card alert of ADCB, FAB, Emirates NBD, SIB, Emirates Islamic and Wio in the template seed
+contains "card" (Wio's in lower case: it needs Shortcuts' "contains" to ignore case);
 more keywords would fire the action two or three times per alert. Settings → *Set up SMS
 capture* walks through it, shows **Last captured**, **Recent captures** (the last 20 runs:
 outcome, sender and message length, never the text, so a Shortcut passing the wrong field shows)

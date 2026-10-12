@@ -1,5 +1,15 @@
 # Changelog
 
+## SMS alerts from Emirates Islamic and Wio become transactions — 2026-10-12
+
+### Backend (Supabase)
+
+- **add** `20261012170000_sms_templates_eib_wio`: templates from real alerts. Emirates Islamic (sender `EI SMS`): the multi-line "Credit Card Purchase / Card Ending / At / Amount / Date / Available Limit" alert as a purchase; the mini statement, Apple Wallet enrol/disable and wallet OTP prompt, and Smart Pass / account-access notices as ignored. Wio (sender `WioPersonal`): "Payment of AED … was done at … using your Wio Personal card NNNN with Credit money" as a purchase (no date in the alert, so it is dated at received_at; whole-dirham amounts parse) and "added to Apple Pay" as ignored; a payment from another Wio balance has no sample yet and stays `unparsed` for the LLM fallback. Emirates NBD: the ENBD X account-recovery notice as ignored. `banks.sms_senders` becomes `{EI SMS}` for EIB and `{WioPersonal}` for Wio (guarded). Inserting the templates re-processes those senders' recent unparsed messages. pgTAP `35_sms_templates_eib_wio`.
+
+### Docs
+
+- **change** ARCHITECTURE §9 and the iOS README: the "Card" automation covers EIB and Wio too; Wio writes "card" in lower case, so it relies on Shortcuts' "contains" ignoring case (still to be checked on a device).
+
 ## Card budgets: a monthly limit for one card, or one card and one category — 2026-10-12
 
 ### Backend (Supabase)
