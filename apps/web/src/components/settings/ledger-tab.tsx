@@ -7,7 +7,7 @@ import { Card, CardHeader } from "@/components/ui/display";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
-import { ThemeToggle } from "@/components/shell";
+import { ThemeToggle } from "@/components/chrome";
 import { ViewerNote } from "@/components/rules/shared";
 
 export function AppearanceTab() {

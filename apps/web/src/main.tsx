@@ -4,15 +4,16 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
 import "./styles.css";
 import { router } from "./router";
-import { initSentry, Sentry } from "./lib/sentry";
+import { initSentry } from "./lib/sentry";
 import { createQueryClient } from "./data/query-client";
 import { AuthProvider } from "./data/auth";
 import { ProfileProvider } from "./data/profile";
-import { Toaster } from "./components/ui/toast";
-import { TooltipProvider } from "./components/ui/primitives";
+import { ErrorBoundary } from "./components/error-boundary";
 import { ErrorState } from "./components/ui/states";
 import { supabaseConfigured } from "./lib/supabase";
 
+// Sentry loads after first paint, and only in a deployed build (lib/sentry.ts).
+// Toasts and tooltips are provided by AppShell, so the public pages carry no Radix (WEB-11).
 initSentry(router);
 const queryClient = createQueryClient();
 
@@ -30,11 +31,7 @@ function Root() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <ProfileProvider>
-          <TooltipProvider>
-            <Toaster>
-              <RouterProvider router={router} />
-            </Toaster>
-          </TooltipProvider>
+          <RouterProvider router={router} />
         </ProfileProvider>
       </AuthProvider>
     </QueryClientProvider>
@@ -43,12 +40,12 @@ function Root() {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <Sentry.ErrorBoundary
+    <ErrorBoundary
       fallback={({ resetError }) => (
         <ErrorState className="min-h-dvh" title="Something broke on this screen" error={new Error("The error has been reported.")} onRetry={resetError} />
       )}
     >
       <Root />
-    </Sentry.ErrorBoundary>
+    </ErrorBoundary>
   </StrictMode>,
 );

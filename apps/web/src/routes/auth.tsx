@@ -16,7 +16,7 @@ import { memberProfiles, profileKeyFromName, useCreateProfile, useProfileContext
 import { errorMessage } from "@/data/api";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/input";
-import { Splash, ThemeToggle } from "@/components/shell";
+import { Splash, ThemeToggle } from "@/components/chrome";
 import { BrandLockup } from "@/components/brand/brand";
 
 function AuthFrame({ children, footer }: { children: ReactNode; footer?: ReactNode }) {
