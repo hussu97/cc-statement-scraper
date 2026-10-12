@@ -48,6 +48,11 @@ struct LedgerShortcuts: AppShortcutsProvider {
             phrases: ["Log bank SMS in \(.applicationName)", "Send SMS to \(.applicationName)"],
             shortTitle: "Log Bank SMS",
             systemImageName: "message.badge")
+        AppShortcut(
+            intent: LogCardPaymentIntent(),
+            phrases: ["Log card payment in \(.applicationName)", "Add card payment to \(.applicationName)"],
+            shortTitle: "Log Card Payment",
+            systemImageName: "creditcard")
     }
 
     static let shortcutTileColor: ShortcutTileColor = .orange

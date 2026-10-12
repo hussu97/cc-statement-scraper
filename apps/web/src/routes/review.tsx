@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Ban, Check, ChevronDown, Inbox, Link2, Plus, Sparkles, X } from "lucide-react";
+import { Ban, Check, ChevronDown, Inbox, Link2, Plus, Sparkles, Wallet, X } from "lucide-react";
 import { useActiveProfile } from "@/data/profile";
-import { NOT_A_TRANSACTION, REVIEW_REASONS, candidatesOf, groupReviews, reviewActionError, reviewFooterActions, useDecideTemplate, useInfiniteOpenReviews, useOpenReviews, useResolveReview, useRetrySmsFallback, useReviewContext, type ResolveAction, type Review } from "@/data/reviews";
+import { NOT_A_TRANSACTION, REVIEW_REASONS, candidatesOf, groupReviews, reviewActionError, reviewFooterActions, useDecideTemplate, useInfiniteOpenReviews, useOpenReviews, useResolveReview, useRetrySmsFallback, useReviewContext, walletPassNameOf, type ResolveAction, type Review } from "@/data/reviews";
 import { useAccounts } from "@/data/cards";
 import { accountLabel } from "@/data/overview";
 import { useSmsBody, type TxnRow } from "@/data/transactions";
@@ -118,11 +118,12 @@ function ReviewCard({ review }: { review: Review }) {
     });
   const busy = resolve.isPending || retryAi.isPending;
   const footer = ctx.data ? reviewFooterActions(review, !!ctx.data.template) : [];
+  const walletPass = ctx.data ? walletPassNameOf(review, ctx.data.sms) : null;
 
   return (
     <Card className={cn("p-5 transition-opacity", busy && "opacity-60")}>
       <div className="mb-3 flex items-center justify-between gap-3 text-[12px] text-subtle">
-        <span>{subjectLabel(review.subject_type)}</span>
+        <span>{ctx.data?.sms?.source === "wallet" ? "Wallet payment" : subjectLabel(review.subject_type)}</span>
         <span>{formatRelative(review.created_at)}</span>
       </div>
       {ctx.isLoading ? (
@@ -176,7 +177,8 @@ function ReviewCard({ review }: { review: Review }) {
             </div>
           )}
 
-          {review.reason === "unknown_card" && isOwner && <UnknownCardAction review={review} bank={ctx.data.sms?.bank_code ?? candidatesOf(review)[0]?.bank_code} last4={ctx.data.sms?.card_last4 ?? candidatesOf(review)[0]?.last4} onRegister={(account) => act({ card: { account_code: account } }, "Card added")} busy={busy} />}
+          {review.reason === "unknown_card" && walletPass !== null && <WalletCardHint passName={walletPass} canEdit={isOwner} />}
+          {review.reason === "unknown_card" && walletPass === null && isOwner && <UnknownCardAction review={review} bank={ctx.data.sms?.bank_code ?? candidatesOf(review)[0]?.bank_code} last4={ctx.data.sms?.card_last4 ?? candidatesOf(review)[0]?.last4} onRegister={(account) => act({ card: { account_code: account } }, "Card added")} busy={busy} />}
 
           {review.reason === "unparsed_sms" && ctx.data.template && <TemplateProposal review={review} template={ctx.data.template} />}
           {review.reason === "unparsed_sms" && !ctx.data.template && (
@@ -248,7 +250,7 @@ function SmsSubject({ sms }: { sms: NonNullable<ReturnType<typeof useReviewConte
   return (
     <Subject
       title={sms.merchant_raw ?? (sms.parse_status === "unparsed" ? "Unrecognised message" : "Card alert")}
-      meta={`${sms.sender} · ${formatDateTime(sms.received_at)}${sms.card_last4 ? ` · ${sms.bank_code ?? ""} •${sms.card_last4}` : ""}`}
+      meta={`${sms.source === "wallet" ? `Wallet${sms.wallet_pass_name ? ` · ${sms.wallet_pass_name}` : ""}` : sms.sender} · ${formatDateTime(sms.received_at)}${sms.card_last4 ? ` · ${sms.bank_code ?? ""} •${sms.card_last4}` : ""}`}
       amount={sms.amount !== null ? <Money value={sms.amount} currency={sms.currency ?? "AED"} /> : undefined}
     >
       <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="tap mt-1.5 inline-flex items-center gap-1 text-[12px] text-accent hover:underline">
@@ -272,6 +274,26 @@ function TxnSubject({ t }: { t: TxnRow }) {
       }
       amount={<TxnAmount t={t} />}
     />
+  );
+}
+
+/** unknown_card on a Wallet payment: the card is found by its Wallet name, set on the Cards page. */
+function WalletCardHint({ passName, canEdit }: { passName: string; canEdit: boolean }) {
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-border bg-bg p-3">
+      <p className="flex items-center gap-2 text-[13px] text-ink">
+        <Wallet className="size-3.5 shrink-0 text-muted" aria-hidden />
+        <span>
+          No card has the Wallet name <span className="font-medium">{passName ? `“${passName}”` : "(no name sent)"}</span>.
+        </span>
+      </p>
+      <p className="text-[12px] text-muted">Once a card has this Wallet name, this payment and any others waiting for it are added to that card and this review closes.</p>
+      {canEdit && (
+        <Link to="/cards" className="text-[13px] text-accent hover:underline">
+          Set this as a card's Wallet name
+        </Link>
+      )}
+    </div>
   );
 }
 

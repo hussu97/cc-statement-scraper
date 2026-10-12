@@ -1,5 +1,27 @@
 # Changelog
 
+## Card payments logged from the phone's wallet — 2026-10-13
+
+### Backend (Supabase)
+
+- **add** `20261012214923_wallet_transactions`: `ingest_wallet_transactions(p_profile_code, p_items)` (owner only, ≤ 200 items of `{client_msg_id, occurred_at, amount, currency, merchant, pass_name}`, amount as a decimal string) stores each payment as an `sms_messages` row with the new `source = 'wallet'` and `wallet_pass_name` (sender `Wallet`, body `<CUR> <amount> at <merchant> (<pass name>)`) and returns the `ingest_sms` result shape and statuses. `process_sms` resolves a Wallet row's card by the new owner-editable `cards.wallet_name` (unique per profile, case-insensitive; column grant to `authenticated`). An unknown name opens an `unknown_card` review (candidates `[{wallet_name}]`) that resolves itself when the name is set on a card; `resolve_review`'s register-card action refuses Wallet rows (22023). A bank SMS and a Wallet event for the same purchase (same account, amount and currency, within 30 minutes, either order) become one transaction with two evidence rows; SMS-only profiles are unaffected. Two Wallet events are never duplicates of each other (`match_sms`'s duplicate-alert step skips Wallet↔Wallet pairs; redelivery is deduped by `client_msg_id`), so identical taps minutes apart are separate transactions; SMS↔SMS duplicate detection is unchanged. pgTAP `39_wallet_transactions`.
+
+### Web
+
+- **add** Cards → edit a card account: a **Wallet name** field per card (the card's name as the Wallet app shows it; the payment shortcut uses it to find the card), shown next to the card's last four digits. Input is trimmed, internal spaces collapsed, capped at 64 characters, and empty clears it (`normalizeWalletName`); a name another card in the ledger already uses (23505) reads "Another card already uses this Wallet name". Saving refreshes every ledger view, since the server re-processes waiting Wallet payments. Owners only; viewers and View only ledgers see the name but no edit control.
+- **add** Review: an unknown-card review for a Wallet payment shows the pass name and links to Cards ("Set this as a card's Wallet name") instead of offering to register a card number (which the server refuses for Wallet rows); "Not a card transaction" and Dismiss still work. The card is labelled **Wallet payment** (`walletPassNameOf`, unit-tested).
+
+### iOS
+
+- **add** **Log Card Payment** App Intent and App Shortcut (`LogCardPaymentIntent`: Amount as a currency amount, Merchant, Card), run by a Shortcuts Transaction automation without opening the app. LedgerKit `WalletCapture` checks and normalises the payment on the phone (amount as `Decimal`, sent as a decimal string) and `WalletIntake` mirrors `SMSIntake`: same "SMS go to" ledger, same result wording, and an unknown card names the card and points to Settings → Card names.
+- **change** The SMS outbox carries both kinds (`OutboxItem`: `sms` / `wallet`) and flushes each profile's SMS to `ingest_sms` and payments to `ingest_wallet_transactions`, so a payment made offline is sent when a connection is back. Queued files written before this decode as SMS. `Outbox` split into `Outbox+Flush.swift` and `OutboxEntry.swift`.
+- **add** Settings → **Card names for payment shortcut**: each card (bank logo, last 4) with its editable `cards.wallet_name` for owners, read-only on view-only ledgers; a name another card has is refused in words (23505). LedgerKit `LedgerCard`, `cards(profileCode:)`, `updateCardWalletName(cardCode:name:)`, `CardWalletNamesModel`.
+
+### Docs
+
+- **change** ARCHITECTURE §3 (`sms_messages.source`, `cards.wallet_name`) and §4 Wallet path.
+- **change** `apps/ios/README.md` Card payment capture: the Shortcuts Transaction automation setup and card names.
+
 ## Backlog batch 1: invites, OTP filter, budgets, rule editor, iOS contrast and VoiceOver — 2026-10-13
 
 ### Backend (Supabase)

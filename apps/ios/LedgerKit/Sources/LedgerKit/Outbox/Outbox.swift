@@ -1,28 +1,7 @@
 import Foundation
 
-/// A message waiting to reach `ingest_sms`.
-public struct OutboxEntry: Codable, Sendable, Hashable, Identifiable {
-    public var id: UUID { payload.clientMsgId }
-    public let payload: SMSPayload
-    /// The ledger it goes to. Reassigned only when the user retries a parked entry.
-    public var profileCode: String
-    public let enqueuedAt: Date
-    public var attempts: Int
-    public var nextAttemptAt: Date
-    public var lastError: String?
-    /// Set when the entry stopped being retried automatically: a permanent
-    /// error (no permission, invalid message), a failing per-message status, or
-    /// too many attempts. It then waits in Settings for Retry or Delete and
-    /// never blocks the rest of the queue. Absent in files written before
-    /// parking existed, which decode as not parked.
-    public var parkedAt: Date?
-    public var parkedReason: String?
-
-    public var isParked: Bool { parkedAt != nil }
-}
-
-/// The offline queue for SMS, a JSON file in the App Group so the App Intent
-/// (its own process) and the app share it. Every operation re-reads the file
+/// The offline queue for SMS and card payments (`OutboxItem`), a JSON file in
+/// the App Group so the App Intents (their own process) and the app share it. Every operation re-reads the file
 /// under an `NSFileCoordinator`, so an entry another process added in between
 /// is never overwritten. Delivery is at-least-once; `client_msg_id` makes the
 /// server side exactly-once.
@@ -40,9 +19,10 @@ public struct OutboxEntry: Codable, Sendable, Hashable, Identifiable {
 ///   the ledger, not a message);
 /// * signed out: kept, not counted as an attempt, and the flush stops.
 /// A per-message failure status in an otherwise successful response parks
-/// only that message.
+/// only that message. Each flush sends per profile and kind, since SMS and
+/// payments go to different RPCs (`Outbox+Flush.swift`).
 public actor Outbox {
-    /// `ingest_sms` takes at most 200 messages per call.
+    /// `ingest_sms` and `ingest_wallet_transactions` take at most 200 items per call.
     public static let batchLimit = 200
     /// Automatic attempts before an entry is parked for the user.
     public static let maxAttempts = 8
@@ -50,10 +30,10 @@ public actor Outbox {
     /// the user, whatever the reason (a week without data is not normal).
     public static let maxAge: TimeInterval = 7 * 24 * 3600
 
-    private let fileURL: URL
-    private let api: any SMSIngestAPI
-    private let backoff: Backoff
-    private let now: @Sendable () -> Date
+    let fileURL: URL
+    let api: any SMSIngestAPI
+    let backoff: Backoff
+    let now: @Sendable () -> Date
     /// One flush at a time in this process: a second caller's flush runs after
     /// the current one (so its newly queued message is included, and no entry
     /// is sent twice by overlapping flushes).
@@ -72,18 +52,26 @@ public actor Outbox {
     }
 
     public func enqueue(_ payload: SMSPayload, profileCode: String) throws {
-        try enqueue([payload], profileCode: profileCode)
+        try enqueue(items: [.sms(payload)], profileCode: profileCode)
     }
 
     /// One coordinated write for many messages. Already-queued ids are skipped.
     public func enqueue(_ payloads: [SMSPayload], profileCode: String) throws {
+        try enqueue(items: payloads.map(OutboxItem.sms), profileCode: profileCode)
+    }
+
+    public func enqueue(_ payment: WalletPayment, profileCode: String) throws {
+        try enqueue(items: [.wallet(payment)], profileCode: profileCode)
+    }
+
+    /// One coordinated write for many items of any kind. Already-queued ids are skipped.
+    public func enqueue(items: [OutboxItem], profileCode: String) throws {
         let at = now()
         try mutate { entries in
             var known = Set(entries.map(\.id))
-            for payload in payloads where !known.contains(payload.clientMsgId) {
-                known.insert(payload.clientMsgId)
-                entries.append(OutboxEntry(payload: payload, profileCode: profileCode, enqueuedAt: at,
-                                           attempts: 0, nextAttemptAt: at, lastError: nil))
+            for item in items where !known.contains(item.clientMsgId) {
+                known.insert(item.clientMsgId)
+                entries.append(OutboxEntry(item: item, profileCode: profileCode, enqueuedAt: at, nextAttemptAt: at))
             }
         }
     }
@@ -129,7 +117,7 @@ public actor Outbox {
     }
 
     /// Sends every due entry (all of them when `force`), oldest first, per
-    /// profile in batches. Parked entries are never sent here.
+    /// profile and kind in batches. Parked entries are never sent here.
     @discardableResult
     public func flush(force: Bool = false) async -> FlushReport {
         // Chain after the previous flush instead of overlapping it.
@@ -142,158 +130,7 @@ public actor Outbox {
         return await task.value
     }
 
-    private func runFlush(force: Bool) async -> FlushReport {
-        var report = FlushReport()
-        let all = (try? OutboxFile.read(fileURL)) ?? []
-        let due = all.filter { !$0.isParked && (force || $0.nextAttemptAt <= now()) }
-            .sorted { $0.enqueuedAt < $1.enqueuedAt }
-        let byProfile = Dictionary(grouping: due, by: \.profileCode)
-
-        outer: for profileCode in byProfile.keys.sorted() {
-            let entries = byProfile[profileCode]!
-            var queue: [[OutboxEntry]] = stride(from: 0, to: entries.count, by: Self.batchLimit).map {
-                Array(entries[$0..<min($0 + Self.batchLimit, entries.count)])
-            }
-            while !queue.isEmpty {
-                let batch = queue.removeFirst()
-                do {
-                    let results = try await api.ingestSMS(profileCode: profileCode, messages: batch.map(\.payload))
-                    settle(batch, results: results, report: &report)
-                } catch {
-                    let apiError = (error as? LedgerAPIError) ?? .network(String(describing: type(of: error)))
-                    report.error = apiError
-                    switch apiError.kind {
-                    case .signedOut:
-                        report.failed += batch.count
-                        recordFailure(batch, error: apiError, countsAsAttempt: false, report: &report)
-                        break outer
-                    case .transient where apiError.isUnreachable:
-                        // No connection: every other profile would fail too.
-                        report.failed += batch.count
-                        recordFailure(batch, error: apiError, countsAsAttempt: false, report: &report)
-                        break outer
-                    case .transient:
-                        // The rest of this profile would most likely fail the same
-                        // way right now; leave it for the next flush.
-                        report.failed += batch.count
-                        recordFailure(batch, error: apiError, countsAsAttempt: true, report: &report)
-                        continue outer
-                    case .permanent:
-                        if apiError.isPermission {
-                            // About the ledger, not a message: park the whole
-                            // profile's due entries without hammering the server.
-                            let rest = [batch] + queue
-                            for chunk in rest {
-                                report.failed += chunk.count
-                                park(chunk, reason: Self.reason(for: apiError), report: &report)
-                            }
-                            continue outer
-                        }
-                        if batch.count > 1 {
-                            // Isolate the bad message(s); the others go through.
-                            let mid = batch.count / 2
-                            queue.insert(contentsOf: [Array(batch[..<mid]), Array(batch[mid...])], at: 0)
-                        } else {
-                            report.failed += 1
-                            park(batch, reason: Self.reason(for: apiError), report: &report)
-                        }
-                    }
-                }
-            }
-        }
-        report.remaining = ((try? OutboxFile.read(fileURL)) ?? []).filter { !$0.isParked }.count
-        return report
-    }
-
-    /// A response arrived: drop delivered entries, park per-message failures,
-    /// and count an attempt for any entry the server did not answer for.
-    private func settle(_ batch: [OutboxEntry], results: [SMSIngestResult], report: inout FlushReport) {
-        var byID: [String: SMSIngestResult] = [:]
-        for r in results where byID[r.clientMsgId.lowercased()] == nil { byID[r.clientMsgId.lowercased()] = r }
-        var delivered = Set<UUID>()
-        var failedStatus: [UUID: String] = [:]
-        var unanswered: [OutboxEntry] = []
-        for entry in batch {
-            guard let result = byID[entry.id.uuidString.lowercased()] else {
-                unanswered.append(entry)
-                continue
-            }
-            report.results.append(result)
-            report.sent += 1
-            if result.isFailure {
-                failedStatus[entry.id] = result.failureReason
-            } else {
-                delivered.insert(entry.id)
-            }
-        }
-        let at = now()
-        try? mutate { entries in
-            entries.removeAll { delivered.contains($0.id) }
-            for i in entries.indices {
-                if let reason = failedStatus[entries[i].id] {
-                    entries[i].parkedAt = at
-                    entries[i].parkedReason = reason
-                    entries[i].lastError = reason
-                }
-            }
-        }
-        for (id, reason) in failedStatus { report.parked[id] = reason }
-        if !unanswered.isEmpty {
-            report.failed += unanswered.count
-            recordFailure(unanswered, error: .server(status: nil, code: nil, message: "Ledger didn't confirm this message."),
-                          countsAsAttempt: true, report: &report)
-        }
-    }
-
-    private func recordFailure(_ batch: [OutboxEntry], error: LedgerAPIError, countsAsAttempt: Bool,
-                               report: inout FlushReport) {
-        let ids = Set(batch.map(\.id))
-        let at = now()
-        var parkedNow: [UUID: String] = [:]
-        try? mutate { entries in
-            for i in entries.indices where ids.contains(entries[i].id) {
-                if countsAsAttempt { entries[i].attempts += 1 }
-                entries[i].lastError = error.description
-                let reason: String? =
-                    if countsAsAttempt && entries[i].attempts >= Self.maxAttempts {
-                        "Gave up after \(entries[i].attempts) tries: \(error.description)"
-                    } else if error.kind != .signedOut && at.timeIntervalSince(entries[i].enqueuedAt) >= Self.maxAge {
-                        "Not sent for 7 days: \(error.description)"
-                    } else {
-                        nil
-                    }
-                if let reason {
-                    entries[i].parkedAt = at
-                    entries[i].parkedReason = reason
-                    parkedNow[entries[i].id] = reason
-                } else {
-                    entries[i].nextAttemptAt = at.addingTimeInterval(backoff.delay(afterAttempt: max(entries[i].attempts, 1)))
-                }
-            }
-        }
-        report.parked.merge(parkedNow) { $1 }
-    }
-
-    private func park(_ batch: [OutboxEntry], reason: String, report: inout FlushReport) {
-        let ids = Set(batch.map(\.id))
-        let at = now()
-        try? mutate { entries in
-            for i in entries.indices where ids.contains(entries[i].id) {
-                entries[i].attempts += 1
-                entries[i].parkedAt = at
-                entries[i].parkedReason = reason
-                entries[i].lastError = reason
-            }
-        }
-        for id in ids { report.parked[id] = reason }
-    }
-
-    static func reason(for error: LedgerAPIError) -> String {
-        if error.isPermission { return "You can't add SMS to this ledger: only its owners can." }
-        return "Ledger rejected this message: \(error.description)"
-    }
-
-    private func mutate(_ change: (inout [OutboxEntry]) -> Void) throws {
+    func mutate(_ change: (inout [OutboxEntry]) -> Void) throws {
         try OutboxFile.mutate(fileURL, change)
     }
 }

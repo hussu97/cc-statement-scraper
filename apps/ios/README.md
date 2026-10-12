@@ -4,8 +4,8 @@ SwiftUI app (iOS 18+) for Ledger v2: Overview (with Needs attention → Review),
 Insights, Budgets and Settings (with Cards & statements → Statements)
 on top of the Supabase backend. Overview, Insights and Budgets share a month switcher (back to the first
 transaction's month, never past the current one); every long list scrolls page after page (100 rows
-per request, `Paginator`), plus the **Log Bank SMS** App Intent and the **Add to Bank Ledger**
-share extension.
+per request, `Paginator`), plus the **Log Bank SMS** and **Log Card Payment** App Intents and the
+**Add to Bank Ledger** share extension.
 
 - **Budgets** (tab): the month's `budget_status` per budget (spent of limit, % used, pace, Over),
   budgets not active that month, and create / edit / delete for owners (same table writes and
@@ -165,6 +165,35 @@ first one you own — never simply the ledger on screen. PDFs shared to "Add to 
    `UIBackgroundModes` fetch + processing). `received_at` stays the time the Shortcut ran.
 5. Shortcuts shows a one-line result naming the ledger and, for unknown cards or held
    matches, pointing to Overview → Needs review. The body is never logged, echoed or sent to Sentry.
+
+## Card payment capture
+
+Tap-to-pay payments reach Bank Ledger through a second Shortcuts personal automation that runs
+**Log Card Payment** (`LogCardPaymentIntent`, `openAppWhenRun = false`). Set it up once per card:
+
+1. Shortcuts → Automation → + → **Transaction**. Choose the card(s) (e.g. the Wio card), "When I
+   tap", and **Run Immediately**. Tap Next.
+2. Create New Shortcut → add **Log Card Payment** (search Ledger). Set **Amount** to Shortcut
+   Input's Amount, **Merchant** to Shortcut Input's Merchant and **Card** to Shortcut Input's Card
+   or Pass.
+3. In Bank Ledger, Settings → **Card names for payment shortcut** → Card names: type each card's
+   name exactly as the phone's card shows it (capitals don't matter). If a payment arrives first,
+   Shortcuts shows "no card is named “…”" with the name it passed; setting that name files the
+   waiting payment on the card.
+
+Enabling it for a card that also sends SMS alerts is safe: the server links the alert and the
+payment (same account, amount and currency, within 30 minutes) as two pieces of evidence for one
+transaction, not two transactions.
+
+`WalletIntake` mirrors `SMSIntake`: `WalletCapture.payment` checks on the phone what the server
+would refuse (amount above zero, rounded half-up to cents; a 3-letter currency, uppercased;
+merchant ≤ 200 and card name ≤ 64 characters, trimmed). The amount is a `Decimal` from the
+intent's currency amount and goes to `rpc('ingest_wallet_transactions')` as a decimal string.
+Payments go to the **SMS go to** ledger and share the SMS outbox (each entry has a `kind`; one
+flush sends each profile's SMS and payments to their own RPC), so a payment made offline at the
+till is sent when a connection is back, and a refused one waits under Settings → **Not sent**.
+The merchant is never logged or sent to Sentry. Card names (`cards.wallet_name`) are owner-edited;
+a view-only ledger shows them read-only.
 
 ## TestFlight
 
