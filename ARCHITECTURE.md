@@ -167,6 +167,8 @@ the transaction's facts:
   A posted line without a printed AED amount (SIB history foreign rows) is estimated the same way.
 - With no evidence, it is `orphaned`. The transaction is never deleted, so its manual category
   and notes survive, and an `orphaned` review opens.
+  Dismissing that review ("Mark as checked") voids it (`void_reason = 'orphan_dismissed'`).
+  Orphaned rows count in no money total: spend, the Activity net or a balance.
 
 ### Statement path
 
@@ -485,6 +487,22 @@ purchases, fees, interest and cash advances, minus refunds. It excludes payments
 ignore and income categories, void and orphaned transactions, and anything marked
 `exclude_from_spend`. Buckets use `txn_date`, a Dubai date. Every analytics RPC builds on it.
 Clients render results and never re-derive money.
+
+There is likewise **one definition of what a card owes**: `public.v_account_balances`
+(`security_invoker`). A sum of transactions cannot know the balance carried in before the first
+document, so each account is anchored on a balance the bank printed, the latest of:
+
+- `statement`: the latest active statement with a closing balance, plus the live (pending or
+  posted) transactions not on it or an earlier statement. Membership, not dates: a purchase dated
+  before the close that posts next cycle is on the next statement.
+- `balance_migration`: the latest "BALANCE MIGRATION" adjustment of a replacement card (SIB,
+  whose histories print no balance). The old card's billed balance moved onto the new one, so the
+  balance restarts at 0 that day and every live transaction from it on counts.
+- `none`: `outstanding_aed` is null, not a guess.
+
+`overview` carries each account's `outstanding_aed` and anchor, and the profile's
+`outstanding` (active accounts), `outstanding_complete` (every account anchored, every AED
+amount known) and `outstanding_has_estimate`. Positive is owed; negative is a credit balance.
 
 Analytics RPCs (security invoker, so RLS applies, except the two marked *, which are
 SECURITY DEFINER with an explicit member check and filter by profile themselves):
