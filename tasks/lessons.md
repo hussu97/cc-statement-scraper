@@ -9,6 +9,7 @@
 
 | When | Lesson |
 |---|---|
+| 2026-10-12 | [Closing a review is not fixing the data: a total counts what the review was about](#closing-a-review-is-not-fixing-the-data-a-total-counts-what-the-review-was-about) |
 | 2026-10-11 | [A row's identity hash names its parent: moving the row means re-keying it](#a-rows-identity-hash-names-its-parent-moving-the-row-means-re-keying-it) |
 | 2026-10-11 | [Only a purchase line's two amounts are a conversion rate](#only-a-purchase-lines-two-amounts-are-a-conversion-rate) |
 | 2026-10-11 | [An FX estimate uses the card's own bank, never another bank's rate](#an-fx-estimate-uses-the-cards-own-bank-never-another-banks-rate) |
@@ -32,6 +33,19 @@
 | 2026-10-08 | [Tooling defaults that don't work here: `gh` account, Supabase MCP, `localhost`, pip](#tooling-defaults-that-dont-work-here-gh-account-supabase-mcp-localhost-pip) |
 
 ## Lessons
+
+### Closing a review is not fixing the data: a total counts what the review was about
+- **What went wrong**: after the FAB re-parse incident the 110 orphaned-transaction reviews were
+  dismissed, but the orphaned rows stayed in the ledger, and `activity_summary` summed every
+  non-void row (`v_spend` already counted only pending and posted). The Activity net read AED
+  796.13 in credit while the cards owed about 3,568. Found by reconciling each account's
+  statements (opening + lines = closing) against its transactions, statement by statement.
+- **Rule**: after an incident, check the money, not the review queue: per account, the latest
+  statement's closing balance must equal the first opening balance plus every live transaction
+  on the statements in between. Every money total counts pending and posted rows only. A sum of
+  transactions is never a balance: balances come from `v_account_balances`.
+- **Enforced by**: `20261012043206` (dismissing an orphan review voids it; `activity_summary`
+  counts pending and posted; `private.void_orphan_duplicates`); pgTAP `31_outstanding_balance`.
 
 ### A row's identity hash names its parent: moving the row means re-keying it
 - **What went wrong**: `statement_lines.line_key` hashes the account. `merge_accounts` moved a
