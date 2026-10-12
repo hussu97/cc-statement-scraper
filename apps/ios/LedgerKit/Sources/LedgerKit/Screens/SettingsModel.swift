@@ -84,7 +84,7 @@ public final class SettingsModel {
     }
 }
 
-/// A message that stopped retrying, as Settings lists it. Shows a short
+/// A message or card payment that stopped retrying, as Settings lists it. Shows a short
 /// preview so the user can tell messages apart; it never leaves the phone.
 public struct ParkedMessage: Sendable, Hashable, Identifiable {
     public let id: UUID
@@ -96,9 +96,17 @@ public struct ParkedMessage: Sendable, Hashable, Identifiable {
 
     public init(_ entry: OutboxEntry) {
         id = entry.id
-        sender = entry.payload.sender.isEmpty ? "Unknown sender" : entry.payload.sender
-        receivedAt = entry.payload.receivedAt
-        let flat = entry.payload.body.split(whereSeparator: \.isNewline).joined(separator: " ")
+        receivedAt = entry.item.capturedAt
+        let text: String
+        switch entry.item {
+        case .sms(let p):
+            sender = p.sender.isEmpty ? "Unknown sender" : p.sender
+            text = p.body
+        case .wallet(let p):
+            sender = "Card payment · \(p.passName)"
+            text = p.summary
+        }
+        let flat = text.split(whereSeparator: \.isNewline).joined(separator: " ")
         preview = flat.count > 60 ? String(flat.prefix(60)) + "…" : flat
         reason = entry.parkedReason ?? entry.lastError ?? "Not sent."
         profileCode = entry.profileCode

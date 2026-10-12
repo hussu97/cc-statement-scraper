@@ -21,7 +21,7 @@ struct OutboxTests {
         let second = Outbox(fileURL: url, api: StubAPI())
         let entries = try await second.entries()
         #expect(entries.count == 2)
-        #expect(entries[0].payload.body.contains("AED 1.00"))
+        #expect(entries[0].sms?.body.contains("AED 1.00") == true)
         #expect(entries[0].profileCode == profile)
         #expect(await second.status().pending == 2)
     }
@@ -185,7 +185,7 @@ struct SMSIntakeTests {
         let entries = try await appOutbox.entries()
         #expect(entries.count == 1)
         let report = await appOutbox.flush(force: true)
-        #expect(report.results.first?.clientMsgId == entries[0].payload.clientMsgId.uuidString.lowercased())
+        #expect(report.results.first?.clientMsgId == entries[0].id.uuidString.lowercased())
     }
 
     @Test("signed out and server errors are not reported as 'offline'")

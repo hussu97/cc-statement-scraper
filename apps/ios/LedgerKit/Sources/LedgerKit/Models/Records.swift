@@ -118,8 +118,14 @@ public struct SMSIngestResult: Decodable, Sendable, Hashable {
         return "Ledger rejected this message (\(status))."
     }
 
-    /// `ingest_sms`'s `invalid` reasons (`private.sms_input_problem`), in words.
+    /// `ingest_sms`'s `invalid` reasons (`private.sms_input_problem`) and
+    /// `ingest_wallet_transactions`' (`private.wallet_input_problem`), in words.
     static let invalidReasons: [String: String] = [
+        "invalid_occurred_at": "its payment time isn't valid.",
+        "invalid_amount": "its amount isn't above zero.",
+        "invalid_currency": "its currency isn't a 3-letter code.",
+        "invalid_merchant": "its merchant is empty or longer than 200 characters.",
+        "invalid_pass_name": "its card name is empty or longer than 64 characters.",
         "not_an_object": "it wasn't sent in the expected format.",
         "invalid_client_msg_id": "its message ID isn't valid.",
         "missing_body": "it has no text.",

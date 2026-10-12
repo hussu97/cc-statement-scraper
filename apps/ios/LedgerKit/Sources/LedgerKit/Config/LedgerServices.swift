@@ -65,6 +65,12 @@ public final class LedgerServices: Sendable {
         return SMSIntake(outbox: outbox, target: { targets.target }, log: captureLog)
     }
 
+    /// "Log Card Payment"'s path: same outbox, same "SMS go to" ledger.
+    public func walletIntake() -> WalletIntake {
+        let targets = smsTargets
+        return WalletIntake(outbox: outbox, target: { targets.target }, log: captureLog)
+    }
+
     /// The share extension's upload to the "SMS go to" ledger, using the shared session.
     public func uploadStatements(_ files: [UploadFile]) async throws -> UploadResponse {
         guard let profile = smsTargets.target?.profileCode else { throw LedgerAPIError.noProfile }

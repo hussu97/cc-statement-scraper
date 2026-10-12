@@ -1,10 +1,14 @@
 import Foundation
 
-/// The SMS path alone — what the outbox and the App Intent need. Kept narrow so
-/// the intent's code path can be driven by a stub in `swift test`.
+/// The capture path alone (SMS and card payments) — what the outbox and the
+/// App Intents need. Kept narrow so the intents' code path can be driven by a
+/// stub in `swift test`.
 public protocol SMSIngestAPI: Sendable {
     /// `rpc('ingest_sms')`. Idempotent per `client_msg_id`.
     func ingestSMS(profileCode: String, messages: [SMSPayload]) async throws -> [SMSIngestResult]
+    /// `rpc('ingest_wallet_transactions')`: owners only, at most 200 items.
+    /// Idempotent per `client_msg_id`; answers `ingest_sms`'s result shape.
+    func ingestWalletPayments(profileCode: String, items: [WalletPayment]) async throws -> [SMSIngestResult]
 }
 
 /// Everything the app reads and writes. Every money figure comes from the
@@ -75,6 +79,13 @@ public protocol LedgerAPI: SMSIngestAPI {
     func deleteBudget(budgetCode: String) async throws
     /// `public.accounts` of the profile (active and closed), by bank: the budget form's cards.
     func accounts(profileCode: String) async throws -> [LedgerAccount]
+
+    // Cards (SupabaseLedgerAPI+Wallet.swift)
+    /// `public.cards` of the profile, by bank and last 4.
+    func cards(profileCode: String) async throws -> [LedgerCard]
+    /// Sets (or clears, with nil) `cards.wallet_name`. Owners only; 23505 when
+    /// another card of the ledger already has the name (case-insensitive).
+    func updateCardWalletName(cardCode: String, name: String?) async throws
 
     /// Fires whenever a row the screens show changes (transactions, SMS,
     /// documents, insights) for the profile. Ends when the caller stops iterating.

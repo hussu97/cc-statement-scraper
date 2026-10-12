@@ -44,6 +44,54 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         }
     }
 
+    // MARK: Card payments (same behaviour as SMS unless `walletDecide` is set)
+
+    private var _walletCalls: [(profile: String, items: [WalletPayment])] = []
+    var walletCalls: [(profile: String, items: [WalletPayment])] { lock.withLock { _walletCalls } }
+    /// Decides a wallet call's answer when set (`.custom` covers SMS only).
+    var walletDecide: (@Sendable (String, [WalletPayment]) throws -> [SMSIngestResult])?
+
+    func ingestWalletPayments(profileCode: String, items: [WalletPayment]) async throws -> [SMSIngestResult] {
+        let (behaviour, decide) = lock.withLock {
+            _walletCalls.append((profileCode, items))
+            return (_behaviour, walletDecide)
+        }
+        if let decide { return try decide(profileCode, items) }
+        switch behaviour {
+        case .succeed(let status):
+            return items.map {
+                SMSIngestResult(clientMsgId: $0.clientMsgId.uuidString.lowercased(), smsCode: "sms_w", status: status, txnCode: nil)
+            }
+        case .fail(let error):
+            throw error
+        case .custom:
+            return items.map {
+                SMSIngestResult(clientMsgId: $0.clientMsgId.uuidString.lowercased(), smsCode: "sms_w", status: "created", txnCode: nil)
+            }
+        }
+    }
+
+    /// `public.cards` rows; `cardWriteError` is thrown by `updateCardWalletName` when set.
+    var cardRows: [LedgerCard] = []
+    var cardWriteError: LedgerAPIError?
+    private(set) var walletNameWrites: [(card: String, name: String?)] = []
+    func cards(profileCode: String) async throws -> [LedgerCard] {
+        count("cards")
+        return lock.withLock { cardRows }
+    }
+    func updateCardWalletName(cardCode: String, name: String?) async throws {
+        if let cardWriteError { throw cardWriteError }
+        lock.withLock {
+            walletNameWrites.append((cardCode, name))
+            cardRows = cardRows.map {
+                $0.cardCode == cardCode
+                    ? LedgerCard(cardCode: $0.cardCode, accountCode: $0.accountCode, bankCode: $0.bankCode, last4: $0.last4,
+                                 status: $0.status, walletName: name)
+                    : $0
+            }
+        }
+    }
+
     var inbox = ReviewInbox(reviews: [])
     private(set) var resolved: [(String, ReviewAction)] = []
     func reviewInbox(profileCode: String, page: PageRequest) async throws -> ReviewInbox {
