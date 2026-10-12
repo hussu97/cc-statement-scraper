@@ -41,6 +41,10 @@ public struct LedgerTransaction: Decodable, Identifiable, Hashable, Sendable {
     public let accountNickname: String?
     public let hasSms: Bool
     public let hasStatement: Bool
+    /// The other side of a card transfer (`public.card_transfers`), when this row is one.
+    public let transferTxnCode: String?
+    public let transferBankCode: String?
+    public let transferCardLast4: String?
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -78,6 +82,9 @@ public struct LedgerTransaction: Decodable, Identifiable, Hashable, Sendable {
         accountNickname = try c.decodeIfPresent(String.self, forKey: .accountNickname)
         hasSms = try c.decodeIfPresent(Bool.self, forKey: .hasSms) ?? false
         hasStatement = try c.decodeIfPresent(Bool.self, forKey: .hasStatement) ?? false
+        transferTxnCode = try c.decodeIfPresent(String.self, forKey: .transferTxnCode)
+        transferBankCode = try c.decodeIfPresent(String.self, forKey: .transferBankCode)
+        transferCardLast4 = try c.decodeIfPresent(String.self, forKey: .transferCardLast4)
     }
 
     enum CodingKeys: String, CodingKey {
@@ -86,6 +93,7 @@ public struct LedgerTransaction: Decodable, Identifiable, Hashable, Sendable {
         case currencyOriginal, amountAed, amountAedIsEstimate, fxRate, authAmount, amountSource
         case relatedTxnCode, excludeFromSpend, notes, categoryCode, categoryName, categoryColor
         case categoryKind, categorySource, bankCode, cardLast4, accountNickname, hasSms, hasStatement
+        case transferTxnCode, transferBankCode, transferCardLast4
     }
 }
 

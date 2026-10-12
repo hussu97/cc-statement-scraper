@@ -129,6 +129,25 @@ struct StatementDetailTests {
         #expect(model.state.errorMessage == "This statement is no longer in this ledger. It may have been replaced by a newer upload.")
     }
 
+    @Test("a card transfer names the other card: Paid to on the debit, From on the credit")
+    func cardTransfers() throws {
+        var rows = try JSONSerialization.jsonObject(with: try fixture("transactions")) as! [[String: Any]]
+        rows[0]["direction"] = "debit"
+        rows[0]["transfer_txn_code"] = "txn_peer"
+        rows[0]["transfer_bank_code"] = "EIB"
+        rows[0]["transfer_card_last4"] = "6177"
+        rows[1]["transfer_txn_code"] = "txn_payer"
+        rows[1]["transfer_bank_code"] = "WIO"
+        rows[1]["transfer_card_last4"] = "2010"
+        let decoded = try LedgerJSON.decode([LedgerTransaction].self, from: try JSONSerialization.data(withJSONObject: rows))
+        #expect(decoded[0].transferPeer == CardTransferPeer(prefix: "Paid to", txnCode: "txn_peer", bankCode: "EIB", cardSuffix: "•6177"))
+        #expect(decoded[1].transferPeer?.prefix == "From")
+        #expect(decoded[1].transferPeer?.cardSuffix == "•2010")
+        // The unmodified fixture predates the columns: no transfer.
+        let plain = try LedgerJSON.decode([LedgerTransaction].self, from: try fixture("transactions"))
+        #expect(plain[0].transferPeer == nil)
+    }
+
     @Test("bank logos replace the bank code in row text")
     func cardSuffixes() throws {
         let rows = try LedgerJSON.decode([LedgerTransaction].self, from: try fixture("transactions"))

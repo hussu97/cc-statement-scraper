@@ -12,6 +12,23 @@ extension LedgerTransaction {
     }
 }
 
+/// The other card of a card transfer: "Paid to" on the paying card's debit, "From" on the
+/// paid card's credit. The server pairs them (`private.link_card_transfer`); the app only names it.
+public struct CardTransferPeer: Hashable, Sendable {
+    public let prefix: String
+    public let txnCode: String
+    public let bankCode: String
+    public let cardSuffix: String?
+}
+
+extension LedgerTransaction {
+    public var transferPeer: CardTransferPeer? {
+        guard let code = transferTxnCode, let bank = transferBankCode else { return nil }
+        return CardTransferPeer(prefix: direction == "debit" ? "Paid to" : "From", txnCode: code,
+                                bankCode: bank, cardSuffix: transferCardLast4.map { "•\($0)" })
+    }
+}
+
 extension StatementCycle {
     /// `"•1234"`, else `"Statement"` / `"History extract"`.
     public var cardSuffix: String { cardLast4.map { "•\($0)" } ?? kindLabel }
