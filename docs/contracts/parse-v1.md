@@ -41,7 +41,8 @@ Body (JSON):
   returned. A hinted parse that found lines is kept, with the warning `This PDF looks like <BANK>,
   not <HINT>; parsed as <HINT> because of the bank hint` when detection disagrees.
 - `settings` holds the profile's PDF passwords: the keys `set_profile_secret` accepts
-  (`<BANK>_PDF_PASSWORD` for FAB, ADCB, ENBD, EIB, SIB and MASHREQ, plus `ADCB_CID`). The worker
+  (`<BANK>_PDF_PASSWORD` for FAB, ADCB, ENBD, EIB, SIB and MASHREQ, plus `ADCB_CID`; WIO statements
+  are unencrypted and have no key). The worker
   sends every key the profile has stored (`worker_document_context`). Each bank parser uses its own
   key; detection, page counting and totals try all of them. Unknown keys are ignored.
 
@@ -108,8 +109,8 @@ Field rules:
 - `document_kind` is `statement_pdf` or `history_pdf`. SIB "transaction history" exports are `history_pdf`.
 - `statements[].kind` is `statement` or `history_extract`. A `history_pdf` produces only `history_extract` statements.
 - `reference_source` is `explicit`, `fallback` or null.
-- `totals` contains every key. A value is null when that parser doesn't extract it. FAB, ENBD/EIB and
-  MASHREQ extract all six; ADCB only the two balances; SIB none. MASHREQ's summary block is used only
+- `totals` contains every key. A value is null when that parser doesn't extract it. FAB, ENBD/EIB,
+  MASHREQ and WIO extract all six; ADCB only the two balances; SIB none. MASHREQ's summary block is used only
   when all of its lines are present and add up (otherwise the balances stay null and a warning says so).
   FAB's `total_credits` includes credits that the summary's Payments/Credits column leaves out
   (rewards redemptions, dispute credits): it is what the row's own Total Payment Due implies.
@@ -130,6 +131,12 @@ Field rules:
 - FAB prints a `VAT ON SERVICE CHARGES` row under each foreign purchase with that purchase's
   currency and amount beside the AED VAT. Since parser 2026.10.7 it is an AED line
   (`amount_original` = `amount_aed`, `fx_rate` `"1"`); earlier versions emitted the foreign pair.
+- WIO (since parser 2026.10.11) prints one signed AED amount per row and no foreign amount: a
+  foreign purchase is followed by `Rate: 3.70 (AED/USD)` (two decimals) and a separate
+  `Foreign Exchange Fee` row (`kind = fee`), so every WIO line is AED. A row with no card number
+  whose description ends in `payment` (`ENBD payment`, `EIB AZ payment`) pays another bank's card
+  from the Wio credit line: `direction = debit`, `kind = payment` (not spend). WIO's summary block
+  is used only when it adds up.
 - `legacy_fingerprint` is `domain.parsing.utils.fingerprint_for(...)`, computed exactly as the legacy backend did. It is used to carry legacy category overrides across.
 - `country_code` is an **ISO 3166-1 alpha-2** code or null. Statements print a trailing token in
   several forms; the parser maps ISO alpha-3 (`ARE` → `AE`, `IRL` → `IE`), `UAE` and the UAE emirate

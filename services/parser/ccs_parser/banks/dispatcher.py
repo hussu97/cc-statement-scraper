@@ -75,4 +75,9 @@ def parse_statement_for_bank(
         from ccs_parser.banks.mashreq import parse_mashreq_statement  # noqa: PLC0415
         return parse_mashreq_statement(pdf_path, _s.get("MASHREQ_PDF_PASSWORD") or None)
 
+    if code == "WIO":
+        from ccs_parser.banks.wio import parse_wio_statement  # noqa: PLC0415
+        # Wio sends its statements unencrypted; no password setting exists for it.
+        return parse_wio_statement(pdf_path)
+
     raise ParserError("UNSUPPORTED_BANK", f"Unsupported bank code: {bank_code}")

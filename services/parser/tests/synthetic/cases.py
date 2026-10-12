@@ -282,6 +282,49 @@ _SIB_HISTORY_NEW_CARD_PAGES: list[list[Line]] = [
 ]
 
 
+# ---------------------------------------------------------------- WIO
+# "Credit Statement": signed AED rows, a foreign purchase with its rate line and separate
+# FX fee row, a payment to another bank's card (no card number) and the bank's repayment.
+
+_WIO_PAGES: list[list[Line]] = [
+    [
+        "CURRENCY MONTHLY INTEREST RATE ANNUAL INTEREST RATE",
+        "CREDIT STATEMENT",
+        "AED 3.25% 39.00%",
+        "FROM 28/12/2025 TO 28/01/2026",
+        "CREDIT LIMIT AVAILABLE CREDIT LIMIT TOT. INTEREST AND FEES",
+        "20,000.00 19,500.00 0.00",
+        "Jane Quincy PAYMENT DUE DATE MIN. PAYMENT DUE TOTAL TO PAY",
+        "Sample 28/01/2026 25.00 500.00",
+        "ACCOUNT NUMBER 1234567890",
+        "Account summary",
+        "Balance From Last Statement 100.00",
+        "Purchases +1,325.00",
+        "Interest +0.00",
+        "Late payment fee +0.00",
+        "Foreign exchange charges +2.00",
+        "Payments and credits -1,027.00",
+        "Closing balance (Total to pay) 400.00",
+        "Transactions",
+        "Date Ref. Number Description Card Number Amount",
+        "02/01/2026 P100000001 Corner Grocery ****1234 -125.00",
+        "05/01/2026 P100000002 Online Shop ****1234 -100.00",
+        "Rate: 3.70 (AED/USD)",
+        "05/01/2026 P100000002 Foreign Exchange Fee ****1234 -2.00",
+        "Page 1 of 2",
+        "(c) 2026 Wio, PJSC. All Rights Reserved.",
+    ],
+    [
+        "Date Ref. Number Description Card Number Amount",
+        "10/01/2026 P100000003 Sample Bank payment -1,100.00",
+        "12/01/2026 P100000004 Book Shop ****1234 +27.00",
+        "20/01/2026 P100000005 Credit Repayment +1,000.00",
+        "Page 2 of 2",
+        "(c) 2026 Wio, PJSC. All Rights Reserved.",
+    ],
+]
+
+
 CASES: dict[str, Case] = {
     "mashreq_statement": Case(_MASHREQ_PAGES),
     # X-17: Mashreq and EIB passwords reach their parsers.
@@ -327,4 +370,5 @@ CASES: dict[str, Case] = {
     "sib_history_new_card": Case(_SIB_HISTORY_NEW_CARD_PAGES),
     # SRV-17: a wrong hint (an ADCB hint on a FAB PDF) is detected and retried once.
     "fab_wrong_hint": Case(_FAB_PAGES, bank_code_hint="ADCB"),
+    "wio_statement": Case(_WIO_PAGES),
 }

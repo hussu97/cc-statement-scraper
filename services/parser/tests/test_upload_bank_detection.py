@@ -37,6 +37,19 @@ def test_infer_bank_code_from_text_identifies_eib() -> None:
     assert _infer_bank_code_from_text(text) == "EIB"
 
 
+def test_infer_bank_code_from_text_identifies_wio_despite_payments_to_other_banks() -> None:
+    # Wio pays other banks' cards from the credit line; those rows name ENBD and Mashreq.
+    text = """
+    CREDIT STATEMENT
+    CREDIT LIMIT AVAILABLE CREDIT LIMIT TOT. INTEREST AND FEES
+    21/06/2026 P1103719260 ENBD payment -7,913.00
+    25/06/2026 P980151260 Mashreq payment -124.00
+    © 2026 Wio, PJSC. All Rights Reserved. Abu Dhabi,
+    Wio Bank Standard Terms and Conditions are applicable
+    """
+    assert _infer_bank_code_from_text(text) == "WIO"
+
+
 def test_infer_bank_code_from_text_returns_none_when_unknown() -> None:
     assert _infer_bank_code_from_text("Random PDF with no known bank markers") is None
 

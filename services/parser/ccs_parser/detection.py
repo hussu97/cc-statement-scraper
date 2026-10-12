@@ -95,7 +95,7 @@ def _legacy_infer_bank_code_from_text(pdf_text: str) -> str | None:
 
 
 # Legacy check order, used as the final tie-break.
-_BANK_ORDER = ("EIB", "ENBD", "MASHREQ", "ADCB", "FAB", "SIB")
+_BANK_ORDER = ("EIB", "ENBD", "MASHREQ", "ADCB", "FAB", "SIB", "WIO")
 
 # (bank, marker, weight). Matched on header/summary text only (transaction rows removed).
 _NAME_MARKERS: tuple[tuple[str, str, int], ...] = (
@@ -109,6 +109,8 @@ _NAME_MARKERS: tuple[tuple[str, str, int], ...] = (
     ("ENBD", "EMIRATES NBD", 2),
     ("MASHREQ", "MASHREQBANK", 3),
     ("MASHREQ", "MASHREQ BANK", 2),
+    ("WIO", "WIO, PJSC", 3),
+    ("WIO", "WIO BANK", 2),
 )
 
 # A line that starts with a date is a transaction row (merchant / transfer text).
@@ -150,6 +152,8 @@ def _layout_scores(text: str) -> dict[str, int]:
         vote("SIB", 3)
     if _word("SIB", text) and "ISLAMIC BANK" in text:
         vote("SIB", 1)
+    if "CREDIT STATEMENT" in text and "TOT. INTEREST AND FEES" in text:
+        vote("WIO", 3)
     return scores
 
 

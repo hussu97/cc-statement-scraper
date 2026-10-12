@@ -10,7 +10,8 @@ The bank parsers (FAB, ADCB, ENBD, EIB, SIB, Mashreq) are **copies** of the lega
 backend parsers (removed from the repo after the cutover; see git history), kept
 behaviourally identical and verified with a golden parity suite. The service adds: decimal-string money with `direction`,
 contract kinds (`interest`), `fx_rate`, `legacy_fingerprint`, document/statement
-kinds, statement identity, and best-effort `totals`.
+kinds, statement identity, and best-effort `totals`. The Wio parser (`banks/wio.py`, 2026-10) is new: v1 never
+read Wio, so it has no legacy parity, only synthetic snapshots.
 
 ## Layout
 

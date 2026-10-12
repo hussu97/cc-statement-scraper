@@ -180,3 +180,45 @@ def test_mashreq_credit_balance() -> None:
     result = extract_totals("MASHREQ", lines)
     assert result.values["opening_balance"] == Decimal("700.00")
     assert result.values["closing_balance"] == Decimal("-115.50")
+
+
+# Sep 2026 layout: Arabic labels interleaved (presentation forms), a credit closing balance.
+WIO_LINES = [
+    "CREDIT STATEMENT CURRENCY MONTHLY INTEREST RATE ANNUAL INTEREST RATE",
+    "28/02/2026 ﻰﻟﺇ 28/01/2026 CREDIT LIMIT TOT. INTEREST AND FEES",
+    "ﻲﻧﺎﻤﺘﺋﻻﺍ",
+    "20,000.00 0.00",
+    "PAYMENT DUE DATE MIN. PAYMENT DUE TOTAL TO PAY",
+    "Jane Quincy ﺩﺍﺪﺴﻟﺍ",
+    "Sample",
+    "28/02/2026 30.00 0.00",
+    "Balance from last statement 0.00",
+    "Purchases +1,000.00",
+    "Interest +0.00",
+    "Late payment fee +0.00",
+    "Foreign exchange charges +20.00",
+    "Payments and credits -1,120.00",
+    "Closing balance (Total to pay) -100.00",
+]
+
+
+def test_wio_summary() -> None:
+    result = extract_totals("WIO", WIO_LINES)
+    assert result.values == {
+        "opening_balance": Decimal("0.00"),
+        "closing_balance": Decimal("-100.00"),
+        "total_debits": Decimal("1020.00"),
+        "total_credits": Decimal("1120.00"),
+        "min_due": Decimal("30.00"),
+        "credit_limit": Decimal("20000.00"),
+    }
+    assert result.due_date == date(2026, 2, 28)
+    assert result.warnings == []
+
+
+def test_wio_summary_that_does_not_add_up_is_left_null() -> None:
+    lines = [ln.replace("-100.00", "-90.00") for ln in WIO_LINES]
+    result = extract_totals("WIO", lines)
+    assert result.values["opening_balance"] is None and result.values["closing_balance"] is None
+    assert result.values["credit_limit"] == Decimal("20000.00")
+    assert result.warnings == ["WIO: account summary does not add up; balance totals left null"]
