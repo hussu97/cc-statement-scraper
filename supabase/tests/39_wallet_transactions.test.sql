@@ -1,4 +1,4 @@
--- Wallet transaction capture (20261012211020_wallet_transactions.sql): card payments logged
+-- Wallet transaction capture (20261012214923_wallet_transactions.sql): card payments logged
 -- by the Shortcuts "Transaction" automation through public.ingest_wallet_transactions become
 -- sms_messages rows with source 'wallet', matched to a card by cards.wallet_name, deduped
 -- against the bank's SMS for the same purchase, and later posted by the statement line.
