@@ -15,6 +15,8 @@ final class StubAuthenticator: DeviceAuthenticating, @unchecked Sendable {
     }
 
     var prompts: [String] { lock.withLock { _prompts } }
+    /// The owner changes the device (removes the passcode, enrols Face ID).
+    func setMethod(_ method: DeviceAuthMethod?) { lock.withLock { _method = method } }
     func answer(_ values: Bool...) { lock.withLock { _answers.append(contentsOf: values) } }
 
     func availableMethod() -> DeviceAuthMethod? { lock.withLock { _method } }
@@ -37,11 +39,11 @@ struct AppLockTests {
     func coverWhenInactive() async throws {
         let lock = AppLock(defaults: try defaults(), authenticator: StubAuthenticator())
         #expect(!lock.showsCover && !lock.isLocked)
-        await lock.phaseChanged(.inactive)
+        await lock.phaseChanged(.inactive)?.value
         #expect(lock.showsCover && !lock.showsUnlock)
-        await lock.phaseChanged(.background)
+        await lock.phaseChanged(.background)?.value
         #expect(lock.showsCover && !lock.isLocked)   // off: covered, never locked
-        await lock.phaseChanged(.active)
+        await lock.phaseChanged(.active)?.value
         #expect(!lock.showsCover)
     }
 
@@ -73,22 +75,52 @@ struct AppLockTests {
         let lock = AppLock(defaults: try defaults(), authenticator: auth)
         await lock.setRequireAuth(true)
 
-        await lock.phaseChanged(.inactive)
+        await lock.phaseChanged(.inactive)?.value
         #expect(!lock.isLocked)              // Control Center etc. only cover
-        await lock.phaseChanged(.background)
+        await lock.phaseChanged(.background)?.value
         #expect(lock.isLocked && lock.showsCover)
 
         auth.answer(false)                   // the owner cancels the prompt
-        await lock.phaseChanged(.active)
+        await lock.phaseChanged(.active)?.value
         #expect(lock.isLocked && lock.showsUnlock && auth.prompts.count == 2)
         // The prompt made the scene inactive and active again: no second automatic prompt.
-        await lock.phaseChanged(.inactive)
-        await lock.phaseChanged(.active)
+        await lock.phaseChanged(.inactive)?.value
+        await lock.phaseChanged(.active)?.value
         #expect(auth.prompts.count == 2 && lock.showsUnlock)
 
         auth.answer(true)                    // the Unlock button
         await lock.unlock()
         #expect(!lock.isLocked && !lock.showsCover)
+    }
+
+    @Test("passcode removed while locked: the lock turns itself off (persisted) instead of stranding the owner")
+    func methodRemoved() async throws {
+        let store = try defaults()
+        let auth = StubAuthenticator(answers: [true])
+        let lock = AppLock(defaults: store, authenticator: auth)
+        await lock.setRequireAuth(true)
+        lock.phaseChanged(.background)
+        auth.setMethod(nil)                  // the owner removed the device passcode meanwhile
+        await lock.phaseChanged(.active)?.value
+        #expect(!lock.isLocked && !lock.showsCover)
+        #expect(!lock.requireAuth && !store.bool(forKey: AppLock.requireKey))
+        #expect(lock.message == AppLock.turnedOffMessage)
+        #expect(auth.prompts.count == 1)     // only the one that turned it on
+        // A cold launch with the setting still stored but no method also opens.
+        let stale = try defaults()
+        stale.set(true, forKey: AppLock.requireKey)
+        let relaunch = AppLock(defaults: stale, authenticator: StubAuthenticator(method: nil))
+        await relaunch.phaseChanged(.active)?.value
+        #expect(!relaunch.isLocked && !stale.bool(forKey: AppLock.requireKey))
+    }
+
+    @Test("leaving covers at once, synchronously, before any await")
+    func synchronousCover() throws {
+        let lock = AppLock(defaults: try defaults(), authenticator: StubAuthenticator())
+        #expect(lock.phaseChanged(.inactive) == nil)
+        #expect(lock.showsCover)
+        lock.phaseChanged(.background)
+        #expect(lock.showsCover)
     }
 
     @Test("a cold launch with it on starts locked and asks on the first activation")
@@ -98,7 +130,7 @@ struct AppLockTests {
         let auth = StubAuthenticator(answers: [true])
         let lock = AppLock(defaults: store, authenticator: auth)
         #expect(lock.isLocked && lock.showsCover)
-        await lock.phaseChanged(.active)
+        await lock.phaseChanged(.active)?.value
         #expect(!lock.isLocked && auth.prompts == ["Unlock Bank Ledger"])
     }
 }
