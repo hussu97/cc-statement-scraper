@@ -2382,7 +2382,11 @@ export type Database = {
         Returns: Json
       }
       budget_status: {
-        Args: { p_month?: string; p_profile_code: string }
+        Args: {
+          p_include_inactive?: boolean
+          p_month?: string
+          p_profile_code: string
+        }
         Returns: {
           account_code: string
           account_name: string
@@ -2392,6 +2396,9 @@ export type Database = {
           category_code: string
           category_name: string
           color_token: string
+          effective_from: string
+          effective_to: string
+          is_effective: boolean
           projected_aed: number
           share_used: number
           spent_aed: number
