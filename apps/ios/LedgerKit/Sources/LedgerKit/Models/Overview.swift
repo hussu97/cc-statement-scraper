@@ -14,6 +14,12 @@ public struct Overview: Decodable, Sendable, Hashable {
     /// `(spend − spend_avg_3m) / spend_avg_3m`; fair only for completed months.
     public let changeVsAvg3m: Decimal?
     public let payments: Decimal
+    /// What the active cards owe now (`v_account_balances`); negative is a credit
+    /// balance. Nil from a server without the field.
+    public let outstanding: Decimal?
+    /// Every active card has a balance anchor and every AED amount is known.
+    public let outstandingComplete: Bool?
+    public let outstandingHasEstimate: Bool?
     public let pendingCount: Int
     public let pendingAmount: Decimal
     public let uncategorizedCount: Int
@@ -27,6 +33,7 @@ public struct Overview: Decodable, Sendable, Hashable {
     enum CodingKeys: String, CodingKey {
         case month, spend, spendPrevMonth, spendPrevMonthToDate, payments, pendingCount, pendingAmount
         case uncategorizedCount, openReviews, lastSmsAt, topCategories, accounts, recent
+        case outstanding, outstandingComplete, outstandingHasEstimate
         case changeVsPrevMonthToDate
         case spendAvg3m = "spendAvg3M"
         case changeVsAvg3m = "changeVsAvg3M"
@@ -55,6 +62,14 @@ public struct Overview: Decodable, Sendable, Hashable {
         public let unbilledAed: Decimal
         /// Latest statement's closing balance / limit, from the server (4dp).
         public let utilisation: Decimal?
+        /// What the card owes now; negative is a credit balance; nil without an
+        /// anchor (or from a server without the field).
+        public let outstandingAed: Decimal?
+        /// `statement` | `balance_migration` | `none`.
+        public let balanceAnchor: String?
+        public let balanceAnchorDate: CalendarDay?
+        public let balanceHasEstimate: Bool?
+        public let balanceUnpricedCount: Int?
 
         public var title: String { nickname ?? productName ?? bankCode }
         /// `"•1234, •5678"`.
