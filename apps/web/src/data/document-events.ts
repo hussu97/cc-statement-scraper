@@ -1,8 +1,9 @@
-import { useEffect, useId, useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, type Tables } from "@/lib/supabase";
 import { keys } from "./keys";
 import { mustList } from "./api";
+import { channelTopic } from "./realtime";
 
 export const DOCUMENT_STAGES = ["received", "stored", "duplicate", "queued", "parsing", "parsed", "ingested", "failed", "retry"] as const;
 export type DocumentStage = (typeof DOCUMENT_STAGES)[number];
@@ -165,7 +166,6 @@ export function useDocumentEvents(profileCode: string, docCodes: readonly (strin
   const codes = useMemo(() => normalizeDocCodes(docCodes), [docCodes]);
   const codesKey = codes.join(",");
   const qc = useQueryClient();
-  const instance = useId();
   const queryKey = keys.documentEvents(profileCode, codes);
   const query = useQuery({
     queryKey,
@@ -187,7 +187,8 @@ export function useDocumentEvents(profileCode: string, docCodes: readonly (strin
     if (!live || !codesKey) return;
     const wanted = new Set(codesKey.split(","));
     const key = keys.documentEvents(profileCode, [...wanted]);
-    const channel = supabase.channel(`doc-events:${profileCode}:${instance}`);
+    // A fresh topic per effect run (WEB-09): reusing one while the old channel is still leaving kills it.
+    const channel = supabase.channel(channelTopic(`doc-events:${profileCode}`));
     channel.on(
       "postgres_changes",
       { event: "INSERT", schema: "public", table: "document_events", filter: `profile_code=eq.${profileCode}` },
@@ -204,7 +205,7 @@ export function useDocumentEvents(profileCode: string, docCodes: readonly (strin
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [live, codesKey, profileCode, qc, instance]);
+  }, [live, codesKey, profileCode, qc]);
 
   return query;
 }
