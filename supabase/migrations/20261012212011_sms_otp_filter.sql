@@ -15,7 +15,7 @@
 --
 -- Deliberately not matched: bare "code" near digits (merchants like CODEFORGE.IO and every
 -- card's last four digits), "auth code" / "approval code" (purchase alerts quote them), and a
--- bare "3-D Secure" mention (a declined-transaction alert can say it); bare Arabic "رمز".
+-- bare "3-D Secure" mention (a declined-transaction alert can say it); bare Arabic "رمز" or "لمرة واحدة" (a one-off fee says it).
 
 create or replace function private.sms_otp_pattern()
 returns text
@@ -23,7 +23,7 @@ language sql
 immutable
 set search_path = ''
 as $$
-  select '(^|[^a-zA-Z0-9_])otp([^a-zA-Z_]|$)|one[^a-zA-Z0-9]{0,3}time[^a-zA-Z0-9]{0,3}(password|pin|code)|verification[^a-zA-Z0-9]{0,3}(code|pin)|pass[^a-zA-Z0-9]?code|security[^a-zA-Z0-9]{0,3}code|authentication[^a-zA-Z0-9]{0,3}(code|pin|password)|secure[^a-zA-Z0-9]{0,3}code|3[^a-zA-Z0-9]?d[^a-zA-Z0-9]?secure[^a-zA-Z0-9]{1,3}(password|pin)|(^|[^a-zA-Z0-9.,])[0-9]{4,8}[^a-zA-Z0-9]{1,3}(is|as)[^a-zA-Z0-9]{1,3}(your|the)[^a-zA-Z0-9]{1,3}([a-zA-Z-]{1,20}[^a-zA-Z0-9]{1,3}){0,3}(code|pin|password|passcode)([^a-zA-Z]|$)|(do[^a-zA-Z0-9]{1,3}not|don[^a-zA-Z0-9]{0,2}t|never)[^a-zA-Z0-9]{1,3}share[^a-zA-Z0-9]{1,3}((this|the|your|it)[^a-zA-Z0-9]{1,3})?(otp|code|password|passcode)|رمز (ال)?تحقق|رمز (ال)?مرور|كلمة (ال)?مرور|كلمة (ال)?سر|لمرة واحدة'::text
+  select '(^|[^a-zA-Z0-9_])otp([^a-zA-Z_]|$)|one[^a-zA-Z0-9]{0,3}time[^a-zA-Z0-9]{0,3}(password|pin|code)|verification[^a-zA-Z0-9]{0,3}(code|pin)|pass[^a-zA-Z0-9]?code|security[^a-zA-Z0-9]{0,3}code|authentication[^a-zA-Z0-9]{0,3}(code|pin|password)|secure[^a-zA-Z0-9]{0,3}code|3[^a-zA-Z0-9]?d[^a-zA-Z0-9]?secure[^a-zA-Z0-9]{1,3}(password|pin)|(^|[^a-zA-Z0-9.,])[0-9]{4,8}[^a-zA-Z0-9]{1,3}(is|as)[^a-zA-Z0-9]{1,3}(your|the)[^a-zA-Z0-9]{1,3}([a-zA-Z-]{1,20}[^a-zA-Z0-9]{1,3}){0,3}(code|pin|password|passcode)([^a-zA-Z]|$)|(do[^a-zA-Z0-9]{1,3}not|don[^a-zA-Z0-9]{0,2}t|never)[^a-zA-Z0-9]{1,3}share[^a-zA-Z0-9]{1,3}((this|the|your|it)[^a-zA-Z0-9]{1,3})?(otp|code|password|passcode)|رمز (ال)?تحقق|رمز (ال)?مرور|كلمة (ال)?مرور|كلمة (ال)?سر|(رمز|كود) لمرة واحدة'::text
 $$;
 
 -- Whether an SMS body is a one-time passcode (case-insensitive, as on the device).
