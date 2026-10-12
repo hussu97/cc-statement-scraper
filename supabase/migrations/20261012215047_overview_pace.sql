@@ -15,9 +15,12 @@
 --                             compares nothing (0.00).
 --   projected_month_end   Where the month is heading (public.spend_pace):
 --                           * current month, with spend in the previous 3 months:
---                               spend + (spend_avg_3m − spend_avg_3m_to_date)
---                             i.e. what is spent so far plus what the last three months spent, on
---                             average, in the rest of the month. It follows the month's usual
+--                               spend + (rest-of-month spend in those months) / n
+--                             where n is the number of those months that have any spend (1-3),
+--                             i.e. what is spent so far plus what the months with history spent,
+--                             on average, in the rest of the month. With 3 months of history this
+--                             is spend + (spend_avg_3m − spend_avg_3m_to_date); dividing by 3 when
+--                             only 1-2 months have data would project a young ledger too low. It follows the month's usual
 --                             shape (rent on the 1st, a mid-month bill) instead of extrapolating
 --                             the first few days, and it equals spend on the last day.
 --                           * current month, no spend in the previous 3 months (a new ledger):
@@ -69,7 +72,8 @@ declare
   v_spend numeric;
   v_avg_3m numeric;
   v_avg_to_date numeric;
-  v_has_history boolean;
+  v_rest numeric;
+  v_months int;
   v_projected numeric;
 begin
   -- The same three sums overview makes, so the figures line up with its spend and spend_avg_3m.
@@ -78,15 +82,17 @@ begin
   select coalesce(round(sum(s.spend_aed) / 3, 2), 0),
          coalesce(round(sum(s.spend_aed) filter (
                     where s.txn_date < public.month_to_date_end(s.txn_date, v_month, v_today)) / 3, 2), 0),
-         count(*) > 0
-  into v_avg_3m, v_avg_to_date, v_has_history
+         coalesce(sum(s.spend_aed) filter (
+                    where s.txn_date >= public.month_to_date_end(s.txn_date, v_month, v_today)), 0),
+         count(distinct date_trunc('month', s.txn_date))
+  into v_avg_3m, v_avg_to_date, v_rest, v_months
   from public.v_spend s
   where s.profile_code = p_profile_code and s.txn_date >= v_from and s.txn_date < v_month;
 
   v_projected := case
     when v_today < v_month then null                                     -- future month
     when v_today >= v_next - 1 then v_spend                              -- complete (or its last day)
-    when v_has_history then v_spend + (v_avg_3m - v_avg_to_date)         -- the usual rest of the month
+    when v_months > 0 then v_spend + v_rest / v_months                   -- the usual rest of the month
     else v_spend / extract(day from v_today)::int * v_days               -- run rate, no history
   end;
 
