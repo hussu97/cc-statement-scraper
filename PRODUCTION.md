@@ -197,11 +197,11 @@ reads a key it doesn't list.
 | `ANTHROPIC_API_KEY`, `LLM_MODEL` | Anthropic console | yes |
 | `SENTRY_DSN`, `SENTRY_ENVIRONMENT` | Sentry `credit-card-ledger-backend` DSN; `production` | yes |
 | `SENTRY_RELEASE` | the commit being deployed: pass `--sentry-release "$(git rev-parse --short HEAD)"` (the Deploy Supabase workflow also sets it) | placeholder |
-| `GMAIL_OAUTH_CLIENT_ID`, `GMAIL_OAUTH_CLIENT_SECRET` | the Google OAuth client (§5) | set (legacy client); a new client in `<gcp-project>` is pending (§5) |
-| `MS_OAUTH_CLIENT_ID`, `MS_OAUTH_CLIENT_SECRET` | the Azure app registration (§6); moved from the legacy DB at cutover | missing |
-| `GMAIL_PUSH_AUDIENCE` | `https://<project-ref>.supabase.co/functions/v1/gmail-push` | missing |
-| `GMAIL_PUSH_SA_EMAIL`, `GMAIL_PUBSUB_TOPIC` | §5: `ccs-gmail-push@<gcp-project>.iam.gserviceaccount.com` (or the reused relay SA), `projects/<gcp-project>/topics/ccs-gmail-push` | missing |
-| `ALLOWED_ORIGINS` | the Vercel production URL(s), comma-separated | missing |
+| `GMAIL_OAUTH_CLIENT_ID`, `GMAIL_OAUTH_CLIENT_SECRET` | the Google OAuth client `ledger-gmail` in `<gcp-project>` (§5) | set (2026-10-12) |
+| `MS_OAUTH_CLIENT_ID`, `MS_OAUTH_CLIENT_SECRET` | the Azure app registration (§6); moved from the legacy DB at cutover | set |
+| `GMAIL_PUSH_AUDIENCE` | `https://<project-ref>.supabase.co/functions/v1/gmail-push` | set |
+| `GMAIL_PUSH_SA_EMAIL`, `GMAIL_PUBSUB_TOPIC` | §5: `gmail-push-invoker@<gcp-project>.iam.gserviceaccount.com`, `projects/<gcp-project>/topics/gmail-statements` | set |
+| `ALLOWED_ORIGINS` | the Vercel production URL(s), comma-separated | set |
 
 ```bash
 # 1. Fill in the missing lines with an editor (not `echo`, which lands in shell history).
@@ -220,7 +220,7 @@ supabase secrets list --project-ref <project-ref>      # names and digests only
   `PARSER_URL` isn't `https://` or points at a local host, or if the file contains
   `PARSER_DOCUMENT_BASE_URL` or `LEDGER_E2E` (local only).
 - Optional overrides: `MS_OAUTH_TENANT` (`consumers`), `OUTLOOK_LOOKBACK_DAYS`,
-  `GMAIL_SENTRY_ALERTS` (unset = Gmail errors and Gmail mailbox/watch health stay out of Sentry until Gmail is configured; set `on` afterwards),
+  `GMAIL_SENTRY_ALERTS` (unset = Gmail errors and Gmail mailbox/watch health stay out of Sentry; `on` in production since 2026-10-12),
   `OUTLOOK_BUDGET_MS`, `GMAIL_PUSH_BUDGET_MS`, `WORKER_BUDGET_MS`, `PARSER_TIMEOUT_MS`, `EDGE_WALL_CLOCK_MS`,
   `OPS_SMS_UNPARSED_THRESHOLD`, `OPS_OPEN_REVIEWS_THRESHOLD`, `OPS_QUEUED_DOCUMENT_AGE_S` and `SENTRY_TRACES_SAMPLE_RATE`
   (see README). Add them to the same file.
@@ -494,7 +494,7 @@ There is no `/api` proxy: the app talks to Supabase directly.
 
 Everything Gmail lives in GCP project **`<gcp-project>`** (account
 `<gcp-owner-account>`), which also hosts the parser. The legacy project
-`<legacy-gcp-project>` only holds the old OAuth client and an unused topic (see item 6).
+`<legacy-gcp-project>` only holds the old OAuth client and an unused topic (see item 8).
 
 **Already provisioned (2026-10-08).** The setup ran these commands; re-run them only to rebuild
 it. `PROJECT=<gcp-project>`, `URL=https://<project-ref>.supabase.co/functions/v1/gmail-push`.
@@ -533,41 +533,41 @@ it. `PROJECT=<gcp-project>`, `URL=https://<project-ref>.supabase.co/functions/v1
    `GMAIL_PUSH_SA_EMAIL=gmail-push-invoker@<gcp-project>.iam.gserviceaccount.com`,
    `GMAIL_PUBSUB_TOPIC=projects/<gcp-project>/topics/gmail-statements`.
 
-**Still to do by hand:**
-
-6. **OAuth client in `<gcp-project>` (required).** Gmail `users.watch` only accepts a
-   topic in the **same GCP project as the OAuth client**. The legacy client (project `…-488614`,
-   currently set as `GMAIL_OAUTH_CLIENT_ID/SECRET`) can refresh the imported mailbox's token, but
-   its watch on the new topic is rejected: on 2026-10-08, `gmail-watch-renew` returned
-   `renewed: 0, failed: 1`. Google doesn't let you create Web OAuth clients for an External
-   consent screen with gcloud, so do it in the console as `<gcp-owner-account>` with
-   project `<gcp-project>` selected:
-   1. **APIs & Services → OAuth consent screen** (Google Auth Platform) → *Get started*. App
-      name `Bank Ledger`, support email = your Gmail → Audience **External** → contact email →
-      agree → *Create*.
-   2. **Audience** → keep *Testing* → *Test users* → *Add users* → the Gmail mailbox you ingest
-      from → *Save*.
-   3. **Data access** → *Add or remove scopes* → paste
+6. **OAuth client** `ledger-gmail` in `<gcp-project>` (done 2026-10-12). Gmail
+   `users.watch` only accepts a topic in the **same GCP project as the OAuth client**, so the
+   legacy client (project `…-488614`) was replaced: its watch on `gmail-statements` failed with
+   `GMAIL_400`. Google has no gcloud command for an External consent screen or a Web client, so
+   to rebuild it use the console as `<gcp-owner-account>` with `<gcp-project>`
+   selected:
+   1. **Google Auth Platform → Branding** → *Get started*: app name `Bank Ledger`, support email
+      = your Gmail, Audience **External**, contact email → *Create*. Leave the logo, home page
+      and privacy policy empty: they start a branding verification that a `vercel.app` home
+      page cannot pass (Google wants a domain you own).
+   2. **Audience** → stays in *Testing* → *Test users* → add the ingested Gmail address. The app
+      is not published: publishing needs a verified home page.
+   3. **Data access** → *Add or remove scopes* → *Manually add scopes*:
       `https://www.googleapis.com/auth/gmail.readonly` → *Add to table* → *Update* → *Save*.
-   4. **Clients** → *Create client* → type **Web application**, name `ledger-gmail`. Under
-      *Authorised redirect URIs* add `https://developers.google.com/oauthplayground` (v2 has no
-      in-app OAuth code exchange: the web app only stores a pasted refresh token through
-      `set_mailbox_secret`) → *Create*. Copy the client ID and secret.
-   5. Put them in `supabase/functions/.env.production` as `GMAIL_OAUTH_CLIENT_ID=` /
-      `GMAIL_OAUTH_CLIENT_SECRET=` (use an editor), then run `scripts/cutover/set-edge-secrets.sh`.
-   6. **Mint a refresh token:** open https://developers.google.com/oauthplayground → ⚙ →
-      tick *Use your own OAuth credentials* → paste the new ID/secret → in *Step 1* enter
+   4. **Clients** → *Create client* → **Web application**, name `ledger-gmail`, authorised
+      redirect URI `https://developers.google.com/oauthplayground` (v2 has no in-app OAuth code
+      exchange: the web app stores a pasted refresh token through `set_mailbox_secret`). Put the
+      ID and secret in `supabase/functions/.env.production` as `GMAIL_OAUTH_CLIENT_ID=` /
+      `GMAIL_OAUTH_CLIENT_SECRET=` (with an editor) and push them (§2.5). A new client
+      invalidates every stored Gmail refresh token: do the next step straight after.
+   5. **Mint a refresh token** (also the weekly renewal, below): open
+      https://developers.google.com/oauthplayground → ⚙ → tick *Use your own OAuth credentials*
+      → paste the client ID/secret → in *Step 1* enter
       `https://www.googleapis.com/auth/gmail.readonly` → *Authorize APIs* → sign in as the
-      mailbox (continue past the "unverified app" warning) → *Exchange authorization code for
-      tokens* → copy the **refresh token**.
-   7. **Re-authorise the mailbox:** web Settings → Sources → the Gmail mailbox → *Set refresh
-      token* → paste → save. The old token only works with the old client, so steps 5 and 7 go
-      together. Until both are done the legacy client stays set and keeps refreshing.
-   8. Start the watch (item 7) and confirm `renewed: 1`.
+      mailbox → *Advanced* → *Go to Bank Ledger (unsafe)* → *Exchange authorization code for
+      tokens* → copy the **refresh token** (leave *Auto-refresh* off; it only affects the
+      Playground). Never screenshot or paste the Playground page: it shows the client secret.
+   6. **Store it:** web Settings → Sources → the Gmail mailbox → *Set refresh token* → paste →
+      save. Then start the watch (item 7) and confirm `renewed: 1`.
 
-   In *Testing* mode, Google expires refresh tokens after **7 days**. To keep the token, set
-   *Audience → Publish app* (in production, a gmail.readonly app used only by its own test users
-   works unverified, behind the warning screen). Otherwise repeat 6–7 weekly.
+   **Weekly renewal.** In *Testing*, Google expires refresh tokens for a restricted scope like
+   `gmail.readonly` after **7 days**. When it lapses, `gmail-push` and `gmail-watch-renew` record
+   `TOKEN_REFRESH_FAILED:invalid_grant` in the mailbox's `sync_state.last_error` and report it to
+   Sentry. Repeat steps 5–6, then run the item 7 curl. Mail that arrives in between is picked up
+   by the cursor-reset backfill once the watch is back.
 7. **Watch.** `ledger-gmail-watch-renew` renews daily (watches expire after 7 days) on
    `GMAIL_PUBSUB_TOPIC`, using `sync_state.watch_label_ids` (default `["INBOX"]`). Start the
    first watch by hand. `?sync=1` waits and returns `{renewed, failed}`:
@@ -912,7 +912,7 @@ Deploy Supabase job failed at `supabase migration fetch --linked` (investigate; 
   - `PARSER_SECRET`: see §3.
   - Service tokens: revoke and re-create in Settings.
   - OAuth clients: rotate in Google or Azure, update the file, then `set-edge-secrets.sh`.
-    A new *Google* client invalidates the stored Gmail refresh tokens (§5.4).
+    A new *Google* client invalidates the stored Gmail refresh tokens (§5 item 6).
   - Mailbox tokens: Set refresh token in Settings.
 - **Backups:** the free tier has no downloadable automated backups. Take a monthly
   `supabase db dump --linked -f ledger-$(date +%F).sql` (schema) and `--data-only` (data). The
