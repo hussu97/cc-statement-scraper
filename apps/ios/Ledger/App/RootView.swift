@@ -52,7 +52,8 @@ struct MainTabs: View {
                     OverviewView(model: model.overview, month: model.month, review: model.review,
                                  profileCode: profileCode, canResolve: model.profiles.canWrite,
                                  outboxAlert: model.settings.outboxStatus.staleAlert,
-                                 openSettings: { model.tabs.show(.settings) })
+                                 openSettings: { model.tabs.show(.settings) },
+                                 settings: model.settings, statements: model.statements)
                 }
             }
             Tab(LedgerTab.activity.title, systemImage: LedgerTab.activity.systemImage, value: .activity) {

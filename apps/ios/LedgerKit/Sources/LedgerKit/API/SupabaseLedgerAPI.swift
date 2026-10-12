@@ -35,6 +35,15 @@ public final class SupabaseLedgerAPI: LedgerAPI, @unchecked Sendable {
         }
     }
 
+    public func memberCount(profileCode: String) async throws -> Int {
+        // Selecting one column keeps members' emails off the wire.
+        struct Row: Decodable { let pending: Bool }
+        return try await read([Row].self) {
+            try await client.rpc("list_profile_members", params: ["p_profile_code": AnyJSON.string(profileCode)])
+                .select("pending").execute()
+        }.count
+    }
+
     // MARK: Analytics
 
     public func overview(profileCode: String, month: CalendarDay?) async throws -> Overview {

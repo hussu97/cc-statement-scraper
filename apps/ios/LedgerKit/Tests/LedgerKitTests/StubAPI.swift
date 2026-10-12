@@ -123,6 +123,13 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
     var stubMemberships: [ProfileMembership] = []
     func memberships() async throws -> [ProfileMembership] { stubMemberships }
     func createProfile(key: String, name: String) async throws -> String { "prf_x" }
+    /// `list_profile_members`' row count; nil throws (a non-member, offline).
+    var memberCountValue: Int? = 1
+    func memberCount(profileCode: String) async throws -> Int {
+        count("memberCount")
+        guard let memberCountValue else { throw LedgerAPIError.network("-1009") }
+        return memberCountValue
+    }
 
     // MARK: Screens (paging, months, refresh fan-out)
 
