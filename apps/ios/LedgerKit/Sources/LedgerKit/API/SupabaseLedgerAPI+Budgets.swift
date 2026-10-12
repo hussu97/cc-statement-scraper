@@ -3,17 +3,9 @@ import Supabase
 
 /// `public.budgets`, written the way the web writes it (apps/web/src/data/budgets.ts):
 /// owners only (RLS `budgets_owner_write`), the amount as a decimal string.
+/// Budgets are read through `budget_status` (with `p_include_inactive`), never
+/// from the table: which one counts is the server's call (WEB-28i).
 extension SupabaseLedgerAPI {
-    public func budgets(profileCode: String) async throws -> [Budget] {
-        try await read([Budget].self) {
-            try await client.from("budgets")
-                .select("budget_code,account_code,category_code,amount_aed,effective_from,effective_to")
-                .eq("profile_code", value: profileCode)
-                .order("effective_from", ascending: false)
-                .execute()
-        }
-    }
-
     public func saveBudget(profileCode: String, draft: BudgetDraft) async throws {
         var row: [String: AnyJSON] = [
             "account_code": draft.accountCode.map(AnyJSON.string) ?? .null,

@@ -92,7 +92,7 @@ public struct ParkedMessage: Sendable, Hashable, Identifiable {
     public let receivedAt: Date
     public let preview: String
     public let reason: String
-    public let profileCode: String
+    public let profileCode: String?
 
     public init(_ entry: OutboxEntry) {
         id = entry.id

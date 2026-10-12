@@ -27,11 +27,8 @@ public struct WalletIntake: Sendable {
         case .failure(let problem):
             outcome = .refused(code: problem.rawValue, message: problem.userMessage)
         case .success(let payment):
-            if let destination {
-                outcome = await SMSIntake.deliver(.wallet(payment), to: destination, outbox: outbox)
-            } else {
-                outcome = .noProfile
-            }
+            // No ledger yet: saved without one, like an SMS, and sent once one is known (IOS-12r).
+            outcome = await SMSIntake.deliver(.wallet(payment), to: destination, outbox: outbox)
         }
         let passName = (try? checked.get())?.passName ?? ""
         let dialog = Self.dialog(outcome, ledger: destination?.name, card: passName)
@@ -47,8 +44,8 @@ public struct WalletIntake: Sendable {
         switch outcome {
         case .delivered(status: "unknown_card"):
             return "Logged \(to), but no card is named “\(card)”. Open Ledger → Settings → Card names and give the card that name."
-        case .noProfile:
-            return "Not logged: Ledger has no ledger set for SMS and payments. Open Ledger → Settings and sign in or choose “SMS go to”."
+        case .queued(.noLedger):
+            return "Saved on this phone, but no ledger is set for SMS and payments. Open Ledger, sign in and choose “SMS go to” to send it."
         case .failed:
             return "Couldn't save the payment on this phone."
         default:

@@ -34,38 +34,48 @@ public actor Outbox {
     let api: any SMSIngestAPI
     let backoff: Backoff
     let now: @Sendable () -> Date
+    /// The "SMS go to" ledger at flush time: entries saved without one are
+    /// adopted by it before anything is sent.
+    let pendingTarget: @Sendable () -> String?
     /// One flush at a time in this process: a second caller's flush runs after
     /// the current one (so its newly queued message is included, and no entry
     /// is sent twice by overlapping flushes).
     private var inFlight: Task<FlushReport, Never>?
 
+    /// An item older than this that hasn't reached the server shows outside
+    /// Settings too (the Settings badge and the Overview strip).
+    public static let staleAfter: TimeInterval = 3600
+
     public init(fileURL: URL, api: any SMSIngestAPI, backoff: Backoff = Backoff(),
-                now: @escaping @Sendable () -> Date = { Date() }) {
+                now: @escaping @Sendable () -> Date = { Date() },
+                pendingTarget: @escaping @Sendable () -> String? = { nil }) {
         self.fileURL = fileURL
         self.api = api
         self.backoff = backoff
         self.now = now
+        self.pendingTarget = pendingTarget
     }
 
     public static func defaultURL(container: URL) -> URL {
         container.appendingPathComponent("sms-outbox.json")
     }
 
-    public func enqueue(_ payload: SMSPayload, profileCode: String) throws {
+    /// `profileCode` nil (here and below): no ledger is known yet; the entry waits for one.
+    public func enqueue(_ payload: SMSPayload, profileCode: String?) throws {
         try enqueue(items: [.sms(payload)], profileCode: profileCode)
     }
 
     /// One coordinated write for many messages. Already-queued ids are skipped.
-    public func enqueue(_ payloads: [SMSPayload], profileCode: String) throws {
+    public func enqueue(_ payloads: [SMSPayload], profileCode: String?) throws {
         try enqueue(items: payloads.map(OutboxItem.sms), profileCode: profileCode)
     }
 
-    public func enqueue(_ payment: WalletPayment, profileCode: String) throws {
+    public func enqueue(_ payment: WalletPayment, profileCode: String?) throws {
         try enqueue(items: [.wallet(payment)], profileCode: profileCode)
     }
 
     /// One coordinated write for many items of any kind. Already-queued ids are skipped.
-    public func enqueue(items: [OutboxItem], profileCode: String) throws {
+    public func enqueue(items: [OutboxItem], profileCode: String?) throws {
         let at = now()
         try mutate { entries in
             var known = Set(entries.map(\.id))
@@ -86,16 +96,39 @@ public actor Outbox {
 
     public func status() -> OutboxStatus {
         let all = (try? OutboxFile.read(fileURL)) ?? []
-        let pending = all.filter { !$0.isParked }
+        let pending = all.filter { !$0.isParked && !$0.awaitsLedger }
+        let at = now()
+        let stale = all.filter { at.timeIntervalSince($0.enqueuedAt) >= Self.staleAfter }
         return OutboxStatus(
             pending: pending.count,
-            parked: all.count - pending.count,
+            parked: all.filter(\.isParked).count,
             oldest: pending.map(\.enqueuedAt).min(),
             nextAttemptAt: pending.map(\.nextAttemptAt).min(),
-            lastError: pending.compactMap(\.lastError).last)
+            lastError: pending.compactMap(\.lastError).last,
+            awaitingLedger: all.filter(\.awaitsLedger).count,
+            stale: stale.count,
+            stalePayments: stale.filter { $0.kind == .wallet }.count)
     }
 
+    /// Every entry, sent or not: sign-out after the user confirmed (the items
+    /// would otherwise be sent under whoever signs in next).
     public func removeAll() throws { try mutate { $0.removeAll() } }
+
+    /// Files the entries saved without a ledger (SMS and card payments) in
+    /// `profileCode`, due now. Returns how many it adopted.
+    @discardableResult
+    public func adoptPending(profileCode: String) throws -> Int {
+        let at = now()
+        var adopted = 0
+        try mutate { entries in
+            for i in entries.indices where entries[i].awaitsLedger {
+                entries[i].profileCode = profileCode
+                entries[i].nextAttemptAt = at
+                adopted += 1
+            }
+        }
+        return adopted
+    }
 
     public func remove(_ ids: Set<UUID>) throws { try mutate { $0.removeAll { ids.contains($0.id) } } }
 

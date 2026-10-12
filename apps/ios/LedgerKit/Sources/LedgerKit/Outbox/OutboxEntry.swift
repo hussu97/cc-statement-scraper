@@ -39,8 +39,12 @@ public enum OutboxItem: Sendable, Hashable {
 public struct OutboxEntry: Sendable, Hashable, Identifiable {
     public var id: UUID { item.clientMsgId }
     public let item: OutboxItem
-    /// The ledger it goes to. Reassigned only when the user retries a parked entry.
-    public var profileCode: String
+    /// The ledger it goes to. Nil while no ledger is known (captured signed
+    /// out, or before an owned ledger exists): the entry waits and is never
+    /// sent until the "SMS go to" ledger is known, which then adopts it
+    /// (BACKLOG IOS-12r). Otherwise reassigned only when the user retries a
+    /// parked entry.
+    public var profileCode: String?
     public let enqueuedAt: Date
     public var attempts: Int
     public var nextAttemptAt: Date
@@ -53,7 +57,7 @@ public struct OutboxEntry: Sendable, Hashable, Identifiable {
     public var parkedAt: Date?
     public var parkedReason: String?
 
-    public init(item: OutboxItem, profileCode: String, enqueuedAt: Date, attempts: Int = 0, nextAttemptAt: Date,
+    public init(item: OutboxItem, profileCode: String?, enqueuedAt: Date, attempts: Int = 0, nextAttemptAt: Date,
                 lastError: String? = nil, parkedAt: Date? = nil, parkedReason: String? = nil) {
         self.item = item
         self.profileCode = profileCode
@@ -66,6 +70,8 @@ public struct OutboxEntry: Sendable, Hashable, Identifiable {
     }
 
     public var isParked: Bool { parkedAt != nil }
+    /// Waiting for a ledger to be known before it can be sent.
+    public var awaitsLedger: Bool { profileCode == nil && !isParked }
     public var kind: OutboxItem.Kind { item.kind }
 
     /// The SMS, when this entry is one.
@@ -94,7 +100,7 @@ extension OutboxEntry: Codable {
         case .sms: item = .sms(try c.decode(SMSPayload.self, forKey: .payload))
         case .wallet: item = .wallet(try c.decode(WalletPayment.self, forKey: .payload))
         }
-        profileCode = try c.decode(String.self, forKey: .profileCode)
+        profileCode = try c.decodeIfPresent(String.self, forKey: .profileCode)
         enqueuedAt = try c.decode(Date.self, forKey: .enqueuedAt)
         attempts = try c.decode(Int.self, forKey: .attempts)
         nextAttemptAt = try c.decode(Date.self, forKey: .nextAttemptAt)
@@ -110,7 +116,7 @@ extension OutboxEntry: Codable {
         case .sms(let p): try c.encode(p, forKey: .payload)
         case .wallet(let p): try c.encode(p, forKey: .payload)
         }
-        try c.encode(profileCode, forKey: .profileCode)
+        try c.encodeIfPresent(profileCode, forKey: .profileCode)
         try c.encode(enqueuedAt, forKey: .enqueuedAt)
         try c.encode(attempts, forKey: .attempts)
         try c.encode(nextAttemptAt, forKey: .nextAttemptAt)
