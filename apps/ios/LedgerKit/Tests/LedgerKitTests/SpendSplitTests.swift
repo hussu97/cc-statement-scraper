@@ -27,6 +27,11 @@ struct SpendSplitTests {
         #expect(bank.groups.map(bank.colorToken(for:)) == ["cat-1", "cat-2", "other"])
     }
 
+    @Test("the rank palette is every categorical token, cat-1 … cat-16 (WEB-17r)")
+    func rankPalette() {
+        #expect(ChartPalette.categoryTokens == (1...16).map { "cat-\($0)" })
+    }
+
     @Test("segments skip zero cells; every month stays on the axis")
     func segments() throws {
         let b = try SpendBreakdown.decode(try fixture("spend_breakdown_bank"))

@@ -13,6 +13,9 @@ const t = JSON.parse(readFileSync(resolve(dirname(fileURLToPath(import.meta.url)
 const THEMES = ["light", "dark"];
 const AA_TEXT = 4.5;
 const AA_GRAPHICS = 3;
+// WEB-17r: 16 hues, so the frequent spending categories each get their own and only rare
+// ones share (the seed assignment lives in SQL, private.seed_categories).
+const CATEGORY_COUNT = 16;
 
 function token(theme, name) {
   const v = name.startsWith("chart.") ? t.chart[theme][name.slice(6)] : t.color[theme][name];
@@ -56,21 +59,28 @@ for (const theme of THEMES) {
     assert.deepEqual(below(theme, pairs, AA_GRAPHICS), []);
   });
 
-  test(`${theme}: category colours are visibly distinct (ΔE2000 ≥ ${t.contrast.categoryMinDeltaE})`, () => {
+  test(`${theme}: the categorical palette is cat-1 … cat-${CATEGORY_COUNT}`, () => {
+    assert.deepEqual(cats(theme), Array.from({ length: CATEGORY_COUNT }, (_, i) => `cat-${i + 1}`));
+  });
+
+  test(`${theme}: category colours are visibly distinct (minimum pairwise ΔE2000 ≥ ${t.contrast.categoryMinDeltaE})`, () => {
     const list = cats(theme);
-    assert.equal(list.length, 12, "expected cat-1 … cat-12");
     const close = [];
+    let min = Infinity;
     for (let i = 0; i < list.length; i++)
       for (let j = i + 1; j < list.length; j++) {
         const d = deltaE2000(t.chart[theme][list[i]], t.chart[theme][list[j]]);
+        min = Math.min(min, d);
         if (d < t.contrast.categoryMinDeltaE) close.push(`${list[i]} / ${list[j]}: ${d.toFixed(1)}`);
       }
     assert.deepEqual(close, []);
+    assert.ok(min >= t.contrast.categoryMinDeltaE, `minimum ΔE2000 ${min.toFixed(1)}`);
   });
 
   test(`${theme}: "Other" (axis) and Uncategorised are not confused with a category`, () => {
     for (const c of cats(theme)) {
       assert.ok(deltaE2000(t.chart[theme][c], t.chart[theme].uncategorized) >= 10, `${c} vs uncategorized`);
+      assert.ok(deltaE2000(t.chart[theme][c], t.chart[theme].axis) >= 10, `${c} vs axis (Other)`);
     }
   });
 }

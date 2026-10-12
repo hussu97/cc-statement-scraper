@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  COLOR_TOKENS,
   cleanConditions,
   countRulesByCategory,
   describeMatch,
@@ -51,6 +52,12 @@ const rule = (extra: Partial<Rule> = {}): Rule => ({
   source: "user",
   updated_at: "",
   ...extra,
+});
+
+describe("COLOR_TOKENS", () => {
+  it("offers the whole categorical palette, cat-1 … cat-16 (WEB-17r)", () => {
+    expect(COLOR_TOKENS).toEqual(Array.from({ length: 16 }, (_, i) => `cat-${i + 1}`));
+  });
 });
 
 describe("ruleTab", () => {

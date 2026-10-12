@@ -3,7 +3,7 @@
 // only to size the bars.
 import { BREAKDOWN_OTHER_KEY, type BreakdownGroupBy, type SpendBreakdown } from "@/data/analytics";
 import { displayRatio, toAmount } from "@/lib/money";
-import { categoryVar, OTHER_FILL } from "./palette";
+import { categoryVar, OTHER_FILL, rankToken } from "./palette";
 
 export const SPLITS = ["none", "category", "bank", "merchant"] as const;
 export type SpendSplit = (typeof SPLITS)[number];
@@ -14,7 +14,6 @@ export function breakdownGroupFor(split: SpendSplit): BreakdownGroupBy {
   return split === "none" ? "category" : split;
 }
 
-const CAT_COUNT = 12;
 /** The "Total" series when the bars are not split. */
 export const TOTAL_KEY = "__total__";
 
@@ -56,7 +55,7 @@ export interface SplitChart {
 export function splitFill(groupBy: BreakdownGroupBy, key: string, colorToken: string | null, index: number): string {
   if (key === BREAKDOWN_OTHER_KEY) return OTHER_FILL;
   if (groupBy === "category") return categoryVar(colorToken);
-  return categoryVar(`cat-${(index % CAT_COUNT) + 1}`);
+  return categoryVar(rankToken(index));
 }
 
 /** Shape a spend_breakdown answer for a stacked monthly bar chart. */

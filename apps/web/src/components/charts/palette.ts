@@ -1,10 +1,13 @@
 // Pure colour helpers for charts. Every colour is a token CSS variable.
 
-import { categoryVar } from "@ledger/tokens/chart";
+import { categoryTokens, categoryVar } from "@ledger/tokens/chart";
 
 export { categoryVar };
 
-const CAT_COUNT = 12;
+/** The palette token for the series at `index` when the grouping has no colour of its own (rank order, cycling). */
+export function rankToken(index: number): string {
+  return categoryTokens[index % categoryTokens.length]!;
+}
 
 /**
  * Colour token for a chart series. Category series keep their own
@@ -14,7 +17,7 @@ const CAT_COUNT = 12;
 export function seriesToken(opts: { key: string; colorToken: string | null; index: number; byCategory: boolean }): string | null {
   if (opts.key === "__other") return null;
   if (opts.byCategory) return opts.colorToken;
-  return `cat-${(opts.index % CAT_COUNT) + 1}`;
+  return rankToken(opts.index);
 }
 
 /** Fill for the folded "Other" series: neutral, and distinct from Uncategorized. */
