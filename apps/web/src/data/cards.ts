@@ -1,6 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, type RpcReturn } from "@/lib/supabase";
-import { keys } from "./keys";
+import { keys, LEDGER_DOMAINS } from "./keys";
 import { useInfiniteList } from "./infinite";
 import { ApiError, fetchPage, functionError, must, mustList, toApiError, type Page } from "./api";
 import { pageRange } from "@/lib/pagination";
@@ -14,7 +14,7 @@ export function useAccounts(profileCode: string) {
       mustList(
         await supabase
           .from("accounts")
-          .select("*, cards(card_code, last4, holder_name, is_supplementary, status)")
+          .select("*, cards(card_code, last4, holder_name, is_supplementary, status, wallet_name)")
           .eq("profile_code", profileCode)
           .order("bank_code"),
       ),
@@ -40,6 +40,53 @@ export function useUpdateAccount(profileCode: string) {
           qc.invalidateQueries({ queryKey: ["p", profileCode, d] }),
         ),
       ),
+  });
+}
+
+/** cards.wallet_name's CHECK: trimmed, 1–64 characters. */
+export const WALLET_NAME_MAX = 64;
+
+/**
+ * A typed Wallet name as cards.wallet_name stores it: trimmed, internal
+ * whitespace collapsed to one space, at most 64 characters; empty clears it
+ * (null). Pure, unit-tested.
+ */
+export function normalizeWalletName(input: string | null | undefined): string | null {
+  const s = (input ?? "").replace(/\s+/g, " ").trim().slice(0, WALLET_NAME_MAX).trim();
+  return s || null;
+}
+
+/**
+ * Friendly text for a cards.wallet_name update error. 23505: the per-ledger,
+ * case-insensitive unique index (cards_wallet_name_uq). Pure, unit-tested.
+ */
+export function walletNameError(e: { code?: string; message?: string } | null | undefined): string {
+  if (e?.code === "23505") return "Another card already uses this Wallet name.";
+  if (e?.code === "23514") return `A Wallet name is 1 to ${WALLET_NAME_MAX} characters.`;
+  return e?.message || "Something went wrong.";
+}
+
+/**
+ * Set one card's Wallet name (the name the Wallet app shows for it; the payment
+ * shortcut sends it). Setting it re-processes waiting Wallet payments and
+ * resolves their unknown-card reviews server-side, so every ledger view is
+ * refreshed afterwards.
+ */
+export function useUpdateCard(profileCode: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (v: { cardCode: string; walletName: string | null }) => {
+      const res = await supabase
+        .from("cards")
+        .update({ wallet_name: normalizeWalletName(v.walletName) })
+        .eq("card_code", v.cardCode)
+        .eq("profile_code", profileCode)
+        .select("card_code");
+      if (res.error) throw new ApiError(walletNameError(res.error), { code: res.error.code, status: res.status });
+      // RLS hides a card this caller can't change: no error, no row.
+      if (!res.data?.length) throw new ApiError("You don't have permission to do that in this ledger.", { code: "42501" });
+    },
+    onSettled: () => Promise.all(LEDGER_DOMAINS.map((d) => qc.invalidateQueries({ queryKey: ["p", profileCode, d] }))),
   });
 }
 
