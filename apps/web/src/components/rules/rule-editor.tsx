@@ -62,8 +62,9 @@ export function RuleEditor({ initial, onClose }: { initial: RuleDraft; onClose: 
   const args = useDebouncedValue(live, 400);
   const preview = useRulePreview(profileCode, live ? args : null);
   // The server is the judge of a rule (Postgres ARE, not JS RegExp): while the
-  // preview rejects it, don't offer to save it (WEB-13).
-  const previewRejected = !!live && preview.isError;
+  // preview rejects it (22023), don't offer to save it (WEB-13). Any other
+  // preview failure (network, timeout) leaves Save to the server's own check.
+  const previewRejected = !!live && preview.isError && (preview.error as { code?: string }).code === "22023";
 
   const submit = () => {
     setTouched(true);
