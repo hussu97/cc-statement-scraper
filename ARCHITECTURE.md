@@ -604,9 +604,11 @@ Realtime publishes `transactions`, `sms_messages`, `documents`, `match_reviews`,
 
 - **Users** sign in with Supabase Auth: an emailed one-time code or a **passkey** (WebAuthn,
   relying party `cc-statement-scraper.vercel.app`; the iOS app shares it through Associated
-  Domains and the web host's `apple-app-site-association`). There are no passwords and no
-  sign-in links in emails (only the seeded local demo user has a password, used by the Debug
-  iOS `DevSignIn`). After a code sign-in, web and iOS offer to add a passkey; "Not now" is
+  Domains and the web host's `apple-app-site-association`). There are no sign-in links in
+  emails, and no passwords except two: the seeded local demo user (Debug iOS `DevSignIn`) and,
+  in production, the App Review demo account, which owns only the synthetic `app-review` ledger
+  (`private.create_review_demo`, PRODUCTION §7) and signs in through the iOS app's *Sign in with
+  a password*. After a code sign-in, web and iOS offer to add a passkey; "Not now" is
   remembered per user on the device, and Settings manages passkeys. Membership in `profile_members`
   grants access, and a profile can have several owners and viewers.
 - **No self sign-up.** Bank Ledger is private: `[auth] enable_signup = false` locally, and the same

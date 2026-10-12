@@ -18,6 +18,13 @@
 //   node apps/ios/scripts/testflight-distribute.mjs --timeout 40       # minutes to wait for processing
 //   node apps/ios/scripts/testflight-distribute.mjs --no-submit        # attach only, skip Beta App Review
 //   node apps/ios/scripts/testflight-distribute.mjs --what-to-test "…" # this build's "What to Test"
+//   node apps/ios/scripts/testflight-distribute.mjs --review-account   # only set the review sign-in
+//
+// --review-account writes the App Review demo account (Guideline 2.1(a): Beta App
+// Review needs a username and password) into Test Information → Beta App Review
+// Information, from $LEDGER_REVIEW_EMAIL / $LEDGER_REVIEW_PASSWORD, which
+// scripts/cutover/create-review-demo.sh leaves in the gitignored .env.review-demo.
+// The password is never printed.
 //
 // "What to Test" defaults to $LEDGER_WHAT_TO_TEST, else the subject of the last
 // commit that touched apps/ios outside build-number.json. Not set when neither exists.
@@ -47,6 +54,7 @@ const BUILD_NUMBER = opt('--build', null);
 const GROUP_NAME = opt('--group', DEFAULT_GROUP);
 const TIMEOUT_MIN = Number(opt('--timeout', '25'));
 const SUBMIT = !args.includes('--no-submit');
+const REVIEW_ACCOUNT = args.includes('--review-account');
 
 const fail = (msg) => {
   console.error(`error: ${msg}`);
@@ -158,14 +166,53 @@ async function setWhatToTest(build, text) {
   say(r.ok ? `What to Test: ${text.split('\n')[0]}` : `(What to Test not set: ${details(r)})`);
 }
 
-async function distribute() {
+async function findApp() {
   // `filter[bundleId]` is a prefix match: pick the exact id out of the results.
   const appRes = await asc('GET', '/v1/apps', { query: { 'filter[bundleId]': APP.bundleId, limit: 200 } });
   if (!appRes.ok) throw new Error(`could not read apps: ${details(appRes)}`);
   const record = appRes.json.data?.find((a) => a.attributes.bundleId === APP.bundleId);
   if (!record) throw new Error(`no app in App Store Connect with bundle id ${APP.bundleId}`);
+  say(`App: ${record.attributes.name} (${record.id})`);
+  return record;
+}
+
+// ── Beta App Review Information: the demo account ──────────────────────────
+const REVIEW_NOTES =
+  'Bank Ledger is a personal finance app for one household; it has no open sign-up. ' +
+  'On the sign-in screen tap "Sign in with a password" and use the demo account above. ' +
+  'It opens a demo ledger filled with synthetic cards, statements, SMS alerts and budgets, so every tab has data.';
+
+async function setReviewAccount() {
+  const email = process.env.LEDGER_REVIEW_EMAIL;
+  const password = process.env.LEDGER_REVIEW_PASSWORD;
+  if (!email || !password) {
+    fail('LEDGER_REVIEW_EMAIL and LEDGER_REVIEW_PASSWORD must be set (source .env.review-demo).');
+  }
+  const record = await findApp();
+  const detail = await asc('GET', `/v1/apps/${record.id}/betaAppReviewDetail`);
+  if (!detail.ok) throw new Error(`could not read Beta App Review Information: ${details(detail)}`);
+  const res = await asc('PATCH', `/v1/betaAppReviewDetails/${detail.json.data.id}`, {
+    body: {
+      data: {
+        type: 'betaAppReviewDetails',
+        id: detail.json.data.id,
+        attributes: {
+          demoAccountRequired: true,
+          demoAccountName: email,
+          demoAccountPassword: password,
+          notes: REVIEW_NOTES,
+        },
+      },
+    },
+  });
+  if (!res.ok) throw new Error(`could not save the review account: ${details(res)}`);
+  say(`Beta App Review sign-in set: ${email} (password not shown)`);
+  return `${APP.label}: review account saved`;
+}
+
+async function distribute() {
+  const record = await findApp();
   const appId = record.id;
-  say(`App: ${record.attributes.name} (${appId})`);
 
   // The group must already exist. Creating one here would mint a *new* public
   // link every time, silently invalidating the link people have been given.
@@ -235,6 +282,19 @@ async function distribute() {
     return `${APP.label}: build ${build.attributes.version} attached (${externalState})`;
   }
 
+  // Beta App Review can't get past sign-in without a demo account: builds 3 and 6
+  // were rejected under Guideline 2.1(a). Don't submit a build that will bounce.
+  const review = await asc('GET', `/v1/apps/${appId}/betaAppReviewDetail`);
+  const reviewInfo = review.json?.data?.attributes;
+  if (!review.ok || !reviewInfo?.demoAccountRequired || !reviewInfo?.demoAccountName) {
+    throw new Error(
+      `build ${build.attributes.version} attached but not submitted: Beta App Review Information has no demo account.\n` +
+        `  Run scripts/cutover/create-review-demo.sh, then\n` +
+        `  set -a; . .env.review-demo; set +a; node apps/ios/scripts/testflight-distribute.mjs --review-account\n` +
+        `  and re-run with --build ${build.attributes.version}.`
+    );
+  }
+
   const sub = await asc('POST', '/v1/betaAppReviewSubmissions', {
     body: {
       data: { type: 'betaAppReviewSubmissions', relationships: { build: { data: { type: 'builds', id: build.id } } } },
@@ -265,6 +325,10 @@ async function distribute() {
 if (!KEY_ID) fail('ASC_KEY_ID must be set (or exactly one AuthKey_*.p8 in ~/.appstoreconnect/private_keys).');
 
 try {
+  if (REVIEW_ACCOUNT) {
+    console.log(`\n✓ ${await setReviewAccount()}`);
+    process.exit(0);
+  }
   const summary = await distribute();
   console.log(`\n✓ ${summary}`);
   console.log(`\nDone. Testers in "${GROUP_NAME}" get this build once Apple approves it.`);

@@ -127,7 +127,9 @@ SIMCTL_CHILD_LEDGER_DEV_EMAIL=demo@ledger.local SIMCTL_CHILD_LEDGER_DEV_PASSWORD
 ```
 
 Sign-in is otherwise an email one-time code (local codes land in Inbucket,
-`http://127.0.0.1:54324`). Sign in with Apple is stubbed behind
+`http://127.0.0.1:54324`) or a passkey. *Sign in with a password* on the sign-in screen is for
+the App Review demo account (PRODUCTION §7 step 5); locally the seed users and an account made
+with `scripts/cutover/create-review-demo.sh --env-file <local env>` work there too. Sign in with Apple is stubbed behind
 `SessionStore.appleSignInEnabled`.
 
 ## SMS capture

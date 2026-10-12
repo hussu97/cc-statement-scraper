@@ -9,6 +9,7 @@
 
 | When | Lesson |
 |---|---|
+| 2026-10-12 | [Beta App Review must be able to sign in: keep a demo account](#beta-app-review-must-be-able-to-sign-in-keep-a-demo-account) |
 | 2026-10-12 | [A bank logo is the bank's own file, downloaded, never drawn](#a-bank-logo-is-the-banks-own-file-downloaded-never-drawn) |
 | 2026-10-12 | [A recursive search reads every file under its root, secret files included](#a-recursive-search-reads-every-file-under-its-root-secret-files-included) |
 | 2026-10-12 | [Closing a review is not fixing the data: a total counts what the review was about](#closing-a-review-is-not-fixing-the-data-a-total-counts-what-the-review-was-about) |
@@ -35,6 +36,17 @@
 | 2026-10-08 | [Tooling defaults that don't work here: `gh` account, Supabase MCP, `localhost`, pip](#tooling-defaults-that-dont-work-here-gh-account-supabase-mcp-localhost-pip) |
 
 ## Lessons
+
+### Beta App Review must be able to sign in: keep a demo account
+- **What went wrong**: TestFlight builds 3 and 6 were rejected under Guideline 2.1(a) ("unable
+  to successfully access all or part of the app"). Sign-in was email code or passkey only, the
+  review information said "contact us for a test sign-in", and Apple doesn't. Builds 7–12 then
+  sat unsubmitted behind build 6's review, so the rejection went unnoticed for days.
+- **Rule**: the app keeps a username + password path that the reviewer can use, and Beta App
+  Review Information always holds a working demo account whose ledger shows every screen with
+  data (synthetic, isolated: `private.create_review_demo`, PRODUCTION §7 step 5).
+- **Enforced by**: `testflight-distribute.mjs` refuses to submit a build while Beta App Review
+  Information has no demo account; pgTAP `32_review_demo`; `PasswordSignInTests`.
 
 ### A bank logo is the bank's own file, downloaded, never drawn
 - **What went wrong**: adding Wio, the logo was built by lifting the wordmark paths out of
