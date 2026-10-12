@@ -89,6 +89,15 @@ struct MoneyFormatTests {
         #expect(MoneyFormat.hero(Decimal(string: "1234567.89")!) == "1,234,568")
     }
 
+    @Test("the hero amount is spoken in dirhams, rounded like the hero")
+    func spokenDirhams() {
+        #expect(MoneyFormat.spokenDirhams(Decimal(string: "860.20")!) == "860 dirhams")
+        #expect(MoneyFormat.spokenDirhams(Decimal(string: "1234567.89")!) == "1,234,568 dirhams")
+        #expect(MoneyFormat.spokenDirhams(Decimal(string: "0.6")!) == "1 dirham")
+        #expect(MoneyFormat.spokenDirhams(0) == "0 dirhams")
+        #expect(MoneyFormat.spokenDirhams(Decimal(string: "-50")!) == "minus 50 dirhams")
+    }
+
     @Test("original currency uses ISO minor units")
     func otherCurrencies() {
         #expect(MoneyFormat.amount(Decimal(string: "12")!, currency: "usd") == "USD 12.00")

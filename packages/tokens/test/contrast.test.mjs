@@ -1,6 +1,7 @@
-// Contrast guard for the design tokens (WEB-06, WEB-29). Runs with `node --test`
+// Contrast guard for the design tokens (WEB-06, WEB-29, IOS-19r). Runs with `node --test`
 // (part of `pnpm --filter @ledger/tokens check`), so a token edit that drops a
 // declared pair below WCAG AA, or makes two category colours look alike, fails CI.
+// The web's pairs are contrast.text/graphics; the iPhone app's are contrast.ios.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -21,22 +22,38 @@ function token(theme, name) {
 
 const cats = (theme) => Object.keys(t.chart[theme]).filter((k) => /^cat-\d+$/.test(k));
 
-for (const theme of THEMES) {
-  test(`${theme}: every declared text pair meets AA ${AA_TEXT}:1`, () => {
-    const fails = t.contrast.text
-      .map(([fg, bg]) => [fg, bg, contrast(token(theme, fg), token(theme, bg))])
-      .filter(([, , r]) => r < AA_TEXT)
-      .map(([fg, bg, r]) => `${fg} on ${bg}: ${r.toFixed(2)}`);
-    assert.deepEqual(fails, []);
-  });
+const below = (theme, pairs, min) =>
+  pairs
+    .map(([fg, bg]) => [fg, bg, contrast(token(theme, fg), token(theme, bg))])
+    .filter(([, , r]) => r < min)
+    .map(([fg, bg, r]) => `${fg} on ${bg}: ${r.toFixed(2)}`);
 
-  test(`${theme}: graphics pairs and every category colour meet ${AA_GRAPHICS}:1 on bg and surface`, () => {
-    const pairs = [...t.contrast.graphics, ...cats(theme).flatMap((c) => [[`chart.${c}`, "surface"], [`chart.${c}`, "bg"]])];
-    const fails = pairs
-      .map(([fg, bg]) => [fg, bg, contrast(token(theme, fg), token(theme, bg))])
-      .filter(([, , r]) => r < AA_GRAPHICS)
-      .map(([fg, bg, r]) => `${fg} on ${bg}: ${r.toFixed(2)}`);
-    assert.deepEqual(fails, []);
+const PLATFORMS = { web: t.contrast, ios: t.contrast.ios };
+
+test("every platform declares text and graphics pairs", () => {
+  for (const [name, p] of Object.entries(PLATFORMS)) {
+    assert.ok(p?.text?.length && p?.graphics?.length, `${name} pairs missing`);
+  }
+});
+
+test("iOS text never uses subtle (glyphs and dividers only)", () => {
+  assert.deepEqual(t.contrast.ios.text.filter(([fg]) => fg === "subtle"), []);
+});
+
+for (const theme of THEMES) {
+  for (const [name, p] of Object.entries(PLATFORMS)) {
+    test(`${theme}: every declared ${name} text pair meets AA ${AA_TEXT}:1`, () => {
+      assert.deepEqual(below(theme, p.text, AA_TEXT), []);
+    });
+
+    test(`${theme}: every declared ${name} graphics pair meets ${AA_GRAPHICS}:1`, () => {
+      assert.deepEqual(below(theme, p.graphics, AA_GRAPHICS), []);
+    });
+  }
+
+  test(`${theme}: every category colour meets ${AA_GRAPHICS}:1 on bg and surface`, () => {
+    const pairs = cats(theme).flatMap((c) => [[`chart.${c}`, "surface"], [`chart.${c}`, "bg"]]);
+    assert.deepEqual(below(theme, pairs, AA_GRAPHICS), []);
   });
 
   test(`${theme}: category colours are visibly distinct (ΔE2000 ≥ ${t.contrast.categoryMinDeltaE})`, () => {
