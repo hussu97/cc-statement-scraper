@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
-import { ThemeToggle } from "@/components/shell";
+import { ThemeToggle } from "@/components/chrome";
 import { BrandLockup } from "@/components/brand/brand";
 import { useAuth } from "@/data/auth";
 import { PRIVACY_CONTACT_EMAIL, PRIVACY_LAST_UPDATED } from "@/lib/public-routes";

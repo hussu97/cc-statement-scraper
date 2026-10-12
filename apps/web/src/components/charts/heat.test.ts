@@ -83,7 +83,8 @@ describe("palette", () => {
   it("keeps category colours and cycles others by rank", () => {
     expect(seriesToken({ key: "cat_a", colorToken: "cat-7", index: 0, byCategory: true })).toBe("cat-7");
     expect(seriesToken({ key: "mer_a", colorToken: null, index: 0, byCategory: false })).toBe("cat-1");
-    expect(seriesToken({ key: "mer_b", colorToken: null, index: 12, byCategory: false })).toBe("cat-1");
+    expect(seriesToken({ key: "mer_b", colorToken: null, index: 12, byCategory: false })).toBe("cat-13");
+    expect(seriesToken({ key: "mer_c", colorToken: null, index: 16, byCategory: false })).toBe("cat-1");
     expect(seriesToken({ key: "__other", colorToken: null, index: 6, byCategory: false })).toBeNull();
     expect(seriesFill(null)).toBe("var(--chart-uncategorized)");
     expect(seriesFill(null, "__other")).toBe("var(--chart-axis)");

@@ -1,15 +1,21 @@
+// @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { init } = vi.hoisted(() => ({ init: vi.fn() }));
-vi.mock("@sentry/react", () => ({
-  init,
-  tanstackRouterBrowserTracingIntegration: () => ({ name: "router" }),
-  replayIntegration: () => ({ name: "replay" }),
+// The front door (WEB-11): the SDK chunk loads only for a deployed build, and only after
+// first paint; anything reported before then waits for it. The SDK chunk itself is mocked
+// here; its init options are tested in sentry-client.test.ts.
+const client = vi.hoisted(() => ({
+  startSentry: vi.fn(),
   captureException: vi.fn(),
+  captureReactException: vi.fn(),
   setTag: vi.fn(),
   setUser: vi.fn(),
 }));
-vi.mock("@supabase/sentry-js-integration", () => ({ supabaseIntegration: () => ({ name: "supabase" }) }));
+const loaded = vi.hoisted(() => ({ count: 0 }));
+vi.mock("./sentry-client", () => {
+  loaded.count += 1;
+  return client;
+});
 
 const DSN = "https://key@o1.ingest.sentry.io/1";
 
@@ -20,79 +26,113 @@ function deployed(environment = "production") {
   vi.stubEnv("DEV", false);
 }
 
+/** Let the idle callback, the dynamic import and the queued calls run. */
+const settle = () => new Promise((r) => setTimeout(r, 20));
+
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.resetModules();
-  init.mockReset();
+  loaded.count = 0;
+  for (const fn of Object.values(client)) fn.mockReset();
 });
 
 describe("initSentry", () => {
-  it("tags every event app=web for the shared ledger-apps project", async () => {
+  it("starts the SDK after first paint, not during the first render", async () => {
     deployed();
-    const { initSentry, SENTRY_APP_TAGS } = await import("./sentry");
-    initSentry({});
-    expect(init).toHaveBeenCalledTimes(1);
-    expect(init.mock.calls[0]?.[0]?.initialScope).toEqual({ tags: { app: "web" } });
-    expect(init.mock.calls[0]?.[0]?.environment).toBe("production");
-    expect(SENTRY_APP_TAGS).toEqual({ app: "web" });
+    const { initSentry } = await import("./sentry");
+    const router = { name: "router" };
+    initSentry(router);
+    expect(client.startSentry).not.toHaveBeenCalled();
+    await settle();
+    expect(client.startSentry).toHaveBeenCalledTimes(1);
+    expect(client.startSentry).toHaveBeenCalledWith(router);
   });
 
-  it("is a no-op without a DSN", async () => {
+  it("starts once, however often it is called", async () => {
     deployed();
-    vi.stubEnv("VITE_SENTRY_DSN", "");
     const { initSentry } = await import("./sentry");
     initSentry({});
-    expect(init).not.toHaveBeenCalled();
+    initSentry({});
+    await settle();
+    expect(client.startSentry).toHaveBeenCalledTimes(1);
   });
 
-  it.each(["", "local", "development", "test", " Local "])("never initialises for environment %j, even with a DSN", async (env) => {
+  it("is a no-op without a DSN: the SDK is never downloaded", async () => {
+    deployed();
+    vi.stubEnv("VITE_SENTRY_DSN", "");
+    const { initSentry, reportQueryError, setSentryUser } = await import("./sentry");
+    initSentry({});
+    reportQueryError(new Error("boom"), "query:x");
+    setSentryUser("u1");
+    await settle();
+    expect(loaded.count).toBe(0);
+    expect(client.startSentry).not.toHaveBeenCalled();
+  });
+
+  it.each(["", "local", "development", "test", " Local "])("never loads the SDK for environment %j, even with a DSN", async (env) => {
     deployed(env);
     const { initSentry, sentryEnabled } = await import("./sentry");
     initSentry({});
+    await settle();
     expect(sentryEnabled).toBe(false);
-    expect(init).not.toHaveBeenCalled();
+    expect(loaded.count).toBe(0);
   });
 
-  it("never initialises on the Vite dev server, even with a production environment", async () => {
+  it("never loads the SDK on the Vite dev server, even with a production environment", async () => {
     deployed("production");
     vi.stubEnv("DEV", true);
     const { initSentry } = await import("./sentry");
     initSentry({});
-    expect(init).not.toHaveBeenCalled();
+    await settle();
+    expect(loaded.count).toBe(0);
   });
 
-  it("scrubs streamed spans via beforeSendSpan and leaves the supabase integration's duplicate error capture off", async () => {
+  it("applies the user and profile set before the SDK loaded, then reports query errors", async () => {
     deployed();
-    const { initSentry } = await import("./sentry");
+    const { initSentry, reportQueryError, setSentryProfile, setSentryUser } = await import("./sentry");
     initSentry({});
-    const opts = init.mock.calls[0]?.[0];
-    // beforeSendTransaction is ignored under v11's default traceLifecycle "stream".
-    expect(opts.traceLifecycle ?? "stream").toBe("stream");
-    expect(opts.beforeSendTransaction).toBeUndefined();
-    expect(typeof opts.beforeSendSpan).toBe("function");
-    const span = opts.beforeSendSpan({
-      name: "GET http://127.0.0.1:54321/rest/v1/v_transactions?description=ilike.*cafe*",
-      span_id: "1",
-      trace_id: "2",
-      start_timestamp: 0,
-      status: "ok",
-      is_segment: false,
-      attributes: {
-        "db.table": "v_transactions",
-        "db.query": ["ilike(description, *cafe*)"],
-        "db.body": { notes: "dinner with a@b.co" },
-        "url.full": "http://127.0.0.1:5173/activity?q=cafe",
-        "http.request.header.authorization": "Bearer abc",
-      },
-    });
-    expect(span.name).toBe("GET http://127.0.0.1:54321/rest/v1/v_transactions?description=[Filtered]");
-    expect(span.attributes).toEqual({
-      "db.table": "v_transactions",
-      "db.query": "[Filtered]",
-      "db.body": "[Filtered]",
-      "url.full": "http://127.0.0.1:5173/activity?q=[Filtered]",
-      "http.request.header.authorization": "[Filtered]",
-    });
+    setSentryUser("user-1");
+    setSentryProfile("prf_01");
+    const error = Object.assign(new Error("db down"), { status: 503 });
+    reportQueryError(error, "query:cards");
+    await settle();
+    expect(client.setUser).toHaveBeenCalledWith({ id: "user-1" });
+    expect(client.setTag).toHaveBeenCalledWith("profile_code", "prf_01");
+    expect(client.captureException).toHaveBeenCalledWith(error, { tags: { scope: "query:cards" } });
+    expect(client.startSentry.mock.invocationCallOrder[0]).toBeLessThan(client.setUser.mock.invocationCallOrder[0]!);
+  });
+
+  it("skips expected client errors", async () => {
+    deployed();
+    const { initSentry, reportQueryError } = await import("./sentry");
+    initSentry({});
+    reportQueryError(Object.assign(new Error("nope"), { status: 403 }), "query:x");
+    reportQueryError(Object.assign(new Error("rls"), { code: "42501" }), "query:x");
+    reportQueryError(Object.assign(new Error("range"), { code: "PGRST103" }), "query:x");
+    await settle();
+    expect(client.captureException).not.toHaveBeenCalled();
+  });
+
+  it("sends uncaught errors from before the SDK loaded, after the user is set", async () => {
+    deployed();
+    const { initSentry, setSentryUser } = await import("./sentry");
+    initSentry({});
+    setSentryUser("user-1");
+    const early = new Error("early");
+    window.dispatchEvent(new ErrorEvent("error", { error: early, message: "early" }));
+    await settle();
+    expect(client.captureException).toHaveBeenCalledWith(early, { mechanism: { type: "onerror", handled: false } });
+    expect(client.setUser.mock.invocationCallOrder[0]).toBeLessThan(client.captureException.mock.invocationCallOrder[0]!);
+  });
+
+  it("reports what a React error boundary caught, with its component stack", async () => {
+    deployed();
+    const { initSentry, reportRenderError } = await import("./sentry");
+    initSentry({});
+    const error = new Error("render");
+    reportRenderError(error, "\n    at Overview");
+    await settle();
+    expect(client.captureReactException).toHaveBeenCalledWith(error, { componentStack: "\n    at Overview" });
   });
 });
 
