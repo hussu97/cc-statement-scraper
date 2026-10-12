@@ -1,5 +1,11 @@
 # Changelog
 
+## Emirates Islamic statements parse — 2026-10-12
+
+### Parser
+
+- **fix** EIB (`2026.10.8`): the parser was written for the Emirates NBD template without a real EIB sample, so the first real statement (an Amazon World Mastercard) failed with `UNSUPPORTED_LAYOUT`. `banks/eib.py` now reads EIB's "Statement of Card Account" layout: the period on two lines ("From:1st Sep 2026" / "To:30th Sep 2026"), "DD MON DD MON" rows with the post date first and the year taken from the period end (Dec/Jan safe), a foreign row's original amount and currency confirmed by the next "*(1 AED = EGP 13.34128)" line (stored as AED per unit), primary and supplementary card sections, and a merchant credit as a refund (only a row that says PAYMENT is a payment; EIB has no legacy data to keep). `totals.py` reads the opening balance and the "Card Limit ... Current Balance (AED)" row (closing balance, minimum due, due date, credit limit). The ENBD-template path stays as the fallback. Synthetic case `eib_card_account`; the real statement's 18 lines reconcile to its printed 61.79.
+
 ## The guard refuses recursive searches over secret files — 2026-10-12
 
 ### Docs
