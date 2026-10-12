@@ -145,6 +145,13 @@ export async function processSmsFallback(svc: Db, msg: QueueMessage): Promise<Jo
     await queueDelete(svc, SMS_QUEUE, msg.msg_id);
     return { queue: SMS_QUEUE, outcome: "skipped" };
   }
+  if (String(ctx.sender ?? "").trim() === "") {
+    // No sender (a hand-typed test, or a Shortcut not passing Sender): propose_sms_template
+    // anchors every template on the bank's senders, so nothing can be learned. The SMS stays
+    // 'unparsed' for the review UI; no LLM call, no DLQ, no alert.
+    await queueDelete(svc, SMS_QUEUE, msg.msg_id);
+    return { queue: SMS_QUEUE, outcome: "skipped", code: "NO_SENDER" };
+  }
   const banks = (ctx.banks ?? []) as { bank_code: string; senders: string[] }[];
   const bankCodes = banks.map((b) => b.bank_code);
   if (bankCodes.length === 0) {

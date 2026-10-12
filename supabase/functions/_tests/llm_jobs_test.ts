@@ -11,10 +11,12 @@ Deno.env.set("ANTHROPIC_API_KEY", "test-key-not-real");
 // The SDK keeps the fetch it finds when the client is created, so install one
 // dispatcher before the first call and swap its answer per test.
 let answer: unknown = {};
+let llmCalls = 0;
 const realFetch = globalThis.fetch;
 globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
   if (!url.startsWith("https://api.anthropic.com/")) return realFetch(input, init);
+  llmCalls++;
   return Promise.resolve(Response.json({
     id: "msg_test",
     type: "message",
@@ -74,6 +76,34 @@ Deno.test("llm_categorize asks about at most LLM_BATCH_MAX (100) merchants per c
     message: { profile_code: "prf_x", merchant_codes: codes },
   });
   assertEquals(db.rpcCalls("worker_llm_context")[0].p_merchant_codes, codes.slice(0, 100));
+});
+
+Deno.test("sms_fallback: a message without a sender is skipped before the LLM, not dead-lettered", async () => {
+  const callsBefore = llmCalls;
+  const db = new FakeDb({
+    rpcs: {
+      worker_sms_context: () => ({
+        data: {
+          parse_status: "unparsed",
+          sender: " ",
+          body: "synthetic",
+          banks: [{ bank_code: "ADCB", senders: ["ADCBAlert"] }],
+        },
+        error: null,
+      }),
+      queue_delete: () => ({ data: true, error: null }),
+    },
+  });
+  const r = await processSmsFallback(db.asDb(), {
+    msg_id: 6,
+    read_ct: 1,
+    message: { sms_code: "sms_01m4rcavc3xxeanad83pcwbwgc" },
+  });
+  assertEquals(r, { queue: "sms_fallback", outcome: "skipped", code: "NO_SENDER" });
+  assertEquals(db.rpcCalls("queue_delete").length, 1);
+  assertEquals(db.rpcCalls("queue_to_dlq").length, 0);
+  assertEquals(db.rpcCalls("propose_sms_template").length, 0);
+  assertEquals(llmCalls - callsBefore, 0, "no model call");
 });
 
 Deno.test("sms_fallback: propose_sms_template 22023 (sender not the bank's) dead-letters once", async () => {
