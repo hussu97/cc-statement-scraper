@@ -90,8 +90,7 @@ Dashboard → Authentication:
      user (`invited`), sends the Auth invite email itself (`auth.admin.inviteUserByEmail`;
      invites work with sign-ups disabled). `{"action": "resend"}` re-sends it to a pending
      member; neither sends to an address invited in the last 10 min. The web Settings → Members
-     screen still calls `add_profile_member` directly; its "Invite" / "Resend invite" buttons
-     calling `member-invite` are a follow-up (NEW-1r), so until then use the function (or step 2).
+     "Invite" and "Resend invite" buttons call it.
   2. Fallback: Dashboard → Authentication → Users → **Invite user** with that email.
   3. The invite email tells them to open Bank Ledger and sign in with that address; the code
      they request confirms the account (the *Confirm signup* template also sends a code). The

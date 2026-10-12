@@ -1,5 +1,31 @@
 # Changelog
 
+## Backlog batch 1: invites, OTP filter, budgets, rule editor, iOS contrast and VoiceOver — 2026-10-13
+
+### Backend (Supabase)
+
+- **change** `20261012210407_budget_status_is_effective`: `budget_status` returns `is_effective`, `effective_from` and `effective_to`, and takes `p_include_inactive` to also list replaced, upcoming and ended budgets. The two-argument call returns the same rows; a non-member now gets 42501 (WEB-28).
+- **fix** `20261012212011_sms_otp_filter`: `ingest_sms` drops OTPs with `private.sms_otp_pattern()`, the same string the iOS filter uses. It now also catches "Use 482913 as the code…", "authentication code", "secure code", 3-D Secure passwords, "never share this code" and Arabic رمز التحقق / كلمة المرور / رمز لمرة واحدة. A bare "one time" in Arabic or English is not enough (a one-off fee alert says it). Run read-only against every production SMS: 0 of 123 matched (IOS-10).
+
+### Web
+
+- **add** Settings → Members: "Invite" goes through the `member-invite` Edge Function, so someone without an account gets the invite email; "Resend invite" on pending members, with clear messages for the 10-minute cooldown, an already-active account and the rate limits (NEW-1r). Edge Function errors keep their code and status through one helper (`functionError`), which statement upload uses too.
+- **fix** Live updates no longer die when the profile switches A→B→A or under StrictMode: each Realtime subscription (ledger and document events) uses its own channel topic (WEB-09).
+- **fix** "Apply to every transaction from this merchant" clears after each pick and whenever the picker closes (WEB-12).
+- **fix** The rule editor shows the server's reason when it rejects a rule (22023) and disables Save until it is fixed; other preview failures offer Try again and leave Save to the server (WEB-13).
+- **fix** Budgets load from `budget_status` alone and split on the server's `is_effective` (no client copy of the selection rule); a failed load shows an error with a retry, not an empty state (WEB-28).
+- **change** The tokens contrast test also checks the iOS app's text and icon pairs (`tokens.json#contrast.ios`) in both themes; no colour changed (IOS-19r).
+
+### iOS
+
+- **fix** The SMS OTP filter is the server's pattern character for character, pinned by the shared fixture in pgTAP `38` and `SMSOTPParityTests`; every SMS template example is must-send (IOS-10).
+- **fix** Caption text (Top merchants ranks, "Category from …", the config hint) uses `muted`, not `subtle`; `PaletteUsageTests` enforces it (IOS-19r).
+- **fix** VoiceOver reads the Overview hero as one sentence, "October spend, posted so far, 860 dirhams" (IOS-20r).
+
+### Docs
+
+- **change** BACKLOG: batch 1 done (8 items), new rows WEB-13r and WEB-28i; 04/05 Fix status; PRODUCTION invite runbook; ARCHITECTURE SMS path; README Budgets; CLAUDE.md §13 guards for the palette and OTP parity tests.
+
 ## Archive instead of delete; a read-only super admin — 2026-10-12
 
 ### Backend (Supabase)

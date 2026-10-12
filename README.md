@@ -345,7 +345,7 @@ Used for the production Edge Function secrets and Vault entries, and for secret 
 | Overview | Month spend posted so far (server comparisons), pending SMS, categories, dues ("Was due …"), Needs attention (reviews, uncategorised) (Realtime refresh) |
 | Activity | Ledger list, filters, transaction detail and categorisation |
 | Insights | Swift Charts views over the same RPCs; the budgets card's "See all budgets" opens the Budgets tab |
-| Budgets | Month switcher, `budget_status` per budget (spent of limit, % used, pace; tone from the server's figures), budgets not active that month, create / edit / delete with an optional card (owners; viewers read only) |
+| Budgets | Month switcher, `budget_status` per budget (spent of limit, % used, pace; tone from the server's figures), budgets not active that month (the server's `is_effective`, with `p_include_inactive`), create / edit / delete with an optional card (owners; viewers read only) |
 | Settings → Statements | Statements, recon, uploads and their processing logs, PDF upload (document picker), PDFs waiting from the share sheet (the former Statements tab) |
 | Review | Open match reviews: link, keep as new, dismiss, register an unknown card (read-only for viewers) |
 | Settings | Cards & statements → Statements, "SMS go to" ledger, SMS capture guide (one "Card" automation, Last captured, Send test), "Not sent" outbox list (Retry / Delete), profile |
