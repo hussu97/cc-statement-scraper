@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { budgetAppliesTo, budgetTone, dateToMonthInput, monthInputToDate, monthPhase, validateBudget } from "./budgets";
+import { budgetAppliesTo, budgetTitle, budgetTone, dateToMonthInput, monthInputToDate, monthPhase, validateBudget } from "./budgets";
 
 describe("budgetTone", () => {
   const b = (share_used: number, projected_aed: number, budget_aed = 1000) => ({ share_used, projected_aed, budget_aed });
@@ -39,8 +39,19 @@ describe("month helpers", () => {
     expect(budgetAppliesTo({ effective_from: "2026-11-01", effective_to: null }, "2026-10-01")).toBe(false);
   });
   it("validates month-input dates through validateBudget", () => {
-    const base = { category_code: null, amount_aed: "1500", effective_to: null };
+    const base = { account_code: null, category_code: null, amount_aed: "1500", effective_to: null };
     expect(validateBudget({ ...base, effective_from: monthInputToDate("2026-10") })).toBeNull();
     expect(validateBudget({ ...base, effective_from: monthInputToDate("") })).toMatch(/first of a month/);
+  });
+});
+
+describe("budgetTitle", () => {
+  it("names every-card budgets by category", () => {
+    expect(budgetTitle({ category_code: null, category_name: "All spending", account_name: null })).toBe("All spending");
+    expect(budgetTitle({ category_code: "cat_1", category_name: "Dining", account_name: null })).toBe("Dining");
+  });
+  it("names card budgets by card, and by category on that card", () => {
+    expect(budgetTitle({ category_code: null, category_name: "All spending", account_name: "FAB · Platinum" })).toBe("FAB · Platinum");
+    expect(budgetTitle({ category_code: "cat_1", category_name: "Dining", account_name: "Daily card" })).toBe("Dining · Daily card");
   });
 });

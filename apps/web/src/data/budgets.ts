@@ -27,6 +27,8 @@ export function useBudgetStatus(profileCode: string, month: string) {
 
 export interface BudgetInput {
   budget_code?: string;
+  /** null: every card. */
+  account_code: string | null;
   category_code: string | null;
   amount_aed: string;
   effective_from: string;
@@ -46,6 +48,7 @@ export function useSaveBudget(profileCode: string) {
   return useMutation({
     mutationFn: async (b: BudgetInput) => {
       const row = {
+        account_code: b.account_code,
         category_code: b.category_code,
         // numeric column: PostgREST accepts the decimal string as-is.
         amount_aed: b.amount_aed.trim() as unknown as number,
@@ -102,6 +105,16 @@ export function monthInputToDate(v: string): string {
 /** "2026-10-01" → "2026-10" for an <input type="month">. */
 export function dateToMonthInput(d: string | null | undefined): string {
   return d && /^\d{4}-\d{2}/.test(d) ? d.slice(0, 7) : "";
+}
+
+/**
+ * A budget's name from its scope: the category (or "All spending"), and for a
+ * card budget the card too. `categoryName` is the server's ("All spending" when
+ * there is no category); `accountName` is null for an every-card budget.
+ */
+export function budgetTitle(b: { category_code: string | null; category_name: string; account_name: string | null }): string {
+  if (!b.account_name) return b.category_name;
+  return b.category_code === null ? b.account_name : `${b.category_name} · ${b.account_name}`;
 }
 
 /** Whether a budget row applies to a month (first-of-month date). */
