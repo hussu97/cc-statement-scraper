@@ -167,7 +167,7 @@ struct BankDirectoryTests {
     func chip() {
         #expect(BankDirectory.needsLightChip(bankCode: "ENBD", darkMode: true))
         #expect(BankDirectory.needsLightChip(bankCode: "fab", darkMode: true))
-        #expect(BankDirectory.needsLightChip(bankCode: "WIO", darkMode: true))  // purple wordmark
+        #expect(!BankDirectory.needsLightChip(bankCode: "WIO", darkMode: true))  // an opaque purple tile
         #expect(!BankDirectory.needsLightChip(bankCode: "ENBD", darkMode: false))
         #expect(!BankDirectory.needsLightChip(bankCode: "ADCB", darkMode: true))
         #expect(!BankDirectory.needsLightChip(bankCode: "MASHREQ", darkMode: true))

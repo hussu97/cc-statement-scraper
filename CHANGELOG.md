@@ -12,11 +12,12 @@
 
 ### iOS
 
-- **add** The Wio logo is bundled (`Bank/WIO`) and sits on the light chip in dark mode (purple wordmark).
+- **add** The Wio logo is bundled (`Bank/WIO`): wio.io's own square icon, an opaque purple tile, so it needs no light chip in dark mode.
 
 ### Docs
 
-- **add** `assets/banks/WIO.png` (from wio.io's SVG wordmark, recoloured `#5700ff`) and its README row; contract notes for WIO rows and totals; ARCHITECTURE `banks`, README, PRODUCTION logo upload loop.
+- **add** `assets/banks/WIO.png`: wio.io's published `logo.png`, unmodified (an earlier draft re-rendered the wordmark; a logo is downloaded, never drawn), and its README row; contract notes for WIO rows and totals; ARCHITECTURE `banks`, README, PRODUCTION logo upload loop.
+
 ## Emirates NBD dnata Platinum: foreign rows and Credit Shield charges — 2026-10-12
 
 ### Parser

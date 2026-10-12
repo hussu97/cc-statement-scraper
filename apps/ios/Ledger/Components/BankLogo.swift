@@ -24,7 +24,7 @@ struct BankLogo: View {
             .frame(width: onChip ? side * 0.78 : side, height: onChip ? side * 0.78 : side)
             .padding(onChip ? side * 0.11 : 0)
             .background {
-                // Dark marks (ENBD, SIB, EIB, FAB, WIO) sit on a light chip in dark mode.
+                // Dark marks (ENBD, SIB, EIB, FAB) sit on a light chip in dark mode.
                 if onChip { RoundedRectangle(cornerRadius: side * 0.22).fill(Color.white) }
             }
             .accessibilityElement()
