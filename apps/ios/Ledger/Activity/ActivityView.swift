@@ -86,7 +86,16 @@ struct ActivityView: View {
                             .onAppear { Task { await model.rowAppeared(txn) } }
                     }
                 } header: {
-                    Text(section.title).font(Typography.caption.weight(.semibold)).foregroundStyle(Palette.muted)
+                    // The day's net over every matching row, from the server (activity_day_totals).
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(section.title).font(Typography.caption.weight(.semibold))
+                        Spacer(minLength: 8)
+                        if let total = model.dayTotal(for: section.day) {
+                            Text(total.label).font(Typography.caption).monospacedDigit()
+                                .accessibilityLabel(total.accessibilityLabel)
+                        }
+                    }
+                    .foregroundStyle(Palette.muted)
                 }
             }
             PagingFooter(footer: model.footer, endMessage: model.endMessage) { await model.loadMore() }

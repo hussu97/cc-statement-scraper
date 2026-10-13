@@ -93,6 +93,10 @@ public final class SupabaseLedgerAPI: LedgerAPI, @unchecked Sendable {
         try await rpc("activity_summary", ActivitySummary.self, query.summaryParams(profileCode: profileCode))
     }
 
+    public func activityDayTotals(profileCode: String, query: ActivityQuery, days: [CalendarDay]) async throws -> [DayTotal] {
+        try await rpc("activity_day_totals", [DayTotal].self, query.dayTotalsParams(profileCode: profileCode, days: days))
+    }
+
     // MARK: Tables
 
     public func transactions(profileCode: String, query: ActivityQuery, page: PageRequest) async throws -> TransactionPage {

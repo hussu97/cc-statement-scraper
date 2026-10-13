@@ -1,4 +1,5 @@
 import Foundation
+import Supabase
 
 /// The Activity date filter's quick picks, as the web's `RANGE_PRESETS`
 /// (`apps/web/src/lib/dates.ts`) builds them from today's Dubai date.
@@ -150,6 +151,17 @@ extension ActivityQuery {
         let q = search.trimmingCharacters(in: .whitespacesAndNewlines)
         if !q.isEmpty { out["q"] = q }
         return out
+    }
+}
+
+extension ActivityQuery {
+    /// The `activity_day_totals` arguments: the web's filter object and the page's days.
+    public func dayTotalsParams(profileCode: String, days: [CalendarDay]) -> [String: AnyJSON] {
+        [
+            "p_profile_code": .string(profileCode),
+            "p_filter": .object(activityFilter.mapValues { .string($0) }),
+            "p_days": .array(days.map { .string($0.iso) }),
+        ]
     }
 }
 
