@@ -1,4 +1,14 @@
 #include "Base.xcconfig"
+
+// TestFlight builds. No local defaults and no Secrets.xcconfig: every backend value
+// comes from the gitignored Secrets.Release.xcconfig, so a key dropped from it is
+// empty, and the "Check release config" Run Script phase
+// (scripts/release-config-check.sh settings) fails the build instead of shipping a
+// local value. Never put SENTRY_AUTH_TOKEN in it: it would become a build setting
+// (scripts/sentry-release.sh reads it from the shell or the keychain).
+LEDGER_SUPABASE_URL =
+LEDGER_SUPABASE_PUBLISHABLE_KEY =
+LEDGER_SENTRY_DSN =
 LEDGER_ENVIRONMENT = production
-// Production Supabase/Sentry values for TestFlight builds (gitignored).
+
 #include? "Secrets.Release.xcconfig"
