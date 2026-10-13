@@ -1,5 +1,5 @@
 import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Outlet } from "@tanstack/react-router";
-import { parseActivitySearch } from "@/lib/activity-filters";
+import { activityRouteSearch } from "@/lib/activity-filters";
 import { parseInsightsSearch, parseRangeSearch, parseTabSearch } from "@/lib/search";
 import { parsePageSearch } from "@/lib/infinite";
 import { parseSignInSearch } from "@/lib/redirect";
@@ -53,7 +53,7 @@ const overviewRoute = createRoute({
 export const activityRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/activity",
-  validateSearch: parseActivitySearch,
+  validateSearch: activityRouteSearch,
   component: lazyRouteComponent(() => import("@/routes/activity"), "ActivityPage"),
 });
 
