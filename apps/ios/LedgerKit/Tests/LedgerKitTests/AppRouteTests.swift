@@ -79,7 +79,62 @@ struct AppLinkTests {
 
     @Test func roundTrip() {
         #expect(AppLink.review.url.absoluteString == "ledger://review")
+        #expect(AppLink.uncategorised.url.absoluteString == "ledger://uncategorised")
+        #expect(AppLink.addStatement.url.absoluteString == "ledger://add-statement")
         for link in AppLink.allCases { #expect(AppLink(url: link.url) == link) }
+        #expect(AppLink(url: URL(string: "LEDGER://Add-Statement/")!) == .addStatement)
+        #expect(AppLink(url: URL(string: "ledger://uncategorized")!) == nil)
+    }
+
+    @Test("ledger://uncategorised opens Activity on this month's uncategorised rows, once")
+    func uncategorised() {
+        let router = TabRouter(today: { CalendarDay(year: 2026, month: 10, day: 13) })
+        router.open(.uncategorised, ledgerOnScreen: true)
+        #expect(router.tab == .activity && !router.showingReview)
+        let preset = router.takeActivityPreset()
+        #expect(preset == .uncategorised(month: CalendarDay(year: 2026, month: 10, day: 1)))
+        #expect(preset?.uncategorizedOnly == true)
+        #expect(preset?.from == CalendarDay(year: 2026, month: 10, day: 1))
+        #expect(preset?.to == CalendarDay(year: 2026, month: 10, day: 31))
+        #expect(router.takeActivityPreset() == nil)
+    }
+
+    @Test("ledger://add-statement pushes Statements and opens the picker once, for an owner only")
+    func addStatement() {
+        let router = TabRouter()
+        router.open(.addStatement, ledgerOnScreen: true)
+        #expect(router.tab == .settings && router.settingsPath == [.statements])
+        #expect(router.takeAddStatementRequest(canUpload: true))
+        #expect(!router.takeAddStatementRequest(canUpload: true))
+
+        router.open(.addStatement, ledgerOnScreen: true)
+        #expect(!router.takeAddStatementRequest(canUpload: false))   // a viewer: Statements, no picker
+        #expect(!router.takeAddStatementRequest(canUpload: true))
+    }
+
+    @Test("a Control's intent hands its link to the app; one that came before the app's model waits")
+    func inbox() {
+        AppLinkInbox.detach()
+        defer { AppLinkInbox.detach() }
+        var opened: [AppLink] = []
+        AppLinkInbox.deliver(.addStatement)          // cold launch: the intent ran first
+        #expect(opened.isEmpty)
+        AppLinkInbox.attach { opened.append($0) }
+        #expect(opened == [.addStatement])
+        AppLinkInbox.deliver(.uncategorised)
+        #expect(opened == [.addStatement, .uncategorised])
+    }
+
+    @Test("a Control's link before a ledger is on screen waits through the ledger's reset")
+    func controlLinkWaits() {
+        let router = TabRouter()
+        router.open(.addStatement, ledgerOnScreen: false)
+        router.reset()
+        #expect(router.settingsPath.isEmpty && router.pendingLink == .addStatement)
+        router.ledgerShown()
+        #expect(router.tab == .settings && router.settingsPath == [.statements])
+        router.reset()   // another ledger: nothing pushed, nothing waiting
+        #expect(router.settingsPath.isEmpty && !router.takeAddStatementRequest(canUpload: true))
     }
 
     @Test("Shortcut results link to Review only for what a review resolves")

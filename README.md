@@ -355,6 +355,7 @@ Used for the production Edge Function secrets and Vault entries, and for secret 
 | **Month Spend**, **What's Due**, **Categorise Last Transaction** (App Intents + App Shortcuts) | Spoken answers for the ledger on screen (`overview`, offline from the widget snapshot); files the newest purchase under a chosen `CategoryEntity`; the device must be unlocked |
 | **Add to Bank Ledger** (share extension) | Sends shared PDFs to `statements-upload` |
 | Widgets (WidgetKit extension) | Month spend and pace, next due, utilisation on the Home and Lock Screen, from an App Group snapshot the app writes (no network); Lock Screen amounts hidden with Require Face ID |
+| Controls (same extension) | *Open Uncategorised* (`ledger://uncategorised`) and *Add Statement* (`ledger://add-statement`) for Control Center, the Lock Screen and the Action button |
 
 ## API surface
 

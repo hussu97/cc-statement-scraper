@@ -69,7 +69,7 @@ struct MainTabs: View {
             Tab(LedgerTab.activity.title, systemImage: LedgerTab.activity.systemImage, value: .activity) {
                 NavigationStack {
                     ActivityView(model: model.activity, months: model.month.range, profileCode: profileCode,
-                                 canEdit: model.profiles.canWrite)
+                                 canEdit: model.profiles.canWrite, tabs: model.tabs)
                 }
             }
             Tab(LedgerTab.insights.title, systemImage: LedgerTab.insights.systemImage, value: .insights) {
@@ -86,7 +86,8 @@ struct MainTabs: View {
             }
             // Statements (cycles, uploads, share-sheet queue, processing logs) live under Settings.
             Tab(LedgerTab.settings.title, systemImage: LedgerTab.settings.systemImage, value: .settings) {
-                NavigationStack { SettingsView(model: model, profileCode: profileCode) }
+                // ledger://add-statement pushes Statements here (TabRouter).
+                NavigationStack(path: $tabs.settingsPath) { SettingsView(model: model, profileCode: profileCode) }
             }
             // SMS that haven't reached the server for an hour (BACKLOG IOS-12r).
             .badge(model.settings.outboxStatus.badgeCount)

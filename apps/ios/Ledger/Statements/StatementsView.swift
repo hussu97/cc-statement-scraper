@@ -9,6 +9,8 @@ struct StatementsView: View {
     let model: StatementsModel
     let profileCode: String
     let canUpload: Bool
+    /// Asks for the picker on arrival (`ledger://add-statement`, the Control).
+    var tabs: TabRouter?
     @State private var picking = false
     @State private var logFor: DocumentRecord?
 
@@ -54,6 +56,12 @@ struct StatementsView: View {
         }
         .task { await model.loadIfNeeded(profileCode: profileCode) }
         .refreshable { await model.load(profileCode: profileCode) }
+        // ledger://add-statement: open the picker once the push has landed.
+        .task(id: tabs?.addStatementRequested) {
+            guard tabs?.takeAddStatementRequest(canUpload: canUpload) == true else { return }
+            try? await Task.sleep(for: .milliseconds(400))
+            picking = true
+        }
         .fileImporter(isPresented: $picking, allowedContentTypes: [.pdf], allowsMultipleSelection: true) { result in
             guard case .success(let urls) = result, !urls.isEmpty else { return }
             Task { await model.upload(urls: urls, profileCode: profileCode) }

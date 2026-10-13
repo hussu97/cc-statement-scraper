@@ -14,6 +14,9 @@ public enum LedgerWidgetKind {
     public static let spend = "ledger.widget.spend"
     public static let due = "ledger.widget.due"
     public static let utilisation = "ledger.widget.utilisation"
+    /// Controls (Control Center, Lock Screen, Action button; N-4).
+    public static let openUncategorised = "ledger.control.uncategorised"
+    public static let addStatement = "ledger.control.add-statement"
 }
 
 /// Whether a widget may draw money.
