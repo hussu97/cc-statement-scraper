@@ -44,6 +44,8 @@ public final class AppModel {
     public let banks: BankCatalog
     /// Insights' Monthly spend split (environment object).
     public let spendSplit: SpendSplitModel
+    /// Settings → Notifications and the SMS guide's permission (environment object).
+    public let notifications: NotificationSettingsModel
     /// The selected tab.
     public let tabs = TabRouter()
     /// The app-switcher cover and the optional Face ID lock (this device only).
@@ -60,6 +62,7 @@ public final class AppModel {
         banks = BankCatalog(api: services.api, supabaseURL: services.config.supabaseURL)
         spendSplit = SpendSplitModel(api: services.api)
         settings = SettingsModel(outbox: services.outbox, intake: services.smsIntake(), log: services.captureLog)
+        notifications = NotificationSettingsModel(preferences: services.notices)
     }
 
     public var overview: OverviewModel { screens.overview }

@@ -1,12 +1,15 @@
 import Foundation
 
-/// Deep links into the app: `ledger://review`. The scheme is registered in
+/// Deep links into the app: `ledger://review`, `ledger://settings`. The scheme is registered in
 /// `project.yml` (`CFBundleURLTypes`) and `AppModel.open(url:)` routes them
 /// (IOS-07r). The App Intents don't open them (they run in the background for
 /// every alert); a Shortcut can, with "Open URL ledger://review".
 public enum AppLink: String, Equatable, Sendable, CaseIterable {
     /// Overview → Needs attention → Review.
     case review
+    /// The Settings tab (outbox, Not sent, Card names): where a notification
+    /// about a capture that is waiting, or a card name, lands (N-1).
+    case settings
 
     public static let scheme = "ledger"
 

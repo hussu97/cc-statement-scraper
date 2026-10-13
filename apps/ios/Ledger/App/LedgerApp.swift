@@ -1,5 +1,6 @@
 import LedgerKit
 import SwiftUI
+import UserNotifications
 
 /// One `LedgerServices` per process. The App Intent runs in this process too
 /// (launched in the background when the app is not running), so it shares the
@@ -38,6 +39,9 @@ struct LedgerApp: App {
             BackgroundSync.register(services)
             _ = AppServices.connectivity
         }
+        // A tap on a notification opens its ledger:// link (N-1).
+        UNUserNotificationCenter.current().delegate = NotificationRouter.shared
+        NotificationRouter.shared.open = { url in _ = model?.open(url: url) }
     }
 
     var body: some Scene {
@@ -60,9 +64,19 @@ struct LedgerApp: App {
             // Synchronous: the cover is up in this turn, before the app-switcher snapshot.
             model.lock.phaseChanged(AppLock.Phase(phase))
             switch phase {
-            case .active: Task { await model.becameActive() }
+            case .active:
+                Task {
+                    await model.becameActive()
+                    await LocalNotifications.refreshOutbox(model.services)
+                    await LocalNotifications.refreshDueReminders(model.services,
+                                                                 profileCode: model.profiles.selected?.profileCode)
+                }
             // Leaving with messages waiting: let iOS send them later.
-            case .background: Task { await BackgroundSync.schedule(model.services) }
+            case .background:
+                Task {
+                    await BackgroundSync.schedule(model.services)
+                    await LocalNotifications.refreshOutbox(model.services)
+                }
             default: break
             }
         }

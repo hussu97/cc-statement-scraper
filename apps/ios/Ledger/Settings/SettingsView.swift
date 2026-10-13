@@ -98,7 +98,14 @@ struct SettingsView: View {
                 Text(SMSAutomationGuide.privacyNote)
             }
 
+            NotificationSettingsSection(services: model.services, profileCode: profileCode)
+
             Section {
+                NavigationLink {
+                    CardPaymentGuideView()
+                } label: {
+                    Label("Set up card payments", systemImage: "wave.3.right")
+                }
                 NavigationLink {
                     CardWalletNamesView(api: model.services.api, profileCode: profileCode, canEdit: profiles.canWrite)
                 } label: {
@@ -107,7 +114,7 @@ struct SettingsView: View {
             } header: {
                 Text("Card names for payment shortcut")
             } footer: {
-                Text("“Log Card Payment” files a tap-to-pay payment on the card with the name the shortcut passes. Payments go to the “SMS go to” ledger.")
+                Text("“Log Card Payment” files a tap-to-pay payment, in its own currency, on the card with the name the shortcut passes. Payments go to the “SMS go to” ledger.")
             }
 
             if !settings.parked.isEmpty {
