@@ -547,9 +547,8 @@ And **one definition of whether a statement was paid**: `public.v_statement_paym
 up to and including the account's next statement date (open-ended for the latest one); a payment
 on the statement date is already in that statement's balance. `payment_status` is `paid` (the
 closing balance is covered, or nothing was owed), `overdue` (the due date has passed, Asia/Dubai,
-and what was paid by the due date did not cover the minimum, or nothing was paid when there is no
-minimum; a later payment of the whole balance turns it `paid`), `part_paid` (something paid, not
-overdue), `unpaid` (nothing paid, due today or later) or null (no closing balance; history
+and the payments so far cover less than the minimum, or nothing was paid when there is no minimum;
+a minimum paid late makes it `part_paid`), `part_paid` (something paid, not overdue), `unpaid` (nothing paid, due today or later) or null (no closing balance; history
 extracts). `overview` (`accounts[].latest_statement`), `statement_cycles` and `statement_detail`
 carry both, `amount_paid` as a decimal string (UX-1r, WEB-36).
 

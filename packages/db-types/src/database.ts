@@ -2294,7 +2294,6 @@ export type Database = {
         Row: {
           account_code: string | null
           amount_paid: number | null
-          paid_by_due: number | null
           payment_status: string | null
           profile_code: string | null
           stmt_code: string | null

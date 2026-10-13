@@ -55,15 +55,23 @@ select pg_temp.stmt('a3', 'a', '2025-03-31', '2025-04-25', 500, 25);
 select pg_temp.txn('a', '2025-01-31', 999);   -- on a1's statement date: already inside a1's balance
 select pg_temp.txn('a', '2025-02-28', 1000);  -- on a2's statement date: still a1's window, late
 select pg_temp.txn('a', '2025-03-01', 40);    -- a2, before its due date
-select pg_temp.txn('a', '2025-03-25', 60);    -- a2, on its due date: 100 by the due date = the minimum
-select pg_temp.txn('a', '2025-04-26', 25);    -- a3, the day after its due date
+select pg_temp.txn('a', '2025-03-25', 60);    -- a2, on its due date: 100 = the minimum
+select pg_temp.txn('a', '2025-04-26', 25);    -- a3, its minimum, one day after its due date
 
 select is(pg_temp.paid('a1'), '1000.00', 'a payment on the statement date is not counted; one on the next statement date is');
 select is(pg_temp.status('a1'), 'paid', 'paid in full after the due date (before the next statement) is paid');
 select is(pg_temp.paid('a2'), '100.00', 'the window starts the day after the statement date (28 Feb → 1 Mar)');
 select is(pg_temp.status('a2'), 'part_paid', 'the minimum paid by the due date, inclusive, is part paid once the due date has passed');
+select is(pg_temp.status('a3'), 'part_paid', 'the minimum paid one day late is part paid, not overdue');
 select is(pg_temp.paid('a3'), '25.00', 'the latest cycle has an open window');
-select is(pg_temp.status('a3'), 'overdue', 'the minimum paid only after the due date is overdue');
+
+-- ── F: past due with less than the minimum paid so far ─────────────────────
+select pg_temp.acc('f', 'WIO');
+select pg_temp.stmt('f1', 'f', '2025-03-31', '2025-04-25', 500, 50);
+select pg_temp.txn('f', '2025-04-20', 15);    -- before the due date
+select pg_temp.txn('f', '2025-04-28', 20);    -- after it: 35 so far, under the minimum of 50
+select is(pg_temp.paid('f1'), '35.00', 'payments before and after the due date both count');
+select is(pg_temp.status('f1'), 'overdue', 'past due with less than the minimum paid so far: overdue');
 
 -- ── B: due today is not overdue; due yesterday is ─────────────────────────
 select pg_temp.acc('b', 'ADCB');
@@ -74,8 +82,10 @@ select is(pg_temp.paid('b1'), '0.00', 'amount_paid is 0.00, not null');
 select pg_temp.acc('c', 'ENBD');
 select pg_temp.stmt('c1', 'c', pg_temp.v('today')::date - 21, pg_temp.v('today')::date - 1, 800, 40);
 select is(pg_temp.status('c1'), 'overdue', 'nothing paid, due yesterday: overdue');
-select pg_temp.txn('c', pg_temp.v('today')::date, 800, 'payment', 'credit', 'pending');
-select is(pg_temp.status('c1'), 'paid', 'a pending payment of the whole balance, even late, is paid');
+select pg_temp.txn('c', pg_temp.v('today')::date, 40, 'payment', 'credit', 'pending');
+select is(pg_temp.status('c1'), 'part_paid', 'the minimum paid today, a day late (pending counts): part paid');
+select pg_temp.txn('c', pg_temp.v('today')::date, 760, 'payment', 'credit', 'pending');
+select is(pg_temp.status('c1'), 'paid', 'the rest of the balance paid late as well: paid');
 
 -- ── D: part paid before the due date; non-payments are ignored ─────────────
 select pg_temp.acc('d', 'SIB');
@@ -96,7 +106,7 @@ select pg_temp.stmt('e4', 'e', '2025-09-30', '2025-10-25', 300, 15, 'history_ext
 select pg_temp.txn('e', '2025-08-25', 10);
 select is(pg_temp.status('e1'), 'paid', 'a statement in credit owes nothing: paid');
 select is(pg_temp.status('e2'), null, 'no closing balance: unknown (null)');
-select is(pg_temp.status('e3'), 'part_paid', 'no minimum on the statement: any payment by the due date avoids overdue');
+select is(pg_temp.status('e3'), 'part_paid', 'no minimum on the statement: any payment avoids overdue');
 select is(pg_temp.status('e4'), null, 'a history extract has no payment status');
 
 select is((select count(*)::int from public.v_statement_payments
@@ -110,14 +120,16 @@ set local role authenticated;
 select results_eq(
   format($$ select payment_status, amount_paid from public.statement_cycles(%L, 100) where account_code = %L
             order by statement_date $$, pg_temp.v('p'), pg_temp.v('a')),
-  $$ values ('paid'::text, '1000.00'::text), ('part_paid', '100.00'), ('overdue', '25.00') $$,
+  $$ values ('paid'::text, '1000.00'::text), ('part_paid', '100.00'), ('part_paid', '25.00') $$,
   'statement_cycles carries payment_status and amount_paid as text');
 select is((select array[payment_status, amount_paid] from public.statement_cycles(pg_temp.v('p'), 100)
            where stmt_code = pg_temp.v('e4')), array[null, null]::text[], 'statement_cycles: null for a history extract');
 
 select pg_temp.set('ov', public.overview(pg_temp.v('p'))::text);
 select is((select x->'latest_statement'->>'payment_status' from jsonb_array_elements(pg_temp.v('ov')::jsonb->'accounts') x
-           where x->>'account_code' = pg_temp.v('a')), 'overdue', 'overview: the latest statement''s status');
+           where x->>'account_code' = pg_temp.v('a')), 'part_paid', 'overview: the latest statement''s status');
+select is((select x->'latest_statement'->>'payment_status' from jsonb_array_elements(pg_temp.v('ov')::jsonb->'accounts') x
+           where x->>'account_code' = pg_temp.v('f')), 'overdue', 'overview: overdue');
 select is((select x->'latest_statement'->'amount_paid' from jsonb_array_elements(pg_temp.v('ov')::jsonb->'accounts') x
            where x->>'account_code' = pg_temp.v('a')), '"25.00"'::jsonb, 'overview: amount_paid is a decimal string');
 select is((select x->'latest_statement'->>'payment_status' from jsonb_array_elements(pg_temp.v('ov')::jsonb->'accounts') x
