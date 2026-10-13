@@ -37,12 +37,39 @@ struct BudgetPresentationTests {
         let row = status("b", category: "cat_g", budget: "2000", spent: "1200.40", projected: "2480.55", share: "0.6002")
         #expect(row.usedLabel == "60% used")
         #expect(row.progressLabel == "AED 1,200 of AED 2,000")
-        #expect(row.paceLabel(.current) == "On pace for AED 2,481")
+        // A server without the pace fields: the projection alone, over pace when projected over.
+        #expect(row.paceLabel(.current) == "Projected AED 2,481")
         #expect(row.paceLabel(.past) == "Month closed")
         #expect(row.paceLabel(.future) == "Month not started")
         #expect(row.isOverPace(.current) && !row.isOverPace(.past))
-        #expect(row.meterAccessibilityLabel == "60% of Groceries budget used")
+        #expect(row.paceTick(.current) == nil)
+        #expect(row.meterAccessibilityLabel(.current) == "60% of Groceries budget used")
         #expect(status("b", share: "1.4").progressFraction == 1)
+    }
+
+    @Test("pace (PAR-7): the expected-by-today tick and over/under pace come from the server")
+    func pace() {
+        func paced(share: String?, expected: String?, over: String?) -> BudgetStatus {
+            BudgetStatus(budgetCode: "b", categoryCode: "cat_g", categoryName: "Groceries", colorToken: "cat-2",
+                         budgetAed: dec("2000"), spentAed: dec("1200"), projectedAed: dec("2480.55"),
+                         shareUsed: dec("0.6"), expectedShare: share.map(dec), expectedAed: expected.map(dec),
+                         overPaceAed: over.map(dec))
+        }
+        let over = paced(share: "0.4194", expected: "838.71", over: "361.29")
+        #expect(over.paceTick(.current) == 0.4194)
+        #expect(over.paceTick(.past) == nil && over.paceTick(.future) == nil)
+        #expect(over.overPaceLabel == "AED 361 over pace")
+        #expect(over.paceLabel(.current) == "AED 361 over pace · projected AED 2,481")
+        #expect(over.isOverPace(.current) && !over.isOverPace(.past))
+        #expect(over.meterAccessibilityLabel(.current)
+                == "60% of Groceries budget used; 42% expected by today (AED 839)")
+        #expect(over.meterAccessibilityLabel(.past) == "60% of Groceries budget used")
+        let under = paced(share: "0.9", expected: "1800", over: "-600")
+        #expect(under.overPaceLabel == "AED 600 under pace" && !under.isOverPace(.current))
+        #expect(paced(share: "0.6", expected: "1200", over: "0").overPaceLabel == "On pace")
+        // Clamped to the meter; nulls (a past month) draw nothing.
+        #expect(paced(share: "1.2", expected: nil, over: nil).paceTick(.current) == 1)
+        #expect(paced(share: nil, expected: nil, over: nil).overPaceLabel == nil)
     }
 
     @Test("month phase compares calendar months in Dubai")
@@ -275,7 +302,11 @@ struct CardBudgetTests {
         #expect(rows[1].accountName == "Daily card" && rows[1].bankCode == "FAB" && rows[1].isCardBudget)
         #expect(rows[0].spentAed == dec("1234.5") && !rows[0].isCardBudget)
         #expect(rows.map(\.title) == ["All spending", "Daily card", "Dining · ADCB · Lulu Platinum", "Groceries"])
-        #expect(rows[2].meterAccessibilityLabel == "114% of Dining · ADCB · Lulu Platinum budget used")
+        #expect(rows[2].meterAccessibilityLabel(.current) == "114% of Dining · ADCB · Lulu Platinum budget used")
+        // The current month's pace fields; null (and absent) ones decode as nil.
+        #expect(rows[0].expectedShare == dec("0.4194") && rows[0].expectedAed == dec("2096.77"))
+        #expect(rows[0].overPaceAed == dec("-862.27"))
+        #expect(rows[1].expectedShare == nil && rows[1].overPaceAed == nil && rows[3].expectedAed == nil)
     }
 
     @Test("title: category, card, or both (web budgetTitle parity)")

@@ -17,6 +17,7 @@
 		26CE0764CC4FB668F3E1A97E /* LedgerKit in Frameworks */ = {isa = PBXBuildFile; productRef = 2ADB8187FA6C42789DED29D6 /* LedgerKit */; };
 		27C14FFDDFA24615121DC5DD /* PaceRuleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 397B421B503B658A12151A59 /* PaceRuleView.swift */; };
 		297FCBB42BD82D0C4AE81898 /* LocalNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = F92DD0D24E75E49A36270126 /* LocalNotifications.swift */; };
+		2A6FD155F219CDE680E71710 /* BudgetMeter.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA428684AEA0926DDBEEF4D3 /* BudgetMeter.swift */; };
 		2AF7A777F5554D6851F1C5F0 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = A83ED65B612B753580BB01DD /* Components.swift */; };
 		2D01C44AA6A9577B970D58E4 /* CategoriseLastTransactionIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F58FDA6BA36479357BC7BFC5 /* CategoriseLastTransactionIntent.swift */; };
 		30CE0ADDA332BC7189C7B9FD /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 870A6ACF064D75EDCE634F89 /* SwiftUI.framework */; };
@@ -148,6 +149,7 @@
 		A31E4CF859EB1BA241A2C0C1 /* OverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewView.swift; sourceTree = "<group>"; };
 		A6E1C4BE6592CF67C5FED755 /* PrivacySection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacySection.swift; sourceTree = "<group>"; };
 		A83ED65B612B753580BB01DD /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
+		AA428684AEA0926DDBEEF4D3 /* BudgetMeter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetMeter.swift; sourceTree = "<group>"; };
 		AAE2E3AE75D7627DDCE82B40 /* ActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityView.swift; sourceTree = "<group>"; };
 		B58A729CF0C51D66DEEDC26A /* Ledger.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Ledger.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B5F7B5FD1E6564824D0B7AB5 /* PagingFooter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PagingFooter.swift; sourceTree = "<group>"; };
@@ -344,6 +346,7 @@
 			isa = PBXGroup;
 			children = (
 				0A25D970A4511B5531978319 /* BudgetEditSheet.swift */,
+				AA428684AEA0926DDBEEF4D3 /* BudgetMeter.swift */,
 				F1D9A6F55EDEC6633699FC7B /* BudgetsView.swift */,
 			);
 			path = Budgets;
@@ -749,6 +752,7 @@
 				738FC2230617C85A8AC57684 /* BackgroundSync.swift in Sources */,
 				9EBF5BFE77ECA1C47D23BAAC /* BankLogo.swift in Sources */,
 				79BE1EC1E38ED7C29DE21E5C /* BudgetEditSheet.swift in Sources */,
+				2A6FD155F219CDE680E71710 /* BudgetMeter.swift in Sources */,
 				9E4B8F2E603C9B778DFE42A7 /* BudgetsView.swift in Sources */,
 				B3574A53BC6AE73D8BE2009E /* CardPaymentGuideView.swift in Sources */,
 				932E3EB322602C54C4764F58 /* CardWalletNamesView.swift in Sources */,

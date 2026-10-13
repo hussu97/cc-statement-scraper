@@ -167,8 +167,7 @@ private struct BudgetsCard: View {
                         Spacer()
                         Text(budget.progressLabel).font(Typography.rowMeta).monospacedDigit()
                     }
-                    ProgressView(value: budget.progressFraction).tint(budget.tone(isCurrentMonth: isCurrentMonth).color)
-                        .accessibilityLabel(budget.meterAccessibilityLabel)
+                    BudgetMeter(row: budget, phase: isCurrentMonth ? .current : .past)
                 }
             }
             Button(action: seeAll) {
