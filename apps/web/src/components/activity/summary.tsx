@@ -1,6 +1,6 @@
 import type { ActivitySummary } from "@/data/transactions";
 import { formatDateSpan } from "@/lib/dates";
-import { formatCount, formatMoney } from "@/lib/money";
+import { formatCount, formatTotal } from "@/lib/money";
 import { cn } from "@/lib/cn";
 import { Badge, Skeleton } from "@/components/ui/display";
 import { Tooltip } from "@/components/ui/primitives";
@@ -45,7 +45,7 @@ export function ActivitySummaryStrip({
         <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-1">
           <span aria-hidden>·</span>
           <span>
-            <span className="tabular font-medium text-ink">{formatMoney(data.net_aed)}</span> net
+            <span className="tabular font-medium text-ink">{formatTotal(data.net_aed)}</span> net
           </span>
           {data.has_estimate && (
             <Tooltip content="Some AED amounts use an estimated exchange rate and may move when statements arrive.">

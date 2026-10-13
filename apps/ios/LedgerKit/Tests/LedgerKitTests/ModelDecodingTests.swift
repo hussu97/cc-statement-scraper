@@ -11,7 +11,7 @@ struct ModelDecodingTests {
         #expect(MoneyFormat.plain(o.spend) == "1234567.89")
         #expect(o.topCategories[0].amount == Decimal(string: "812.45")!)
         #expect(o.topCategories[1].amount == Decimal(string: "0.3")!)
-        #expect(o.topCategories[1].displayName == "Uncategorized")
+        #expect(o.topCategories[1].displayName == "Uncategorised")
         #expect(o.accounts[0].creditLimit == Decimal(string: "30000")!)
         #expect(o.accounts[0].cardsLabel == "•1234, •5678")
         #expect(o.accounts[0].latestStatement?.dueDate?.iso == "2026-10-20")

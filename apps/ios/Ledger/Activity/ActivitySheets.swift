@@ -164,7 +164,7 @@ struct ActivityFilterSheet: View {
                     Text("All cards").tag(String?.none)
                     ForEach(meta?.accounts ?? []) { Text($0.title).tag(Optional($0.accountCode)) }
                 }
-                Toggle("Uncategorized only", isOn: $query.uncategorizedOnly).tint(Palette.accent)
+                Toggle("Uncategorised only", isOn: $query.uncategorizedOnly).tint(Palette.accent)
                 if !query.uncategorizedOnly {
                     Picker("Category", selection: $query.categoryCode) {
                         Text("All categories").tag(String?.none)

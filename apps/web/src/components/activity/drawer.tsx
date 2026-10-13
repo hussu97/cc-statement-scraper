@@ -8,6 +8,8 @@ import {
   ROLE_LABEL,
   evidenceBadge,
   evidenceTime,
+  isNoteDirty,
+  noteToSave,
   useEvidence,
   useRelatedTransactions,
   useSetCategory,
@@ -216,7 +218,7 @@ function DrawerBody({ t, meta }: { t: TxnRow; meta: FilterMeta | undefined }) {
         <div className="flex flex-col gap-1.5">
           <label htmlFor="notes" className="text-[13px] text-ink">Notes</label>
           <Textarea id="notes" value={notes} disabled={!isOwner} onChange={(e) => setNotes(e.target.value)} placeholder="Add a note for yourself" maxLength={1000} />
-          {isOwner && notes !== (t.notes ?? "") && (
+          {isOwner && isNoteDirty(notes, t.notes) && (
             <div className="flex justify-end gap-2">
               <Button size="sm" variant="ghost" onClick={() => setNotes(t.notes ?? "")}>Cancel</Button>
               <Button
@@ -225,7 +227,7 @@ function DrawerBody({ t, meta }: { t: TxnRow; meta: FilterMeta | undefined }) {
                 loading={update.isPending}
                 onClick={() =>
                   update.mutate(
-                    { txnCode: t.txn_code!, patch: { notes: notes.trim() || null } },
+                    { txnCode: t.txn_code!, patch: { notes: noteToSave(notes) } },
                     {
                       onSuccess: () => toast({ title: "Note saved", tone: "positive" }),
                       onError: (e) => toast({ title: "Couldn't save the note", description: errorMessage(e), tone: "danger" }),

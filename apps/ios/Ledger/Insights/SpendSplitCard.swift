@@ -298,7 +298,7 @@ private struct GroupList: View {
     }
 }
 
-/// The chart palette, with Others in its own neutral (Uncategorized keeps the grey).
+/// The chart palette, with Others in its own neutral (Uncategorised keeps the grey).
 private func splitColor(_ token: String?) -> Color {
     token == SpendBreakdown.otherToken ? Palette.borderStrong : ChartPalette.color(for: token)
 }

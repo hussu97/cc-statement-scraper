@@ -333,6 +333,19 @@ export async function fetchActivityExport(profileCode: string, sel: TxnSelection
   return must(await supabase.rpc("activity_export", args)) as unknown as ExportRow[];
 }
 
+/** The note as saved: trimmed, and null when blank. */
+export function noteToSave(draft: string): string | null {
+  return draft.trim() || null;
+}
+
+/**
+ * Whether the notes box holds an unsaved change (WEB-49). It compares what would be saved, so
+ * padding around a saved note doesn't leave the box "dirty" after Save.
+ */
+export function isNoteDirty(draft: string, saved: string | null | undefined): boolean {
+  return noteToSave(draft) !== noteToSave(saved ?? "");
+}
+
 export function useUpdateTransaction(profileCode: string) {
   const invalidate = useInvalidateLedger(profileCode);
   return useMutation({

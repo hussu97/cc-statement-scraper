@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   budgetDraft,
+  budgetPace,
   budgetTitle,
   budgetTone,
   dateToMonthInput,
@@ -26,6 +27,26 @@ describe("budgetTone", () => {
   });
   it("is danger once over budget", () => {
     expect(budgetTone(b(1.01, 1500), true)).toBe("danger");
+  });
+});
+
+describe("budgetPace (WEB-38)", () => {
+  it("says how far over the expected-by-today share, from the server's figures", () => {
+    expect(budgetPace({ expected_share: "0.4194", expected_aed: "503.23", over_pace_aed: "120.40" })).toEqual({
+      tickAt: 0.4194,
+      label: "AED 120 over pace",
+      over: true,
+      expected: "AED 503 expected by today",
+    });
+  });
+  it("says under pace, and on pace at exactly zero", () => {
+    expect(budgetPace({ expected_share: 0.5, expected_aed: 600, over_pace_aed: "-80.00" })).toMatchObject({ label: "AED 80 under pace", over: false });
+    expect(budgetPace({ expected_share: 0.5, expected_aed: 600, over_pace_aed: "0.00" })).toMatchObject({ label: "On pace", over: false });
+    expect(budgetPace({ expected_share: 0.5, expected_aed: 600, over_pace_aed: "0.40" })).toMatchObject({ label: "AED 0.40 over pace", over: true });
+  });
+  it("has nothing to say outside the current month, or from an older server", () => {
+    expect(budgetPace({ expected_share: null, expected_aed: null, over_pace_aed: null })).toEqual({ tickAt: null, label: null, over: false, expected: null });
+    expect(budgetPace({})).toEqual({ tickAt: null, label: null, over: false, expected: null });
   });
 });
 

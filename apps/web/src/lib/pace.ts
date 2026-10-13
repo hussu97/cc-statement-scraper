@@ -1,7 +1,7 @@
 // Display geometry for the overview "pace rule": where each server-provided
 // amount sits on a shared horizontal scale, and the labels around it. Display
 // only — no money maths: every amount is a server field (CLAUDE.md §2.2).
-import { formatMoney, toAmount, type MoneyInput } from "./money";
+import { formatTotal, toAmount, type MoneyInput } from "./money";
 import { formatDate, type ISODate } from "./dates";
 
 export interface PaceMark {
@@ -87,5 +87,5 @@ export function pacePins(o: PaceSource, dayLabel: string): PacePin[] {
 /** "Projected AED 12,346 by 31 Oct" from the server's projected_month_end; null without one. */
 export function projectionLabel(projected: MoneyInput, lastDay: ISODate): string | null {
   if (toAmount(projected) === null) return null;
-  return `Projected ${formatMoney(projected, { whole: true })} by ${formatDate(lastDay, "short")}`;
+  return `Projected ${formatTotal(projected)} by ${formatDate(lastDay, "short")}`;
 }

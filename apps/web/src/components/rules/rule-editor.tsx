@@ -317,7 +317,7 @@ function RulePreview({
     body = <p className="text-[13px] text-muted">Checking your transactions…</p>;
   } else {
     const p = preview.data;
-    const matched = p.matched >= 1000 ? "1,000+" : formatCount(p.matched);
+    const matched = formatCount(p.matched);
     body = (
       <>
         <p className="text-sm text-ink">

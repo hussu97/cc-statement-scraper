@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { activitySummaryArgs, applyActivityFilters, evidenceBadge, groupByDay, sortEvidence, type EvidenceItem, type FilterBuilder } from "./transactions";
+import { activitySummaryArgs, applyActivityFilters, evidenceBadge, groupByDay, isNoteDirty, noteToSave, sortEvidence, type EvidenceItem, type FilterBuilder } from "./transactions";
 import { channelTopic, invalidationKeys } from "./realtime";
 import { keys, LEDGER_DOMAINS } from "./keys";
 import { chooseActiveProfile, memberProfiles, profileKeyFromName, toProfileSummaries, type ProfileRow, type ProfileSummary } from "./profile";
 import { attachContexts, candidatesOf, contextOf, groupReviews, type Review, type ReviewContextRow } from "./reviews";
 import { checkUploadFiles } from "./cards";
 import { friendlyMessage } from "./api";
-import { sortInsights } from "./overview";
+import { pendingSummary, sortInsights } from "./overview";
 
 class FakeBuilder implements FilterBuilder<FakeBuilder> {
   calls: string[] = [];
@@ -218,5 +218,21 @@ describe("api + insights", () => {
   it("sorts insights by severity then recency", () => {
     const i = (severity: string, created_at: string) => ({ severity, created_at });
     expect(sortInsights([i("info", "2026-10-02"), i("alert", "2026-10-01"), i("info", "2026-10-03")]).map((x) => x.created_at)).toEqual(["2026-10-01", "2026-10-03", "2026-10-02"]);
+  });
+  it("saves a note trimmed, and a blank one as null", () => {
+    expect(noteToSave("  coffee with Sam \n")).toBe("coffee with Sam");
+    expect(noteToSave("   ")).toBeNull();
+  });
+  it("compares the note as it would be saved, so padding doesn't leave it dirty (WEB-49)", () => {
+    expect(isNoteDirty("  coffee  ", "coffee")).toBe(false);
+    expect(isNoteDirty("  ", null)).toBe(false);
+    expect(isNoteDirty("", undefined)).toBe(false);
+    expect(isNoteDirty("coffee!", "coffee")).toBe(true);
+    expect(isNoteDirty("", "coffee")).toBe(true);
+  });
+  it("sums up pending SMS in one line from the server's count and amount (WEB-35)", () => {
+    expect(pendingSummary(31, "3082.40")).toBe("31 pending · AED 3,082");
+    expect(pendingSummary(1200, "15000.00")).toBe("1,200 pending · AED 15,000");
+    expect(pendingSummary(0, "0")).toBeNull();
   });
 });

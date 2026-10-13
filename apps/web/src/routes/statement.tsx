@@ -7,7 +7,7 @@ import { useFilterMeta } from "@/data/overview";
 import { dueInDays, isStatementCode, useStatementDetail, utilisationOf, utilisationTone, type StatementDetail } from "@/data/statements";
 import { useBanks } from "@/data/banks";
 import { formatDate, todayDubai } from "@/lib/dates";
-import { formatMoney, formatPercent } from "@/lib/money";
+import { formatPercent, formatTotal } from "@/lib/money";
 import { reconBadge, reconChecks, reconNote } from "@/lib/recon";
 import { cn } from "@/lib/cn";
 import { Badge, Card, Meter, Skeleton } from "@/components/ui/display";
@@ -161,12 +161,12 @@ function Summary({ data }: { data: StatementDetail }) {
   return (
     <section aria-label="Statement summary">
       <dl className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
-        <Tile label="Opening balance">{formatMoney(s.opening_balance)}</Tile>
-        <Tile label="Total debits" sub={`${data.debits.count} ${data.debits.count === 1 ? "line" : "lines"}`}>{formatMoney(s.total_debits)}</Tile>
+        <Tile label="Opening balance">{formatTotal(s.opening_balance)}</Tile>
+        <Tile label="Total debits" sub={`${data.debits.count} ${data.debits.count === 1 ? "line" : "lines"}`}>{formatTotal(s.total_debits)}</Tile>
         <Tile label="Total credits" sub={`${data.credits.count} ${data.credits.count === 1 ? "line" : "lines"}`}>
-          <span className="text-positive">{formatMoney(s.total_credits, { signed: true })}</span>
+          <span className="text-positive">{formatTotal(s.total_credits, { signed: true })}</span>
         </Tile>
-        <Tile label="Closing balance">{formatMoney(s.closing_balance)}</Tile>
+        <Tile label="Closing balance">{formatTotal(s.closing_balance)}</Tile>
         <Tile
           label="Minimum due"
           sub={
@@ -180,9 +180,9 @@ function Summary({ data }: { data: StatementDetail }) {
             )
           }
         >
-          {formatMoney(s.min_due)}
+          {formatTotal(s.min_due)}
         </Tile>
-        <Tile label="Utilisation" sub={s.credit_limit ? `of ${formatMoney(s.credit_limit, { whole: true })}` : "No credit limit"}>
+        <Tile label="Utilisation" sub={s.credit_limit ? `of ${formatTotal(s.credit_limit)}` : "No credit limit"}>
           <span>{util !== null ? formatPercent(util) : "—"}</span>
           {util !== null && <Meter value={util} tone={utilisationTone(util)} className="mt-1.5 h-1" label="Utilisation" />}
         </Tile>

@@ -20,7 +20,7 @@ export function seriesToken(opts: { key: string; colorToken: string | null; inde
   return rankToken(opts.index);
 }
 
-/** Fill for the folded "Other" series: neutral, and distinct from Uncategorized. */
+/** Fill for the folded "Other" series: neutral, and distinct from Uncategorised. */
 export const OTHER_FILL = "var(--chart-axis)";
 
 /** CSS fill for a series (null token → the neutral "uncategorized" swatch). */

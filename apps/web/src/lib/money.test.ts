@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { displayRatio, formatChange, formatMoney, formatPercent, formatTxnAmount, moneyParts, toAmount } from "./money";
+import { displayRatio, formatChange, formatMoney, formatPercent, formatTotal, formatTxnAmount, moneyParts, toAmount } from "./money";
 
 describe("money", () => {
   it("parses numbers and decimal strings", () => {
@@ -28,6 +28,27 @@ describe("money", () => {
     expect(formatMoney("1234.56", { bare: true })).toBe("1,234.56");
     expect(formatMoney("1234.56", { whole: true })).toBe("AED 1,235");
     expect(formatMoney("12500", { compact: true })).toBe("AED 12.5K");
+  });
+
+  it("one rule for decimals (WEB-34): transactions two, balances, limits and aggregates whole", () => {
+    expect(formatTxnAmount("1234.56", "debit")).toBe("AED 1,234.56");
+    expect(formatTotal("1234.56")).toBe("AED 1,235");
+    expect(formatTotal("-1234.56")).toBe("−AED 1,235");
+    expect(formatTotal("250.00", { signed: true })).toBe("+AED 250");
+    expect(formatTotal("1234.56", { bare: true })).toBe("1,235");
+    expect(formatTotal("0")).toBe("AED 0");
+    expect(formatTotal(null)).toBe("—");
+  });
+
+  it("keeps decimals when whole units would show a non-zero total as 0", () => {
+    expect(formatTotal("0.40")).toBe("AED 0.40");
+    expect(formatTotal("-0.40")).toBe("−AED 0.40");
+    expect(formatTotal("0.50")).toBe("AED 1");
+  });
+
+  it("compacts a total from a thousand up, and is whole below", () => {
+    expect(formatTotal("12500", { compact: true })).toBe("AED 12.5K");
+    expect(formatTotal("836.60", { compact: true })).toBe("AED 837");
   });
 
   it("shows credits with + and debits plain", () => {

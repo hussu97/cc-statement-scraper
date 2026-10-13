@@ -90,7 +90,7 @@ public struct Overview: Decodable, Sendable, Hashable {
         public let amount: Decimal
         public let txnCount: Int
 
-        public var displayName: String { name ?? "Uncategorized" }
+        public var displayName: String { name ?? "Uncategorised" }
     }
 
     public struct OverviewAccount: Decodable, Sendable, Hashable, Identifiable {

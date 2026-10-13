@@ -4,7 +4,7 @@ import { useDailySpend } from "@/data/analytics";
 import { useTransactions } from "@/data/transactions";
 import type { RpcReturn } from "@/lib/supabase";
 import { formatDate, todayDubai, WEEKDAYS_ISO, type DateRange } from "@/lib/dates";
-import { formatMoney, toAmount } from "@/lib/money";
+import { formatTotal, toAmount } from "@/lib/money";
 import { useElementWidth } from "@/lib/hooks";
 import { cn } from "@/lib/cn";
 import { Card, CardHeader } from "@/components/ui/display";
@@ -54,7 +54,7 @@ function CalendarHeatmap({ rows, from, to, profileCode }: { rows: Row[]; from: s
   const [day, setDay] = useState<Row | null>(null);
   const cell = (c: { date: string; datum: Row | null }) => ({
     background: heatFill(heatLevel(toAmount(c.datum?.amount) ?? 0, thresholds)),
-    label: `${formatDate(c.date, "day")}: ${formatMoney(c.datum?.amount ?? 0)}, ${countLabel(c.datum?.txn_count ?? 0, "transaction")}`,
+    label: `${formatDate(c.date, "day")}: ${formatTotal(c.datum?.amount ?? 0)}, ${countLabel(c.datum?.txn_count ?? 0, "transaction")}`,
   });
   const onCell = {
     hover: (d: Row | null) => d && setHovered(d),
@@ -77,7 +77,7 @@ function CalendarHeatmap({ rows, from, to, profileCode }: { rows: Row[]; from: s
             <>
               <span className="font-medium text-ink">{formatDate(hovered.day, "day")}</span>
               {" · "}
-              <span className="tabular">{formatMoney(hovered.amount)}</span>
+              <span className="tabular">{formatTotal(hovered.amount)}</span>
               {" · "}
               {countLabel(hovered.txn_count, "transaction")}
             </>
@@ -191,7 +191,7 @@ function DaySheet({ profileCode, day, onClose }: { profileCode: string; day: Row
       open={!!day}
       onOpenChange={(o) => !o && onClose()}
       title={day ? formatDate(day.day, "day") : "Day"}
-      description={day ? `${formatMoney(day.amount)} spent · ${countLabel(day.txn_count, "transaction")}` : undefined}
+      description={day ? `${formatTotal(day.amount)} spent · ${countLabel(day.txn_count, "transaction")}` : undefined}
     >
       {day && <DayTransactions profileCode={profileCode} day={day.day} />}
     </Sheet>

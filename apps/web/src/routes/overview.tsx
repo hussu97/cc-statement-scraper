@@ -1,11 +1,11 @@
 import { useMemo } from "react";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import { ArrowRight, ChevronLeft, ChevronRight, Inbox, Lightbulb, MessageSquareText, X } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight, Inbox, Lightbulb, X } from "lucide-react";
 import { useActiveProfile } from "@/data/profile";
-import { accountLabel, insightTarget, sortInsights, useDismissInsight, useInsights, useOverview, type Insight, type Overview, type OverviewAccount } from "@/data/overview";
-import { evidenceBadge, useTransactions } from "@/data/transactions";
-import { addMonths, daysBetween, formatDate, formatDateTime, formatMonth, formatRelative, formatTime, monthEnd, monthStart, todayDubai } from "@/lib/dates";
-import { formatChange, formatMoney, formatPercent, toAmount } from "@/lib/money";
+import { accountLabel, insightTarget, pendingSummary, sortInsights, useDismissInsight, useInsights, useOverview, type Insight, type Overview, type OverviewAccount } from "@/data/overview";
+import { evidenceBadge } from "@/data/transactions";
+import { addMonths, daysBetween, formatDate, formatDateTime, formatMonth, formatRelative, monthEnd, monthStart, todayDubai } from "@/lib/dates";
+import { formatChange, formatPercent, formatTotal, toAmount } from "@/lib/money";
 import { balanceAnchorNote, formatOutstanding, outstandingCaveat } from "@/lib/balances";
 import { pacePins, projectionLabel } from "@/lib/pace";
 import { cn } from "@/lib/cn";
@@ -18,7 +18,7 @@ import { CategoryRing } from "@/components/overview/category-ring";
 import { MonthlySpendCard } from "@/components/overview/monthly-spend";
 import { SetupChecklistCard } from "@/components/overview/setup-checklist";
 import { isEmptyLedger } from "@/lib/setup-checklist";
-import { BankLogo, CardRef } from "@/components/bank-logo";
+import { BankLogo } from "@/components/bank-logo";
 
 export function OverviewPage() {
   const { profile_code } = useActiveProfile();
@@ -67,7 +67,7 @@ export function OverviewPage() {
         )}
       </section>
 
-      {isCurrent && <PendingStrip profileCode={profile_code} overview={q.data} />}
+      {isCurrent && <PendingStrip overview={q.data} />}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
         <Card>
@@ -164,14 +164,14 @@ function Hero({ data, isCurrent, today }: { data: Overview; isCurrent: boolean; 
               "Nothing to compare with last month yet"
             )}
             <span className="mx-2 text-border-strong">/</span>
-            3-month average {formatMoney(data.spend_avg_3m, { whole: true })}
+            3-month average {formatTotal(data.spend_avg_3m)}
             {avgDelta && <span className="tabular"> ({avgDelta})</span>}
           </p>
         </div>
         <dl className="flex gap-8 text-sm">
           <div>
             <dt className="text-[12px] text-subtle">Payments in</dt>
-            <dd className="tabular mt-0.5 text-positive">{formatMoney(data.payments, { signed: true })}</dd>
+            <dd className="tabular mt-0.5 text-positive">{formatTotal(data.payments, { signed: true })}</dd>
           </div>
           {/* A <dl> holds only dt/dd groups (in a <div>), so the link sits in the dd and stretches over its group (WEB-52). */}
           <div className="relative">
@@ -212,63 +212,37 @@ function ordinal(n: number): string {
   return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
 }
 
-function PendingStrip({ profileCode, overview }: { profileCode: string; overview: Overview | undefined }) {
-  const q = useTransactions(profileCode, { status: "pending" });
-  const rows = q.data?.rows ?? [];
-  const now = q.dataUpdatedAt;
+/**
+ * Pending SMS charges in one line (WEB-35): the count and sum from the server, and when the last
+ * SMS arrived. The rows themselves are at the top of Recent activity with a Pending badge, so the
+ * two panels no longer list the same transactions.
+ */
+function PendingStrip({ overview }: { overview: Overview | undefined }) {
+  const summary = overview ? pendingSummary(overview.pending_count, overview.pending_amount) : null;
   return (
-    <section aria-labelledby="pending-title" className="rounded-lg border border-border bg-surface">
-      <header className="flex flex-wrap items-center justify-between gap-2 px-5 pt-4 pb-3">
-        <div className="flex items-center gap-2">
-          <span className="relative flex size-2">
-            <span className="absolute inline-flex size-full animate-ping rounded-pill bg-accent opacity-50" />
-            <span className="relative inline-flex size-2 rounded-pill bg-accent" />
-          </span>
-          <h2 id="pending-title" className="text-[15px] font-semibold text-ink">Pending from SMS</h2>
-          {overview && (
-            <span className="tabular text-[13px] text-muted">
-              {overview.pending_count} · {formatMoney(overview.pending_amount)}
-            </span>
-          )}
-        </div>
-        <span className="text-[12px] text-subtle">
-          {overview?.last_sms_at ? `Last SMS ${formatRelative(overview.last_sms_at)}` : "No SMS received yet"}
+    <section aria-labelledby="pending-title" className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg border border-border bg-surface px-5 py-3.5">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+        <span aria-hidden className="relative flex size-2">
+          <span className="absolute inline-flex size-full animate-ping rounded-pill bg-accent opacity-50" />
+          <span className="relative inline-flex size-2 rounded-pill bg-accent" />
         </span>
-      </header>
-      {q.isLoading ? (
-        <div className="flex gap-3 overflow-hidden px-5 pb-4">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-[76px] w-52 shrink-0 rounded-md" />)}</div>
-      ) : q.isError ? (
-        <ErrorState error={q.error} onRetry={() => void q.refetch()} className="py-6" />
-      ) : rows.length === 0 ? (
-        <p className="px-5 pb-4 text-[13px] text-muted">
-          Nothing pending. New card alerts land here within seconds. <Link to="/settings" search={{ tab: "sms" }} className="text-accent hover:underline">Set up SMS capture</Link>
-        </p>
-      ) : (
-        <ul className="flex snap-x gap-3 overflow-x-auto px-5 pb-4 [scrollbar-width:thin]">
-          {rows.slice(0, 20).map((t) => {
-            const fresh = t.created_at ? now - new Date(t.created_at).getTime() < 60_000 : false;
-            return (
-              <li key={t.txn_code} className="snap-start">
-                <Link
-                  to="/activity"
-                  search={{ txn: t.txn_code ?? undefined }}
-                  className={cn(
-                    "flex h-full w-52 flex-col gap-1 rounded-md border bg-bg px-3 py-2.5 transition-colors hover:border-border-strong",
-                    fresh ? "border-accent animate-rise" : "border-border",
-                  )}
-                >
-                  <span className="flex items-center justify-between text-[11px] text-subtle">
-                    <span className="inline-flex min-w-0 items-center gap-1"><MessageSquareText className="size-3 shrink-0" /><CardRef bankCode={t.bank_code} last4={t.card_last4} /></span>
-                    <span>{t.txn_at ? `${formatDate(t.txn_date, "short")} ${formatTime(t.txn_at)}` : formatDate(t.txn_date, "short")}</span>
-                  </span>
-                  <span className="truncate text-[13px] text-ink">{t.merchant_name ?? t.description}</span>
-                  <TxnAmount t={t} align="start" showOriginal={false} className="text-[15px] font-medium" />
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+        <h2 id="pending-title" className="text-[15px] font-semibold text-ink">Pending from SMS</h2>
+        {summary ? (
+          <Link to="/activity" search={{ status: "pending" }} className="tap tabular text-[13px] text-muted hover:text-accent hover:underline">
+            {summary}
+          </Link>
+        ) : (
+          overview && (
+            <span className="text-[13px] text-muted">
+              Nothing pending. New card alerts show in Recent activity within seconds.{" "}
+              <Link to="/settings" search={{ tab: "sms" }} className="text-accent hover:underline">Set up SMS capture</Link>
+            </span>
+          )
+        )}
+      </div>
+      <span className="text-[12px] text-subtle">
+        {overview?.last_sms_at ? `Last SMS ${formatRelative(overview.last_sms_at)}` : "No SMS received yet"}
+      </span>
     </section>
   );
 }
@@ -402,8 +376,8 @@ function AccountCard({ account: a }: { account: OverviewAccount }) {
           <dt className="text-subtle">Statement</dt>
           <dd className="tabular mt-0.5 text-sm text-ink">
             {st ? (
-              <Link to="/statements/$stmtCode" params={{ stmtCode: st.stmt_code }} className="tap hover:text-accent hover:underline" aria-label={`Statement of ${formatDate(st.statement_date)}: ${formatMoney(st.closing_balance, { whole: true })}`}>
-                {formatMoney(st.closing_balance, { whole: true })}
+              <Link to="/statements/$stmtCode" params={{ stmtCode: st.stmt_code }} className="tap hover:text-accent hover:underline" aria-label={`Statement of ${formatDate(st.statement_date)}: ${formatTotal(st.closing_balance)}`}>
+                {formatTotal(st.closing_balance)}
               </Link>
             ) : (
               "—"
@@ -413,11 +387,11 @@ function AccountCard({ account: a }: { account: OverviewAccount }) {
         <div>
           <dt className="text-subtle">Due</dt>
           <dd className="mt-0.5 text-sm text-ink">{st?.due_date ? formatDate(st.due_date, "short") : "—"}</dd>
-          {st?.min_due && <dd className="tabular text-[11px] text-subtle">min {formatMoney(st.min_due, { whole: true })}</dd>}
+          {st?.min_due && <dd className="tabular text-[11px] text-subtle">min {formatTotal(st.min_due)}</dd>}
         </div>
         <div>
           <dt className="text-subtle">Since statement</dt>
-          <dd className="tabular mt-0.5 text-sm text-ink">{formatMoney(a.unbilled_aed, { whole: true })}</dd>
+          <dd className="tabular mt-0.5 text-sm text-ink">{formatTotal(a.unbilled_aed)}</dd>
         </div>
       </dl>
       <div>
@@ -425,7 +399,7 @@ function AccountCard({ account: a }: { account: OverviewAccount }) {
           <span className="text-subtle">Utilisation at last statement</span>
           <span className="tabular text-ink-2">
             {util !== null ? formatPercent(util) : "—"}
-            {a.credit_limit && <span className="text-subtle"> of {formatMoney(a.credit_limit, { whole: true })}</span>}
+            {a.credit_limit && <span className="text-subtle"> of {formatTotal(a.credit_limit)}</span>}
           </span>
         </div>
         <Meter value={util} tone={util !== null && util > 0.7 ? "danger" : util !== null && util > 0.3 ? "warn" : "positive"} label="Utilisation" />
