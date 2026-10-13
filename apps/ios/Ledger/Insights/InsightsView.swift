@@ -61,7 +61,7 @@ private struct CategoriesCard: View {
             if categories.isEmpty {
                 Text("Nothing categorised yet.").font(Typography.rowMeta).foregroundStyle(Palette.muted)
             }
-            ForEach(categories.prefix(10)) { category in
+            ForEach(categories) { category in
                 NavigationLink {
                     CategoryDetailView(request: CategoryDrillDownRequest(target: CategoryTarget(category), from: from, to: to),
                                        profileCode: profileCode)
@@ -84,8 +84,14 @@ private struct CategoriesCard: View {
                 }
                 ProgressView(value: category.shareFraction)
                     .tint(ChartPalette.color(for: category.colorToken))
-                Text(category.detailLabel)
-                    .font(Typography.caption).foregroundStyle(Palette.muted)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(category.detailLabel)
+                        .font(Typography.caption).foregroundStyle(Palette.muted)
+                    Spacer(minLength: 4)
+                    // vs the previous period of the same length (server `change`), "New" without one.
+                    Chip(label: category.changeChip.label, tone: category.changeChip.tone)
+                        .accessibilityLabel(category.changeAccessibilityLabel)
+                }
             }
             Image(systemName: "chevron.right").font(.caption).foregroundStyle(Palette.subtle)
         }

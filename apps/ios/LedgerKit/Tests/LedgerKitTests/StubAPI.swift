@@ -174,7 +174,12 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         lock.withLock { seriesFilters.append(filter) }
         return seriesPoints
     }
-    func merchantLeaderboard(profileCode: String, from: CalendarDay, to: CalendarDay, limit: Int) async throws -> [MerchantSpend] { [] }
+    /// `p_limit` of each `merchant_leaderboard` call.
+    private(set) var merchantLimits: [Int] = []
+    func merchantLeaderboard(profileCode: String, from: CalendarDay, to: CalendarDay, limit: Int) async throws -> [MerchantSpend] {
+        lock.withLock { merchantLimits.append(limit) }
+        return []
+    }
     func statementCycles(profileCode: String, limit: Int) async throws -> [StatementCycle] {
         count("statementCycles")
         return []
