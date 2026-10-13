@@ -56,6 +56,8 @@ targets:
           - $(SRCROOT)/Ledger/Info.plist
         outputFiles:
           - $(DERIVED_FILE_DIR)/Info.Debug.plist
+        # Never echo the build environment: in an archive it holds the release config.
+        showEnvVars: false
     entitlements:
       path: Ledger/Ledger.entitlements
       properties:
@@ -129,6 +131,8 @@ targets:
           - $(SRCROOT)/ShareExtension/Info.plist
         outputFiles:
           - $(DERIVED_FILE_DIR)/Info.Debug.plist
+        # Never echo the build environment: in an archive it holds the release config.
+        showEnvVars: false
     entitlements:
       path: ShareExtension/LedgerShare.entitlements
       properties:

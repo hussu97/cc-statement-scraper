@@ -65,7 +65,7 @@ if [[ ! -f Config/Secrets.Release.xcconfig ]]; then
   echo "       the local Supabase. Copy Config/Secrets.example.xcconfig and fill in production values." >&2
   exit 1
 fi
-if grep -Eq '127\.0\.0\.1|localhost' Config/Secrets.Release.xcconfig; then
+if grep -vE '^[[:space:]]*//' Config/Secrets.Release.xcconfig | grep -Eq '127\.0\.0\.1|localhost'; then
   echo "error: Config/Secrets.Release.xcconfig points at a local Supabase." >&2
   exit 1
 fi
