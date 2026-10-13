@@ -1693,6 +1693,13 @@ export type Database = {
             referencedRelation: "statements"
             referencedColumns: ["profile_code", "stmt_code"]
           },
+          {
+            foreignKeyName: "statement_lines_stmt_fkey"
+            columns: ["profile_code", "stmt_code"]
+            isOneToOne: false
+            referencedRelation: "v_statement_payments"
+            referencedColumns: ["profile_code", "stmt_code"]
+          },
         ]
       }
       statement_recon: {
@@ -1730,6 +1737,13 @@ export type Database = {
             columns: ["profile_code", "stmt_code"]
             isOneToOne: false
             referencedRelation: "statements"
+            referencedColumns: ["profile_code", "stmt_code"]
+          },
+          {
+            foreignKeyName: "statement_recon_stmt_fkey"
+            columns: ["profile_code", "stmt_code"]
+            isOneToOne: false
+            referencedRelation: "v_statement_payments"
             referencedColumns: ["profile_code", "stmt_code"]
           },
         ]
@@ -1856,6 +1870,13 @@ export type Database = {
             columns: ["profile_code", "superseded_by"]
             isOneToOne: false
             referencedRelation: "statements"
+            referencedColumns: ["profile_code", "stmt_code"]
+          },
+          {
+            foreignKeyName: "statements_superseded_by_fkey"
+            columns: ["profile_code", "superseded_by"]
+            isOneToOne: false
+            referencedRelation: "v_statement_payments"
             referencedColumns: ["profile_code", "stmt_code"]
           },
         ]
@@ -2179,6 +2200,13 @@ export type Database = {
             referencedRelation: "statements"
             referencedColumns: ["profile_code", "stmt_code"]
           },
+          {
+            foreignKeyName: "transactions_stmt_fkey"
+            columns: ["profile_code", "stmt_code"]
+            isOneToOne: false
+            referencedRelation: "v_statement_payments"
+            referencedColumns: ["profile_code", "stmt_code"]
+          },
         ]
       }
     }
@@ -2255,6 +2283,39 @@ export type Database = {
           },
           {
             foreignKeyName: "transactions_profile_code_fkey"
+            columns: ["profile_code"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["profile_code"]
+          },
+        ]
+      }
+      v_statement_payments: {
+        Row: {
+          account_code: string | null
+          amount_paid: number | null
+          paid_by_due: number | null
+          payment_status: string | null
+          profile_code: string | null
+          stmt_code: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "statements_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "statements_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "v_account_balances"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "statements_profile_code_fkey"
             columns: ["profile_code"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -2387,6 +2448,13 @@ export type Database = {
             columns: ["profile_code", "stmt_code"]
             isOneToOne: false
             referencedRelation: "statements"
+            referencedColumns: ["profile_code", "stmt_code"]
+          },
+          {
+            foreignKeyName: "transactions_stmt_fkey"
+            columns: ["profile_code", "stmt_code"]
+            isOneToOne: false
+            referencedRelation: "v_statement_payments"
             referencedColumns: ["profile_code", "stmt_code"]
           },
         ]
@@ -2854,6 +2922,7 @@ export type Database = {
         Args: { p_limit?: number; p_profile_code: string }
         Returns: {
           account_code: string
+          amount_paid: string
           bank_code: string
           card_last4: string
           closing_balance: number
@@ -2866,6 +2935,7 @@ export type Database = {
           line_count: number
           logo_path: string
           min_due: number
+          payment_status: string
           period_end: string
           period_start: string
           recon_checks: Json
