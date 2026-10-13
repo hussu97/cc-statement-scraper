@@ -7,6 +7,7 @@ import { evidenceBadge } from "@/data/transactions";
 import { addMonths, daysBetween, formatDate, formatDateTime, formatMonth, formatRelative, monthEnd, monthStart, todayDubai } from "@/lib/dates";
 import { formatChange, formatPercent, formatTotal, toAmount } from "@/lib/money";
 import { balanceAnchorNote, formatOutstanding, outstandingCaveat } from "@/lib/balances";
+import { dueBadge, paidNote } from "@/lib/dues";
 import { pacePins, projectionLabel } from "@/lib/pace";
 import { cn } from "@/lib/cn";
 import { Card, CardHeader, Badge, Dot, Meter, Skeleton } from "@/components/ui/display";
@@ -358,6 +359,9 @@ function AccountCard({ account: a }: { account: OverviewAccount }) {
   const st = a.latest_statement;
   const today = todayDubai();
   const dueIn = st?.due_date ? daysBetween(today, st.due_date) : null;
+  // Paid / Part paid / Overdue come from the server (WEB-36); the countdown only from the date.
+  const due = st ? dueBadge(st.payment_status, dueIn) : null;
+  const paid = st ? paidNote(st.payment_status, st.amount_paid) : null;
   const util = toAmount(a.utilisation);
   return (
     <Card className="flex flex-col gap-4 p-5">
@@ -367,7 +371,7 @@ function AccountCard({ account: a }: { account: OverviewAccount }) {
           <p className="truncate text-sm font-medium text-ink">{accountLabel(a)}</p>
           <p className="text-[12px] text-subtle">{a.last4 ? a.last4.split(",").map((l) => `•${l}`).join("  ") : "No card yet"}</p>
         </div>
-        {dueIn !== null && dueIn >= 0 && dueIn <= 7 && <Badge tone={dueIn <= 2 ? "danger" : "warn"}>Due in {dueIn} d</Badge>}
+        {due && <Badge tone={due.tone}>{due.label}</Badge>}
       </div>
       <div>
         <p className="text-[12px] text-subtle">Owed now</p>
@@ -391,6 +395,7 @@ function AccountCard({ account: a }: { account: OverviewAccount }) {
           <dt className="text-subtle">Due</dt>
           <dd className="mt-0.5 text-sm text-ink">{st?.due_date ? formatDate(st.due_date, "short") : "—"}</dd>
           {st?.min_due && <dd className="tabular text-[11px] text-subtle">min {formatTotal(st.min_due)}</dd>}
+          {paid && <dd className="tabular text-[11px] text-subtle">{paid}</dd>}
         </div>
         <div>
           <dt className="text-subtle">Since statement</dt>

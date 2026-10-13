@@ -9,6 +9,7 @@ import { useBanks } from "@/data/banks";
 import { formatDate, todayDubai } from "@/lib/dates";
 import { formatMoney, formatPercent, formatTotal } from "@/lib/money";
 import { reconBadge, reconChecks, reconNote } from "@/lib/recon";
+import { dueBadge, paidNote } from "@/lib/dues";
 import { cn } from "@/lib/cn";
 import { Badge, Card, Meter, Skeleton } from "@/components/ui/display";
 import { Button } from "@/components/ui/button";
@@ -156,7 +157,9 @@ function Tile({ label, children, sub, className }: { label: string; children: Re
 function Summary({ data }: { data: StatementDetail }) {
   const s = data.statement;
   const util = utilisationOf(s);
-  const due = dueInDays(s.due_date, todayDubai());
+  // Paid / Part paid / Overdue come from the server (WEB-36); the countdown only from the date.
+  const dueState = dueBadge(s.payment_status, dueInDays(s.due_date, todayDubai()));
+  const paid = paidNote(s.payment_status, s.amount_paid);
   const badge = reconBadge(s.recon_status);
   return (
     <section aria-label="Statement summary">
@@ -173,7 +176,8 @@ function Summary({ data }: { data: StatementDetail }) {
             s.due_date ? (
               <span className="inline-flex flex-wrap items-center gap-1.5">
                 Due {formatDate(s.due_date, "short")}
-                {due !== null && due >= 0 && due <= 7 && <Badge tone={due <= 2 ? "danger" : "warn"}>in {due} d</Badge>}
+                {dueState && <Badge tone={dueState.tone}>{dueState.label}</Badge>}
+                {paid && <span className="tabular">{paid}</span>}
               </span>
             ) : (
               "No due date"
