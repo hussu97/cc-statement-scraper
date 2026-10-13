@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useRouter } from "@tanstack/react-router";
-import { NotebookPen, ReceiptText, X } from "lucide-react";
+import { NotebookPen, ReceiptText } from "lucide-react";
 import { activityRoute } from "@/router";
 import { listSearch, withFilter, type ActivitySearch } from "@/lib/activity-filters";
 import { DEFAULT_PAGE_SIZE, pageCount } from "@/lib/pagination";
@@ -10,7 +10,7 @@ import { formatDate, formatTime } from "@/lib/dates";
 import { cn } from "@/lib/cn";
 import { useActiveProfile } from "@/data/profile";
 import { useFilterMeta } from "@/data/overview";
-import { evidenceBadge, groupByDay, useBulkSetCategory, useInfiniteTransactions, useActivitySummary, useSetCategory, useTransactions, type TxnRow } from "@/data/transactions";
+import { evidenceBadge, groupByDay, useInfiniteTransactions, useActivitySummary, useSetCategory, useTransactions, type TxnRow, type TxnSelection } from "@/data/transactions";
 import { errorMessage } from "@/data/api";
 import { PageHeader, Card } from "@/components/ui/display";
 import { Checkbox } from "@/components/ui/primitives";
@@ -23,6 +23,7 @@ import { InfiniteFooter } from "@/components/infinite-footer";
 import { ActivityFilters } from "@/components/activity/filters";
 import { ActivitySummaryStrip } from "@/components/activity/summary";
 import { TransactionDrawer } from "@/components/activity/drawer";
+import { BulkBar } from "@/components/activity/bulk-bar";
 import { CardRef } from "@/components/bank-logo";
 import { transferPeer } from "@/lib/transfers";
 
@@ -52,10 +53,15 @@ export function ActivityPage() {
   }, [search.txn]);
   const toast = useToast();
   const setCat = useSetCategory(profile_code);
-  const bulk = useBulkSetCategory(profile_code);
+  // "Select all N matching": the selection is the filter, not the ticked rows (WEB-24).
+  const [allMatching, setAllMatching] = useState(false);
+  const clearSelection = () => {
+    setSelected(new Set());
+    setAllMatching(false);
+  };
 
   const go = (next: ActivitySearch) => {
-    setSelected(new Set());
+    clearSelection();
     void navigate({ search: next, replace: true });
   };
   const patch = (p: Partial<ActivitySearch>) => go(withFilter(search, p));
@@ -65,14 +71,26 @@ export function ActivityPage() {
   const outOfRange = !phone && !!q.data && (search.page ?? 1) > pageCount(q.data.total, size);
   const rows = useMemo(() => q.data?.rows ?? [], [q.data]);
   const groups = useMemo(() => groupByDay(rows), [rows]);
-  const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.txn_code!));
-  const toggle = (code: string) =>
-    setSelected((s) => {
-      const n = new Set(s);
-      if (n.has(code)) n.delete(code);
-      else n.add(code);
-      return n;
-    });
+  const isSelected = (code: string) => allMatching || selected.has(code);
+  const allSelected = rows.length > 0 && (allMatching || rows.every((r) => selected.has(r.txn_code!)));
+  const selectRows = () => {
+    setAllMatching(false);
+    setSelected(new Set(rows.map((r) => r.txn_code!)));
+  };
+  const toggle = (code: string) => {
+    // Unticking one row of "all matching" falls back to the loaded rows minus that one.
+    const base = allMatching ? new Set(rows.map((r) => r.txn_code!)) : selected;
+    setAllMatching(false);
+    const n = new Set(base);
+    if (n.has(code)) n.delete(code);
+    else n.add(code);
+    setSelected(n);
+  };
+  const selection = useMemo<TxnSelection | null>(
+    () => (allMatching ? { kind: "filter", search: list } : selected.size ? { kind: "codes", codes: [...selected] } : null),
+    [allMatching, list, selected],
+  );
+  const matchingTotal = q.data?.total ?? 0;
 
   return (
     <div>
@@ -80,7 +98,7 @@ export function ActivityPage() {
         title="Activity"
         description="Every card transaction from SMS alerts and statements, matched into one ledger."
         actions={
-          isOwner && rows.length > 0 ? (
+          rows.length > 0 ? (
             <Button
               size="sm"
               variant={selecting ? "primary" : "secondary"}
@@ -88,7 +106,7 @@ export function ActivityPage() {
               aria-pressed={selecting}
               onClick={() => {
                 setSelecting((s) => !s);
-                setSelected(new Set());
+                clearSelection();
               }}
             >
               {selecting ? "Done" : "Select"}
@@ -116,13 +134,11 @@ export function ActivityPage() {
           <div role="table" aria-label="Transactions">
             <div role="row" className="hidden grid-cols-[28px_minmax(0,1fr)_200px_120px_130px] items-center gap-3 rounded-t-lg border-b border-border px-4 py-2 text-[11px] font-medium tracking-wide text-subtle uppercase md:grid">
               <span role="columnheader">
-                {isOwner && (
-                  <Checkbox
-                    aria-label={phone ? "Select all loaded" : "Select all on this page"}
-                    checked={allSelected ? true : selected.size ? "indeterminate" : false}
-                    onCheckedChange={() => setSelected(allSelected ? new Set() : new Set(rows.map((r) => r.txn_code!)))}
-                  />
-                )}
+                <Checkbox
+                  aria-label={phone ? "Select all loaded" : "Select all on this page"}
+                  checked={allSelected ? true : selected.size ? "indeterminate" : false}
+                  onCheckedChange={() => (allSelected ? clearSelection() : selectRows())}
+                />
               </span>
               <span role="columnheader">Description</span>
               <span role="columnheader">Category</span>
@@ -138,9 +154,9 @@ export function ActivityPage() {
                   <TxnLine
                     key={t.txn_code}
                     t={t}
-                    selected={selected.has(t.txn_code!)}
+                    selected={isSelected(t.txn_code!)}
                     selecting={selecting}
-                    onToggle={isOwner ? () => toggle(t.txn_code!) : undefined}
+                    onToggle={() => toggle(t.txn_code!)}
                     onOpen={() => {
                       pushedDrawer.current = true;
                       void navigate({ search: { ...search, txn: t.txn_code! } });
@@ -185,44 +201,18 @@ export function ActivityPage() {
         />
       )}
 
-      {selected.size > 0 && (
-        // Sits above the phone tab bar and the home indicator.
-        <div className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 flex justify-center px-4 lg:bottom-6 lg:pl-60">
-          <div
-            role="region"
-            aria-label="Bulk actions"
-            className="flex max-w-full min-w-0 items-center gap-2 rounded-lg border border-border-strong bg-surface py-2 pr-2 pl-4 shadow-[0_16px_40px_-20px_var(--color-ink)] animate-rise sm:gap-3"
-          >
-            <span className="tabular shrink-0 text-sm text-ink">{selected.size} selected</span>
-            {!allSelected && (
-              <Button size="sm" variant="ghost" className="md:hidden" onClick={() => setSelected(new Set(rows.map((r) => r.txn_code!)))}>
-                All
-              </Button>
-            )}
-            <CategoryPicker
-              categories={meta.data?.categories ?? []}
-              value={null}
-              emptyLabel="Categorise…"
-              triggerClassName="h-8 min-w-0 border-border bg-surface-2 not-italic text-ink"
-              disabled={bulk.isPending}
-              onSelect={(code) =>
-                bulk.mutate(
-                  { txnCodes: [...selected], categoryCode: code },
-                  {
-                    onSuccess: (n) => {
-                      toast({ title: `${n} transactions categorised`, tone: "positive" });
-                      setSelected(new Set());
-                    },
-                    onError: (e) => toast({ title: "Couldn't categorise", description: errorMessage(e), tone: "danger" }),
-                  },
-                )
-              }
-            />
-            <Button size="icon-sm" variant="ghost" aria-label="Clear selection" onClick={() => setSelected(new Set())}>
-              <X className="size-4" />
-            </Button>
-          </div>
-        </div>
+      {selection && (
+        <BulkBar
+          profileCode={profile_code}
+          selection={selection}
+          isOwner={isOwner}
+          categories={meta.data?.categories ?? []}
+          selectAllLoaded={!allSelected ? selectRows : undefined}
+          selectAllMatching={
+            !allMatching && allSelected && matchingTotal > selected.size ? { total: matchingTotal, onSelect: () => setAllMatching(true) } : undefined
+          }
+          onClear={clearSelection}
+        />
       )}
 
       <TransactionDrawer
