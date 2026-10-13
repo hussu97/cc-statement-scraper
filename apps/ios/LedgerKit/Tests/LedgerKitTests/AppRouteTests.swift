@@ -112,6 +112,31 @@ struct AppLinkTests {
         #expect(!router.takeAddStatementRequest(canUpload: true))
     }
 
+    @Test("each link bumps its request count, and taking the request leaves the count (the task's id) alone")
+    func requestCounts() {
+        let router = TabRouter(today: { CalendarDay(year: 2026, month: 10, day: 13) })
+        #expect(router.activityPresetRequest == 0 && router.addStatementRequest == 0)
+        router.open(.uncategorised, ledgerOnScreen: true)
+        #expect(router.activityPresetRequest == 1)
+        #expect(router.takeActivityPreset() != nil)
+        #expect(router.activityPresetRequest == 1)   // Activity's task keeps running while it applies
+        router.open(.uncategorised, ledgerOnScreen: true)   // again, with Activity already showing
+        #expect(router.activityPresetRequest == 2 && router.takeActivityPreset() != nil)
+
+        router.open(.addStatement, ledgerOnScreen: true)
+        #expect(router.addStatementRequest == 1)
+        #expect(router.takeAddStatementRequest(canUpload: true))
+        #expect(router.addStatementRequest == 1)
+        router.open(.review, ledgerOnScreen: true)
+        router.reset()
+        #expect(router.activityPresetRequest == 2 && router.addStatementRequest == 1)
+        // A link waiting for a ledger counts once it opens.
+        router.open(.addStatement, ledgerOnScreen: false)
+        #expect(router.addStatementRequest == 1)
+        router.ledgerShown()
+        #expect(router.addStatementRequest == 2)
+    }
+
     @Test("a Control's intent hands its link to the app; one that came before the app's model waits")
     func inbox() {
         AppLinkInbox.detach()
