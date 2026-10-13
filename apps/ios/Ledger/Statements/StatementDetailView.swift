@@ -42,6 +42,25 @@ struct StatementDetailView: View {
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Palette.bg, for: .navigationBar)
+        .toolbar {
+            // PAR-13: every member may read the ledger's PDFs (storage RLS), as on the web.
+            if let header = model.state.value?.detail.statement {
+                ToolbarItem(placement: .topBarTrailing) {
+                    StatementPDFButton(pdf: model.pdf, docCode: header.docCode) {
+                        Task { await model.openPDF(profileCode: profileCode) }
+                    }
+                }
+            }
+        }
+        .sheet(item: Binding(get: { model.pdf.document }, set: { if $0 == nil { model.pdf.close() } })) { document in
+            StatementPDFSheet(document: document)
+        }
+        .alert("Couldn't open the PDF", isPresented: Binding(get: { model.pdf.errorMessage != nil },
+                                                             set: { if !$0 { model.pdf.errorMessage = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(model.pdf.errorMessage ?? "")
+        }
         .task { if model.state.value == nil { await model.load(profileCode: profileCode) } }
         .refreshable { await model.load(profileCode: profileCode) }
         .sheet(item: $model.selected) { txn in

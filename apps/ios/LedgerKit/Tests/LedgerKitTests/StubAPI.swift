@@ -189,9 +189,13 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         lock.withLock { merchantLimits.append(limit) }
         return []
     }
+    /// `statement_cycles` rows, newest first (sliced to `p_limit`), and each call's limit.
+    var cycleRows: [StatementCycle] = []
+    private(set) var cycleLimits: [Int] = []
     func statementCycles(profileCode: String, limit: Int) async throws -> [StatementCycle] {
         count("statementCycles")
-        return []
+        lock.withLock { cycleLimits.append(limit) }
+        return Array(cycleRows.prefix(limit))
     }
     private(set) var budgetMonths: [CalendarDay?] = []
     /// `budget_status` rows, effective and not: like the server, a call without
@@ -396,6 +400,48 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         case .failure(let error)?: throw error
         case nil: return UploadResponse(uploads: [])
         }
+    }
+
+    // MARK: Activity bulk actions (PAR-11)
+
+    /// `activity_selection_summary`'s answer (zero rows when unset), and each call's selection.
+    var selectionSummaryResult: Result<ActivitySelectionSummary, LedgerAPIError>?
+    private(set) var selectionSummaryCalls: [ActivityBulkSelection] = []
+    /// `bulk_update_transactions`' answer: rows changed, or the error to throw.
+    var bulkUpdateResult: Result<Int, LedgerAPIError> = .success(0)
+    private(set) var bulkUpdates: [(patch: ActivityBulkPatch, selection: ActivityBulkSelection)] = []
+    func activitySelectionSummary(profileCode: String, selection: ActivityBulkSelection) async throws -> ActivitySelectionSummary {
+        let result = lock.withLock {
+            selectionSummaryCalls.append(selection)
+            return selectionSummaryResult
+        }
+        switch result {
+        case .success(let s)?: return s
+        case .failure(let e)?: throw e
+        case nil: return ActivitySelectionSummary(txnCount: 0, netAed: 0)
+        }
+    }
+    func bulkUpdateTransactions(profileCode: String, patch: ActivityBulkPatch,
+                                selection: ActivityBulkSelection) async throws -> Int {
+        let result = lock.withLock {
+            bulkUpdates.append((patch, selection))
+            return bulkUpdateResult
+        }
+        return try result.get()
+    }
+
+    // MARK: Statement PDF (PAR-13)
+
+    /// `statementPDFURL`'s answer by doc code; a missing code is `.notAvailable`.
+    var pdfURLs: [String: Result<URL, any Error>] = [:]
+    private(set) var pdfURLRequests: [(profile: String, doc: String)] = []
+    func statementPDFURL(profileCode: String, docCode: String) async throws -> URL {
+        let answer = lock.withLock {
+            pdfURLRequests.append((profileCode, docCode))
+            return pdfURLs[docCode]
+        }
+        guard let answer else { throw StatementPDF.Failure.notAvailable }
+        return try answer.get()
     }
 
     func changes(profileCode: String) -> AsyncStream<LedgerChange> {
