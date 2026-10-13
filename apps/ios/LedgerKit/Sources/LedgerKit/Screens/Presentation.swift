@@ -66,29 +66,6 @@ public enum SpendComparison {
     }
 }
 
-/// Due-date wording shared by Overview and Statements. Whether a statement was
-/// paid is not known on the phone yet, so a past due date is "Was due …"
-/// unless the caller *knows* no payment arrived for the latest statement.
-public enum DueStatus {
-    /// - Parameters:
-    ///   - isLatest: the account's newest statement. An older one was
-    ///     superseded by a newer statement, so it is never overdue.
-    ///   - paymentDetected: nil when payment detection isn't available —
-    ///     then a past due date is never called overdue.
-    public static func describe(due: CalendarDay?, isLatest: Bool, paymentDetected: Bool? = nil,
-                                today: CalendarDay = LedgerDates.today()) -> (text: String, tone: Tone)? {
-        guard let due else { return nil }
-        let days = today.days(until: due)
-        if days >= 0 {
-            return (LedgerDates.dueLabel(due, today: today), days <= 5 ? .warn : .neutral)
-        }
-        if isLatest, paymentDetected == false {
-            return (LedgerDates.dueLabel(due, today: today), .danger)
-        }
-        return ("Was due \(LedgerDates.dayLabel(due, today: today))", .neutral)
-    }
-}
-
 /// One card account as the Overview shows it.
 public struct AccountSummary: Sendable, Hashable, Identifiable {
     public var id: String { account.accountCode }
@@ -101,9 +78,11 @@ public struct AccountSummary: Sendable, Hashable, Identifiable {
     /// The server's `accounts[].utilisation` (latest statement balance / limit).
     public var utilisation: Decimal? { account.utilisation }
 
-    /// The latest statement's due date, worded by `DueStatus`.
+    /// The latest statement's due date and, from a server that knows it,
+    /// whether it was paid, worded by `DueStatus`.
     public func due(today: CalendarDay = LedgerDates.today()) -> (text: String, tone: Tone)? {
-        DueStatus.describe(due: account.latestStatement?.dueDate, isLatest: true, today: today)
+        DueStatus.describe(due: account.latestStatement?.dueDate, isLatest: true, payment: account.duePayment,
+                           today: today)
     }
 
     public var utilisationLabel: String? { utilisation.map { "\(MoneyFormat.percent($0)) used" } }

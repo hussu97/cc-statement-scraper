@@ -113,6 +113,15 @@ public struct Overview: Decodable, Sendable, Hashable {
         public let balanceAnchorDate: CalendarDay?
         public let balanceHasEstimate: Bool?
         public let balanceUnpricedCount: Int?
+        /// The latest statement's `paid | part_paid | unpaid | overdue`, when the
+        /// server sends it on the account rather than on `latest_statement`.
+        public let paymentStatus: String?
+        public let amountPaid: Decimal?
+
+        /// Whether the latest statement was paid; nil from an older server.
+        public var duePayment: DuePayment? {
+            latestStatement?.duePayment ?? DuePayment(status: paymentStatus, amountPaid: amountPaid)
+        }
 
         public var title: String { nickname ?? productName ?? bankCode }
         /// `"•1234, •5678"`.
@@ -128,6 +137,12 @@ public struct Overview: Decodable, Sendable, Hashable {
         public let dueDate: CalendarDay?
         public let closingBalance: Decimal?
         public let minDue: Decimal?
+        /// `paid | part_paid | unpaid | overdue`; absent from older servers.
+        public let paymentStatus: String?
+        /// Paid towards this statement (AED); absent from older servers.
+        public let amountPaid: Decimal?
+
+        public var duePayment: DuePayment? { DuePayment(status: paymentStatus, amountPaid: amountPaid) }
     }
 
     public struct RecentTransaction: Decodable, Sendable, Hashable, Identifiable {
