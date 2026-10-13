@@ -180,9 +180,13 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         lock.withLock { merchantLimits.append(limit) }
         return []
     }
+    /// `statement_cycles` rows, newest first (sliced to `p_limit`), and each call's limit.
+    var cycleRows: [StatementCycle] = []
+    private(set) var cycleLimits: [Int] = []
     func statementCycles(profileCode: String, limit: Int) async throws -> [StatementCycle] {
         count("statementCycles")
-        return []
+        lock.withLock { cycleLimits.append(limit) }
+        return Array(cycleRows.prefix(limit))
     }
     private(set) var budgetMonths: [CalendarDay?] = []
     /// `budget_status` rows, effective and not: like the server, a call without

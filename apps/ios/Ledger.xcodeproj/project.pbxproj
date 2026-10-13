@@ -75,6 +75,7 @@
 		F348325E16B8A296503CF699 /* LedgerWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E56CBBE004CCEDD4CFBD228 /* LedgerWidgetBundle.swift */; };
 		F36EF8148860144D5242451A /* StatementPDFView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B74637D07758B9964A8A355 /* StatementPDFView.swift */; };
 		F47A3D77AFB9C697BC01AF1B /* StatementDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73761BCB90A985F69998349F /* StatementDetailView.swift */; };
+		F8C8FA7A950003781340C2F3 /* AccountComparisonCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94A3FB2B051B6AC074428042 /* AccountComparisonCard.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -150,6 +151,7 @@
 		8E56CBBE004CCEDD4CFBD228 /* LedgerWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerWidgetBundle.swift; sourceTree = "<group>"; };
 		90DD295322C6F4844758D023 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
 		933BB97FFFA1958362EEA82B /* ChartDescriptor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChartDescriptor.swift; sourceTree = "<group>"; };
+		94A3FB2B051B6AC074428042 /* AccountComparisonCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountComparisonCard.swift; sourceTree = "<group>"; };
 		95DCC00204983D702C001D63 /* CardWalletNamesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardWalletNamesView.swift; sourceTree = "<group>"; };
 		969BD9B5973AD206051A6368 /* ActivityBulkBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityBulkBar.swift; sourceTree = "<group>"; };
 		98278F14CDF74A5CA8371C59 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -303,6 +305,7 @@
 		613F54D1A78E328AD04425BC /* Statements */ = {
 			isa = PBXGroup;
 			children = (
+				94A3FB2B051B6AC074428042 /* AccountComparisonCard.swift */,
 				73761BCB90A985F69998349F /* StatementDetailView.swift */,
 				8B74637D07758B9964A8A355 /* StatementPDFView.swift */,
 				F52CAA6FE73B46EFE59439A4 /* StatementsView.swift */,
@@ -758,6 +761,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F8C8FA7A950003781340C2F3 /* AccountComparisonCard.swift in Sources */,
 				B2147489CB68A81222AC64F3 /* ActivityBulkBar.swift in Sources */,
 				4E5309A305E082B648C197FE /* ActivityFilterSheet.swift in Sources */,
 				88E22D6FB72866F27D8AE476 /* ActivitySheets.swift in Sources */,
