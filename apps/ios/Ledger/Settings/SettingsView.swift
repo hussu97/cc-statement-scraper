@@ -153,7 +153,7 @@ struct SettingsView: View {
             }
         }
         .task {
-            model.statements.refreshWaiting()
+            await model.statements.refreshWaiting()
             await settings.refresh()
         }
         .confirmationDialog("Discard messages that haven't reached Bank Ledger?", isPresented: $confirmClear,

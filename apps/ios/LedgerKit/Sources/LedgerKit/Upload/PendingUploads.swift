@@ -129,8 +129,6 @@ public struct PendingUploads: Sendable {
 }
 
 extension LedgerServices {
-    public var pendingUploads: PendingUploads { PendingUploads(container: config.sharedContainerURL) }
-
     /// Sends PDFs the Share Extension queued, to the "SMS go to" ledger (the
     /// one the extension named when it saved them). Called when the app becomes active.
     @discardableResult
