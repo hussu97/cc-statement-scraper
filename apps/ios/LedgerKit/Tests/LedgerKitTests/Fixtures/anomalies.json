@@ -1,0 +1,16 @@
+[
+  {"txn_code": "txn_01hzy3k8w9m2n4p6q8r0s2t4b1", "txn_date": "2026-10-03", "description": "BAYLEAF RESTAURANT,DUBAI",
+   "amount": 1250.00, "reason": "merchant_outlier", "baseline_mean": 250.00, "baseline_sd": 40.12,
+   "merchant_code": "mer_01hzy3k8w9m2n4p6q8r0s2t4b1", "merchant_name": "Bayleaf Restaurant",
+   "category_code": "cat_01hzy3k8w9m2n4p6q8r0s2t4d1", "category_name": "Dining",
+   "baseline_scope": "merchant", "times_usual": 5},
+  {"txn_code": "txn_01hzy3k8w9m2n4p6q8r0s2t4b2", "txn_date": "2026-10-05", "description": "NEW AIRLINE 0412",
+   "amount": 6900.00, "reason": "new_merchant_large", "baseline_mean": 3000.00, "baseline_sd": 1200.50,
+   "merchant_code": "mer_01hzy3k8w9m2n4p6q8r0s2t4b2", "merchant_name": "New Airline",
+   "category_code": "cat_01hzy3k8w9m2n4p6q8r0s2t4d2", "category_name": "Travel",
+   "baseline_scope": "category", "times_usual": 2.3},
+  {"txn_code": "txn_01hzy3k8w9m2n4p6q8r0s2t4b3", "txn_date": "2026-10-07", "description": "FIRST SHOP LLC",
+   "amount": 640.00, "reason": "new_merchant_large", "baseline_mean": null, "baseline_sd": null,
+   "merchant_code": "mer_01hzy3k8w9m2n4p6q8r0s2t4b3", "merchant_name": null,
+   "category_code": null, "category_name": null, "baseline_scope": null, "times_usual": null}
+]

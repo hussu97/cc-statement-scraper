@@ -143,13 +143,16 @@ public final class SupabaseLedgerAPI: LedgerAPI, @unchecked Sendable {
     }
 
     public func insights(profileCode: String) async throws -> [Insight] {
-        try await read([Insight].self) {
+        // Expired insights hide at once, not after the nightly cleanup (the web's WEB-45).
+        let today = LedgerDates.today().iso
+        return try await read([Insight].self) {
             try await client.from("insights")
-                .select("insight_code,kind,severity,title,body,valid_until,dismissed_at,created_at")
+                .select("insight_code,kind,severity,title,body,data,valid_until,dismissed_at,created_at")
                 .eq("profile_code", value: profileCode)
                 .is("dismissed_at", value: nil)
+                .or("valid_until.is.null,valid_until.gte.\(today)")
                 .order("created_at", ascending: false)
-                .limit(20)
+                .limit(InsightFeed.limit)
                 .execute()
         }
     }
