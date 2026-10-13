@@ -23,6 +23,8 @@ struct InsightsView: View {
 
             StateContainer(state: model.state, retry: reload) { content in
                 let range = InsightsModel.range(for: model.period, month: month.requestMonth)
+                // "Worth a look" and Unusual spending over this period (PAR-9).
+                WorthALookCard(profileCode: profileCode, from: range.from, to: range.to)
                 SpendSplitCard(trend: content.trend, from: range.from, to: range.to, profileCode: profileCode)
                 if !content.budgets.isEmpty {
                     BudgetsCard(budgets: content.budgets, scope: model.budgetsScope(), isCurrentMonth: month.isCurrent,
