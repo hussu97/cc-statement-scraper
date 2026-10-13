@@ -203,3 +203,27 @@ struct CategoryDrillDownTests {
 private extension Array {
     subscript(safeIndex index: Int) -> Element? { indices.contains(index) ? self[index] : nil }
 }
+
+@Suite("Category drill-down → Activity (See transactions)")
+struct CategoryDrillDownActivityLinkTests {
+    @Test("a category opens Activity filtered to it over the range shown")
+    func category() {
+        let request = CategoryDrillDownRequest(
+            target: CategoryTarget(categoryCode: dining, name: "Dining", colorToken: "cat-4"),
+            from: day("2026-10-01"), to: day("2026-10-31"))
+        let query = request.activityQuery
+        #expect(query.categoryCode == dining)
+        #expect(!query.uncategorizedOnly)
+        #expect(query.from == day("2026-10-01") && query.to == day("2026-10-31"))
+    }
+
+    @Test("the uncategorised bucket opens the uncategorised filter")
+    func uncategorised() {
+        let request = CategoryDrillDownRequest(
+            target: CategoryTarget(categoryCode: nil, name: "Uncategorised", colorToken: nil),
+            from: day("2026-09-01"), to: day("2026-10-31"))
+        let query = request.activityQuery
+        #expect(query.categoryCode == nil)
+        #expect(query.uncategorizedOnly)
+    }
+}
