@@ -10,6 +10,9 @@ public struct CategorySpend: Decodable, Sendable, Hashable, Identifiable {
     public let txnCount: Int
     public let share: Decimal?
     public let prevAmount: Decimal
+    /// `(amount − prev_amount) / prev_amount` from the server, against the previous period of
+    /// the same length; nil when that period had no spend (or from a server without the field).
+    public let change: Decimal?
 
     /// The server's share, clamped to 0…1 for drawing a bar.
     public var shareFraction: Double { min(max((share ?? 0).chartValue, 0), 1) }
