@@ -188,3 +188,57 @@ struct DueReminderTests {
         #expect(DueReminders.sync(pendingIDs: ["ledger.due.stm_adcb.t0"], planned: plan).cancel == ["ledger.due.stm_adcb.t0"])
     }
 }
+
+@Suite("Due reminders are replanned only for a loaded ledger, and withdrawn on sign-out")
+struct DueReminderRefreshTests {
+    let ledger = LedgerProfile(profileCode: "prf_a", key: "a", name: "A")
+    let signedIn = SessionStore.Phase.signedIn(userID: "u", email: nil)
+
+    @Test("profiles loaded with the selected ledger in them: replan that ledger")
+    func replans() {
+        #expect(DueReminders.refresh(phase: signedIn, profiles: .loaded([ledger]), selected: "prf_a")
+                == .replan(profileCode: "prf_a"))
+    }
+
+    @Test("a cold or offline launch (restoring, profiles idle, loading or failed, nothing selected) keeps what is scheduled")
+    func keeps() {
+        #expect(DueReminders.refresh(phase: .restoring, profiles: .idle, selected: "prf_a") == .keep)
+        #expect(DueReminders.refresh(phase: signedIn, profiles: .idle, selected: "prf_a") == .keep)
+        #expect(DueReminders.refresh(phase: signedIn, profiles: .loading(previous: nil), selected: "prf_a") == .keep)
+        #expect(DueReminders.refresh(phase: signedIn, profiles: .loading(previous: [ledger]), selected: "prf_a") == .keep)
+        #expect(DueReminders.refresh(phase: signedIn, profiles: .failed("offline", previous: nil), selected: "prf_a") == .keep)
+        #expect(DueReminders.refresh(phase: signedIn, profiles: .loaded([ledger]), selected: nil) == .keep)
+        #expect(DueReminders.refresh(phase: signedIn, profiles: .loaded([ledger]), selected: "prf_gone") == .keep)
+        #expect(DueReminders.refresh(phase: .awaitingCode(email: "x@y.z"), profiles: .idle, selected: nil) == .keep)
+    }
+
+    @Test("signed out: every due reminder goes, whatever the profiles say")
+    func signedOut() {
+        #expect(DueReminders.refresh(phase: .signedOut, profiles: .idle, selected: nil) == .withdrawAll)
+        #expect(DueReminders.refresh(phase: .signedOut, profiles: .loaded([ledger]), selected: "prf_a") == .withdrawAll)
+    }
+
+    @Test("an offline launch through ProfileStore: the load fails, so nothing is withdrawn")
+    @MainActor func offlineLaunch() async {
+        let api = StubAPI()
+        let defaults = UserDefaults(suiteName: "ledger-due-refresh-\(UUID().uuidString)")!
+        let selection = ProfileSelection(defaults: defaults)
+        selection.profileCode = "prf_a"
+        let store = ProfileStore(api: api, selection: selection)
+        #expect(DueReminders.refresh(phase: signedIn, profiles: store.state, selected: store.selectedCode) == .keep)
+        api.profilesError = .network("offline")
+        await store.load()
+        #expect(store.selectedCode == "prf_a")
+        #expect(DueReminders.refresh(phase: signedIn, profiles: store.state, selected: store.selectedCode) == .keep)
+    }
+
+    @Test("withdrawing all takes pending and delivered due reminders, and nothing else")
+    func withdrawAll() {
+        let update = DueReminders.withdrawAll(
+            pendingIDs: ["ledger.due.stm_a.t3", "ledger.outbox-stuck", "ledger.due.stm_b.t0"],
+            deliveredIDs: ["ledger.due.stm_a.t3", "ledger.due.stm_c.t0", "ledger.unknown-card"])
+        #expect(update.post.isEmpty)
+        #expect(update.cancel == ["ledger.due.stm_a.t3", "ledger.due.stm_b.t0", "ledger.due.stm_c.t0"])
+        #expect(DueReminders.withdrawAll(pendingIDs: [], deliveredIDs: []).isEmpty)
+    }
+}
