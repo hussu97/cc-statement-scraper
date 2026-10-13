@@ -1,4 +1,4 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, type RpcReturn } from "@/lib/supabase";
 import type { DateRange } from "@/lib/dates";
 import type { Grain, SpendGroup } from "@/lib/search";
@@ -115,6 +115,23 @@ export function useAnomalies(profileCode: string, range: DateRange) {
     queryKey: keys.analytics(profileCode, "anomalies", range),
     placeholderData: keepPreviousData,
     queryFn: async () => mustList(await supabase.rpc("anomalies", rangeArgs(profileCode, range))),
+  });
+}
+
+/**
+ * "This is fine": the owner dismisses an unusual charge for good (dismiss_anomaly). The
+ * server leaves it out of anomalies from then on and dismisses its insight, so both refetch.
+ */
+export function useDismissAnomaly(profileCode: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (txnCode: string) =>
+      must(await supabase.rpc("dismiss_anomaly", { p_profile_code: profileCode, p_txn_code: txnCode })),
+    onSettled: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: keys.analytics(profileCode, "anomalies") }),
+        qc.invalidateQueries({ queryKey: keys.insights(profileCode) }),
+      ]),
   });
 }
 
