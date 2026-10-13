@@ -144,11 +144,16 @@ public struct DueWidgetContent: Sendable, Equatable {
         let upcoming = WidgetDue.upcoming(snapshot.cards, today: today)
         guard let next = upcoming.first, let due = next.dueDate else {
             // A claim only the data can make: statements exist, none due ahead.
-            let anyStatement = snapshot.cards.contains { $0.dueDate != nil }
-            return .message(anyStatement ? "Nothing due. Every due date has passed." : "No statements yet.")
+            switch WidgetDue.whyNothingDue(snapshot.cards, today: today) {
+            case .paid: return .message("Nothing due. Every upcoming statement is paid.")
+            case .passed: return .message("Nothing due. Every due date has passed.")
+            case .noStatements: return .message("No statements yet.")
+            }
         }
         let showsAmounts = WidgetPrivacy.showsAmounts(on: placement, requireAuth: requireAuth)
-        let status = DueStatus.describe(due: due, isLatest: true, today: today)
+        // "Part paid (AED 1,000.00)" is an amount: hidden ones keep only the status.
+        let payment = showsAmounts ? next.duePayment : next.duePayment.map { DuePayment(status: $0.status) }
+        let status = DueStatus.describe(due: due, isLatest: true, payment: payment, today: today)
         let amount = showsAmounts ? next.closingBalance.map { MoneyFormat.aed($0) } : nil
         let minimum = showsAmounts ? next.minDue.map { "Min \(MoneyFormat.aed($0))" } : nil
         let rest = upcoming.dropFirst()
@@ -211,14 +216,33 @@ public struct UtilisationWidgetContent: Sendable, Equatable {
     }
 }
 
-/// Which statements are still to pay, soonest first. A past due date is left
-/// out: whether it was paid isn't known on the phone (`DueStatus`).
+/// Which statements are still to pay, soonest first. A statement the server
+/// marks `paid` is left out, and so is a past due date (the widget is about
+/// what comes next; Overview says whether a past one was paid).
 public enum WidgetDue {
     public static func upcoming(_ cards: [WidgetSnapshot.Card], today: CalendarDay) -> [WidgetSnapshot.Card] {
         cards.enumerated()
-            .filter { _, card in card.dueDate.map { today.days(until: $0) >= 0 } ?? false }
+            .filter { _, card in isAhead(card, today: today) && card.duePayment?.status != .paid }
             .sorted { a, b in (a.element.dueDate!, a.offset) < (b.element.dueDate!, b.offset) }
             .map(\.element)
+    }
+
+    /// Why `upcoming` is empty, so "nothing due" says what the data shows.
+    public enum NothingDue: Sendable, Equatable {
+        /// A statement is due ahead, and the server marks it paid.
+        case paid
+        /// Statements exist; every due date has passed.
+        case passed
+        case noStatements
+    }
+
+    public static func whyNothingDue(_ cards: [WidgetSnapshot.Card], today: CalendarDay) -> NothingDue {
+        if cards.contains(where: { isAhead($0, today: today) }) { return .paid }
+        return cards.contains { $0.dueDate != nil } ? .passed : .noStatements
+    }
+
+    static func isAhead(_ card: WidgetSnapshot.Card, today: CalendarDay) -> Bool {
+        card.dueDate.map { today.days(until: $0) >= 0 } ?? false
     }
 }
 

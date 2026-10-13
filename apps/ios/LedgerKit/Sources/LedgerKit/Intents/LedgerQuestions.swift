@@ -84,14 +84,18 @@ public struct LedgerQuestions: Sendable {
         let today = LedgerDates.today(now: now)
         let upcoming = WidgetDue.upcoming(figures.cards, today: today)
         guard !upcoming.isEmpty else {
-            let anyStatement = figures.cards.contains { $0.dueDate != nil }
-            let line = anyStatement ? "Nothing is due: every statement's due date has passed."
-                                    : "No statements yet, so nothing is due."
+            let line = switch WidgetDue.whyNothingDue(figures.cards, today: today) {
+            case .paid: "Nothing is due: every upcoming statement is paid."
+            case .passed: "Nothing is due: every statement's due date has passed."
+            case .noStatements: "No statements yet, so nothing is due."
+            }
             return (0, Self.prefix(source, today: today) + line)
         }
         let lines = upcoming.prefix(3).map { card -> String in
             let due = card.dueDate!
-            let when = LedgerDates.dueLabel(due, today: today).replacingOccurrences(of: "Due", with: "due")
+            // The server's payment status words it: "due in 5 days", "part paid (AED 1,000.00), due in 5 days".
+            let status = DueStatus.describe(due: due, isLatest: true, payment: card.duePayment, today: today)
+            let when = Self.spoken(status?.text ?? LedgerDates.dueLabel(due, today: today))
             var line = "\(card.title): "
             line += card.closingBalance.map { "\(MoneyFormat.aed($0)) \(when)" } ?? when.capitalizedFirst
             line += " (\(LedgerDates.dayLabel(due, today: today)))"
@@ -146,6 +150,14 @@ public struct LedgerQuestions: Sendable {
         let day = CalendarDay(date: at)
         let when = day == today ? LedgerDates.timeLabel(at) : LedgerDates.dayLabel(day, today: today)
         return "Offline, as of \(when): "
+    }
+
+    /// `DueStatus` wording inside a sentence: `"Part paid (AED 1,000.00) · Due
+    /// in 5 days"` → `"part paid (AED 1,000.00), due in 5 days"`.
+    static func spoken(_ status: String) -> String {
+        lowercasedFirst(status)
+            .replacingOccurrences(of: " · ", with: ", ")
+            .replacingOccurrences(of: "Due", with: "due")
     }
 
     static func lowercasedFirst(_ text: String) -> String {
