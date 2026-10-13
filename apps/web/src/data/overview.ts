@@ -2,8 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, type Tables } from "@/lib/supabase";
 import { keys } from "./keys";
 import { must, mustList } from "./api";
-import { todayDubai } from "@/lib/dates";
-import { formatCount, formatTotal, type MoneyInput } from "@/lib/money";
+import { formatRelative, todayDubai } from "@/lib/dates";
 import type { BalanceAnchor } from "@/lib/balances";
 import type { PaymentStatus } from "@/lib/dues";
 
@@ -81,8 +80,6 @@ export interface Overview {
   /** Every active card has a balance anchor and every AED amount is known. */
   outstanding_complete: boolean;
   outstanding_has_estimate: boolean;
-  pending_count: number;
-  pending_amount: string;
   uncategorized_count: number;
   open_reviews: number;
   last_sms_at: string | null;
@@ -172,12 +169,12 @@ export function insightTarget(i: Pick<Insight, "kind" | "data">): InsightTarget 
 }
 
 /**
- * The pending strip's line (WEB-35): "31 pending · AED 3,082", from the server's count and sum;
- * null when nothing is pending. The rows themselves are in Recent activity, with a Pending badge.
+ * Under the hero: when the last card alert (bank SMS or payment shortcut) arrived, so a person can
+ * see capture is working. Null before the first one. Charges from alerts are transactions like any
+ * other, so this line never counts them apart.
  */
-export function pendingSummary(count: number, amount: MoneyInput): string | null {
-  if (count <= 0) return null;
-  return `${formatCount(count)} pending · ${formatTotal(amount)}`;
+export function lastCardAlertLabel(lastSmsAt: string | null, now: Date = new Date()): string | null {
+  return lastSmsAt ? `Last card alert ${formatRelative(lastSmsAt, now)}` : null;
 }
 
 /** The Insights feed's sections (MA-5): which screen answers an insight, in display order. */

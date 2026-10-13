@@ -2,7 +2,12 @@
 import { isISODate, type ISODate } from "./dates";
 import { DEFAULT_PAGE_SIZE, normalizePage, normalizePageSize, type PageSize } from "./pagination";
 
-export const TXN_STATUSES = ["pending", "posted", "void", "orphaned"] as const;
+/**
+ * The status filter's values. `pending` (an SMS or payment charge no statement has matched yet)
+ * is not one: those charges are transactions like any other, so an old `?status=pending` link
+ * parses to no status filter.
+ */
+export const TXN_STATUSES = ["posted", "void", "orphaned"] as const;
 export type TxnStatus = (typeof TXN_STATUSES)[number];
 export const TXN_SOURCES = ["sms", "statement", "both"] as const;
 export type TxnSource = (typeof TXN_SOURCES)[number];
