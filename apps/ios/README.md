@@ -96,7 +96,8 @@ Sentry starts only in a Release build with a DSN and an environment other than
 `local`/`development`/`dev`/`test` (`Telemetry.shouldStart`), so simulator and local runs never report.
 
 `//` starts an xcconfig comment, hence `$()` between the slashes. The simulator reaches
-the Mac's `127.0.0.1`; `NSAllowsLocalNetworking` permits plain HTTP to it.
+the Mac's `127.0.0.1`; `NSAllowsLocalNetworking` permits plain HTTP to it. Only Debug builds
+carry that key (`project.yml` → "Debug ATS" script); Release is HTTPS only.
 
 ## Tests
 

@@ -340,6 +340,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = DD0B3ABF594D0EF5EF60062E /* Build configuration list for PBXNativeTarget "Ledger" */;
 			buildPhases = (
+				58C6CA92047F36E5603E7E2E /* Debug ATS */,
 				F1F080D0181C4541717A419D /* Sources */,
 				14420028183664A5B903B70E /* Resources */,
 				BEDB20D07F84761F660CA805 /* Frameworks */,
@@ -362,6 +363,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = A6BC08DDD17D92D4C800440D /* Build configuration list for PBXNativeTarget "LedgerShare" */;
 			buildPhases = (
+				328008F3E61BE930285227BE /* Debug ATS */,
 				928B4980483D167D2E8FDE30 /* Sources */,
 				1BA2AD4A0804783C9708591A /* Resources */,
 				ABD8F4F549B4DD2C598C0958 /* Frameworks */,
@@ -439,6 +441,49 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		328008F3E61BE930285227BE /* Debug ATS */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/ShareExtension/Info.plist",
+			);
+			name = "Debug ATS";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Info.Debug.plist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "plutil -insert NSAppTransportSecurity -json '{\"NSAllowsLocalNetworking\":true}' \\\n  -o - \"$SCRIPT_INPUT_FILE_0\" > \"$SCRIPT_OUTPUT_FILE_0\"\n";
+		};
+		58C6CA92047F36E5603E7E2E /* Debug ATS */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/Ledger/Info.plist",
+			);
+			name = "Debug ATS";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Info.Debug.plist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "plutil -insert NSAppTransportSecurity -json '{\"NSAllowsLocalNetworking\":true}' \\\n  -o - \"$SCRIPT_INPUT_FILE_0\" > \"$SCRIPT_OUTPUT_FILE_0\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		928B4980483D167D2E8FDE30 /* Sources */ = {
@@ -528,7 +573,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/LedgerShare.entitlements;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = ShareExtension/Info.plist;
+				INFOPLIST_FILE = "$(DERIVED_FILE_DIR)/Info.Debug.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -687,7 +732,7 @@
 				CODE_SIGN_ENTITLEMENTS = Ledger/Ledger.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = Ledger/Info.plist;
+				INFOPLIST_FILE = "$(DERIVED_FILE_DIR)/Info.Debug.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
