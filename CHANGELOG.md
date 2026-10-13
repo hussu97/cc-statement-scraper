@@ -1,5 +1,22 @@
 # Changelog
 
+## Backlog batch 7: iOS parity with the web — 2026-10-14
+
+### iOS
+
+- **add** Activity filters match the web: This month, Last month, Last 3 months, This year or a custom range; card; Void status; SMS / statement / both source (PAR-1).
+- **add** A transaction sheet everyone can open: viewers read-only, owners with the details in the edit sheet. Status, kind and source badges, Awaiting FX rate / AED estimated, time and posted date, card, merchant context, FX rate, the reversal pair, and the evidence timeline with the SMS text shown on request and never kept (PAR-2).
+- **add** Activity date headers show each day's net over every matching transaction (`activity_day_totals`) (PAR-3).
+- **add** Other screens open Activity filtered: Overview's uncategorised count, pending strip and recent rows, Insights' top merchants, and a category's "See transactions" (PAR-4).
+- **add** Category drill-down from Insights and the Overview ring (slices are tappable): monthly trend, top merchants, change vs the previous period (PAR-5).
+- **add** Overview's current month shows a pace rule (last month and the 3-month average by today) and the projected month end (PAR-6).
+- **add** Budget meters show an expected-by-today tick and "AED X over/under pace" (PAR-7).
+- **add** Insights categories show the change vs the previous period and list every category; merchants show the top 20 (PAR-8).
+
+### Docs
+
+- **change** BACKLOG: iOS parity PAR-1…8 done; PAR-9…14 remain.
+
 ## Backlog batch 6: payment status, analytics, widgets, Shortcuts, notifications, Wallet currency — 2026-10-13
 
 ### Backend (Supabase)

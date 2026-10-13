@@ -28,10 +28,10 @@ separately):
 | Edge Functions | 0 | 0 | – | – | 0 |
 | Parser | 1 | – | – | – | 1 |
 | Web | 0 | 6 | 0 | – | 6 |
-| iOS | 0 | 18 | 0 | 2 | 20 |
+| iOS | 0 | 10 | 0 | 2 | 12 |
 | Scraper | – | 0 | – | – | 0 |
 | CI, config and ops | 0 | 0 | – | 0 | 0 |
-| **Total** | **1** | **26** | **0** | **3** | **30** |
+| **Total** | **1** | **18** | **0** | **3** | **22** |
 
 There are no open P0 or P1 findings. The last P1 remainders (WEB-02 statements beyond 500 and
 merchant search, WEB-07 "Retry AI") landed in `98f901c`. What is left of the P1s are the device
@@ -150,14 +150,6 @@ export is web-only. Order is the recommended build order.
 
 | ID | Gap | Backing RPC | Effort |
 |---|---|---|---|
-| PAR-1 | Activity filters: date presets and custom range, card filter, void status, source (SMS/statement) | `activity_summary`, `v_transactions` | S |
-| PAR-2 | A detail sheet viewers can open too: FX rate and estimate badges, time and posted date, status badges, merchant context, related reversal, evidence timeline and SMS body | `v_transactions`, `merchant_context`, `transaction_evidence` | M |
-| PAR-3 | Per-day net totals in Activity date headers | `activity_day_totals` | S |
-| PAR-4 | Open Activity with filters from other screens (ring slices, uncategorised and pending counts, merchants, insights) | — (routing) | S–M |
-| PAR-5 | Category drill-down screen (trend, top merchants, change vs previous period) | `category_breakdown`, `spend_breakdown` | M |
-| PAR-6 | Overview pace rule and "Projected AED X by …" (fields already decoded) | `overview` | S |
-| PAR-7 | Budget "expected by today" tick and over/under pace | `budget_status` | S |
-| PAR-8 | Categories show change vs previous period; merchants top 20 with tap-through | `category_breakdown`, `merchant_leaderboard` | S |
 | PAR-9 | Anomalies with "This is fine"; full "Worth a look" feed with links | `anomalies`, `dismiss_anomaly`, `insights` | M |
 | PAR-10 | Trends: week/day buckets, account/card grouping, custom range | `spend_series`, `spend_breakdown` | M |
 | PAR-11 | Bulk select with Categorise and Exclude (CSV export stays web-only) | `activity_selection_summary`, `bulk_update_transactions` | M |
@@ -267,6 +259,21 @@ CHANGELOG.
 (05's recommendations 3–5 are IOS-19r, IOS-20r, IOS-18, IOS-28 and IOS-17 above.)
 
 ---
+
+## Done: backlog batch 7, iOS parity (2026-10-14)
+
+Branch `batch/backlog-7`; iOS only, on existing RPCs. Audited after merge.
+
+| ID | Outcome |
+|---|---|
+| PAR-1 | Done: Activity date presets and custom range, card filter, void status, SMS/statement source, passed to `activity_summary` and the list as the web does |
+| PAR-2 | Done: a detail sheet viewers can open (owners see the same details in the edit sheet): badges, FX, time and posted date, merchant context, reversal pair, evidence with the SMS text on request |
+| PAR-3 | Done: per-day net totals in Activity date headers (`activity_day_totals`) |
+| PAR-4 | Done: `TabRouter.openActivity` / `openTransaction` from Overview (uncategorised, pending, recent), Insights merchants and the category drill-down |
+| PAR-5 | Done: category drill-down (trend, top merchants, change vs previous period, See transactions) from Insights and the Overview ring |
+| PAR-6 | Done: Overview pace rule and "Projected AED X by …" |
+| PAR-7 | Done: budget meters' expected-by-today tick and over/under pace |
+| PAR-8 | Done: category change chips and every category; top 20 merchants |
 
 ## Done: backlog batch 6 (2026-10-13)
 

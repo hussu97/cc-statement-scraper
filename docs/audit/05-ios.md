@@ -553,3 +553,6 @@ Everything still open, including the UX and iOS-native recommendations and the d
 
 **Backlog batch 6 (2026-10-13):** UX-1r, N-1 to N-4 and IOS-06g (N-5 closed by decision); outcomes in
 [BACKLOG.md](BACKLOG.md#done-backlog-batch-6-2026-10-13).
+
+**Backlog batch 7 (2026-10-14):** iOS parity PAR-1 to PAR-8 done; outcomes in
+[BACKLOG.md](BACKLOG.md#done-backlog-batch-7-ios-parity-2026-10-14).
