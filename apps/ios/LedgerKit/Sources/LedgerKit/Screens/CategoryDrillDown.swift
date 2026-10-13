@@ -251,15 +251,25 @@ extension Overview {
         CategoryDrillDownRequest(target: CategoryTarget(category), from: month.startOfMonth, to: month.endOfMonth)
     }
 
-    /// The ring slice under a chart angle value (the running total of the slices' amounts, as
-    /// Swift Charts reports a `SectorMark` selection). Display geometry only.
-    public static func ringCategory(_ categories: [TopCategory], atAngleValue value: Double) -> TopCategory? {
+    /// The ring slice at `fraction` of the way round (0 at twelve o'clock, clockwise), the slices
+    /// drawn in order with angles in proportion to their amounts. Display geometry only.
+    public static func ringCategory(_ categories: [TopCategory], atFraction fraction: Double) -> TopCategory? {
+        let total = categories.reduce(0.0) { $0 + $1.amount.chartValue }
+        guard total > 0 else { return categories.last }
+        let target = min(max(fraction, 0), 1) * total
         var running = 0.0
         for category in categories {
             running += category.amount.chartValue
-            if value <= running { return category }
+            if target <= running { return category }
         }
         return categories.last
+    }
+
+    /// How far round the ring (0…1, from twelve o'clock, clockwise) a tap lies, given its
+    /// offset from the ring's centre in points (y grows downwards).
+    public static func ringFraction(dx: Double, dy: Double) -> Double {
+        let angle = atan2(dx, -dy)   // 0 at the top, positive clockwise
+        return (angle < 0 ? angle + 2 * .pi : angle) / (2 * .pi)
     }
 }
 

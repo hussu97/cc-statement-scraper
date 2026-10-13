@@ -182,10 +182,21 @@ struct CategoryDrillDownTests {
         #expect(request.from == day("2026-10-01") && request.to == day("2026-10-31"))
         #expect(request.target.categoryCode == first.categoryCode && request.target.name == first.displayName)
         let cats = o.ringCategories
-        #expect(Overview.ringCategory(cats, atAngleValue: 0.5)?.id == cats[0].id)
-        let pastFirst = cats[0].amount.chartValue + 0.01
-        #expect(Overview.ringCategory(cats, atAngleValue: pastFirst)?.id == cats[safeIndex: 1]?.id)
-        #expect(Overview.ringCategory([], atAngleValue: 1) == nil)
+        let total = cats.reduce(0.0) { $0 + $1.amount.chartValue }
+        let firstShare = cats[0].amount.chartValue / total
+        #expect(Overview.ringCategory(cats, atFraction: 0)?.id == cats[0].id)
+        #expect(Overview.ringCategory(cats, atFraction: firstShare / 2)?.id == cats[0].id)
+        #expect(Overview.ringCategory(cats, atFraction: firstShare + 0.001)?.id == cats[safeIndex: 1]?.id)
+        #expect(Overview.ringCategory(cats, atFraction: 1)?.id == cats.last?.id)
+        #expect(Overview.ringCategory([], atFraction: 0.5) == nil)
+    }
+
+    @Test("a tap's offset from the ring's centre is a fraction of the way round, clockwise from the top")
+    func ringFraction() {
+        #expect(Overview.ringFraction(dx: 0, dy: -10) == 0)
+        #expect(abs(Overview.ringFraction(dx: 10, dy: 0) - 0.25) < 1e-9)
+        #expect(abs(Overview.ringFraction(dx: 0, dy: 10) - 0.5) < 1e-9)
+        #expect(abs(Overview.ringFraction(dx: -10, dy: 0) - 0.75) < 1e-9)
     }
 }
 
