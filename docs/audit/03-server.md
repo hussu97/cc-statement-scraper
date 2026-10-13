@@ -565,3 +565,6 @@ local behaviour; CHANGELOG has an "Audit fixes (pre-cutover)" section. Open item
 (`save_mailbox_sync_state`), SRV-20 (`begin_document_parse`, `resubmit_document`, `fail_document`
 never un-parses) and SRV-22 (`drain_dlq`, `requeue_dlq`, `documents_stuck` = `parsing` > 1 h,
 queue `newest_age_s` for alert-on-increase). The Edge Functions call them (Edge + CI pass above).
+
+**Backlog batch 3 (2026-10-13):** SRV-16 and NEW-3 fixed; outcomes in
+[BACKLOG.md](BACKLOG.md#done-backlog-batch-3-2026-10-13).

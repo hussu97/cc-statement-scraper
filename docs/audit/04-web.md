@@ -335,3 +335,6 @@ still has to call it instead of deleting the row.
 
 **Backlog batch 2 (2026-10-13):** WEB-11, WEB-17r and WEB-26 are fixed; outcomes in
 [BACKLOG.md](BACKLOG.md#done-backlog-batch-2-2026-10-13).
+
+**Backlog batch 3 (2026-10-13):** WEB-10r, WEB-16, WEB-27 and WEB-39 fixed; outcomes in
+[BACKLOG.md](BACKLOG.md#done-backlog-batch-3-2026-10-13).

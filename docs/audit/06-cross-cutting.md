@@ -349,3 +349,6 @@ values can only collide if a null shifts a field into a neighbour of a different
 parsers use `EIB_PDF_PASSWORD` / `MASHREQ_PDF_PASSWORD`; the worker already sent them. X-25 is
 fully fixed: `country_code` is ISO 3166-1 alpha-2 or null. X-33's parser nits are fixed (`fx_rate`
 `"1"` for every AED line, null below 1e-8); the line-key and iOS nits remain (BACKLOG X-33r).
+
+**Backlog batch 3 (2026-10-13):** X-34 fixed; outcomes in
+[BACKLOG.md](BACKLOG.md#done-backlog-batch-3-2026-10-13).

@@ -541,3 +541,6 @@ Everything still open, including the UX and iOS-native recommendations and the d
 
 **Backlog batch 2 (2026-10-13):** IOS-12r, IOS-22, IOS-23 and WEB-28i (the iOS half of WEB-28) are fixed; outcomes in
 [BACKLOG.md](BACKLOG.md#done-backlog-batch-2-2026-10-13).
+
+**Backlog batch 3 (2026-10-13):** IOS-11 (by the IOS-10 shared fixture) fixed; outcomes in
+[BACKLOG.md](BACKLOG.md#done-backlog-batch-3-2026-10-13).

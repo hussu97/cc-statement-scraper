@@ -27,11 +27,11 @@ separately):
 | Database (Supabase SQL) | 0 | 2 | – | 1 | 3 |
 | Edge Functions | 0 | 0 | – | – | 0 |
 | Parser | 1 | – | – | – | 1 |
-| Web | 4 | 20 | 5 | – | 29 |
-| iOS | 3 | 9 | 7 | 2 | 21 |
-| Scraper | – | 2 | – | – | 2 |
-| CI, config and ops | 0 | 1 | – | 0 | 1 |
-| **Total** | **8** | **34** | **12** | **3** | **57** |
+| Web | 1 | 20 | 5 | – | 26 |
+| iOS | 2 | 9 | 7 | 2 | 20 |
+| Scraper | – | 1 | – | – | 1 |
+| CI, config and ops | 0 | 0 | – | 0 | 0 |
+| **Total** | **4** | **32** | **12** | **3** | **51** |
 
 There are no open P0 or P1 findings. The last P1 remainders (WEB-02 statements beyond 500 and
 merchant search, WEB-07 "Retry AI") landed in `98f901c`. What is left of the P1s are the device
@@ -93,16 +93,12 @@ None open. All five were done on 2026-10-09: see [Done: Edge Functions and CI pa
 
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
-| WEB-10r | Each review card runs 1–3 context queries, and every `transactions` event invalidates all review contexts | The badge part is fixed (head count) | One `review_context` RPC per list; invalidate only `["p", code, "reviews", "open"]` on txn events | M |
-| WEB-16 | Anomalies show raw uppercase descriptions as separate rows, flag "Large first purchase" on a charge below usual, and use jargon | Partly server-side (`anomalies`) | Return `merchant_name`, require first purchase **and** above threshold, phrase as "about 4× your usual Shopping purchase", add a "this is fine" action | M |
 | WEB-24 | Bulk bar: phone selection and Categorise are done; still no Exclude, Export CSV or server-computed selection total | UX | Add those actions (server total via an RPC) | M |
-| WEB-27 | Empty ledger shows AED 0.00, an empty ruler and four empty states; no first-run guidance | Out of the P1 pass | "Get your ledger going" checklist from server state: statement, mailbox, PDF passwords, SMS shortcut, member | M |
 
 ### iOS
 
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
-| IOS-11 | SMS filter tests use invented bodies, not the `sms_templates` examples (the pre-push hook compiles the app and extension; no macOS CI) | Test fixture | Export template examples to a fixture with a drift check | M |
 | IOS-18 | Category sheet opens at `.medium` (3 categories), no search, no "None", merchant toggle defaults off, no notes or exclude-from-spend | UX, out of the P1 pass | `.large` + `.searchable`, merchant toggle on unless the category is manual, "Exclude from spend" and notes, swipe actions on rows | M |
 | IOS-21r | Release config still includes the local `Secrets.xcconfig` (one dropped key ships a local value); no assertion on the archived Info.plist; no Sentry releases; the token in `Secrets.Release.xcconfig` is an Xcode build setting (also X-28) | Only the token handling in `publish-build.sh` was done | Include `Secrets.xcconfig` from `Debug.xcconfig` only; `plutil` asserts on the archived app and `.appex` (https, `production`, non-empty keys); `sentry-cli releases new/set-commits/finalize`; keep the token in the shell or keychain | M |
 
@@ -134,13 +130,13 @@ None open (SRV-12, SRV-17 and X-25r are done).
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
 | WEB-13r | The rule editor still pre-checks regex syntax with JS `RegExp`, so Postgres-only syntax (embedded options such as `(?b)…`) is blocked on the client | Found in the batch-1 WEB-13 fix; only the opposite direction was in scope | Drop the JS pre-check and let `preview_rule` (22023) judge | S |
+| WEB-16r | The nightly `large_transaction` insight title still uses the raw uppercase description | Found with WEB-16; needs a `private.generate_insights` rewrite | Title from `merchant_name`, as `anomalies` now returns | S |
 | WEB-31 | "Uncategorised" vs "Uncategorized" across UI, Trends and the server name | Polish | UK spelling everywhere, server name included | S |
 | WEB-34 | Mixed decimals for the same kind of figure | Polish | Two decimals for transactions, whole units for balances, limits and aggregates | S |
 | WEB-35 | "Pending from SMS" and "Recent activity" show largely the same rows | UX | Merge, or exclude pending from Recent | S |
 | WEB-36 | "Due in 0 d"; past dues show no paid/overdue state | Needs payment-matched status from the server (also iOS "Paid") | "Due today/tomorrow"; server flag for a payment covering the statement | M |
 | WEB-37 | No headline totals (subscriptions per year, YoY YTD delta, Trends period total/avg); partial month unmarked | Needs small RPC additions | Server totals and an "Oct (to date)" marker | M |
 | WEB-38 | Budgets have no "expected by today" tick or "AED X over pace" | UX | Today tick on meters, over-pace text | S |
-| WEB-39 | Deep links are lost on sign-in | UX | Carry a same-origin `redirect` through `/signin` | S |
 | WEB-40 | First-run "Key … X-Profile-Key header" jargon; "one person's cards" copy vs a "Household" example | UX copy | Move "Key" under Advanced with a generated default; fix the copy | S |
 | WEB-41 | Disabled-until-valid primary buttons are ~2:1 and give no reason | UX | Keep enabled and validate on submit, or explain | S |
 | WEB-42 | Revoked tokens are listed forever (the pluralisation is fixed) | UX | Collapse revoked tokens behind a "Show revoked" toggle | S |
@@ -172,14 +168,12 @@ None open (SRV-12, SRV-17 and X-25r are done).
 
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
-| SRV-16 | `uploaded.json` is written non-atomically and a corrupt file is silently treated as empty; long or padded filenames never get recorded | Out of the P1 pass | Temp file + `os.replace`, keep a `.corrupt` copy with a warning; normalise names before matching | S |
-| NEW-3 | `scraper/README.md` doesn't document `CCS_SCRAPER_UPLOAD_MAX_FILES` / `_MAX_MB` or the batch-and-retry behaviour (root README does) | File outside the docs pass | Add both to the scraper README's env table and upload section | S |
+| SRV-16r | `upload_pdfs` tracks files by name only, so same-named files from two folders can be misattributed after a partial failure; `ccs-scraper upload` records nothing and ends with a traceback on a partial batch failure | Found with SRV-16 | Track by path; catch the partial failure, record the batches that succeeded | S |
 
 ### CI, config and ops
 
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
-| X-34 | `pnpm db:types:check` can flip between resets: two `v_transactions` relationships share the FK name `accounts_bank_code_fkey` and the generator orders them nondeterministically | Seen during batch 2; CI has passed so far | Normalise the generated file (stable sort of `Relationships`) in `db:types` and `db:types:check`, or give the view's second bank join a distinct FK-backed name | S |
 
 ---
 
@@ -285,6 +279,23 @@ CHANGELOG.
 (05's recommendations 3–5 are IOS-19r, IOS-20r, IOS-18, IOS-28 and IOS-17 above.)
 
 ---
+
+## Done: backlog batch 3 (2026-10-13)
+
+Branch `batch/backlog-3`, migrations `20261012234036_anomalies_plain_and_dismissals` and
+`20261013001856_review_context`, pgTAP `42` and `43`. Audited after merge; the sign-in redirect
+validator was tightened (dot segments could normalise to `//host`).
+
+| ID | Outcome |
+|---|---|
+| WEB-16 | Done: `anomalies` returns merchant and category names, `baseline_scope`, `times_usual`; a first purchase needs a known merchant, ≥ AED 500 and ≥ 2× the category's usual; "This is fine" (`dismiss_anomaly`, `anomaly_dismissals`). Insight titles are WEB-16r |
+| WEB-10r | Done: `review_context` loads a page of reviews' context in one call; transaction events refetch only the open-review list |
+| WEB-27 | Done: "Get your ledger going" checklist on an empty ledger, each step proven by data, unknown when unreadable |
+| WEB-39 | Done: `/signin?redirect=` carries a validated same-origin path through email code and passkey sign-in |
+| SRV-16 | Done: atomic `uploaded.json` / `bank_map.json`, corrupt files kept aside, server-normalised filenames. Remainder SRV-16r |
+| NEW-3 | Done: scraper README and `.env.example` document the upload limits and batch-and-retry |
+| X-34 | Done: `packages/db-types/scripts/gen-types.mjs` sorts `Relationships`; `db:types`, `db:types:check`, pre-push and CI use it |
+| IOS-11 | Done by IOS-10 (batch 1): `38_sms_otp_filter` fails when a `sms_templates` example is missing from the shared fixture, and `SMSOTPParityTests` runs the same bodies on the device filter |
 
 ## Done: backlog batch 2 (2026-10-13)
 
