@@ -15,7 +15,7 @@ export function csvCell(value: string | null | undefined): string {
   if (value === null || value === undefined) return "";
   let s = value;
   // Leading spaces don't save a cell from being read as a formula by every spreadsheet.
-  const head = s.trimStart();
+  const head = s.replace(/^ +/, "");
   if (FORMULA_START.test(head) && !DECIMAL.test(s)) s = `'${s}`;
   if (/[",\r\n]/.test(s) || s !== s.trim()) s = `"${s.replace(/"/g, '""')}"`;
   return s;
