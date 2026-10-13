@@ -38,8 +38,9 @@ struct ActivityView: View {
             }
         }
         .refreshable { await model.load(profileCode: profileCode) }
-        // ledger://uncategorised (the Control): this month's uncategorised rows.
-        .task(id: tabs?.activityPreset) {
+        // ledger://uncategorised (the Control): this month's uncategorised rows. Keyed on the
+        // request count, not the preset: taking the preset must not cancel this task.
+        .task(id: tabs?.activityPresetRequest) {
             guard let preset = tabs?.takeActivityPreset() else { return }
             await model.apply(preset, profileCode: profileCode)
         }

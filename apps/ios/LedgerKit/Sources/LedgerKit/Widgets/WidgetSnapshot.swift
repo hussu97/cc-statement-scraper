@@ -26,7 +26,8 @@ public struct WidgetSnapshot: Codable, Sendable, Equatable {
     public let uncategorizedCount: Int
     public let cards: [Card]
 
-    /// One card account: its latest statement's due date and balance, and utilisation.
+    /// One card account: its latest statement's due date, balance and
+    /// payment status, and utilisation.
     public struct Card: Codable, Sendable, Equatable, Identifiable {
         public var id: String { accountCode }
         public let accountCode: String
@@ -36,19 +37,44 @@ public struct WidgetSnapshot: Codable, Sendable, Equatable {
         public let minDue: Decimal?
         /// The server's latest statement balance / limit (4dp).
         public let utilisation: Decimal?
+        /// The latest statement's `payment_status` (`paid | part_paid | unpaid |
+        /// overdue`). Absent from an older server, and from a snapshot written
+        /// before it was kept: then the phone never claims it was paid.
+        public let paymentStatus: String?
+        /// Paid towards the latest statement (AED), when the server says.
+        public let amountPaid: Decimal?
 
         public init(accountCode: String, title: String, dueDate: CalendarDay?, closingBalance: Decimal?,
-                    minDue: Decimal?, utilisation: Decimal?) {
+                    minDue: Decimal?, utilisation: Decimal?, paymentStatus: String? = nil,
+                    amountPaid: Decimal? = nil) {
             self.accountCode = accountCode
             self.title = title
             self.dueDate = dueDate
             self.closingBalance = closingBalance
             self.minDue = minDue
             self.utilisation = utilisation
+            self.paymentStatus = paymentStatus
+            self.amountPaid = amountPaid
         }
 
+        /// The server's verdict on the latest statement (`DueStatus`).
+        public var duePayment: DuePayment? { DuePayment(status: paymentStatus, amountPaid: amountPaid) }
+
         enum CodingKeys: String, CodingKey {
-            case accountCode, title, dueDate, closingBalance, minDue, utilisation
+            case accountCode, title, dueDate, closingBalance, minDue, utilisation, paymentStatus, amountPaid
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            accountCode = try c.decode(String.self, forKey: .accountCode)
+            title = try c.decode(String.self, forKey: .title)
+            dueDate = try c.decodeIfPresent(CalendarDay.self, forKey: .dueDate)
+            closingBalance = try c.decodeIfPresent(Decimal.self, forKey: .closingBalance)
+            minDue = try c.decodeIfPresent(Decimal.self, forKey: .minDue)
+            utilisation = try c.decodeIfPresent(Decimal.self, forKey: .utilisation)
+            // Snapshots written before these were kept still decode.
+            paymentStatus = try c.decodeIfPresent(String.self, forKey: .paymentStatus)
+            amountPaid = try c.decodeIfPresent(Decimal.self, forKey: .amountPaid)
         }
 
         public func encode(to encoder: any Encoder) throws {
@@ -59,6 +85,8 @@ public struct WidgetSnapshot: Codable, Sendable, Equatable {
             try c.encodeIfPresent(closingBalance.map(DecimalValue.init), forKey: .closingBalance)
             try c.encodeIfPresent(minDue.map(DecimalValue.init), forKey: .minDue)
             try c.encodeIfPresent(utilisation.map(DecimalValue.init), forKey: .utilisation)
+            try c.encodeIfPresent(paymentStatus, forKey: .paymentStatus)
+            try c.encodeIfPresent(amountPaid.map(DecimalValue.init), forKey: .amountPaid)
         }
     }
 
@@ -92,7 +120,9 @@ public struct WidgetSnapshot: Codable, Sendable, Equatable {
                      dueDate: account.latestStatement?.dueDate,
                      closingBalance: account.latestStatement?.closingBalance,
                      minDue: account.latestStatement?.minDue,
-                     utilisation: account.utilisation)
+                     utilisation: account.utilisation,
+                     paymentStatus: account.latestStatement?.paymentStatus,
+                     amountPaid: account.latestStatement?.amountPaid)
             })
     }
 
@@ -104,7 +134,8 @@ public struct WidgetSnapshot: Codable, Sendable, Equatable {
     }
 
     /// Reload the widgets' timelines for this write: when anything they show
-    /// changed, or the one on disk is over `maxAge` old (its "Updated" time).
+    /// changed (a statement's payment status included: a paid statement leaves
+    /// the due widget), or the one on disk is over `maxAge` old (its "Updated" time).
     /// Overview reloads on every Realtime change; an identical write within
     /// the half hour costs no widget reload.
     public func needsReload(replacing previous: WidgetSnapshot?, maxAge: TimeInterval = 30 * 60) -> Bool {

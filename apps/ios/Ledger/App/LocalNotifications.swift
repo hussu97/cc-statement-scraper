@@ -73,19 +73,37 @@ enum LocalNotifications {
         await apply(CaptureNotices.outboxReminder(status, preferences: services.notices))
     }
 
-    /// Replans the due reminders from the ledger's statement cycles. A failed
-    /// load changes nothing: the reminders already pending stay.
-    static func refreshDueReminders(_ services: LedgerServices, profileCode: String?) async {
-        let planned: [LocalNotice]
-        if let profileCode, services.notices.isOn(.dueReminder) {
-            guard let cycles = try? await services.api.statementCycles(profileCode: profileCode,
-                                                                        limit: DueReminders.cycleLimit) else { return }
-            planned = DueReminders.plan(cycles: cycles, preferences: services.notices)
-        } else {
-            planned = []
+    /// Applies `DueReminders.refresh`: replans from the ledger's statement
+    /// cycles, withdraws everything once signed out, or (profiles not loaded
+    /// yet) leaves what is scheduled. A failed load changes nothing either.
+    static func refreshDueReminders(_ services: LedgerServices, _ refresh: DueReminders.Refresh) async {
+        switch refresh {
+        case .keep:
+            return
+        case .withdrawAll:
+            await withdrawDueReminders()
+        case .replan(let profileCode):
+            let cycles: [StatementCycle]
+            if services.notices.isOn(.dueReminder) {
+                guard let loaded = try? await services.api.statementCycles(profileCode: profileCode,
+                                                                            limit: DueReminders.cycleLimit) else { return }
+                cycles = loaded
+            } else {
+                cycles = []
+            }
+            let planned = DueReminders.plan(cycles: cycles, preferences: services.notices)
+            let pending = await center.pendingNotificationRequests().map(\.identifier)
+            let delivered = await center.deliveredNotifications().map(\.request.identifier)
+            await apply(DueReminders.sync(pendingIDs: pending, deliveredIDs: delivered, planned: planned,
+                                          cycles: cycles))
         }
+    }
+
+    /// Signed out: every due reminder, scheduled or delivered, is withdrawn.
+    static func withdrawDueReminders() async {
         let pending = await center.pendingNotificationRequests().map(\.identifier)
-        await apply(DueReminders.sync(pendingIDs: pending, planned: planned))
+        let delivered = await center.deliveredNotifications().map(\.request.identifier)
+        await apply(DueReminders.withdrawAll(pendingIDs: pending, deliveredIDs: delivered))
     }
 }
 

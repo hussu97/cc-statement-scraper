@@ -33,13 +33,64 @@ public enum DueReminders {
             .sorted { ($0.fireAt ?? now, $0.id) < ($1.fireAt ?? now, $1.id) }
     }
 
-    /// What to change, given the due-reminder requests pending now: withdraw
-    /// those no longer planned (paid, superseded, switched off), post the plan
-    /// (re-posting an id replaces it, so a changed amount is kept current).
-    public static func sync(pendingIDs: [String], planned: [LocalNotice]) -> NoticeUpdate {
+    /// What the app does with the due reminders on coming to the foreground,
+    /// or once a ledger is on screen.
+    public enum Refresh: Equatable, Sendable {
+        /// Load this ledger's statement cycles and sync the plan.
+        case replan(profileCode: String)
+        /// Signed out: withdraw every due reminder, pending and delivered.
+        case withdrawAll
+        /// Nothing is known about the ledger yet: leave what is scheduled.
+        case keep
+    }
+
+    /// Only a loaded profile list with the selected ledger in it can replan.
+    /// While the session restores, or the profiles are loading or failed to
+    /// load (a cold or offline launch), nothing is selected yet, and planning
+    /// from that would withdraw every reminder; they stay as scheduled. Only
+    /// signing out withdraws them all.
+    public static func refresh(phase: SessionStore.Phase, profiles: LoadState<[LedgerProfile]>,
+                               selected: String?) -> Refresh {
+        switch phase {
+        case .signedOut:
+            return .withdrawAll
+        case .restoring, .awaitingCode:
+            return .keep
+        case .signedIn:
+            guard case .loaded(let list) = profiles, let selected,
+                  list.contains(where: { $0.profileCode == selected }) else { return .keep }
+            return .replan(profileCode: selected)
+        }
+    }
+
+    /// Signing out: every due reminder goes, scheduled or already in
+    /// Notification Centre (the next account's ledger isn't this one).
+    public static func withdrawAll(pendingIDs: [String], deliveredIDs: [String]) -> NoticeUpdate {
+        NoticeUpdate(cancel: Set((pendingIDs + deliveredIDs).filter { $0.hasPrefix(idPrefix) }).sorted())
+    }
+
+    /// What to change, given the due-reminder requests pending now and those
+    /// already delivered: withdraw the pending ones no longer planned (paid,
+    /// superseded, switched off) and the delivered ones for a statement the
+    /// server now marks paid (a "due today" for a paid card is wrong, not
+    /// history), then post the plan (re-posting an id replaces it, so a
+    /// changed amount is kept current). A delivered reminder for a statement
+    /// still to pay stays in Notification Centre.
+    public static func sync(pendingIDs: [String], deliveredIDs: [String] = [], planned: [LocalNotice],
+                            cycles: [StatementCycle] = []) -> NoticeUpdate {
         let keep = Set(planned.map(\.id))
-        let stale = pendingIDs.filter { $0.hasPrefix(idPrefix) && !keep.contains($0) }.sorted()
-        return NoticeUpdate(post: planned, cancel: stale)
+        let stale = pendingIDs.filter { $0.hasPrefix(idPrefix) && !keep.contains($0) }
+        let paid = Set(cycles.filter { $0.duePayment?.status == .paid }.map(\.stmtCode))
+        let paidDelivered = deliveredIDs.filter { id in statementCode(of: id).map(paid.contains) ?? false }
+        return NoticeUpdate(post: planned, cancel: Set(stale + paidDelivered).sorted())
+    }
+
+    /// `"ledger.due.stm_x.t3"` → `"stm_x"`; nil for any other notification.
+    static func statementCode(of id: String) -> String? {
+        guard id.hasPrefix(idPrefix), let dot = id.lastIndex(of: "."),
+              dot >= id.index(id.startIndex, offsetBy: idPrefix.count) else { return nil }
+        let code = id[id.index(id.startIndex, offsetBy: idPrefix.count)..<dot]
+        return code.isEmpty ? nil : String(code)
     }
 
     static func notice(_ cycle: StatementCycle, due: CalendarDay, daysBefore: Int, id: String,

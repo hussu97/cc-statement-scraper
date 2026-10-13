@@ -7,6 +7,8 @@ private let enAE = Locale(identifier: "en_AE")
 private let enUS = Locale(identifier: "en_US")
 private let deDE = Locale(identifier: "de_DE")
 private let enGB = Locale(identifier: "en_GB")
+private let arAE = Locale(identifier: "ar_AE")
+private let arSA = Locale(identifier: "ar_SA")
 
 @Suite("Log Card Payment — the currency comes with the Wallet amount")
 struct WalletAmountTests {
@@ -51,11 +53,63 @@ struct WalletAmountTests {
     }
 
     @Test("no currency in the text, or a symbol several currencies use: none is guessed", arguments: [
-        ("12.50", enAE), ("$6.25", enGB), ("¥500", enGB),
+        ("12.50", enAE, false), ("$6.25", enGB, true), ("¥500", enGB, true), ("₿ 5", enAE, true),
     ])
-    func noCurrency(text: String, locale: Locale) throws {
+    func noCurrency(text: String, locale: Locale, marked: Bool) throws {
         let parsed = try #require(WalletAmountText.parse(text, locale: locale))
         #expect(parsed.currency == nil)
+        #expect(parsed.hasCurrencyMarker == marked)
+    }
+
+    // MARK: - Arabic-locale phones
+
+    @Test("Arabic-locale symbols with their bidi marks and trailing dot resolve; ٫ is the decimal point", arguments: [
+        // ar_AE writes Western digits.
+        ("\u{200F}12.500\u{00A0}\u{062F}.\u{0643}.\u{200F}", arAE, "12.500", "KWD"),
+        ("\u{200F}1,234.567\u{00A0}\u{062F}.\u{0628}.\u{200F}", arAE, "1234.567", "BHD"),
+        ("\u{200F}1,234.57\u{00A0}\u{062C}.\u{0645}.\u{200F}", arAE, "1234.57", "EGP"),
+        ("\u{0631}.\u{0639}. 3.250", arAE, "3.250", "OMR"),
+        ("\u{062F}.\u{0623}. 7.125", arAE, "7.125", "JOD"),
+        // ar_SA writes Arabic-Indic digits, ٬ for grouping and ٫ for the decimal point.
+        ("\u{0661}\u{066B}\u{0662}\u{0663}\u{0664} \u{062F}.\u{0643}.", arSA, "1.234", "KWD"),
+        ("\u{200F}\u{0661}\u{066C}\u{0662}\u{0663}\u{0664}\u{066B}\u{0665}\u{0666}\u{0667}\u{00A0}\u{062F}.\u{0643}.\u{200F}",
+         arSA, "1234.567", "KWD"),
+        ("\u{200F}\u{0662}\u{0665}\u{066B}\u{0665}\u{0660}\u{0660}\u{00A0}\u{062F}.\u{0628}.\u{200F}", arSA, "25.500", "BHD"),
+        ("\u{200F}\u{0661}\u{066C}\u{0662}\u{0663}\u{0664}\u{066B}\u{0665}\u{0667}\u{00A0}\u{062C}.\u{0645}.\u{200F}",
+         arSA, "1234.57", "EGP"),
+        // ٬ with three digits after it is grouping in ar_SA, as , is in ar_AE.
+        ("\u{0661}\u{066C}\u{0662}\u{0663}\u{0664} \u{062C}.\u{0645}.", arSA, "1234", "EGP"),
+    ])
+    func arabicLocales(text: String, locale: Locale, amount: String, currency: String) throws {
+        let parsed = try #require(WalletAmountText.parse(text, locale: locale))
+        #expect(parsed.amount == dec(amount))
+        #expect(parsed.currency == currency)
+        #expect(WalletAmount.resolve(text: text, fallbackCurrency: "AED", locale: locale)
+                == .success(.init(amount: dec(amount), currency: currency, source: .text)))
+    }
+
+    @Test("whatever these Arabic locales write for a Gulf or Levant currency reads back as that currency",
+          arguments: ["ar_AE", "ar_SA", "ar_KW", "ar_EG"])
+    func arabicRoundTrip(identifier: String) throws {
+        let locale = Locale(identifier: identifier)
+        let formatter = NumberFormatter()
+        formatter.locale = locale
+        formatter.numberStyle = .currency
+        for code in ["KWD", "BHD", "OMR", "JOD", "EGP", "AED", "SAR", "QAR"] {
+            formatter.currencyCode = code
+            let text = try #require(formatter.string(from: NSDecimalNumber(string: "1234.5")))
+            let parsed = try #require(WalletAmountText.parse(text, locale: locale), "\(identifier) \(code)")
+            #expect(parsed.currency == code, "\(identifier) \(code)")
+            #expect(parsed.amount == dec("1234.5"), "\(identifier) \(code)")
+        }
+    }
+
+    @Test("the symbol key drops bidi marks and spaces and trims the dots, for the table and the text alike")
+    func symbolKey() {
+        #expect(WalletAmountText.symbolKey("\u{062F}.\u{0643}.\u{200F}") == "\u{062F}.\u{0643}")
+        #expect(WalletAmountText.symbolKey(" \u{062F}.\u{0643}. ") == "\u{062F}.\u{0643}")
+        #expect(WalletAmountText.symbolKey("US $") == "US$")
+        #expect(WalletAmountText.symbolKey(" . ") == "")
     }
 
     @Test("not an amount", arguments: ["", "AED", "twelve", "12.50.AB3", "1/2"])
@@ -75,6 +129,15 @@ struct WalletAmountTests {
     func fallback() {
         let r = WalletAmount.resolve(text: "12.50", fallbackCurrency: " aed ", locale: enAE)
         #expect(r == .success(.init(amount: dec("12.50"), currency: "AED", source: .fallbackCurrency)))
+    }
+
+    @Test("a symbol that is ambiguous or unknown is refused, never filled in from the fallback", arguments: [
+        ("$6.25", enGB), ("¥500", enGB), ("₿ 5", enAE), ("12.50 XYZ", enAE), ("\u{0634}.\u{0634}. 12", arAE),
+    ])
+    func markedButUnresolved(text: String, locale: Locale) {
+        #expect(WalletAmount.resolve(text: text, fallbackCurrency: "AED", locale: locale) == .failure(.ambiguousCurrency))
+        #expect(WalletAmount.resolve(text: text, fallbackCurrency: nil, locale: locale) == .failure(.ambiguousCurrency))
+        #expect(WalletCapture.Problem.ambiguousCurrency.userMessage.contains("won't guess"))
     }
 
     @Test("no currency anywhere, or an invalid fallback: refused, nothing guessed", arguments: [

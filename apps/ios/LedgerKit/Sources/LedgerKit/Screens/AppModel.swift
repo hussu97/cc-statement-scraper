@@ -54,6 +54,15 @@ public final class AppModel {
 
     private var lastPhase: SessionStore.Phase = .restoring
 
+    /// Withdraws every due reminder from the notification centre; set by the
+    /// app (LedgerKit doesn't post notifications). Called on every sign-out.
+    public var withdrawDueReminders: @MainActor () async -> Void = {}
+
+    /// Whether the due reminders can be replanned now (`DueReminders.refresh`).
+    public var dueReminderRefresh: DueReminders.Refresh {
+        DueReminders.refresh(phase: session.phase, profiles: profiles.state, selected: profiles.selectedCode)
+    }
+
     public init(services: LedgerServices) {
         self.services = services
         session = SessionStore(client: services.client, storage: services.sessionStorage)
@@ -121,6 +130,7 @@ public final class AppModel {
             tabs.signedOut()   // a pending ledger://review must not open for the next account
             screens.stop()
             services.widgets.clear()   // nothing of this account stays on the Home or Lock Screen
+            await withdrawDueReminders()   // nor in its notifications
         default:
             break
         }
@@ -203,6 +213,7 @@ public final class AppModel {
         screens.stop()
         tabs.signedOut()
         services.widgets.clear()
+        await withdrawDueReminders()
         await session.signOut()
         profiles.reset()
         do {
