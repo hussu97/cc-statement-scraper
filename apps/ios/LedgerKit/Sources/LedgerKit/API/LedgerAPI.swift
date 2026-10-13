@@ -26,9 +26,10 @@ public protocol LedgerAPI: SMSIngestAPI {
     // Analytics (SQL RPCs)
     func overview(profileCode: String, month: CalendarDay?) async throws -> Overview
     func categoryBreakdown(profileCode: String, from: CalendarDay, to: CalendarDay) async throws -> [CategorySpend]
-    /// `rpc('spend_series')` over the spend `filter` keeps (empty: all spend).
+    /// `rpc('spend_series')` over the spend `filter` keeps (empty: all spend). With `top`, groups
+    /// beyond the `top` largest fold into one "Other" row per bucket (`group_key` null), on the server.
     func spendSeries(profileCode: String, from: CalendarDay, to: CalendarDay, grain: SpendGrain, group: SpendGroup,
-                     filter: SpendFilter) async throws -> [SpendPoint]
+                     top: Int?, filter: SpendFilter) async throws -> [SpendPoint]
     func merchantLeaderboard(profileCode: String, from: CalendarDay, to: CalendarDay, limit: Int) async throws -> [MerchantSpend]
     func statementCycles(profileCode: String, limit: Int) async throws -> [StatementCycle]
     /// `rpc('budget_status')`: the budgets that count for the month, and with
@@ -124,6 +125,13 @@ extension LedgerAPI {
     public func spendSeries(profileCode: String, from: CalendarDay, to: CalendarDay, grain: SpendGrain,
                             group: SpendGroup) async throws -> [SpendPoint] {
         try await spendSeries(profileCode: profileCode, from: from, to: to, grain: grain, group: group, filter: SpendFilter())
+    }
+
+    /// Every group, none folded.
+    public func spendSeries(profileCode: String, from: CalendarDay, to: CalendarDay, grain: SpendGrain,
+                            group: SpendGroup, filter: SpendFilter) async throws -> [SpendPoint] {
+        try await spendSeries(profileCode: profileCode, from: from, to: to, grain: grain, group: group, top: nil,
+                              filter: filter)
     }
 
     /// All spend, unfiltered.
