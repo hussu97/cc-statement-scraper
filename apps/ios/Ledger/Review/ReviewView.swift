@@ -2,8 +2,9 @@ import LedgerKit
 import SwiftUI
 
 /// Open reviews for the active ledger: link an SMS or statement line to a
-/// candidate, keep it as a new transaction, register an unknown card, or
-/// dismiss. What each review offers is decided in LedgerKit (`ReviewPresentation`).
+/// candidate, keep it as a new transaction, register an unknown card, accept or
+/// reject a proposed SMS format (PAR-14), or dismiss. What each review offers is
+/// decided in LedgerKit (`ReviewPresentation`).
 struct ReviewView: View {
     let model: ReviewModel
     let profileCode: String
@@ -25,7 +26,8 @@ struct ReviewView: View {
                     EmptyCard(systemImage: "checkmark.seal", message: "Nothing to review.")
                 }
                 ForEach(groups) { group in
-                    ReviewGroupCard(group: group, working: model.working, canResolve: canResolve) { item, option in
+                    ReviewGroupCard(group: group, working: model.working, canResolve: canResolve,
+                                    messages: model.messages, profileCode: profileCode) { item, option in
                         Task { await model.resolve(item, option, profileCode: profileCode) }
                     }
                 }
@@ -46,6 +48,9 @@ private struct ReviewGroupCard: View {
     let group: ReviewGroup
     let working: String?
     let canResolve: Bool
+    /// An SMS subject's text, shown on request.
+    let messages: SMSTextReveal
+    let profileCode: String
     let resolve: (ReviewItem, ReviewItem.Option) -> Void
 
     var body: some View {
@@ -63,6 +68,10 @@ private struct ReviewGroupCard: View {
                     if let detail = item.subjectDetail {
                         Text(detail).font(Typography.caption).foregroundStyle(Palette.muted)
                     }
+                    if let sms = item.smsCode {
+                        SMSTextToggle(smsCode: sms, profileCode: profileCode, messages: messages)
+                    }
+                    if let proposal = item.proposal { FormatProposalView(proposal: proposal) }
                     if let note = item.note {
                         Text(note).font(Typography.caption).foregroundStyle(Palette.muted)
                     }

@@ -69,6 +69,7 @@
 		D987345F5472C568EB6B0C2A /* UtilisationWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 132F44CB313BF94C3BC3D2A9 /* UtilisationWidget.swift */; };
 		E02100DFFF1F05C3E19306C6 /* AnomaliesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F97ED19E6EAD9BD539F47D2 /* AnomaliesView.swift */; };
 		E0FD108F9F8CAE01FBFFBA28 /* ReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7DE35B2ABB9AA3A980FD35D /* ReviewView.swift */; };
+		E43EF93F5455BEBBC096595F /* FormatProposalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0683EFBBA23F8FEF402BC02F /* FormatProposalView.swift */; };
 		E5EB7FF2C25CAEADF48222E7 /* CategoryRingCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 507717F76A89EB62E91E2240 /* CategoryRingCard.swift */; };
 		EBE6B98A364642BCAF0A7E52 /* ProfilePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842801DBC37F9A8E31C6DFA8 /* ProfilePickerView.swift */; };
 		ED325B9BA4B367EF0EA35685 /* GuideSteps.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF198F50092EDA75F342D73A /* GuideSteps.swift */; };
@@ -113,6 +114,7 @@
 /* Begin PBXFileReference section */
 		0120325ABB16C928EB7D78A2 /* ActivitySheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivitySheets.swift; sourceTree = "<group>"; };
 		05EB2567DB0EA258329DBD95 /* InsightsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsightsView.swift; sourceTree = "<group>"; };
+		0683EFBBA23F8FEF402BC02F /* FormatProposalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FormatProposalView.swift; sourceTree = "<group>"; };
 		076A0083646CF5850906DE83 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		0A25D970A4511B5531978319 /* BudgetEditSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetEditSheet.swift; sourceTree = "<group>"; };
 		11D547CA077A0BBC6F976DC3 /* LedgerControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerControls.swift; sourceTree = "<group>"; };
@@ -412,6 +414,7 @@
 		E68653B65277F1FC17330CBE /* Review */ = {
 			isa = PBXGroup;
 			children = (
+				0683EFBBA23F8FEF402BC02F /* FormatProposalView.swift */,
 				E7DE35B2ABB9AA3A980FD35D /* ReviewView.swift */,
 			);
 			path = Review;
@@ -778,6 +781,7 @@
 				E5EB7FF2C25CAEADF48222E7 /* CategoryRingCard.swift in Sources */,
 				C7D2A9DBE9043F127D748D46 /* ChartDescriptor.swift in Sources */,
 				2AF7A777F5554D6851F1C5F0 /* Components.swift in Sources */,
+				E43EF93F5455BEBBC096595F /* FormatProposalView.swift in Sources */,
 				ED325B9BA4B367EF0EA35685 /* GuideSteps.swift in Sources */,
 				8C58D7674B9E904EDD66A742 /* InsightFeedView.swift in Sources */,
 				4F5F815454811A4ECF4C88FF /* InsightsView.swift in Sources */,
