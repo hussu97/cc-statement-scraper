@@ -37,9 +37,8 @@ struct ActivityView: View {
         }
         .refreshable { await model.load(profileCode: profileCode) }
         .sheet(item: $editing) { txn in
-            CategorySheet(transaction: txn, categories: model.meta?.assignableCategories ?? []) { code, all in
-                await model.setCategory(txn, to: code, applyToMerchant: all, profileCode: profileCode)
-            }
+            CategorySheet(transaction: txn, categories: model.meta?.assignableCategories ?? [],
+                          profileCode: profileCode, target: model)
         }
         .sheet(isPresented: $showFilters) {
             ActivityFilterSheet(initial: model.query, meta: model.meta, months: months) { draft in
@@ -85,6 +84,16 @@ struct ActivityView: View {
     @ViewBuilder private func row(_ txn: LedgerTransaction) -> some View {
         if canEdit {
             Button { editing = txn } label: { TransactionRow(txn: txn) }
+                .swipeActions(edge: .trailing) {
+                    Button("Categorise", systemImage: "tag") { editing = txn }.tint(Palette.accent)
+                }
+                .swipeActions(edge: .leading) {
+                    Button(TransactionEditor.excludeActionTitle(excluded: txn.excludeFromSpend),
+                           systemImage: txn.excludeFromSpend ? "plus.circle" : "minus.circle") {
+                        Task { await model.toggleExcluded(txn, profileCode: profileCode) }
+                    }
+                    .tint(Palette.info)
+                }
         } else {
             TransactionRow(txn: txn)
         }
@@ -123,14 +132,14 @@ struct TransactionRow: View {
     @ViewBuilder private var meta: some View {
         if typeSize.prefersStackedRows {
             VStack(alignment: .leading, spacing: 2) {
-                Text(txn.categoryName ?? "Uncategorized")
+                Text(txn.categoryCaption)
                 BankCardLabel(bankCode: txn.bankCode, label: txn.cardSuffix, size: 16)
             }
             .font(Typography.caption)
             .foregroundStyle(Palette.muted)
         } else {
             HStack(spacing: 6) {
-                Text(txn.categoryName ?? "Uncategorized")
+                Text(txn.categoryCaption)
                 Text("·")
                 BankCardLabel(bankCode: txn.bankCode, label: txn.cardSuffix, size: 16)
             }
