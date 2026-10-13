@@ -144,6 +144,14 @@ jobs:
           # The append-only check diffs against the PR base / previous main.
           fetch-depth: 0
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      # The drift check normalises the generator's output (X-34); test that first.
+      - name: DB types normaliser tests
+        run: node --test packages/db-types/scripts/gen-types.test.mjs
+
       - name: Migrations are append-only
         if: needs.changes.outputs.migrations == 'true' && github.event_name != 'workflow_dispatch'
         env:
@@ -163,10 +171,11 @@ jobs:
       - name: pgTAP
         run: supabase test db
 
+      # Same script as `pnpm db:types:check`: generate, stable-sort each Relationships
+      # array, then diff -u against the committed file.
       - name: DB types drift
         run: |
-          supabase gen types typescript --local > "$RUNNER_TEMP/database.ts"
-          if ! diff -u packages/db-types/src/database.ts "$RUNNER_TEMP/database.ts"; then
+          if ! node packages/db-types/scripts/gen-types.mjs --check; then
             echo "::error::packages/db-types is stale. Run 'pnpm db:types' and commit the result."
             exit 1
           fi
