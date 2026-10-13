@@ -46,7 +46,12 @@ public final class Paginator<Item: Identifiable & Sendable> {
     /// The one page size (CLAUDE.md §4.5).
     public nonisolated static var defaultPageSize: Int { ActivityQuery.defaultPageSize }
 
-    public private(set) var state: LoadState<[Item]> = .idle
+    public private(set) var state: LoadState<[Item]> = .idle {
+        didSet { revision &+= 1 }
+    }
+    /// Changes whenever `state` does, so a view of the rows (Activity's day
+    /// sections) is rebuilt only when they change, not on every redraw.
+    public private(set) var revision = 0
     public private(set) var footer: Footer = .hidden
     /// The server's exact row count, when it gives one.
     public private(set) var total: Int?

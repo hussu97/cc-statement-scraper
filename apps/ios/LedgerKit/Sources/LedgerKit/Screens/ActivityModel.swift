@@ -33,13 +33,21 @@ public final class ActivityModel: TransactionEditing {
         let query: ActivityQuery
     }
 
+    /// `sections` for the rows at `revision`, labelled relative to `today`.
+    @ObservationIgnored private var sectionsCache: (revision: Int, today: CalendarDay, sections: [DaySection])?
+    /// How many times the sections were built (tests check the cache).
+    @ObservationIgnored private(set) var sectionBuilds = 0
+
     public init(api: any LedgerAPI) { self.api = api }
 
     public var state: LoadState<[LedgerTransaction]> { list.state }
     public var rows: [LedgerTransaction] { list.items }
     public var total: Int? { list.total }
     public var footer: ListFooter { list.footer }
-    public var sections: [DaySection] { Self.sections(rows) }
+    /// The rows by day. Built when the rows (or the day) change, not on every
+    /// body evaluation: after a few "Load more" pages that is thousands of rows
+    /// grouped and sorted per keystroke (IOS-26).
+    public var sections: [DaySection] { sections(today: LedgerDates.today()) }
     public var hasLoaded: Bool { loadedFor != nil }
     public var summaryDisplay: ActivitySummaryDisplay { .of(summary) }
 
@@ -182,6 +190,15 @@ public final class ActivityModel: TransactionEditing {
             guard summaryGate.isCurrent(ticket) else { return }
             summary = .failed(LoadState<ActivitySummary>.message(for: error), previous: nil)
         }
+    }
+
+    func sections(today: CalendarDay) -> [DaySection] {
+        let revision = list.revision
+        if let cache = sectionsCache, cache.revision == revision, cache.today == today { return cache.sections }
+        let built = Self.sections(rows, today: today)
+        sectionsCache = (revision, today, built)
+        sectionBuilds += 1
+        return built
     }
 
     // MARK: Pure
