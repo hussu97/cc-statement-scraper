@@ -157,6 +157,22 @@ public enum SMSAutomationGuide {
              detail: "Tap Send test below to check the action and your sign-in. After your next card purchase, “Last captured” shows what happened, and Recent captures shows the sender and length the Shortcut passed."),
     ]
 
+    /// One picture of the Shortcuts editor, under step 5 (IOS-06g).
+    public struct Frame: Identifiable, Sendable, Hashable {
+        public var id: String { image }
+        /// The asset catalog name (`Guide/ShortcutInput1…3`).
+        public let image: String
+        public let caption: String
+    }
+
+    /// Step 5 in pictures: how "Shortcut Input" is picked as the message, from
+    /// the Shortcuts editor (simulator screenshots; nothing personal on them).
+    public static let shortcutInputFrames: [Frame] = [
+        Frame(image: "Guide/ShortcutInput1", caption: "1. Tap Message, then Select Variable."),
+        Frame(image: "Guide/ShortcutInput2", caption: "2. Tap Shortcut Input, above the action."),
+        Frame(image: "Guide/ShortcutInput3", caption: "3. Tap it again in the action and choose Content."),
+    ]
+
     public static let privacyNote = """
     Bank Ledger drops one-time passcodes on the phone; they never leave it. Every other \
     message the automation hands over is sent over your signed-in session, and Bank Ledger \

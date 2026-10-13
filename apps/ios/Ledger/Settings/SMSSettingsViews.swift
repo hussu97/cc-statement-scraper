@@ -97,6 +97,8 @@ struct SMSSetupGuideView: View {
 
             GuideSteps(steps: SMSAutomationGuide.steps)
 
+            ShortcutInputStrip(frames: SMSAutomationGuide.shortcutInputFrames)
+
             Card {
                 Label("Privacy", systemImage: "lock").font(Typography.cardTitle)
                 Text(SMSAutomationGuide.privacyNote).font(Typography.rowMeta).foregroundStyle(Palette.muted)

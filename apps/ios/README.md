@@ -144,7 +144,10 @@ more keywords would fire the action two or three times per alert. Settings → *
 capture* walks through it, shows **Last captured**, **Recent captures** (the last 20 runs:
 outcome, sender and message length, never the text, so a Shortcut passing the wrong field shows)
 and has **Send test** (the intent's path with a synthetic one-time passcode, dropped on the phone,
-plus an outbox flush).
+plus an outbox flush). Under the steps, a three-picture strip shows step 5 in the Shortcuts editor
+(Select Variable → Shortcut Input → Content; `SMSAutomationGuide.shortcutInputFrames`, images in
+`Assets.xcassets/Guide`, taken from the Shortcuts app in the simulator, iOS 26, so the editor on
+iOS 18 looks slightly different).
 
 Messages go to the **SMS go to** ledger (Settings): owned ledgers only, defaulting to the
 first one you own — never simply the ledger on screen. PDFs shared to "Add to Bank Ledger" go there too.
