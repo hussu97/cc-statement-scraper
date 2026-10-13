@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Link, Navigate, Outlet, useRouterState } from "@tanstack/react-router";
+import { Link, Navigate, Outlet, useLocation, useRouterState } from "@tanstack/react-router";
 import {
   ChartColumnBig,
   ChevronsUpDown,
@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { formatBadgeCount } from "@/lib/money";
+import { signInSearch } from "@/lib/redirect";
 import { useAuth, signOut } from "@/data/auth";
 import { memberProfiles, useProfileContext, type ProfileSummary } from "@/data/profile";
 import { useRealtimeInvalidation } from "@/data/realtime";
@@ -222,6 +223,17 @@ function MobileNav({ nav }: { nav: NavItem[] }) {
   );
 }
 
+/**
+ * To /signin, keeping the deep link so sign-in can send you back (WEB-39). The
+ * link is read once: the shell stays mounted while the navigation is pending,
+ * and re-reading the location then would see /signin and drop the redirect.
+ */
+function ToSignIn() {
+  const href = useLocation({ select: (l) => l.href });
+  const [from] = useState(href);
+  return <Navigate to="/signin" search={signInSearch(from)} replace />;
+}
+
 /** Authenticated layout: guards, realtime, navigation. */
 export function AppShell() {
   const { session, loading } = useAuth();
@@ -230,7 +242,7 @@ export function AppShell() {
   useRealtimeInvalidation(profile?.profile_code ?? null);
 
   if (loading) return <Splash />;
-  if (!session) return <Navigate to="/signin" />;
+  if (!session) return <ToSignIn />;
   if (profilesLoading) return <Splash />;
   if (error) return <ErrorState error={error} title="Couldn't load your ledgers" className="min-h-dvh" />;
   // Onboarding is about memberships: a super admin who belongs to no ledger
