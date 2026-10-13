@@ -42,5 +42,5 @@ public struct SignOutPlan: Sendable, Equatable {
     /// Shown after sign-out when `delete` failed.
     public static let deleteFailedMessage =
         "Signed out, but some SMS, card payments or PDFs couldn't be deleted from this phone. "
-        + "They won't be sent to another account; sign in again to delete them in Settings."
+        + "Sign in again and delete them in Settings; a PDF left here is uploaded for whoever signs in next."
 }
