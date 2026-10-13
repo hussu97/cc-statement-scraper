@@ -236,6 +236,18 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         case nil: return ActivitySummary(txnCount: 0, netAed: 0)
         }
     }
+    /// `activity_day_totals` answers by day (days not here aren't returned), the calls, and an error to throw.
+    var dayTotalRows: [CalendarDay: DayTotal] = [:]
+    var dayTotalsError: LedgerAPIError?
+    private(set) var dayTotalCalls: [(query: ActivityQuery, days: [CalendarDay])] = []
+    func activityDayTotals(profileCode: String, query: ActivityQuery, days: [CalendarDay]) async throws -> [DayTotal] {
+        let (rows, error) = lock.withLock {
+            dayTotalCalls.append((query, days))
+            return (dayTotalRows, dayTotalsError)
+        }
+        if let error { throw error }
+        return days.compactMap { rows[$0] }
+    }
     func transactions(profileCode: String, query: ActivityQuery, page: PageRequest) async throws -> TransactionPage {
         count("transactions")
         let all = lock.withLock {
@@ -275,6 +287,31 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
     var changeScript: [[String]] = []
     private(set) var subscriptions = 0
     private var openStreams: [AsyncStream<LedgerChange>.Continuation] = []
+    // MARK: Transaction detail
+
+    var merchantContexts: [String: MerchantContext] = [:]
+    var evidenceRows: [String: [EvidenceItem]] = [:]
+    var evidenceError: LedgerAPIError?
+    var smsBodies: [String: String] = [:]
+    private(set) var smsBodyReads: [String] = []
+    func merchantContext(profileCode: String, merchantCode: String) async throws -> MerchantContext {
+        count("merchantContext")
+        guard let context = merchantContexts[merchantCode] else { throw LedgerAPIError.network("-1009") }
+        return context
+    }
+    func transactionEvidence(profileCode: String, txnCode: String) async throws -> [EvidenceItem] {
+        if let evidenceError { throw evidenceError }
+        return EvidenceItem.sorted(evidenceRows[txnCode] ?? [])
+    }
+    func smsBody(profileCode: String, smsCode: String) async throws -> String? {
+        lock.withLock { smsBodyReads.append(smsCode) }
+        return smsBodies[smsCode]
+    }
+    func relatedTransactions(profileCode: String, txn: LedgerTransaction) async throws -> [LedgerTransaction] {
+        let all = lock.withLock { transactionRows[profileCode] ?? [] }
+        return all.filter { ($0.relatedTxnCode == txn.txnCode || $0.txnCode == txn.relatedTxnCode) && $0.txnCode != txn.txnCode }
+    }
+
     // MARK: Statement detail, spend split, banks, upload timeline
 
     var detail: StatementDetail?

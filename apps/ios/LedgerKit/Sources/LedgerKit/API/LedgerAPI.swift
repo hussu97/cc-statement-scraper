@@ -38,6 +38,9 @@ public protocol LedgerAPI: SMSIngestAPI {
     func filterMeta(profileCode: String) async throws -> FilterMeta
     /// `rpc('activity_summary')`: count, net AED and date span of the rows Activity lists for `query`.
     func activitySummary(profileCode: String, query: ActivityQuery) async throws -> ActivitySummary
+    /// `rpc('activity_day_totals')`: each of `days`' totals over every row matching `query`
+    /// (days with none are left out). `p_filter` is `query.activityFilter`, as the web sends it.
+    func activityDayTotals(profileCode: String, query: ActivityQuery, days: [CalendarDay]) async throws -> [DayTotal]
 
     // Tables / views
     /// One page of `v_transactions`, newest first, with the exact total.
@@ -68,6 +71,16 @@ public protocol LedgerAPI: SMSIngestAPI {
     /// `exclude_from_spend`, the columns `authenticated` may update). Owners only (RLS).
     func updateTransaction(txnCode: String, edit: TransactionEdit) async throws
     func uploadStatements(profileCode: String, files: [UploadFile]) async throws -> UploadResponse
+
+    // Transaction detail (SupabaseLedgerAPI+Transactions.swift): what the sheet shows beside the row
+    /// `rpc('merchant_context')`: visits, average and 6-month spend at the merchant.
+    func merchantContext(profileCode: String, merchantCode: String) async throws -> MerchantContext
+    /// `public.transaction_evidence` of the transaction with its statement line or SMS (no SMS body).
+    func transactionEvidence(profileCode: String, txnCode: String) async throws -> [EvidenceItem]
+    /// One SMS's text, read only when the reader opens it on the sheet. Never logged or kept.
+    func smsBody(profileCode: String, smsCode: String) async throws -> String?
+    /// The reversal pair of `txn`, in either direction (the row itself left out).
+    func relatedTransactions(profileCode: String, txn: LedgerTransaction) async throws -> [LedgerTransaction]
 
     // Statement detail, spend split, banks, upload timeline (SupabaseLedgerAPI+Statements.swift)
     /// `rpc('statement_detail')`. P0002 when the statement is unknown to the profile.

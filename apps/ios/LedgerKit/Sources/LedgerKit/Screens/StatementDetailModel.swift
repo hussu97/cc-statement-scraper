@@ -71,6 +71,11 @@ public final class StatementDetailModel: TransactionEditing {
     }
 
     /// Saves a note or the exclude flag and reloads the statement.
+    /// The details sheet of a matched line's transaction.
+    public func detail(for txn: LedgerTransaction, profileCode: String) -> TransactionDetailModel {
+        TransactionDetailModel(transaction: txn, profileCode: profileCode, api: api)
+    }
+
     public func saveEdit(_ txn: LedgerTransaction, _ edit: TransactionEdit, profileCode: String) async throws {
         try await api.updateTransaction(txnCode: txn.txnCode, edit: edit)
         await load(profileCode: profileCode)

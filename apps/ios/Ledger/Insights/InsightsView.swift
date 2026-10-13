@@ -29,7 +29,7 @@ struct InsightsView: View {
                                 seeAll: showBudgets)
                 }
                 CategoriesCard(categories: content.categories, from: range.from, to: range.to, profileCode: profileCode)
-                MerchantsCard(merchants: content.merchants)
+                MerchantsCard(merchants: content.merchants, from: range.from, to: range.to)
                 RecurringCard(recurring: content.activeRecurring, annualTotal: content.recurringAnnualTotal)
             }
         }
@@ -101,8 +101,12 @@ private struct CategoriesCard: View {
     }
 }
 
+/// The merchant leaderboard; a row opens Activity on that merchant in the range (PAR-4).
 private struct MerchantsCard: View {
     let merchants: [MerchantSpend]
+    let from: CalendarDay
+    let to: CalendarDay
+    @Environment(TabRouter.self) private var tabs: TabRouter?
 
     var body: some View {
         Card {
@@ -111,19 +115,30 @@ private struct MerchantsCard: View {
                 Text("No merchants in this period.").font(Typography.rowMeta).foregroundStyle(Palette.muted)
             }
             ForEach(Array(merchants.enumerated()), id: \.element.id) { index, merchant in
-                HStack {
-                    Text("\(index + 1)").font(Typography.caption).monospacedDigit().foregroundStyle(Palette.muted)
-                        .frame(width: 18, alignment: .leading)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(merchant.merchantName).font(Typography.rowTitle).lineLimit(1)
-                        Text("\(merchant.txnCount)× · avg \(MoneyFormat.aed(merchant.avgAmount, fractionDigits: 0))")
-                            .font(Typography.caption).foregroundStyle(Palette.muted)
-                    }
-                    Spacer()
-                    Text(MoneyFormat.aed(merchant.amount, fractionDigits: 0)).font(Typography.amount)
+                if let query = merchant.activityQuery(from: from, to: to) {
+                    Button { tabs?.openActivity(query) } label: { row(index, merchant) }
+                        .buttonStyle(.plain)
+                        .accessibilityHint("Shows its transactions in Activity")
+                } else {
+                    row(index, merchant)
                 }
             }
         }
+    }
+
+    private func row(_ index: Int, _ merchant: MerchantSpend) -> some View {
+        HStack {
+            Text("\(index + 1)").font(Typography.caption).monospacedDigit().foregroundStyle(Palette.muted)
+                .frame(width: 18, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(merchant.merchantName).font(Typography.rowTitle).lineLimit(1)
+                Text("\(merchant.txnCount)× · avg \(MoneyFormat.aed(merchant.avgAmount, fractionDigits: 0))")
+                    .font(Typography.caption).foregroundStyle(Palette.muted)
+            }
+            Spacer()
+            Text(MoneyFormat.aed(merchant.amount, fractionDigits: 0)).font(Typography.amount)
+        }
+        .contentShape(Rectangle())
     }
 }
 
