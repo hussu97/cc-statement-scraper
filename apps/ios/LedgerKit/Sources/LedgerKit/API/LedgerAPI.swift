@@ -102,6 +102,11 @@ public protocol LedgerAPI: SMSIngestAPI {
     /// otherwise). Returns how many rows changed.
     func bulkUpdateTransactions(profileCode: String, patch: ActivityBulkPatch, selection: ActivityBulkSelection) async throws -> Int
 
+    // Statement PDF (SupabaseLedgerAPI+StatementPDF.swift, PAR-13)
+    /// A short-lived signed URL for the document's PDF in the `statements` bucket (members).
+    /// `StatementPDF.Failure.notAvailable` when the document has no stored file.
+    func statementPDFURL(profileCode: String, docCode: String) async throws -> URL
+
     // Budgets (SupabaseLedgerAPI+Budgets.swift)
     /// Inserts a new budget (no `budgetCode`) or updates one. Owners only (RLS).
     func saveBudget(profileCode: String, draft: BudgetDraft) async throws

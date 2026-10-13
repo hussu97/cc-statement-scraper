@@ -23,12 +23,23 @@ public final class StatementDetailModel: TransactionEditing {
     /// The line whose transaction is being fetched.
     public private(set) var opening: String?
     public var errorMessage: String?
+    /// The statement's PDF, opened on request (PAR-13).
+    public let pdf: StatementPDF
     private let api: any LedgerAPI
 
-    public init(api: any LedgerAPI, stmtCode: String, isLatest: Bool = false) {
+    public init(api: any LedgerAPI, stmtCode: String, isLatest: Bool = false,
+                fetchPDF: @escaping StatementPDF.Fetch = StatementPDF.download) {
         self.api = api
         self.stmtCode = stmtCode
         self.isLatest = isLatest
+        pdf = StatementPDF(api: api, fetch: fetchPDF)
+    }
+
+    /// Signs and downloads the loaded statement's PDF for the viewer.
+    public func openPDF(profileCode: String) async {
+        guard let header = state.value?.detail.statement else { return }
+        await pdf.open(profileCode: profileCode, docCode: header.docCode,
+                       title: "\(header.kindLabel) \(LedgerDates.fullDayLabel(header.statementDate))")
     }
 
     public func load(profileCode: String) async {

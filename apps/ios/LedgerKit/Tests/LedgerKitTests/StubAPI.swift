@@ -390,6 +390,20 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         return try result.get()
     }
 
+    // MARK: Statement PDF (PAR-13)
+
+    /// `statementPDFURL`'s answer by doc code; a missing code is `.notAvailable`.
+    var pdfURLs: [String: Result<URL, any Error>] = [:]
+    private(set) var pdfURLRequests: [(profile: String, doc: String)] = []
+    func statementPDFURL(profileCode: String, docCode: String) async throws -> URL {
+        let answer = lock.withLock {
+            pdfURLRequests.append((profileCode, docCode))
+            return pdfURLs[docCode]
+        }
+        guard let answer else { throw StatementPDF.Failure.notAvailable }
+        return try answer.get()
+    }
+
     func changes(profileCode: String) -> AsyncStream<LedgerChange> {
         let script: [String]? = lock.withLock {
             defer { subscriptions += 1 }
