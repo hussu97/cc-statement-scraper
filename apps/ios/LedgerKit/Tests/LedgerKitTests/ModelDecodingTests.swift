@@ -97,6 +97,63 @@ struct ModelDecodingTests {
         #expect(old.changeVsPrevMonthToDate == nil)
         #expect(old.accounts.first?.utilisation == nil)
     }
+
+    /// The top-level keys `rpc('overview')` returned from the local stack on
+    /// 2026-10-13 (demo ledger); the fixture carries every one of them.
+    static let liveOverviewKeys: Set<String> = [
+        "accounts", "change_vs_avg_3m", "change_vs_prev_month_to_date", "last_sms_at", "month", "open_reviews",
+        "outstanding", "outstanding_complete", "outstanding_has_estimate", "payments", "pending_amount",
+        "pending_count", "pending_unpriced_count", "projected_month_end", "recent", "spend", "spend_avg_3m",
+        "spend_avg_3m_to_date", "spend_prev_month", "spend_prev_month_to_date", "top_categories",
+        "uncategorized_count",
+    ]
+
+    @Test("overview keys are named as the wire spells them, with or without the snake-case strategy (X-33r)")
+    func overviewWireKeys() throws {
+        let data = try fixture("overview")
+        let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(Set(object.keys) == Self.liveOverviewKeys)
+
+        let o = try LedgerJSON.decode(Overview.self, from: data)
+        #expect(o.spendAvg3m == Decimal(string: "9000.33")!)
+        #expect(o.spendAvg3mToDate == Decimal(string: "2650.4")!)
+        #expect(o.projectedMonthEnd == Decimal(string: "9100.25")!)
+
+        // The same document through a decoder with no key strategy: every
+        // top-level figure lands identically, so no field rests on how
+        // `.convertFromSnakeCase` capitalises `3m`. (Nested rows still use the
+        // shared decoder's strategy, so they're emptied here.)
+        var flat = object
+        flat["top_categories"] = []
+        flat["accounts"] = []
+        flat["recent"] = []
+        flat["last_sms_at"] = NSNull()
+        let plain = try JSONDecoder().decode(Overview.self, from: JSONSerialization.data(withJSONObject: flat))
+        #expect(plain.spendAvg3m == o.spendAvg3m && plain.spendAvg3mToDate == o.spendAvg3mToDate)
+        #expect(plain.projectedMonthEnd == o.projectedMonthEnd && plain.changeVsAvg3m == o.changeVsAvg3m)
+        #expect(plain.changeVsPrevMonthToDate == o.changeVsPrevMonthToDate)
+        #expect(plain.spendPrevMonthToDate == o.spendPrevMonthToDate && plain.pendingAmount == o.pendingAmount)
+        #expect(plain.outstanding == o.outstanding && plain.uncategorizedCount == o.uncategorizedCount)
+
+        // A future month has no projection; an older server sends neither field.
+        flat["projected_month_end"] = NSNull()
+        let future = try JSONDecoder().decode(Overview.self, from: JSONSerialization.data(withJSONObject: flat))
+        #expect(future.projectedMonthEnd == nil)
+        let old = try LedgerJSON.decode(Overview.self, from: try fixture("overview_legacy"))
+        #expect(old.spendAvg3m == Decimal(string: "9000.33")! && old.spendAvg3mToDate == nil && old.projectedMonthEnd == nil)
+    }
+
+    @Test("a missing required overview figure fails loudly, naming the wire key")
+    func overviewMissingKey() throws {
+        var object = try #require(try JSONSerialization.jsonObject(with: try fixture("overview")) as? [String: Any])
+        object["spend_avg_3m"] = nil
+        do {
+            _ = try LedgerJSON.decode(Overview.self, from: JSONSerialization.data(withJSONObject: object))
+            Issue.record("decoded without spend_avg_3m")
+        } catch DecodingError.keyNotFound(let key, _) {
+            #expect(key.stringValue == "spend_avg_3m")
+        }
+    }
 }
 
 @Suite("Presentation and query encoding")
