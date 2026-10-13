@@ -168,11 +168,20 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
     }
     /// `spend_series` answers (all spend when unset), and the filters it was asked for.
     var seriesPoints: [SpendPoint] = []
+    /// Answers by `p_group`, over `seriesPoints` (Trends asks for the totals and a grouping at once).
+    var seriesByGroup: [SpendGroup: [SpendPoint]] = [:]
+    var seriesError: LedgerAPIError?
     private(set) var seriesFilters: [SpendFilter] = []
+    /// Each `spend_series` call: grain, group, `p_top` and range.
+    private(set) var seriesRequests: [(grain: SpendGrain, group: SpendGroup, top: Int?, from: CalendarDay, to: CalendarDay)] = []
     func spendSeries(profileCode: String, from: CalendarDay, to: CalendarDay, grain: SpendGrain, group: SpendGroup,
-                     filter: SpendFilter) async throws -> [SpendPoint] {
-        lock.withLock { seriesFilters.append(filter) }
-        return seriesPoints
+                     top: Int?, filter: SpendFilter) async throws -> [SpendPoint] {
+        lock.withLock {
+            seriesFilters.append(filter)
+            seriesRequests.append((grain, group, top, from, to))
+        }
+        if let seriesError { throw seriesError }
+        return seriesByGroup[group] ?? seriesPoints
     }
     /// `p_limit` of each `merchant_leaderboard` call.
     private(set) var merchantLimits: [Int] = []
