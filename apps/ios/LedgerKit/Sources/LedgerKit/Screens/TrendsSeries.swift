@@ -37,6 +37,10 @@ public enum TrendsGroup: String, CaseIterable, Identifiable, Sendable {
 /// What the Trends chart and table draw: every bucket of the range (oldest first) with the
 /// server's total, and each group's slice of it. Shaping only; every figure is the server's.
 public struct TrendsSeries: Sendable, Hashable {
+    /// The filter this series was fetched with. Links use it, not the screen's current filter,
+    /// which may already be newer while this series is still on screen (loading or failed).
+    public var filter = SpendFilter()
+
     public struct Group: Sendable, Hashable, Identifiable {
         public var id: String { key }
         /// The chart's series key: the server's code, `otherKey` for the folded rest, else the label.
@@ -202,6 +206,11 @@ extension TrendsSeries {
     /// links into `/activity`: the bucket's days within the range, the group, and the filter.
     /// Nil when Activity can't show exactly those (a bank, the folded "Other", several codes of
     /// one kind, or a merchant slice under a search filter).
+    public func activityQuery(bucket: Bucket, group slice: Group?) -> ActivityQuery? {
+        activityQuery(bucket: bucket, group: slice, filter: filter)
+    }
+
+    /// `activityQuery(bucket:group:)` under an explicit filter.
     public func activityQuery(bucket: Bucket, group slice: Group?, filter: SpendFilter) -> ActivityQuery? {
         var query = ActivityQuery()
         query.setRange(from: max(bucket.start, range.from),

@@ -119,12 +119,13 @@ public final class TrendsModel {
     public func load(profileCode: String, force: Bool = false) async {
         adopt(profileCode)
         let key = request(profileCode: profileCode)
-        if !force, gate.loaded == key, state.value != nil, !state.isLoading { return }
+        if !force, gate.loaded == key, state.value != nil, !state.isLoading, state.errorMessage == nil { return }
         let (ticket, _) = gate.begin(key)
         // The previous chart stays, dimmed, until the new one lands (the web's keepPreviousData).
         state = state.startLoading()
         do {
-            let series = try await fetch(key)
+            var series = try await fetch(key)
+            series.filter = key.filter
             guard gate.isCurrent(ticket) else { return }   // a newer range, grouping or filter superseded this one
             gate.finish(key)
             state = .loaded(series)

@@ -21,7 +21,7 @@ struct TrendsTable: View {
                         .buttonStyle(.plain)
                         .accessibilityHint(model.selectedBucket == bucket.id ? "Hides its split" : "Shows its split")
                         if model.selectedBucket == bucket.id { slices(bucket) }
-                    } else if let tabs, let query = series.activityQuery(bucket: bucket, group: nil, filter: model.filter) {
+                    } else if let tabs, let query = series.activityQuery(bucket: bucket, group: nil) {
                         Button { tabs.openActivity(query) } label: { BucketRow(bucket: bucket, glyph: "chevron.right") }
                             .buttonStyle(.plain)
                             .accessibilityHint("Shows its transactions in Activity")
@@ -39,7 +39,7 @@ struct TrendsTable: View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(bucket.entries) { entry in
                 if let group = series.group(key: entry.groupKey) {
-                    if let tabs, let query = series.activityQuery(bucket: bucket, group: group, filter: model.filter) {
+                    if let tabs, let query = series.activityQuery(bucket: bucket, group: group) {
                         Button { tabs.openActivity(query) } label: { SliceRow(group: group, entry: entry, linked: true) }
                             .buttonStyle(.plain)
                             .accessibilityHint("Shows its transactions in Activity")
@@ -48,7 +48,7 @@ struct TrendsTable: View {
                     }
                 }
             }
-            if let tabs, let query = series.activityQuery(bucket: bucket, group: nil, filter: model.filter) {
+            if let tabs, let query = series.activityQuery(bucket: bucket, group: nil) {
                 Button { tabs.openActivity(query) } label: {
                     Label("See all transactions", systemImage: "list.bullet")
                         .font(Typography.caption)
