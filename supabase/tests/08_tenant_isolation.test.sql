@@ -137,6 +137,10 @@ select throws_ok($$ select public.resolve_review(pg_temp.v('rev_forged'), jsonb_
 select throws_ok($$ select public.resolve_review(pg_temp.v('rev_forged'), jsonb_build_object('link',
                       (select txn_code from public.transactions where profile_code = pg_temp.v('pa') limit 1))) $$,
                  'P0002', null, 'link refuses a subject of another profile');
+select is((select line from public.review_context(pg_temp.v('pa'), array[pg_temp.v('rev_forged')])), null,
+          'review_context shows nothing of another profile''s line, even through a forged review (WEB-10r)');
+select throws_ok($$ select * from public.review_context(pg_temp.v('pb'), array[pg_temp.v('rev_own')]) $$, '42501', null,
+                 'review_context refuses another profile');
 
 -- ═══ other RPCs that take codes ════════════════════════════════════════════
 select throws_ok($$ select public.set_transaction_category(pg_temp.v('txn_b'), null) $$, '42501', null,

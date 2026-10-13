@@ -60,7 +60,8 @@ select is(
 select is(
   (select array_agg(t order by t) from unnest(array[
      'accounts', 'cards', 'profiles', 'transactions', 'statements', 'statement_lines', 'documents',
-     'service_tokens', 'transaction_evidence', 'match_reviews', 'insights', 'recurring_series', 'document_events']) t
+     'service_tokens', 'transaction_evidence', 'match_reviews', 'insights', 'recurring_series', 'document_events',
+     'anomaly_dismissals']) t
    where has_table_privilege('authenticated', format('public.%I', t), 'INSERT,DELETE')),
   null,
   'authenticated cannot INSERT or DELETE ledger/identity tables directly'
@@ -90,6 +91,7 @@ select set_eq(
   array[
     'accounts.credit_limit:authenticated:UPDATE', 'accounts.cycle_close_day:authenticated:UPDATE', 'accounts.nickname:authenticated:UPDATE',
     'accounts.product_name:authenticated:UPDATE', 'accounts.status:authenticated:UPDATE', 'accounts:authenticated:SELECT',
+    'anomaly_dismissals:authenticated:SELECT',
     'audit_events:authenticated:SELECT', 'banks:authenticated:SELECT', 'budgets:authenticated:DELETE',
     'budgets:authenticated:INSERT', 'budgets:authenticated:SELECT', 'budgets:authenticated:UPDATE',
     'cards.holder_name:authenticated:UPDATE', 'cards.is_supplementary:authenticated:UPDATE', 'cards.status:authenticated:UPDATE',

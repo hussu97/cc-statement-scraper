@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Ban, Check, ChevronDown, Inbox, Link2, Plus, Sparkles, Wallet, X } from "lucide-react";
 import { useActiveProfile } from "@/data/profile";
-import { NOT_A_TRANSACTION, REVIEW_REASONS, candidatesOf, groupReviews, reviewActionError, reviewFooterActions, useDecideTemplate, useInfiniteOpenReviews, useOpenReviews, useResolveReview, useRetrySmsFallback, useReviewContext, walletPassNameOf, type ResolveAction, type Review } from "@/data/reviews";
+import { NOT_A_TRANSACTION, REVIEW_REASONS, candidatesOf, groupReviews, reviewActionError, reviewFooterActions, useDecideTemplate, useInfiniteOpenReviews, useOpenReviews, useResolveReview, useRetrySmsFallback, walletPassNameOf, type ResolveAction, type Review, type ReviewContext, type ReviewItem } from "@/data/reviews";
 import { useAccounts } from "@/data/cards";
 import { accountLabel } from "@/data/overview";
 import { useSmsBody, type TxnRow } from "@/data/transactions";
@@ -97,9 +97,10 @@ export function ReviewPage() {
   );
 }
 
-function ReviewCard({ review }: { review: Review }) {
+function ReviewCard({ review }: { review: ReviewItem }) {
   const { profile_code, isOwner } = useActiveProfile();
-  const ctx = useReviewContext(profile_code, review);
+  // The context came with the list (one review_context call per page, WEB-10r).
+  const ctx = review.ctx;
   const resolve = useResolveReview(profile_code);
   const retryAi = useRetrySmsFallback(profile_code);
   const toast = useToast();
@@ -117,110 +118,104 @@ function ReviewCard({ review }: { review: Review }) {
       onError: (e) => toast({ title: "Couldn't retry", description: reviewActionError(e), tone: "danger" }),
     });
   const busy = resolve.isPending || retryAi.isPending;
-  const footer = ctx.data ? reviewFooterActions(review, !!ctx.data.template) : [];
-  const walletPass = ctx.data ? walletPassNameOf(review, ctx.data.sms) : null;
+  const footer = reviewFooterActions(review, !!ctx.template);
+  const walletPass = walletPassNameOf(review, ctx.sms);
 
   return (
     <Card className={cn("p-5 transition-opacity", busy && "opacity-60")}>
       <div className="mb-3 flex items-center justify-between gap-3 text-[12px] text-subtle">
-        <span>{ctx.data?.sms?.source === "wallet" ? "Wallet payment" : subjectLabel(review.subject_type)}</span>
+        <span>{ctx.sms?.source === "wallet" ? "Wallet payment" : subjectLabel(review.subject_type)}</span>
         <span>{formatRelative(review.created_at)}</span>
       </div>
-      {ctx.isLoading ? (
-        <LoadingRows rows={2} className="p-0" />
-      ) : ctx.isError || !ctx.data ? (
-        <ErrorState error={ctx.error} onRetry={() => void ctx.refetch()} className="py-4" />
-      ) : (
-        <div className="flex flex-col gap-4">
-          {ctx.data.line && (
-            <Subject
-              title={ctx.data.line.description_raw}
-              meta={`${formatDate(ctx.data.line.txn_date)} · ${ctx.data.line.evidence_type === "history_line" ? "history export" : "statement"} line${ctx.data.line.card_last4 ? ` · •${ctx.data.line.card_last4}` : ""}`}
-              amount={<TxnAmount t={ctx.data.line} />}
-            />
-          )}
-          {ctx.data.sms && (
-            <SmsSubject sms={ctx.data.sms} />
-          )}
-          {ctx.data.txn && <TxnSubject t={ctx.data.txn} />}
-          {ctx.data.statement && (
-            <Subject
-              title={`Statement of ${formatDate(ctx.data.statement.statement_date)}`}
-              meta={ctx.data.statement.period_start ? `${formatDate(ctx.data.statement.period_start)} – ${formatDate(ctx.data.statement.period_end)}` : undefined}
-              amount={<Money value={ctx.data.statement.closing_balance} />}
-            />
-          )}
+      <div className="flex flex-col gap-4">
+        {ctx.line && (
+          <Subject
+            title={ctx.line.description_raw}
+            meta={`${formatDate(ctx.line.txn_date)} · ${ctx.line.evidence_type === "history_line" ? "history export" : "statement"} line${ctx.line.card_last4 ? ` · •${ctx.line.card_last4}` : ""}`}
+            amount={<TxnAmount t={ctx.line} />}
+          />
+        )}
+        {ctx.sms && (
+          <SmsSubject sms={ctx.sms} />
+        )}
+        {ctx.txn && <TxnSubject t={ctx.txn} />}
+        {ctx.statement && (
+          <Subject
+            title={`Statement of ${formatDate(ctx.statement.statement_date)}`}
+            meta={ctx.statement.period_start ? `${formatDate(ctx.statement.period_start)} – ${formatDate(ctx.statement.period_end)}` : undefined}
+            amount={<Money value={ctx.statement.closing_balance} />}
+          />
+        )}
 
-          {(review.reason === "ambiguous" || review.reason === "low_score") && (
-            <div className="flex flex-col gap-2">
-              <p className="text-[12px] font-medium text-ink-2">Possible matches</p>
-              {ctx.data.candidates.length === 0 && <p className="text-[13px] text-muted">The candidate transactions no longer exist.</p>}
-              {ctx.data.candidates.map((c) => {
-                const score = candidatesOf(review).find((x) => x.txn_code === c.txn_code)?.score;
-                return (
-                  <div key={c.txn_code} className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-bg px-3 py-2">
-                    <div className="min-w-40 flex-1">
-                      <p className="truncate text-[13px] text-ink">{c.merchant_name ?? c.description}</p>
-                      <p className="text-[12px] text-muted">
-                        {c.txn_at ? formatDateTime(c.txn_at) : formatDate(c.txn_date)} · <CardRef bankCode={c.bank_code} last4={c.card_last4} className="align-middle" /> {score !== undefined && `· match ${Math.round(Number(score))}/100`}
-                      </p>
-                    </div>
-                    <TxnAmount t={c} className="text-[13px]" />
-                    {isOwner && (
-                      <Button size="sm" variant="secondary" icon={<Link2 className="size-3.5" />} disabled={busy} onClick={() => act({ link: c.txn_code! }, "Linked")}>
-                        Same purchase
-                      </Button>
-                    )}
+        {(review.reason === "ambiguous" || review.reason === "low_score") && (
+          <div className="flex flex-col gap-2">
+            <p className="text-[12px] font-medium text-ink-2">Possible matches</p>
+            {ctx.candidates.length === 0 && <p className="text-[13px] text-muted">The candidate transactions no longer exist.</p>}
+            {ctx.candidates.map((c) => {
+              const score = candidatesOf(review).find((x) => x.txn_code === c.txn_code)?.score;
+              return (
+                <div key={c.txn_code} className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-bg px-3 py-2">
+                  <div className="min-w-40 flex-1">
+                    <p className="truncate text-[13px] text-ink">{c.merchant_name ?? c.description}</p>
+                    <p className="text-[12px] text-muted">
+                      {c.txn_at ? formatDateTime(c.txn_at) : formatDate(c.txn_date)} · <CardRef bankCode={c.bank_code} last4={c.card_last4} className="align-middle" /> {score !== undefined && `· match ${Math.round(Number(score))}/100`}
+                    </p>
                   </div>
-                );
-              })}
-            </div>
-          )}
-
-          {review.reason === "unknown_card" && walletPass !== null && <WalletCardHint passName={walletPass} canEdit={isOwner} />}
-          {review.reason === "unknown_card" && walletPass === null && isOwner && <UnknownCardAction review={review} bank={ctx.data.sms?.bank_code ?? candidatesOf(review)[0]?.bank_code} last4={ctx.data.sms?.card_last4 ?? candidatesOf(review)[0]?.last4} onRegister={(account) => act({ card: { account_code: account } }, "Card added")} busy={busy} />}
-
-          {review.reason === "unparsed_sms" && ctx.data.template && <TemplateProposal review={review} template={ctx.data.template} />}
-          {review.reason === "unparsed_sms" && !ctx.data.template && (
-            <p className="text-[13px] text-muted">
-              Bank Ledger couldn't propose a format for this message. Ask the AI to try again, mark it as not a card transaction, or dismiss it and add the format later.
-            </p>
-          )}
-
-          {isOwner && footer.length > 0 && (
-            <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">
-              {footer.includes("separate") && (
-                <Button size="sm" icon={<Plus className="size-3.5" />} disabled={busy} onClick={() => act({ create_new: true }, "Kept as a new transaction")}>
-                  It's a separate purchase
-                </Button>
-              )}
-              {footer.includes("supersede") &&
-                candidatesOf(review)
-                  .filter((c) => c.stmt_code)
-                  .map((c) => (
-                    <Button key={c.stmt_code} size="sm" disabled={busy} onClick={() => act({ supersede: c.stmt_code! }, "Older statement superseded")}>
-                      Replace statement of {formatDate(c.statement_date)}
+                  <TxnAmount t={c} className="text-[13px]" />
+                  {isOwner && (
+                    <Button size="sm" variant="secondary" icon={<Link2 className="size-3.5" />} disabled={busy} onClick={() => act({ link: c.txn_code! }, "Linked")}>
+                      Same purchase
                     </Button>
-                  ))}
-              {footer.includes("retry_ai") && (
-                <Button size="sm" icon={<Sparkles className="size-3.5" />} disabled={busy} loading={retryAi.isPending} onClick={retry}>
-                  Retry with AI
-                </Button>
-              )}
-              {footer.includes("not_a_transaction") && (
-                <Button size="sm" icon={<Ban className="size-3.5" />} disabled={busy} onClick={() => act(NOT_A_TRANSACTION, "Marked as not a card transaction")}>
-                  Not a card transaction
-                </Button>
-              )}
-              {footer.includes("dismiss") && (
-                <Button size="sm" variant="ghost" icon={<X className="size-3.5" />} disabled={busy} onClick={() => act({ dismiss: true }, "Dismissed")}>
-                  {review.reason === "orphaned" ? "Void transaction" : review.reason === "missing_from_statement" ? "Mark as checked" : "Dismiss"}
-                </Button>
-              )}
-            </div>
-          )}
-        </div>
-      )}
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {review.reason === "unknown_card" && walletPass !== null && <WalletCardHint passName={walletPass} canEdit={isOwner} />}
+        {review.reason === "unknown_card" && walletPass === null && isOwner && <UnknownCardAction review={review} bank={ctx.sms?.bank_code ?? candidatesOf(review)[0]?.bank_code} last4={ctx.sms?.card_last4 ?? candidatesOf(review)[0]?.last4} onRegister={(account) => act({ card: { account_code: account } }, "Card added")} busy={busy} />}
+
+        {review.reason === "unparsed_sms" && ctx.template && <TemplateProposal review={review} template={ctx.template} />}
+        {review.reason === "unparsed_sms" && !ctx.template && (
+          <p className="text-[13px] text-muted">
+            Bank Ledger couldn't propose a format for this message. Ask the AI to try again, mark it as not a card transaction, or dismiss it and add the format later.
+          </p>
+        )}
+
+        {isOwner && footer.length > 0 && (
+          <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">
+            {footer.includes("separate") && (
+              <Button size="sm" icon={<Plus className="size-3.5" />} disabled={busy} onClick={() => act({ create_new: true }, "Kept as a new transaction")}>
+                It's a separate purchase
+              </Button>
+            )}
+            {footer.includes("supersede") &&
+              candidatesOf(review)
+                .filter((c) => c.stmt_code)
+                .map((c) => (
+                  <Button key={c.stmt_code} size="sm" disabled={busy} onClick={() => act({ supersede: c.stmt_code! }, "Older statement superseded")}>
+                    Replace statement of {formatDate(c.statement_date)}
+                  </Button>
+                ))}
+            {footer.includes("retry_ai") && (
+              <Button size="sm" icon={<Sparkles className="size-3.5" />} disabled={busy} loading={retryAi.isPending} onClick={retry}>
+                Retry with AI
+              </Button>
+            )}
+            {footer.includes("not_a_transaction") && (
+              <Button size="sm" icon={<Ban className="size-3.5" />} disabled={busy} onClick={() => act(NOT_A_TRANSACTION, "Marked as not a card transaction")}>
+                Not a card transaction
+              </Button>
+            )}
+            {footer.includes("dismiss") && (
+              <Button size="sm" variant="ghost" icon={<X className="size-3.5" />} disabled={busy} onClick={() => act({ dismiss: true }, "Dismissed")}>
+                {review.reason === "orphaned" ? "Void transaction" : review.reason === "missing_from_statement" ? "Mark as checked" : "Dismiss"}
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
     </Card>
   );
 }
@@ -242,7 +237,7 @@ function Subject({ title, meta, amount, children }: { title: ReactNode; meta?: R
   );
 }
 
-function SmsSubject({ sms }: { sms: NonNullable<ReturnType<typeof useReviewContext>["data"]>["sms"] }) {
+function SmsSubject({ sms }: { sms: ReviewContext["sms"] }) {
   const { profile_code } = useActiveProfile();
   const [open, setOpen] = useState(false);
   const body = useSmsBody(profile_code, open ? sms!.sms_code : null);
@@ -332,7 +327,7 @@ function UnknownCardAction({ review, bank, last4, onRegister, busy }: { review: 
   );
 }
 
-function TemplateProposal({ review, template }: { review: Review; template: NonNullable<NonNullable<ReturnType<typeof useReviewContext>["data"]>["template"]> }) {
+function TemplateProposal({ review, template }: { review: Review; template: NonNullable<ReviewContext["template"]> }) {
   const { profile_code, isOwner } = useActiveProfile();
   const decide = useDecideTemplate(profile_code);
   const toast = useToast();

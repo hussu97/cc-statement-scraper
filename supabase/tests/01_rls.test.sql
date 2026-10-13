@@ -71,6 +71,13 @@ select is((select count(*)::int from public.category_rules where profile_code = 
 
 -- Data for bob's profile, written by the system.
 insert into public.accounts (profile_code, bank_code) select v, 'FAB' from ids where k = 'pb';
+with t as (
+  insert into public.transactions (profile_code, account_code, status, kind, direction, txn_date, description,
+                                   amount_original, currency_original, amount_aed, amount_source)
+  select a.profile_code, a.account_code, 'posted', 'purchase', 'debit', current_date, 'BOB SHOP', 900, 'AED', 900, 'manual'
+  from public.accounts a where a.profile_code = (select v from ids where k = 'pb')
+  returning profile_code, txn_code)
+insert into public.anomaly_dismissals (profile_code, txn_code) select profile_code, txn_code from t;
 
 select pg_temp.claims((select v::uuid from ids where k = 'ua'));
 set local role authenticated;
@@ -78,6 +85,9 @@ select is((select count(*)::int from public.profiles), 1, 'alice sees only her p
 select is((select count(*)::int from public.accounts), 0, 'alice cannot see bob''s accounts');
 select is((select count(*)::int from public.categories where profile_code = (select v from ids where k = 'pb')), 0,
           'alice cannot see bob''s categories');
+select is((select count(*)::int from public.anomaly_dismissals), 0, 'alice cannot see bob''s anomaly dismissals');
+select throws_ok($$ select public.dismiss_anomaly((select v from ids where k = 'pb'), 'txn_x') $$,
+                 '42501', null, 'alice cannot dismiss anomalies in bob''s profile');
 select throws_ok(
   $$ insert into public.documents (profile_code, storage_path, original_filename, sha256, size_bytes, source)
      select v, 'x', 'x.pdf', repeat('a', 64), 1, 'upload' from ids where k = 'pa' $$,
