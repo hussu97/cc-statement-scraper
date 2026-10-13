@@ -215,6 +215,25 @@ till is sent when a connection is back, and a refused one waits under Settings �
 The merchant is never logged or sent to Sentry. Card names (`cards.wallet_name`) are owner-edited;
 a view-only ledger shows them read-only.
 
+## Notifications
+
+Local notifications only (no push), for what needs the person (BACKLOG N-1). LedgerKit decides
+(`CaptureNotices`, `DueReminders`, `NotificationSettingsModel`; `LocalNoticeTests`); the app's
+`LocalNotifications` applies it to `UNUserNotificationCenter`. Permission is asked from
+**Set up SMS capture** (or Settings → Notifications), never at launch. Each kind has a switch in
+Settings → **Notifications** (App Group defaults, so the intents read them too):
+
+| Kind | When | Tap opens |
+|---|---|---|
+| Unknown cards | an intent's outcome is `unknown_card` | Review (SMS) / Settings (payment: Card names) |
+| Messages not sent | an hour after the oldest capture still retrying; withdrawn once the outbox is empty | Settings |
+| Signed out with messages waiting | an intent saved a capture as `signedOut` / `noLedger` | the app |
+| Statement due dates | 09:00 Dubai 3 days before and on the due date of each account's latest statement, from `statement_cycles` of the ledger on screen; withdrawn when `payment_status` is `paid` or the switch is off | the app |
+
+A notification never carries an SMS body or a merchant: only counts, the card name a payment
+passed, the bank and the statement's figures. Due reminders are replanned whenever the app
+becomes active (a failed load keeps the ones already pending).
+
 ## TestFlight
 
 Same flow as mm-pos (`mm-pos/ci/README.md`): build and sign on the Mac, upload over the

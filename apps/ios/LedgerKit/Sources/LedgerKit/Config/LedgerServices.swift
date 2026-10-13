@@ -33,6 +33,8 @@ public final class LedgerServices: Sendable {
     public let sessionStorage: SharedKeychainStorage
     /// PDFs the Share Extension saved for later, in the App Group.
     public let pendingUploads: PendingUploads
+    /// Settings → Notifications switches (read by the App Intents too).
+    public let notices: NoticePreferences
 
     /// `debugSessionFallback`: Debug builds only — keep the session in memory
     /// when the keychain refuses it (an unsigned simulator build), instead of
@@ -64,6 +66,7 @@ public final class LedgerServices: Sendable {
         selection = ProfileSelection(defaults: defaults)
         captureLog = CaptureLog(defaults: defaults)
         pendingUploads = PendingUploads(container: container)
+        notices = NoticePreferences(defaults: defaults)
     }
 
     /// Reads config from the running bundle. Extensions carry the same `Ledger*`
