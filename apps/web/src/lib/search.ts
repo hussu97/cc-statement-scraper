@@ -14,12 +14,28 @@ export const GRAINS = ["day", "week", "month"] as const;
 export type Grain = (typeof GRAINS)[number];
 export const DEFAULT_TREND_GROUP: SpendGroup = "category";
 
-/** Trends filters (?cat=&bank=&card=&q=) are in TrendFilterSearch (see trend-filters.ts). */
-export interface InsightsSearch extends TrendFilterSearch {
-  tab?: string;
+/** A date range in the URL: a preset, or a custom from/to (which wins). */
+export interface RangeSearch {
   range?: RangePreset;
   from?: ISODate;
   to?: ISODate;
+}
+
+/** Parse an untrusted range: a known preset, or a valid from ≤ to (which drops the preset). */
+export function parseRangeSearch(raw: Record<string, unknown>): RangeSearch {
+  if (isISODate(raw.from) && isISODate(raw.to) && raw.from <= raw.to) return { from: raw.from, to: raw.to };
+  if (typeof raw.range === "string" && RANGE_PRESETS.some((p) => p.value === raw.range)) return { range: raw.range as RangePreset };
+  return {};
+}
+
+/** Replace a range-only search's range (the category view's URL). */
+export function withRange(r: { range: RangePreset } | { from: ISODate; to: ISODate }): RangeSearch {
+  return parseRangeSearch(r);
+}
+
+/** Trends filters (?cat=&bank=&card=&q=) are in TrendFilterSearch (see trend-filters.ts). */
+export interface InsightsSearch extends TrendFilterSearch, RangeSearch {
+  tab?: string;
   /** Trends grouping; omitted when it is the default ("category"). */
   group?: SpendGroup;
   /** Trends bucket size; omitted to follow the range (see defaultGrain). */
@@ -27,13 +43,7 @@ export interface InsightsSearch extends TrendFilterSearch {
 }
 
 export function parseInsightsSearch(raw: Record<string, unknown>): InsightsSearch {
-  const out: InsightsSearch = { ...parseTabSearch(raw) };
-  if (typeof raw.range === "string" && RANGE_PRESETS.some((p) => p.value === raw.range)) out.range = raw.range as RangePreset;
-  if (isISODate(raw.from) && isISODate(raw.to) && raw.from <= raw.to) {
-    out.from = raw.from;
-    out.to = raw.to;
-    delete out.range;
-  }
+  const out: InsightsSearch = { ...parseTabSearch(raw), ...parseRangeSearch(raw) };
   if (typeof raw.group === "string" && (SPEND_GROUPS as readonly string[]).includes(raw.group) && raw.group !== DEFAULT_TREND_GROUP) {
     out.group = raw.group as SpendGroup;
   }
@@ -61,7 +71,7 @@ export function withTrendFilters(s: InsightsSearch, f: TrendFilters): InsightsSe
 export const DEFAULT_INSIGHTS_RANGE: RangePreset = "last_6_months";
 
 /** Resolve the effective date range for an Insights URL. */
-export function insightsRange(s: InsightsSearch, today?: ISODate): DateRange & { preset: RangePreset | null } {
+export function insightsRange(s: RangeSearch, today?: ISODate): DateRange & { preset: RangePreset | null } {
   if (s.from && s.to) return { from: s.from, to: s.to, preset: matchPreset({ from: s.from, to: s.to }, today) };
   const preset = s.range ?? DEFAULT_INSIGHTS_RANGE;
   return { ...presetRange(preset, today), preset };
