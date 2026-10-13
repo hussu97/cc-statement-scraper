@@ -1,23 +1,30 @@
 import LedgerKit
 import SwiftUI
 
-/// The transaction sheet (IOS-18): the category, searchable, with "None" to
-/// clear a manual choice and merchant-wide by default; exclude from spend; and
-/// notes. `TransactionEditor` decides; owners only (viewers never open it).
+/// The owner's transaction sheet (IOS-18): the category, searchable, with
+/// "None" to clear a manual choice and merchant-wide by default; exclude from
+/// spend; notes; then the details a viewer's sheet shows too (PAR-2).
+/// `TransactionEditor` and `TransactionDetailModel` decide; viewers get
+/// `TransactionDetailSheet` instead.
 struct CategorySheet: View {
     @State private var editor: TransactionEditor
+    let detail: TransactionDetailModel
     @Environment(\.dismiss) private var dismiss
 
     init(transaction: LedgerTransaction, categories: [FilterMeta.CategoryOption], profileCode: String,
-         target: any TransactionEditing) {
+         target: any TransactionEditing, detail: TransactionDetailModel) {
         _editor = State(initialValue: TransactionEditor(transaction: transaction, categories: categories,
                                                         profileCode: profileCode, target: target))
+        self.detail = detail
     }
 
     var body: some View {
         NavigationStack {
             List {
-                if editor.showsDetails { Section { summary } }
+                if editor.showsDetails {
+                    Section { TransactionDetailHeader(txn: transaction) }
+                    TransactionDetailSections(model: detail) { EmptyView() }
+                }
                 categorySection
                 if editor.showsDetails {
                     Section {
@@ -29,8 +36,11 @@ struct CategorySheet: View {
                         Text("For transfers or reimbursed purchases: they stay in Activity but leave spend totals.")
                     }
                     notesSection
+                    TransactionEvidenceSection(model: detail)
                 }
             }
+            .task { await detail.load() }
+            .onDisappear { detail.closeAllSMS() }
             .searchable(text: $editor.search, placement: .navigationBarDrawer(displayMode: .always),
                         prompt: "Find a category")
             .navigationTitle("Transaction")
@@ -47,19 +57,6 @@ struct CategorySheet: View {
     }
 
     private var transaction: LedgerTransaction { editor.transaction }
-
-    private var summary: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(transaction.title).font(Typography.rowTitle)
-            Text("\(transaction.amountLabel) · \(LedgerDates.dayLabel(transaction.txnDate))")
-                .font(Typography.rowMeta).monospacedDigit().foregroundStyle(Palette.muted)
-            BankCardLabel(bankCode: transaction.bankCode, label: transaction.cardSuffix, size: 18,
-                          font: Typography.rowMeta)
-            if let peer = transaction.transferPeer {
-                TransferPeerLabel(peer: peer, size: 18, font: Typography.rowMeta)
-            }
-        }
-    }
 
     private var categorySection: some View {
         Section {
