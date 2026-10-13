@@ -1,0 +1,6 @@
+[
+  {"dow": 1, "hour": 9, "amount": 120.00, "txn_count": 2},
+  {"dow": 1, "hour": 13, "amount": 48.50, "txn_count": 1},
+  {"dow": 5, "hour": 21, "amount": 905.25, "txn_count": 3},
+  {"dow": 7, "hour": 0, "amount": 15.00, "txn_count": 1}
+]

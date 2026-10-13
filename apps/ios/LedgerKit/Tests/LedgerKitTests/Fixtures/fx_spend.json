@@ -1,0 +1,6 @@
+[
+  {"currency": "USD", "amount_original": 337.62, "amount_aed": 1240.10, "txn_count": 5, "implied_rate": 3.673000, "estimated_share": 0.000},
+  {"currency": "EUR", "amount_original": 120.00, "amount_aed": 487.92, "txn_count": 5, "implied_rate": 4.066000, "estimated_share": 0.400},
+  {"currency": "JPY", "amount_original": 4500, "amount_aed": 112.05, "txn_count": 1, "implied_rate": 0.024900, "estimated_share": 1.000},
+  {"currency": "GBP", "amount_original": 0.00, "amount_aed": 0.00, "txn_count": 2, "implied_rate": null, "estimated_share": 0.000}
+]
