@@ -69,13 +69,28 @@ public enum DueReminders {
         NoticeUpdate(cancel: Set((pendingIDs + deliveredIDs).filter { $0.hasPrefix(idPrefix) }).sorted())
     }
 
-    /// What to change, given the due-reminder requests pending now: withdraw
-    /// those no longer planned (paid, superseded, switched off), post the plan
-    /// (re-posting an id replaces it, so a changed amount is kept current).
-    public static func sync(pendingIDs: [String], planned: [LocalNotice]) -> NoticeUpdate {
+    /// What to change, given the due-reminder requests pending now and those
+    /// already delivered: withdraw the pending ones no longer planned (paid,
+    /// superseded, switched off) and the delivered ones for a statement the
+    /// server now marks paid (a "due today" for a paid card is wrong, not
+    /// history), then post the plan (re-posting an id replaces it, so a
+    /// changed amount is kept current). A delivered reminder for a statement
+    /// still to pay stays in Notification Centre.
+    public static func sync(pendingIDs: [String], deliveredIDs: [String] = [], planned: [LocalNotice],
+                            cycles: [StatementCycle] = []) -> NoticeUpdate {
         let keep = Set(planned.map(\.id))
-        let stale = pendingIDs.filter { $0.hasPrefix(idPrefix) && !keep.contains($0) }.sorted()
-        return NoticeUpdate(post: planned, cancel: stale)
+        let stale = pendingIDs.filter { $0.hasPrefix(idPrefix) && !keep.contains($0) }
+        let paid = Set(cycles.filter { $0.duePayment?.status == .paid }.map(\.stmtCode))
+        let paidDelivered = deliveredIDs.filter { id in statementCode(of: id).map(paid.contains) ?? false }
+        return NoticeUpdate(post: planned, cancel: Set(stale + paidDelivered).sorted())
+    }
+
+    /// `"ledger.due.stm_x.t3"` → `"stm_x"`; nil for any other notification.
+    static func statementCode(of id: String) -> String? {
+        guard id.hasPrefix(idPrefix), let dot = id.lastIndex(of: "."),
+              dot >= id.index(id.startIndex, offsetBy: idPrefix.count) else { return nil }
+        let code = id[id.index(id.startIndex, offsetBy: idPrefix.count)..<dot]
+        return code.isEmpty ? nil : String(code)
     }
 
     static func notice(_ cycle: StatementCycle, due: CalendarDay, daysBefore: Int, id: String,

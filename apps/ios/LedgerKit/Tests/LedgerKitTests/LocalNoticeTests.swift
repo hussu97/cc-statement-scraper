@@ -171,6 +171,33 @@ struct DueReminderTests {
         #expect(sync.post.map(\.id) == ["ledger.due.stm_adcb.t0"])
     }
 
+    @Test("paid: a reminder already delivered for it is removed; one for a statement still due stays")
+    func paidDelivered() throws {
+        let paid = try cycles(fabExtra: #", "payment_status": "paid", "amount_paid": "4210.55""#)
+        let plan = DueReminders.plan(cycles: paid, now: now, preferences: freshPreferences())
+        let sync = DueReminders.sync(pendingIDs: ["ledger.due.stm_fab_new.t0"],
+                                     deliveredIDs: ["ledger.due.stm_fab_new.t3", "ledger.due.stm_adcb.t3",
+                                                    "ledger.due.stm_fab_old.t0", "ledger.unknown-card"],
+                                     planned: plan, cycles: paid)
+        // FAB's new statement is paid: its pending T-0 and delivered T-3 go. ADCB is still due,
+        // and FAB's older statement was never marked paid: both delivered ones stay.
+        #expect(sync.cancel == ["ledger.due.stm_fab_new.t0", "ledger.due.stm_fab_new.t3"])
+
+        let unpaid = DueReminders.sync(pendingIDs: [], deliveredIDs: ["ledger.due.stm_fab_new.t3"],
+                                       planned: DueReminders.plan(cycles: try cycles(), now: now,
+                                                                  preferences: freshPreferences()),
+                                       cycles: try cycles())
+        #expect(unpaid.cancel.isEmpty)
+    }
+
+    @Test("a reminder's id names its statement")
+    func statementCode() {
+        #expect(DueReminders.statementCode(of: "ledger.due.stm_01abc.t3") == "stm_01abc")
+        #expect(DueReminders.statementCode(of: "ledger.due.stm_01abc.t0") == "stm_01abc")
+        #expect(DueReminders.statementCode(of: "ledger.outbox-stuck") == nil)
+        #expect(DueReminders.statementCode(of: "ledger.due..t0") == nil)
+    }
+
     @Test("part paid: still reminded, with what was paid")
     func partPaid() throws {
         let part = try cycles(fabExtra: #", "payment_status": "part_paid", "amount_paid": "1000""#)

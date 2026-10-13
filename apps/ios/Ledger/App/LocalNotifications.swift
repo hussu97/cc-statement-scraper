@@ -83,16 +83,19 @@ enum LocalNotifications {
         case .withdrawAll:
             await withdrawDueReminders()
         case .replan(let profileCode):
-            let planned: [LocalNotice]
+            let cycles: [StatementCycle]
             if services.notices.isOn(.dueReminder) {
-                guard let cycles = try? await services.api.statementCycles(profileCode: profileCode,
+                guard let loaded = try? await services.api.statementCycles(profileCode: profileCode,
                                                                             limit: DueReminders.cycleLimit) else { return }
-                planned = DueReminders.plan(cycles: cycles, preferences: services.notices)
+                cycles = loaded
             } else {
-                planned = []
+                cycles = []
             }
+            let planned = DueReminders.plan(cycles: cycles, preferences: services.notices)
             let pending = await center.pendingNotificationRequests().map(\.identifier)
-            await apply(DueReminders.sync(pendingIDs: pending, planned: planned))
+            let delivered = await center.deliveredNotifications().map(\.request.identifier)
+            await apply(DueReminders.sync(pendingIDs: pending, deliveredIDs: delivered, planned: planned,
+                                          cycles: cycles))
         }
     }
 
