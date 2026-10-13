@@ -5,7 +5,7 @@ import { useActiveProfile } from "@/data/profile";
 import { accountLabel, insightTarget, sortInsights, useDismissInsight, useInsights, useOverview, type Insight, type Overview, type OverviewAccount } from "@/data/overview";
 import { evidenceBadge, useTransactions } from "@/data/transactions";
 import { addMonths, daysBetween, formatDate, formatDateTime, formatMonth, formatRelative, formatTime, monthEnd, monthStart, todayDubai } from "@/lib/dates";
-import { formatChange, formatMoney, formatPercent, toAmount } from "@/lib/money";
+import { formatChange, formatPercent, formatTotal, toAmount } from "@/lib/money";
 import { balanceAnchorNote, formatOutstanding, outstandingCaveat } from "@/lib/balances";
 import { pacePins, projectionLabel } from "@/lib/pace";
 import { cn } from "@/lib/cn";
@@ -164,14 +164,14 @@ function Hero({ data, isCurrent, today }: { data: Overview; isCurrent: boolean; 
               "Nothing to compare with last month yet"
             )}
             <span className="mx-2 text-border-strong">/</span>
-            3-month average {formatMoney(data.spend_avg_3m, { whole: true })}
+            3-month average {formatTotal(data.spend_avg_3m)}
             {avgDelta && <span className="tabular"> ({avgDelta})</span>}
           </p>
         </div>
         <dl className="flex gap-8 text-sm">
           <div>
             <dt className="text-[12px] text-subtle">Payments in</dt>
-            <dd className="tabular mt-0.5 text-positive">{formatMoney(data.payments, { signed: true })}</dd>
+            <dd className="tabular mt-0.5 text-positive">{formatTotal(data.payments, { signed: true })}</dd>
           </div>
           <Link to="/activity" search={{ category: "none", from: data.month, to: monthEnd(data.month) }} className="group">
             <dt className="text-[12px] text-subtle">Uncategorised</dt>
@@ -213,7 +213,7 @@ function PendingStrip({ profileCode, overview }: { profileCode: string; overview
           <h2 id="pending-title" className="text-[15px] font-semibold text-ink">Pending from SMS</h2>
           {overview && (
             <span className="tabular text-[13px] text-muted">
-              {overview.pending_count} · {formatMoney(overview.pending_amount)}
+              {overview.pending_count} · {formatTotal(overview.pending_amount)}
             </span>
           )}
         </div>
@@ -388,8 +388,8 @@ function AccountCard({ account: a }: { account: OverviewAccount }) {
           <dt className="text-subtle">Statement</dt>
           <dd className="tabular mt-0.5 text-sm text-ink">
             {st ? (
-              <Link to="/statements/$stmtCode" params={{ stmtCode: st.stmt_code }} className="tap hover:text-accent hover:underline" aria-label={`Statement of ${formatDate(st.statement_date)}: ${formatMoney(st.closing_balance, { whole: true })}`}>
-                {formatMoney(st.closing_balance, { whole: true })}
+              <Link to="/statements/$stmtCode" params={{ stmtCode: st.stmt_code }} className="tap hover:text-accent hover:underline" aria-label={`Statement of ${formatDate(st.statement_date)}: ${formatTotal(st.closing_balance)}`}>
+                {formatTotal(st.closing_balance)}
               </Link>
             ) : (
               "—"
@@ -399,11 +399,11 @@ function AccountCard({ account: a }: { account: OverviewAccount }) {
         <div>
           <dt className="text-subtle">Due</dt>
           <dd className="mt-0.5 text-sm text-ink">{st?.due_date ? formatDate(st.due_date, "short") : "—"}</dd>
-          {st?.min_due && <dd className="tabular text-[11px] text-subtle">min {formatMoney(st.min_due, { whole: true })}</dd>}
+          {st?.min_due && <dd className="tabular text-[11px] text-subtle">min {formatTotal(st.min_due)}</dd>}
         </div>
         <div>
           <dt className="text-subtle">Since statement</dt>
-          <dd className="tabular mt-0.5 text-sm text-ink">{formatMoney(a.unbilled_aed, { whole: true })}</dd>
+          <dd className="tabular mt-0.5 text-sm text-ink">{formatTotal(a.unbilled_aed)}</dd>
         </div>
       </dl>
       <div>
@@ -411,7 +411,7 @@ function AccountCard({ account: a }: { account: OverviewAccount }) {
           <span className="text-subtle">Utilisation at last statement</span>
           <span className="tabular text-ink-2">
             {util !== null ? formatPercent(util) : "—"}
-            {a.credit_limit && <span className="text-subtle"> of {formatMoney(a.credit_limit, { whole: true })}</span>}
+            {a.credit_limit && <span className="text-subtle"> of {formatTotal(a.credit_limit)}</span>}
           </span>
         </div>
         <Meter value={util} tone={util !== null && util > 0.7 ? "danger" : util !== null && util > 0.3 ? "warn" : "positive"} label="Utilisation" />

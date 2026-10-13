@@ -3,13 +3,14 @@ import { balanceAnchorNote, formatOutstanding, outstandingCaveat } from "./balan
 
 describe("formatOutstanding", () => {
   it("shows what is owed", () => {
-    expect(formatOutstanding("515.26")).toBe("AED 515.26");
+    expect(formatOutstanding("515.26")).toBe("AED 515");
   });
   it("names a credit balance instead of a minus sign", () => {
-    expect(formatOutstanding("-0.84")).toBe("AED 0.84 in credit");
+    expect(formatOutstanding("-12.84")).toBe("AED 13 in credit");
+    expect(formatOutstanding("-0.40")).toBe("AED 0.40 in credit");
   });
   it("marks estimates", () => {
-    expect(formatOutstanding("2969.79", true)).toBe("≈ AED 2,969.79");
+    expect(formatOutstanding("2969.79", true)).toBe("≈ AED 2,970");
   });
   it("never invents a figure", () => {
     expect(formatOutstanding(null)).toBe("—");

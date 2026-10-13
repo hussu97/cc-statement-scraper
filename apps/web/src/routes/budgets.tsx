@@ -136,7 +136,7 @@ export function BudgetsPage() {
                   {b.account_code && <BankLogo bankCode={b.bank_code} size="xs" decorative />}
                   <span className="min-w-0 flex-1 truncate text-sm text-ink">{budgetTitle(b)}</span>
                   <Badge>{inactiveBudgetLabel(b, month)}</Badge>
-                  <Money value={b.budget_aed} className="text-sm text-ink-2" />
+                  <Money value={b.budget_aed} total className="text-sm text-ink-2" />
                   {isOwner && (
                     <span className="flex gap-1">
                       <Button variant="ghost" size="sm" onClick={() => edit(b)}>

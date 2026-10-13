@@ -1,7 +1,7 @@
 import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { budgetTitle, budgetTone, type BudgetStatusRow } from "@/data/budgets";
 import { BankLogo } from "@/components/bank-logo";
-import { formatMoney, formatPercent, toAmount } from "@/lib/money";
+import { formatPercent, formatTotal, toAmount } from "@/lib/money";
 import { cn } from "@/lib/cn";
 import { Money } from "@/components/ledger";
 import { Badge, Card, Dot, Meter } from "@/components/ui/display";
@@ -69,13 +69,13 @@ export function BudgetCard({
           {hero ? (
             <span className="inline-flex items-baseline gap-1.5">
               <span className="text-[13px] font-medium tracking-wide text-muted">AED</span>
-              <span className="display-num text-[34px] leading-none text-ink md:text-[40px]">{formatMoney(row.spent_aed, { bare: true })}</span>
+              <span className="display-num text-[34px] leading-none text-ink md:text-[40px]">{formatTotal(row.spent_aed, { bare: true })}</span>
             </span>
           ) : (
-            <Money value={row.spent_aed} className="text-xl font-medium text-ink" />
+            <Money value={row.spent_aed} total className="text-xl font-medium text-ink" />
           )}
           <span className="text-[13px] text-muted">
-            of <Money value={row.budget_aed} />
+            of <Money value={row.budget_aed} total />
           </span>
         </p>
         <Meter value={share} tone={tone} className={cn("mt-3", hero && "h-2")} label={`${formatPercent(share)} of ${title} budget used`} />
@@ -85,7 +85,7 @@ export function BudgetCard({
         <span className={cn("tabular font-medium", TONE_TEXT[tone])}>{formatPercent(share)} used</span>
         {phase === "current" ? (
           <span className={cn("text-muted", overPace && "text-warn")}>
-            On pace for <span className="tabular">{formatMoney(row.projected_aed)}</span>
+            On pace for <span className="tabular">{formatTotal(row.projected_aed)}</span>
           </span>
         ) : phase === "past" ? (
           <span className="text-muted">Month closed</span>

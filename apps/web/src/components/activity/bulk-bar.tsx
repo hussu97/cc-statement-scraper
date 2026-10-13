@@ -5,7 +5,7 @@ import { fetchActivityExport, useBulkUpdate, useSelectionSummary, type BulkPatch
 import { activityCsv, activityCsvFilename } from "@/lib/csv";
 import { downloadText } from "@/lib/download";
 import { todayDubai } from "@/lib/dates";
-import { formatCount, formatMoney } from "@/lib/money";
+import { formatCount, formatTotal } from "@/lib/money";
 import { Button } from "@/components/ui/button";
 import { Badge, Skeleton } from "@/components/ui/display";
 import { Tooltip } from "@/components/ui/primitives";
@@ -94,7 +94,7 @@ export function BulkBar({
             <Skeleton className="h-3.5 w-20" />
           ) : (
             <span className={summary.isFetching ? "opacity-60 transition-opacity" : undefined}>
-              <span className="tabular font-medium text-ink">{formatMoney(s.net_aed)}</span> <span className="text-muted">net</span>
+              <span className="tabular font-medium text-ink">{formatTotal(s.net_aed)}</span> <span className="text-muted">net</span>
             </span>
           )}
           {s?.has_estimate && (

@@ -63,6 +63,20 @@ export function formatMoney(value: MoneyInput, opts: FormatMoneyOptions = {}): s
   return `${sign}${body}`;
 }
 
+/**
+ * A balance, limit or aggregate (WEB-34): whole units, "AED 1,235". The one rule for decimals:
+ * a transaction's own amount keeps two (formatMoney, formatTxnAmount, <TxnAmount>); a balance,
+ * a limit, a due amount or any sum or average shows whole units. An amount that whole units would
+ * show as 0 keeps its decimals, so a AED 0.40 credit never reads "AED 0". `compact` ("12.5K")
+ * applies from a thousand up; below that a compact total is whole units too, never "836.6".
+ */
+export function formatTotal(value: MoneyInput, opts: Omit<FormatMoneyOptions, "whole"> = {}): string {
+  const n = toAmount(value);
+  const belowOne = n !== null && n !== 0 && Math.abs(n) < 0.5;
+  const compact = !!opts.compact && n !== null && Math.abs(n) >= 1000;
+  return formatMoney(value, { ...opts, compact, whole: !belowOne });
+}
+
 /** Split a formatted amount into currency code and figure, for hero typography. */
 export function moneyParts(value: MoneyInput, currency = "AED"): { currency: string; figure: string; negative: boolean } {
   const n = toAmount(value);

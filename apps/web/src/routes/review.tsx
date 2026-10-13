@@ -143,7 +143,7 @@ function ReviewCard({ review }: { review: ReviewItem }) {
           <Subject
             title={`Statement of ${formatDate(ctx.statement.statement_date)}`}
             meta={ctx.statement.period_start ? `${formatDate(ctx.statement.period_start)} – ${formatDate(ctx.statement.period_end)}` : undefined}
-            amount={<Money value={ctx.statement.closing_balance} />}
+            amount={<Money value={ctx.statement.closing_balance} total />}
           />
         )}
 

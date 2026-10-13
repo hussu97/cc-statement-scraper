@@ -3,7 +3,7 @@ import { Clock } from "lucide-react";
 import { useHourWeekday } from "@/data/analytics";
 import type { RpcReturn } from "@/lib/supabase";
 import { WEEKDAYS_ISO, type DateRange } from "@/lib/dates";
-import { formatMoney, toAmount } from "@/lib/money";
+import { formatTotal, toAmount } from "@/lib/money";
 import { cn } from "@/lib/cn";
 import { Card, CardHeader } from "@/components/ui/display";
 import { EmptyState, LoadingBlock, QueryView } from "@/components/ui/states";
@@ -74,7 +74,7 @@ function HourHeatmap({ rows }: { rows: Row[] }) {
                 {WEEKDAY_LONG[selected.dow - 1]}, {pad(selected.hour)}:00–{pad((selected.hour + 1) % 24)}:00
               </span>
               {" · "}
-              <span className="tabular">{formatMoney(selected.amount)}</span>
+              <span className="tabular">{formatTotal(selected.amount)}</span>
               {" · "}
               {countLabel(selected.txn_count, "transaction")}
             </>
@@ -108,7 +108,7 @@ function HourRow({
     <>
       <span className="pr-1.5 text-right text-[11px] leading-[22px] text-subtle">{WEEKDAYS_ISO[day]}</span>
       {cells.map((c, h) => {
-        const label = `${WEEKDAY_LONG[day]} ${pad(h)}:00: ${formatMoney(c?.amount ?? 0)}`;
+        const label = `${WEEKDAY_LONG[day]} ${pad(h)}:00: ${formatTotal(c?.amount ?? 0)}`;
         return (
           <button
             key={h}

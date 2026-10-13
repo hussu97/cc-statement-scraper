@@ -6,7 +6,7 @@ import type { NameType, ValueType } from "recharts/types/component/DefaultToolti
 import { useSpendBreakdown } from "@/data/analytics";
 import { formatMonth, type DateRange } from "@/lib/dates";
 import type { TrendFilters } from "@/lib/trend-filters";
-import { formatMoney, formatPercent } from "@/lib/money";
+import { formatPercent, formatTotal } from "@/lib/money";
 import { useMediaQuery } from "@/lib/hooks";
 import { cn } from "@/lib/cn";
 import { Segmented } from "@/components/ui/primitives";
@@ -107,7 +107,7 @@ function SplitTooltip({ active, payload, label, chart }: Partial<TooltipContentP
     <div className="min-w-48 max-w-72 rounded-md border border-border bg-surface px-3 py-2 text-[12px] shadow-[0_8px_24px_-12px_var(--color-border-strong)]">
       <p className="mb-1.5 flex items-baseline justify-between gap-3 font-medium text-ink">
         <span>{formatMonth(monthDate(month))}</span>
-        <span className="tabular">{formatMoney(monthTotal)}</span>
+        <span className="tabular">{formatTotal(monthTotal)}</span>
       </p>
       {chart.series.length > 1 && (
         <ul className="flex flex-col gap-1">
@@ -117,7 +117,7 @@ function SplitTooltip({ active, payload, label, chart }: Partial<TooltipContentP
               <li key={s.dataKey} className="flex items-center gap-2">
                 <span aria-hidden className="inline-block size-2 shrink-0 rounded-pill" style={{ background: s.fill }} />
                 <span className="min-w-0 flex-1 truncate text-ink-2">{s.label}</span>
-                <span className="tabular text-ink">{formatMoney(value)}</span>
+                <span className="tabular text-ink">{formatTotal(value)}</span>
                 <span className="tabular w-9 text-right text-muted">{share !== null ? formatPercent(share) : ""}</span>
               </li>
             );
@@ -144,14 +144,14 @@ function Totals({ chart, split, groupBy, range, total }: { chart: SplitChart; sp
           {[...chart.rows].reverse().map((r) => (
             <tr key={r.month}>
               <th scope="row" className="px-2 py-1.5 text-left font-normal text-ink">{formatMonth(monthDate(r.month))}</th>
-              <td className="tabular px-2 py-1.5 text-right whitespace-nowrap text-ink">{formatMoney(r.monthTotal)}</td>
+              <td className="tabular px-2 py-1.5 text-right whitespace-nowrap text-ink">{formatTotal(r.monthTotal)}</td>
             </tr>
           ))}
         </tbody>
         <tfoot>
           <tr>
             <th scope="row" className="px-2 py-1.5 text-left font-medium text-ink">Total</th>
-            <td className="tabular px-2 py-1.5 text-right whitespace-nowrap font-medium text-ink">{formatMoney(total)}</td>
+            <td className="tabular px-2 py-1.5 text-right whitespace-nowrap font-medium text-ink">{formatTotal(total)}</td>
           </tr>
         </tfoot>
       </table>
@@ -188,7 +188,7 @@ function Totals({ chart, split, groupBy, range, total }: { chart: SplitChart; sp
                   name
                 )}
               </th>
-              <td className="tabular px-2 py-1.5 text-right whitespace-nowrap text-ink">{formatMoney(s.total)}</td>
+              <td className="tabular px-2 py-1.5 text-right whitespace-nowrap text-ink">{formatTotal(s.total)}</td>
               <td className="tabular px-2 py-1.5 text-right whitespace-nowrap text-muted">{formatPercent(s.share)}</td>
             </tr>
           );
@@ -197,7 +197,7 @@ function Totals({ chart, split, groupBy, range, total }: { chart: SplitChart; sp
       <tfoot>
         <tr>
           <th scope="row" className="px-2 py-1.5 text-left font-medium text-ink">Total</th>
-          <td className="tabular px-2 py-1.5 text-right whitespace-nowrap font-medium text-ink">{formatMoney(total)}</td>
+          <td className="tabular px-2 py-1.5 text-right whitespace-nowrap font-medium text-ink">{formatTotal(total)}</td>
           <td />
         </tr>
       </tfoot>
