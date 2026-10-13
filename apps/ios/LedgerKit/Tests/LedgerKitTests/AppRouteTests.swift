@@ -59,7 +59,7 @@ struct AppRouteTests {
 }
 
 @MainActor
-@Suite("Deep links: ledger://review from a Shortcut result (IOS-07r)")
+@Suite("Deep links: ledger://review, and Shortcut results that point to Review (IOS-07r)")
 struct AppLinkTests {
     @Test("ledger://review parses in the shapes iOS hands over; other URLs are not ours", arguments: [
         ("ledger://review", true),
@@ -96,6 +96,23 @@ struct AppLinkTests {
         #expect(WalletIntake.link(.delivered(status: "unknown_card")) == nil)
         #expect(WalletIntake.link(.delivered(status: "held")) == .review)
         #expect(WalletIntake.link(.delivered(status: "new")) == nil)
+    }
+
+    @Test("the Shortcut line names Review exactly when a review is waiting; it never opens the app")
+    func dialogPointsToReview() {
+        let statuses = ["unknown_card", "held", "new", "unparsed", "ignored", "duplicate_delivery", "rejected_otp"]
+        for status in statuses {
+            let outcome = SMSIntakeOutcome.delivered(status: status)
+            let line = outcome.dialog(ledger: "Home")
+            #expect(line.hasSuffix(SMSIntakeOutcome.reviewPointer) == (outcome.link == .review), "\(status)")
+            #expect(!line.contains("iPhone"))
+        }
+        #expect(SMSIntakeOutcome.delivered(status: "unknown_card").dialog(ledger: "Home")
+                == "Logged to Home, but Ledger doesn't know this card yet. Needs a look in Review: open Ledger → Overview → Needs attention.")
+        // A payment's unknown card points to Card names, not Review.
+        let payment = WalletIntake.dialog(.delivered(status: "unknown_card"), ledger: "Home", card: "Wio")
+        #expect(payment.contains("Card names") && !payment.contains("Review"))
+        #expect(WalletIntake.dialog(.delivered(status: "held"), ledger: "Home", card: "Wio").hasSuffix(SMSIntakeOutcome.reviewPointer))
     }
 
     @Test("with a ledger on screen the link opens Overview → Review at once")

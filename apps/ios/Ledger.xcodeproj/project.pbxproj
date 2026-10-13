@@ -17,7 +17,6 @@
 		4CF8BA51B1B5A50B3C0B7185 /* PrivacyCover.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D3D0FE265167769766B23F5 /* PrivacyCover.swift */; };
 		4E142F33C460497F23C39750 /* LedgerKit in Frameworks */ = {isa = PBXBuildFile; productRef = 3CADAE061DE32CE51E97EF02 /* LedgerKit */; };
 		4F5F815454811A4ECF4C88FF /* InsightsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05EB2567DB0EA258329DBD95 /* InsightsView.swift */; };
-		55170D1045264F8DE9B46AAD /* ShortcutResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7ED66CC0952A7FD22E9D47D /* ShortcutResult.swift */; };
 		659B1CF789C0735789CC64EE /* StatementsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F52CAA6FE73B46EFE59439A4 /* StatementsView.swift */; };
 		67823B3F9665BD78F8BE1182 /* PasskeysView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62D21289B23718DD5F57954 /* PasskeysView.swift */; };
 		738FC2230617C85A8AC57684 /* BackgroundSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 577A951513B717E3C3EB9347 /* BackgroundSync.swift */; };
@@ -112,7 +111,6 @@
 		BDC537589817A7B6C31CC447 /* LedgerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerApp.swift; sourceTree = "<group>"; };
 		C85D8FFE075C3A5378BB0BEC /* SpendSplitCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendSplitCard.swift; sourceTree = "<group>"; };
 		D30D95BAF30905880DE075A8 /* LogCardPaymentIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogCardPaymentIntent.swift; sourceTree = "<group>"; };
-		D7ED66CC0952A7FD22E9D47D /* ShortcutResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutResult.swift; sourceTree = "<group>"; };
 		E7DE35B2ABB9AA3A980FD35D /* ReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewView.swift; sourceTree = "<group>"; };
 		EFDA37FE8678FA89D04F3841 /* SignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInView.swift; sourceTree = "<group>"; };
 		F0031ECF8AB7A33BF21B99E9 /* SignOutButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignOutButton.swift; sourceTree = "<group>"; };
@@ -331,7 +329,6 @@
 			children = (
 				306FF1BBB7DC9A30BCC65C13 /* LogBankSMSIntent.swift */,
 				D30D95BAF30905880DE075A8 /* LogCardPaymentIntent.swift */,
-				D7ED66CC0952A7FD22E9D47D /* ShortcutResult.swift */,
 			);
 			path = Intents;
 			sourceTree = "<group>";
@@ -572,7 +569,6 @@
 				F11E6EF9D13C280E1E1E7A65 /* SMSSettingsViews.swift in Sources */,
 				1D830163AD6DCE4782E30CE8 /* SettingsView.swift in Sources */,
 				C5A4A377005DFC5A8A379D11 /* SetupChecklistCard.swift in Sources */,
-				55170D1045264F8DE9B46AAD /* ShortcutResult.swift in Sources */,
 				96964A46ECACE02F55F2E30D /* SignInView.swift in Sources */,
 				990B019CA85E7B39CB28A31A /* SignOutButton.swift in Sources */,
 				76C6B0E503A29FB340C66AAD /* SpendFilterSheet.swift in Sources */,

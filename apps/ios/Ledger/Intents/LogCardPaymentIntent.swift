@@ -33,9 +33,9 @@ struct LogCardPaymentIntent: AppIntent {
         Summary("Log \(\.$amount) at \(\.$merchant) on \(\.$card)")
     }
 
-    func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog & OpensIntent {
+    func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog {
         guard let services = AppServices.shared else {
-            return ShortcutResult.make("not_configured", dialog: "Bank Ledger isn't configured.", link: nil)
+            return .result(value: "not_configured", dialog: "Bank Ledger isn't configured.")
         }
         Telemetry.start(target: .intent, config: services.config, isDebugBuild: BuildFlavor.isDebug)
         let (outcome, dialog) = await services.walletIntake().handle(
@@ -43,6 +43,8 @@ struct LogCardPaymentIntent: AppIntent {
         Telemetry.breadcrumb("wallet_ingest", outcome: outcome.telemetryOutcome, data: ["entry": "intent"])
         // Saved but not sent (e.g. no data at the till): ask iOS to send it once a connection is back.
         if case .queued = outcome { await BackgroundSync.schedule(services) }
-        return ShortcutResult.make(outcome.telemetryOutcome, dialog: dialog, link: WalletIntake.link(outcome))
+        // Never opens the app: this runs in the background for every alert. A
+        // review is named in the dialog (IOS-07r; README "Open URL ledger://review").
+        return .result(value: outcome.telemetryOutcome, dialog: IntentDialog(stringLiteral: dialog))
     }
 }

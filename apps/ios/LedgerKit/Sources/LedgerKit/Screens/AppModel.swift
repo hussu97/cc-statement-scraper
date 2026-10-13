@@ -119,7 +119,7 @@ public final class AppModel {
         await logos
     }
 
-    /// A `ledger://` deep link (a Shortcut result's "Needs review"). It opens
+    /// A `ledger://` deep link (a Shortcut's "Open URL ledger://review"). It opens
     /// now when a ledger is on screen; otherwise once one is (after restoring
     /// the session, signing in or picking a ledger). False for a URL the app
     /// doesn't handle.
