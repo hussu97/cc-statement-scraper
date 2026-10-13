@@ -99,6 +99,14 @@ public final class LedgerServices: Sendable {
         return WalletIntake(outbox: outbox, target: { targets.target }, log: captureLog)
     }
 
+    /// The App Intents beyond SMS (N-3): spend, what's due, categorise the last
+    /// purchase, for the ledger the app shows, with the widgets' snapshot as the
+    /// offline fallback.
+    public func questions() -> LedgerQuestions {
+        let selection = selection, widgets = widgets
+        return LedgerQuestions(api: api, profileCode: { selection.profileCode }, snapshot: { widgets.read() })
+    }
+
     /// What sign-out would delete from this phone: SMS and card payments in
     /// the outbox (sent or not yet), and the share extension's PDFs.
     public func signOutPlan() async -> SignOutPlan {
