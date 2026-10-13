@@ -1,7 +1,9 @@
 import Foundation
 
 /// Whether a statement was paid, as the server decides it (`payment_status`,
-/// `amount_paid` on `overview.accounts[]` and `statement_cycles`). Both are
+/// `amount_paid` on `overview.accounts[].latest_statement`, `statement_cycles`
+/// and `statement_detail.statement`). "Overdue" means the due date passed and
+/// the payments so far cover less than the minimum. Both are
 /// optional: an older server sends neither, and then the phone never claims a
 /// statement was paid or overdue.
 public struct DuePayment: Sendable, Hashable {
