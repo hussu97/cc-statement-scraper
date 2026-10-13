@@ -15,11 +15,15 @@
 # Needs:
 #   * An "Apple Distribution" identity in the keychain (Xcode → Settings → Accounts).
 #   * Config/Secrets.Release.xcconfig with the production Supabase URL/publishable key and
-#     Sentry DSN (a Release build never falls back to the local 127.0.0.1 config).
-#   * dSYMs: SENTRY_AUTH_TOKEN, SENTRY_ORG, SENTRY_PROJECT (default: the DSN's project id), from
-#     the environment or, when unset there, Config/Secrets.Release.xcconfig; and
-#     sentry-cli (brew install getsentry/tools/sentry-cli). The token reaches
-#     sentry-cli through the environment and is never printed.
+#     Sentry DSN. Release reads only that file (never the local Secrets.xcconfig): a missing
+#     or local value fails the build (scripts/release-config-check.sh, a Run Script phase),
+#     and the archived app + share extension Info.plists are checked again after archiving.
+#   * Sentry (dSYMs + the `ledger-ios@<version>+<build>` release; scripts/sentry-release.sh):
+#     sentry-cli (brew install getsentry/tools/sentry-cli); SENTRY_AUTH_TOKEN from the
+#     environment or the login keychain, never an xcconfig, stored once with
+#       security add-generic-password -U -s ledger-sentry-auth-token -a "$USER" -w
+#     (prompts for the value); SENTRY_ORG / SENTRY_PROJECT from the environment or
+#     Secrets.Release.xcconfig (not secrets). Sentry being down only warns.
 #   * Upload — an App Store Connect API key, no password, no 2FA prompt:
 #       ASC_KEY_ID, ASC_ISSUER_ID and ~/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8
 #     ASC_KEY_ID defaults to the one key in that directory, ASC_ISSUER_ID to the
@@ -63,6 +67,17 @@ if [[ ! -f Config/Secrets.Release.xcconfig ]]; then
 fi
 if grep -Eq '127\.0\.0\.1|localhost' Config/Secrets.Release.xcconfig; then
   echo "error: Config/Secrets.Release.xcconfig points at a local Supabase." >&2
+  exit 1
+fi
+# A token in an xcconfig is an Xcode build setting: every build phase sees it and
+# build logs can show it (audit X-28). It lives in the shell or the keychain.
+if grep -Eq '^[[:space:]]*SENTRY_AUTH_TOKEN[[:space:]]*=' Config/Secrets.Release.xcconfig; then
+  cat >&2 <<'MSG'
+error: Config/Secrets.Release.xcconfig defines SENTRY_AUTH_TOKEN, which makes it an Xcode build
+       setting. Move it to the login keychain, then delete that line from the file:
+         security add-generic-password -U -s ledger-sentry-auth-token -a "$USER" -w
+       (prompts for the token; or export SENTRY_AUTH_TOKEN in the shell instead).
+MSG
   exit 1
 fi
 
@@ -159,6 +174,10 @@ xcodebuild archive \
   DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
   CURRENT_PROJECT_VERSION="$BUILD"
 
+# What the archive actually carries, app and share extension: https and not local,
+# `production`, keys present. Shape only; no value is printed.
+./scripts/release-config-check.sh archive "$ARCHIVE"
+
 echo "==> Exporting Ledger"
 # Xcode 15.4 renamed the App Store export method; fall back for older Xcode.
 write_export_options "app-store-connect"
@@ -174,38 +193,11 @@ IPA=$(find "$BUILD_DIR/export" -name '*.ipa' | head -1)
 [[ -n "$IPA" ]] || { echo "error: no .ipa produced" >&2; exit 1; }
 echo "==> Built $IPA"
 
-# ── dSYMs → Sentry ─────────────────────────────────────────────────────────
+# ── dSYMs + release → Sentry ───────────────────────────────────────────────
 # Crash reports from the app, the intent and the share extension are only
-# readable with these. Skipped (loudly) when not configured.
-# `KEY = value` from the release xcconfig (last assignment wins); prints nothing else.
-release_setting() {
-  sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" Config/Secrets.Release.xcconfig | tail -1 | sed 's/[[:space:]]*$//'
-}
-SENTRY_TOKEN_SOURCE="environment"
-if [[ -z "${SENTRY_AUTH_TOKEN:-}" ]]; then
-  SENTRY_AUTH_TOKEN="$(release_setting SENTRY_AUTH_TOKEN)"
-  SENTRY_TOKEN_SOURCE="Config/Secrets.Release.xcconfig"
-fi
-SENTRY_ORG="${SENTRY_ORG:-$(release_setting SENTRY_ORG)}"
-SENTRY_PROJECT="${SENTRY_PROJECT:-$(release_setting SENTRY_PROJECT)}"
-# Unset: use the project id at the end of the DSN (slug: credit-card-ledger-apps);
-# the id cannot drift from the DSN.
-if [[ -z "${SENTRY_PROJECT:-}" ]]; then
-  SENTRY_PROJECT="$(release_setting LEDGER_SENTRY_DSN | sed -n 's|.*/\([0-9][0-9]*\)$|\1|p')"
-fi
-export SENTRY_AUTH_TOKEN
-if [[ -n "${SENTRY_AUTH_TOKEN:-}" ]]; then
-  echo "==> Sentry token from $SENTRY_TOKEN_SOURCE"
-  command -v sentry-cli >/dev/null || {
-    echo "error: SENTRY_AUTH_TOKEN set but sentry-cli not installed (brew install getsentry/tools/sentry-cli)" >&2; exit 1; }
-  : "${SENTRY_ORG:?set SENTRY_ORG}"
-  echo "==> Uploading dSYMs to Sentry ($SENTRY_ORG/${SENTRY_PROJECT:-credit-card-ledger-apps})"
-  sentry-cli debug-files upload --include-sources \
-    --org "$SENTRY_ORG" --project "${SENTRY_PROJECT:-credit-card-ledger-apps}" \
-    "$ARCHIVE/dSYMs"
-else
-  echo "==> SENTRY_AUTH_TOKEN not set — dSYMs NOT uploaded; crashes from build $BUILD will be unsymbolicated."
-fi
+# readable with the dSYMs. Never fails the build: Sentry down or unconfigured
+# is a loud warning.
+./scripts/sentry-release.sh "$ARCHIVE"
 
 if [[ $UPLOAD -eq 0 ]]; then
   echo
