@@ -87,6 +87,12 @@ public final class TabRouter {
         tab = .activity
     }
 
+    /// Switches to Settings with Statements pushed (a "payment due" insight, PAR-9).
+    public func openStatements() {
+        settingsPath = [.statements]
+        tab = .settings
+    }
+
     /// Opens `link` now when a ledger is on screen, else keeps it for `ledgerShown`.
     public func open(_ link: AppLink, ledgerOnScreen: Bool) {
         guard ledgerOnScreen else {

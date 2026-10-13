@@ -1,0 +1,10 @@
+[
+  {"review_code": "rev_01hzy3k8w9m2n4p6q8r0s2t4c1",
+   "template": {"template_code": "tpl_01hzy3k8w9m2n4p6q8r0s2t4c1", "bank_code": "FAB", "name": "FAB card purchase",
+                "sender_pattern": "^FAB$", "body_pattern": "purchase of ([A-Z]{3}) ([0-9,.]+) with credit card ending ([0-9]{4}) at (.+?) on ([0-9/]+)",
+                "field_groups": {"date": 5, "last4": 3, "amount": 2, "currency": 1, "merchant": 4},
+                "date_format": "DD/MM/YY", "msg_kind": "purchase", "priority": 100, "active": false,
+                "version": 1, "source": "llm",
+                "created_at": "2026-10-12T10:00:00.123456+00:00", "updated_at": "2026-10-12T10:00:00.123456+00:00"}},
+  {"review_code": "rev_01hzy3k8w9m2n4p6q8r0s2t4c2", "template": null}
+]

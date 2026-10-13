@@ -121,16 +121,19 @@ public struct ReviewInbox: Sendable, Hashable {
     public let accounts: [LedgerAccount]
     /// Every open review of the ledger (this page holds `reviews.count` of them).
     public let total: Int?
+    /// The SMS format proposed for an `unparsed_sms` review, by review code (`review_context`).
+    public let formats: [String: SMSFormatProposal]
 
     public init(reviews: [MatchReview], sms: [String: ReviewSMS] = [:], lines: [String: ReviewLine] = [:],
                 transactions: [String: LedgerTransaction] = [:], accounts: [LedgerAccount] = [],
-                total: Int? = nil) {
+                total: Int? = nil, formats: [String: SMSFormatProposal] = [:]) {
         self.reviews = reviews
         self.sms = sms
         self.lines = lines
         self.transactions = transactions
         self.accounts = accounts
         self.total = total
+        self.formats = formats
     }
 }
 
@@ -146,4 +149,17 @@ public enum ReviewAction: Sendable, Hashable {
     case notATransaction
     /// Ask the LLM fallback to read an unparsed SMS again.
     case retryWithAI
+    /// Accept (`accept` true) or reject the SMS format proposed for an unparsed SMS:
+    /// `rpc('set_sms_template_active')`, not `resolve_review` (PAR-14).
+    case decideFormat(templateCode: String, accept: Bool)
+
+    /// The outcome of an action another RPC answers (they return nothing); nil for
+    /// `resolve_review`'s actions, whose outcome the server names.
+    public var outcomeWithoutResolve: String? {
+        switch self {
+        case .retryWithAI: "retrying"
+        case .decideFormat(_, let accept): accept ? "format_accepted" : "format_rejected"
+        default: nil
+        }
+    }
 }

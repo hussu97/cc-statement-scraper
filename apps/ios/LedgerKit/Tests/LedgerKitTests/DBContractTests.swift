@@ -102,13 +102,14 @@ struct ReviewContractTests {
         #expect(item.note == nil)
     }
 
-    @Test("unparsed SMS with a proposed format: the proposal is for the web; not a transaction still offered")
+    @Test("unparsed SMS whose proposed format didn't load (or is gone): as without one, like the web")
     func unparsedWithTemplate() {
         let review = MatchReview(reviewCode: "rev_2", subjectType: "sms", subjectCode: "sms_2", reason: "unparsed_sms",
                                  candidates: [.init(txnCode: nil, bankCode: "FAB", last4: nil, templateCode: "tpl_1")])
         let item = ReviewPresentation.item(review, inbox: ReviewInbox(reviews: [review]))
-        #expect(item.options.map(\.action) == [.notATransaction, .dismiss])
-        #expect(item.note?.contains("web") == true)
+        #expect(item.options.map(\.action) == [.retryWithAI, .notATransaction, .dismiss])
+        #expect(item.proposal == nil)
+        #expect(item.note == nil)
     }
 
     @Test("unknown card SMS can be marked as not a card transaction")

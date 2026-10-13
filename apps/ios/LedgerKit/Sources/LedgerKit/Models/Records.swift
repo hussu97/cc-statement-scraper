@@ -35,6 +35,70 @@ public struct Insight: Decodable, Sendable, Hashable, Identifiable {
     public let validUntil: CalendarDay?
     public let dismissedAt: Date?
     public let createdAt: Date
+    /// The codes the insight is about (`data`), read for its link (`InsightLink`).
+    public let data: InsightData
+
+    enum CodingKeys: String, CodingKey {
+        case insightCode, kind, severity, title, body, validUntil, dismissedAt, createdAt, data
+    }
+
+    public init(insightCode: String, kind: String, severity: String, title: String, body: String,
+                validUntil: CalendarDay? = nil, dismissedAt: Date? = nil, createdAt: Date = Date(),
+                data: InsightData = InsightData()) {
+        self.insightCode = insightCode
+        self.kind = kind
+        self.severity = severity
+        self.title = title
+        self.body = body
+        self.validUntil = validUntil
+        self.dismissedAt = dismissedAt
+        self.createdAt = createdAt
+        self.data = data
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        insightCode = try c.decode(String.self, forKey: .insightCode)
+        kind = try c.decode(String.self, forKey: .kind)
+        severity = try c.decode(String.self, forKey: .severity)
+        title = try c.decode(String.self, forKey: .title)
+        body = try c.decode(String.self, forKey: .body)
+        validUntil = try c.decodeIfPresent(CalendarDay.self, forKey: .validUntil)
+        dismissedAt = try c.decodeIfPresent(Date.self, forKey: .dismissedAt)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        // A read without `data`, or a shape this build doesn't know, only loses the link.
+        data = (try? c.decodeIfPresent(InsightData.self, forKey: .data)) ?? InsightData()
+    }
+}
+
+/// The codes in `insights.data` a link needs (`private.generate_insights`): `category_code`
+/// (category_spike), `txn_code` (large_transaction), `stmt_code` (statement_due). Only a
+/// well-formed code (`xxx_` + 26 characters) is kept, as the web's `insightTarget` does, so a
+/// malformed value never links somewhere wrong.
+public struct InsightData: Decodable, Sendable, Hashable {
+    public let categoryCode: String?
+    public let txnCode: String?
+    public let stmtCode: String?
+
+    public init(categoryCode: String? = nil, txnCode: String? = nil, stmtCode: String? = nil) {
+        self.categoryCode = Self.code(categoryCode)
+        self.txnCode = Self.code(txnCode)
+        self.stmtCode = Self.code(stmtCode)
+    }
+
+    enum CodingKeys: String, CodingKey { case categoryCode, txnCode, stmtCode }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        func text(_ key: CodingKeys) -> String? { (try? c.decodeIfPresent(String.self, forKey: key)) ?? nil }
+        self.init(categoryCode: text(.categoryCode), txnCode: text(.txnCode), stmtCode: text(.stmtCode))
+    }
+
+    /// `^[a-z]{3}_[0-9a-z]{26}$`, else nil.
+    static func code(_ raw: String?) -> String? {
+        guard let raw, raw.wholeMatch(of: /[a-z]{3}_[0-9a-z]{26}/) != nil else { return nil }
+        return raw
+    }
 }
 
 /// `public.documents` — a PDF as received, and where its parse is.
