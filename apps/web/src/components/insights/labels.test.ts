@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   allZero,
+  anomalyExplanation,
   anomalyReasonLabel,
+  timesLabel,
+  type AnomalyExplained,
   bucketLabel,
   cadenceLabel,
   changeTone,
@@ -29,12 +32,37 @@ describe("insights labels", () => {
   });
 
   it("labels anomaly reasons and cadences", () => {
-    expect(anomalyReasonLabel("merchant_outlier")).toBe("Unusual for this merchant");
-    expect(anomalyReasonLabel("new_merchant_large")).toBe("Large first purchase");
-    expect(anomalyReasonLabel("category_outlier")).toBe("Unusual for this category");
+    expect(anomalyReasonLabel("merchant_outlier")).toBe("Higher than usual");
+    expect(anomalyReasonLabel("new_merchant_large")).toBe("New merchant");
+    expect(anomalyReasonLabel("category_outlier")).toBe("Higher than usual");
     expect(anomalyReasonLabel(null)).toBe("Unusual");
     expect(cadenceLabel("monthly")).toBe("Monthly");
     expect(cadenceLabel("odd")).toBe("—");
+  });
+
+  it("explains an anomaly in plain words from the server's figures (WEB-16)", () => {
+    const row = (over: Partial<AnomalyExplained>): AnomalyExplained => ({
+      reason: "merchant_outlier", baseline_scope: "merchant", baseline_mean: 100, times_usual: 5, category_name: "Dining", ...over,
+    });
+    expect(anomalyExplanation(row({}))).toBe("About 5× what you usually spend here (AED 100.00)");
+    expect(anomalyExplanation(row({ reason: "category_outlier", baseline_scope: "category", baseline_mean: "300.00", times_usual: "10", category_name: "Shopping" })))
+      .toBe("About 10× your usual Shopping purchase (AED 300.00)");
+    expect(anomalyExplanation(row({ reason: "new_merchant_large", baseline_scope: "category", baseline_mean: 3000, times_usual: 2.3, category_name: "Travel" })))
+      .toBe("First purchase here, about 2.3× your usual Travel purchase (AED 3,000.00)");
+    expect(anomalyExplanation(row({ reason: "new_merchant_large", baseline_scope: null, baseline_mean: null, times_usual: null })))
+      .toBe("First purchase here");
+    expect(anomalyExplanation(row({ reason: "category_outlier", baseline_scope: "category", category_name: null, times_usual: 4, baseline_mean: 50 })))
+      .toBe("About 4× your usual purchase in this category (AED 50.00)");
+    expect(anomalyExplanation(row({ times_usual: null }))).toBe("Usually AED 100.00");
+    expect(anomalyExplanation(row({ times_usual: null, baseline_mean: null, baseline_scope: null }))).toBe("Higher than usual");
+    // No jargon: never a ± or "standard deviation".
+    expect(anomalyExplanation(row({}))).not.toMatch(/±|deviation/);
+  });
+
+  it("prints the server's rounded multiple as is", () => {
+    expect(timesLabel(5)).toBe("5×");
+    expect(timesLabel("2.3")).toBe("2.3×");
+    expect(timesLabel(null)).toBeNull();
   });
 
   it("badges price changes above half a percent", () => {
