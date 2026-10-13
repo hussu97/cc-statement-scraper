@@ -70,10 +70,6 @@ struct StatementsView: View {
             guard case .success(let urls) = result, !urls.isEmpty else { return }
             Task { await model.upload(urls: urls, profileCode: profileCode) }
         }
-        .navigationDestination(for: StatementCycle.self) { cycle in
-            StatementDetailScreen(make: { model.detailModel(for: cycle) }, profileCode: profileCode,
-                                  canEdit: canUpload)
-        }
         .sheet(item: $logFor) { doc in
             DocumentLogView(model: model.documentLog(for: doc), profileCode: profileCode)
         }
@@ -133,7 +129,7 @@ private struct CyclesCard: View {
                     .font(Typography.rowMeta).foregroundStyle(Palette.muted)
             }
             ForEach(cycles) { cycle in
-                NavigationLink(value: cycle) {
+                NavigationLink(value: SettingsRoute.statement(cycle)) {
                     CycleRow(cycle: cycle, isLatest: model.latestStatementCodes.contains(cycle.stmtCode))
                 }
                 .buttonStyle(.plain)

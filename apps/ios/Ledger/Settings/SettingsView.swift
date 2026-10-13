@@ -158,6 +158,9 @@ struct SettingsView: View {
             case .statements:
                 StatementsView(model: model.statements, profileCode: profileCode, canUpload: profiles.canWrite,
                                tabs: model.tabs)
+            case .statement(let cycle):
+                StatementDetailScreen(make: { model.statements.detailModel(for: cycle) }, profileCode: profileCode,
+                                      canEdit: profiles.canWrite)
             }
         }
         .task {
