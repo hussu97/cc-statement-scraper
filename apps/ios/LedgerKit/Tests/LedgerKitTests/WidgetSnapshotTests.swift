@@ -10,10 +10,12 @@ func widgetSnapshot(now: Date = widgetNow, name: String? = "Home") throws -> Wid
     return try #require(WidgetSnapshot.make(overview: overview, profileCode: "prf_a", ledgerName: name, now: now))
 }
 
-func card(_ code: String, due: String?, balance: String? = "100.00", utilisation: String? = nil) -> WidgetSnapshot.Card {
+func card(_ code: String, due: String?, balance: String? = "100.00", utilisation: String? = nil,
+          payment: String? = nil, paid: String? = nil) -> WidgetSnapshot.Card {
     WidgetSnapshot.Card(accountCode: code, title: "Card \(code)", dueDate: due.flatMap(CalendarDay.init(iso:)),
                         closingBalance: balance.flatMap(LedgerDecimal.parse), minDue: nil,
-                        utilisation: utilisation.flatMap(LedgerDecimal.parse))
+                        utilisation: utilisation.flatMap(LedgerDecimal.parse), paymentStatus: payment,
+                        amountPaid: paid.flatMap(LedgerDecimal.parse))
 }
 
 func snapshot(cards: [WidgetSnapshot.Card], month: CalendarDay = CalendarDay(year: 2026, month: 10, day: 1)) -> WidgetSnapshot {
