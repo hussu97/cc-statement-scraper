@@ -34,7 +34,7 @@ struct ActivityView: View {
                     Image(systemName: model.query.hasFilters
                           ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
                 }
-                .accessibilityLabel(model.query.hasFilters ? "Filters, active" : "Filters")
+                .accessibilityLabel(model.query.hasFilters ? "Filters, \(model.query.filterCount) active" : "Filters")
             }
         }
         .refreshable { await model.load(profileCode: profileCode) }

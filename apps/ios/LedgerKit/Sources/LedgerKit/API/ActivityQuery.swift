@@ -4,9 +4,24 @@ import Foundation
 /// encoding (the part that breaks on a comma in a merchant name) is testable.
 public struct ActivityQuery: Sendable, Hashable {
     public enum StatusFilter: String, Sendable, CaseIterable, Identifiable {
-        case all, pending, posted, orphaned
+        case all, pending, posted, void, orphaned
         public var id: String { rawValue }
-        public var label: String { rawValue.capitalized }
+        public var label: String { self == .all ? "Any status" : rawValue.capitalized }
+    }
+
+    /// Where a transaction's evidence came from (the web's `source` filter):
+    /// SMS only, a statement only, or both.
+    public enum SourceFilter: String, Sendable, CaseIterable, Identifiable {
+        case all, sms, statement, both
+        public var id: String { rawValue }
+        public var label: String {
+            switch self {
+            case .all: "Any source"
+            case .sms: "SMS only"
+            case .statement: "Statement only"
+            case .both: "SMS + statement"
+            }
+        }
     }
 
     /// The one page size (CLAUDE.md §4.5): 100, options up to 2000. Paging
@@ -16,9 +31,12 @@ public struct ActivityQuery: Sendable, Hashable {
 
     public var search: String = ""
     public var accountCode: String?
+    /// One card of the ledger (`cards.card_code`); `setAccount` clears it.
+    public var cardCode: String?
     public var categoryCode: String?
     public var uncategorizedOnly = false
     public var status: StatusFilter = .all
+    public var source: SourceFilter = .all
     public var from: CalendarDay?
     public var to: CalendarDay?
 
@@ -33,8 +51,21 @@ public struct ActivityQuery: Sendable, Hashable {
         return query
     }
 
-    public var hasFilters: Bool {
-        accountCode != nil || categoryCode != nil || uncategorizedOnly || status != .all || from != nil || to != nil
+    public var hasFilters: Bool { filterCount > 0 }
+
+    /// How many filters narrow the list, the search aside (the toolbar's
+    /// "Filters, 3 active"). A date range counts once, like the web's chip.
+    public var filterCount: Int {
+        [accountCode != nil, cardCode != nil, categoryCode != nil || uncategorizedOnly, status != .all,
+         source != .all, from != nil || to != nil].filter { $0 }.count
+    }
+
+    /// A new account filter drops the card filter, as the web's does: the card
+    /// may belong to another account.
+    public mutating func setAccount(_ code: String?) {
+        guard code != accountCode else { return }
+        accountCode = code
+        cardCode = nil
     }
 
     /// Resets every filter but keeps the search text.
