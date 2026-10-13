@@ -175,12 +175,21 @@ public final class SupabaseLedgerAPI: LedgerAPI, @unchecked Sendable {
 
     // MARK: Writes
 
-    public func setTransactionCategory(txnCode: String, categoryCode: String, applyToMerchant: Bool) async throws {
+    public func setTransactionCategory(txnCode: String, categoryCode: String?, applyToMerchant: Bool) async throws {
         _ = try await read(Ignored.self) {
             try await client.rpc("set_transaction_category", params: [
-                "p_txn_code": AnyJSON.string(txnCode), "p_category_code": .string(categoryCode),
+                "p_txn_code": AnyJSON.string(txnCode), "p_category_code": categoryCode.map(AnyJSON.string) ?? .null,
                 "p_apply_to_merchant": .bool(applyToMerchant),
             ]).execute()
+        }
+    }
+
+    public func updateTransaction(txnCode: String, edit: TransactionEdit) async throws {
+        _ = try await read(Ignored.self) {
+            try await client.from("transactions")
+                .update(edit.row)
+                .eq("txn_code", value: txnCode)
+                .execute()
         }
     }
 
@@ -279,4 +288,14 @@ public final class SupabaseLedgerAPI: LedgerAPI, @unchecked Sendable {
 
 extension Optional where Wrapped == CalendarDay {
     var json: AnyJSON { map { .string($0.iso) } ?? .null }
+}
+
+extension TransactionEdit {
+    /// The PATCH body: one of the columns `authenticated` may update.
+    var row: [String: AnyJSON] {
+        switch self {
+        case .excludeFromSpend(let excluded): ["exclude_from_spend": .bool(excluded)]
+        case .notes(let notes): ["notes": notes.map(AnyJSON.string) ?? .null]
+        }
+    }
 }
