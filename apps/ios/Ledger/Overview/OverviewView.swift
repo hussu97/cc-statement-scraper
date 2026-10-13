@@ -48,7 +48,8 @@ struct OverviewView: View {
                 }
                 if !content.insights.isEmpty {
                     // Dismissing is an owner write (`insights_owner_dismiss`).
-                    InsightsCard(insights: content.insights, dismiss: canResolve ? { insight in
+                    InsightsCard(insights: content.insights, profileCode: profileCode, canDismiss: canResolve,
+                                 dismiss: canResolve ? { insight in
                         Task { await model.dismiss(insight, profileCode: profileCode) }
                     } : nil)
                 }
@@ -222,30 +223,31 @@ private struct AccountsCard: View {
     }
 }
 
+/// The first open insights, alerts first, each linking where it leads, and the whole feed (PAR-9).
 private struct InsightsCard: View {
     let insights: [Insight]
+    let profileCode: String
+    let canDismiss: Bool
     /// Nil when the user may not dismiss (not an owner).
     let dismiss: ((Insight) -> Void)?
+    @Environment(InsightFeedModel.self) private var feed: InsightFeedModel?
 
     var body: some View {
         Card {
             SectionHeader(title: "Worth a look")
-            ForEach(insights.prefix(4)) { insight in
-                HStack(alignment: .top, spacing: 10) {
-                    RoundedRectangle(cornerRadius: 2).fill(insight.tone.color).frame(width: 3)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(insight.title).font(Typography.rowTitle)
-                        Text(insight.body).font(Typography.rowMeta).foregroundStyle(Palette.muted)
-                    }
-                    Spacer()
-                    if let dismiss {
-                        Button { dismiss(insight) } label: {
-                            Image(systemName: "xmark").font(.caption).frame(minWidth: 44, minHeight: 44)
-                        }
-                        .foregroundStyle(Palette.muted)
-                        .accessibilityLabel("Dismiss insight")
-                    }
+            ForEach(InsightFeed.sorted(insights).prefix(4)) { insight in
+                InsightRow(insight: insight, link: feed?.link(for: insight), host: .overview, profileCode: profileCode,
+                           dismiss: dismiss.map { dismiss in { dismiss(insight) } })
+            }
+            if feed != nil {
+                NavigationLink {
+                    InsightFeedView(profileCode: profileCode, canDismiss: canDismiss, host: .overview)
+                } label: {
+                    Text("All insights").font(Typography.rowMeta).foregroundStyle(Palette.accent)
+                        .frame(maxWidth: .infinity, minHeight: Metrics.tapMin, alignment: .leading)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
             }
         }
     }

@@ -102,6 +102,10 @@ struct MainTabs: View {
         .environment(model.spendSplit)
         .environment(model.screens.categoryDrillDowns)
         .environment(model.notifications)
+        // Worth a look and Unusual spending (PAR-9); who may dismiss reads the ledger's role.
+        .environment(model.screens.feed)
+        .environment(model.screens.anomalies)
+        .environment(model.profiles)
     }
 }
 
