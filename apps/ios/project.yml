@@ -60,6 +60,11 @@ targets:
         BGTaskSchedulerPermittedIdentifiers:
           - com.example.ledger.outbox-refresh
           - com.example.ledger.outbox-send
+        # Deep links: ledger://review (LedgerKit AppLink; the App Intents open it
+        # when a review is needed, BACKLOG IOS-07r).
+        CFBundleURLTypes:
+          - CFBundleURLName: $(LEDGER_BUNDLE_PREFIX)
+            CFBundleURLSchemes: [ledger]
         # No NSAppTransportSecurity here: Release allows HTTPS only. Debug adds
         # NSAllowsLocalNetworking in the "Debug ATS" script below (BACKLOG IOS-30).
         LedgerSupabaseURL: $(LEDGER_SUPABASE_URL)

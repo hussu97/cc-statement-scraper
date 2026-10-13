@@ -50,6 +50,8 @@ struct LedgerApp: App {
                 }
             }
             .tint(Palette.accent)
+            // ledger://review, from a Shortcut result (LedgerKit AppLink).
+            .onOpenURL { url in model?.open(url: url) }
             // The privacy cover lives in its own window above every sheet (IOS-22).
             .background(WindowSceneReader { scene in cover?.attach(to: scene) })
         }

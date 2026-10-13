@@ -60,6 +60,10 @@ struct MainTabs: View {
                                  outboxAlert: model.settings.outboxStatus.staleAlert,
                                  openSettings: { model.tabs.show(.settings) },
                                  settings: model.settings, statements: model.statements)
+                    // ledger://review (a Shortcut result) pushes Review here.
+                    .navigationDestination(isPresented: $tabs.showingReview) {
+                        ReviewView(model: model.review, profileCode: profileCode, canResolve: model.profiles.canWrite)
+                    }
                 }
             }
             Tab(LedgerTab.activity.title, systemImage: LedgerTab.activity.systemImage, value: .activity) {
