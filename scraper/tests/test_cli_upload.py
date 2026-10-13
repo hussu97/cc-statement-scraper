@@ -275,3 +275,73 @@ def test_upload_groups_records_the_batches_that_succeeded(tmp_path: Path) -> Non
     assert [(code, [f.name for f in files]) for code, files, _ in failures] == [("FAB", ["bad.pdf"])]
     assert state.is_uploaded(sha256_file(ok[0])) and state.is_uploaded(sha256_file(ok[1]))
     assert not state.is_uploaded(sha256_file(bad[0]))
+
+
+# ---------------------------------------------------------------------------
+# SRV-16r: `upload` on a partial batch failure
+# ---------------------------------------------------------------------------
+
+
+def test_upload_command_records_succeeded_batches_on_partial_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import re
+
+    import httpx
+
+    from scraper.client import ScraperClient
+
+    first = _pdf(tmp_path / "jan", "stmt.pdf")
+    second = _pdf(tmp_path / "feb", "stmt.pdf")
+    second.write_bytes(b"%PDF-1.4 february")
+    requests: list[list[str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        names = [n.decode() for n in re.findall(rb'name="files"; filename="([^"]+)"', request.read())]
+        requests.append(names)
+        if len(requests) > 1:
+            return httpx.Response(500, json={"error": "boom"})
+        uploads = [{"filename": n, "doc_code": "doc_jan", "status": "queued"} for n in names]
+        return httpx.Response(200, json={"uploads": uploads})
+
+    client = ScraperClient(
+        "https://abc.supabase.co", "tok", "hussain", upload_path="/functions/v1/statements-upload",
+        transport=httpx.MockTransport(handler), retry_delays=(), sleep=lambda _s: None,
+        max_files_per_request=1,
+    )
+    _patch_cli(monkeypatch, tmp_path, client)  # type: ignore[arg-type]
+
+    result = CliRunner().invoke(cli.app, ["upload", "--profile", "hussain", str(first), str(second)])
+
+    assert result.exit_code == 1
+    assert isinstance(result.exception, SystemExit)  # a clean exit, not a traceback
+    assert requests == [["stmt.pdf"], ["stmt.pdf"]]
+    state = UploadedState(tmp_path / "state")
+    entry = state.get(sha256_file(first))
+    assert entry is not None and entry["doc_code"] == "doc_jan"
+    assert not state.is_uploaded(sha256_file(second))
+    assert "PARTIALLY FAILED" in result.output
+    assert f"    {second}" in result.output
+    assert f"Retry with: ccs-scraper upload --profile hussain {second}" in result.output
+
+
+def test_upload_command_total_failure_exits_cleanly(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    pdf = _pdf(tmp_path / "in", "a.pdf")
+    _patch_cli(monkeypatch, tmp_path, FakeClient(fail_banks={None}))  # type: ignore[arg-type]
+
+    result = CliRunner().invoke(cli.app, ["upload", "--profile", "hussain", str(pdf)])
+
+    assert result.exit_code == 1
+    assert isinstance(result.exception, SystemExit)
+    assert "Upload FAILED" in result.output and f"    {pdf}" in result.output
+    assert not UploadedState(tmp_path / "state").is_uploaded(sha256_file(pdf))
+
+
+def test_upload_command_records_all_on_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    pdf = _pdf(tmp_path / "in", "a.pdf")
+    _patch_cli(monkeypatch, tmp_path, FakeClient())
+
+    result = CliRunner().invoke(cli.app, ["upload", "--profile", "hussain", str(pdf)])
+
+    assert result.exit_code == 0, result.output
+    assert UploadedState(tmp_path / "state").get(sha256_file(pdf))["doc_code"] == "doc_a"  # type: ignore[index]

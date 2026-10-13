@@ -418,6 +418,32 @@ def test_partial_failure_reports_uploaded_and_failed_files(tmp_path: Path) -> No
     assert len(err.value.result["uploads"]) == 20
 
 
+def test_partial_failure_tracks_same_named_files_by_path(tmp_path: Path) -> None:
+    """SRV-16r: two folders' ``stmt.pdf`` land in the right uploaded/failed lists."""
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    first = _pdf(tmp_path / "a", "stmt.pdf")
+    second = _pdf(tmp_path / "b", "stmt.pdf")
+    second.write_bytes(b"%PDF-1.4 other content")
+    calls: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        if len(calls) > 1:
+            return httpx.Response(422, json={"error": {"code": "NOT_A_PDF"}})
+        return _echo(request)
+
+    client = ScraperClient(
+        "https://abc.supabase.co", "tok", "hussain", upload_path=_V2_PATH,
+        transport=httpx.MockTransport(handler), retry_delays=(), sleep=lambda _s: None,
+        max_files_per_request=1,
+    )
+    with pytest.raises(UploadBatchError) as err:
+        client.upload_pdfs([first, second])
+    assert err.value.uploaded_files == [first]
+    assert err.value.failed_files == [second]
+
+
 def test_merge_results_legacy_and_v2() -> None:
     assert merge_results([{"job_id": 1}]) == {"job_id": 1}
     assert merge_results([{"uploads": [1]}, {"uploads": [2]}]) == {"uploads": [1, 2]}
