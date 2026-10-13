@@ -234,8 +234,33 @@ function ToSignIn() {
   return <Navigate to="/signin" search={signInSearch(from)} replace />;
 }
 
-/** Authenticated layout: guards, realtime, navigation. */
-export function AppShell() {
+/** Main content's id: the skip link's target. */
+const MAIN_ID = "main";
+
+/**
+ * "Skip to content": the first focusable element, hidden until focused (WEB-52). It moves
+ * focus itself rather than following `#main`, so the router never sees a hash change.
+ */
+function SkipLink() {
+  return (
+    <a
+      href={`#${MAIN_ID}`}
+      onClick={(e) => {
+        e.preventDefault();
+        document.getElementById(MAIN_ID)?.focus();
+      }}
+      className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-md focus:border focus:border-border focus:bg-surface focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-ink focus:shadow-[0_8px_24px_-12px_var(--color-border-strong)]"
+    >
+      Skip to content
+    </a>
+  );
+}
+
+/**
+ * Authenticated layout: guards, realtime, navigation. `children` replaces the route outlet,
+ * for content that isn't a route of its own (the signed-in 404).
+ */
+export function AppShell({ children }: { children?: ReactNode }) {
   const { session, loading } = useAuth();
   const { profile, profiles, loading: profilesLoading, error } = useProfileContext();
   const nav = useNav(profile?.profile_code ?? null);
@@ -253,12 +278,13 @@ export function AppShell() {
   return (
     <TooltipProvider>
       <Toaster>
+        <SkipLink />
         <div className="flex min-h-dvh">
           <Sidebar nav={nav} />
           <div className="min-w-0 flex-1">
             <MobileNav nav={nav} />
-            <main key={profile.profile_code} className="mx-auto w-full max-w-[1240px] pt-6 pr-[max(var(--space-gutter),env(safe-area-inset-right))] pb-[calc(7rem+env(safe-area-inset-bottom))] pl-[max(var(--space-gutter),env(safe-area-inset-left))] md:pt-10 md:pr-[max(var(--space-gutter-lg),env(safe-area-inset-right))] md:pl-[max(var(--space-gutter-lg),env(safe-area-inset-left))] lg:pb-16">
-              <Outlet />
+            <main key={profile.profile_code} id={MAIN_ID} tabIndex={-1} className="mx-auto w-full outline-none max-w-[1240px] pt-6 pr-[max(var(--space-gutter),env(safe-area-inset-right))] pb-[calc(7rem+env(safe-area-inset-bottom))] pl-[max(var(--space-gutter),env(safe-area-inset-left))] md:pt-10 md:pr-[max(var(--space-gutter-lg),env(safe-area-inset-right))] md:pl-[max(var(--space-gutter-lg),env(safe-area-inset-left))] lg:pb-16">
+              {children ?? <Outlet />}
             </main>
           </div>
         </div>

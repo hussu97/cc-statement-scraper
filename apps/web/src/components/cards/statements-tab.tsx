@@ -131,7 +131,7 @@ function StatementRow({ s }: { s: StatementCycle }) {
         <span className="hidden text-[13px] md:block">
           <span className="block text-[11px] text-subtle">Utilisation</span>
           <span className="tabular block text-ink">{util !== null ? formatPercent(util) : "—"}</span>
-          {util !== null && <Meter value={util} className="mt-1 h-1 w-20" tone={utilisationTone(util)} />}
+          {util !== null && <Meter value={util} className="mt-1 h-1 w-20" tone={utilisationTone(util)} label="Utilisation" />}
         </span>
         <span className="flex items-center justify-end gap-1.5">
           <Badge tone={badge.tone}>{badge.label}</Badge>

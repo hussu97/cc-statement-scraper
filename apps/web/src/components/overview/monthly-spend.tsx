@@ -1,9 +1,14 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { addMonths, formatMonth, monthEnd, monthStart } from "@/lib/dates";
 import { Card, CardHeader } from "@/components/ui/display";
-import { SpendSplitChart, SplitControl } from "@/components/charts/spend-split-chart";
+import { LoadingBlock } from "@/components/ui/states";
+import { SplitControl } from "@/components/charts/split-control";
 import type { SpendSplit } from "@/components/charts/spend-split";
+
+// The bars are the only chart-library user on Overview: load them after the screen renders,
+// so the hero and the category ring don't wait for that chunk (WEB-53).
+const SpendSplitChart = lazy(() => import("@/components/charts/spend-split-chart").then((m) => ({ default: m.SpendSplitChart })));
 
 /** Six months up to the Overview's month, as bars that can be split by category, bank or merchant. */
 export function MonthlySpendCard({ profileCode, month }: { profileCode: string; month: string }) {
@@ -25,7 +30,9 @@ export function MonthlySpendCard({ profileCode, month }: { profileCode: string; 
         <SplitControl value={split} onChange={setSplit} />
       </div>
       <div className="px-3 pb-4 md:px-4">
-        <SpendSplitChart profileCode={profileCode} range={{ from, to }} split={split} />
+        <Suspense fallback={<LoadingBlock className="h-64 md:h-72" />}>
+          <SpendSplitChart profileCode={profileCode} range={{ from, to }} split={split} />
+        </Suspense>
       </div>
     </Card>
   );

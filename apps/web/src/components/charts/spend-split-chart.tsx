@@ -9,18 +9,12 @@ import type { TrendFilters } from "@/lib/trend-filters";
 import { formatMoney, formatPercent } from "@/lib/money";
 import { useMediaQuery } from "@/lib/hooks";
 import { cn } from "@/lib/cn";
-import { Segmented } from "@/components/ui/primitives";
 import { EmptyState, ErrorState, LoadingBlock } from "@/components/ui/states";
 import { BankLogo } from "@/components/bank-logo";
 import { AXIS_TICK, CURSOR_FILL, GRID_STROKE, axisMoney } from "./chart-tooltip";
 import { shortMonth } from "./heat";
-import { breakdownGroupFor, groupActivitySearch, monthDate, monthShare, SPLIT_LABEL, SPLITS, splitChart, type SplitChart, type SpendSplit } from "./spend-split";
+import { breakdownGroupFor, groupActivitySearch, monthDate, monthShare, SPLIT_LABEL, splitChart, type SplitChart, type SpendSplit } from "./spend-split";
 import { axisTickInterval } from "@/components/insights/labels";
-
-/** The split control: none / category / bank / merchant. */
-export function SplitControl({ value, onChange, className }: { value: SpendSplit; onChange: (s: SpendSplit) => void; className?: string }) {
-  return <Segmented ariaLabel="Split bars by" value={value} onChange={onChange} options={SPLITS.map((s) => ({ value: s, label: SPLIT_LABEL[s] }))} className={className} />;
-}
 
 /**
  * Monthly spend bars, optionally stacked by category, bank or merchant (top 10
