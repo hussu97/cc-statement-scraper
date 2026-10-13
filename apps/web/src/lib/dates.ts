@@ -24,6 +24,18 @@ export function todayDubai(now: Date = new Date()): ISODate {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
+/**
+ * The Dubai calendar date of a value: a date-only "YYYY-MM-DD" is returned as
+ * is; a timestamp (timestamptz, "2026-10-12T21:30:00+00:00") becomes the day
+ * it is in Dubai (13 Oct), never its UTC day (WEB-47). Null when unparseable.
+ */
+export function dubaiDate(v: string | null | undefined): ISODate | null {
+  if (!v) return null;
+  if (ISO_RE.test(v)) return v;
+  const x = new Date(v);
+  return Number.isNaN(x.getTime()) ? null : todayDubai(x);
+}
+
 function toUTC(d: ISODate): Date {
   return new Date(`${d}T00:00:00Z`);
 }
@@ -68,10 +80,14 @@ function fmt(key: string, opts: Intl.DateTimeFormatOptions): Intl.DateTimeFormat
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const WEEKDAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-/** "8 Oct 2026" (or "8 Oct" when `short`). Date-only values are not shifted. */
+/**
+ * "8 Oct 2026" (or "8 Oct" when `short`). Date-only values are not shifted;
+ * a timestamp shows its Dubai day (dubaiDate).
+ */
 export function formatDate(d: ISODate | null | undefined, style: "short" | "long" | "day" = "long"): string {
-  if (!d) return "—";
-  const x = toUTC(d.slice(0, 10));
+  const day = dubaiDate(d);
+  if (!day) return "—";
+  const x = toUTC(day);
   if (Number.isNaN(x.getTime())) return "—";
   const dm = `${x.getUTCDate()} ${MONTHS_SHORT[x.getUTCMonth()]}`;
   if (style === "day") return `${WEEKDAYS_SHORT[x.getUTCDay()]} ${dm}`;
@@ -87,8 +103,9 @@ export function formatDateSpan(from: ISODate | null | undefined, to: ISODate | n
 }
 
 export function formatMonth(d: ISODate | null | undefined, style: "long" | "short" = "long"): string {
-  if (!d) return "—";
-  const x = toUTC(monthStart(d.slice(0, 10)));
+  const day = dubaiDate(d);
+  if (!day) return "—";
+  const x = toUTC(monthStart(day));
   return style === "long"
     ? fmt("month-long", { timeZone: "UTC", month: "long", year: "numeric" }).format(x)
     : fmt("month-short", { timeZone: "UTC", month: "short" }).format(x);
@@ -122,7 +139,7 @@ export function formatRelative(ts: string | null | undefined, now: Date = new Da
   if (h < 36) return `${h} h ago`;
   const d = Math.round(h / 24);
   if (d < 60) return `${d} d ago`;
-  return formatDate(new Date(t).toISOString().slice(0, 10));
+  return formatDate(todayDubai(new Date(t)));
 }
 
 export interface DateRange {

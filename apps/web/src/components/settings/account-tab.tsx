@@ -90,7 +90,7 @@ function PasskeysSection() {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium break-words text-ink">{pk.friendly_name || "Passkey"}</p>
                   <p className="mt-0.5 text-[12px] text-muted">
-                    Added {formatDate(pk.created_at.slice(0, 10))} · {pk.last_used_at ? `last used ${formatRelative(pk.last_used_at)}` : "not used yet"}
+                    Added {formatDate(pk.created_at)} · {pk.last_used_at ? `last used ${formatRelative(pk.last_used_at)}` : "not used yet"}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
