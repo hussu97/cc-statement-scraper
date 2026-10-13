@@ -22,6 +22,8 @@ export function safeRedirect(raw: unknown): string | undefined {
     return undefined;
   }
   if (url.origin !== BASE) return undefined;
+  // Dot segments can normalise "/.//host" into "//host": never hand back a protocol-relative path.
+  if (url.pathname.startsWith("//")) return undefined;
   // Back to /signin would loop; "/" is where sign-in goes anyway.
   if (url.pathname === "/" && !url.search && !url.hash) return undefined;
   if (url.pathname === "/signin" || url.pathname.startsWith("/signin/")) return undefined;
