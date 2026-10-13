@@ -464,6 +464,7 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "plutil -insert NSAppTransportSecurity -json '{\"NSAllowsLocalNetworking\":true}' \\\n  -o - \"$SCRIPT_INPUT_FILE_0\" > \"$SCRIPT_OUTPUT_FILE_0\"\n";
+			showEnvVarsInLog = 0;
 		};
 		58C6CA92047F36E5603E7E2E /* Debug ATS */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -484,6 +485,7 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "plutil -insert NSAppTransportSecurity -json '{\"NSAllowsLocalNetworking\":true}' \\\n  -o - \"$SCRIPT_INPUT_FILE_0\" > \"$SCRIPT_OUTPUT_FILE_0\"\n";
+			showEnvVarsInLog = 0;
 		};
 		7C12563EFE44B756979B8DB7 /* Check release config */ = {
 			isa = PBXShellScriptBuildPhase;

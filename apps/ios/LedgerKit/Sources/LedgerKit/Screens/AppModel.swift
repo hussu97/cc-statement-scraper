@@ -103,6 +103,7 @@ public final class AppModel {
             // Every way of being signed out (the button, a rejected session, a
             // refresh that failed): nothing is filed in the last ledger any more.
             profiles.clearSMSTarget()
+            tabs.signedOut()   // a pending ledger://review must not open for the next account
             screens.stop()
         default:
             break

@@ -150,4 +150,16 @@ struct TransportSecurityTests {
         #expect(lines.filter { $0.contains("INFOPLIST_FILE: $(DERIVED_FILE_DIR)/Info.Debug.plist") }.count == 2)
         #expect(lines.filter { $0.contains(#"NSAllowsLocalNetworking":true"#) }.count == 2)
     }
+
+    @Test("every build script phase hides the build environment (an archive's holds the release config)")
+    func scriptPhasesHideEnvironment() throws {
+        let pbx = try String(contentsOf: Self.iosRoot.appendingPathComponent("Ledger.xcodeproj/project.pbxproj"),
+                             encoding: .utf8)
+        let phases = pbx.components(separatedBy: "isa = PBXShellScriptBuildPhase;").dropFirst()
+        #expect(!phases.isEmpty)
+        for phase in phases {
+            let body = phase.components(separatedBy: "};").first ?? ""
+            #expect(body.contains("showEnvVarsInLog = 0;"))
+        }
+    }
 }
