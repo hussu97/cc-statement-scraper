@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, type Views, type RpcArgs } from "@/lib/supabase";
-import { searchOrFilter, UNCATEGORIZED, type ActivitySearch } from "@/lib/activity-filters";
+import { activityFilter, searchOrFilter, UNCATEGORIZED, type ActivityFilter, type ActivitySearch } from "@/lib/activity-filters";
+import type { ExportRow } from "@/lib/csv";
 import type { ISODate } from "@/lib/dates";
 import { DEFAULT_PAGE_SIZE, pageRange } from "@/lib/pagination";
 import { keys, LEDGER_DOMAINS } from "./keys";
@@ -271,18 +272,65 @@ export function useSetCategory(profileCode: string) {
   });
 }
 
-export function useBulkSetCategory(profileCode: string) {
+/**
+ * What the Activity bulk bar acts on: the ticked rows, or every row matching the filters
+ * ("select all matching"). The bulk RPCs take exactly one of the two (WEB-24).
+ */
+export type TxnSelection = { kind: "codes"; codes: readonly string[] } | { kind: "filter"; search: ActivitySearch };
+
+/** A selection as the bulk RPCs' arguments: exactly one of the two. Pure. */
+export function selectionArgs(sel: TxnSelection): { p_txn_codes?: string[]; p_filter?: ActivityFilter } {
+  return sel.kind === "codes" ? { p_txn_codes: [...sel.codes] } : { p_filter: activityFilter(sel.search) };
+}
+
+/** A selection's identity for a query key: codes in a stable order, or the filter. Pure. */
+export function selectionKey(sel: TxnSelection): { codes: string[] } | { filter: ActivityFilter } {
+  return sel.kind === "codes" ? { codes: [...sel.codes].sort() } : { filter: activityFilter(sel.search) };
+}
+
+/** public.activity_selection_summary: the bulk bar's numbers. */
+export interface SelectionSummary {
+  txn_count: number;
+  /** Debits minus credits in AED, pending and posted only: a decimal string. */
+  net_aed: string;
+  unpriced_count: number;
+  has_estimate: boolean;
+  /** Rows already excluded from spend ("Include" when it equals txn_count). */
+  excluded_count: number;
+}
+
+/** Count, net AED and excluded count of a selection, computed on the server (§2.2). */
+export function useSelectionSummary(profileCode: string, sel: TxnSelection | null) {
+  return useQuery({
+    queryKey: keys.selectionSummary(profileCode, sel ? selectionKey(sel) : null),
+    enabled: !!sel && (sel.kind === "filter" || sel.codes.length > 0),
+    // No placeholder: another selection's total is not this one's, so the bar waits for its own.
+    queryFn: async () => {
+      const args: RpcArgs<"activity_selection_summary"> = { p_profile_code: profileCode, ...selectionArgs(sel!) };
+      return must(await supabase.rpc("activity_selection_summary", args)) as unknown as SelectionSummary;
+    },
+  });
+}
+
+/** The user fields a bulk action may set (public.bulk_update_transactions). */
+export type BulkPatch = { exclude_from_spend: boolean } | { manual_category_code: string | null };
+
+/** Exclude / Include from spend, or Categorise, a selection (owner). Resolves to the rows changed. */
+export function useBulkUpdate(profileCode: string) {
   const invalidate = useInvalidateLedger(profileCode);
   return useMutation({
-    mutationFn: async (v: { txnCodes: string[]; categoryCode: string | null }) =>
-      must(
-        await supabase.rpc("set_transactions_category", {
-          p_txn_codes: v.txnCodes,
-          p_category_code: v.categoryCode as string,
-        }),
-      ) as number,
+    mutationFn: async (v: { selection: TxnSelection; patch: BulkPatch }) => {
+      const args: RpcArgs<"bulk_update_transactions"> = { p_profile_code: profileCode, p_patch: v.patch, ...selectionArgs(v.selection) };
+      return must(await supabase.rpc("bulk_update_transactions", args)) as number;
+    },
     onSettled: invalidate,
   });
+}
+
+/** The rows of a selection for Export CSV, newest first; money as decimal strings. */
+export async function fetchActivityExport(profileCode: string, sel: TxnSelection): Promise<ExportRow[]> {
+  const args: RpcArgs<"activity_export"> = { p_profile_code: profileCode, ...selectionArgs(sel) };
+  return must(await supabase.rpc("activity_export", args)) as unknown as ExportRow[];
 }
 
 export function useUpdateTransaction(profileCode: string) {

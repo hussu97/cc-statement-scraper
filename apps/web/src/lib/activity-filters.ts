@@ -8,6 +8,8 @@ export const TXN_SOURCES = ["sms", "statement", "both"] as const;
 export type TxnSource = (typeof TXN_SOURCES)[number];
 /** Category filter value meaning "no category". */
 export const UNCATEGORIZED = "none";
+/** The keys that narrow the list; also the bulk RPCs' `p_filter` keys (private.activity_selection). */
+const FILTER_KEYS = ["from", "to", "account", "card", "category", "status", "source", "q"] as const;
 
 /**
  * The search box keeps its own text while typing and writes `?q=` after a
@@ -79,7 +81,7 @@ export function parseActivitySearch(raw: Record<string, unknown>): ActivitySearc
 
 /** Filters that narrow the result set (excludes paging). */
 export function activeFilterCount(s: ActivitySearch): number {
-  return (["from", "to", "account", "card", "category", "status", "source", "q"] as const).filter((k) => s[k] !== undefined).length;
+  return FILTER_KEYS.filter((k) => s[k] !== undefined).length;
 }
 
 /** Apply a filter change: any filter change resets to page 1. */
@@ -112,6 +114,23 @@ export function sanitizedSearch(raw: string): string {
 export function searchOrFilter(q: string | undefined): string | null {
   const term = sanitizedSearch(q ?? "");
   return term ? `description.ilike.*${term}*,merchant_name.ilike.*${term}*` : null;
+}
+
+export type ActivityFilter = Partial<Record<(typeof FILTER_KEYS)[number], string>>;
+
+/**
+ * The Activity filters as the bulk RPCs' `p_filter` ("select all matching"): the URL's
+ * filter keys only (no paging, no drawer), blank search dropped. Pure.
+ */
+export function activityFilter(s: ActivitySearch): ActivityFilter {
+  const out: ActivityFilter = {};
+  for (const k of FILTER_KEYS) {
+    const v = s[k];
+    if (v === undefined) continue;
+    if (k === "q" && !String(v).trim()) continue;
+    out[k] = String(v);
+  }
+  return out;
 }
 
 /** The part of the search that determines the list (drops the drawer param). */
