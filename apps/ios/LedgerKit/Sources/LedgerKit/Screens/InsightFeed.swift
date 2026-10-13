@@ -225,7 +225,7 @@ public final class InsightFeedModel {
             state = .loaded(rows.filter { $0.insightCode != insight.insightCode })
         }
         try? await api.dismissInsight(insightCode: insight.insightCode)
-        await load(profileCode: profileCode)
+        await refresh(profileCode: profileCode)   // not if the reader switched ledger meanwhile
         await onChange?(profileCode)
     }
 
