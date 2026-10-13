@@ -3,6 +3,7 @@ import { supabase, type Tables } from "@/lib/supabase";
 import { keys } from "./keys";
 import { must, mustList } from "./api";
 import { todayDubai } from "@/lib/dates";
+import { formatCount, formatTotal, type MoneyInput } from "@/lib/money";
 import type { BalanceAnchor } from "@/lib/balances";
 
 export interface OverviewCategory {
@@ -155,6 +156,15 @@ export function insightTarget(i: Pick<Insight, "kind" | "data">): InsightTarget 
     default:
       return null;
   }
+}
+
+/**
+ * The pending strip's line (WEB-35): "31 pending · AED 3,082", from the server's count and sum;
+ * null when nothing is pending. The rows themselves are in Recent activity, with a Pending badge.
+ */
+export function pendingSummary(count: number, amount: MoneyInput): string | null {
+  if (count <= 0) return null;
+  return `${formatCount(count)} pending · ${formatTotal(amount)}`;
 }
 
 /** Severity order for display: alerts first. */
