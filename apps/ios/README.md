@@ -21,6 +21,13 @@ per request, `Paginator`), plus the **Log Bank SMS** and **Log Card Payment** Ap
 - **Insights → Monthly spend** splits by None / Category / Bank / Merchant (`spend_breakdown`, top
   10 + Others): stacked bars, legend, tap a month for its callout (AED and share of the month), and
   each group's total and share for the range. Charts carry VoiceOver chart descriptors.
+- **More App Intents** (Shortcuts, Spotlight, voice): *Month Spend* ("How much have I spent this
+  month in Bank Ledger"), *What's Due* and *Categorise Last Transaction* (a `CategoryEntity`
+  picker; files the newest purchase of the ledger on screen, that transaction only). They answer
+  for the ledger the app shows, from `rpc('overview')`, or offline from the widget snapshot ("Offline,
+  as of 14:05: …"). Each needs the device unlocked (`.requiresAuthentication`): they read money
+  aloud. Words and choices are `LedgerQuestions` (LedgerKit). App Shortcuts need a team-signed
+  build: an ad-hoc simulator build lists them but linkd refuses to run them.
 - **Widgets** (`LedgerWidgets` extension): *Month spend* (spend so far and the server's pace
   against the same day last month), *Next due* (the soonest upcoming statement, its balance and
   minimum) and *Utilisation* (each card's latest statement against its limit), on the Home Screen
@@ -60,7 +67,7 @@ apps/ios/
 │   │   │                    DocumentLogModel, share-extension offline queue (+ quarantine)
 │   │   └── Widgets/         WidgetSnapshot (+ App Group store), what each widget says, privacy
 │   └── Tests/LedgerKitTests/
-├── Ledger/                  app target — layout only (+ LogBankSMSIntent, PrivacyInfo.xcprivacy)
+├── Ledger/                  app target — layout only (+ App Intents in Intents/, PrivacyInfo.xcprivacy)
 ├── ShareExtension/          "Add to Bank Ledger" (PDFs → statements-upload, + PrivacyInfo.xcprivacy)
 ├── Widgets/                 Home and Lock Screen widgets — layout only (+ PrivacyInfo.xcprivacy)
 └── scripts/                testflight.sh (archive → export → dSYMs → upload), publish-build.sh

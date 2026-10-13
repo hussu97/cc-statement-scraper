@@ -352,6 +352,7 @@ Used for the production Edge Function secrets and Vault entries, and for secret 
 | Review | Open match reviews: link, keep as new, dismiss, register an unknown card (read-only for viewers) |
 | Settings | Cards & statements → Statements, "SMS go to" ledger, SMS capture guide (one "Card" automation, Last captured, Send test), "Not sent" outbox list (Retry / Delete), Privacy → Require Face ID (the app is always covered in the app switcher), profile; sign-out confirms and clears what is waiting on the phone |
 | **Log Bank SMS** (App Intent) | Called by the Shortcuts automation, with no UI |
+| **Month Spend**, **What's Due**, **Categorise Last Transaction** (App Intents + App Shortcuts) | Spoken answers for the ledger on screen (`overview`, offline from the widget snapshot); files the newest purchase under a chosen `CategoryEntity`; the device must be unlocked |
 | **Add to Bank Ledger** (share extension) | Sends shared PDFs to `statements-upload` |
 | Widgets (WidgetKit extension) | Month spend and pace, next due, utilisation on the Home and Lock Screen, from an App Group snapshot the app writes (no network); Lock Screen amounts hidden with Require Face ID |
 

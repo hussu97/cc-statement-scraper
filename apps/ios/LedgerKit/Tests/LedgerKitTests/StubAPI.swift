@@ -150,10 +150,13 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
     /// Months `overview` was asked for (nil: current).
     private(set) var overviewMonths: [CalendarDay?] = []
     var overviewFixture: Overview?
+    /// Thrown by `overview` when set.
+    var overviewError: LedgerAPIError?
 
     func overview(profileCode: String, month: CalendarDay?) async throws -> Overview {
         lock.withLock { overviewMonths.append(month) }
         count("overview")
+        if let overviewError { throw overviewError }
         guard let overviewFixture else { throw LedgerAPIError.noProfile }
         return overviewFixture
     }
