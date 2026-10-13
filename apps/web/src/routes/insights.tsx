@@ -15,9 +15,12 @@ import { CalendarTab } from "@/components/insights/calendar-tab";
 import { TimeOfDayTab } from "@/components/insights/time-tab";
 import { YoyTab } from "@/components/insights/yoy-tab";
 import { AnomaliesTab } from "@/components/insights/anomalies-tab";
+import { FeedTab } from "@/components/insights/feed-tab";
+import { useInsights } from "@/data/overview";
+import { formatBadgeCount } from "@/lib/money";
 
-/** Tabs that ignore the date range (they have their own period). */
-const RANGELESS: InsightTab[] = ["subscriptions", "yoy"];
+/** Tabs that ignore the date range (they have their own period, or none). */
+const RANGELESS: InsightTab[] = ["feed", "subscriptions", "yoy"];
 
 export function InsightsPage() {
   const { profile_code: profileCode } = useActiveProfile();
@@ -27,6 +30,9 @@ export function InsightsPage() {
   const { from, to } = insightsRange(search);
   const range = { from, to };
   const props = { profileCode, range };
+  // The feed tab's count; the same cached query as Overview's insights panel.
+  const insights = useInsights(profileCode);
+  const open = insights.data?.length ?? 0;
 
   return (
     <div className="animate-fade-in">
@@ -47,6 +53,14 @@ export function InsightsPage() {
           {INSIGHT_TABS.map((t) => (
             <TabsTrigger key={t.value} value={t.value}>
               {t.label}
+              {t.value === "feed" && open > 0 && (
+                <>
+                  <span aria-hidden className="tabular ml-1.5 rounded-pill bg-accent-soft px-1.5 text-[11px] leading-[18px] font-medium text-accent">
+                    {formatBadgeCount(open)}
+                  </span>
+                  <span className="sr-only">, {open} open</span>
+                </>
+              )}
             </TabsTrigger>
           ))}
         </TabsList>
@@ -54,6 +68,9 @@ export function InsightsPage() {
         <div className="pt-5">
           <TabsContent value="trends">
             <TrendsTab {...props} />
+          </TabsContent>
+          <TabsContent value="feed">
+            <FeedTab profileCode={profileCode} />
           </TabsContent>
           <TabsContent value="categories">
             <CategoriesTab {...props} />
