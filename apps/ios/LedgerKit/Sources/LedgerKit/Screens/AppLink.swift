@@ -1,12 +1,19 @@
 import Foundation
 
-/// Deep links into the app: `ledger://review`. The scheme is registered in
-/// `project.yml` (`CFBundleURLTypes`) and `AppModel.open(url:)` routes them
-/// (IOS-07r). The App Intents don't open them (they run in the background for
-/// every alert); a Shortcut can, with "Open URL ledger://review".
+/// Deep links into the app: `ledger://review`, `ledger://uncategorised`,
+/// `ledger://add-statement`. The scheme is registered in `project.yml`
+/// (`CFBundleURLTypes`) and `AppModel.open(url:)` routes them through
+/// `TabRouter` (IOS-07r). The SMS intents don't open them (they run in the
+/// background for every alert); a Shortcut can ("Open URL ledger://review"),
+/// and the Controls do (N-4).
 public enum AppLink: String, Equatable, Sendable, CaseIterable {
     /// Overview → Needs attention → Review.
     case review
+    /// Activity filtered to this month's uncategorised transactions (the
+    /// "Open Uncategorised" Control, N-4).
+    case uncategorised
+    /// Settings → Statements with the PDF picker open (the "Add statement" Control).
+    case addStatement = "add-statement"
 
     public static let scheme = "ledger"
 
@@ -20,6 +27,33 @@ public enum AppLink: String, Equatable, Sendable, CaseIterable {
     }
 
     public var url: URL { URL(string: "\(Self.scheme)://\(rawValue)")! }
+}
+
+/// Hands a link from an App Intent that opened the app (a Control, N-4) to the
+/// app's router. The intent may run before the app's model exists (a cold
+/// launch), so a link delivered then waits for `attach`.
+@MainActor
+public enum AppLinkInbox {
+    private static var handler: ((AppLink) -> Void)?
+    private static var waiting: AppLink?
+
+    public static func deliver(_ link: AppLink) {
+        if let handler { handler(link) } else { waiting = link }
+    }
+
+    /// The app's model attaches once; a link that came first opens now.
+    public static func attach(_ handler: @escaping (AppLink) -> Void) {
+        self.handler = handler
+        if let link = waiting {
+            waiting = nil
+            handler(link)
+        }
+    }
+
+    static func detach() {
+        handler = nil
+        waiting = nil
+    }
 }
 
 extension SMSIntakeOutcome {

@@ -13,7 +13,7 @@ struct AppStoreTextTests {
 
     static let banned = ["iPhone", "iPad", "Siri", "Apple Watch"]
 
-    @Test(arguments: ["Ledger/Intents", "Widgets"])
+    @Test(arguments: ["Ledger/Intents", "Widgets", "Shared"])
     func noTrademarks(directory: String) throws {
         let dir = Self.iosRoot.appendingPathComponent(directory)
         let files = try FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)

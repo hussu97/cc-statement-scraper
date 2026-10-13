@@ -25,6 +25,8 @@ targets:
     platform: iOS
     sources:
       - path: Ledger
+      # The Controls' intents: the app runs them, the widget extension shows them (N-4).
+      - path: Shared
     dependencies:
       - package: LedgerKit
       - target: LedgerShare
@@ -91,8 +93,8 @@ targets:
         BGTaskSchedulerPermittedIdentifiers:
           - com.example.ledger.outbox-refresh
           - com.example.ledger.outbox-send
-        # Deep links: ledger://review (LedgerKit AppLink; the App Intents open it
-        # when a review is needed, BACKLOG IOS-07r).
+        # Deep links: ledger://review, ledger://uncategorised, ledger://add-statement
+        # (LedgerKit AppLink, routed by TabRouter; IOS-07r, N-4).
         CFBundleURLTypes:
           - CFBundleURLName: $(LEDGER_BUNDLE_PREFIX)
             CFBundleURLSchemes: [ledger]
@@ -183,6 +185,7 @@ targets:
     platform: iOS
     sources:
       - path: Widgets
+      - path: Shared
     dependencies:
       - package: LedgerKit
       - sdk: WidgetKit.framework

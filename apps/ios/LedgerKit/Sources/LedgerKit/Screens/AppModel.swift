@@ -140,8 +140,18 @@ public final class AppModel {
     @discardableResult
     public func open(url: URL) -> Bool {
         guard let link = AppLink(url: url) else { return false }
-        tabs.open(link, ledgerOnScreen: ledgerOnScreen)
+        open(link)
         return true
+    }
+
+    /// A link from a URL or from a Control's intent (`AppLinkInbox`).
+    public func open(_ link: AppLink) {
+        tabs.open(link, ledgerOnScreen: ledgerOnScreen)
+    }
+
+    /// Takes the links the Controls' intents deliver (N-4). Called once by the app.
+    public func receiveIntentLinks() {
+        AppLinkInbox.attach { [weak self] link in self?.open(link) }
     }
 
     /// The main tabs are showing the selected ledger.

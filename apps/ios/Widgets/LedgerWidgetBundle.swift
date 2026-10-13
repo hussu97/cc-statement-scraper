@@ -2,9 +2,10 @@ import LedgerKit
 import SwiftUI
 import WidgetKit
 
-/// Bank Ledger's Home and Lock Screen widgets (BACKLOG N-2). They draw the
-/// snapshot the app writes to the App Group after Overview loads: no network,
-/// no session. Every word they show is decided in LedgerKit (`WidgetContent`).
+/// Bank Ledger's Home and Lock Screen widgets (BACKLOG N-2) and Controls (N-4).
+/// The widgets draw the snapshot the app writes to the App Group after
+/// Overview loads: no network, no session. Every word they show is decided in
+/// LedgerKit (`WidgetContent`); the Controls open `ledger://` links.
 @main
 struct LedgerWidgetBundle: WidgetBundle {
     init() {
@@ -15,6 +16,8 @@ struct LedgerWidgetBundle: WidgetBundle {
         SpendWidget()
         DueWidget()
         UtilisationWidget()
+        OpenUncategorisedControl()
+        AddStatementControl()
     }
 }
 

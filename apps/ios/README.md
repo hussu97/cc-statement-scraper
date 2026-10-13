@@ -28,6 +28,12 @@ per request, `Paginator`), plus the **Log Bank SMS** and **Log Card Payment** Ap
   as of 14:05: …"). Each needs the device unlocked (`.requiresAuthentication`): they read money
   aloud. Words and choices are `LedgerQuestions` (LedgerKit). App Shortcuts need a team-signed
   build: an ad-hoc simulator build lists them but linkd refuses to run them.
+- **Controls** (Control Center, Lock Screen, Action button; in the widget extension): *Open
+  Uncategorised* (Activity filtered to this month's uncategorised rows) and *Add Statement*
+  (Settings → Statements with the PDF picker open; a viewer gets Statements without it). Their
+  intents (`Shared/OpenLinkIntents.swift`, in both targets) open the app and hand an `AppLink` to
+  `AppLinkInbox`; `TabRouter` routes it, waiting for a ledger when the app is on sign-in or the
+  picker. The same routes are deep links: `ledger://uncategorised`, `ledger://add-statement`.
 - **Widgets** (`LedgerWidgets` extension): *Month spend* (spend so far and the server's pace
   against the same day last month), *Next due* (the soonest upcoming statement, its balance and
   minimum) and *Utilisation* (each card's latest statement against its limit), on the Home Screen
@@ -69,7 +75,8 @@ apps/ios/
 │   └── Tests/LedgerKitTests/
 ├── Ledger/                  app target — layout only (+ App Intents in Intents/, PrivacyInfo.xcprivacy)
 ├── ShareExtension/          "Add to Bank Ledger" (PDFs → statements-upload, + PrivacyInfo.xcprivacy)
-├── Widgets/                 Home and Lock Screen widgets — layout only (+ PrivacyInfo.xcprivacy)
+├── Widgets/                 Home and Lock Screen widgets and Controls — layout only (+ PrivacyInfo.xcprivacy)
+├── Shared/                  the Controls' intents, compiled into the app and the widgets
 └── scripts/                testflight.sh (archive → export → dSYMs → upload), publish-build.sh
                              (stage for CI), testflight-distribute.mjs (external testers)
 ```

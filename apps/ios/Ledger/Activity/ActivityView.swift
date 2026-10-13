@@ -7,6 +7,8 @@ struct ActivityView: View {
     let profileCode: String
     /// Owners recategorise; viewers and view-only ledgers just read.
     let canEdit: Bool
+    /// Hands over the filters of a deep link (`ledger://uncategorised`).
+    var tabs: TabRouter?
     @State private var editing: LedgerTransaction?
     @State private var showFilters = false
 
@@ -36,6 +38,11 @@ struct ActivityView: View {
             }
         }
         .refreshable { await model.load(profileCode: profileCode) }
+        // ledger://uncategorised (the Control): this month's uncategorised rows.
+        .task(id: tabs?.activityPreset) {
+            guard let preset = tabs?.takeActivityPreset() else { return }
+            await model.apply(preset, profileCode: profileCode)
+        }
         .sheet(item: $editing) { txn in
             CategorySheet(transaction: txn, categories: model.meta?.assignableCategories ?? [],
                           profileCode: profileCode, target: model)

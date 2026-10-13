@@ -32,6 +32,7 @@ struct LedgerApp: App {
     init() {
         Telemetry.start(target: .app, config: AppServices.shared?.config, isDebugBuild: BuildFlavor.isDebug)
         let model = AppServices.shared.map { AppModel(services: $0) }
+        model?.receiveIntentLinks()   // the Controls' intents (N-4)
         _model = State(initialValue: model)
         _cover = State(initialValue: model.map { PrivacyCoverWindow(lock: $0.lock) })
         if let services = AppServices.shared {
@@ -50,7 +51,7 @@ struct LedgerApp: App {
                 }
             }
             .tint(Palette.accent)
-            // ledger://review, from a Shortcut result (LedgerKit AppLink).
+            // ledger://review, ledger://uncategorised, ledger://add-statement (LedgerKit AppLink).
             .onOpenURL { url in model?.open(url: url) }
             // The privacy cover lives in its own window above every sheet (IOS-22).
             .background(WindowSceneReader { scene in cover?.attach(to: scene) })
