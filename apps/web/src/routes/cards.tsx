@@ -19,6 +19,7 @@ import { UploadDropzone } from "@/components/cards/upload";
 import { StatementsTab, type ListPaging } from "@/components/cards/statements-tab";
 import { DocumentsTab } from "@/components/cards/documents-tab";
 import { BankLogo } from "@/components/bank-logo";
+import { AccountComparison } from "@/components/cards/account-comparison";
 
 const TABS = ["cards", "statements", "upload", "documents"] as const;
 
@@ -45,7 +46,7 @@ export function CardsPage() {
           <TabsTrigger value="upload">Upload</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
         </TabsList>
-        <TabsContent value="cards" className="pt-6"><AccountsTab profileCode={profile_code} isOwner={isOwner} /></TabsContent>
+        <TabsContent value="cards" className="pt-6"><AccountsTab profileCode={profile_code} isOwner={isOwner} /><AccountComparison profileCode={profile_code} /></TabsContent>
         <TabsContent value="statements" className="pt-6"><StatementsTab profileCode={profile_code} paging={paging} /></TabsContent>
         <TabsContent value="upload" className="pt-6"><UploadDropzone profileCode={profile_code} disabled={!isOwner} /></TabsContent>
         <TabsContent value="documents" className="pt-6"><DocumentsTab profileCode={profile_code} isOwner={isOwner} paging={paging} /></TabsContent>
