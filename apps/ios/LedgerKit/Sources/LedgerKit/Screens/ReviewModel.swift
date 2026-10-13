@@ -15,6 +15,10 @@ public struct ReviewItem: Sendable, Hashable, Identifiable {
     public let note: String?
     /// The bank the subject belongs to, drawn as its logo beside `subjectBody`.
     public var bankCode: String? = nil
+    /// The SMS format proposed for an unparsed SMS, which the options accept or reject (PAR-14).
+    public var proposal: SMSFormatProposal? = nil
+    /// The SMS the review is about, whose text the screen shows on request ("Show message").
+    public var smsCode: String? = nil
 
     /// `subject` without the leading bank code the logo replaces:
     /// `"•3687 · AED 46.00 · VOX CINEMAS"`. VoiceOver reads the logo's bank name first.
@@ -28,7 +32,10 @@ public struct ReviewItem: Sendable, Hashable, Identifiable {
         public var id: String { label }
         public let label: String
         public let action: ReviewAction
-        public var isDestructive: Bool { action == .dismiss }
+        public var isDestructive: Bool {
+            if case .decideFormat(_, accept: false) = action { return true }
+            return action == .dismiss
+        }
     }
 }
 
@@ -66,7 +73,7 @@ public enum ReviewPresentation {
         case "low_score": "The closest transaction is only a partial match. Link it if it's the same purchase."
         case "amount_drift": "The posted amount differs from the alert."
         case "unknown_card": "An SMS mentions a card Ledger doesn't know. Choose the account it belongs to; waiting messages from it are then processed."
-        case "unparsed_sms": "A bank message didn't match any format. Ask the AI to try again, or mark it as not a card transaction. Proposed formats are accepted on the web."
+        case "unparsed_sms": "A bank message didn't match any format. Accept a proposed format to read similar messages; without one, ask the AI to try again or mark it as not a card transaction."
         case "orphaned": "Their only evidence was removed, so they count in no total. Void them once checked."
         case "missing_from_statement": "An SMS purchase never appeared on its statement. It may have been released."
         case "period_overlap": "Two statements of the same card cover the same days. Resolve it on the web."
@@ -97,8 +104,9 @@ public enum ReviewPresentation {
         let (subject, detail) = describeSubject(review, inbox: inbox)
         var options: [ReviewItem.Option] = []
         var note: String?
-        var dismissLabel = "Dismiss"
+        var dismissLabel: String? = "Dismiss"
         let canMatch = review.subjectType == "sms" || review.subjectType == "statement_line"
+        let proposal = review.reason == "unparsed_sms" ? inbox.formats[review.reviewCode] : nil
 
         switch review.reason {
         case "unknown_card":
@@ -115,14 +123,17 @@ public enum ReviewPresentation {
             if review.subjectType == "sms" {
                 options.append(.init(label: "Not a card transaction", action: .notATransaction))
             }
+        case "unparsed_sms" where proposal != nil:
+            // The web's TemplateProposal: accept or reject the format, nothing else
+            // (its footer offers no other action while a proposal is waiting).
+            let code = proposal!.templateCode
+            options = [.init(label: "Accept format", action: .decideFormat(templateCode: code, accept: true)),
+                       .init(label: "Reject", action: .decideFormat(templateCode: code, accept: false))]
+            dismissLabel = nil
         case "unparsed_sms" where review.subjectType == "sms":
-            // Same as the web's footer: without a proposed format, the AI can
-            // try again; a proposal is accepted or rejected on the web.
-            if review.candidates.contains(where: { $0.templateCode != nil }) {
-                note = "Ledger proposed a format for this message. Accept or reject it on the web."
-            } else {
-                options.append(.init(label: "Retry with AI", action: .retryWithAI))
-            }
+            // The web's footer without a proposed format (none, or it is gone):
+            // the AI can try again.
+            options.append(.init(label: "Retry with AI", action: .retryWithAI))
             options.append(.init(label: "Not a card transaction", action: .notATransaction))
         case "ambiguous", "low_score", "amount_drift":
             guard canMatch else {
@@ -141,12 +152,13 @@ public enum ReviewPresentation {
         default:
             note = "More options for this are on the web."
         }
-        options.append(.init(label: dismissLabel, action: .dismiss))
+        if let dismissLabel { options.append(.init(label: dismissLabel, action: .dismiss)) }
         let bank = inbox.sms[review.subjectCode]?.bankCode
             ?? (inbox.lines[review.subjectCode] == nil && inbox.transactions[review.subjectCode] == nil
-                ? review.candidates.first?.bankCode : nil)
+                ? review.candidates.first?.bankCode ?? proposal?.bankCode : nil)
         return ReviewItem(review: review, subject: subject, subjectDetail: detail, options: options, note: note,
-                          bankCode: bank)
+                          bankCode: bank, proposal: proposal,
+                          smsCode: review.subjectType == "sms" ? review.subjectCode : nil)
     }
 
     static func describeSubject(_ review: MatchReview, inbox: ReviewInbox) -> (String, String?) {
@@ -183,6 +195,8 @@ public enum ReviewPresentation {
         case "ignored": "Marked as not a card transaction."
         case "superseded": "Older statement superseded."
         case "retrying": "Sent to the AI again. If it still can't read the message, it comes back here."
+        case "format_accepted": "Format accepted. Waiting messages are being read again."
+        case "format_rejected": "Format rejected."
         default: "Done."
         }
     }
@@ -218,6 +232,9 @@ public enum ReviewPresentation {
                 return "Ledger doesn't know this message's card or amount yet. Add the card first."
             }
             return "That answer doesn't fit this review. The list has been refreshed."
+        case "42501" where has("not allowed"):
+            // set_sms_template_active: not an owner, or no review of this ledger waits on the format.
+            return "This format was already decided, or only an owner of this ledger can decide it. The list has been refreshed."
         default:
             return LoadState<Int>.message(for: error)
         }
@@ -232,10 +249,15 @@ public final class ReviewModel {
     public let list = Paginator<ReviewItem>()
     public private(set) var working: String?
     public var message: String?
+    /// The text of a reviewed SMS, read only when the reader asks ("Show message").
+    public let messages: SMSTextReveal
     private let api: any LedgerAPI
     private var loadedProfile: String?
 
-    public init(api: any LedgerAPI) { self.api = api }
+    public init(api: any LedgerAPI) {
+        self.api = api
+        messages = SMSTextReveal(api: api)
+    }
 
     /// The loaded reviews, grouped by reason.
     public var state: LoadState<[ReviewGroup]> {
@@ -286,6 +308,7 @@ public final class ReviewModel {
         loadedProfile = nil
         working = nil
         message = nil
+        messages.closeAll()
     }
 
     public func resolve(_ item: ReviewItem, _ option: ReviewItem.Option, profileCode: String) async {

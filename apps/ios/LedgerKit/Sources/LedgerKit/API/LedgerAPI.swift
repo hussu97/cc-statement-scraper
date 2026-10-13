@@ -47,6 +47,7 @@ public protocol LedgerAPI: SMSIngestAPI {
     func transactions(profileCode: String, query: ActivityQuery, page: PageRequest) async throws -> TransactionPage
     /// The given rows of `v_transactions` (any order): re-reads rows after an edit.
     func transactions(profileCode: String, codes: [String]) async throws -> [LedgerTransaction]
+    /// Open, unexpired `public.insights`, newest first, at most `InsightFeed.limit`.
     func insights(profileCode: String) async throws -> [Insight]
     func dismissInsight(insightCode: String) async throws
     /// One page of uploads, newest first, with the exact total.
@@ -101,6 +102,15 @@ public protocol LedgerAPI: SMSIngestAPI {
     func deleteBudget(budgetCode: String) async throws
     /// `public.accounts` of the profile (active and closed), by bank: the budget form's cards.
     func accounts(profileCode: String) async throws -> [LedgerAccount]
+
+    // Unusual spending and SMS format proposals (SupabaseLedgerAPI+Insights.swift, PAR-9 / PAR-14)
+    /// `rpc('anomalies')`: unusual charges in the range, largest first; members read.
+    func anomalies(profileCode: String, from: CalendarDay, to: CalendarDay) async throws -> [Anomaly]
+    /// `rpc('dismiss_anomaly')`, "This is fine": owners only. P0002 for a transaction not in the ledger.
+    func dismissAnomaly(profileCode: String, txnCode: String) async throws
+    /// `rpc('set_sms_template_active')`: accepts (true) or rejects (false) an AI-proposed SMS
+    /// format, closing the reviews waiting on it. Owners of a ledger with such a review only (42501).
+    func setSMSTemplateActive(templateCode: String, active: Bool) async throws
 
     // Cards (SupabaseLedgerAPI+Wallet.swift)
     /// `public.cards` of the profile, by bank and last 4.

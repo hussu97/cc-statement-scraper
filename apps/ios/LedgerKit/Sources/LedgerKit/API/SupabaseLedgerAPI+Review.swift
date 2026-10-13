@@ -51,21 +51,33 @@ extension SupabaseLedgerAPI {
                 .order("bank_code")
                 .execute()
         }
-        let (s, l, t, a) = try await (sms, lines, txns, accounts)
+        // The proposed format of each unparsed SMS that has one (PAR-14).
+        let proposalCodes = reviews
+            .filter { $0.reason == "unparsed_sms" && $0.candidates.contains { $0.templateCode != nil } }
+            .map(\.reviewCode)
+        async let formats = proposedFormats(profileCode: profileCode, reviewCodes: proposalCodes)
+        let (s, l, t, a, f) = try await (sms, lines, txns, accounts, formats)
         return ReviewInbox(
             reviews: reviews,
             sms: Dictionary(s.map { ($0.smsCode, $0) }, uniquingKeysWith: { a, _ in a }),
             lines: Dictionary(l.map { ($0.lineCode, $0) }, uniquingKeysWith: { a, _ in a }),
             transactions: Dictionary(t.map { ($0.txnCode, $0) }, uniquingKeysWith: { a, _ in a }),
             accounts: a,
-            total: total)
+            total: total,
+            formats: f)
     }
 
     public func resolveReview(reviewCode: String, action: ReviewAction) async throws -> String {
-        guard let payload = action.json else {
+        switch action {
+        case .retryWithAI:
             try await retrySMSFallback(reviewCode: reviewCode)
-            return "retrying"
+        case let .decideFormat(templateCode, accept):
+            try await setSMSTemplateActive(templateCode: templateCode, active: accept)
+        default:
+            break
         }
+        if let outcome = action.outcomeWithoutResolve { return outcome }
+        guard let payload = action.json else { return "done" }
         struct Result: Decodable { let outcome: String? }
         let result = try await rpc("resolve_review", Result.self, [
             "p_review_code": .string(reviewCode),
@@ -80,7 +92,7 @@ extension SupabaseLedgerAPI {
 }
 
 extension ReviewAction {
-    /// `p_action` for `resolve_review`; nil for `.retryWithAI` (another RPC).
+    /// `p_action` for `resolve_review`; nil for `.retryWithAI` and `.decideFormat` (other RPCs).
     var json: AnyJSON? {
         switch self {
         case .link(let txnCode): .object(["link": .string(txnCode)])
@@ -88,7 +100,7 @@ extension ReviewAction {
         case .dismiss: .object(["dismiss": .bool(true)])
         case .registerCard(let accountCode): .object(["card": .object(["account_code": .string(accountCode)])])
         case .notATransaction: .object(["not_a_transaction": .bool(true)])
-        case .retryWithAI: nil
+        case .retryWithAI, .decideFormat: nil
         }
     }
 }

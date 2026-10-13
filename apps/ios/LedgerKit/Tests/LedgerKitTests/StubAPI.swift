@@ -98,12 +98,12 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         count("reviewInbox")
         let slice = Array(inbox.reviews.dropFirst(page.offset).prefix(page.limit))
         return ReviewInbox(reviews: slice, sms: inbox.sms, lines: inbox.lines, transactions: inbox.transactions,
-                           accounts: inbox.accounts, total: inbox.reviews.count)
+                           accounts: inbox.accounts, total: inbox.reviews.count, formats: inbox.formats)
     }
     func resolveReview(reviewCode: String, action: ReviewAction) async throws -> String {
         lock.withLock { resolved.append((reviewCode, action)) }
         if let resolveError { throw resolveError }
-        return "dismissed"
+        return action.outcomeWithoutResolve ?? "dismissed"
     }
     var resolveError: LedgerAPIError?
     private(set) var retried: [String] = []
@@ -262,8 +262,45 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         let all = lock.withLock { transactionRows[profileCode] ?? [] }
         return all.filter { codes.contains($0.txnCode) }
     }
-    func insights(profileCode: String) async throws -> [Insight] { [] }
-    func dismissInsight(insightCode: String) async throws {}
+    // MARK: Insights feed, unusual spending, SMS format proposals (PAR-9, PAR-14)
+
+    var insightRows: [Insight] = []
+    var insightsError: LedgerAPIError?
+    private(set) var dismissedInsights: [String] = []
+    func insights(profileCode: String) async throws -> [Insight] {
+        count("insights")
+        if let insightsError { throw insightsError }
+        return lock.withLock { insightRows }
+    }
+    func dismissInsight(insightCode: String) async throws {
+        lock.withLock {
+            dismissedInsights.append(insightCode)
+            insightRows.removeAll { $0.insightCode == insightCode }
+        }
+    }
+    var anomalyRows: [Anomaly] = []
+    var anomalyError: LedgerAPIError?
+    private(set) var anomalyRequests: [(from: CalendarDay, to: CalendarDay)] = []
+    private(set) var dismissedAnomalies: [String] = []
+    func anomalies(profileCode: String, from: CalendarDay, to: CalendarDay) async throws -> [Anomaly] {
+        let (rows, error) = lock.withLock {
+            anomalyRequests.append((from, to))
+            return (anomalyRows, anomalyError)
+        }
+        if let error { throw error }
+        return rows
+    }
+    func dismissAnomaly(profileCode: String, txnCode: String) async throws {
+        if let anomalyError { throw anomalyError }
+        lock.withLock {
+            dismissedAnomalies.append(txnCode)
+            anomalyRows.removeAll { $0.txnCode == txnCode }
+        }
+    }
+    private(set) var formatDecisions: [(template: String, active: Bool)] = []
+    func setSMSTemplateActive(templateCode: String, active: Bool) async throws {
+        lock.withLock { formatDecisions.append((templateCode, active)) }
+    }
     var documentRows: [DocumentRecord] = []
     func documents(profileCode: String, page: PageRequest) async throws -> ListPage<DocumentRecord> {
         count("documents")
