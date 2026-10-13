@@ -27,10 +27,13 @@ enum BuildFlavor {
 struct LedgerApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @State private var model: AppModel?
+    @State private var cover: PrivacyCoverWindow?
 
     init() {
         Telemetry.start(target: .app, config: AppServices.shared?.config, isDebugBuild: BuildFlavor.isDebug)
-        _model = State(initialValue: AppServices.shared.map { AppModel(services: $0) })
+        let model = AppServices.shared.map { AppModel(services: $0) }
+        _model = State(initialValue: model)
+        _cover = State(initialValue: model.map { PrivacyCoverWindow(lock: $0.lock) })
         if let services = AppServices.shared {
             BackgroundSync.register(services)
             _ = AppServices.connectivity
@@ -47,7 +50,8 @@ struct LedgerApp: App {
                 }
             }
             .tint(Palette.accent)
-            .privacyCovered(by: model?.lock)
+            // The privacy cover lives in its own window above every sheet (IOS-22).
+            .background(WindowSceneReader { scene in cover?.attach(to: scene) })
         }
         .onChange(of: scenePhase) { _, phase in
             guard let model else { return }
