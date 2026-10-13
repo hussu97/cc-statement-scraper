@@ -16,6 +16,8 @@ import { EvidenceBadge, HeroAmount, StatusBadge, TxnAmount } from "@/components/
 import { PaceRule } from "@/components/overview/pace-rule";
 import { CategoryRing } from "@/components/overview/category-ring";
 import { MonthlySpendCard } from "@/components/overview/monthly-spend";
+import { SetupChecklistCard } from "@/components/overview/setup-checklist";
+import { isEmptyLedger } from "@/lib/setup-checklist";
 import { BankLogo, CardRef } from "@/components/bank-logo";
 
 export function OverviewPage() {
@@ -28,6 +30,17 @@ export function OverviewPage() {
   const isCurrent = month === thisMonth;
   const q = useOverview(profile_code, month);
   const setMonth = (m: string) => void navigate({ to: "/", search: m === thisMonth ? {} : { month: m } });
+
+  // No transaction and no card: AED 0.00, an empty pace rule and empty panels
+  // would claim things the ledger can't know yet. Show its first steps (WEB-27).
+  if (q.data && isEmptyLedger(q.data)) {
+    return (
+      <div className="max-w-2xl">
+        <h1 className="sr-only">Overview</h1>
+        <SetupChecklistCard lastSmsAt={q.data.last_sms_at} />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">
