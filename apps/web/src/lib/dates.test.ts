@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDays, addMonths, daysBetween, formatDate, formatDateSpan, formatDateTime, formatMonth, formatRelative, isISODate, matchPreset, monthEnd, monthStart, presetRange, todayDubai } from "./dates";
+import { addDays, addMonths, daysBetween, dubaiDate, formatDate, formatDateSpan, formatDateTime, formatMonth, formatRelative, isISODate, matchPreset, monthEnd, monthStart, presetRange, todayDubai } from "./dates";
 
 describe("dates", () => {
   it("formats a date span", () => {
@@ -53,6 +53,35 @@ describe("dates", () => {
     expect(presetRange("last_12_months", "2026-10-08")).toEqual({ from: "2025-11-01", to: "2026-10-31" });
     expect(matchPreset({ from: "2026-09-01", to: "2026-09-30" }, "2026-10-08")).toBe("last_month");
     expect(matchPreset({ from: "2026-09-02", to: "2026-09-30" }, "2026-10-08")).toBeNull();
+  });
+});
+
+describe("timestamps show their Dubai day, not the UTC day (WEB-47)", () => {
+  // 21:30 UTC on 12 Oct is 01:30 on 13 Oct in Dubai (UTC+4).
+  const lateUtc = "2026-10-12T21:30:00+00:00";
+
+  it("dubaiDate keeps date-only values and moves timestamps to Dubai", () => {
+    expect(dubaiDate("2026-10-12")).toBe("2026-10-12");
+    expect(dubaiDate(lateUtc)).toBe("2026-10-13");
+    expect(dubaiDate("2026-10-12T21:30:00Z")).toBe("2026-10-13");
+    expect(dubaiDate("2026-10-12T19:59:59Z")).toBe("2026-10-12");
+    expect(dubaiDate("2026-10-12T20:00:00Z")).toBe("2026-10-13");
+    expect(dubaiDate("2026-12-31T20:00:00.123456+00:00")).toBe("2027-01-01");
+    expect(dubaiDate(null)).toBeNull();
+    expect(dubaiDate("not a date")).toBeNull();
+  });
+
+  it("formatDate and formatMonth show the Dubai day of a timestamp", () => {
+    expect(formatDate(lateUtc)).toBe("13 Oct 2026");
+    expect(formatDate(lateUtc, "short")).toBe("13 Oct");
+    expect(formatDate("2026-10-12T10:00:00+00:00")).toBe("12 Oct 2026");
+    expect(formatDate("2026-09-30T20:30:00Z", "short")).toBe("1 Oct");
+    expect(formatMonth("2026-09-30T20:30:00Z")).toBe("October 2026");
+    expect(formatDate("garbage")).toBe("—");
+  });
+
+  it("formatRelative's fallback date is the Dubai day", () => {
+    expect(formatRelative(lateUtc, new Date("2027-03-01T00:00:00Z"))).toBe("13 Oct 2026");
   });
 });
 
