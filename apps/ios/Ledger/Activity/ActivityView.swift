@@ -30,6 +30,15 @@ struct ActivityView: View {
             await model.loadIfNeeded(profileCode: profileCode)
         }
         .toolbar {
+            // Bulk select (PAR-11): owners only; the bar below acts on the ticked rows.
+            if model.selection.isSelecting || model.offersSelection(canEdit: canEdit) {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(model.selection.isSelecting ? "Done" : "Select") {
+                        model.selection.setSelecting(!model.selection.isSelecting)
+                    }
+                    .fontWeight(model.selection.isSelecting ? .semibold : .regular)
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button { showFilters = true } label: {
                     Image(systemName: model.query.hasFilters
@@ -39,6 +48,17 @@ struct ActivityView: View {
             }
         }
         .refreshable { await model.load(profileCode: profileCode) }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if model.selection.isSelecting && canEdit {
+                ActivityBulkBar(model: model, profileCode: profileCode)
+            }
+        }
+        // The bar's figures follow the selection (the model drops superseded answers).
+        .task(id: model.selection.selection(for: model.listedQuery)) {
+            try? await Task.sleep(for: .milliseconds(200))
+            guard !Task.isCancelled else { return }
+            await model.loadSelectionSummary(profileCode: profileCode)
+        }
         // TabRouter.openActivity / openTransaction (Overview, Insights, ledger://uncategorised).
         // Keyed on the request count, not the preset: taking it must not cancel this task.
         .task(id: tabs?.activityPresetRequest) {
@@ -109,7 +129,20 @@ struct ActivityView: View {
     }
 
     @ViewBuilder private func row(_ txn: LedgerTransaction) -> some View {
-        if canEdit {
+        if model.selection.isSelecting {
+            let selected = model.selection.isSelected(txn.txnCode)
+            Button { model.selection.toggle(txn.txnCode, loaded: model.loadedCodes) } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                        .font(.title3)
+                        .foregroundStyle(selected ? Palette.accent : Palette.muted)
+                        .accessibilityHidden(true)
+                    TransactionRow(txn: txn)
+                }
+            }
+            .accessibilityAddTraits(selected ? .isSelected : [])
+            .accessibilityHint(selected ? "Removes it from the selection" : "Adds it to the selection")
+        } else if canEdit {
             Button { opened = txn } label: { TransactionRow(txn: txn) }
                 .swipeActions(edge: .trailing) {
                     Button("Categorise", systemImage: "tag") { opened = txn }.tint(Palette.accent)
