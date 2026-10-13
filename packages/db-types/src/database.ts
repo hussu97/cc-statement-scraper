@@ -94,6 +94,66 @@ export type Database = {
           },
         ]
       }
+      anomaly_dismissals: {
+        Row: {
+          created_at: string
+          dismissal_code: string
+          dismissed_by: string | null
+          profile_code: string
+          txn_code: string
+        }
+        Insert: {
+          created_at?: string
+          dismissal_code?: string
+          dismissed_by?: string | null
+          profile_code: string
+          txn_code: string
+        }
+        Update: {
+          created_at?: string
+          dismissal_code?: string
+          dismissed_by?: string | null
+          profile_code?: string
+          txn_code?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "anomaly_dismissals_profile_code_fkey"
+            columns: ["profile_code"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["profile_code"]
+          },
+          {
+            foreignKeyName: "anomaly_dismissals_txn_fkey"
+            columns: ["profile_code", "txn_code"]
+            isOneToOne: true
+            referencedRelation: "transactions"
+            referencedColumns: ["profile_code", "txn_code"]
+          },
+          {
+            foreignKeyName: "anomaly_dismissals_txn_fkey"
+            columns: ["profile_code", "txn_code"]
+            isOneToOne: true
+            referencedRelation: "v_spend"
+            referencedColumns: ["profile_code", "txn_code"]
+          },
+          {
+            foreignKeyName: "anomaly_dismissals_txn_fkey"
+            columns: ["profile_code", "txn_code"]
+            isOneToOne: true
+            referencedRelation: "v_transactions"
+            referencedColumns: ["profile_code", "transfer_txn_code"]
+          },
+          {
+            foreignKeyName: "anomaly_dismissals_txn_fkey"
+            columns: ["profile_code", "txn_code"]
+            isOneToOne: true
+            referencedRelation: "v_transactions"
+            referencedColumns: ["profile_code", "txn_code"]
+          },
+        ]
+      }
       audit_events: {
         Row: {
           action: string
@@ -2365,9 +2425,15 @@ export type Database = {
         Returns: {
           amount: number
           baseline_mean: number
+          baseline_scope: string
           baseline_sd: number
+          category_code: string
+          category_name: string
           description: string
+          merchant_code: string
+          merchant_name: string
           reason: string
+          times_usual: number
           txn_code: string
           txn_date: string
         }[]
@@ -2449,6 +2515,10 @@ export type Database = {
       delete_profile: {
         Args: { p_confirm_key: string; p_profile_code: string }
         Returns: Json
+      }
+      dismiss_anomaly: {
+        Args: { p_profile_code: string; p_txn_code: string }
+        Returns: undefined
       }
       drain_dlq: { Args: { p_queue: string }; Returns: number }
       dubai_date: { Args: { ts: string }; Returns: string }
@@ -2662,6 +2732,18 @@ export type Database = {
       retry_sms_fallback: {
         Args: { p_review_code: string }
         Returns: undefined
+      }
+      review_context: {
+        Args: { p_profile_code: string; p_review_codes: string[] }
+        Returns: {
+          candidates: Json
+          line: Json
+          review_code: string
+          sms: Json
+          statement: Json
+          template: Json
+          txn: Json
+        }[]
       }
       revoke_service_token: {
         Args: { p_token_code: string }

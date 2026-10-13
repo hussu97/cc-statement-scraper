@@ -109,7 +109,7 @@ auth.users ─< profile_members >─ profiles ─┬─ profile_state (rules_ver
                                            │      └─ *_category_code ──> categories (1-level tree)
                                            ├─ category_rules, merchant_profile_category
                                            ├─ match_reviews, statement_recon
-                                           ├─ budgets, recurring_series, insights, audit_events
+                                           ├─ budgets, recurring_series, insights, audit_events, anomaly_dismissals
                                            └─ email_mailboxes ─< email_routes, email_events
 fx_rates (global)
 ```
@@ -129,11 +129,12 @@ fx_rates (global)
 | `transactions` | The canonical ledger. Derived facts (status pending/posted/void/orphaned, dates, amounts, FX, merchant) come from evidence via `private.refresh_transaction()`. User fields: `manual_category_code`, `notes`, `exclude_from_spend`. |
 | `card_transfers` | A payment from one credit card to another (Wio's credit card pays other cards from its credit line, e.g. an EIB card): `from_txn_code` is the paying card's charge (`direction = debit`, `kind = payment`), `to_txn_code` the paid card's credit `payment`. `private.link_card_transfer` pairs them on every insert/update of a payment (trigger `transactions_card_transfer`): same AED amount, opposite directions, different accounts, at most 3 days apart, each the other's only candidate; a side that stops qualifying drops the link. `v_transactions` carries the other side (`transfer_txn_code`, `transfer_bank_code`, `transfer_card_last4`). Members read; no client writes. |
 | `transaction_evidence` | Links a transaction to a statement line, history line or SMS. `role` primary/auth/post/reversal/duplicate, `method` new/exact/scored/tie/manual/legacy, `is_active`, `is_locked`. A line or SMS has at most one active link, and a transaction has at most one active statement line and one active history line. |
-| `match_reviews` | Human decisions: ambiguous, low_score, orphaned, missing_from_statement, period_overlap, unknown_card, unparsed_sms. (`amount_drift` is allowed by the CHECK but reserved: an auth/post difference shows as `auth_amount` instead.) |
+| `match_reviews` | Human decisions: ambiguous, low_score, orphaned, missing_from_statement, period_overlap, unknown_card, unparsed_sms. (`amount_drift` is allowed by the CHECK but reserved: an auth/post difference shows as `auth_amount` instead.) Clients read a page of reviews, then `review_context(profile, review_codes[])` once for all of them: per review its subject (`line`, `sms` without `body`, `txn` or `statement`), its `candidates` as `v_transactions` rows in candidate order, and an unparsed SMS's proposed `template` (client-readable columns only); SECURITY DEFINER with a member check, everything filtered by the profile, at most 2000 codes. |
 | `statement_recon` | Per-statement checks and an ok/warn/fail/n/a status (§4). |
 | `merchants`, `merchant_aliases` | Global rows, but a member reads only merchants referenced by their profiles' transactions, merchant choices or recurring series. `merchant_key()` strips payment-wallet prefixes, cities/countries (also when glued to the name), reference tokens, foreign amounts and trailing digits; branch names stay. After a key change, `private.rekey_merchants()` merges merchants onto survivors that keep their codes and maps old keys through `merchant_aliases`. |
 | `categories`, `category_rules`, `merchant_profile_category` | Per profile. Categories are archived, never deleted. Rules are exact/prefix/contains/regex with optional conditions, validated on write (known keys and types, own `card_code`, pattern ≤ 200 chars, no back-references). Merchant categories come from a user's manual choice or an LLM suggestion. `merchant_category_skips` remembers merchants the LLM declined (per category-set hash) and suggestions an owner rejected (`reject_merchant_suggestion`), so neither is re-asked. |
 | `budgets`, `recurring_series`, `insights`, `audit_events` | Monthly budgets (total or per category, for every card or one card: `account_code`), detected subscriptions, the nightly insight feed, and an audit trail of user edits. |
+| `anomaly_dismissals` | Charges an owner marked "This is fine" on the Anomalies list (`dismiss_anomaly`), one per `(profile_code, txn_code)`, with `dismissed_by`; deleted with the transaction. Members read; no client writes. `anomalies` leaves these charges out. |
 | `email_mailboxes`, `email_routes`, `email_events` | Mailbox (gmail/outlook, `sync_state` cursor), per-bank routing rules, and per-attachment idempotency log. |
 | `document_events` | A document's timeline for the apps (`event_code` `dev_…`, `doc_code`, `stage` received/stored/duplicate/queued/parsing/parsed/ingested/failed/retry, `level` info/warn/error, `message` a sentence for end users, `detail` codes and counts only). Member read, in the Realtime publication; written only by the service role and SQL functions (§4). No FK on `doc_code`: `received`/`stored` precede the documents row. Kept 90 days. |
 | `fx_rates` | Global AED-per-unit market rates (fallback estimate only). `private.bank_fx_fees` holds each bank's markup over them; `private.fx_rate_history` keeps every day's rate (backfilled from 2025-01-11). |
@@ -540,7 +541,7 @@ document, so each account is anchored on a balance the bank printed, the latest 
 `outstanding` (active accounts), `outstanding_complete` (every account anchored, every AED
 amount known) and `outstanding_has_estimate`. Positive is owed; negative is a credit balance.
 
-Analytics RPCs (security invoker, so RLS applies, except the two marked *, which are
+Analytics RPCs (security invoker, so RLS applies, except those marked *, which are
 SECURITY DEFINER with an explicit member check and filter by profile themselves):
 
 | Group | RPCs |
@@ -548,7 +549,7 @@ SECURITY DEFINER with an explicit member check and filter by profile themselves)
 | Overview and trends | `overview`, `spend_pace`, `spend_series` (grain, group_by, optional `p_top` with an "Other" fold), `spend_breakdown`* |
 | Breakdowns | `category_breakdown`, `merchant_leaderboard`, `daily_spend`, `hour_weekday_pattern` |
 | Currency and cycles | `fx_spend`, `statement_cycles`, `statement_detail`*, `yoy_compare` |
-| Exceptions and metadata | `anomalies`, `filter_meta` |
+| Exceptions and metadata | `anomalies`*, `filter_meta` |
 | Budgets and recurring | `budget_status`, `recurring_list` |
 
 `overview` (accounts), `statement_cycles` and `filter_meta` (banks) carry each bank's `logo_path`.
@@ -571,6 +572,20 @@ a line is `{line_code, txn_code, txn_date, posting_date, description, merchant_n
 amount_original, currency_original, category_code, kind, card_last4}`, ordered by `txn_date`,
 `line_no`. `description` is the line as the statement printed it; `merchant_name` and
 `category_code` come from the transaction the line evidences.
+
+`anomalies(profile, from, to)` lists the range's unusually large charges, largest first, each
+compared with the 365 days before it (its own day excluded). `reason` is `merchant_outlier` (≥ 5
+earlier purchases at the merchant, more than mean + 3 sd and 1.5× the mean), `category_outlier`
+(≥ 10 in the category, more than mean + 3 sd; uncategorised spend has no category baseline) or
+`new_merchant_large` (the first purchase at a known merchant, at least AED 500 and, when the
+category has ≥ 5 earlier purchases, at least 2× their mean). Each row names the charge
+(`merchant_code`, `merchant_name`, `category_code`, `category_name`, and the raw `description`)
+and says what it was compared with: `baseline_scope` (`merchant`, `category` or null),
+`baseline_mean` / `baseline_sd` of that scope, and `times_usual` (amount ÷ `baseline_mean`, whole
+from 3×, one decimal below), so a client prints "about 4× your usual Shopping purchase" as is.
+An owner's `dismiss_anomaly(profile, txn)` ("This is fine") records the charge in
+`anomaly_dismissals` and dismisses its `large_transaction` insight; `anomalies` leaves dismissed
+charges out, so the nightly feed doesn't raise them again.
 
 `v_transactions` is the Activity read model. It carries category source, evidence flags
 (`has_sms`, `has_statement`; scalar sub-queries on the evidence index, evaluated only for the

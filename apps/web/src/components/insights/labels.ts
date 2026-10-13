@@ -1,6 +1,6 @@
 // Pure display helpers for the Insights screen.
 import { daysBetween, formatDate, formatMonth, type ISODate } from "@/lib/dates";
-import { formatCount, toAmount, type MoneyInput } from "@/lib/money";
+import { formatCount, formatMoney, toAmount, type MoneyInput } from "@/lib/money";
 import type { Grain } from "@/data/analytics";
 import { MONTH_SHORT, shortMonth } from "@/components/charts/heat";
 
@@ -33,12 +33,48 @@ export function changeTone(change: MoneyInput): "warn" | "positive" | "neutral" 
 }
 
 const ANOMALY_REASONS: Record<string, string> = {
-  merchant_outlier: "Unusual for this merchant",
-  category_outlier: "Unusual for this category",
-  new_merchant_large: "Large first purchase",
+  merchant_outlier: "Higher than usual",
+  category_outlier: "Higher than usual",
+  new_merchant_large: "New merchant",
 };
 export function anomalyReasonLabel(reason: string | null | undefined): string {
   return (reason && ANOMALY_REASONS[reason]) || "Unusual";
+}
+
+/** The fields of an `anomalies` row its explanation reads. The server computes every figure. */
+export interface AnomalyExplained {
+  reason: string | null;
+  baseline_scope: string | null;
+  baseline_mean: MoneyInput;
+  times_usual: MoneyInput;
+  category_name: string | null;
+}
+
+/** "5×", "2.3×": the server's rounded `times_usual`, printed as is. */
+export function timesLabel(times: MoneyInput): string | null {
+  const t = toAmount(times);
+  return t === null ? null : `${t.toLocaleString("en-US", { maximumFractionDigits: 1 })}×`;
+}
+
+/**
+ * One plain sentence for an unusual charge (WEB-16), from the server's figures only:
+ * "About 5× what you usually spend here (AED 100.00)",
+ * "About 10× your usual Shopping purchase (AED 300.00)",
+ * "First purchase here, about 2.3× your usual Travel purchase (AED 3,000.00)",
+ * "First purchase here". Pure, unit-tested.
+ */
+export function anomalyExplanation(row: AnomalyExplained): string {
+  const times = timesLabel(row.times_usual);
+  const hasUsual = toAmount(row.baseline_mean) !== null;
+  const usual = hasUsual ? ` (${formatMoney(row.baseline_mean)})` : "";
+  let compared: string | null = null;
+  if (times && row.baseline_scope === "merchant") compared = `${times} what you usually spend here`;
+  if (times && row.baseline_scope === "category") {
+    compared = `${times} ${row.category_name ? `your usual ${row.category_name} purchase` : "your usual purchase in this category"}`;
+  }
+  if (row.reason === "new_merchant_large") return compared ? `First purchase here, about ${compared}${usual}` : "First purchase here";
+  if (compared) return `About ${compared}${usual}`;
+  return hasUsual ? `Usually ${formatMoney(row.baseline_mean)}` : "Higher than usual";
 }
 
 const CADENCES: Record<string, string> = { weekly: "Weekly", monthly: "Monthly", yearly: "Yearly" };
