@@ -167,11 +167,11 @@ public final class StatementsModel {
 
 extension StatementCycle {
     public var chips: [ReconChip] { ReconChip.chips(for: self) }
-    /// Upcoming: `"Due in 5 days"`. Past: `"Was due 20 Sep"` — the same rule
-    /// as Overview (`DueStatus`): payment isn't detected on the phone, so a
-    /// statement is never called overdue.
+    /// Upcoming: `"Due in 5 days"`. Past: `"Was due 20 Sep"`. With the
+    /// server's `payment_status`: `"Paid"`, `"Part paid (AED 1,200) · …"`,
+    /// `"Overdue by 3 days"` — the same rule as Overview (`DueStatus`).
     public func due(isLatest: Bool, today: CalendarDay = LedgerDates.today()) -> (text: String, tone: Tone)? {
-        DueStatus.describe(due: dueDate, isLatest: isLatest, today: today)
+        DueStatus.describe(due: dueDate, isLatest: isLatest, payment: duePayment, today: today)
     }
 
     public var kindLabel: String { kind == "history_extract" ? "History extract" : "Statement" }

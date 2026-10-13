@@ -199,7 +199,7 @@ struct PresentationTests {
     func heroAccessibilityLabel() throws {
         let o = try LedgerJSON.decode(Overview.self, from: try fixture("overview"))
         #expect(o.heroAccessibilityLabel(today: CalendarDay(iso: "2026-10-08")!)
-                == "October spend, posted so far, 1,234,568 dirhams")
+                == "October spend, posted so far, 1,234,568 dirhams, plus 145 dirhams pending")
         #expect(o.heroAccessibilityLabel(today: CalendarDay(iso: "2026-11-02")!) == "October spend, 1,234,568 dirhams")
         #expect(o.heroAccessibilityLabel(today: CalendarDay(iso: "2027-01-02")!) == "October 2026 spend, 1,234,568 dirhams")
     }
