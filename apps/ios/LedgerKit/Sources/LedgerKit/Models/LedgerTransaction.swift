@@ -147,6 +147,12 @@ extension LedgerTransaction {
 
     public var isCredit: Bool { direction == "credit" }
 
+    /// The row's category caption; an excluded transaction says so, since it
+    /// has left the spend totals (`v_spend`).
+    public var categoryCaption: String {
+        (categoryName ?? "Uncategorized") + (excludeFromSpend ? " · Excluded" : "")
+    }
+
     /// `"FAB •1234"`.
     public var cardLabel: String {
         if let last4 = cardLast4 { return "\(bankCode) •\(last4)" }

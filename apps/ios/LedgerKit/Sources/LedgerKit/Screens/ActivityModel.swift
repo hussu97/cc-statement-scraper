@@ -5,7 +5,7 @@ import Observation
 /// scrolling page after page (`Paginator`).
 @MainActor
 @Observable
-public final class ActivityModel {
+public final class ActivityModel: TransactionEditing {
     public struct DaySection: Identifiable, Sendable, Hashable {
         public var id: CalendarDay { day }
         public let day: CalendarDay
@@ -117,21 +117,37 @@ public final class ActivityModel {
         errorMessage = nil
     }
 
-    /// Recategorise one transaction, optionally every transaction from its
-    /// merchant, then re-read the affected rows and patch them where they are
-    /// (the list keeps its scroll position and pages). A row that no longer
-    /// matches the category filter leaves the list.
-    public func setCategory(_ txn: LedgerTransaction, to categoryCode: String, applyToMerchant: Bool,
-                            profileCode: String) async -> Bool {
+    /// Recategorise one transaction (nil clears the manual choice), optionally
+    /// every transaction from its merchant, then re-read the affected rows and
+    /// patch them where they are (the list keeps its scroll position and pages).
+    /// A row that no longer matches the category filter leaves the list.
+    public func saveCategory(_ txn: LedgerTransaction, to categoryCode: String?, applyToMerchant: Bool,
+                             profileCode: String) async throws {
         let wholeMerchant = applyToMerchant && txn.merchantCode != nil
+        try await api.setTransactionCategory(txnCode: txn.txnCode, categoryCode: categoryCode,
+                                             applyToMerchant: wholeMerchant)
+        await reread(Self.affectedCodes(of: txn, wholeMerchant: wholeMerchant, in: rows), profileCode: profileCode)
+    }
+
+    /// Saves a note or the exclude flag, then patches the row in place.
+    public func saveEdit(_ txn: LedgerTransaction, _ edit: TransactionEdit, profileCode: String) async throws {
+        try await api.updateTransaction(txnCode: txn.txnCode, edit: edit)
+        await reread([txn.txnCode], profileCode: profileCode)
+    }
+
+    /// The row's swipe action: flips `exclude_from_spend`. A failure shows in
+    /// `errorMessage` (no sheet is open to show it).
+    public func toggleExcluded(_ txn: LedgerTransaction, profileCode: String) async {
         do {
-            try await api.setTransactionCategory(txnCode: txn.txnCode, categoryCode: categoryCode,
-                                                 applyToMerchant: wholeMerchant)
+            try await saveEdit(txn, .excludeFromSpend(!txn.excludeFromSpend), profileCode: profileCode)
         } catch {
             errorMessage = LoadState<Int>.message(for: error)
-            return false
         }
-        let codes = Self.affectedCodes(of: txn, wholeMerchant: wholeMerchant, in: rows)
+    }
+
+    /// After a write: re-read these rows, patch them, drop the ones the
+    /// filters no longer keep, and refresh the summary.
+    private func reread(_ codes: [String], profileCode: String) async {
         do {
             let updated = try await api.transactions(profileCode: profileCode, codes: codes)
             list.patch(updated)
@@ -142,7 +158,6 @@ public final class ActivityModel {
             await list.refreshHead()
         }
         if let loadedFor { await loadSummary(profileCode: loadedFor.profileCode, query: loadedFor.query) }
-        return true
     }
 
     private func loadMetaIfNeeded(profileCode: String) async {
