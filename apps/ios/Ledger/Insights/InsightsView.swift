@@ -30,7 +30,10 @@ struct InsightsView: View {
                 }
                 CategoriesCard(categories: content.categories, from: range.from, to: range.to, profileCode: profileCode)
                 MerchantsCard(merchants: content.merchants, from: range.from, to: range.to)
-                RecurringCard(recurring: content.activeRecurring, annualTotal: content.recurringAnnualTotal)
+                RecurringCard(recurring: content.activeRecurring, annualTotal: content.recurringAnnualTotal,
+                              all: content.recurring)
+                // Calendar, time of day, year over year, foreign currency (PAR-12).
+                AnalysisLinksCard(range: AnalysisRange(from: range.from, to: range.to), profileCode: profileCode)
             }
         }
         .ledgerNavigation("Insights")
@@ -145,6 +148,8 @@ private struct MerchantsCard: View {
 private struct RecurringCard: View {
     let recurring: [RecurringCharge]
     let annualTotal: Decimal
+    /// The whole `recurring_list`, for "See all subscriptions".
+    let all: [RecurringCharge]
 
     var body: some View {
         Card {
@@ -168,6 +173,8 @@ private struct RecurringCard: View {
                     }
                 }
             }
+            // Every recurring_list row, ended and dismissed too (PAR-12).
+            if !all.isEmpty { SubscriptionsSeeAllLink(charges: all) }
         }
     }
 }
