@@ -12,6 +12,7 @@ import {
   shouldOfferPasskey,
 } from "@/data/passkeys";
 import { supabase } from "@/lib/supabase";
+import { safeRedirect } from "@/lib/redirect";
 import { memberProfiles, profileKeyFromName, useCreateProfile, useProfileContext } from "@/data/profile";
 import { errorMessage } from "@/data/api";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,10 @@ export function SignInPage() {
   // Verifying a code signs in before we know whether to offer a passkey: hold the redirect until then.
   const [holdRedirect, setHoldRedirect] = useState(false);
   const navigate = useNavigate();
+  // The deep link that sent you here, already checked by /signin's validateSearch (WEB-39).
+  // Re-checked here too: it is the one value on this page an address bar controls.
+  const { redirect } = useSearch({ from: "/signin" });
+  const destination = safeRedirect(redirect) ?? "/";
 
   // Passkey autofill on the email field where the browser supports it. A later
   // explicit passkey or code sign-in cancels this pending request (auth-js does that).
@@ -59,8 +64,14 @@ export function SignInPage() {
     };
   }, []);
 
-  if (loading) return <Splash />;
-  if (session && step !== "offer" && !holdRedirect) return <Navigate to="/" />;
+  // Signed in (and not being offered a passkey): go where you were headed. `href`
+  // carries the path, search and hash together; <Navigate> only takes `to`.
+  const signedIn = !loading && !!session && step !== "offer" && !holdRedirect;
+  useEffect(() => {
+    if (signedIn) void navigate({ href: destination, replace: true });
+  }, [signedIn, destination, navigate]);
+
+  if (loading || signedIn) return <Splash />;
 
   const run = async (kind: NonNullable<typeof busy>, fn: () => Promise<void>) => {
     setBusy(kind);
@@ -108,7 +119,7 @@ export function SignInPage() {
 
   const finishOffer = (declined: boolean) => {
     if (declined && session) setPasskeyOfferDeclined(session.user.id, true);
-    void navigate({ to: "/" });
+    void navigate({ href: destination, replace: true });
   };
 
   const onAddPasskey = () =>
