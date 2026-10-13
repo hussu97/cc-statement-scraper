@@ -28,6 +28,9 @@ struct StatementsView: View {
                 WaitingCard(model: model, profileCode: profileCode)
             }
 
+            AccountComparisonCard(model: model.comparison) {
+                Task { await model.comparison.load(profileCode: profileCode) }
+            }
             StateContainer(state: model.cycles.state, retry: reload) { cycles in
                 CyclesCard(cycles: cycles, model: model, profileCode: profileCode, canUpload: canUpload,
                            footer: PagingFooter(footer: model.cycles.footer,

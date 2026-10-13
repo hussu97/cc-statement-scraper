@@ -20,6 +20,8 @@ public final class StatementsModel {
     public let documents = Paginator<DocumentRecord>()
     /// The live per-file upload log (document picker).
     public let uploads: UploadSession
+    /// Compare accounts: balance, utilisation and spending sparklines (PAR-13).
+    public let comparison: AccountComparisonModel
     /// A picked file that couldn't be read on the phone.
     public var uploadMessage: String?
     /// PDFs the Share Extension saved for later, and the ones the server refused.
@@ -41,6 +43,7 @@ public final class StatementsModel {
         self.pending = pendingUploads
         self.flushPending = flushPending
         self.uploads = UploadSession(api: api)
+        self.comparison = AccountComparisonModel(api: api)
     }
 
     public var isUploading: Bool { uploads.isUploading }
@@ -65,7 +68,8 @@ public final class StatementsModel {
         async let b: Void = documents.reload(keepingRows: same) { page in
             try await api.documents(profileCode: profileCode, page: page)
         }
-        _ = await (a, b)
+        async let c: Void = comparison.load(profileCode: profileCode)
+        _ = await (a, b, c)
     }
 
     /// First visit of the tab for this ledger.
@@ -80,12 +84,14 @@ public final class StatementsModel {
         await refreshWaiting()
         async let a: Void = cycles.refreshHead()
         async let b: Void = documents.refreshHead()
-        _ = await (a, b)
+        async let c: Void = comparison.load(profileCode: profileCode)
+        _ = await (a, b, c)
     }
 
     public func reset() {
         cycles.reset()
         documents.reset()
+        comparison.reset()
         loadedProfile = nil
         uploadMessage = nil
         uploads.stop()
