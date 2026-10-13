@@ -11,12 +11,12 @@
 --   payment_status  one of
 --                     'paid'       amount_paid covers the closing balance (or nothing was owed:
 --                                  closing balance ≤ 0);
---                     'overdue'    the due date has passed (Asia/Dubai, §1.4) and what was paid by
---                                  the due date, inclusive, did not cover the minimum due (with no
---                                  minimum on the statement: nothing was paid by the due date). A
---                                  late payment that clears the whole balance turns it 'paid';
+--                     'overdue'    the due date has passed (Asia/Dubai, §1.4) and amount_paid so
+--                                  far is less than the minimum due (with no minimum on the
+--                                  statement: nothing has been paid). A minimum paid late makes it
+--                                  'part_paid', a late payment of the whole balance 'paid';
 --                     'part_paid'  something was paid but not the whole balance, and it is not
---                                  overdue (before the due date, or the minimum was met in time);
+--                                  overdue (before the due date, or the minimum is covered);
 --                     'unpaid'     nothing paid yet and not overdue (due today or later, or no due
 --                                  date on the statement);
 --                     null         unknown: the statement has no closing balance.
@@ -35,12 +35,11 @@ select st.profile_code,
        st.stmt_code,
        st.account_code,
        p.amount_paid,
-       p.paid_by_due,
        case
          when st.closing_balance is null then null
          when st.closing_balance <= 0 or p.amount_paid >= st.closing_balance then 'paid'
          when st.due_date is not null and public.dubai_date(now()) > st.due_date
-              and case when st.min_due is null then p.paid_by_due <= 0 else p.paid_by_due < st.min_due end
+              and case when st.min_due is null then p.amount_paid <= 0 else p.amount_paid < st.min_due end
            then 'overdue'
          when p.amount_paid > 0 then 'part_paid'
          else 'unpaid'
@@ -53,8 +52,7 @@ cross join lateral (
     and n.statement_date > st.statement_date
 ) nx
 cross join lateral (
-  select coalesce(sum(t.amount_aed), 0)::numeric(14,2) as amount_paid,
-         coalesce(sum(t.amount_aed) filter (where t.txn_date <= st.due_date), 0)::numeric(14,2) as paid_by_due
+  select coalesce(sum(t.amount_aed), 0)::numeric(14,2) as amount_paid
   from public.transactions t
   where t.account_code = st.account_code
     and t.kind = 'payment' and t.direction = 'credit' and t.status in ('pending', 'posted')
