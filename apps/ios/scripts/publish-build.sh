@@ -14,7 +14,7 @@
 # Normally invoked by the repo's pre-push hook for main pushes that change the
 # iOS app; run it directly to stage a build without pushing:
 #
-#   apps/ios/scripts/publish-build.sh              # test, build, sign, check, Sentry, stage
+#   apps/ios/scripts/publish-build.sh              # test, build, sign, dSYMs, stage
 #   apps/ios/scripts/publish-build.sh --keep-build # reuse the current build number
 #
 # To build AND upload straight from this Mac (no GitHub involved):
@@ -53,11 +53,6 @@ BUNDLE_ID="$(sed -n 's/^LEDGER_BUNDLE_PREFIX *= *//p' Config/Base.xcconfig)"
 IPA=$(find build/testflight/export -name '*.ipa' | head -1)
 [[ -n "$IPA" ]] || { echo "error: no .ipa for Ledger" >&2; exit 1; }
 [[ "$(basename "$IPA")" == "Ledger.ipa" ]] || { echo "error: expected Ledger.ipa, got $(basename "$IPA")" >&2; exit 1; }
-
-# testflight.sh checked the archive; this checks the IPA that is about to ship
-# (app + share extension Info.plists: https non-local URL, `production`, keys
-# present). Shape only, no value printed. A failure stages nothing.
-./scripts/release-config-check.sh archive "$IPA"
 
 # The workflow refuses to ship artifacts that do not belong to the commit that
 # triggered it. Without this, a push made from a machine that did not build

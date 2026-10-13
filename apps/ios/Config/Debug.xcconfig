@@ -1,13 +1,1 @@
 #include "Base.xcconfig"
-
-// Local stack defaults: a fresh clone builds and the app shows a "configure
-// Supabase" screen. The gitignored Secrets.xcconfig (copy Secrets.example.xcconfig)
-// overrides them, for Debug only; Release never reads it.
-// `//` starts a comment in xcconfig, so URLs are written with `$()` between the
-// slashes: http:/$()/127.0.0.1:54321
-LEDGER_SUPABASE_URL = http:/$()/127.0.0.1:54321
-LEDGER_SUPABASE_PUBLISHABLE_KEY =
-LEDGER_SENTRY_DSN =
-LEDGER_ENVIRONMENT = local
-
-#include? "Secrets.xcconfig"
