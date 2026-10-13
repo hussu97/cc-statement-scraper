@@ -48,6 +48,12 @@ public final class TabRouter {
     public private(set) var activityPreset: ActivityQuery?
     /// Statements opens its PDF picker when it next appears (`ledger://add-statement`).
     public private(set) var addStatementRequested = false
+    /// Bumped by every `ledger://uncategorised` and `ledger://add-statement`.
+    /// Activity and Statements key their `.task` on these, never on the
+    /// request itself: taking the request changes it, and SwiftUI would cancel
+    /// the very task applying it (mid-fetch, or in the picker's delay).
+    public private(set) var activityPresetRequest = 0
+    public private(set) var addStatementRequest = 0
     /// A link that came before a ledger was on screen (a cold start, the
     /// sign-in screen, the profile picker). It opens once one is.
     public private(set) var pendingLink: AppLink?
@@ -72,10 +78,12 @@ public final class TabRouter {
             showingReview = true
         case .uncategorised:
             activityPreset = .uncategorised(month: today().startOfMonth)
+            activityPresetRequest += 1
             tab = .activity
         case .addStatement:
             settingsPath = [.statements]
             addStatementRequested = true
+            addStatementRequest += 1
             tab = .settings
         case .settings:
             tab = .settings

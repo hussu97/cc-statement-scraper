@@ -56,8 +56,9 @@ struct StatementsView: View {
         }
         .task { await model.loadIfNeeded(profileCode: profileCode) }
         .refreshable { await model.load(profileCode: profileCode) }
-        // ledger://add-statement: open the picker once the push has landed.
-        .task(id: tabs?.addStatementRequested) {
+        // ledger://add-statement: open the picker once the push has landed. Keyed on the
+        // request count: taking the request must not cancel the delay before the picker.
+        .task(id: tabs?.addStatementRequest) {
             guard tabs?.takeAddStatementRequest(canUpload: canUpload) == true else { return }
             try? await Task.sleep(for: .milliseconds(400))
             picking = true
