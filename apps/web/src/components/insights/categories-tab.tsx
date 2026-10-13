@@ -14,6 +14,7 @@ import { EmptyState, LoadingRows, QueryView } from "@/components/ui/states";
 import { TooltipCard } from "@/components/charts/chart-tooltip";
 import { categoryVar } from "@/components/charts/palette";
 import { changeTone, countLabel, rangeLabel } from "./labels";
+import { categoryParam } from "./category-view";
 
 type Row = RpcReturn<"category_breakdown">[number];
 
@@ -79,8 +80,9 @@ function CategoryRow({ row, range, barRatio }: { row: Row; range: DateRange; bar
   return (
     <li>
       <Link
-        to="/activity"
-        search={{ category: row.category_code ?? UNCATEGORIZED, from: range.from, to: range.to }}
+        to="/insights/category/$categoryCode"
+        params={{ categoryCode: categoryParam(row.category_code) }}
+        search={{ from: range.from, to: range.to }}
         className="group flex items-center gap-3 px-5 py-3 transition-colors hover:bg-surface-2"
       >
         <Dot token={row.color_token} className="size-2.5" />

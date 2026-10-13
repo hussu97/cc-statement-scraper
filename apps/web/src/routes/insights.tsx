@@ -1,7 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { insightsRoute } from "@/router";
 import { useActiveProfile } from "@/data/profile";
-import { insightsRange } from "@/lib/search";
+import { insightsRange, withInsightsRange } from "@/lib/search";
 import { PageHeader } from "@/components/ui/display";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/primitives";
 import { RangeControl } from "@/components/insights/range-control";
@@ -33,7 +33,11 @@ export function InsightsPage() {
       <PageHeader
         title="Insights"
         description="Where your money goes, and how that changes over time."
-        actions={RANGELESS.includes(tab) ? undefined : <RangeControl />}
+        actions={
+          RANGELESS.includes(tab) ? undefined : (
+            <RangeControl search={search} onChange={(r) => void navigate({ search: (s) => withInsightsRange(s, r), replace: true })} />
+          )
+        }
       />
       <Tabs
         value={tab}
