@@ -94,22 +94,7 @@ struct SMSSetupGuideView: View {
             }
             .padding(.top, 8)
 
-            ForEach(SMSAutomationGuide.steps) { step in
-                Card {
-                    HStack(alignment: .top, spacing: 12) {
-                        Text("\(step.number)")
-                            .font(.system(.title3, design: .serif))
-                            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-                            .foregroundStyle(Palette.accentInk)
-                            .frame(width: 32, height: 32)
-                            .background(Palette.accent, in: Circle())
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(step.title).font(Typography.cardTitle)
-                            Text(step.detail).font(Typography.rowMeta).foregroundStyle(Palette.muted)
-                        }
-                    }
-                }
-            }
+            GuideSteps(steps: SMSAutomationGuide.steps)
 
             Card {
                 Label("Privacy", systemImage: "lock").font(Typography.cardTitle)
@@ -125,11 +110,7 @@ struct SMSSetupGuideView: View {
                     .tint(Palette.accent)
             }
 
-            Link(destination: URL(string: "shortcuts://")!) {
-                Label("Open Shortcuts", systemImage: "arrow.up.forward.app")
-                    .frame(maxWidth: .infinity, minHeight: Metrics.tapMin)
-            }
-            .buttonStyle(.borderedProminent)
+            OpenShortcutsButton()
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)

@@ -37,6 +37,7 @@
 		AC6B124273C727CF4191CF2D /* PagingFooter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5F7B5FD1E6564824D0B7AB5 /* PagingFooter.swift */; };
 		ADA71066669326EC96C41A89 /* OverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A31E4CF859EB1BA241A2C0C1 /* OverviewView.swift */; };
 		AED0BA06AC058188E57F5191 /* ActivitySummaryRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D0F477A0B843C6F8017F998 /* ActivitySummaryRow.swift */; };
+		B3574A53BC6AE73D8BE2009E /* CardPaymentGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8802E77E86B569258157B0CA /* CardPaymentGuideView.swift */; };
 		BBE93A827D2F8A180047195D /* PrivacySection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6E1C4BE6592CF67C5FED755 /* PrivacySection.swift */; };
 		BEF2BF5B8FBECE13DEBF4631 /* UploadLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 582E2ECDA81AFDC1C9849F12 /* UploadLogView.swift */; };
 		C05BE17C5A3CB168D026EAAF /* LogBankSMSIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 306FF1BBB7DC9A30BCC65C13 /* LogBankSMSIntent.swift */; };
@@ -45,6 +46,7 @@
 		D735424BB191ECF6BEFB087C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F190BDC9EB8084E38F344EE7 /* Assets.xcassets */; };
 		E0FD108F9F8CAE01FBFFBA28 /* ReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7DE35B2ABB9AA3A980FD35D /* ReviewView.swift */; };
 		EBE6B98A364642BCAF0A7E52 /* ProfilePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842801DBC37F9A8E31C6DFA8 /* ProfilePickerView.swift */; };
+		ED325B9BA4B367EF0EA35685 /* GuideSteps.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF198F50092EDA75F342D73A /* GuideSteps.swift */; };
 		EED387BA724CF8451B94FE7C /* MonthSwitcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B4BB4BE741A2728C651F5B4 /* MonthSwitcher.swift */; };
 		F11E6EF9D13C280E1E1E7A65 /* SMSSettingsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5F69C5F905C31027D08B21F /* SMSSettingsViews.swift */; };
 		F47A3D77AFB9C697BC01AF1B /* StatementDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73761BCB90A985F69998349F /* StatementDetailView.swift */; };
@@ -98,6 +100,7 @@
 		7C90F3BB1055921EA00C9200 /* SetupChecklistCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupChecklistCard.swift; sourceTree = "<group>"; };
 		7D0F477A0B843C6F8017F998 /* ActivitySummaryRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivitySummaryRow.swift; sourceTree = "<group>"; };
 		842801DBC37F9A8E31C6DFA8 /* ProfilePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilePickerView.swift; sourceTree = "<group>"; };
+		8802E77E86B569258157B0CA /* CardPaymentGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardPaymentGuideView.swift; sourceTree = "<group>"; };
 		8D9278C556B98D50473DE68C /* OverviewStrips.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewStrips.swift; sourceTree = "<group>"; };
 		90DD295322C6F4844758D023 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
 		933BB97FFFA1958362EEA82B /* ChartDescriptor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChartDescriptor.swift; sourceTree = "<group>"; };
@@ -109,6 +112,7 @@
 		B58A729CF0C51D66DEEDC26A /* Ledger.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Ledger.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B5F7B5FD1E6564824D0B7AB5 /* PagingFooter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PagingFooter.swift; sourceTree = "<group>"; };
 		BDC537589817A7B6C31CC447 /* LedgerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerApp.swift; sourceTree = "<group>"; };
+		BF198F50092EDA75F342D73A /* GuideSteps.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuideSteps.swift; sourceTree = "<group>"; };
 		C85D8FFE075C3A5378BB0BEC /* SpendSplitCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendSplitCard.swift; sourceTree = "<group>"; };
 		D30D95BAF30905880DE075A8 /* LogCardPaymentIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogCardPaymentIntent.swift; sourceTree = "<group>"; };
 		E7DE35B2ABB9AA3A980FD35D /* ReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewView.swift; sourceTree = "<group>"; };
@@ -249,6 +253,7 @@
 				565481D48090AF940C8DF22A /* BankLogo.swift */,
 				933BB97FFFA1958362EEA82B /* ChartDescriptor.swift */,
 				A83ED65B612B753580BB01DD /* Components.swift */,
+				BF198F50092EDA75F342D73A /* GuideSteps.swift */,
 				5B4BB4BE741A2728C651F5B4 /* MonthSwitcher.swift */,
 				B5F7B5FD1E6564824D0B7AB5 /* PagingFooter.swift */,
 			);
@@ -286,6 +291,7 @@
 		D8F249B71FEBA5D190CA1D8F /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				8802E77E86B569258157B0CA /* CardPaymentGuideView.swift */,
 				95DCC00204983D702C001D63 /* CardWalletNamesView.swift */,
 				F62D21289B23718DD5F57954 /* PasskeysView.swift */,
 				A6E1C4BE6592CF67C5FED755 /* PrivacySection.swift */,
@@ -551,9 +557,11 @@
 				9EBF5BFE77ECA1C47D23BAAC /* BankLogo.swift in Sources */,
 				79BE1EC1E38ED7C29DE21E5C /* BudgetEditSheet.swift in Sources */,
 				9E4B8F2E603C9B778DFE42A7 /* BudgetsView.swift in Sources */,
+				B3574A53BC6AE73D8BE2009E /* CardPaymentGuideView.swift in Sources */,
 				932E3EB322602C54C4764F58 /* CardWalletNamesView.swift in Sources */,
 				C7D2A9DBE9043F127D748D46 /* ChartDescriptor.swift in Sources */,
 				2AF7A777F5554D6851F1C5F0 /* Components.swift in Sources */,
+				ED325B9BA4B367EF0EA35685 /* GuideSteps.swift in Sources */,
 				4F5F815454811A4ECF4C88FF /* InsightsView.swift in Sources */,
 				7661F492311F61EFDB72CA0D /* LedgerApp.swift in Sources */,
 				C05BE17C5A3CB168D026EAAF /* LogBankSMSIntent.swift in Sources */,
