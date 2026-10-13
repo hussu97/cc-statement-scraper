@@ -200,7 +200,7 @@ extension StatementDetail.Header {
     }
 
     public func due(isLatest: Bool, today: CalendarDay = LedgerDates.today()) -> (text: String, tone: Tone)? {
-        DueStatus.describe(due: dueDate, isLatest: isLatest, today: today)
+        DueStatus.describe(due: dueDate, isLatest: isLatest, payment: duePayment, today: today)
     }
 }
 

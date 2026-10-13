@@ -27,13 +27,20 @@ public struct StatementDetail: Decodable, Sendable, Hashable {
         public let docCode: String?
         public let reconStatus: String?        // ok | warn | fail | n/a
         public let reconChecks: ReconChecks?
+        /// `paid | part_paid | unpaid | overdue`; absent from older servers (UX-1r).
+        public let paymentStatus: String?
+        /// Paid towards this statement (AED); absent from older servers.
+        public let amountPaid: Decimal?
+
+        /// Whether this statement was paid; nil from an older server.
+        public var duePayment: DuePayment? { DuePayment(status: paymentStatus, amountPaid: amountPaid) }
 
         enum CodingKeys: String, CodingKey {
             case stmtCode, kind, bankCode, accountCode, statementDate, periodStart, periodEnd, dueDate
             // `.convertFromSnakeCase` capitalises after the digit: `card_last4s` → `cardLast4S`.
             case cardLast4s = "cardLast4S"
             case openingBalance, closingBalance, totalDebits, totalCredits, minDue, creditLimit, docCode
-            case reconStatus, reconChecks
+            case reconStatus, reconChecks, paymentStatus, amountPaid
         }
 
         public init(from decoder: any Decoder) throws {
@@ -56,6 +63,8 @@ public struct StatementDetail: Decodable, Sendable, Hashable {
             docCode = try c.decodeIfPresent(String.self, forKey: .docCode)
             reconStatus = try c.decodeIfPresent(String.self, forKey: .reconStatus)
             reconChecks = try? c.decodeIfPresent(ReconChecks.self, forKey: .reconChecks)
+            paymentStatus = try c.decodeIfPresent(String.self, forKey: .paymentStatus)
+            amountPaid = try c.decodeIfPresent(Decimal.self, forKey: .amountPaid)
         }
     }
 

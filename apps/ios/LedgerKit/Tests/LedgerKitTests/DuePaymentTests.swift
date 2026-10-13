@@ -4,16 +4,15 @@ import Testing
 
 private func dec(_ s: String) -> Decimal { LedgerDecimal.parse(s)! }
 
-/// Overview JSON with one account; `latest` and `account` are spliced into
-/// `latest_statement` and the account object (UX-1r).
-private func overview(latest: String = "", account: String = "", pendingCount: Int = 2,
+/// Overview JSON with one account; `latest` is spliced into `latest_statement` (UX-1r).
+private func overview(latest: String = "", pendingCount: Int = 2,
                       pendingAmount: String = "3105.30") throws -> Overview {
     let json = """
     {"month": "2026-10-01", "spend": "860", "spend_prev_month": "0", "spend_prev_month_to_date": "0",
      "spend_avg_3m": "0", "payments": "0", "pending_count": \(pendingCount), "pending_amount": "\(pendingAmount)",
      "uncategorized_count": 0, "open_reviews": 0, "last_sms_at": null, "top_categories": [], "recent": [],
      "accounts": [{"account_code": "acc_01hzy3k8w9m2n4p6q8r0s2t4v6", "bank_code": "FAB", "nickname": null,
-       "product_name": null, "credit_limit": null, "last4": null, "unbilled_aed": "0"\(account),
+       "product_name": null, "credit_limit": null, "last4": null, "unbilled_aed": "0",
        "latest_statement": {"stmt_code": "stm_01hzy3k8w9m2n4p6q8r0s2t4v6", "statement_date": "2026-09-25",
          "due_date": "2026-10-20", "closing_balance": "4210.55", "min_due": "210.53"\(latest)}}]}
     """
@@ -56,13 +55,22 @@ struct DuePaymentTests {
         #expect(AccountSummary(account: account).due(today: today)! == ("Part paid (AED 1,200.50) · Due in 12 days", .warn))
     }
 
-    @Test("the account itself may carry them; latest_statement wins when both do")
-    func onAccount() throws {
-        let o = try overview(account: #", "payment_status": "paid", "amount_paid": "4210.55""#)
-        #expect(o.accounts.first?.duePayment == DuePayment(status: .paid, amountPaid: dec("4210.55")))
-        let both = try overview(latest: #", "payment_status": "overdue", "amount_paid": null"#,
-                                account: #", "payment_status": "paid""#)
-        #expect(both.accounts.first?.duePayment?.status == .overdue)
+    @Test("statement_detail's header: decoded when present, absent from an older server")
+    func statementDetail() throws {
+        func header(_ extra: String) throws -> StatementDetail.Header {
+            let json = """
+            {"statement": {"stmt_code": "stm_01hzy3k8w9m2n4p6q8r0s2t4v6", "account_code": "acc_01hzy3k8w9m2n4p6q8r0s2t4v6",
+              "statement_date": "2026-09-25", "due_date": "2026-09-30"\(extra)},
+             "debits": {"lines": [], "total": "0", "count": 0}, "credits": {"lines": [], "total": "0", "count": 0}}
+            """
+            return try LedgerJSON.decode(StatementDetail.self, from: Data(json.utf8)).statement
+        }
+        let older = try header("")
+        #expect(older.duePayment == nil)
+        #expect(older.due(isLatest: true, today: today)! == ("Was due 30 Sep", .neutral))
+        let overdue = try header(#", "payment_status": "overdue", "amount_paid": "1510.82""#)
+        #expect(overdue.duePayment == DuePayment(status: .overdue, amountPaid: dec("1510.82")))
+        #expect(overdue.due(isLatest: true, today: today)! == ("Overdue by 8 days · AED 1,510.82 paid", .danger))
     }
 
     @Test("statement_cycles: decoded when present, a number amount too")
