@@ -207,6 +207,15 @@ struct TrendsActivityLinkTests {
         #expect(bank.activityQuery(bucket: bank.buckets[0], group: bank.groups[0], filter: SpendFilter()) == nil)
     }
 
+    @Test("links use the filter the series was fetched with, not a newer one on screen")
+    func seriesFilter() {
+        var s = series(.total, [])
+        s.filter = SpendFilter(categoryCodes: ["cat_a"])
+        #expect(s.activityQuery(bucket: s.buckets[0], group: nil)?.categoryCode == "cat_a")
+        s.filter = SpendFilter()
+        #expect(s.activityQuery(bucket: s.buckets[0], group: nil)?.categoryCode == nil)
+    }
+
     @Test("the filter carries over when Activity can show it, else there is no link")
     func filters() {
         let s = series(.total, [])

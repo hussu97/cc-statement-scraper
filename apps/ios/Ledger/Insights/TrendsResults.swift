@@ -32,7 +32,7 @@ private struct TrendsChartCard: View {
     var body: some View {
         Card {
             if let bucket = model.selected {
-                TrendsCallout(series: series, bucket: bucket, filter: model.filter)
+                TrendsCallout(series: series, bucket: bucket)
             }
             TrendsChart(series: series, selected: $model.selectedBucket)
                 .opacity(model.state.isLoading ? 0.5 : 1)
@@ -106,7 +106,6 @@ private struct TrendsChart: View {
 private struct TrendsCallout: View {
     let series: TrendsSeries
     let bucket: TrendsSeries.Bucket
-    let filter: SpendFilter
     @Environment(TabRouter.self) private var tabs: TabRouter?
 
     var body: some View {
@@ -121,7 +120,7 @@ private struct TrendsCallout: View {
             VStack(alignment: .trailing, spacing: 2) {
                 Text(bucket.total.map { MoneyFormat.aed($0, fractionDigits: 0) } ?? "No spending")
                     .font(Typography.amount).moneyLine()
-                if let tabs, let query = series.activityQuery(bucket: bucket, group: nil, filter: filter) {
+                if let tabs, let query = series.activityQuery(bucket: bucket, group: nil) {
                     Button("See transactions") { tabs.openActivity(query) }
                         .font(Typography.caption).buttonStyle(.borderless).tint(Palette.accent)
                 }
