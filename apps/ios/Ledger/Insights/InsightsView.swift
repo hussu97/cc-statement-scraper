@@ -20,6 +20,7 @@ struct InsightsView: View {
                 Text(InsightsModel.periodCaption(model.period, month: month.requestMonth))
                     .font(Typography.caption).foregroundStyle(Palette.muted)
             }
+            TrendsLink(profileCode: profileCode)
 
             StateContainer(state: model.state, retry: reload) { content in
                 let range = InsightsModel.range(for: model.period, month: month.requestMonth)
