@@ -115,12 +115,12 @@ struct ActivityFilterTests {
         q.cardCode = "crd_1"
         q.uncategorizedOnly = true
         q.categoryCode = "cat_ignored"
-        q.status = .pending
+        q.status = .posted
         q.source = .statement
         q.search = "  café  "
         #expect(q.activityFilter == [
             "from": "2026-09-01", "to": "2026-09-30", "account": "acc_1", "card": "crd_1", "category": "none",
-            "status": "pending", "source": "statement", "q": "café",
+            "status": "posted", "source": "statement", "q": "café",
         ])
     }
 
@@ -139,9 +139,10 @@ struct ActivityFilterTests {
         #expect(q.filterCount == 0 && q.search == "noon" && q.source == .all && q.cardCode == nil)
     }
 
-    @Test("void is a status choice, and every choice has words")
+    @Test("void is a status choice, pending never is (SMS charges aren't set apart), and every choice has words")
     func statusAndSourceLabels() {
-        #expect(ActivityQuery.StatusFilter.allCases.map(\.rawValue) == ["all", "pending", "posted", "void", "orphaned"])
+        #expect(ActivityQuery.StatusFilter.allCases.map(\.rawValue) == ["all", "posted", "void", "orphaned"])
+        #expect(ActivityQuery.StatusFilter(rawValue: "pending") == nil)
         #expect(ActivityQuery.StatusFilter.void.label == "Void" && ActivityQuery.StatusFilter.all.label == "Any status")
         #expect(ActivityQuery.SourceFilter.allCases.map(\.label) == ["Any source", "SMS only", "Statement only", "SMS + statement"])
         #expect(ActivityDateChoice.all.map(\.label)

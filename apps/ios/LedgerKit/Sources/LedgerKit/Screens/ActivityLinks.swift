@@ -4,13 +4,6 @@ import Foundation
 /// into `/activity` do: each is an `ActivityQuery` handed to
 /// `TabRouter.openActivity`.
 extension ActivityQuery {
-    /// Every pending transaction, any date (Overview's pending strip; the web's `?status=pending`).
-    public static func pending() -> ActivityQuery {
-        var query = ActivityQuery()
-        query.status = .pending
-        return query
-    }
-
     /// One merchant's transactions in a range: its name as the search, as the
     /// web's merchant links do. Nil for a blank name.
     public static func merchant(_ name: String, from: CalendarDay, to: CalendarDay,
@@ -28,8 +21,6 @@ extension ActivityQuery {
 extension Overview {
     /// "N uncategorised this month": that month's uncategorised transactions.
     public var uncategorisedActivity: ActivityQuery { .uncategorised(month: month) }
-    /// The pending strip: every pending transaction.
-    public var pendingActivity: ActivityQuery { .pending() }
 }
 
 extension MerchantSpend {

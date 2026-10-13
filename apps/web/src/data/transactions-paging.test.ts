@@ -12,7 +12,7 @@ describe("listFilters (an infinite list's identity)", () => {
     const a = parseActivitySearch({ q: "coffee", page: "2" });
     const b = parseActivitySearch({ q: "coffee", page: "7" });
     expect(listFilters(a)).toEqual(listFilters(b));
-    expect(listFilters(withFilter(a, { status: "pending" }))).not.toEqual(listFilters(a));
+    expect(listFilters(withFilter(a, { status: "void" }))).not.toEqual(listFilters(a));
   });
 
   it("a filter change also resets the numbered page", () => {

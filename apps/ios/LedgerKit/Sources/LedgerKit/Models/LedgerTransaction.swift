@@ -97,13 +97,14 @@ public struct LedgerTransaction: Decodable, Identifiable, Hashable, Sendable {
     }
 }
 
-/// How a transaction is evidenced — the badge on every Activity row.
+/// How a transaction is evidenced — the badge on every Activity row. An SMS
+/// or payment charge (DB status `pending` until a statement matches it) is a
+/// source of truth like a statement line: it reads "SMS", never "Pending".
 public enum EvidenceBadge: String, Sendable, CaseIterable {
-    case pending, sms, statement, both, orphaned, void
+    case sms, statement, both, orphaned, void
 
     public var label: String {
         switch self {
-        case .pending: "Pending"
         case .sms: "SMS"
         case .statement: "Statement"
         case .both: "SMS + Statement"
@@ -120,7 +121,6 @@ public enum EvidenceBadge: String, Sendable, CaseIterable {
         }
         if hasSms && hasStatement { return .both }
         if hasStatement { return .statement }
-        if status == "pending" { return .pending }
         return .sms
     }
 }

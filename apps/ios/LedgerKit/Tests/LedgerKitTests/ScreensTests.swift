@@ -51,12 +51,12 @@ struct ActivityModelTests {
         let model = ActivityModel(api: api)
         model.query.search = "noon"
         var draft = model.query
-        draft.status = .pending
+        draft.status = .void
         draft.month = CalendarDay(iso: "2026-09-14")
         #expect(model.query.status == .all && !model.query.hasFilters)   // swiped away: unchanged
         draft.search = "stale"
         await model.apply(draft, profileCode: "prf_a")
-        #expect(model.query.status == .pending && model.query.search == "noon")
+        #expect(model.query.status == .void && model.query.search == "noon")
         #expect(model.query.from == CalendarDay(iso: "2026-09-01") && model.query.to == CalendarDay(iso: "2026-09-30"))
         #expect(api.transactionRequests.last?.query == model.query)
     }
@@ -123,7 +123,7 @@ struct ActivityModelTests {
         b.search = "carrefour"
         #expect(ActivityModel.keepsRows(from: ("prf_a", a), to: ("prf_a", b)))
         #expect(!ActivityModel.keepsRows(from: ("prf_a", a), to: ("prf_b", a)))
-        a.status = .pending
+        a.status = .void
         #expect(!ActivityModel.keepsRows(from: ("prf_a", a), to: ("prf_a", b)))
     }
 

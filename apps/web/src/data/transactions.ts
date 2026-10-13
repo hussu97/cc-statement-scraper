@@ -440,6 +440,15 @@ export function evidenceBadge(t: Pick<TxnRow, "has_sms" | "has_statement" | "sta
   return "none";
 }
 
+/**
+ * The status a row shows as a badge: only void and orphaned. A charge from an SMS or a payment
+ * shortcut (DB status `pending` until a statement matches it) is a source of truth too, so it
+ * shows no status, like a posted one.
+ */
+export function statusBadge(status: string | null | undefined): "void" | "orphaned" | null {
+  return status === "void" || status === "orphaned" ? status : null;
+}
+
 /** Consecutive rows grouped by txn_date, preserving server order. */
 export function groupByDay<T extends { txn_date: string | null }>(rows: T[]): { day: string; rows: T[] }[] {
   const out: { day: string; rows: T[] }[] = [];

@@ -204,16 +204,17 @@ extension LedgerTransaction {
     /// No AED amount yet for a foreign charge: the amount shows in its own currency.
     public var awaitingFx: Bool { amountAed == nil && currencyOriginal != "AED" }
 
-    /// The web drawer's badges: status, kind, where the evidence came from, the
-    /// FX state and the spend exclusion.
+    /// The web drawer's badges: status (void and orphaned only: an SMS or
+    /// payment charge shows no status, like a posted one), kind, where the
+    /// evidence came from, the FX state and the spend exclusion.
     public var detailBadges: [DetailBadge] {
-        let statusTone: Tone = switch status {
-        case "pending": .warn
-        case "orphaned": .danger
-        default: .neutral
+        var out: [DetailBadge] = []
+        switch status {
+        case "void": out.append(DetailBadge(label: "Void", tone: .neutral))
+        case "orphaned": out.append(DetailBadge(label: "Orphaned", tone: .danger))
+        default: break
         }
-        var out = [DetailBadge(label: status.capitalized, tone: statusTone),
-                   DetailBadge(label: kind.replacingOccurrences(of: "_", with: " ").capitalized, tone: .neutral)]
+        out.append(DetailBadge(label: kind.replacingOccurrences(of: "_", with: " ").capitalized, tone: .neutral))
         switch (hasSms, hasStatement) {
         case (true, true): out.append(DetailBadge(label: "SMS + statement", tone: .neutral))
         case (true, false): out.append(DetailBadge(label: "SMS", tone: .neutral))

@@ -9,9 +9,15 @@ const TXN = "txn_01hzzzzzzzzzzzzzzzzzzzzzzz";
 describe("activity search codec", () => {
   it("keeps valid params and drops junk", () => {
     expect(
-      parseActivitySearch({ from: "2026-10-01", to: "2026-10-31", account: ACC, category: CAT, status: "pending", source: "both", q: "  coffee ", page: "2", size: "500" }),
-    ).toEqual({ from: "2026-10-01", to: "2026-10-31", account: ACC, category: CAT, status: "pending", source: "both", q: "coffee", page: 2, size: 500 });
+      parseActivitySearch({ from: "2026-10-01", to: "2026-10-31", account: ACC, category: CAT, status: "posted", source: "both", q: "  coffee ", page: "2", size: "500" }),
+    ).toEqual({ from: "2026-10-01", to: "2026-10-31", account: ACC, category: CAT, status: "posted", source: "both", q: "coffee", page: 2, size: 500 });
     expect(parseActivitySearch({ from: "yesterday", account: "acc_bad", status: "weird", source: "x", page: "-1", size: "7", category: "drop table" })).toEqual({});
+  });
+
+  it("drops an old ?status=pending link to no status filter: SMS charges are transactions like any other", () => {
+    const s = parseActivitySearch({ status: "pending", q: "noon" });
+    expect(s).toEqual({ q: "noon" });
+    expect(activeFilterCount(s)).toBe(1);
   });
 
   it("accepts the uncategorised sentinel and the drawer txn", () => {

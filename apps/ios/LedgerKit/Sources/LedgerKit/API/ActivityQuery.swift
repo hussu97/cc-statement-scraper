@@ -3,8 +3,10 @@ import Foundation
 /// Activity's filters, as the PostgREST filters they become. Pure, so the
 /// encoding (the part that breaks on a comma in a merchant name) is testable.
 public struct ActivityQuery: Sendable, Hashable {
+    /// No `pending`: an SMS or payment charge is a transaction like any other,
+    /// so the filter never sets it apart (the web dropped `?status=pending` too).
     public enum StatusFilter: String, Sendable, CaseIterable, Identifiable {
-        case all, pending, posted, void, orphaned
+        case all, posted, void, orphaned
         public var id: String { rawValue }
         public var label: String { self == .all ? "Any status" : rawValue.capitalized }
     }
