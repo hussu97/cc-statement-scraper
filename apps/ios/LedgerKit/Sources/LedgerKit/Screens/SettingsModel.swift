@@ -27,7 +27,8 @@ public final class SettingsModel {
 
     public func refresh() async {
         outboxStatus = await outbox.status()
-        parked = await outbox.parkedEntries().map(ParkedMessage.init)
+        let user = outbox.currentUser
+        parked = await outbox.parkedEntries().map { ParkedMessage($0, currentUser: user) }
         lastCapture = log?.last
         recentCaptures = log?.recent ?? []
         lastTest = log?.lastTest
@@ -93,8 +94,13 @@ public struct ParkedMessage: Sendable, Hashable, Identifiable {
     public let preview: String
     public let reason: String
     public let profileCode: String?
+    /// Retry may send it to this account's "SMS go to" ledger: false for one
+    /// captured under another account on this phone, which can only be deleted.
+    public let canRetry: Bool
 
-    public init(_ entry: OutboxEntry) {
+    /// `currentUser`: the account signed in now (`DeviceUserStore`).
+    public init(_ entry: OutboxEntry, currentUser: String? = nil) {
+        canRetry = !entry.isOtherAccounts && entry.belongs(to: currentUser)
         id = entry.id
         receivedAt = entry.item.capturedAt
         let text: String

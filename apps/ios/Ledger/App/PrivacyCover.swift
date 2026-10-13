@@ -1,28 +1,96 @@
 import LedgerKit
 import SwiftUI
+import UIKit
 
-/// Covers the app while the scene isn't active (the app-switcher snapshot) and
-/// while it is locked (`AppLock`, BACKLOG IOS-22). The content underneath is
-/// blurred too, so nothing readable shows through the material.
-struct PrivacyCovered: ViewModifier {
-    let lock: AppLock
+/// The privacy cover and lock screen (`AppLock`, BACKLOG IOS-22) in a window of
+/// its own above the app's, so it covers every presentation too: sheets,
+/// full-screen covers, alerts and menus. An overlay on the SwiftUI root sat
+/// under them, so an open sheet showed in the app-switcher snapshot and stayed
+/// usable without Face ID.
+///
+/// It follows `lock.showsCover`, and also covers straight from UIKit's
+/// will-deactivate notification, which comes before SwiftUI's scene phase.
+@MainActor
+final class PrivacyCoverWindow {
+    private let lock: AppLock
+    private var window: UIWindow?
+    private var observers: [NSObjectProtocol] = []
 
-    func body(content: Content) -> some View {
-        content
-            .blur(radius: lock.showsCover ? 24 : 0)
-            .accessibilityHidden(lock.showsCover)
-            .overlay {
-                if lock.showsCover { PrivacyCover(lock: lock) }
+    init(lock: AppLock) { self.lock = lock }
+
+    /// Called with the app's window scene once the root view is in a window.
+    func attach(to scene: UIWindowScene) {
+        guard window?.windowScene !== scene else { return }
+        let window = UIWindow(windowScene: scene)
+        window.windowLevel = .alert + 1
+        let host = UIHostingController(rootView: PrivacyCover(lock: lock))
+        host.view.backgroundColor = .clear
+        window.rootViewController = host
+        self.window = window
+
+        let center = NotificationCenter.default
+        observers.forEach(center.removeObserver)
+        observers = [
+            center.addObserver(forName: UIScene.willDeactivateNotification, object: scene, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.show(true) }
+            },
+            center.addObserver(forName: UIScene.didActivateNotification, object: scene, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.sync() }
+            },
+        ]
+        track()
+        sync()
+    }
+
+    /// Re-arms after every change (Observation reports one change per registration).
+    private func track() {
+        withObservationTracking {
+            _ = lock.showsCover
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                self?.sync()
+                self?.track()
             }
+        }
+    }
+
+    private func sync() { show(lock.showsCover) }
+
+    private func show(_ on: Bool) {
+        guard let window, window.isHidden == on else { return }
+        window.isHidden = !on
     }
 }
 
+/// Hands the root view's `UIWindowScene` to `PrivacyCoverWindow`.
+struct WindowSceneReader: UIViewRepresentable {
+    let found: (UIWindowScene) -> Void
+
+    func makeUIView(context: Context) -> SceneView { SceneView(found: found) }
+    func updateUIView(_ view: SceneView, context: Context) {}
+
+    final class SceneView: UIView {
+        let found: (UIWindowScene) -> Void
+        init(found: @escaping (UIWindowScene) -> Void) {
+            self.found = found
+            super.init(frame: .zero)
+            isUserInteractionEnabled = false
+        }
+        required init?(coder: NSCoder) { nil }
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if let scene = window?.windowScene { found(scene) }
+        }
+    }
+}
+
+/// Opaque, so nothing of the app shows through in the snapshot.
 private struct PrivacyCover: View {
     let lock: AppLock
 
     var body: some View {
         ZStack {
-            Rectangle().fill(.thickMaterial).ignoresSafeArea()
+            Palette.bg.ignoresSafeArea()
             VStack(spacing: 16) {
                 Image(systemName: lock.isLocked ? "lock.fill" : "eye.slash")
                     .font(.system(size: 40)).foregroundStyle(Palette.accent)
@@ -39,14 +107,6 @@ private struct PrivacyCover: View {
                 }
             }
             .padding(Metrics.gutter)
-        }
-    }
-}
-
-extension View {
-    func privacyCovered(by lock: AppLock?) -> some View {
-        Group {
-            if let lock { modifier(PrivacyCovered(lock: lock)) } else { self }
         }
     }
 }

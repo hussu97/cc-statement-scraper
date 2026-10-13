@@ -25,9 +25,24 @@ public struct PendingUploads: Sendable {
 
     public var count: Int { list().count }
 
-    /// Every saved PDF, waiting or refused (sign-out, after the person confirmed).
-    public func removeAll() {
-        try? FileManager.default.removeItem(at: directory)
+    /// These saved PDFs (sign-out, after the person confirmed the count), each
+    /// with its refusal reason. A file that moved to `rejected/` since it was
+    /// counted is deleted there; one already sent is gone and skipped. Throws
+    /// the first file that couldn't be deleted, after trying them all.
+    public func remove(files: [URL]) throws {
+        let fm = FileManager.default
+        var failure: (any Error)?
+        for url in files {
+            let candidates = [url, rejectedDirectory.appendingPathComponent(url.lastPathComponent)]
+            guard let found = candidates.first(where: { fm.fileExists(atPath: $0.path) }) else { continue }
+            do {
+                try fm.removeItem(at: found)
+                try? fm.removeItem(at: Self.reasonURL(found))
+            } catch {
+                failure = failure ?? error
+            }
+        }
+        if let failure { throw failure }
     }
 
     static func originalName(_ url: URL) -> String {

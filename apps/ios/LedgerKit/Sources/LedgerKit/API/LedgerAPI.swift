@@ -18,9 +18,10 @@ public protocol LedgerAPI: SMSIngestAPI {
     func profiles() async throws -> [LedgerProfile]
     func memberships() async throws -> [ProfileMembership]
     func createProfile(key: String, name: String) async throws -> String
-    /// `rpc('list_profile_members')`, counted: members plus pending invites.
-    /// Only the count crosses the wire (Overview's empty-ledger checklist).
-    func memberCount(profileCode: String) async throws -> Int
+    /// `rpc('list_profile_members')`, counted: members with access and pending
+    /// invites apart. Only the `pending` flag crosses the wire (Overview's
+    /// empty-ledger checklist).
+    func memberCount(profileCode: String) async throws -> MemberCount
 
     // Analytics (SQL RPCs)
     func overview(profileCode: String, month: CalendarDay?) async throws -> Overview

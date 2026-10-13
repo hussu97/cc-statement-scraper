@@ -27,6 +27,8 @@ public final class LedgerServices: Sendable {
     public let outboxSync: OutboxSync
     public let selection: ProfileSelection
     public let smsTargets: SMSTargetStore
+    /// The account last signed in on this phone (kept after sign-out).
+    public let deviceUser: DeviceUserStore
     public let captureLog: CaptureLog
     public let sessionStorage: SharedKeychainStorage
 
@@ -47,9 +49,12 @@ public final class LedgerServices: Sendable {
         api = SupabaseLedgerAPI(client: client, config: config, session: session)
         let targets = SMSTargetStore(defaults: config.sharedDefaults)
         smsTargets = targets
-        // SMS saved while no ledger was known go to the "SMS go to" ledger as soon as one is.
+        let users = DeviceUserStore(defaults: config.sharedDefaults)
+        deviceUser = users
+        // SMS and payments saved while no ledger was known go to the "SMS go to"
+        // ledger as soon as one is, if it's the account they were captured under.
         outbox = Outbox(fileURL: Outbox.defaultURL(container: config.sharedContainerURL), api: api,
-                        pendingTarget: { targets.target?.profileCode })
+                        pendingTarget: { targets.target?.profileCode }, deviceUser: { users.userID })
         outboxSync = OutboxSync(outbox: outbox)
         selection = ProfileSelection(defaults: config.sharedDefaults)
         captureLog = CaptureLog(defaults: config.sharedDefaults)
@@ -76,19 +81,13 @@ public final class LedgerServices: Sendable {
 
     /// What sign-out would delete from this phone: SMS and card payments in
     /// the outbox (sent or not yet), and the share extension's PDFs.
-    public func deviceQueue() async -> DeviceQueue {
-        let entries = (try? await outbox.entries()) ?? []
-        let uploads = pendingUploads
-        return DeviceQueue(messages: entries.filter { $0.kind == .sms }.count,
-                           payments: entries.filter { $0.kind == .wallet }.count,
-                           pdfs: uploads.count + uploads.rejected().count)
+    public func signOutPlan() async -> SignOutPlan {
+        await SignOutPlan.make(outbox: outbox, uploads: pendingUploads)
     }
 
-    /// Sign-out, after the person confirmed: the outbox and the share
-    /// extension's PDFs go, so nothing is sent under whoever signs in next.
-    public func clearDeviceQueue() async {
-        try? await outbox.removeAll()
-        pendingUploads.removeAll()
+    /// Sign-out, after the person confirmed: exactly what `plan` counted goes.
+    public func delete(_ plan: SignOutPlan) async throws {
+        try await plan.delete(outbox: outbox, uploads: pendingUploads)
     }
 
     /// The share extension's upload to the "SMS go to" ledger, using the shared session.
