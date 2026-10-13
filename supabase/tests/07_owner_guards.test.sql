@@ -95,14 +95,14 @@ set local role authenticated;
 select is((select change from public.category_breakdown(pg_temp.v('p'), '2024-03-01', '2024-03-31')
            where category_code = pg_temp.v('dining')), 0.5000::numeric, 'Dining 100 → 150 is +0.5');
 select is((select change from public.category_breakdown(pg_temp.v('p'), '2024-03-01', '2024-03-31')
-           where category_code is null), -0.5000::numeric, 'Uncategorized 80 → 40 is −0.5');
+           where category_code is null), -0.5000::numeric, 'Uncategorised 80 → 40 is −0.5');
 select is((select change from public.category_breakdown(pg_temp.v('p'), '2024-03-01', '2024-03-31')
            where category_code = pg_temp.v('travel')), null::numeric, 'change is null when the previous period had no spend');
 select is((select prev_amount from public.category_breakdown(pg_temp.v('p'), '2024-03-01', '2024-03-31')
            where category_code = pg_temp.v('travel')), 0::numeric, 'prev_amount is still 0, not null');
 select is((select string_agg(name || ':' || amount || ':' || share || ':' || prev_amount, ',' order by amount desc)
            from public.category_breakdown(pg_temp.v('p'), '2024-03-01', '2024-03-31')),
-          'Dining:150.00:0.5556:100.00,Travel:80.00:0.2963:0,Uncategorized:40.00:0.1481:80.00',
+          'Dining:150.00:0.5556:100.00,Travel:80.00:0.2963:0,Uncategorised:40.00:0.1481:80.00',
           'existing columns are unchanged');
 
 select pg_temp.as_user('uc');

@@ -150,7 +150,7 @@ extension LedgerTransaction {
     /// The row's category caption; an excluded transaction says so, since it
     /// has left the spend totals (`v_spend`).
     public var categoryCaption: String {
-        (categoryName ?? "Uncategorized") + (excludeFromSpend ? " · Excluded" : "")
+        (categoryName ?? "Uncategorised") + (excludeFromSpend ? " · Excluded" : "")
     }
 
     /// `"FAB •1234"`.

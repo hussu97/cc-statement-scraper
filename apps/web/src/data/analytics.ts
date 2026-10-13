@@ -174,7 +174,7 @@ export function pivotSeries(rows: SpendSeriesRow[]): SeriesPivot {
   const byBucket = new Map<string, Record<string, number | string>>();
   for (const r of rows) {
     const key = seriesKey(r);
-    const g = groups.get(key) ?? { key, label: r.group_label ?? "Uncategorized", color_token: r.color_token ?? null, total: 0 };
+    const g = groups.get(key) ?? { key, label: r.group_label ?? "Uncategorised", color_token: r.color_token ?? null, total: 0 };
     g.total += Number(r.amount);
     groups.set(key, g);
     const row = byBucket.get(r.bucket) ?? { bucket: r.bucket };

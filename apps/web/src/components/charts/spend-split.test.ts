@@ -9,7 +9,7 @@ const byCategory: SpendBreakdown = {
   months: ["2026-08", "2026-09"],
   groups: [
     { key: "cat_dining", label: "Dining", color_token: "cat-3", logo_path: null, total: "900.00", share: "0.6000" },
-    { key: "__uncategorized__", label: "Uncategorized", color_token: null, logo_path: null, total: "400.00", share: "0.2667" },
+    { key: "__uncategorized__", label: "Uncategorised", color_token: null, logo_path: null, total: "400.00", share: "0.2667" },
     { key: "__other__", label: "Others", color_token: null, logo_path: null, total: "200.00", share: "0.1333" },
   ],
   series: [
@@ -31,7 +31,7 @@ describe("splitChart", () => {
     expect(c.raw.get("2026-08")!.get("s0")).toBe("300.00");
   });
 
-  it("colours categories by their own token, Uncategorized neutral, Others distinct", () => {
+  it("colours categories by their own token, Uncategorised neutral, Others distinct", () => {
     const c = splitChart(byCategory, "category");
     expect(c.series[0]!.fill).toBe("var(--chart-cat-3)");
     expect(c.series[1]!.fill).toBe("var(--chart-uncategorized)");

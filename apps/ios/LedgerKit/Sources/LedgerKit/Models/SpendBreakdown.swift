@@ -114,7 +114,7 @@ public struct SpendCallout: Sendable, Hashable {
 }
 
 extension SpendBreakdown {
-    /// Others' token: a lighter neutral than Uncategorized's grey.
+    /// Others' token: a lighter neutral than Uncategorised's grey.
     public static let otherToken = "other"
 
     /// The colour token of a group: a category's own `color_token`; banks and
