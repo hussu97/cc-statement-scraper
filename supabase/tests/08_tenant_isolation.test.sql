@@ -184,6 +184,27 @@ select throws_ok($$ update public.sms_messages set account_code = pg_temp.v('acc
                     where profile_code = pg_temp.v('pa') $$,
                  '23503', null, 'nor an SMS bound to another profile''s account');
 
+-- ═══ Activity bulk actions (WEB-24) ════════════════════════════════════════
+select pg_temp.as_user('ua');
+set local role authenticated;
+select throws_ok($$ select public.activity_selection_summary(pg_temp.v('pb'), p_filter => '{}') $$, '42501', null,
+                 'activity_selection_summary refuses another profile');
+select throws_ok($$ select public.bulk_update_transactions(pg_temp.v('pb'), '{"exclude_from_spend":true}', p_filter => '{}') $$,
+                 '42501', null, 'bulk_update_transactions refuses another profile');
+select throws_ok($$ select public.activity_export(pg_temp.v('pb'), p_filter => '{}') $$, '42501', null,
+                 'activity_export refuses another profile');
+select is(public.activity_selection_summary(pg_temp.v('pa'), array[pg_temp.v('txn_b')])->>'txn_count', '0',
+          'activity_selection_summary counts nothing of another profile''s codes');
+select is(public.activity_export(pg_temp.v('pa'), array[pg_temp.v('txn_b')]), '[]'::jsonb,
+          'activity_export returns nothing of another profile''s codes');
+select is(public.bulk_update_transactions(pg_temp.v('pa'), '{"exclude_from_spend":true}', array[pg_temp.v('txn_b')]), 0,
+          'bulk_update_transactions changes nothing of another profile''s codes');
+select throws_ok($$ select public.bulk_update_transactions(pg_temp.v('pa'), jsonb_build_object('manual_category_code', pg_temp.v('cat_b')),
+                      p_filter => '{}') $$, 'P0002', null, 'nor sets another profile''s category');
+reset role;
+select is((select exclude_from_spend from public.transactions where txn_code = pg_temp.v('txn_b')), false,
+          'B''s transaction is still counted as spend');
+
 -- ═══ DB-04: global tables are not readable by strangers ═══════════════════
 select pg_temp.as_user('uc');
 set local role authenticated;

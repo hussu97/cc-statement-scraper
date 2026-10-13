@@ -2393,6 +2393,22 @@ export type Database = {
       }
     }
     Functions: {
+      activity_export: {
+        Args: {
+          p_filter?: Json
+          p_profile_code: string
+          p_txn_codes?: string[]
+        }
+        Returns: Json
+      }
+      activity_selection_summary: {
+        Args: {
+          p_filter?: Json
+          p_profile_code: string
+          p_txn_codes?: string[]
+        }
+        Returns: Json
+      }
       activity_summary: {
         Args: {
           p_account_code?: string
@@ -2478,6 +2494,15 @@ export type Database = {
           share_used: number
           spent_aed: number
         }[]
+      }
+      bulk_update_transactions: {
+        Args: {
+          p_filter?: Json
+          p_patch: Json
+          p_profile_code: string
+          p_txn_codes?: string[]
+        }
+        Returns: number
       }
       cancel_profile_invite: {
         Args: { p_email: string; p_profile_code: string }
