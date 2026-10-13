@@ -28,10 +28,10 @@ separately):
 | Edge Functions | 0 | 0 | – | – | 0 |
 | Parser | 1 | – | – | – | 1 |
 | Web | 0 | 7 | 5 | – | 12 |
-| iOS | 0 | 4 | 7 | 2 | 13 |
+| iOS | 0 | 4 | 6 | 2 | 12 |
 | Scraper | – | 0 | – | – | 0 |
 | CI, config and ops | 0 | 0 | – | 0 | 0 |
-| **Total** | **1** | **13** | **12** | **3** | **29** |
+| **Total** | **1** | **13** | **11** | **3** | **28** |
 
 There are no open P0 or P1 findings. The last P1 remainders (WEB-02 statements beyond 500 and
 merchant search, WEB-07 "Retry AI") landed in `98f901c`. What is left of the P1s are the device
@@ -251,7 +251,6 @@ CHANGELOG.
 | N-2 | WidgetKit Home and Lock Screen widgets (month spend and pace, next due, utilisation) from an App Group snapshot JSON, no network | Also ROADMAP §5 | M |
 | N-3 | App Intents beyond SMS: "How much have I spent this month?", "What's due?", a `CategoryEntity` with "Categorise last transaction" | Existing `AppShortcutsProvider` | M |
 | N-4 | Controls (Control Center / Action button): "Open Uncategorised", "Add statement" | — | S |
-| N-5 | Live Activities: low value; at most "Parsing 3 statements…" after a share. Recommendation: don't build before N-1 to N-4 | — | – |
 | IOS-06g | SMS guide: an inline three-image strip for the iOS 18 Shortcuts UI (variable picker for "Shortcut Input") | Screenshots from a device | S |
 
 (05's recommendations 3–5 are IOS-19r, IOS-20r, IOS-18, IOS-28 and IOS-17 above.)
@@ -369,6 +368,7 @@ merchant masks (PRODUCTION §10.2).
 | WEB-51 | Accepted: strict CSP; nothing to change |
 | IOS-08r | Accepted: personal use; revisit only if distributed |
 | IOS-31 | Accepted filter edge cases |
+| N-5 | Decided (2026-10-13): no Live Activities; the only candidate ("Parsing N statements…") isn't worth a new surface |
 
 ## Needs verification
 
