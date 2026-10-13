@@ -69,6 +69,16 @@ public protocol LedgerAPI: SMSIngestAPI {
     func updateTransaction(txnCode: String, edit: TransactionEdit) async throws
     func uploadStatements(profileCode: String, files: [UploadFile]) async throws -> UploadResponse
 
+    // Transaction detail (SupabaseLedgerAPI+Transactions.swift): what the sheet shows beside the row
+    /// `rpc('merchant_context')`: visits, average and 6-month spend at the merchant.
+    func merchantContext(profileCode: String, merchantCode: String) async throws -> MerchantContext
+    /// `public.transaction_evidence` of the transaction with its statement line or SMS (no SMS body).
+    func transactionEvidence(profileCode: String, txnCode: String) async throws -> [EvidenceItem]
+    /// One SMS's text, read only when the reader opens it on the sheet. Never logged or kept.
+    func smsBody(profileCode: String, smsCode: String) async throws -> String?
+    /// The reversal pair of `txn`, in either direction (the row itself left out).
+    func relatedTransactions(profileCode: String, txn: LedgerTransaction) async throws -> [LedgerTransaction]
+
     // Statement detail, spend split, banks, upload timeline (SupabaseLedgerAPI+Statements.swift)
     /// `rpc('statement_detail')`. P0002 when the statement is unknown to the profile.
     func statementDetail(profileCode: String, stmtCode: String) async throws -> StatementDetail

@@ -114,6 +114,11 @@ public final class ActivityModel: TransactionEditing {
 
     public func clearFilters() { query.clearFilters() }
 
+    /// The details sheet of a listed transaction (everyone; owners also edit).
+    public func detail(for txn: LedgerTransaction, profileCode: String) -> TransactionDetailModel {
+        TransactionDetailModel(transaction: txn, profileCode: profileCode, api: api)
+    }
+
     /// Another ledger or sign-out.
     public func reset() {
         list.reset()
