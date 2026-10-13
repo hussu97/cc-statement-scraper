@@ -605,7 +605,9 @@ it. `PROJECT=credit-card-scraper-ht`, `URL=https://nkmylznisjcnmqbxosey.supabase
    LEDGER_SENTRY_DSN = <credit-card-ledger-apps DSN>
    ```
 2. One-time App Store Connect setup (bundle ids `com.hussu97.ledger` + `.share` are already
-   registered with App Groups; Xcode assigns `group.com.hussu97.ledger` on the first archive):
+   registered with App Groups; Xcode assigns `group.com.hussu97.ledger` on the first archive;
+   `.widgets`, the WidgetKit extension, needs the App Groups capability with the same group, which
+   automatic signing adds on its first archive or you add under *Identifiers* in the portal):
    create the app record (*Apps → + → New App*, name **Bank Ledger**, SKU `credit-card-ledger`, bundle id
    `com.hussu97.ledger`; the home-screen name is "Bank Ledger", the share extension "Add to Bank Ledger"), then in
    TestFlight an internal group **Bank Ledger Internal** (automatic distribution) and an external

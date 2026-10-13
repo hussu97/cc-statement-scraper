@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Privacy manifest (IOS-08, N-2). Required-reason APIs used by Ledger's own code
+  (LedgerKit is linked into this target):
+    • UserDefaults(suiteName: group.…) — the widgets read the "hide Lock Screen
+      amounts" flag the app mirrors from Require Face ID (1C8F.1); `.standard`
+      is only a fallback when the App Group is unavailable (CA92.1).
+  The widgets read the snapshot file the app writes to the App Group; they make
+  no network calls. No file-timestamp, system-boot-time, disk-space or
+  active-keyboard APIs are called by Ledger's code. Sentry ships its own manifest.
+  Collected data: crash and error reports sent to Sentry (sendDefaultPii off,
+  tagged with the opaque user id), used for app functionality, not tracking.
+-->
+<plist version="1.0">
+<dict>
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeCrashData</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>1C8F.1</string>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

@@ -45,8 +45,9 @@ and §11; layout and setup are in [README.md](README.md).
   Don't put backend values in `Base.xcconfig` or include `Secrets.xcconfig` from Release. A
   missing or local value fails the "Check release config" Run Script phase
   (`scripts/release-config-check.sh settings`), and the archive and the staged IPA are checked
-  with `plutil` (app + share extension). Keep the phase's `showEnvVars: false`: otherwise the
-  build log prints every build setting.
+  with `plutil` (the app and every `.appex`: share extension, widgets). A new extension carries
+  the same `Ledger*` Info.plist keys, the "Check release config" and "Debug ATS" phases. Keep
+  the phase's `showEnvVars: false`: otherwise the build log prints every build setting.
 - The app holds only the publishable key (`LEDGER_SUPABASE_PUBLISHABLE_KEY`, `sb_publishable_…`);
   `LedgerConfig` refuses an `sb_secret_…` key, and so does the release check.
 - `SENTRY_AUTH_TOKEN` lives in the shell or the login keychain item `ledger-sentry-auth-token`
@@ -67,8 +68,9 @@ and §11; layout and setup are in [README.md](README.md).
   were rejected without one). Keep *Sign in with a password* on the sign-in screen and the demo
   account in Beta App Review Information (PRODUCTION §7 step 5); `testflight-distribute.mjs`
   refuses to submit without it.
-- Both the app and the share extension ship a `PrivacyInfo.xcprivacy`; keep them when adding
-  required-reason APIs (ITMS-91053).
+- The app, the share extension and the widgets each ship a `PrivacyInfo.xcprivacy`; keep them
+  when adding required-reason APIs (ITMS-91053). Widget descriptions and Control titles follow
+  the same no-Apple-trademark rule as intents.
 - **Releasing is a production action.** A push to `main` that changes the app makes the pre-push
   hook run `scripts/publish-build.sh` (test, archive, sign, check the release config, dSYMs and
   release to Sentry, stage the IPA,

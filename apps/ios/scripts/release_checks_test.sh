@@ -98,6 +98,17 @@ expect pass "good .app" "Release config OK" -- "$CHECK" archive "$A/Products/App
 A="$(archive appex-local -- LedgerSupabaseURL=http://127.0.0.1:54321)"
 expect fail "appex on the local stack" "LedgerShare.appex: LedgerSupabaseURL is not https" -- "$CHECK" archive "$A"
 
+# Every .appex is checked, not only the share extension: the widgets (N-2) too.
+A="$(archive widgets-local)"
+# shellcheck disable=SC2046
+plist "$A/Products/Applications/Ledger.app/PlugIns/LedgerWidgets.appex/Info.plist" \
+  $(merge LedgerSupabaseURL=http://127.0.0.1:54321)
+expect fail "widgets appex on the local stack" "LedgerWidgets.appex: LedgerSupabaseURL is not https" -- "$CHECK" archive "$A"
+A="$(archive widgets-good)"
+# shellcheck disable=SC2046
+plist "$A/Products/Applications/Ledger.app/PlugIns/LedgerWidgets.appex/Info.plist" $(merge)
+expect pass "app, share extension and widgets" "Release config OK" -- "$CHECK" archive "$A"
+
 A="$(archive env-local LedgerEnvironment=local)"
 expect fail "app environment local" "Ledger.app: LedgerEnvironment is not" -- "$CHECK" archive "$A"
 

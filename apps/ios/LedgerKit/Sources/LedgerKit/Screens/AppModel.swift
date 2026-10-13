@@ -47,7 +47,8 @@ public final class AppModel {
     /// The selected tab.
     public let tabs = TabRouter()
     /// The app-switcher cover and the optional Face ID lock (this device only).
-    public let lock = AppLock(defaults: .standard, authenticator: LocalDeviceAuthenticator())
+    /// The widgets mirror its setting to hide Lock Screen amounts (N-2).
+    public let lock: AppLock
 
     private var lastPhase: SessionStore.Phase = .restoring
 
@@ -60,6 +61,17 @@ public final class AppModel {
         banks = BankCatalog(api: services.api, supabaseURL: services.config.supabaseURL)
         spendSplit = SpendSplitModel(api: services.api)
         settings = SettingsModel(outbox: services.outbox, intake: services.smsIntake(), log: services.captureLog)
+        let widgets = services.widgets
+        lock = AppLock(defaults: .standard, authenticator: LocalDeviceAuthenticator(),
+                       onRequireChanged: { widgets.hidesLockScreenAmounts = $0 })
+        // The current month of the ledger on screen feeds the widgets (N-2).
+        let profiles = self.profiles
+        screens.overview.onLoaded = { overview, code in
+            guard profiles.selectedCode == code,
+                  let snapshot = WidgetSnapshot.make(overview: overview, profileCode: code,
+                                                     ledgerName: profiles.selected?.name) else { return }
+            widgets.write(snapshot)
+        }
     }
 
     public var overview: OverviewModel { screens.overview }
@@ -105,6 +117,7 @@ public final class AppModel {
             profiles.clearSMSTarget()
             tabs.signedOut()   // a pending ledger://review must not open for the next account
             screens.stop()
+            services.widgets.clear()   // nothing of this account stays on the Home or Lock Screen
         default:
             break
         }
@@ -176,6 +189,7 @@ public final class AppModel {
         profiles.clearSMSTarget()
         screens.stop()
         tabs.signedOut()
+        services.widgets.clear()
         await session.signOut()
         profiles.reset()
         do {
