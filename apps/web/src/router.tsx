@@ -2,6 +2,7 @@ import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Outlet,
 import { parseActivitySearch } from "@/lib/activity-filters";
 import { parseInsightsSearch, parseTabSearch } from "@/lib/search";
 import { parsePageSearch } from "@/lib/infinite";
+import { parseSignInSearch } from "@/lib/redirect";
 import { EmptyState } from "@/components/ui/states";
 
 const rootRoute = createRootRoute({
@@ -16,6 +17,8 @@ const rootRoute = createRootRoute({
 const signInRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/signin",
+  // Where to go after signing in: a same-origin path only (WEB-39).
+  validateSearch: parseSignInSearch,
   component: lazyRouteComponent(() => import("@/routes/auth"), "SignInPage"),
 });
 
