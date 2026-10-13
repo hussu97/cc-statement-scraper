@@ -1,5 +1,5 @@
 import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
-import { budgetTitle, budgetTone, type BudgetStatusRow } from "@/data/budgets";
+import { budgetPace, budgetTitle, budgetTone, type BudgetStatusRow } from "@/data/budgets";
 import { BankLogo } from "@/components/bank-logo";
 import { formatPercent, formatTotal, toAmount } from "@/lib/money";
 import { cn } from "@/lib/cn";
@@ -27,9 +27,9 @@ export function BudgetCard({
 }) {
   const tone = budgetTone(row, phase === "current");
   const share = toAmount(row.share_used) ?? 0;
-  const projected = toAmount(row.projected_aed);
-  const budget = toAmount(row.budget_aed);
-  const overPace = phase === "current" && projected !== null && budget !== null && projected > budget;
+  // Server figures, null outside the current month (WEB-38).
+  const pace = budgetPace(row);
+  const tick = phase === "current" && pace.tickAt !== null ? { at: pace.tickAt, label: pace.expected ?? "Expected by today" } : null;
   const isTotal = row.category_code === null;
   const title = budgetTitle(row);
 
@@ -78,14 +78,27 @@ export function BudgetCard({
             of <Money value={row.budget_aed} total />
           </span>
         </p>
-        <Meter value={share} tone={tone} className={cn("mt-3", hero && "h-2")} label={`${formatPercent(share)} of ${title} budget used`} />
+        <Meter
+          value={share}
+          tone={tone}
+          className={cn("mt-3", hero && "h-2")}
+          marker={tick}
+          label={`${formatPercent(share)} of ${title} budget used${tick ? `; ${formatPercent(tick.at)} expected by today` : ""}`}
+        />
       </div>
 
       <footer className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[12px]">
         <span className={cn("tabular font-medium", TONE_TEXT[tone])}>{formatPercent(share)} used</span>
         {phase === "current" ? (
-          <span className={cn("text-muted", overPace && "text-warn")}>
-            On pace for <span className="tabular">{formatTotal(row.projected_aed)}</span>
+          <span className={cn("text-muted", pace.over && "text-warn")}>
+            {pace.label ? (
+              <>
+                <span className="tabular font-medium">{pace.label}</span> · projected{" "}
+              </>
+            ) : (
+              "Projected "
+            )}
+            <span className="tabular">{formatTotal(row.projected_aed)}</span>
           </span>
         ) : phase === "past" ? (
           <span className="text-muted">Month closed</span>

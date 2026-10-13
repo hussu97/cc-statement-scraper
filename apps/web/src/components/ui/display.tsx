@@ -63,19 +63,48 @@ export function Dot({ token, className }: { token: string | null | undefined; cl
 }
 
 /** Thin progress bar. `value` is a display ratio (0–1+). */
-export function Meter({ value, tone = "accent", className, label }: { value: number | null; tone?: "accent" | "positive" | "warn" | "danger"; className?: string; label?: string }) {
+/**
+ * A horizontal meter. `marker` draws a tick at a 0–1 position, e.g. a budget's "expected by today"
+ * (WEB-38); its `label` is a tooltip, so say the same thing in text nearby or in `label`.
+ */
+export function Meter({
+  value,
+  tone = "accent",
+  className,
+  label,
+  marker,
+}: {
+  value: number | null;
+  tone?: "accent" | "positive" | "warn" | "danger";
+  className?: string;
+  label?: string;
+  marker?: { at: number; label: string } | null;
+}) {
   const pct = Math.max(0, Math.min(1, value ?? 0)) * 100;
   const color = { accent: "bg-accent", positive: "bg-positive", warn: "bg-warn", danger: "bg-danger" }[tone];
-  return (
+  const bar = (
     <div
       role="meter"
       aria-label={label}
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={Math.round(pct)}
-      className={cn("h-1.5 w-full overflow-hidden rounded-pill bg-surface-3", className)}
+      className={cn("w-full overflow-hidden rounded-pill bg-surface-3", marker ? "h-full" : "h-1.5", !marker && className)}
     >
       <div className={cn("h-full rounded-pill transition-[width] duration-500", color)} style={{ width: `${pct}%` }} />
+    </div>
+  );
+  if (!marker) return bar;
+  const at = Math.max(0, Math.min(1, marker.at)) * 100;
+  return (
+    <div className={cn("relative h-1.5 w-full", className)}>
+      {bar}
+      <span
+        aria-hidden
+        title={marker.label}
+        className="absolute -top-1 -bottom-1 w-0.5 -translate-x-1/2 rounded-pill bg-ink"
+        style={{ left: `${at}%` }}
+      />
     </div>
   );
 }
