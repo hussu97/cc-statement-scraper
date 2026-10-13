@@ -13,7 +13,7 @@ public protocol SMSIngestAPI: Sendable {
 
 /// Everything the app reads and writes. Every money figure comes from the
 /// server; screens render it and never re-derive it.
-public protocol LedgerAPI: SMSIngestAPI {
+public protocol LedgerAPI: SMSIngestAPI, AnalysisAPI {
     // Identity
     func profiles() async throws -> [LedgerProfile]
     func memberships() async throws -> [ProfileMembership]

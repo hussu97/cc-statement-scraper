@@ -1,0 +1,8 @@
+[
+  {"day": "2026-09-29", "amount": 0, "txn_count": 0},
+  {"day": "2026-09-30", "amount": 1240.75, "txn_count": 4},
+  {"day": "2026-10-01", "amount": 86.40, "txn_count": 1},
+  {"day": "2026-10-02", "amount": 0, "txn_count": 0},
+  {"day": "2026-10-03", "amount": 312.00, "txn_count": 2},
+  {"day": "2026-10-04", "amount": -45.00, "txn_count": 1}
+]

@@ -229,6 +229,33 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         return accountRows
     }
     func recurringList(profileCode: String) async throws -> [RecurringCharge] { [] }
+    // MARK: Analysis (PAR-12): scripted answers, and each call's arguments
+    var dailyRows: [DailySpend] = []
+    var hourRows: [HourWeekdaySpend] = []
+    var yoyRows: [YearOverYearMonth] = []
+    var fxRows: [FxSpend] = []
+    var analysisError: LedgerAPIError?
+    private(set) var analysisCalls: [String] = []
+    func dailySpend(profileCode: String, from: CalendarDay, to: CalendarDay) async throws -> [DailySpend] {
+        try analysisAnswer("daily_spend \(from.iso) \(to.iso)", dailyRows)
+    }
+    func hourWeekdayPattern(profileCode: String, from: CalendarDay, to: CalendarDay) async throws -> [HourWeekdaySpend] {
+        try analysisAnswer("hour_weekday_pattern \(from.iso) \(to.iso)", hourRows)
+    }
+    func yearOverYear(profileCode: String, year: Int) async throws -> [YearOverYearMonth] {
+        try analysisAnswer("yoy_compare \(year)", yoyRows)
+    }
+    func fxSpend(profileCode: String, from: CalendarDay, to: CalendarDay) async throws -> [FxSpend] {
+        try analysisAnswer("fx_spend \(from.iso) \(to.iso)", fxRows)
+    }
+    private func analysisAnswer<T>(_ call: String, _ rows: T) throws -> T {
+        let error = lock.withLock {
+            analysisCalls.append(call)
+            return analysisError
+        }
+        if let error { throw error }
+        return rows
+    }
     func filterMeta(profileCode: String) async throws -> FilterMeta {
         if let filterMetaError { throw filterMetaError }
         return FilterMeta(accounts: [], cards: [], categories: categoryOptions, banks: [],
