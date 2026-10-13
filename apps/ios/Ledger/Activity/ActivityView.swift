@@ -7,7 +7,7 @@ struct ActivityView: View {
     let profileCode: String
     /// Owners recategorise; viewers and view-only ledgers just read.
     let canEdit: Bool
-    /// Hands over the filters of a deep link (`ledger://uncategorised`).
+    /// Hands over the filters or transaction another screen opened Activity with.
     var tabs: TabRouter?
     /// The open transaction: owners get the edit sheet, everyone else the read-only one.
     @State private var opened: LedgerTransaction?
@@ -39,11 +39,15 @@ struct ActivityView: View {
             }
         }
         .refreshable { await model.load(profileCode: profileCode) }
-        // ledger://uncategorised (the Control): this month's uncategorised rows. Keyed on the
-        // request count, not the preset: taking the preset must not cancel this task.
+        // TabRouter.openActivity / openTransaction (Overview, Insights, ledger://uncategorised).
+        // Keyed on the request count, not the preset: taking it must not cancel this task.
         .task(id: tabs?.activityPresetRequest) {
-            guard let preset = tabs?.takeActivityPreset() else { return }
-            await model.apply(preset, profileCode: profileCode)
+            if let preset = tabs?.takeActivityPreset() {
+                await model.show(preset, profileCode: profileCode)
+            } else if let code = tabs?.takeActivityTransaction(),
+                      let txn = await model.transaction(code, profileCode: profileCode) {
+                opened = txn
+            }
         }
         .sheet(item: $opened) { txn in
             if canEdit {

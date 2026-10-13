@@ -111,6 +111,12 @@ public final class ActivityModel: TransactionEditing {
         await load(profileCode: profileCode)
     }
 
+    /// Shows exactly `query`, search included: another screen opened Activity with it.
+    public func show(_ query: ActivityQuery, profileCode: String) async {
+        self.query = query
+        await load(profileCode: profileCode)
+    }
+
     /// Realtime / foreground: refresh the newest page, keep the scrolled pages.
     public func refresh(profileCode: String) async {
         guard let loadedFor, loadedFor.profileCode == profileCode else { return }
@@ -141,6 +147,18 @@ public final class ActivityModel: TransactionEditing {
     }
 
     public func clearFilters() { query.clearFilters() }
+
+    /// One transaction of the ledger, for a sheet opened from another screen;
+    /// nil (and `errorMessage`) when it is gone or the read failed.
+    public func transaction(_ txnCode: String, profileCode: String) async -> LedgerTransaction? {
+        do {
+            if let txn = try await api.transactions(profileCode: profileCode, codes: [txnCode]).first { return txn }
+            errorMessage = "This transaction is no longer in this ledger."
+        } catch {
+            errorMessage = LoadState<Int>.message(for: error)
+        }
+        return nil
+    }
 
     /// The details sheet of a listed transaction (everyone; owners also edit).
     public func detail(for txn: LedgerTransaction, profileCode: String) -> TransactionDetailModel {

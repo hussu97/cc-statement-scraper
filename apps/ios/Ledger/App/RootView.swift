@@ -96,6 +96,8 @@ struct MainTabs: View {
             // SMS that haven't reached the server for an hour (BACKLOG IOS-12r).
             .badge(model.settings.outboxStatus.badgeCount)
         }
+        // Screens link into Activity through it (`TabRouter.openActivity`, PAR-4).
+        .environment(model.tabs)
         .environment(model.banks)
         .environment(model.spendSplit)
         .environment(model.notifications)
