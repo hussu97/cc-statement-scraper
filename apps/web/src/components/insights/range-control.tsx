@@ -1,17 +1,18 @@
 import { useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
-import { insightsRoute } from "@/router";
-import { RANGE_PRESETS, isISODate, type RangePreset } from "@/lib/dates";
-import { insightsRange, withInsightsRange } from "@/lib/search";
+import { RANGE_PRESETS, isISODate, type ISODate, type RangePreset } from "@/lib/dates";
+import { insightsRange, type RangeSearch } from "@/lib/search";
 import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 
 const CUSTOM = "custom";
 
-/** Date-range picker for Insights: presets, or a custom from/to in the URL. */
-export function RangeControl() {
-  const search = insightsRoute.useSearch();
-  const navigate = useNavigate({ from: "/insights" });
+export type RangeChange = { range: RangePreset } | { from: ISODate; to: ISODate };
+
+/**
+ * Date-range picker for Insights and the category view: presets, or a custom from/to. The
+ * screen owns the URL: it passes its search and writes the change back.
+ */
+export function RangeControl({ search, onChange }: { search: RangeSearch; onChange: (r: RangeChange) => void }) {
   const range = insightsRange(search);
   const [customOpen, setCustomOpen] = useState(false);
   const showCustom = customOpen || (!!search.from && range.preset === null);
@@ -19,7 +20,7 @@ export function RangeControl() {
 
   const setCustom = (from: string, to: string) => {
     if (!isISODate(from) || !isISODate(to) || from > to) return;
-    void navigate({ search: (s) => withInsightsRange(s, { from, to }), replace: true });
+    onChange({ from, to });
   };
 
   return (
@@ -58,7 +59,7 @@ export function RangeControl() {
             return;
           }
           setCustomOpen(false);
-          void navigate({ search: (s) => withInsightsRange(s, { range: v as RangePreset }), replace: true });
+          onChange({ range: v as RangePreset });
         }}
         options={[...RANGE_PRESETS, { value: CUSTOM, label: "Custom range" }]}
       />

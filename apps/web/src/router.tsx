@@ -1,6 +1,6 @@
 import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Outlet } from "@tanstack/react-router";
 import { parseActivitySearch } from "@/lib/activity-filters";
-import { parseInsightsSearch, parseTabSearch } from "@/lib/search";
+import { parseInsightsSearch, parseRangeSearch, parseTabSearch } from "@/lib/search";
 import { parsePageSearch } from "@/lib/infinite";
 import { parseSignInSearch } from "@/lib/redirect";
 
@@ -64,6 +64,14 @@ export const insightsRoute = createRoute({
   component: lazyRouteComponent(() => import("@/routes/insights"), "InsightsPage"),
 });
 
+/** One category over time (MA-1): `$categoryCode` is a cat_ code or "none"; the range is the Insights range. */
+export const categoryRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/insights/category/$categoryCode",
+  validateSearch: parseRangeSearch,
+  component: lazyRouteComponent(() => import("@/routes/category"), "CategoryPage"),
+});
+
 const budgetsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/budgets",
@@ -111,7 +119,7 @@ const routeTree = rootRoute.addChildren([
   signInRoute,
   welcomeRoute,
   privacyRoute,
-  appRoute.addChildren([overviewRoute, activityRoute, insightsRoute, budgetsRoute, cardsRoute, statementRoute, reviewRoute, rulesRoute, settingsRoute]),
+  appRoute.addChildren([overviewRoute, activityRoute, insightsRoute, categoryRoute, budgetsRoute, cardsRoute, statementRoute, reviewRoute, rulesRoute, settingsRoute]),
 ]);
 
 export const router = createRouter({ routeTree, defaultPreload: "intent", scrollRestoration: true });

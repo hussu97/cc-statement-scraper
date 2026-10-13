@@ -4,6 +4,7 @@ import { displayRatio, formatPercent, formatTotal, toAmount, type MoneyInput } f
 import { Dot } from "@/components/ui/display";
 import { ringDash, ringSegments } from "@/components/charts/ring";
 import type { OverviewCategory } from "@/data/overview";
+import { categoryParam } from "@/components/insights/category-view";
 
 // A hand-rolled SVG ring, so Overview doesn't load the chart library for one donut (WEB-53).
 // 180px box, arcs from radius 62 to 86.
@@ -50,8 +51,9 @@ export function CategoryRing({ categories, total, from, to }: { categories: Over
         {data.map((c) => (
           <li key={c.category_code ?? "none"}>
             <Link
-              to="/activity"
-              search={{ category: c.category_code ?? "none", from, to }}
+              to="/insights/category/$categoryCode"
+              params={{ categoryCode: categoryParam(c.category_code) }}
+              search={{ from, to }}
               className="-mx-2 grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-3 rounded-sm px-2 py-2.5 text-[13px] hover:bg-surface-2 lg:py-1.5"
             >
               <Dot token={c.color_token} />
