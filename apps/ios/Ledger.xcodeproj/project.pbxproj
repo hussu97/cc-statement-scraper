@@ -73,6 +73,7 @@
 		EED387BA724CF8451B94FE7C /* MonthSwitcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B4BB4BE741A2728C651F5B4 /* MonthSwitcher.swift */; };
 		F11E6EF9D13C280E1E1E7A65 /* SMSSettingsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5F69C5F905C31027D08B21F /* SMSSettingsViews.swift */; };
 		F348325E16B8A296503CF699 /* LedgerWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E56CBBE004CCEDD4CFBD228 /* LedgerWidgetBundle.swift */; };
+		F36EF8148860144D5242451A /* StatementPDFView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B74637D07758B9964A8A355 /* StatementPDFView.swift */; };
 		F47A3D77AFB9C697BC01AF1B /* StatementDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73761BCB90A985F69998349F /* StatementDetailView.swift */; };
 /* End PBXBuildFile section */
 
@@ -144,6 +145,7 @@
 		842801DBC37F9A8E31C6DFA8 /* ProfilePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilePickerView.swift; sourceTree = "<group>"; };
 		870A6ACF064D75EDCE634F89 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		8802E77E86B569258157B0CA /* CardPaymentGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardPaymentGuideView.swift; sourceTree = "<group>"; };
+		8B74637D07758B9964A8A355 /* StatementPDFView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatementPDFView.swift; sourceTree = "<group>"; };
 		8D9278C556B98D50473DE68C /* OverviewStrips.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewStrips.swift; sourceTree = "<group>"; };
 		8E56CBBE004CCEDD4CFBD228 /* LedgerWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerWidgetBundle.swift; sourceTree = "<group>"; };
 		90DD295322C6F4844758D023 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
@@ -302,6 +304,7 @@
 			isa = PBXGroup;
 			children = (
 				73761BCB90A985F69998349F /* StatementDetailView.swift */,
+				8B74637D07758B9964A8A355 /* StatementPDFView.swift */,
 				F52CAA6FE73B46EFE59439A4 /* StatementsView.swift */,
 				582E2ECDA81AFDC1C9849F12 /* UploadLogView.swift */,
 			);
@@ -801,6 +804,7 @@
 				76C6B0E503A29FB340C66AAD /* SpendFilterSheet.swift in Sources */,
 				068354C0DAB42FC21BBB092A /* SpendSplitCard.swift in Sources */,
 				F47A3D77AFB9C697BC01AF1B /* StatementDetailView.swift in Sources */,
+				F36EF8148860144D5242451A /* StatementPDFView.swift in Sources */,
 				659B1CF789C0735789CC64EE /* StatementsView.swift in Sources */,
 				051BA67209BA99FF81613115 /* TransactionDetailViews.swift in Sources */,
 				BEF2BF5B8FBECE13DEBF4631 /* UploadLogView.swift in Sources */,
