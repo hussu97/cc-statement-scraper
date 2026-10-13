@@ -1,12 +1,12 @@
 import LedgerKit
 import SwiftUI
 
-/// "Sign out": when SMS or PDFs are still waiting on this phone, a confirmation
-/// that names them first, since signing out deletes them (BACKLOG IOS-12r). The
-/// wording and the cleanup are `AppModel`'s.
+/// "Sign out": when SMS, card payments or PDFs are still waiting on this phone,
+/// a confirmation that names them first, since signing out deletes exactly
+/// those (BACKLOG IOS-12r). The counting, the order and the cleanup are `AppModel`'s.
 struct SignOutButton: View {
     let model: AppModel
-    @State private var warning: String?
+    @State private var plan: SignOutPlan?
     @State private var isSigningOut = false
 
     var body: some View {
@@ -14,21 +14,22 @@ struct SignOutButton: View {
             Task {
                 isSigningOut = true
                 defer { isSigningOut = false }
-                if let text = await model.signOutWarning() {
-                    warning = text
+                let counted = await model.prepareSignOut()
+                if counted.warning != nil {
+                    plan = counted
                 } else {
-                    await model.signOut()
+                    await model.signOut(deleting: counted)
                 }
             }
         }
         .disabled(isSigningOut)
         .confirmationDialog("Sign out?", isPresented: Binding(
-            get: { warning != nil }, set: { if !$0 { warning = nil } }),
-                            titleVisibility: .visible, presenting: warning) { _ in
-            Button("Sign out and delete", role: .destructive) { Task { await model.signOut() } }
+            get: { plan != nil }, set: { if !$0 { plan = nil } }),
+                            titleVisibility: .visible, presenting: plan) { counted in
+            Button("Sign out and delete", role: .destructive) { Task { await model.signOut(deleting: counted) } }
             Button("Cancel", role: .cancel) {}
-        } message: { text in
-            Text(text)
+        } message: { counted in
+            Text(counted.warning ?? "")
         }
     }
 }

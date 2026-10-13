@@ -136,22 +136,31 @@ public final class AppModel {
         await settings.refresh()
     }
 
-    /// Step one of signing out: the confirmation naming what would be deleted
-    /// from this phone, or nil when nothing would be (sign out straight away).
-    public func signOutWarning() async -> String? {
-        await services.deviceQueue().signOutWarning
+    /// Step one of signing out: what would be deleted from this phone. Its
+    /// `warning` is the confirmation; nil means sign out straight away.
+    public func prepareSignOut() async -> SignOutPlan {
+        await services.signOutPlan()
     }
 
-    /// Signs out and deletes the SMS outbox and the share extension's PDFs
-    /// (after the person confirmed `signOutWarning`), so nothing is sent under
-    /// whoever signs in next (BACKLOG IOS-12r). A session the server rejects
-    /// signs out without this and keeps them.
-    public func signOut() async {
-        await services.clearDeviceQueue()
-        await settings.refresh()
+    /// Set when sign-out couldn't delete everything it counted; the root view shows it.
+    public var signOutError: String?
+
+    /// Signs out, then deletes exactly what `plan` counted (BACKLOG IOS-12r).
+    /// The order matters: "SMS go to" is cleared and the session ended first,
+    /// so an intent running meanwhile saves without a ledger, stamped with this
+    /// account, rather than filing in its ledger after the outbox was emptied.
+    /// A session the server rejects signs out without deleting anything.
+    public func signOut(deleting plan: SignOutPlan) async {
+        profiles.clearSMSTarget()
         screens.stop()
         tabs.reset()
         await session.signOut()
         profiles.reset()
+        do {
+            try await services.delete(plan)
+        } catch {
+            signOutError = SignOutPlan.deleteFailedMessage
+        }
+        await settings.refresh()
     }
 }
