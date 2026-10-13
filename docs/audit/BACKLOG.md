@@ -27,11 +27,11 @@ separately):
 | Database (Supabase SQL) | 0 | 2 | – | 1 | 3 |
 | Edge Functions | 0 | 0 | – | – | 0 |
 | Parser | 1 | – | – | – | 1 |
-| Web | 0 | 15 | 5 | – | 20 |
-| iOS | 1 | 8 | 7 | 2 | 18 |
-| Scraper | – | 1 | – | – | 1 |
+| Web | 0 | 7 | 5 | – | 12 |
+| iOS | 0 | 4 | 7 | 2 | 13 |
+| Scraper | – | 0 | – | – | 0 |
 | CI, config and ops | 0 | 0 | – | 0 | 0 |
-| **Total** | **2** | **26** | **12** | **3** | **43** |
+| **Total** | **1** | **13** | **12** | **3** | **29** |
 
 There are no open P0 or P1 findings. The last P1 remainders (WEB-02 statements beyond 500 and
 merchant search, WEB-07 "Retry AI") landed in `98f901c`. What is left of the P1s are the device
@@ -98,7 +98,6 @@ None open. All five were done on 2026-10-09: see [Done: Edge Functions and CI pa
 
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
-| IOS-21r | Release config still includes the local `Secrets.xcconfig` (one dropped key ships a local value); no assertion on the archived Info.plist; no Sentry releases; the token in `Secrets.Release.xcconfig` is an Xcode build setting (also X-28) | Only the token handling in `publish-build.sh` was done. **Built (branch `worktree-agent-ae3b81cd59353e270`, held out of release 4):** Release reads only `Secrets.Release.xcconfig` with a "Check release config" build step, `release-config-check.sh` asserts the archive and IPA plists, `sentry-release.sh` creates Sentry releases, and the token comes from the shell or the keychain. It ships once `SENTRY_AUTH_TOKEN` is moved out of `Secrets.Release.xcconfig` into the keychain item `ledger-sentry-auth-token` (`testflight.sh` refuses otherwise); then revert `21ceeef` | Include `Secrets.xcconfig` from `Debug.xcconfig` only; `plutil` asserts on the archived app and `.appex` (https, `production`, non-empty keys); `sentry-cli releases new/set-commits/finalize`; keep the token in the shell or keychain | M |
 
 ### CI, config and ops
 
@@ -127,40 +126,27 @@ None open (SRV-12, SRV-17 and X-25r are done).
 
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
-| WEB-31 | "Uncategorised" vs "Uncategorized" across UI, Trends and the server name | Polish | UK spelling everywhere, server name included | S |
-| WEB-34 | Mixed decimals for the same kind of figure | Polish | Two decimals for transactions, whole units for balances, limits and aggregates | S |
-| WEB-35 | "Pending from SMS" and "Recent activity" show largely the same rows | UX | Merge, or exclude pending from Recent | S |
 | WEB-36 | "Due in 0 d"; past dues show no paid/overdue state | Needs payment-matched status from the server (also iOS "Paid") | "Due today/tomorrow"; server flag for a payment covering the statement | M |
 | WEB-37 | No headline totals (subscriptions per year, YoY YTD delta, Trends period total/avg); partial month unmarked | Needs small RPC additions | Server totals and an "Oct (to date)" marker | M |
-| WEB-38 | Budgets have no "expected by today" tick or "AED X over pace" | UX | Today tick on meters, over-pace text | S |
 | WEB-40 | First-run "Key … X-Profile-Key header" jargon; "one person's cards" copy vs a "Household" example | UX copy | Move "Key" under Advanced with a generated default; fix the copy | S |
 | WEB-41 | Disabled-until-valid primary buttons are ~2:1 and give no reason | UX | Keep enabled and validate on submit, or explain | S |
 | WEB-42 | Revoked tokens are listed forever (the pluralisation is fixed) | UX | Collapse revoked tokens behind a "Show revoked" toggle | S |
-| WEB-49 | Notes stay dirty after saving padded text; preview shows "1,000+" though counts are exact | Polish | Compare trimmed; drop the cap text | S |
-| WEB-52 | `<a>` directly in `<dl>`, unnamed `role=meter`, 404 outside the shell, no skip link | a11y polish | `<div><dt/><dd/></div>`, `aria-label`, 404 in the shell, "Skip to content" | S |
-| WEB-53 | Overview loads the 285 kB Recharts chunk for one donut | Perf | Hand-rolled SVG ring | S |
 | WEB-54 | Two pager components, duplicated helpers, `ConfirmDialog` under `rules/`, 480-line `email-section.tsx`, 470-line `data/rules.ts` | Readability | Consolidate and split | M |
-| WEB-55 | The `usePager` page reset on filter change is untested (the other helpers have tests) | Test gap | One unit test for the reset | S |
 | WEB-56 | Netted refunds show as AED 0.00 top merchants; columns not sortable; no per-merchant trend | UX | Gross and refund columns, sorting, a trend link | M |
 
 ### iOS
 
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
-| IOS-07r | No deep link from a Shortcut result to the Review screen | The Review screen shipped | `ledger://review` URL handled by the app; use it in the intent's result | S |
 | IOS-24 | App and share extension can refresh the same rotating refresh token concurrently (10 s reuse window) | Needs device testing | Extension: `autoRefreshToken: false` and re-read storage before each request, or an App Group file lock | M |
-| IOS-25r | Two Swift 6 warnings remain (`nonisolated(unsafe)` in `LedgerDates`, deprecated `Breadcrumb.data` setter) | Reentrancy part fixed (flushes chained) | Fix both warnings | S |
-| IOS-26 | `ActivityModel.sections` re-sorts on every body evaluation; an `ISO8601DateFormatter` per timestamp | Perf | Cache sections on state change; static formatters | S |
 | IOS-27 | Large nav titles are SF Bold while section heads are serif; redundant title and eyebrow; AED hard-coded despite `base_currency` | UI polish | Serif large titles via `UINavigationBarAppearance`; month as the Overview title; "Cycles" section; profile currency | S |
 | IOS-28 | Insights draws the partial month like a full one; no average line, values or budget rule; rows not drillable | UX | Hatched current month with projection, `RuleMark` average, `chartXSelection`, rows link to filtered Activity | M |
 | IOS-29 | Small presentation decisions in views (`prefix(4)`, `prefix(10)`, fallbacks) | Readability | Move into LedgerKit presentation extensions with tests | S |
-| IOS-30 | Sentry failed-request capture can carry Activity search text in the PostgREST URL; `NSAllowsLocalNetworking` ships in Release | Hygiene | Strip query strings in `beforeSend`; set the ATS key in Debug only | S |
 
 ### Scraper
 
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
-| SRV-16r | `upload_pdfs` tracks files by name only, so same-named files from two folders can be misattributed after a partial failure; `ccs-scraper upload` records nothing and ends with a traceback on a partial batch failure | Found with SRV-16 | Track by path; catch the partial failure, record the batches that succeeded | S |
 
 ### CI, config and ops
 
@@ -271,6 +257,32 @@ CHANGELOG.
 (05's recommendations 3–5 are IOS-19r, IOS-20r, IOS-18, IOS-28 and IOS-17 above.)
 
 ---
+
+## Done: backlog batch 5 (2026-10-13)
+
+Branch `batch/backlog-5`, migrations `20261013111525_uk_uncategorised` and
+`20261013112601_budget_status_pace`, pgTAP `46` and `47`. Audited after merge: the "Debug ATS"
+build phases were made to hide the build environment (a test now checks every phase), amounts you
+pay keep two decimals, and the pending strip makes no claim before the overview loads. The IOS-21r
+token moved to the keychain item `ledger-sentry-auth-token`; Vercel's `SENTRY_AUTH_TOKEN` was
+replaced with it.
+
+| ID | Outcome |
+|---|---|
+| WEB-31 | Done: "Uncategorised" in UI, iOS and RPC labels; pgTAP 46 and `uk-spelling.test.ts` guard it |
+| WEB-34 | Done: `formatTotal` / `<Money total>`: transactions two decimals, limits and aggregates whole units; outstanding balance and statement totals stay exact |
+| WEB-35 | Done: the pending strip is one server-figure line; pending rows appear once, in Recent |
+| WEB-38 | Done: `budget_status` `expected_share` / `expected_aed` / `over_pace_aed`; meters show an "expected by today" tick and over/under pace |
+| WEB-49 | Done: trimmed notes comparison; exact preview counts |
+| WEB-52 | Done: `dt`/`dd` groups, named meters (`Meter.label` required), 404 in the shell, skip link |
+| WEB-53 | Done: SVG category ring; monthly bars lazy; the bundle budget fails if Overview loads charts before rendering |
+| WEB-55 | Done: `usePager` reset test |
+| IOS-21r | Done: Release reads only `Secrets.Release.xcconfig` with a "Check release config" phase; `release-config-check.sh` on the archive and IPA; `sentry-release.sh`; the token from the shell or keychain |
+| IOS-25r | Done: no Swift 6 warnings |
+| IOS-26 | Done: Activity sections cached by revision and day; shared locked ISO formatters |
+| IOS-30 | Done: query strings and fragments stripped from Sentry URLs, breadcrumbs and spans; `NSAllowsLocalNetworking` in Debug only |
+| IOS-07r | Done: `ledger://review` deep link; Shortcut results say "Needs a look in Review" and never open the app |
+| SRV-16r | Done: uploads tracked by path; `upload` records partial successes and exits 1 cleanly |
 
 ## Done: backlog batch 4 (2026-10-13)
 

@@ -568,3 +568,6 @@ queue `newest_age_s` for alert-on-increase). The Edge Functions call them (Edge 
 
 **Backlog batch 3 (2026-10-13):** SRV-16 and NEW-3 fixed; outcomes in
 [BACKLOG.md](BACKLOG.md#done-backlog-batch-3-2026-10-13).
+
+**Backlog batch 5 (2026-10-13):** SRV-16r fixed; outcomes in
+[BACKLOG.md](BACKLOG.md#done-backlog-batch-5-2026-10-13).

@@ -352,3 +352,6 @@ fully fixed: `country_code` is ISO 3166-1 alpha-2 or null. X-33's parser nits ar
 
 **Backlog batch 3 (2026-10-13):** X-34 fixed; outcomes in
 [BACKLOG.md](BACKLOG.md#done-backlog-batch-3-2026-10-13).
+
+**Backlog batch 5 (2026-10-13):** X-28 (with IOS-21r) fixed; outcomes in
+[BACKLOG.md](BACKLOG.md#done-backlog-batch-5-2026-10-13).

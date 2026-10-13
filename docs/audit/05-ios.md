@@ -547,3 +547,6 @@ Everything still open, including the UX and iOS-native recommendations and the d
 
 **Backlog batch 4 (2026-10-13):** IOS-18 and X-33r (IOS-21r built, held back); outcomes in
 [BACKLOG.md](BACKLOG.md#done-backlog-batch-4-2026-10-13).
+
+**Backlog batch 5 (2026-10-13):** IOS-07r, IOS-21r, IOS-25r, IOS-26 and IOS-30 fixed; outcomes in
+[BACKLOG.md](BACKLOG.md#done-backlog-batch-5-2026-10-13).
