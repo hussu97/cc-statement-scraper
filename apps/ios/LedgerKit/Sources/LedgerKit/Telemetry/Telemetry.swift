@@ -1,12 +1,14 @@
 import Foundation
 import Sentry
 
-/// The three processes that run Ledger code on the phone. Each starts Sentry
-/// itself — an App Intent and a Share Extension do not share the app's SDK.
+/// The processes that run Ledger code on the phone. Each starts Sentry
+/// itself — an App Intent and the extensions do not share the app's SDK.
 public enum TelemetryTarget: String, Sendable {
     case app
     case intent
     case shareExtension = "share_extension"
+    /// The Home and Lock Screen widgets and the Controls (N-2, N-4).
+    case widgets
 }
 
 /// Sentry for every iOS runtime (CLAUDE.md §6). `sendDefaultPii` is off, the

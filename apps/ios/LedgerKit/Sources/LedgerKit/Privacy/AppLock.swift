@@ -60,12 +60,19 @@ public final class AppLock {
     /// The automatic prompt has run since the app last came back from the background.
     private var prompted = false
 
-    public init(defaults: UserDefaults, authenticator: any DeviceAuthenticating) {
+    /// Told the setting at launch and on every change: the widgets' Lock
+    /// Screen privacy flag mirrors it (`WidgetSnapshotStore`, N-2).
+    private let onRequireChanged: (@Sendable (Bool) -> Void)?
+
+    public init(defaults: UserDefaults, authenticator: any DeviceAuthenticating,
+                onRequireChanged: (@Sendable (Bool) -> Void)? = nil) {
         self.defaults = defaults
         self.authenticator = authenticator
+        self.onRequireChanged = onRequireChanged
         let required = defaults.bool(forKey: Self.requireKey)
         requireAuth = required
         isLocked = required   // a cold launch starts locked
+        onRequireChanged?(required)
     }
 
     /// Draw the cover over everything.
@@ -133,6 +140,7 @@ public final class AppLock {
     private func setRequired(_ on: Bool) {
         requireAuth = on
         defaults.set(on, forKey: Self.requireKey)
+        onRequireChanged?(on)
     }
 
     /// Turning it on proves the owner can pass the check first, so nobody is

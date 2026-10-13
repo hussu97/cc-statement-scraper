@@ -184,10 +184,10 @@ Built and signed on the Mac (free), uploaded by a Linux runner (1x), as in anoth
    `apps/ios/Config/Secrets.Release.xcconfig`; the local `Secrets.xcconfig` is included from
    `Debug.xcconfig` only, so a key dropped from the release file is empty, never a local value.
    Three checks, all in `apps/ios/scripts/release-config-check.sh`, shape only, no value printed:
-   - the **"Check release config"** Run Script phase (both targets, `project.yml`) fails a
+   - the **"Check release config"** Run Script phase (every target, `project.yml`) fails a
      Release build whose `LEDGER_*` settings are empty, local, not `production` or a placeholder;
    - `testflight.sh` runs it on the archive, and `publish-build.sh` on the IPA it stages:
-     `plutil` reads the app's **and** the share extension's Info.plist (`LedgerSupabaseURL`
+     `plutil` reads the app's **and** every extension's Info.plist (share extension, widgets) (`LedgerSupabaseURL`
      https and not local/private, `LedgerEnvironment` = `production`,
      `LedgerSupabasePublishableKey` `sb_publishable_…`, `LedgerSentryDSN` non-empty).
 

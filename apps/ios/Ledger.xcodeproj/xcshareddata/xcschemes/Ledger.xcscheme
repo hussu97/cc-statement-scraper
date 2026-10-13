@@ -35,6 +35,20 @@
                ReferencedContainer = "container:Ledger.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "D468CAE437FD24070010A5CD"
+               BuildableName = "LedgerWidgets.appex"
+               BlueprintName = "LedgerWidgets"
+               ReferencedContainer = "container:Ledger.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction

@@ -10,7 +10,7 @@ import Foundation
 ///   a moment in a busy run loop, not the blocking call (Sentry's own docs say so). Build
 ///   26 sent one from a double-tap in a text field on an iOS beta (UIKit text selection,
 ///   `NSClassFromString`, InputAnalytics): system work we can neither see nor fix.
-/// * The App Intent and the Share Extension run headless or briefly: no hang tracking.
+/// * The App Intent, the Share Extension and the widgets run headless or briefly: no hang tracking.
 public struct HangReporting: Equatable, Sendable {
     /// App-hang tracking is on.
     public let enabled: Bool
@@ -22,7 +22,7 @@ public struct HangReporting: Equatable, Sendable {
     public static func forTarget(_ target: TelemetryTarget) -> HangReporting {
         switch target {
         case .app: HangReporting(enabled: true, timeout: 2, reportsNonFullyBlocking: false)
-        case .intent, .shareExtension: HangReporting(enabled: false, timeout: 2, reportsNonFullyBlocking: false)
+        case .intent, .shareExtension, .widgets: HangReporting(enabled: false, timeout: 2, reportsNonFullyBlocking: false)
         }
     }
 }
