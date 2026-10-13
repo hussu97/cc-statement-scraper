@@ -25,9 +25,14 @@ targets:
     platform: iOS
     sources:
       - path: Ledger
+      # The Controls' intents: the app runs them, the widget extension shows them (N-4).
+      - path: Shared
     dependencies:
       - package: LedgerKit
       - target: LedgerShare
+        embed: true
+        codeSign: true
+      - target: LedgerWidgets
         embed: true
         codeSign: true
     # Release reads only Config/Secrets.Release.xcconfig; a missing or local value
@@ -88,8 +93,8 @@ targets:
         BGTaskSchedulerPermittedIdentifiers:
           - com.hussu97.ledger.outbox-refresh
           - com.hussu97.ledger.outbox-send
-        # Deep links: ledger://review (LedgerKit AppLink; the App Intents open it
-        # when a review is needed, BACKLOG IOS-07r).
+        # Deep links: ledger://review, ledger://uncategorised, ledger://add-statement
+        # (LedgerKit AppLink, routed by TabRouter; IOS-07r, N-4).
         CFBundleURLTypes:
           - CFBundleURLName: $(LEDGER_BUNDLE_PREFIX)
             CFBundleURLSchemes: [ledger]
@@ -171,12 +176,68 @@ targets:
         PRODUCT_NAME: LedgerShare
         GENERATE_INFOPLIST_FILE: NO
         APPLICATION_EXTENSION_API_ONLY: YES
+  # Home and Lock Screen widgets (BACKLOG N-2). They read the App Group
+  # snapshot the app writes; no network. Carries the same Ledger* keys as the
+  # share extension: LedgerConfig finds the App Group through them, and the
+  # release check reads every .appex.
+  LedgerWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Widgets
+      - path: Shared
+    dependencies:
+      - package: LedgerKit
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+    preBuildScripts:
+      - *releaseConfigCheck
+      - name: Debug ATS
+        script: |
+          plutil -insert NSAppTransportSecurity -json '{"NSAllowsLocalNetworking":true}' \
+            -o - "$SCRIPT_INPUT_FILE_0" > "$SCRIPT_OUTPUT_FILE_0"
+        inputFiles:
+          - $(SRCROOT)/Widgets/Info.plist
+        outputFiles:
+          - $(DERIVED_FILE_DIR)/Info.Debug.plist
+        # Never echo the build environment: in an archive it holds the release config.
+        showEnvVars: false
+    entitlements:
+      path: Widgets/LedgerWidgets.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - $(LEDGER_APP_GROUP)
+    info:
+      path: Widgets/Info.plist
+      properties:
+        CFBundleDisplayName: Bank Ledger
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        # NSAllowsLocalNetworking: Debug only, as for the app (IOS-30).
+        LedgerSupabaseURL: $(LEDGER_SUPABASE_URL)
+        LedgerSupabasePublishableKey: $(LEDGER_SUPABASE_PUBLISHABLE_KEY)
+        LedgerSentryDSN: $(LEDGER_SENTRY_DSN)
+        LedgerEnvironment: $(LEDGER_ENVIRONMENT)
+        LedgerAppGroup: $(LEDGER_APP_GROUP)
+        LedgerKeychainGroup: $(AppIdentifierPrefix)$(LEDGER_KEYCHAIN_GROUP)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      configs:
+        Debug:
+          INFOPLIST_FILE: $(DERIVED_FILE_DIR)/Info.Debug.plist
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(LEDGER_BUNDLE_PREFIX).widgets
+        PRODUCT_NAME: LedgerWidgets
+        GENERATE_INFOPLIST_FILE: NO
+        APPLICATION_EXTENSION_API_ONLY: YES
 schemes:
   Ledger:
     build:
       targets:
         Ledger: all
         LedgerShare: all
+        LedgerWidgets: all
     run:
       config: Debug
     archive:

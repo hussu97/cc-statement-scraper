@@ -31,7 +31,7 @@ Docs:
 | `supabase/` | `config.toml`, `migrations/` (schema + all business logic), `functions/` (Edge Functions), `tests/` (pgTAP), `seed.sql` (local demo data) | Postgres 17, Deno 2 |
 | `services/parser/` | Stateless statement parser `POST /parse` for Cloud Run ([README](services/parser/README.md)) | Python 3.12, FastAPI, pdfplumber |
 | `apps/web/` | Web app | Vite, React 19, TanStack Router/Query, supabase-js, Tailwind v4, Recharts |
-| `apps/ios/` | iPhone app, `LedgerKit` package, share extension ([README](apps/ios/README.md)) | SwiftUI, iOS 18, XcodeGen |
+| `apps/ios/` | iPhone app, `LedgerKit` package, share extension, widgets ([README](apps/ios/README.md)) | SwiftUI, iOS 18, XcodeGen |
 | `packages/tokens/` | Design tokens → CSS variables, chart palette, `Tokens.swift` | Node |
 | `assets/brand/` | Bank Ledger mark (`bank-ledger-mark.svg`); `pnpm brand:icons` renders the web favicons, PWA icons, `site.webmanifest` and `ios/AppIcon-1024.png` from it (`scripts/brand/generate-icons.mjs`, `--check` for drift) | Node (`@resvg/resvg-js`) |
 | `packages/db-types/` | Generated Supabase TypeScript types (never hand-written) | TS |
@@ -352,7 +352,10 @@ Used for the production Edge Function secrets and Vault entries, and for secret 
 | Review | Open match reviews: link, keep as new, dismiss, register an unknown card (read-only for viewers) |
 | Settings | Cards & statements → Statements, "SMS go to" ledger, SMS capture guide (one "Card" automation, Last captured, Send test), "Not sent" outbox list (Retry / Delete), Privacy → Require Face ID (the app is always covered in the app switcher), profile; sign-out confirms and clears what is waiting on the phone |
 | **Log Bank SMS** (App Intent) | Called by the Shortcuts automation, with no UI |
+| **Month Spend**, **What's Due**, **Categorise Last Transaction** (App Intents + App Shortcuts) | Spoken answers for the ledger on screen (`overview`, offline from the widget snapshot); files the newest purchase under a chosen `CategoryEntity`; the device must be unlocked |
 | **Add to Bank Ledger** (share extension) | Sends shared PDFs to `statements-upload` |
+| Widgets (WidgetKit extension) | Month spend and pace, next due, utilisation on the Home and Lock Screen, from an App Group snapshot the app writes (no network); Lock Screen amounts hidden with Require Face ID |
+| Controls (same extension) | *Open Uncategorised* (`ledger://uncategorised`) and *Add Statement* (`ledger://add-statement`) for Control Center, the Lock Screen and the Action button |
 
 ## API surface
 

@@ -22,6 +22,10 @@ public final class OverviewModel {
         let month: CalendarDay?
     }
 
+    /// Called after each successful load with the ledger it was for: the app
+    /// writes the widgets' snapshot from it (N-2).
+    @ObservationIgnored public var onLoaded: (@MainActor (Overview, _ profileCode: String) -> Void)?
+
     public init(api: any LedgerAPI) { self.api = api }
 
     /// The month on screen or loading (nil: the current month).
@@ -46,6 +50,7 @@ public final class OverviewModel {
                 accounts: o.accounts.map { AccountSummary(account: $0) },
                 insights: i,
                 setup: setup))
+            onLoaded?(o, profileCode)
         } catch {
             guard gate.isCurrent(ticket) else { return }
             state = state.fail(error)

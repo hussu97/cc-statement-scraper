@@ -156,7 +156,8 @@ struct SettingsView: View {
         .navigationDestination(for: SettingsRoute.self) { route in
             switch route {
             case .statements:
-                StatementsView(model: model.statements, profileCode: profileCode, canUpload: profiles.canWrite)
+                StatementsView(model: model.statements, profileCode: profileCode, canUpload: profiles.canWrite,
+                               tabs: model.tabs)
             }
         }
         .task {
