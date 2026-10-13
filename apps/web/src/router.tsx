@@ -1,17 +1,13 @@
-import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Outlet, Link } from "@tanstack/react-router";
+import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Outlet } from "@tanstack/react-router";
 import { parseActivitySearch } from "@/lib/activity-filters";
 import { parseInsightsSearch, parseTabSearch } from "@/lib/search";
 import { parsePageSearch } from "@/lib/infinite";
 import { parseSignInSearch } from "@/lib/redirect";
-import { EmptyState } from "@/components/ui/states";
 
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
-  notFoundComponent: () => (
-    <EmptyState title="This page doesn't exist" className="min-h-[60dvh]" action={<Link to="/" className="text-accent underline">Go to overview</Link>}>
-      Check the address, or head back to your overview.
-    </EmptyState>
-  ),
+  // Inside the app shell when signed in, a plain page when not (WEB-52). Lazy, as it loads the shell.
+  notFoundComponent: lazyRouteComponent(() => import("@/routes/not-found"), "NotFoundPage"),
 });
 
 const signInRoute = createRoute({

@@ -173,14 +173,28 @@ function Hero({ data, isCurrent, today }: { data: Overview; isCurrent: boolean; 
             <dt className="text-[12px] text-subtle">Payments in</dt>
             <dd className="tabular mt-0.5 text-positive">{formatMoney(data.payments, { signed: true })}</dd>
           </div>
-          <Link to="/activity" search={{ category: "none", from: data.month, to: monthEnd(data.month) }} className="group">
+          {/* A <dl> holds only dt/dd groups (in a <div>), so the link sits in the dd and stretches over its group (WEB-52). */}
+          <div className="relative">
             <dt className="text-[12px] text-subtle">Uncategorised</dt>
-            <dd className="tabular mt-0.5 text-ink group-hover:text-accent">{data.uncategorized_count}</dd>
-          </Link>
-          <Link to="/review" className="group">
+            <dd className="tabular mt-0.5">
+              <Link
+                to="/activity"
+                search={{ category: "none", from: data.month, to: monthEnd(data.month) }}
+                aria-label={`${data.uncategorized_count} uncategorised`}
+                className="text-ink after:absolute after:inset-0 hover:text-accent"
+              >
+                {data.uncategorized_count}
+              </Link>
+            </dd>
+          </div>
+          <div className="relative">
             <dt className="text-[12px] text-subtle">To review</dt>
-            <dd className={cn("tabular mt-0.5 group-hover:text-accent", data.open_reviews ? "text-accent" : "text-ink")}>{data.open_reviews}</dd>
-          </Link>
+            <dd className="tabular mt-0.5">
+              <Link to="/review" aria-label={`${data.open_reviews} to review`} className={cn("after:absolute after:inset-0 hover:text-accent", data.open_reviews ? "text-accent" : "text-ink")}>
+                {data.open_reviews}
+              </Link>
+            </dd>
+          </div>
         </dl>
       </div>
       {isCurrent && (
