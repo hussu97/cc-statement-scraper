@@ -56,7 +56,9 @@ extension SupabaseLedgerAPI {
             .filter { $0.reason == "unparsed_sms" && $0.candidates.contains { $0.templateCode != nil } }
             .map(\.reviewCode)
         async let formats = proposedFormats(profileCode: profileCode, reviewCodes: proposalCodes)
-        let (s, l, t, a, f) = try await (sms, lines, txns, accounts, formats)
+        let (s, l, t, a) = try await (sms, lines, txns, accounts)
+        // Optional: without it a proposal falls back to Retry with AI, the inbox still loads.
+        let f = (try? await formats) ?? [:]
         return ReviewInbox(
             reviews: reviews,
             sms: Dictionary(s.map { ($0.smsCode, $0) }, uniquingKeysWith: { a, _ in a }),
