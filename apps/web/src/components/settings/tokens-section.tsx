@@ -76,7 +76,7 @@ export function TokensSection() {
                 </div>
                 <div className="flex items-center justify-between gap-3 sm:justify-end">
                   <p className="text-[12px] text-muted sm:text-right">
-                    Created {formatDate(t.created_at.slice(0, 10))}
+                    Created {formatDate(t.created_at)}
                     <br />
                     {t.revoked_at ? `Revoked ${formatRelative(t.revoked_at)}` : `Last used ${formatRelative(t.last_used_at)}`}
                   </p>

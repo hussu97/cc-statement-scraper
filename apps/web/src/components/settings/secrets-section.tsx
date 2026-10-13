@@ -43,7 +43,7 @@ export function SecretsSection() {
                 <li key={k.key} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-3">
                   <span className="min-w-0 flex-1 text-sm text-ink">{k.label}</span>
                   <span className={st.set ? "text-[12px] text-positive" : "text-[12px] text-subtle"}>
-                    {st.set ? `Set · updated ${formatDate(st.updatedAt?.slice(0, 10), "short")}` : "Not set"}
+                    {st.set ? `Set · updated ${formatDate(st.updatedAt, "short")}` : "Not set"}
                   </span>
                   {isOwner && (
                     <div className="flex gap-1">
