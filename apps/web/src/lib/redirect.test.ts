@@ -11,6 +11,9 @@ describe("safeRedirect (WEB-39)", () => {
 
   it.each([
     ["protocol-relative", "//evil.example/x"],
+    ["dot segment hiding //", "/.//evil.example/x"],
+    ["parent segment hiding //", "/a/..//evil.example"],
+    ["encoded dots hiding //", "/%2e%2e//evil.example"],
     ["absolute http", "https://evil.example/"],
     ["javascript scheme", "javascript:alert(1)"],
     ["data scheme", "data:text/html,hi"],
