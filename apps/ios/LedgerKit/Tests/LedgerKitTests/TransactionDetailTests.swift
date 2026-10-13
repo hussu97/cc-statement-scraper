@@ -46,7 +46,7 @@ struct TransactionDetailTests {
     @Test("badges, time, posted date, card and FX lines read as the web drawer's")
     func presentation() {
         let t = detailTxn()
-        #expect(t.detailBadges.map(\.label) == ["Posted", "Purchase", "SMS + statement", "AED estimated"])
+        #expect(t.detailBadges.map(\.label) == ["Purchase", "SMS + statement", "AED estimated"])
         #expect(t.whenLabel == "8 Oct 2026, 14:15")                   // Dubai time
         #expect(t.postedLabel == "10 Oct 2026")
         #expect(t.cardDetail == "FAB •1234 · Daily")
@@ -57,7 +57,7 @@ struct TransactionDetailTests {
                                   "kind": "cash_advance", "has_statement": false, "exclude_from_spend": true,
                                   "txn_at": nil, "posting_date": nil, "auth_amount": 11.5, "related_txn_code": "txn_0"])
         #expect(awaiting.detailBadges == [
-            DetailBadge(label: "Pending", tone: .warn), DetailBadge(label: "Cash Advance", tone: .neutral),
+            DetailBadge(label: "Cash Advance", tone: .neutral),
             DetailBadge(label: "SMS", tone: .neutral), DetailBadge(label: "Awaiting FX rate", tone: .warn),
             DetailBadge(label: "Excluded from spend", tone: .info),
         ])

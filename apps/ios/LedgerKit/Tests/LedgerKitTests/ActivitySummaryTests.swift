@@ -21,13 +21,13 @@ struct ActivitySummaryTests {
         q.search = "  café, (dxb) 50%  "
         q.accountCode = "acc_1"
         q.categoryCode = "cat_food"
-        q.status = .pending
+        q.status = .posted
         q.month = CalendarDay(iso: "2026-09-14")
         let p = q.summaryParams(profileCode: "prf_a")
         #expect(p["p_q"] == .string("café, (dxb) 50%"))
         #expect(p["p_from"] == .string("2026-09-01") && p["p_to"] == .string("2026-09-30"))
         #expect(p["p_account_code"] == .string("acc_1") && p["p_category_code"] == .string("cat_food"))
-        #expect(p["p_status"] == .string("pending") && p["p_uncategorized"] == .bool(false))
+        #expect(p["p_status"] == .string("posted") && p["p_uncategorized"] == .bool(false))
         #expect(p["p_card_code"] == .null && p["p_source"] == .null)
     }
 

@@ -26,8 +26,6 @@ public struct Overview: Decodable, Sendable, Hashable {
     /// Every active card has a balance anchor and every AED amount is known.
     public let outstandingComplete: Bool?
     public let outstandingHasEstimate: Bool?
-    public let pendingCount: Int
-    public let pendingAmount: Decimal
     public let uncategorizedCount: Int
     public let openReviews: Int
     public let lastSmsAt: Date?
@@ -49,8 +47,6 @@ public struct Overview: Decodable, Sendable, Hashable {
         case changeVsAvg3m = "change_vs_avg_3m"
         case outstandingComplete = "outstanding_complete"
         case outstandingHasEstimate = "outstanding_has_estimate"
-        case pendingCount = "pending_count"
-        case pendingAmount = "pending_amount"
         case uncategorizedCount = "uncategorized_count"
         case openReviews = "open_reviews"
         case lastSmsAt = "last_sms_at"
@@ -72,8 +68,6 @@ public struct Overview: Decodable, Sendable, Hashable {
         outstanding = try c.decodeIfPresent(Decimal.self, forKey: .outstanding)
         outstandingComplete = try c.decodeIfPresent(Bool.self, forKey: .outstandingComplete)
         outstandingHasEstimate = try c.decodeIfPresent(Bool.self, forKey: .outstandingHasEstimate)
-        pendingCount = try c.decode(Int.self, forKey: .pendingCount)
-        pendingAmount = try c.decode(Decimal.self, forKey: .pendingAmount)
         uncategorizedCount = try c.decode(Int.self, forKey: .uncategorizedCount)
         openReviews = try c.decode(Int.self, forKey: .openReviews)
         lastSmsAt = try c.decodeIfPresent(Date.self, forKey: .lastSmsAt)
