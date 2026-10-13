@@ -57,6 +57,27 @@ struct LedgerShortcuts: AppShortcutsProvider {
             phrases: ["Log card payment in \(.applicationName)", "Add card payment to \(.applicationName)"],
             shortTitle: "Log Card Payment",
             systemImageName: "creditcard")
+        // N-3: questions and one action beyond capture (no Apple product names, ITMS-90626).
+        AppShortcut(
+            intent: MonthSpendIntent(),
+            phrases: ["How much have I spent this month in \(.applicationName)",
+                      "What's my spend this month in \(.applicationName)",
+                      "\(.applicationName) month spend"],
+            shortTitle: "Month Spend",
+            systemImageName: "chart.bar")
+        AppShortcut(
+            intent: WhatsDueIntent(),
+            phrases: ["What's due in \(.applicationName)",
+                      "What do I owe on my cards in \(.applicationName)",
+                      "\(.applicationName) what's due"],
+            shortTitle: "What's Due",
+            systemImageName: "calendar.badge.clock")
+        AppShortcut(
+            intent: CategoriseLastTransactionIntent(),
+            phrases: ["Categorise last transaction in \(.applicationName)",
+                      "Categorize my last purchase in \(.applicationName)"],
+            shortTitle: "Categorise Last",
+            systemImageName: "tag")
     }
 
     static let shortcutTileColor: ShortcutTileColor = .orange

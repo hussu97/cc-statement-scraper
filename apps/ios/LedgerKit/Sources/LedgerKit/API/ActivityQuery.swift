@@ -24,6 +24,15 @@ public struct ActivityQuery: Sendable, Hashable {
 
     public init() {}
 
+    /// The month's uncategorised transactions: Overview's "N uncategorised this
+    /// month" and the `ledger://uncategorised` link.
+    public static func uncategorised(month: CalendarDay) -> ActivityQuery {
+        var query = ActivityQuery()
+        query.uncategorizedOnly = true
+        query.month = month
+        return query
+    }
+
     public var hasFilters: Bool {
         accountCode != nil || categoryCode != nil || uncategorizedOnly || status != .all || from != nil || to != nil
     }

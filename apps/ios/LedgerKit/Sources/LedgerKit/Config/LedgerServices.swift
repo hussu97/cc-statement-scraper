@@ -1,5 +1,8 @@
 import Foundation
 import Supabase
+#if canImport(WidgetKit) && os(iOS)
+import WidgetKit
+#endif
 
 /// The ledger the app is showing, in the App Group's defaults. SMS and shared
 /// PDFs do NOT follow it; they go to `SMSTargetStore.target`.
@@ -35,6 +38,8 @@ public final class LedgerServices: Sendable {
     public let pendingUploads: PendingUploads
     /// Settings → Notifications switches (read by the App Intents too).
     public let notices: NoticePreferences
+    /// The Home and Lock Screen widgets' snapshot and privacy flag, in the App Group (N-2).
+    public let widgets: WidgetSnapshotStore
 
     /// `debugSessionFallback`: Debug builds only — keep the session in memory
     /// when the keychain refuses it (an unsigned simulator build), instead of
@@ -67,6 +72,15 @@ public final class LedgerServices: Sendable {
         captureLog = CaptureLog(defaults: defaults)
         pendingUploads = PendingUploads(container: container)
         notices = NoticePreferences(defaults: defaults)
+        widgets = WidgetSnapshotStore(container: container, defaults: defaults, reload: Self.reloadWidgets)
+    }
+
+    /// Every widget re-reads the snapshot. Free from the foreground app; the
+    /// store calls it only when something on a widget changed.
+    @Sendable static func reloadWidgets() {
+        #if canImport(WidgetKit) && os(iOS)
+        WidgetCenter.shared.reloadAllTimelines()
+        #endif
     }
 
     /// Reads config from the running bundle. Extensions carry the same `Ledger*`
@@ -86,6 +100,14 @@ public final class LedgerServices: Sendable {
     public func walletIntake() -> WalletIntake {
         let targets = smsTargets
         return WalletIntake(outbox: outbox, target: { targets.target }, log: captureLog)
+    }
+
+    /// The App Intents beyond SMS (N-3): spend, what's due, categorise the last
+    /// purchase, for the ledger the app shows, with the widgets' snapshot as the
+    /// offline fallback.
+    public func questions() -> LedgerQuestions {
+        let selection = selection, widgets = widgets
+        return LedgerQuestions(api: api, profileCode: { selection.profileCode }, snapshot: { widgets.read() })
     }
 
     /// What sign-out would delete from this phone: SMS and card payments in

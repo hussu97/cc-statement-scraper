@@ -130,6 +130,7 @@ struct TelemetryScrubberTests {
         #expect(Telemetry.scopeTags(target: .app) == ["app": "ios", "target": "app"])
         #expect(Telemetry.scopeTags(target: .intent) == ["app": "ios", "target": "intent"])
         #expect(Telemetry.scopeTags(target: .shareExtension) == ["app": "ios", "target": "share_extension"])
+        #expect(Telemetry.scopeTags(target: .widgets) == ["app": "ios", "target": "widgets"])
     }
 }
 
@@ -140,15 +141,16 @@ struct TransportSecurityTests {
         .deletingLastPathComponent()
 
     @Test("the Info.plists Release reads have no ATS exception; project.yml adds it to Debug's copy",
-          arguments: ["Ledger/Info.plist", "ShareExtension/Info.plist"])
+          arguments: ["Ledger/Info.plist", "ShareExtension/Info.plist", "Widgets/Info.plist"])
     func releasePlists(path: String) throws {
         let data = try Data(contentsOf: Self.iosRoot.appendingPathComponent(path))
         let plist = try #require(try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any])
         #expect(plist["NSAppTransportSecurity"] == nil)
         let spec = try String(contentsOf: Self.iosRoot.appendingPathComponent("project.yml"), encoding: .utf8)
         let lines = spec.components(separatedBy: "\n")
-        #expect(lines.filter { $0.contains("INFOPLIST_FILE: $(DERIVED_FILE_DIR)/Info.Debug.plist") }.count == 2)
-        #expect(lines.filter { $0.contains(#"NSAllowsLocalNetworking":true"#) }.count == 2)
+        // The app, the share extension and the widgets (N-2).
+        #expect(lines.filter { $0.contains("INFOPLIST_FILE: $(DERIVED_FILE_DIR)/Info.Debug.plist") }.count == 3)
+        #expect(lines.filter { $0.contains(#"NSAllowsLocalNetworking":true"#) }.count == 3)
     }
 
     @Test("every build script phase hides the build environment (an archive's holds the release config)")

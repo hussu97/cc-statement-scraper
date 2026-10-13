@@ -12,13 +12,19 @@
 		068354C0DAB42FC21BBB092A /* SpendSplitCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = C85D8FFE075C3A5378BB0BEC /* SpendSplitCard.swift */; };
 		07A1FE280DBD7CEE19B027AB /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41E5147D73DD93C7A015339F /* ShareViewController.swift */; };
 		1176CC00449538BB2CD3BE6C /* LedgerKit in Frameworks */ = {isa = PBXBuildFile; productRef = B88DC4F872A6B8B169F66444 /* LedgerKit */; };
+		19CA7DE96B1CF371346DD6C3 /* SpendWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3F3F9CEAC602F5DBC013256 /* SpendWidget.swift */; };
 		1D830163AD6DCE4782E30CE8 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FCEADD59EE2BBF22D5B715A /* SettingsView.swift */; };
+		26CE0764CC4FB668F3E1A97E /* LedgerKit in Frameworks */ = {isa = PBXBuildFile; productRef = 2ADB8187FA6C42789DED29D6 /* LedgerKit */; };
 		297FCBB42BD82D0C4AE81898 /* LocalNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = F92DD0D24E75E49A36270126 /* LocalNotifications.swift */; };
 		2AF7A777F5554D6851F1C5F0 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = A83ED65B612B753580BB01DD /* Components.swift */; };
+		2D01C44AA6A9577B970D58E4 /* CategoriseLastTransactionIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F58FDA6BA36479357BC7BFC5 /* CategoriseLastTransactionIntent.swift */; };
+		30CE0ADDA332BC7189C7B9FD /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 870A6ACF064D75EDCE634F89 /* SwiftUI.framework */; };
 		422A6F1FD0CDB23E0425862C /* LogCardPaymentIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = D30D95BAF30905880DE075A8 /* LogCardPaymentIntent.swift */; };
+		49D81ED55559A99D12B73F08 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6F2FA96E42C0B4A8F21A7391 /* WidgetKit.framework */; };
 		4CF8BA51B1B5A50B3C0B7185 /* PrivacyCover.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D3D0FE265167769766B23F5 /* PrivacyCover.swift */; };
 		4E142F33C460497F23C39750 /* LedgerKit in Frameworks */ = {isa = PBXBuildFile; productRef = 3CADAE061DE32CE51E97EF02 /* LedgerKit */; };
 		4F5F815454811A4ECF4C88FF /* InsightsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05EB2567DB0EA258329DBD95 /* InsightsView.swift */; };
+		64DA37F832CAF1265B346D60 /* DueWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E0E8F29832625D4E0CE1A50 /* DueWidget.swift */; };
 		659B1CF789C0735789CC64EE /* StatementsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F52CAA6FE73B46EFE59439A4 /* StatementsView.swift */; };
 		67823B3F9665BD78F8BE1182 /* PasskeysView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62D21289B23718DD5F57954 /* PasskeysView.swift */; };
 		738FC2230617C85A8AC57684 /* BackgroundSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 577A951513B717E3C3EB9347 /* BackgroundSync.swift */; };
@@ -29,14 +35,19 @@
 		79BE1EC1E38ED7C29DE21E5C /* BudgetEditSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A25D970A4511B5531978319 /* BudgetEditSheet.swift */; };
 		7A19A23E1C8368E0F3EB5B51 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 4C249495FC88BB9133CB717E /* PrivacyInfo.xcprivacy */; };
 		7B056F939B7822BC41E88540 /* LedgerShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F8A491D8C79A061F71F857D7 /* LedgerShare.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		858DB5F021ADD1D38FDF5F73 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 98278F14CDF74A5CA8371C59 /* PrivacyInfo.xcprivacy */; };
 		860158FF70A963842E055393 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCE4248BBC6E6FA967938803 /* RootView.swift */; };
 		871208BEB18E26315B2F91E7 /* NotificationSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46627BD8DB7F56C7CC4A6352 /* NotificationSettingsSection.swift */; };
 		88E22D6FB72866F27D8AE476 /* ActivitySheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0120325ABB16C928EB7D78A2 /* ActivitySheets.swift */; };
 		932E3EB322602C54C4764F58 /* CardWalletNamesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95DCC00204983D702C001D63 /* CardWalletNamesView.swift */; };
 		96964A46ECACE02F55F2E30D /* SignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFDA37FE8678FA89D04F3841 /* SignInView.swift */; };
+		97DD70480E99E50E9597732A /* LedgerWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D21059F2B887CC7A1599A309 /* LedgerWidgets.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		98A92BBD011227141714E065 /* LedgerQuestionIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3B0173159F8BB5FB7AB32EF /* LedgerQuestionIntents.swift */; };
 		990B019CA85E7B39CB28A31A /* SignOutButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0031ECF8AB7A33BF21B99E9 /* SignOutButton.swift */; };
 		9E4B8F2E603C9B778DFE42A7 /* BudgetsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1D9A6F55EDEC6633699FC7B /* BudgetsView.swift */; };
 		9EBF5BFE77ECA1C47D23BAAC /* BankLogo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 565481D48090AF940C8DF22A /* BankLogo.swift */; };
+		9F0A7680CEAF316FEB157DC7 /* OpenLinkIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 612EF1900499B76054B1C37E /* OpenLinkIntents.swift */; };
+		A6792114E70BC70B2162EC68 /* OpenLinkIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 612EF1900499B76054B1C37E /* OpenLinkIntents.swift */; };
 		AC6B124273C727CF4191CF2D /* PagingFooter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5F7B5FD1E6564824D0B7AB5 /* PagingFooter.swift */; };
 		ADA71066669326EC96C41A89 /* OverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A31E4CF859EB1BA241A2C0C1 /* OverviewView.swift */; };
 		AED0BA06AC058188E57F5191 /* ActivitySummaryRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D0F477A0B843C6F8017F998 /* ActivitySummaryRow.swift */; };
@@ -44,18 +55,28 @@
 		BBE93A827D2F8A180047195D /* PrivacySection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6E1C4BE6592CF67C5FED755 /* PrivacySection.swift */; };
 		BEF2BF5B8FBECE13DEBF4631 /* UploadLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 582E2ECDA81AFDC1C9849F12 /* UploadLogView.swift */; };
 		C05BE17C5A3CB168D026EAAF /* LogBankSMSIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 306FF1BBB7DC9A30BCC65C13 /* LogBankSMSIntent.swift */; };
+		C58D63C54752C964E2C59D22 /* LedgerControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11D547CA077A0BBC6F976DC3 /* LedgerControls.swift */; };
 		C5A4A377005DFC5A8A379D11 /* SetupChecklistCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C90F3BB1055921EA00C9200 /* SetupChecklistCard.swift */; };
 		C7D2A9DBE9043F127D748D46 /* ChartDescriptor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 933BB97FFFA1958362EEA82B /* ChartDescriptor.swift */; };
 		D735424BB191ECF6BEFB087C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F190BDC9EB8084E38F344EE7 /* Assets.xcassets */; };
+		D987345F5472C568EB6B0C2A /* UtilisationWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 132F44CB313BF94C3BC3D2A9 /* UtilisationWidget.swift */; };
 		E0FD108F9F8CAE01FBFFBA28 /* ReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7DE35B2ABB9AA3A980FD35D /* ReviewView.swift */; };
 		EBE6B98A364642BCAF0A7E52 /* ProfilePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842801DBC37F9A8E31C6DFA8 /* ProfilePickerView.swift */; };
 		ED325B9BA4B367EF0EA35685 /* GuideSteps.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF198F50092EDA75F342D73A /* GuideSteps.swift */; };
 		EED387BA724CF8451B94FE7C /* MonthSwitcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B4BB4BE741A2728C651F5B4 /* MonthSwitcher.swift */; };
 		F11E6EF9D13C280E1E1E7A65 /* SMSSettingsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5F69C5F905C31027D08B21F /* SMSSettingsViews.swift */; };
+		F348325E16B8A296503CF699 /* LedgerWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E56CBBE004CCEDD4CFBD228 /* LedgerWidgetBundle.swift */; };
 		F47A3D77AFB9C697BC01AF1B /* StatementDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73761BCB90A985F69998349F /* StatementDetailView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		4E858B0318D34FD3C378937B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B0A8B9A62D78718FE29D671C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D468CAE437FD24070010A5CD;
+			remoteInfo = LedgerWidgets;
+		};
 		C16DFED98AC864E59D7C3174 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = B0A8B9A62D78718FE29D671C /* Project object */;
@@ -73,6 +94,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				7B056F939B7822BC41E88540 /* LedgerShare.appex in Embed Foundation Extensions */,
+				97DD70480E99E50E9597732A /* LedgerWidgets.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -84,6 +106,8 @@
 		05EB2567DB0EA258329DBD95 /* InsightsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsightsView.swift; sourceTree = "<group>"; };
 		076A0083646CF5850906DE83 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		0A25D970A4511B5531978319 /* BudgetEditSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetEditSheet.swift; sourceTree = "<group>"; };
+		11D547CA077A0BBC6F976DC3 /* LedgerControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerControls.swift; sourceTree = "<group>"; };
+		132F44CB313BF94C3BC3D2A9 /* UtilisationWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UtilisationWidget.swift; sourceTree = "<group>"; };
 		15C0186C1E6AFC4A04ACCC41 /* LedgerKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LedgerKit; path = LedgerKit; sourceTree = SOURCE_ROOT; };
 		18CF2690692498221A6F2653 /* LedgerShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LedgerShare.entitlements; sourceTree = "<group>"; };
 		1D3D0FE265167769766B23F5 /* PrivacyCover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyCover.swift; sourceTree = "<group>"; };
@@ -100,15 +124,21 @@
 		577A951513B717E3C3EB9347 /* BackgroundSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundSync.swift; sourceTree = "<group>"; };
 		582E2ECDA81AFDC1C9849F12 /* UploadLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadLogView.swift; sourceTree = "<group>"; };
 		5B4BB4BE741A2728C651F5B4 /* MonthSwitcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonthSwitcher.swift; sourceTree = "<group>"; };
+		612EF1900499B76054B1C37E /* OpenLinkIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenLinkIntents.swift; sourceTree = "<group>"; };
+		6E0E8F29832625D4E0CE1A50 /* DueWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DueWidget.swift; sourceTree = "<group>"; };
+		6F2FA96E42C0B4A8F21A7391 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		73761BCB90A985F69998349F /* StatementDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatementDetailView.swift; sourceTree = "<group>"; };
 		7C90F3BB1055921EA00C9200 /* SetupChecklistCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupChecklistCard.swift; sourceTree = "<group>"; };
 		7D0F477A0B843C6F8017F998 /* ActivitySummaryRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivitySummaryRow.swift; sourceTree = "<group>"; };
 		842801DBC37F9A8E31C6DFA8 /* ProfilePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilePickerView.swift; sourceTree = "<group>"; };
+		870A6ACF064D75EDCE634F89 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		8802E77E86B569258157B0CA /* CardPaymentGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardPaymentGuideView.swift; sourceTree = "<group>"; };
 		8D9278C556B98D50473DE68C /* OverviewStrips.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewStrips.swift; sourceTree = "<group>"; };
+		8E56CBBE004CCEDD4CFBD228 /* LedgerWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerWidgetBundle.swift; sourceTree = "<group>"; };
 		90DD295322C6F4844758D023 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
 		933BB97FFFA1958362EEA82B /* ChartDescriptor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChartDescriptor.swift; sourceTree = "<group>"; };
 		95DCC00204983D702C001D63 /* CardWalletNamesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardWalletNamesView.swift; sourceTree = "<group>"; };
+		98278F14CDF74A5CA8371C59 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		A31E4CF859EB1BA241A2C0C1 /* OverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewView.swift; sourceTree = "<group>"; };
 		A6E1C4BE6592CF67C5FED755 /* PrivacySection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacySection.swift; sourceTree = "<group>"; };
 		A83ED65B612B753580BB01DD /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
@@ -119,14 +149,20 @@
 		BF198F50092EDA75F342D73A /* GuideSteps.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuideSteps.swift; sourceTree = "<group>"; };
 		C7C5873FCC2E19704B1FA5F5 /* ShortcutInputStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutInputStrip.swift; sourceTree = "<group>"; };
 		C85D8FFE075C3A5378BB0BEC /* SpendSplitCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendSplitCard.swift; sourceTree = "<group>"; };
+		D21059F2B887CC7A1599A309 /* LedgerWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = LedgerWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		D30D95BAF30905880DE075A8 /* LogCardPaymentIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogCardPaymentIntent.swift; sourceTree = "<group>"; };
+		DA9E13197D3470541555A614 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		E3B0173159F8BB5FB7AB32EF /* LedgerQuestionIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerQuestionIntents.swift; sourceTree = "<group>"; };
+		E3F3F9CEAC602F5DBC013256 /* SpendWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendWidget.swift; sourceTree = "<group>"; };
 		E7DE35B2ABB9AA3A980FD35D /* ReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewView.swift; sourceTree = "<group>"; };
+		EA61B4ADEB2ED72CBB4A381F /* LedgerWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LedgerWidgets.entitlements; sourceTree = "<group>"; };
 		EFDA37FE8678FA89D04F3841 /* SignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInView.swift; sourceTree = "<group>"; };
 		F0031ECF8AB7A33BF21B99E9 /* SignOutButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignOutButton.swift; sourceTree = "<group>"; };
 		F190BDC9EB8084E38F344EE7 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		F1D9A6F55EDEC6633699FC7B /* BudgetsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetsView.swift; sourceTree = "<group>"; };
 		F1E4A856AC27772DBFEAAA57 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		F52CAA6FE73B46EFE59439A4 /* StatementsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatementsView.swift; sourceTree = "<group>"; };
+		F58FDA6BA36479357BC7BFC5 /* CategoriseLastTransactionIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoriseLastTransactionIntent.swift; sourceTree = "<group>"; };
 		F5F69C5F905C31027D08B21F /* SMSSettingsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMSSettingsViews.swift; sourceTree = "<group>"; };
 		F62D21289B23718DD5F57954 /* PasskeysView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasskeysView.swift; sourceTree = "<group>"; };
 		F8A491D8C79A061F71F857D7 /* LedgerShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = LedgerShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -151,9 +187,34 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		DFA1460D572D432C8CB7D087 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				26CE0764CC4FB668F3E1A97E /* LedgerKit in Frameworks */,
+				49D81ED55559A99D12B73F08 /* WidgetKit.framework in Frameworks */,
+				30CE0ADDA332BC7189C7B9FD /* SwiftUI.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		027F9B936F905874F9B85C65 /* Widgets */ = {
+			isa = PBXGroup;
+			children = (
+				6E0E8F29832625D4E0CE1A50 /* DueWidget.swift */,
+				DA9E13197D3470541555A614 /* Info.plist */,
+				11D547CA077A0BBC6F976DC3 /* LedgerControls.swift */,
+				8E56CBBE004CCEDD4CFBD228 /* LedgerWidgetBundle.swift */,
+				EA61B4ADEB2ED72CBB4A381F /* LedgerWidgets.entitlements */,
+				98278F14CDF74A5CA8371C59 /* PrivacyInfo.xcprivacy */,
+				E3F3F9CEAC602F5DBC013256 /* SpendWidget.swift */,
+				132F44CB313BF94C3BC3D2A9 /* UtilisationWidget.swift */,
+			);
+			path = Widgets;
+			sourceTree = "<group>";
+		};
 		386FEA08CC77E210641F703D /* Ledger */ = {
 			isa = PBXGroup;
 			children = (
@@ -213,7 +274,10 @@
 				39D0B7209C269777A9D2CB69 /* Config */,
 				386FEA08CC77E210641F703D /* Ledger */,
 				67155E20D69186BA03D55C14 /* Packages */,
+				F7C7E517D8BCABE2E2DCF42C /* Shared */,
 				CB9DA7D8B7A3C1F5A8C94E49 /* ShareExtension */,
+				027F9B936F905874F9B85C65 /* Widgets */,
+				FB5F4259F30558B5216AD536 /* Frameworks */,
 				672E309D080729BF93B82C50 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -250,6 +314,7 @@
 			children = (
 				B58A729CF0C51D66DEEDC26A /* Ledger.app */,
 				F8A491D8C79A061F71F857D7 /* LedgerShare.appex */,
+				D21059F2B887CC7A1599A309 /* LedgerWidgets.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -339,9 +404,28 @@
 			path = Insights;
 			sourceTree = "<group>";
 		};
+		F7C7E517D8BCABE2E2DCF42C /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				612EF1900499B76054B1C37E /* OpenLinkIntents.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		FB5F4259F30558B5216AD536 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				870A6ACF064D75EDCE634F89 /* SwiftUI.framework */,
+				6F2FA96E42C0B4A8F21A7391 /* WidgetKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		FD9612D2EC0D00E696282BA1 /* Intents */ = {
 			isa = PBXGroup;
 			children = (
+				F58FDA6BA36479357BC7BFC5 /* CategoriseLastTransactionIntent.swift */,
+				E3B0173159F8BB5FB7AB32EF /* LedgerQuestionIntents.swift */,
 				306FF1BBB7DC9A30BCC65C13 /* LogBankSMSIntent.swift */,
 				D30D95BAF30905880DE075A8 /* LogCardPaymentIntent.swift */,
 			);
@@ -366,6 +450,7 @@
 			);
 			dependencies = (
 				11400A812688B23F85245E43 /* PBXTargetDependency */,
+				BC3ED210BA4122A222BA03AC /* PBXTargetDependency */,
 			);
 			name = Ledger;
 			packageProductDependencies = (
@@ -374,6 +459,28 @@
 			productName = Ledger;
 			productReference = B58A729CF0C51D66DEEDC26A /* Ledger.app */;
 			productType = "com.apple.product-type.application";
+		};
+		D468CAE437FD24070010A5CD /* LedgerWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FF3F769CABF3C1A5E4BDA726 /* Build configuration list for PBXNativeTarget "LedgerWidgets" */;
+			buildPhases = (
+				45B1CE1874254580CC47CFDC /* Check release config */,
+				0F55D383435A0D5DD54C5AA3 /* Debug ATS */,
+				4D6965E456A87DA5DBF8F3FC /* Sources */,
+				A48C1A92B3830F84232484BF /* Resources */,
+				DFA1460D572D432C8CB7D087 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = LedgerWidgets;
+			packageProductDependencies = (
+				2ADB8187FA6C42789DED29D6 /* LedgerKit */,
+			);
+			productName = LedgerWidgets;
+			productReference = D21059F2B887CC7A1599A309 /* LedgerWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 		E6D8A3C59AE470EED95533AC /* LedgerShare */ = {
 			isa = PBXNativeTarget;
@@ -410,6 +517,10 @@
 						DevelopmentTeam = <apple-team-id>;
 						ProvisioningStyle = Automatic;
 					};
+					D468CAE437FD24070010A5CD = {
+						DevelopmentTeam = <apple-team-id>;
+						ProvisioningStyle = Automatic;
+					};
 					E6D8A3C59AE470EED95533AC = {
 						DevelopmentTeam = <apple-team-id>;
 						ProvisioningStyle = Automatic;
@@ -435,6 +546,7 @@
 			targets = (
 				4C63ED7EA67F3DD405FABA36 /* Ledger */,
 				E6D8A3C59AE470EED95533AC /* LedgerShare */,
+				D468CAE437FD24070010A5CD /* LedgerWidgets */,
 			);
 		};
 /* End PBXProject section */
@@ -457,9 +569,38 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A48C1A92B3830F84232484BF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				858DB5F021ADD1D38FDF5F73 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		0F55D383435A0D5DD54C5AA3 /* Debug ATS */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/Widgets/Info.plist",
+			);
+			name = "Debug ATS";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Info.Debug.plist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "plutil -insert NSAppTransportSecurity -json '{\"NSAllowsLocalNetworking\":true}' \\\n  -o - \"$SCRIPT_INPUT_FILE_0\" > \"$SCRIPT_OUTPUT_FILE_0\"\n";
+			showEnvVarsInLog = 0;
+		};
 		328008F3E61BE930285227BE /* Debug ATS */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -479,6 +620,27 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "plutil -insert NSAppTransportSecurity -json '{\"NSAllowsLocalNetworking\":true}' \\\n  -o - \"$SCRIPT_INPUT_FILE_0\" > \"$SCRIPT_OUTPUT_FILE_0\"\n";
+			showEnvVarsInLog = 0;
+		};
+		45B1CE1874254580CC47CFDC /* Check release config */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/scripts/release-config-check.sh",
+			);
+			name = "Check release config";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "if [ \"${CONFIGURATION}\" = \"Release\" ]; then\n  \"${SRCROOT}/scripts/release-config-check.sh\" settings\nfi\n";
 			showEnvVarsInLog = 0;
 		};
 		58C6CA92047F36E5603E7E2E /* Debug ATS */ = {
@@ -547,6 +709,19 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		4D6965E456A87DA5DBF8F3FC /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				64DA37F832CAF1265B346D60 /* DueWidget.swift in Sources */,
+				C58D63C54752C964E2C59D22 /* LedgerControls.swift in Sources */,
+				F348325E16B8A296503CF699 /* LedgerWidgetBundle.swift in Sources */,
+				9F0A7680CEAF316FEB157DC7 /* OpenLinkIntents.swift in Sources */,
+				19CA7DE96B1CF371346DD6C3 /* SpendWidget.swift in Sources */,
+				D987345F5472C568EB6B0C2A /* UtilisationWidget.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		928B4980483D167D2E8FDE30 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -568,16 +743,19 @@
 				9E4B8F2E603C9B778DFE42A7 /* BudgetsView.swift in Sources */,
 				B3574A53BC6AE73D8BE2009E /* CardPaymentGuideView.swift in Sources */,
 				932E3EB322602C54C4764F58 /* CardWalletNamesView.swift in Sources */,
+				2D01C44AA6A9577B970D58E4 /* CategoriseLastTransactionIntent.swift in Sources */,
 				C7D2A9DBE9043F127D748D46 /* ChartDescriptor.swift in Sources */,
 				2AF7A777F5554D6851F1C5F0 /* Components.swift in Sources */,
 				ED325B9BA4B367EF0EA35685 /* GuideSteps.swift in Sources */,
 				4F5F815454811A4ECF4C88FF /* InsightsView.swift in Sources */,
 				7661F492311F61EFDB72CA0D /* LedgerApp.swift in Sources */,
+				98A92BBD011227141714E065 /* LedgerQuestionIntents.swift in Sources */,
 				297FCBB42BD82D0C4AE81898 /* LocalNotifications.swift in Sources */,
 				C05BE17C5A3CB168D026EAAF /* LogBankSMSIntent.swift in Sources */,
 				422A6F1FD0CDB23E0425862C /* LogCardPaymentIntent.swift in Sources */,
 				EED387BA724CF8451B94FE7C /* MonthSwitcher.swift in Sources */,
 				871208BEB18E26315B2F91E7 /* NotificationSettingsSection.swift in Sources */,
+				A6792114E70BC70B2162EC68 /* OpenLinkIntents.swift in Sources */,
 				04912B1C9183546039CC8D3B /* OverviewStrips.swift in Sources */,
 				ADA71066669326EC96C41A89 /* OverviewView.swift in Sources */,
 				AC6B124273C727CF4191CF2D /* PagingFooter.swift in Sources */,
@@ -609,9 +787,50 @@
 			target = E6D8A3C59AE470EED95533AC /* LedgerShare */;
 			targetProxy = C16DFED98AC864E59D7C3174 /* PBXContainerItemProxy */;
 		};
+		BC3ED210BA4122A222BA03AC /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D468CAE437FD24070010A5CD /* LedgerWidgets */;
+			targetProxy = 4E858B0318D34FD3C378937B /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		0BDA2ED05CF665F0FC8F6B23 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = Widgets/LedgerWidgets.entitlements;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "$(DERIVED_FILE_DIR)/Info.Debug.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(LEDGER_BUNDLE_PREFIX).widgets";
+				PRODUCT_NAME = LedgerWidgets;
+				SDKROOT = iphoneos;
+			};
+			name = Debug;
+		};
+		82B143B545A6695EEAF0BF77 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = Widgets/LedgerWidgets.entitlements;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Widgets/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(LEDGER_BUNDLE_PREFIX).widgets";
+				PRODUCT_NAME = LedgerWidgets;
+				SDKROOT = iphoneos;
+			};
+			name = Release;
+		};
 		9C1386B84DE36CC20C7DD48C /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -841,6 +1060,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
+		FF3F769CABF3C1A5E4BDA726 /* Build configuration list for PBXNativeTarget "LedgerWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0BDA2ED05CF665F0FC8F6B23 /* Debug */,
+				82B143B545A6695EEAF0BF77 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -851,6 +1079,10 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		2ADB8187FA6C42789DED29D6 /* LedgerKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LedgerKit;
+		};
 		3CADAE061DE32CE51E97EF02 /* LedgerKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = LedgerKit;

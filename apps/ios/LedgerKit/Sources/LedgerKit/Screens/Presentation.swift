@@ -87,7 +87,10 @@ public struct AccountSummary: Sendable, Hashable, Identifiable {
 
     public var utilisationLabel: String? { utilisation.map { "\(MoneyFormat.percent($0)) used" } }
 
-    public var utilisationTone: Tone {
+    public var utilisationTone: Tone { Self.utilisationTone(utilisation) }
+
+    /// Under 30% positive, under 70% warn, else danger (Overview's bar and the widget).
+    public static func utilisationTone(_ utilisation: Decimal?) -> Tone {
         guard let u = utilisation else { return .neutral }
         return u >= Decimal(string: "0.7")! ? .danger : u >= Decimal(string: "0.3")! ? .warn : .positive
     }

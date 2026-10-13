@@ -14,7 +14,7 @@ struct TelemetryHangPolicyTests {
         #expect(!hangs.reportsNonFullyBlocking)
     }
 
-    @Test("the App Intent and the Share Extension track no hangs", arguments: [TelemetryTarget.intent, .shareExtension])
+    @Test("the App Intent, the Share Extension and the widgets track no hangs", arguments: [TelemetryTarget.intent, .shareExtension, .widgets])
     func headless(target: TelemetryTarget) {
         let hangs = HangReporting.forTarget(target)
         #expect(!hangs.enabled)
