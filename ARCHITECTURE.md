@@ -541,6 +541,18 @@ document, so each account is anchored on a balance the bank printed, the latest 
 `outstanding` (active accounts), `outstanding_complete` (every account anchored, every AED
 amount known) and `outstanding_has_estimate`. Positive is owed; negative is a credit balance.
 
+And **one definition of whether a statement was paid**: `public.v_statement_payments`
+(`security_invoker`, statements of kind `statement`). `amount_paid` sums the card repayments
+(`kind = 'payment'`, credit, pending or posted, with an AED amount) dated after the statement date
+up to and including the account's next statement date (open-ended for the latest one); a payment
+on the statement date is already in that statement's balance. `payment_status` is `paid` (the
+closing balance is covered, or nothing was owed), `overdue` (the due date has passed, Asia/Dubai,
+and what was paid by the due date did not cover the minimum, or nothing was paid when there is no
+minimum; a later payment of the whole balance turns it `paid`), `part_paid` (something paid, not
+overdue), `unpaid` (nothing paid, due today or later) or null (no closing balance; history
+extracts). `overview` (`accounts[].latest_statement`), `statement_cycles` and `statement_detail`
+carry both, `amount_paid` as a decimal string (UX-1r, WEB-36).
+
 Analytics RPCs (security invoker, so RLS applies, except those marked *, which are
 SECURITY DEFINER with an explicit member check and filter by profile themselves):
 
@@ -567,7 +579,7 @@ total with 4 decimals, clamped to 0..1 (a group of only refunds can be net negat
 `statement_detail(profile, stmt)` returns one statement with its current lines:
 `{statement: {stmt_code, kind, bank_code, account_code, card_last4s, statement_date, period_start,
 period_end, due_date, opening_balance, closing_balance, total_debits, total_credits, min_due,
-credit_limit, doc_code, recon_status, recon_checks}, debits: {count, total, lines}, credits: {…}}`;
+credit_limit, doc_code, recon_status, recon_checks, payment_status, amount_paid}, debits: {count, total, lines}, credits: {…}}`;
 a line is `{line_code, txn_code, txn_date, posting_date, description, merchant_name, amount_aed,
 amount_original, currency_original, category_code, kind, card_last4}`, ordered by `txn_date`,
 `line_no`. `description` is the line as the statement printed it; `merchant_name` and
