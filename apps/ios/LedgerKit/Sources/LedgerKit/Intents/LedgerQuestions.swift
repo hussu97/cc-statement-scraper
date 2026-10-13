@@ -84,14 +84,18 @@ public struct LedgerQuestions: Sendable {
         let today = LedgerDates.today(now: now)
         let upcoming = WidgetDue.upcoming(figures.cards, today: today)
         guard !upcoming.isEmpty else {
-            let anyStatement = figures.cards.contains { $0.dueDate != nil }
-            let line = anyStatement ? "Nothing is due: every statement's due date has passed."
-                                    : "No statements yet, so nothing is due."
+            let line = switch WidgetDue.whyNothingDue(figures.cards, today: today) {
+            case .paid: "Nothing is due: every upcoming statement is paid."
+            case .passed: "Nothing is due: every statement's due date has passed."
+            case .noStatements: "No statements yet, so nothing is due."
+            }
             return (0, Self.prefix(source, today: today) + line)
         }
         let lines = upcoming.prefix(3).map { card -> String in
             let due = card.dueDate!
-            let when = LedgerDates.dueLabel(due, today: today).replacingOccurrences(of: "Due", with: "due")
+            // The server's payment status words it: "due in 5 days", "part paid (AED 1,000.00), due in 5 days".
+            let status = DueStatus.describe(due: due, isLatest: true, payment: card.duePayment, today: today)
+            let when = Self.spoken(status?.text ?? LedgerDates.dueLabel(due, today: today))
             var line = "\(card.title): "
             line += card.closingBalance.map { "\(MoneyFormat.aed($0)) \(when)" } ?? when.capitalizedFirst
             line += " (\(LedgerDates.dayLabel(due, today: today)))"
@@ -114,17 +118,22 @@ public struct LedgerQuestions: Sendable {
 
     /// How many recent rows "the last transaction" is looked for in.
     static let lastTransactionWindow = 20
+    /// Purchases that aren't one any more: cancelled, or left behind when
+    /// their evidence was re-parsed. Filing either would categorise nothing real.
+    static let skippedStatuses: Set<String> = ["void", "orphaned"]
 
     /// Files the newest purchase of the ledger on screen under `categoryCode`,
     /// for that transaction only (never the merchant's rule). "Last" is
     /// Activity's order (newest first); refunds, payments and fees are skipped,
-    /// since what someone categorises after paying is the purchase.
+    /// since what someone categorises after paying is the purchase, and so are
+    /// void and orphaned purchases.
     public func categoriseLast(categoryCode: String, categoryName: String) async -> (txnCode: String?, dialog: String) {
         guard let code = profileCode() else { return (nil, Self.noLedger) }
         do {
             let page = try await api.transactions(profileCode: code, query: ActivityQuery(),
                                                   page: PageRequest(offset: 0, limit: Self.lastTransactionWindow))
-            guard let txn = page.rows.first(where: { $0.kind == "purchase" && $0.status != "void" }) else {
+            guard let txn = page.rows.first(where: { $0.kind == "purchase" && !Self.skippedStatuses.contains($0.status) })
+            else {
                 return (nil, "There's no recent purchase to categorise.")
             }
             let what = "\(txn.title) (\(txn.amountLabel), \(LedgerDates.dayLabel(txn.txnDate)))"
@@ -146,6 +155,14 @@ public struct LedgerQuestions: Sendable {
         let day = CalendarDay(date: at)
         let when = day == today ? LedgerDates.timeLabel(at) : LedgerDates.dayLabel(day, today: today)
         return "Offline, as of \(when): "
+    }
+
+    /// `DueStatus` wording inside a sentence: `"Part paid (AED 1,000.00) · Due
+    /// in 5 days"` → `"part paid (AED 1,000.00), due in 5 days"`.
+    static func spoken(_ status: String) -> String {
+        lowercasedFirst(status)
+            .replacingOccurrences(of: " · ", with: ", ")
+            .replacingOccurrences(of: "Due", with: "due")
     }
 
     static func lowercasedFirst(_ text: String) -> String {

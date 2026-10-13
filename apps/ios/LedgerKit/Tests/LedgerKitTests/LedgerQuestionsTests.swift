@@ -112,6 +112,26 @@ struct LedgerQuestionsTests {
                 == LedgerQuestions.noLedger)
     }
 
+    @Test("categorise: a void or orphaned purchase is skipped for the newest real one", arguments: ["void", "orphaned"])
+    func categoriseSkipsDeadPurchases(status: String) async throws {
+        let api = StubAPI()
+        let json = """
+        {"txn_code":"txn_dead","profile_code":"prf_a","account_code":"acc_a","status":"\(status)","kind":"purchase",
+         "direction":"debit","txn_date":"2026-10-05","description":"GONE","merchant_name":"Gone",
+         "amount_original":"10.00","currency_original":"AED","amount_aed":"10.00","bank_code":"FAB"}
+        """
+        let dead = try LedgerJSON.decode(LedgerTransaction.self, from: Data(json.utf8))
+        #expect(dead.status == status)
+        api.transactionRows["prf_a"] = [dead, txn("txn_live")]
+        let answer = await questions(api).categoriseLast(categoryCode: "cat_food", categoryName: "Groceries")
+        #expect(answer.txnCode == "txn_live")
+        #expect(api.recategorised.map(\.txn) == ["txn_live"])
+
+        api.transactionRows["prf_a"] = [dead]
+        #expect(await questions(api).categoriseLast(categoryCode: "c", categoryName: "C").dialog
+                == "There's no recent purchase to categorise.")
+    }
+
     @Test("the category picker lists the ledger's categories that aren't archived")
     func categories() async throws {
         let api = StubAPI()

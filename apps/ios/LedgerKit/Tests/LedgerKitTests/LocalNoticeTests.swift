@@ -171,6 +171,33 @@ struct DueReminderTests {
         #expect(sync.post.map(\.id) == ["ledger.due.stm_adcb.t0"])
     }
 
+    @Test("paid: a reminder already delivered for it is removed; one for a statement still due stays")
+    func paidDelivered() throws {
+        let paid = try cycles(fabExtra: #", "payment_status": "paid", "amount_paid": "4210.55""#)
+        let plan = DueReminders.plan(cycles: paid, now: now, preferences: freshPreferences())
+        let sync = DueReminders.sync(pendingIDs: ["ledger.due.stm_fab_new.t0"],
+                                     deliveredIDs: ["ledger.due.stm_fab_new.t3", "ledger.due.stm_adcb.t3",
+                                                    "ledger.due.stm_fab_old.t0", "ledger.unknown-card"],
+                                     planned: plan, cycles: paid)
+        // FAB's new statement is paid: its pending T-0 and delivered T-3 go. ADCB is still due,
+        // and FAB's older statement was never marked paid: both delivered ones stay.
+        #expect(sync.cancel == ["ledger.due.stm_fab_new.t0", "ledger.due.stm_fab_new.t3"])
+
+        let unpaid = DueReminders.sync(pendingIDs: [], deliveredIDs: ["ledger.due.stm_fab_new.t3"],
+                                       planned: DueReminders.plan(cycles: try cycles(), now: now,
+                                                                  preferences: freshPreferences()),
+                                       cycles: try cycles())
+        #expect(unpaid.cancel.isEmpty)
+    }
+
+    @Test("a reminder's id names its statement")
+    func statementCode() {
+        #expect(DueReminders.statementCode(of: "ledger.due.stm_01abc.t3") == "stm_01abc")
+        #expect(DueReminders.statementCode(of: "ledger.due.stm_01abc.t0") == "stm_01abc")
+        #expect(DueReminders.statementCode(of: "ledger.outbox-stuck") == nil)
+        #expect(DueReminders.statementCode(of: "ledger.due..t0") == nil)
+    }
+
     @Test("part paid: still reminded, with what was paid")
     func partPaid() throws {
         let part = try cycles(fabExtra: #", "payment_status": "part_paid", "amount_paid": "1000""#)
@@ -186,5 +213,59 @@ struct DueReminderTests {
         let plan = DueReminders.plan(cycles: try cycles(), now: now, preferences: prefs)
         #expect(plan.isEmpty)
         #expect(DueReminders.sync(pendingIDs: ["ledger.due.stm_adcb.t0"], planned: plan).cancel == ["ledger.due.stm_adcb.t0"])
+    }
+}
+
+@Suite("Due reminders are replanned only for a loaded ledger, and withdrawn on sign-out")
+struct DueReminderRefreshTests {
+    let ledger = LedgerProfile(profileCode: "prf_a", key: "a", name: "A")
+    let signedIn = SessionStore.Phase.signedIn(userID: "u", email: nil)
+
+    @Test("profiles loaded with the selected ledger in them: replan that ledger")
+    func replans() {
+        #expect(DueReminders.refresh(phase: signedIn, profiles: .loaded([ledger]), selected: "prf_a")
+                == .replan(profileCode: "prf_a"))
+    }
+
+    @Test("a cold or offline launch (restoring, profiles idle, loading or failed, nothing selected) keeps what is scheduled")
+    func keeps() {
+        #expect(DueReminders.refresh(phase: .restoring, profiles: .idle, selected: "prf_a") == .keep)
+        #expect(DueReminders.refresh(phase: signedIn, profiles: .idle, selected: "prf_a") == .keep)
+        #expect(DueReminders.refresh(phase: signedIn, profiles: .loading(previous: nil), selected: "prf_a") == .keep)
+        #expect(DueReminders.refresh(phase: signedIn, profiles: .loading(previous: [ledger]), selected: "prf_a") == .keep)
+        #expect(DueReminders.refresh(phase: signedIn, profiles: .failed("offline", previous: nil), selected: "prf_a") == .keep)
+        #expect(DueReminders.refresh(phase: signedIn, profiles: .loaded([ledger]), selected: nil) == .keep)
+        #expect(DueReminders.refresh(phase: signedIn, profiles: .loaded([ledger]), selected: "prf_gone") == .keep)
+        #expect(DueReminders.refresh(phase: .awaitingCode(email: "x@y.z"), profiles: .idle, selected: nil) == .keep)
+    }
+
+    @Test("signed out: every due reminder goes, whatever the profiles say")
+    func signedOut() {
+        #expect(DueReminders.refresh(phase: .signedOut, profiles: .idle, selected: nil) == .withdrawAll)
+        #expect(DueReminders.refresh(phase: .signedOut, profiles: .loaded([ledger]), selected: "prf_a") == .withdrawAll)
+    }
+
+    @Test("an offline launch through ProfileStore: the load fails, so nothing is withdrawn")
+    @MainActor func offlineLaunch() async {
+        let api = StubAPI()
+        let defaults = UserDefaults(suiteName: "ledger-due-refresh-\(UUID().uuidString)")!
+        let selection = ProfileSelection(defaults: defaults)
+        selection.profileCode = "prf_a"
+        let store = ProfileStore(api: api, selection: selection)
+        #expect(DueReminders.refresh(phase: signedIn, profiles: store.state, selected: store.selectedCode) == .keep)
+        api.profilesError = .network("offline")
+        await store.load()
+        #expect(store.selectedCode == "prf_a")
+        #expect(DueReminders.refresh(phase: signedIn, profiles: store.state, selected: store.selectedCode) == .keep)
+    }
+
+    @Test("withdrawing all takes pending and delivered due reminders, and nothing else")
+    func withdrawAll() {
+        let update = DueReminders.withdrawAll(
+            pendingIDs: ["ledger.due.stm_a.t3", "ledger.outbox-stuck", "ledger.due.stm_b.t0"],
+            deliveredIDs: ["ledger.due.stm_a.t3", "ledger.due.stm_c.t0", "ledger.unknown-card"])
+        #expect(update.post.isEmpty)
+        #expect(update.cancel == ["ledger.due.stm_a.t3", "ledger.due.stm_b.t0", "ledger.due.stm_c.t0"])
+        #expect(DueReminders.withdrawAll(pendingIDs: [], deliveredIDs: []).isEmpty)
     }
 }

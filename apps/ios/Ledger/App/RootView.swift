@@ -25,7 +25,11 @@ struct RootView: View {
                         ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity).background(Palette.bg)
                     }
                 }
-                .task(id: code) { await model.profileSelected(code) }
+                .task(id: code) {
+                    await model.profileSelected(code)
+                    // A launch that came to the foreground before the profiles loaded replans now.
+                    await LocalNotifications.refreshDueReminders(model.services, model.dueReminderRefresh)
+                }
             }
         }
         .task { model.start() }
