@@ -169,7 +169,6 @@ function DrawerBody({ t, meta }: { t: TxnRow; meta: FilterMeta | undefined }) {
         {amount.original && <p className="tabular mt-1.5 text-[13px] text-muted">{formatMoney(amount.original.value, { currency: amount.original.currency })}</p>}
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <StatusBadge status={t.status} />
-          {t.status === "posted" && <Badge>posted</Badge>}
           <Badge tone="neutral">{t.kind}</Badge>
           <EvidenceBadge kind={evidenceBadge(t)} />
           {amount.awaitingFx && <Badge tone="warn">Awaiting FX rate</Badge>}

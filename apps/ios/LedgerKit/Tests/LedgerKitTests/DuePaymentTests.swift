@@ -5,11 +5,10 @@ import Testing
 private func dec(_ s: String) -> Decimal { LedgerDecimal.parse(s)! }
 
 /// Overview JSON with one account; `latest` is spliced into `latest_statement` (UX-1r).
-private func overview(latest: String = "", pendingCount: Int = 2,
-                      pendingAmount: String = "3105.30") throws -> Overview {
+private func overview(latest: String = "") throws -> Overview {
     let json = """
     {"month": "2026-10-01", "spend": "860", "spend_prev_month": "0", "spend_prev_month_to_date": "0",
-     "spend_avg_3m": "0", "payments": "0", "pending_count": \(pendingCount), "pending_amount": "\(pendingAmount)",
+     "spend_avg_3m": "0", "payments": "0", "pending_count": 2, "pending_amount": "3105.30",
      "uncategorized_count": 0, "open_reviews": 0, "last_sms_at": null, "top_categories": [], "recent": [],
      "accounts": [{"account_code": "acc_01hzy3k8w9m2n4p6q8r0s2t4v6", "bank_code": "FAB", "nickname": null,
        "product_name": null, "credit_limit": null, "last4": null, "unbilled_aed": "0",
@@ -118,29 +117,26 @@ struct DuePaymentTests {
     }
 }
 
-@Suite("Overview hero: pending beside posted spend, from the server (UX-1r)")
-struct HeroPendingTests {
+@Suite("Overview hero: the server's spend, SMS and payment charges in it, never set apart")
+struct HeroSpendTests {
     let october = CalendarDay(iso: "2026-10-08")!
 
-    @Test("current month: the server's pending_amount, rounded to dirhams")
-    func pendingLine() throws {
+    @Test("current month: \"so far\", no pending line or spoken pending (the server's pending fields are ignored)")
+    func soFar() throws {
         let o = try overview()
-        #expect(o.heroPendingLine(today: october) == "+ AED 3,105 pending")
-        #expect(o.heroAccessibilityLabel(today: october)
-                == "October spend, posted so far, 860 dirhams, plus 3,105 dirhams pending")
+        #expect(o.heroEyebrow(today: october) == "October 2026 · so far")
+        #expect(o.heroAccessibilityLabel(today: october) == "October spend so far, 860 dirhams")
     }
 
-    @Test("a past month, or nothing pending: no line")
-    func noLine() throws {
-        #expect(try overview().heroPendingLine(today: CalendarDay(iso: "2026-11-02")!) == nil)
-        #expect(try overview(pendingCount: 0, pendingAmount: "0").heroPendingLine(today: october) == nil)
-        #expect(try overview(pendingCount: 0, pendingAmount: "0").heroAccessibilityLabel(today: october)
-                == "October spend, posted so far, 860 dirhams")
+    @Test("a past month: the month alone")
+    func pastMonth() throws {
+        let o = try overview()
+        #expect(o.heroEyebrow(today: CalendarDay(iso: "2026-11-02")!) == "October 2026")
+        #expect(o.heroAccessibilityLabel(today: CalendarDay(iso: "2026-11-02")!) == "October spend, 860 dirhams")
     }
 
-    @Test("pending charges without an AED rate yet: a count, never AED 0")
-    func unpriced() throws {
-        #expect(try overview(pendingCount: 1, pendingAmount: "0").heroPendingLine(today: october) == "+ 1 pending charge")
-        #expect(try overview(pendingCount: 3, pendingAmount: "0").heroPendingLine(today: october) == "+ 3 pending charges")
+    @Test("no last-card-alert line before the first alert")
+    func lastCardAlert() throws {
+        #expect(try overview().lastCardAlertLabel(today: october) == nil)
     }
 }

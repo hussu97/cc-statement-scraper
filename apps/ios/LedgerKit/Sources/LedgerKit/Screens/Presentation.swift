@@ -151,7 +151,6 @@ extension DocumentRecord {
 extension EvidenceBadge {
     public var tone: Tone {
         switch self {
-        case .pending: .warn
         case .sms: .info
         case .statement, .void: .neutral
         case .both: .positive

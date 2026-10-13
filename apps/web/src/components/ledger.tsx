@@ -5,6 +5,7 @@ import { displayAmount, formatMoney, formatTotal, formatTxnAmount, type MoneyInp
 import { Popover, PopoverContent, PopoverTrigger, Checkbox, Tooltip } from "./ui/primitives";
 import { Badge, Dot, type Tone } from "./ui/display";
 import { orderCategories } from "@/data/rules";
+import { statusBadge } from "@/data/transactions";
 import { useMediaQuery } from "@/lib/hooks";
 import { BankLogo } from "./bank-logo";
 
@@ -79,19 +80,21 @@ export function HeroAmount({ value, currency = "AED", className }: { value: Mone
   );
 }
 
-const STATUS_TONE: Record<string, Tone> = { pending: "warn", posted: "neutral", void: "neutral", orphaned: "danger" };
+const STATUS_TONE: Record<NonNullable<ReturnType<typeof statusBadge>>, Tone> = { void: "neutral", orphaned: "danger" };
+/** Void and orphaned only: an SMS or payment charge looks like any other transaction. */
 export function StatusBadge({ status }: { status: string | null | undefined }) {
-  if (!status || status === "posted") return null;
+  const shown = statusBadge(status);
+  if (!shown) return null;
   return (
-    <Badge tone={STATUS_TONE[status] ?? "neutral"} className={status === "void" ? "line-through" : undefined}>
-      {status}
+    <Badge tone={STATUS_TONE[shown]} className={shown === "void" ? "line-through" : undefined}>
+      {shown}
     </Badge>
   );
 }
 
 const EVIDENCE: Record<string, { label: string; icon: ReactNode; tip: string }> = {
   both: { label: "SMS + statement", icon: <Layers className="size-3" />, tip: "Seen by SMS and confirmed by a statement" },
-  sms: { label: "SMS", icon: <MessageSquareText className="size-3" />, tip: "From a bank SMS; not on a statement yet" },
+  sms: { label: "SMS", icon: <MessageSquareText className="size-3" />, tip: "From a card alert: a bank SMS or a payment" },
   statement: { label: "Statement", icon: <FileText className="size-3" />, tip: "From a statement only" },
   orphaned: { label: "No evidence", icon: <CircleDashed className="size-3" />, tip: "Its evidence was removed" },
   none: { label: "—", icon: null, tip: "" },

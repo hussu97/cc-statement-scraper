@@ -2,9 +2,9 @@ import { useMemo } from "react";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { ArrowRight, ChevronLeft, ChevronRight, Inbox, Lightbulb } from "lucide-react";
 import { useActiveProfile } from "@/data/profile";
-import { accountLabel, pendingSummary, sortInsights, useDismissInsight, useInsights, useOverview, type Overview, type OverviewAccount } from "@/data/overview";
+import { accountLabel, lastCardAlertLabel, sortInsights, useDismissInsight, useInsights, useOverview, type Overview, type OverviewAccount } from "@/data/overview";
 import { evidenceBadge } from "@/data/transactions";
-import { addMonths, daysBetween, formatDate, formatDateTime, formatMonth, formatRelative, monthEnd, monthStart, todayDubai } from "@/lib/dates";
+import { addMonths, daysBetween, formatDate, formatDateTime, formatMonth, monthEnd, monthStart, todayDubai } from "@/lib/dates";
 import { formatChange, formatPercent, formatTotal, toAmount } from "@/lib/money";
 import { balanceAnchorNote, formatOutstanding, outstandingCaveat } from "@/lib/balances";
 import { dueBadge, paidNote } from "@/lib/dues";
@@ -69,7 +69,7 @@ export function OverviewPage() {
         )}
       </section>
 
-      {isCurrent && <PendingStrip overview={q.data} />}
+      {isCurrent && <LastCardAlert overview={q.data} />}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
         <Card>
@@ -214,42 +214,11 @@ function ordinal(n: number): string {
   return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
 }
 
-/**
- * Pending SMS charges in one line (WEB-35): the count and sum from the server, and when the last
- * SMS arrived. The rows themselves are at the top of Recent activity with a Pending badge, so the
- * two panels no longer list the same transactions.
- */
-function PendingStrip({ overview }: { overview: Overview | undefined }) {
-  const summary = overview ? pendingSummary(overview.pending_count, overview.pending_amount) : null;
-  return (
-    <section aria-labelledby="pending-title" className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg border border-border bg-surface px-5 py-3.5">
-      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-        <span aria-hidden className="relative flex size-2">
-          <span className="absolute inline-flex size-full animate-ping rounded-pill bg-accent opacity-50" />
-          <span className="relative inline-flex size-2 rounded-pill bg-accent" />
-        </span>
-        <h2 id="pending-title" className="text-[15px] font-semibold text-ink">Pending from SMS</h2>
-        {summary ? (
-          <Link to="/activity" search={{ status: "pending" }} className="tap tabular text-[13px] text-muted hover:text-accent hover:underline">
-            {summary}
-          </Link>
-        ) : (
-          overview && (
-            <span className="text-[13px] text-muted">
-              Nothing pending. New card alerts show in Recent activity within seconds.{" "}
-              <Link to="/settings" search={{ tab: "sms" }} className="text-accent hover:underline">Set up SMS capture</Link>
-            </span>
-          )
-        )}
-      </div>
-      {/* Only a loaded overview may claim there has been no SMS (CLAUDE.md §4.3). */}
-      {overview && (
-        <span className="text-[12px] text-subtle">
-          {overview.last_sms_at ? `Last SMS ${formatRelative(overview.last_sms_at)}` : "No SMS received yet"}
-        </span>
-      )}
-    </section>
-  );
+/** When the last card alert arrived, in one quiet line; nothing before the first one. */
+function LastCardAlert({ overview }: { overview: Overview | undefined }) {
+  const label = overview ? lastCardAlertLabel(overview.last_sms_at) : null;
+  if (!label) return null;
+  return <p className="-mt-3 text-[12px] text-subtle">{label}</p>;
 }
 
 function InsightsPanel({ profileCode }: { profileCode: string }) {

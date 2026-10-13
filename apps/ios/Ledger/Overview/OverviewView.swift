@@ -30,12 +30,8 @@ struct OverviewView: View {
                 } else {
                     HeroCard(overview: overview)
                 }
-                if overview.showsLiveSections(), let pending = overview.pendingSummary {
-                    Button { tabs?.openActivity(overview.pendingActivity) } label: {
-                        PendingStrip(summary: pending, lastSMS: overview.lastSMSLabel())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityHint("Shows them in Activity")
+                if overview.showsLiveSections(), let lastAlert = overview.lastCardAlertLabel() {
+                    Text(lastAlert).font(Typography.caption).foregroundStyle(Palette.muted)
                 }
                 if !overview.attention().isEmpty {
                     AttentionCard(items: overview.attention(), review: review, profileCode: profileCode,
@@ -71,7 +67,7 @@ private struct HeroCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            // One VoiceOver element: "October spend, posted so far, 860 dirhams".
+            // One VoiceOver element: "October spend so far, 860 dirhams".
             VStack(alignment: .leading, spacing: 10) {
                 Text(overview.heroEyebrow().uppercased())
                     .font(Typography.caption).tracking(1.2).foregroundStyle(Palette.muted)
@@ -80,9 +76,6 @@ private struct HeroCard: View {
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .firstTextBaseline, spacing: 6) { unit; amount }
                     VStack(alignment: .leading, spacing: 0) { unit; amount }
-                }
-                if let pending = overview.heroPendingLine() {
-                    Text(pending).font(Typography.rowTitle).foregroundStyle(Palette.warn).monospacedDigit()
                 }
             }
             .accessibilityElement(children: .ignore)

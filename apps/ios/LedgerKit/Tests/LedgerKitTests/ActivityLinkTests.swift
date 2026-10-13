@@ -11,7 +11,7 @@ struct ActivityLinkTests {
     func openActivity() {
         let router = TabRouter()
         var query = ActivityQuery()
-        query.status = .pending
+        query.status = .void
         router.openActivity(query)
         #expect(router.tab == .activity && router.activityPresetRequest == 1)
         #expect(router.takeActivityPreset() == query && router.takeActivityPreset() == nil)
@@ -23,14 +23,15 @@ struct ActivityLinkTests {
     @Test("openTransaction opens one transaction over Activity's own filters; the latest request wins")
     func openTransaction() {
         let router = TabRouter()
-        router.openActivity(.pending())
+        let preset = ActivityQuery.uncategorised(month: day("2026-10-01"))
+        router.openActivity(preset)
         router.openTransaction("txn_1")
         #expect(router.tab == .activity && router.activityPresetRequest == 2)
         #expect(router.takeActivityPreset() == nil)
         #expect(router.takeActivityTransaction() == "txn_1" && router.takeActivityTransaction() == nil)
         router.openTransaction("txn_2")
-        router.openActivity(.pending())
-        #expect(router.takeActivityTransaction() == nil && router.takeActivityPreset() == .pending())
+        router.openActivity(preset)
+        #expect(router.takeActivityTransaction() == nil && router.takeActivityPreset() == preset)
         router.openTransaction("txn_3")
         router.reset()
         #expect(router.takeActivityTransaction() == nil && router.tab == .overview)
@@ -44,14 +45,12 @@ struct ActivityLinkTests {
         #expect(router.takeActivityPreset() == .uncategorised(month: day("2026-10-01")))
     }
 
-    @Test("Overview's links: the month's uncategorised rows, and every pending row")
+    @Test("Overview's link: the month's uncategorised rows")
     func overviewLinks() throws {
         let overview = try LedgerJSON.decode(Overview.self, from: try fixture("overview"))
         let uncategorised = overview.uncategorisedActivity
         #expect(uncategorised.uncategorizedOnly && uncategorised.month == overview.month.startOfMonth)
         #expect(uncategorised.activityFilter["category"] == "none")
-        let pending = overview.pendingActivity
-        #expect(pending.status == .pending && pending.from == nil && pending.filterCount == 1)
     }
 
     @Test("a merchant row: its name as the search, the range shown; never the unknown bucket")

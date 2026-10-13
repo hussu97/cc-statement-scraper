@@ -18,7 +18,7 @@ public struct WidgetSnapshot: Codable, Sendable, Equatable {
     public let ledgerName: String?
     /// The first day of the month the figures are for.
     public let month: CalendarDay
-    /// Posted spend so far this month (`overview.spend`).
+    /// Spend so far this month (`overview.spend`: SMS, payment and statement charges).
     public let spend: Decimal
     /// `overview.spend_prev_month_to_date` and the server's ratio against it.
     public let spendPrevMonthToDate: Decimal
