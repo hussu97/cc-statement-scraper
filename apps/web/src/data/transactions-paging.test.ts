@@ -4,8 +4,8 @@ import { parseActivitySearch, withFilter } from "@/lib/activity-filters";
 
 describe("listFilters (an infinite list's identity)", () => {
   it("drops paging and the open drawer, keeps every filter", () => {
-    const s = parseActivitySearch({ q: "coffee", status: "posted", page: "3", size: "500", txn: "txn_01k4ea5wxd4v7q0k6gw13ejsny" });
-    expect(listFilters(s)).toEqual({ q: "coffee", status: "posted" });
+    const s = parseActivitySearch({ q: "coffee", status: "void", page: "3", size: "500", txn: "txn_01k4ea5wxd4v7q0k6gw13ejsny" });
+    expect(listFilters(s)).toEqual({ q: "coffee", status: "void" });
   });
 
   it("is the same list on every page, and a new list when a filter changes", () => {

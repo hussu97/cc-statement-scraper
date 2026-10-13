@@ -21,13 +21,13 @@ struct ActivitySummaryTests {
         q.search = "  café, (dxb) 50%  "
         q.accountCode = "acc_1"
         q.categoryCode = "cat_food"
-        q.status = .posted
+        q.status = .void
         q.month = CalendarDay(iso: "2026-09-14")
         let p = q.summaryParams(profileCode: "prf_a")
         #expect(p["p_q"] == .string("café, (dxb) 50%"))
         #expect(p["p_from"] == .string("2026-09-01") && p["p_to"] == .string("2026-09-30"))
         #expect(p["p_account_code"] == .string("acc_1") && p["p_category_code"] == .string("cat_food"))
-        #expect(p["p_status"] == .string("posted") && p["p_uncategorized"] == .bool(false))
+        #expect(p["p_status"] == .string("void") && p["p_uncategorized"] == .bool(false))
         #expect(p["p_card_code"] == .null && p["p_source"] == .null)
     }
 
@@ -101,9 +101,9 @@ struct ActivitySummaryModelTests {
         await model.load(profileCode: "prf_a")
         #expect(model.summaryDisplay == .shown(ActivitySummaryHeader(ActivitySummary(txnCount: 3, netAed: 30))))
         var draft = model.query
-        draft.status = .posted
+        draft.status = .void
         await model.apply(draft, profileCode: "prf_a")
-        #expect(api.summaryQueries.count == 2 && api.summaryQueries.last?.status == .posted)
+        #expect(api.summaryQueries.count == 2 && api.summaryQueries.last?.status == .void)
         await model.refresh(profileCode: "prf_a")
         #expect(api.summaryQueries.count == 3)
     }
