@@ -156,6 +156,19 @@ extension CategorySpend {
         return pct > 0 ? ("+\(magnitude)%", .warn) : ("−\(magnitude)%", .positive)
     }
 
+    /// VoiceOver for the change chip: `"Up 20% on the previous period, AED 1,000"`,
+    /// `"Down 16% …"`, `"Level with the previous period"`, `"New: nothing the period before"`.
+    public var changeAccessibilityLabel: String {
+        guard change != nil else { return "New: nothing the period before" }
+        let chip = changeChip
+        let previous = MoneyFormat.aed(prevAmount, fractionDigits: 0)
+        switch chip.tone {
+        case .warn: return "Up \(chip.label.dropFirst()) on the previous period, \(previous)"
+        case .positive: return "Down \(chip.label.dropFirst()) on the previous period, \(previous)"
+        default: return "Level with the previous period, \(previous)"
+        }
+    }
+
     /// `"was AED 1,200"`, or `"nothing the period before"` with no previous spend.
     public var previousLabel: String {
         change == nil ? "nothing the period before" : "was \(MoneyFormat.aed(prevAmount, fractionDigits: 0))"
