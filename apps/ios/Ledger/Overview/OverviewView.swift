@@ -85,6 +85,7 @@ private struct HeroCard: View {
             ForEach(overview.referenceLines, id: \.self) { line in
                 Text(line).font(Typography.rowMeta).foregroundStyle(Palette.muted).monospacedDigit()
             }
+            if let pace = overview.paceRule() { PaceRuleView(rule: pace) }
         }
         .padding(.top, 8)
     }
