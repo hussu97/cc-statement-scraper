@@ -28,10 +28,10 @@ separately):
 | Edge Functions | 0 | 0 | – | – | 0 |
 | Parser | 1 | – | – | – | 1 |
 | Web | 0 | 7 | 5 | – | 12 |
-| iOS | 0 | 4 | 6 | 2 | 12 |
+| iOS | 0 | 18 | 6 | 2 | 26 |
 | Scraper | – | 0 | – | – | 0 |
 | CI, config and ops | 0 | 0 | – | 0 | 0 |
-| **Total** | **1** | **13** | **11** | **3** | **28** |
+| **Total** | **1** | **27** | **11** | **3** | **42** |
 
 There are no open P0 or P1 findings. The last P1 remainders (WEB-02 statements beyond 500 and
 merchant search, WEB-07 "Retry AI") landed in `98f901c`. What is left of the P1s are the device
@@ -142,6 +142,29 @@ None open (SRV-12, SRV-17 and X-25r are done).
 | IOS-27 | Large nav titles are SF Bold while section heads are serif; redundant title and eyebrow; AED hard-coded despite `base_currency` | UI polish | Serif large titles via `UINavigationBarAppearance`; month as the Overview title; "Cycles" section; profile currency | S |
 | IOS-28 | Insights draws the partial month like a full one; no average line, values or budget rule; rows not drillable | UX | Hatched current month with projection, `RuleMark` average, `chartXSelection`, rows link to filtered Activity | M |
 | IOS-29 | Small presentation decisions in views (`prefix(4)`, `prefix(10)`, fallbacks) | Readability | Move into LedgerKit presentation extensions with tests | S |
+
+### iOS parity with the web (2026-10-13 audit)
+
+Analysis, search and filtering the web has and the iOS app lacks. Every row is backed by an RPC
+that already exists; rules, categories and merchant management stay web-first by design, and CSV
+export is web-only. Order is the recommended build order.
+
+| ID | Gap | Backing RPC | Effort |
+|---|---|---|---|
+| PAR-1 | Activity filters: date presets and custom range, card filter, void status, source (SMS/statement) | `activity_summary`, `v_transactions` | S |
+| PAR-2 | A detail sheet viewers can open too: FX rate and estimate badges, time and posted date, status badges, merchant context, related reversal, evidence timeline and SMS body | `v_transactions`, `merchant_context`, `transaction_evidence` | M |
+| PAR-3 | Per-day net totals in Activity date headers | `activity_day_totals` | S |
+| PAR-4 | Open Activity with filters from other screens (ring slices, uncategorised and pending counts, merchants, insights) | — (routing) | S–M |
+| PAR-5 | Category drill-down screen (trend, top merchants, change vs previous period) | `category_breakdown`, `spend_breakdown` | M |
+| PAR-6 | Overview pace rule and "Projected AED X by …" (fields already decoded) | `overview` | S |
+| PAR-7 | Budget "expected by today" tick and over/under pace | `budget_status` | S |
+| PAR-8 | Categories show change vs previous period; merchants top 20 with tap-through | `category_breakdown`, `merchant_leaderboard` | S |
+| PAR-9 | Anomalies with "This is fine"; full "Worth a look" feed with links | `anomalies`, `dismiss_anomaly`, `insights` | M |
+| PAR-10 | Trends: week/day buckets, account/card grouping, custom range | `spend_series`, `spend_breakdown` | M |
+| PAR-11 | Bulk select with Categorise and Exclude (CSV export stays web-only) | `activity_selection_summary`, `bulk_update_transactions` | M |
+| PAR-12 | Calendar heatmap, time of day, year over year, FX & travel, full subscriptions | `daily_spend`, `hour_weekday_pattern`, `yoy_compare`, `fx_spend`, `recurring_list` | M–L |
+| PAR-13 | Account comparison sparklines; open a statement's PDF | `statement_cycles`, `spend_series`, storage | M |
+| PAR-14 | Review: accept/reject a proposed SMS format on the phone | `resolve_review`, `set_sms_template_active` | S–M |
 
 ### Scraper
 
