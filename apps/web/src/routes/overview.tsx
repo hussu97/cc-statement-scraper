@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import { ArrowRight, ChevronLeft, ChevronRight, Inbox, Lightbulb, X } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight, Inbox, Lightbulb } from "lucide-react";
 import { useActiveProfile } from "@/data/profile";
-import { accountLabel, insightTarget, pendingSummary, sortInsights, useDismissInsight, useInsights, useOverview, type Insight, type Overview, type OverviewAccount } from "@/data/overview";
+import { accountLabel, pendingSummary, sortInsights, useDismissInsight, useInsights, useOverview, type Overview, type OverviewAccount } from "@/data/overview";
 import { evidenceBadge } from "@/data/transactions";
 import { addMonths, daysBetween, formatDate, formatDateTime, formatMonth, formatRelative, monthEnd, monthStart, todayDubai } from "@/lib/dates";
 import { formatChange, formatPercent, formatTotal, toAmount } from "@/lib/money";
@@ -15,6 +15,7 @@ import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
 import { EvidenceBadge, HeroAmount, StatusBadge, TxnAmount } from "@/components/ledger";
 import { PaceRule } from "@/components/overview/pace-rule";
 import { CategoryRing } from "@/components/overview/category-ring";
+import { InsightCard } from "@/components/insights/insight-card";
 import { MonthlySpendCard } from "@/components/overview/monthly-spend";
 import { SetupChecklistCard } from "@/components/overview/setup-checklist";
 import { isEmptyLedger } from "@/lib/setup-checklist";
@@ -257,7 +258,11 @@ function InsightsPanel({ profileCode }: { profileCode: string }) {
   const list = useMemo(() => sortInsights(q.data ?? []), [q.data]);
   return (
     <Card>
-      <CardHeader eyebrow="Worth a look" title="Insights" />
+      <CardHeader
+        eyebrow="Worth a look"
+        title="Insights"
+        action={<Link to="/insights" search={{ tab: "feed" }} className="tap text-[13px] text-accent hover:underline">All insights</Link>}
+      />
       {q.isLoading ? (
         <LoadingRows rows={3} />
       ) : q.isError ? (
@@ -272,45 +277,6 @@ function InsightsPanel({ profileCode }: { profileCode: string }) {
         </ul>
       )}
     </Card>
-  );
-}
-
-function InsightCard({ insight: i, onDismiss }: { insight: Insight; onDismiss?: () => void }) {
-  const target = insightTarget(i);
-  const body = (
-    <>
-      <div className="flex items-center gap-2">
-        <span aria-hidden className={cn("size-1.5 shrink-0 rounded-pill", i.severity === "alert" ? "bg-danger" : i.severity === "warn" ? "bg-warn" : "bg-info")} />
-        <p className="text-[13.5px] font-medium text-ink">{i.title}</p>
-      </div>
-      <p className="mt-1 text-[13px] leading-relaxed text-muted">{i.body}</p>
-      {target && (
-        <span className="mt-1.5 inline-flex items-center gap-1 text-[12.5px] font-medium text-accent">
-          {target.label} <ArrowRight className="size-3.5" aria-hidden />
-        </span>
-      )}
-    </>
-  );
-  return (
-    <li className="group relative rounded-md border border-border bg-bg transition-colors hover:border-border-strong">
-      {target ? (
-        <Link to={target.to} search={"search" in target ? target.search : undefined} className="block rounded-md px-4 py-3 pr-12">
-          {body}
-        </Link>
-      ) : (
-        <div className="px-4 py-3 pr-12">{body}</div>
-      )}
-      {onDismiss && (
-        <button
-          type="button"
-          onClick={onDismiss}
-          aria-label={`Dismiss: ${i.title}`}
-          className="absolute top-0 right-0 flex size-11 items-center justify-center rounded-md text-muted hover:bg-surface-2 hover:text-ink md:top-1 md:right-1 md:size-8"
-        >
-          <X className="size-3.5" />
-        </button>
-      )}
-    </li>
   );
 }
 
