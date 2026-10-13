@@ -84,6 +84,7 @@ struct SendTestButton: View {
 /// Step-by-step for the Shortcuts automation that feeds bank SMS to the app.
 struct SMSSetupGuideView: View {
     let settings: SettingsModel
+    @Environment(NotificationSettingsModel.self) private var notifications: NotificationSettingsModel?
 
     var body: some View {
         Page {
@@ -94,26 +95,25 @@ struct SMSSetupGuideView: View {
             }
             .padding(.top, 8)
 
-            ForEach(SMSAutomationGuide.steps) { step in
-                Card {
-                    HStack(alignment: .top, spacing: 12) {
-                        Text("\(step.number)")
-                            .font(.system(.title3, design: .serif))
-                            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-                            .foregroundStyle(Palette.accentInk)
-                            .frame(width: 32, height: 32)
-                            .background(Palette.accent, in: Circle())
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(step.title).font(Typography.cardTitle)
-                            Text(step.detail).font(Typography.rowMeta).foregroundStyle(Palette.muted)
-                        }
-                    }
-                }
-            }
+            GuideSteps(steps: SMSAutomationGuide.steps)
+
+            ShortcutInputStrip(frames: SMSAutomationGuide.shortcutInputFrames)
 
             Card {
                 Label("Privacy", systemImage: "lock").font(Typography.cardTitle)
                 Text(SMSAutomationGuide.privacyNote).font(Typography.rowMeta).foregroundStyle(Palette.muted)
+            }
+
+            // Asked here, never at launch (N-1): this is where capture is set up.
+            if let notifications {
+                Card {
+                    Label("Notifications", systemImage: "bell").font(Typography.cardTitle)
+                    Text("Get a notification only when something needs you: an SMS for a card Bank Ledger doesn't know, or captures not sent after an hour. Never the text of a message.")
+                        .font(Typography.rowMeta).foregroundStyle(Palette.muted)
+                    NotificationPermissionRow(model: notifications)
+                        .buttonStyle(.bordered)
+                        .tint(Palette.accent)
+                }
             }
 
             Card {
@@ -125,11 +125,7 @@ struct SMSSetupGuideView: View {
                     .tint(Palette.accent)
             }
 
-            Link(destination: URL(string: "shortcuts://")!) {
-                Label("Open Shortcuts", systemImage: "arrow.up.forward.app")
-                    .frame(maxWidth: .infinity, minHeight: Metrics.tapMin)
-            }
-            .buttonStyle(.borderedProminent)
+            OpenShortcutsButton()
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)

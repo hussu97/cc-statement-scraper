@@ -61,6 +61,8 @@ public final class TabRouter {
         case .review:
             tab = .overview
             showingReview = true
+        case .settings:
+            tab = .settings
         }
     }
 

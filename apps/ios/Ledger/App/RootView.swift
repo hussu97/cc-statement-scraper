@@ -93,6 +93,7 @@ struct MainTabs: View {
         }
         .environment(model.banks)
         .environment(model.spendSplit)
+        .environment(model.notifications)
     }
 }
 

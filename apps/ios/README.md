@@ -144,7 +144,10 @@ more keywords would fire the action two or three times per alert. Settings → *
 capture* walks through it, shows **Last captured**, **Recent captures** (the last 20 runs:
 outcome, sender and message length, never the text, so a Shortcut passing the wrong field shows)
 and has **Send test** (the intent's path with a synthetic one-time passcode, dropped on the phone,
-plus an outbox flush).
+plus an outbox flush). Under the steps, a three-picture strip shows step 5 in the Shortcuts editor
+(Select Variable → Shortcut Input → Content; `SMSAutomationGuide.shortcutInputFrames`, images in
+`Assets.xcassets/Guide`, taken from the Shortcuts app in the simulator, iOS 26, so the editor on
+iOS 18 looks slightly different).
 
 Messages go to the **SMS go to** ledger (Settings): owned ledgers only, defaulting to the
 first one you own — never simply the ledger on screen. PDFs shared to "Add to Bank Ledger" go there too.
@@ -180,7 +183,8 @@ Tap-to-pay payments reach Bank Ledger through a second Shortcuts personal automa
    tap", and **Run Immediately**. Tap Next.
 2. Create New Shortcut → add **Log Card Payment** (search Ledger). Set **Amount** to Shortcut
    Input's Amount, **Merchant** to Shortcut Input's Merchant and **Card** to Shortcut Input's Card
-   or Pass.
+   or Pass. Leave **Currency if missing** (under Show More) empty: the currency comes with the
+   Amount. The in-app guide is Settings → Card names for payment shortcut → **Set up card payments**.
 3. In Bank Ledger, Settings → **Card names for payment shortcut** → Card names: type each card's
    name exactly as the phone's card shows it (capitals don't matter). If a payment arrives first,
    Shortcuts shows "no card is named “…”" with the name it passed; setting that name files the
@@ -190,15 +194,50 @@ Enabling it for a card that also sends SMS alerts is safe: the server links the 
 payment (same account, amount and currency, within 30 minutes) as two pieces of evidence for one
 transaction, not two transactions.
 
+**Currency.** The automation's Shortcut Input is the Wallet transaction; its Amount is the
+amount as the phone formats it, currency included (`AED 12.50`, `$6.25` on an en_AE phone, `€4.20`,
+`12,50 €`). The intent's **Amount** (`transactionAmount`) is a text parameter, so that string
+arrives whole, and `WalletAmount.resolve` (LedgerKit) reads the amount and an ISO code from it:
+a three-letter code, else the symbol as the phone's locale writes it (`$` is USD in en_AE and
+en_US, ambiguous in en_GB), else `€ £ ₹ US$ د.إ …`. Only when the text has no currency, or an
+ambiguous symbol, does the optional **Currency if missing** (`fallbackCurrency`) apply; with
+neither, the payment is refused in Shortcuts ("Set Currency if missing"), never guessed.
+Automations set up before this used an `IntentCurrencyAmount` parameter (`amount`, now **Amount
+in a set currency**, optional, under Show More): Shortcuts bound the number to it and took the
+currency from a picker fixed in the automation, so a payment abroad was filed in AED. They keep
+working unchanged, and their result line adds a pointer to set **Amount** instead. Left untouched,
+that field shows **0 AED** in Shortcuts; a zero there counts as empty (no amount, no fallback
+currency).
+
 `WalletIntake` mirrors `SMSIntake`: `WalletCapture.payment` checks on the phone what the server
 would refuse (amount above zero, rounded half-up to cents; a 3-letter currency, uppercased;
-merchant ≤ 200 and card name ≤ 64 characters, trimmed). The amount is a `Decimal` from the
-intent's currency amount and goes to `rpc('ingest_wallet_transactions')` as a decimal string.
+merchant ≤ 200 and card name ≤ 64 characters, trimmed). The amount is a `Decimal` (parsed from
+the text without a binary float) and goes to `rpc('ingest_wallet_transactions')` as a decimal
+string.
 Payments go to the **SMS go to** ledger and share the SMS outbox (each entry has a `kind`; one
 flush sends each profile's SMS and payments to their own RPC), so a payment made offline at the
 till is sent when a connection is back, and a refused one waits under Settings → **Not sent**.
 The merchant is never logged or sent to Sentry. Card names (`cards.wallet_name`) are owner-edited;
 a view-only ledger shows them read-only.
+
+## Notifications
+
+Local notifications only (no push), for what needs the person (BACKLOG N-1). LedgerKit decides
+(`CaptureNotices`, `DueReminders`, `NotificationSettingsModel`; `LocalNoticeTests`); the app's
+`LocalNotifications` applies it to `UNUserNotificationCenter`. Permission is asked from
+**Set up SMS capture** (or Settings → Notifications), never at launch. Each kind has a switch in
+Settings → **Notifications** (App Group defaults, so the intents read them too):
+
+| Kind | When | Tap opens |
+|---|---|---|
+| Unknown cards | an intent's outcome is `unknown_card` | Review (SMS) / Settings (payment: Card names) |
+| Messages not sent | an hour after the oldest capture still retrying; withdrawn once the outbox is empty | Settings |
+| Signed out with messages waiting | an intent saved a capture as `signedOut` / `noLedger` | the app |
+| Statement due dates | 09:00 Dubai 3 days before and on the due date of each account's latest statement, from `statement_cycles` of the ledger on screen; withdrawn when `payment_status` is `paid` or the switch is off | the app |
+
+A notification never carries an SMS body or a merchant: only counts, the card name a payment
+passed, the bank and the statement's figures. Due reminders are replanned whenever the app
+becomes active (a failed load keeps the ones already pending).
 
 ## TestFlight
 

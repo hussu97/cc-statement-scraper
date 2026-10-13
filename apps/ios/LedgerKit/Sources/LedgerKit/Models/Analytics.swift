@@ -162,6 +162,13 @@ public struct StatementCycle: Decodable, Sendable, Hashable, Identifiable {
     public let reconStatus: String?       // ok | warn | fail
     public let reconChecks: ReconChecks?
     public let docCode: String?
+    /// `paid | part_paid | unpaid | overdue`; absent from older servers.
+    public let paymentStatus: String?
+    /// Paid towards this statement (AED); absent from older servers.
+    public let amountPaid: Decimal?
+
+    /// Whether this statement was paid; nil from an older server.
+    public var duePayment: DuePayment? { DuePayment(status: paymentStatus, amountPaid: amountPaid) }
 
     public var title: String {
         cardLast4.map { "\(bankCode) •\($0)" } ?? bankCode

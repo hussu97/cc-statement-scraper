@@ -74,6 +74,9 @@ private struct HeroCard: View {
                     HStack(alignment: .firstTextBaseline, spacing: 6) { unit; amount }
                     VStack(alignment: .leading, spacing: 0) { unit; amount }
                 }
+                if let pending = overview.heroPendingLine() {
+                    Text(pending).font(Typography.rowTitle).foregroundStyle(Palette.warn).monospacedDigit()
+                }
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(overview.heroAccessibilityLabel())

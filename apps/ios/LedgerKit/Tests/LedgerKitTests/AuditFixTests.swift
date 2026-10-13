@@ -175,6 +175,24 @@ struct SMSGuideTests {
         #expect(!text.contains("Repeat"))
         #expect(text.contains("Send test"))
     }
+
+    @Test("step 5 in three pictures, each one in the app's asset catalog (IOS-06g)")
+    func shortcutInputStrip() throws {
+        let frames = SMSAutomationGuide.shortcutInputFrames
+        #expect(frames.count == 3)
+        #expect(frames.map { $0.caption.prefix(2) } == ["1.", "2.", "3."])
+        #expect(frames.last?.caption.contains("Content") == true)
+        // apps/ios/LedgerKit/Tests/LedgerKitTests/ → apps/ios/Ledger/Resources/Assets.xcassets
+        let catalog = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appending(path: "../../../Ledger/Resources/Assets.xcassets").standardizedFileURL
+        for frame in frames {
+            let name = try #require(frame.image.split(separator: "/").last)
+            let png = catalog.appending(path: "\(frame.image).imageset/\(name).png")
+            #expect(FileManager.default.fileExists(atPath: png.path), "\(png.path)")
+        }
+        let step5 = try #require(SMSAutomationGuide.steps.first { $0.number == 5 })
+        #expect(step5.detail.contains("Shortcut Input") && step5.detail.contains("Content"))
+    }
 }
 
 #if canImport(SwiftUI)

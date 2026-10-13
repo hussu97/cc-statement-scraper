@@ -124,7 +124,26 @@ extension Overview {
     public func heroAccessibilityLabel(today: CalendarDay = LedgerDates.today()) -> String {
         let name = month.year == today.year ? LedgerDates.monthName(month) : monthTitle
         let scope = isCurrentMonth(today: today) ? "\(name) spend, posted so far" : "\(name) spend"
-        return "\(scope), \(MoneyFormat.spokenDirhams(spend))"
+        let pending = heroPendingAmount(today: today).map { ", plus \(MoneyFormat.spokenDirhams($0)) pending" } ?? ""
+        return "\(scope), \(MoneyFormat.spokenDirhams(spend))\(pending)"
+    }
+
+    /// The hero's pending line (UX-1r): `"+ AED 3,105 pending"`, from the
+    /// server's `pending_amount` and `pending_count`, never a sum on the phone.
+    /// The hero number is posted spend, so pending is shown beside it, not
+    /// folded in. Current month only (pending alerts are about now); nil when
+    /// nothing is pending. Pending charges with no AED rate yet aren't in the
+    /// amount: a count stands in when that leaves nothing to show.
+    public func heroPendingLine(today: CalendarDay = LedgerDates.today()) -> String? {
+        guard isCurrentMonth(today: today), pendingCount > 0 else { return nil }
+        if let amount = heroPendingAmount(today: today) {
+            return "+ \(MoneyFormat.aed(amount, fractionDigits: 0)) pending"
+        }
+        return pendingCount == 1 ? "+ 1 pending charge" : "+ \(pendingCount) pending charges"
+    }
+
+    private func heroPendingAmount(today: CalendarDay) -> Decimal? {
+        isCurrentMonth(today: today) && pendingCount > 0 && pendingAmount > 0 ? pendingAmount : nil
     }
 
     public func isCurrentMonth(today: CalendarDay = LedgerDates.today()) -> Bool {
