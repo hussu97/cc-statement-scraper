@@ -77,7 +77,7 @@ struct OutboxHygieneTests {
                 == "2 card payments haven't reached Bank Ledger. Signing out deletes them from this phone.")
     }
 
-    @Test("sign-out cleanup: the outbox and every saved PDF (waiting or refused) go")
+    @Test("sign-out deletes exactly what the confirmation counted; what arrived meanwhile stays")
     func cleanup() async throws {
         let container = FileManager.default.temporaryDirectory.appendingPathComponent("ledger-signout-\(UUID().uuidString)")
         let pending = PendingUploads(container: container)
@@ -85,13 +85,39 @@ struct OutboxHygieneTests {
         try pending.save(UploadFile(filename: "b.pdf", data: Data("%PDF-1".utf8)))
         pending.quarantine(try #require(pending.list().first), reason: "Too large.")
         #expect(pending.count == 1 && pending.rejected().count == 1)
-        pending.removeAll()
-        #expect(pending.count == 0 && pending.rejected().isEmpty)
-
         let outbox = Outbox(fileURL: temporaryOutboxURL(), api: StubAPI())
         try await outbox.enqueue([payload(1), payload(2)], profileCode: nil)
-        try await outbox.removeAll()
-        #expect(await outbox.status().isEmpty)
+
+        let plan = await SignOutPlan.make(outbox: outbox, uploads: pending)
+        #expect(plan.queue == DeviceQueue(messages: 2, payments: 0, pdfs: 2))
+        #expect(plan.warning == "2 SMS and 2 PDFs haven't reached Bank Ledger. Signing out deletes them from this phone.")
+
+        // While the confirmation is open: an SMS and a PDF arrive, and the
+        // waiting PDF is refused (moves to rejected/).
+        let late = payload(3)
+        try await outbox.enqueue(late, profileCode: nil)
+        pending.quarantine(try #require(pending.list().first), reason: "Not a PDF.")
+        try pending.save(UploadFile(filename: "c.pdf", data: Data("%PDF-1".utf8)))
+
+        try await plan.delete(outbox: outbox, uploads: pending)
+        #expect(try await outbox.entries().map(\.id) == [late.clientMsgId])
+        #expect(pending.list().map(PendingUploads.originalName) == ["c.pdf"] && pending.rejected().isEmpty)
+        #expect(SignOutPlan.empty.warning == nil)
+    }
+
+    @Test("a counted file that can't be deleted is reported, not swallowed")
+    func deleteFailureSurfaces() async throws {
+        let container = FileManager.default.temporaryDirectory.appendingPathComponent("ledger-signout-\(UUID().uuidString)")
+        let pending = PendingUploads(container: container)
+        try pending.save(UploadFile(filename: "a.pdf", data: Data("%PDF-1".utf8)))
+        let plan = await SignOutPlan.make(outbox: Outbox(fileURL: temporaryOutboxURL(), api: StubAPI()), uploads: pending)
+        // The folder becomes read-only: the file can't be removed.
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: pending.directory.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: pending.directory.path) }
+        await #expect(throws: (any Error).self) {
+            try await plan.delete(outbox: Outbox(fileURL: temporaryOutboxURL(), api: StubAPI()), uploads: pending)
+        }
+        #expect(pending.count == 1)
     }
 
     @Test("an outbox file written before IOS-12r (every entry has a ledger) still decodes")

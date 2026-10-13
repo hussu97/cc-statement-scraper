@@ -37,6 +37,12 @@ struct RootView: View {
             await DevSignIn.attemptIfConfigured(session: model.session)
             #endif
         }
+        .alert("Not everything was deleted", isPresented: Binding(
+            get: { model.signOutError != nil }, set: { if !$0 { model.signOutError = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(model.signOutError ?? "")
+        }
     }
 }
 
