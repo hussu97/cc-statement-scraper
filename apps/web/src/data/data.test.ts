@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { activitySummaryArgs, applyActivityFilters, evidenceBadge, groupByDay, isNoteDirty, noteToSave, sortEvidence, type EvidenceItem, type FilterBuilder } from "./transactions";
+import { activitySummaryArgs, applyActivityFilters, evidenceBadge, groupByDay, isNoteDirty, noteToSave, sortEvidence, statusBadge, type EvidenceItem, type FilterBuilder } from "./transactions";
 import { channelTopic, invalidationKeys } from "./realtime";
 import { keys, LEDGER_DOMAINS } from "./keys";
 import { chooseActiveProfile, memberProfiles, profileKeyFromName, toProfileSummaries, type ProfileRow, type ProfileSummary } from "./profile";
 import { attachContexts, candidatesOf, contextOf, groupReviews, type Review, type ReviewContextRow } from "./reviews";
 import { checkUploadFiles } from "./cards";
 import { friendlyMessage } from "./api";
-import { pendingSummary, sortInsights } from "./overview";
+import { lastCardAlertLabel, sortInsights } from "./overview";
 
 class FakeBuilder implements FilterBuilder<FakeBuilder> {
   calls: string[] = [];
@@ -24,7 +24,7 @@ class FakeBuilder implements FilterBuilder<FakeBuilder> {
 describe("activity query filters", () => {
   it("maps every filter to PostgREST calls", () => {
     const b = applyActivityFilters(new FakeBuilder(), {
-      from: "2026-10-01", to: "2026-10-31", account: "acc_x", card: "crd_x", category: "none", status: "pending", source: "sms", q: "cafe",
+      from: "2026-10-01", to: "2026-10-31", account: "acc_x", card: "crd_x", category: "none", status: "void", source: "sms", q: "cafe",
     });
     expect(b.calls).toEqual([
       "gte txn_date 2026-10-01",
@@ -32,7 +32,7 @@ describe("activity query filters", () => {
       "eq account_code acc_x",
       "eq card_code crd_x",
       "is category_code null",
-      "eq status pending",
+      "eq status void",
       "eq has_sms true",
       "eq has_statement false",
       "or description.ilike.*cafe*,merchant_name.ilike.*cafe*",
@@ -80,6 +80,14 @@ describe("transaction helpers", () => {
     expect(evidenceBadge({ has_sms: true, has_statement: false, status: "pending" })).toBe("sms");
     expect(evidenceBadge({ has_sms: false, has_statement: true, status: "posted" })).toBe("statement");
     expect(evidenceBadge({ has_sms: false, has_statement: false, status: "orphaned" })).toBe("orphaned");
+  });
+
+  it("badges only void and orphaned rows: an SMS or payment charge shows no status", () => {
+    expect(statusBadge("pending")).toBeNull();
+    expect(statusBadge("posted")).toBeNull();
+    expect(statusBadge(null)).toBeNull();
+    expect(statusBadge("void")).toBe("void");
+    expect(statusBadge("orphaned")).toBe("orphaned");
   });
 
   it("orders evidence active-first then by time", () => {
@@ -230,9 +238,10 @@ describe("api + insights", () => {
     expect(isNoteDirty("coffee!", "coffee")).toBe(true);
     expect(isNoteDirty("", "coffee")).toBe(true);
   });
-  it("sums up pending SMS in one line from the server's count and amount (WEB-35)", () => {
-    expect(pendingSummary(31, "3082.40")).toBe("31 pending · AED 3,082");
-    expect(pendingSummary(1200, "15000.00")).toBe("1,200 pending · AED 15,000");
-    expect(pendingSummary(0, "0")).toBeNull();
+  it("says when the last card alert arrived, and nothing before the first one", () => {
+    const now = new Date("2026-10-14T10:00:00Z");
+    expect(lastCardAlertLabel("2026-10-14T09:55:00Z", now)).toBe("Last card alert 5 min ago");
+    expect(lastCardAlertLabel("2026-10-14T09:59:50Z", now)).toBe("Last card alert just now");
+    expect(lastCardAlertLabel(null, now)).toBeNull();
   });
 });
