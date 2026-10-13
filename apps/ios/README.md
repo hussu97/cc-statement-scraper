@@ -205,7 +205,9 @@ neither, the payment is refused in Shortcuts ("Set Currency if missing"), never 
 Automations set up before this used an `IntentCurrencyAmount` parameter (`amount`, now **Amount
 in a set currency**, optional, under Show More): Shortcuts bound the number to it and took the
 currency from a picker fixed in the automation, so a payment abroad was filed in AED. They keep
-working unchanged, and their result line adds a pointer to set **Amount** instead.
+working unchanged, and their result line adds a pointer to set **Amount** instead. Left untouched,
+that field shows **0 AED** in Shortcuts; a zero there counts as empty (no amount, no fallback
+currency).
 
 `WalletIntake` mirrors `SMSIntake`: `WalletCapture.payment` checks on the phone what the server
 would refuse (amount above zero, rounded half-up to cents; a 3-letter currency, uppercased;
