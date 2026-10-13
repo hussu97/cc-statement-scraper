@@ -47,6 +47,7 @@ enum BackgroundSync {
             Telemetry.breadcrumb("sms_outbox_background", outcome: report.error == nil ? "sent" : "waiting",
                                  data: ["sent": "\(report.sent)", "remaining": "\(report.remaining)"])
             await schedule(services)
+            await LocalNotifications.refreshOutbox(services)
             done.finish(success: report.error == nil)
         }
         task.expirationHandler = {

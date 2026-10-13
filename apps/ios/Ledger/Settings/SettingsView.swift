@@ -98,6 +98,8 @@ struct SettingsView: View {
                 Text(SMSAutomationGuide.privacyNote)
             }
 
+            NotificationSettingsSection(services: model.services, profileCode: profileCode)
+
             Section {
                 NavigationLink {
                     CardPaymentGuideView()

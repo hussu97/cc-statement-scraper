@@ -64,6 +64,8 @@ struct LogCardPaymentIntent: AppIntent {
         Telemetry.breadcrumb("wallet_ingest", outcome: outcome.telemetryOutcome, data: ["entry": "intent"])
         // Saved but not sent (e.g. no data at the till): ask iOS to send it once a connection is back.
         if case .queued = outcome { await BackgroundSync.schedule(services) }
+        // Only what needs the person notifies (unknown card, signed out, not sent in an hour).
+        await LocalNotifications.afterCapture(outcome, capture: .payment(card: card), services: services)
         // Never opens the app: this runs in the background for every alert. A
         // review is named in the dialog (IOS-07r; README "Open URL ledger://review").
         return .result(value: outcome.telemetryOutcome, dialog: IntentDialog(stringLiteral: dialog))
