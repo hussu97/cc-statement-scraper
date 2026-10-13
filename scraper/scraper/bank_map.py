@@ -8,8 +8,9 @@ reached the server is tracked separately in ``state/uploaded.json``
 """
 from __future__ import annotations
 
-import json
 from pathlib import Path
+
+from scraper.json_state import load_json_object, write_json_atomic
 
 
 class BankMap:
@@ -42,13 +43,8 @@ class BankMap:
 
     # ------------------------------------------------------------------
     def _load(self) -> dict[str, str]:
-        if not self._path.exists():
-            return {}
-        try:
-            return json.loads(self._path.read_text())
-        except Exception:  # noqa: BLE001 — corrupt file, start fresh
-            return {}
+        # Atomic writes; a corrupt file is kept aside with a warning (SRV-16).
+        return load_json_object(self._path)
 
     def _save(self, data: dict[str, str]) -> None:
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(json.dumps(data, indent=2))
+        write_json_atomic(self._path, data)

@@ -187,7 +187,7 @@ Create a service token in web Settings → Sources & health → Tokens, or with
 | Component | Command |
 |---|---|
 | Database (pgTAP: RLS guards, matching, categorisation, recon, analytics, SMS templates, FX, legacy import, cross-profile isolation, ingest robustness, review actions, client privilege matrix, re-parse relink, the 2026-10-09 P2/P3 fixes (`13`–`19`); hermetic, so they also pass on a non-empty local DB) | `supabase db reset && supabase test db` |
-| DB types drift | `pnpm db:types:check` (regenerate with `pnpm db:types`) |
+| DB types drift | `pnpm db:types:check` (regenerate with `pnpm db:types`; both stable-sort each `Relationships` array so the output is deterministic, tested by `pnpm db:types:test`) |
 | Edge Functions | `cd supabase/functions && deno lint && deno fmt --check && deno check . && deno test -A .` (the lock `deno.lock` is frozen; the local e2e runs only with `LEDGER_E2E=1` and a served stack) |
 | Parser | `cd services/parser && .venv/bin/ruff check . && .venv/bin/pytest -q` (golden parity needs private PDFs; skipped otherwise) |
 | Web | `pnpm web:test`, `pnpm --filter @ledger/web lint`, `pnpm web:build` |
@@ -303,7 +303,7 @@ JWTs. The service client logs which source it used (never the value).
 | `{PROFILE}_CCS_SCRAPER_API_TOKEN` | — | Per-profile service token (v2 tokens are profile-scoped; scope `statements:upload`). Wins over the global token |
 | `CCS_SCRAPER_API_TOKEN` | — | Global fallback token for profiles without their own |
 | `CCS_SCRAPER_SUPABASE_PUBLISHABLE_KEY` | — | Optional publishable key (`sb_publishable_…`), sent as `apikey`. `CCS_SCRAPER_SUPABASE_ANON_KEY` is read as a deprecated fallback |
-| `CCS_SCRAPER_UPLOAD_MAX_FILES`, `CCS_SCRAPER_UPLOAD_MAX_MB` | `20`, `32` | Upload batching: files and MB of PDF per request, clamped to the server's limits (20 files, 40 MB). A 413 halves the batch; batches that succeeded are recorded, so `upload-pending` retries only the rest |
+| `CCS_SCRAPER_UPLOAD_MAX_FILES`, `CCS_SCRAPER_UPLOAD_MAX_MB` | `20`, `32` | Upload batching: files and MB of PDF per request; they can only lower the defaults (the server accepts 20 files / 40 MB per request). A 413 halves the batch; batches that succeeded are recorded, so `upload-pending` retries only the rest |
 | `CCS_SCRAPER_HEADLESS`, `CCS_SCRAPER_DOWNLOAD_DIR`, `CCS_SCRAPER_BROWSER_*` | `true`, `./downloads`, Dubai | Browser settings |
 | `{PROFILE}_{BANK}_*` | — | Bank portal credentials per profile (see `scraper/.env.example`) |
 | `SIB_CARD_LAST4S` | every card the portal's Credit Card section lists | SIB cards to export, e.g. `4821` or `4821,9218` (also `card_last4s:` under `SIB` in `config/banks.yaml`). One export per card; a replaced card stays listed next to its successor |

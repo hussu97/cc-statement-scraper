@@ -237,6 +237,7 @@ fi
 
 if want supabase; then
   section "Supabase (local stack)"
+  run_check "DB types normaliser tests" node --test packages/db-types/scripts/gen-types.test.mjs
   if ! have supabase; then
     warn "Supabase" "supabase CLI not found; pgTAP + types drift run in CI"
   elif ! have docker || ! docker info >/dev/null 2>&1; then
@@ -261,7 +262,7 @@ if want supabase; then
         run_check "supabase db reset (PRE_PUSH_DB_RESET=1)" supabase db reset
       fi
       run_check "pgTAP (supabase test db)" supabase test db
-      run_check "DB types drift" bash -c 'supabase gen types typescript --local 2>/dev/null | diff -q - packages/db-types/src/database.ts'
+      run_check "DB types drift" node packages/db-types/scripts/gen-types.mjs --check
     fi
   fi
 fi
