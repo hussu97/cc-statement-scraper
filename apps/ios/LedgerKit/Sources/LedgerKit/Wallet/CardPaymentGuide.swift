@@ -13,7 +13,7 @@ public enum CardPaymentGuide {
         .init(number: 4, title: "Pass the payment",
               detail: "Tap Amount and choose Shortcut Input, then Amount. Its currency comes with it, so a payment abroad keeps its own. Set Merchant to Shortcut Input's Merchant and Card to its Card or Pass."),
         .init(number: 5, title: "Leave the currency to the payment",
-              detail: "Under Show More, leave Currency if missing empty: it applies only to an amount that arrives without a currency. A shortcut set up earlier with Amount in a set currency still works but files every payment in that currency: set Amount as in step 4 and clear it."),
+              detail: "Under Show More, leave Currency if missing empty: it applies only to an amount that arrives without a currency."),
         .init(number: 6, title: "Name your cards",
               detail: "In Card names, type each card's name exactly as Wallet shows it. Until then, Shortcuts shows the name it passed and the payment waits for it."),
     ]
