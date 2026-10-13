@@ -33,6 +33,42 @@ public enum DueReminders {
             .sorted { ($0.fireAt ?? now, $0.id) < ($1.fireAt ?? now, $1.id) }
     }
 
+    /// What the app does with the due reminders on coming to the foreground,
+    /// or once a ledger is on screen.
+    public enum Refresh: Equatable, Sendable {
+        /// Load this ledger's statement cycles and sync the plan.
+        case replan(profileCode: String)
+        /// Signed out: withdraw every due reminder, pending and delivered.
+        case withdrawAll
+        /// Nothing is known about the ledger yet: leave what is scheduled.
+        case keep
+    }
+
+    /// Only a loaded profile list with the selected ledger in it can replan.
+    /// While the session restores, or the profiles are loading or failed to
+    /// load (a cold or offline launch), nothing is selected yet, and planning
+    /// from that would withdraw every reminder; they stay as scheduled. Only
+    /// signing out withdraws them all.
+    public static func refresh(phase: SessionStore.Phase, profiles: LoadState<[LedgerProfile]>,
+                               selected: String?) -> Refresh {
+        switch phase {
+        case .signedOut:
+            return .withdrawAll
+        case .restoring, .awaitingCode:
+            return .keep
+        case .signedIn:
+            guard case .loaded(let list) = profiles, let selected,
+                  list.contains(where: { $0.profileCode == selected }) else { return .keep }
+            return .replan(profileCode: selected)
+        }
+    }
+
+    /// Signing out: every due reminder goes, scheduled or already in
+    /// Notification Centre (the next account's ledger isn't this one).
+    public static func withdrawAll(pendingIDs: [String], deliveredIDs: [String]) -> NoticeUpdate {
+        NoticeUpdate(cancel: Set((pendingIDs + deliveredIDs).filter { $0.hasPrefix(idPrefix) }).sorted())
+    }
+
     /// What to change, given the due-reminder requests pending now: withdraw
     /// those no longer planned (paid, superseded, switched off), post the plan
     /// (re-posting an id replaces it, so a changed amount is kept current).

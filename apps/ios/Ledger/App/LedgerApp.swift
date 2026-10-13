@@ -34,6 +34,7 @@ struct LedgerApp: App {
         Telemetry.start(target: .app, config: AppServices.shared?.config, isDebugBuild: BuildFlavor.isDebug)
         let model = AppServices.shared.map { AppModel(services: $0) }
         model?.receiveIntentLinks()   // the Controls' intents (N-4)
+        model?.withdrawDueReminders = { await LocalNotifications.withdrawDueReminders() }
         _model = State(initialValue: model)
         _cover = State(initialValue: model.map { PrivacyCoverWindow(lock: $0.lock) })
         if let services = AppServices.shared {
@@ -69,8 +70,7 @@ struct LedgerApp: App {
                 Task {
                     await model.becameActive()
                     await LocalNotifications.refreshOutbox(model.services)
-                    await LocalNotifications.refreshDueReminders(model.services,
-                                                                 profileCode: model.profiles.selected?.profileCode)
+                    await LocalNotifications.refreshDueReminders(model.services, model.dueReminderRefresh)
                 }
             // Leaving with messages waiting: let iOS send them later.
             case .background:

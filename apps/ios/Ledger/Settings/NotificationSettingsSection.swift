@@ -37,7 +37,7 @@ struct NotificationSettingsSection: View {
         Task {
             await LocalNotifications.apply(NoticeUpdate(cancel: withdraw))
             switch kind {
-            case .dueReminder: await LocalNotifications.refreshDueReminders(services, profileCode: profileCode)
+            case .dueReminder: await LocalNotifications.refreshDueReminders(services, .replan(profileCode: profileCode))
             case .outboxStuck: await LocalNotifications.refreshOutbox(services)
             default: break
             }
