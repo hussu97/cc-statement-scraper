@@ -98,16 +98,17 @@ public final class SupabaseLedgerAPI: LedgerAPI, @unchecked Sendable {
     public func transactions(profileCode: String, query: ActivityQuery, page: PageRequest) async throws -> TransactionPage {
         do {
             var q = client.from("v_transactions").select("*", count: .exact).eq("profile_code", value: profileCode)
-            if let search = query.searchOrFilter { q = q.or(search) }
-            if let account = query.accountCode { q = q.eq("account_code", value: account) }
-            if query.uncategorizedOnly {
-                q = q.is("category_code", value: nil)
-            } else if let category = query.categoryCode {
-                q = q.eq("category_code", value: category)
+            for filter in query.restFilters {
+                switch filter {
+                case let .eq(column, value): q = q.eq(column, value: value)
+                case let .isTrue(column): q = q.eq(column, value: true)
+                case let .isFalse(column): q = q.eq(column, value: false)
+                case let .isNull(column): q = q.is(column, value: nil)
+                case let .gte(column, value): q = q.gte(column, value: value)
+                case let .lte(column, value): q = q.lte(column, value: value)
+                case let .or(filters): q = q.or(filters)
+                }
             }
-            if query.status != .all { q = q.eq("status", value: query.status.rawValue) }
-            if let from = query.from { q = q.gte("txn_date", value: from.iso) }
-            if let to = query.to { q = q.lte("txn_date", value: to.iso) }
             let response = try await q
                 .order("txn_date", ascending: false)
                 .order("txn_at", ascending: false, nullsFirst: false)

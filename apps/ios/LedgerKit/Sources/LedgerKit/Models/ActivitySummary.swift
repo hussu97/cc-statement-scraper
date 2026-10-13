@@ -29,8 +29,7 @@ public struct ActivitySummary: Decodable, Sendable, Hashable {
 
 extension ActivityQuery {
     /// The `activity_summary` arguments for these filters. The search goes raw:
-    /// the server cleans it exactly as `sanitizedSearch` does. iOS has no card
-    /// or source filter, so those are null.
+    /// the server cleans it exactly as `sanitizedSearch` does. Unset filters are null.
     public func summaryParams(profileCode: String) -> [String: AnyJSON] {
         let search = search.trimmingCharacters(in: .whitespacesAndNewlines)
         return [
@@ -38,11 +37,11 @@ extension ActivityQuery {
             "p_from": from.map { .string($0.iso) } ?? .null,
             "p_to": to.map { .string($0.iso) } ?? .null,
             "p_account_code": accountCode.map { .string($0) } ?? .null,
-            "p_card_code": .null,
+            "p_card_code": cardCode.map { .string($0) } ?? .null,
             "p_category_code": uncategorizedOnly ? .null : categoryCode.map { .string($0) } ?? .null,
             "p_uncategorized": .bool(uncategorizedOnly),
             "p_status": status == .all ? .null : .string(status.rawValue),
-            "p_source": .null,
+            "p_source": source == .all ? .null : .string(source.rawValue),
             "p_q": search.isEmpty ? .null : .string(search),
         ]
     }
