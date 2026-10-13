@@ -160,7 +160,6 @@ class ScraperClient:
         data = {"bank_code_hint": hint} if hint else {}
         # Read once so every retry sends identical bytes without reopening files.
         payload = [(path.name, path.read_bytes()) for path in files]
-        by_name = {path.name: path for path in files}
         batches = chunk_payload(payload, self._max_files, self._max_bytes)
         if len(batches) > 1:
             logger.info("Uploading %d file(s) in %d request(s)", len(payload), len(batches))
@@ -169,14 +168,19 @@ class ScraperClient:
         uploaded: list[Path] = []
         failed: list[Path] = []
         errors: list[Exception] = []
+        # Batches are contiguous, in order, so each maps back to its paths by position:
+        # same-named files from different folders stay distinct (audit SRV-16r).
+        offset = 0
         with httpx.Client(timeout=120, transport=self._transport) as client:
             for batch in batches:
+                batch_paths = files[offset:offset + len(batch)]
+                offset += len(batch)
                 try:
                     results.extend(self._post_splitting(client, batch, data))
-                    uploaded.extend(by_name[name] for name, _ in batch)
+                    uploaded.extend(batch_paths)
                 except Exception as exc:  # noqa: BLE001 — other batches still go
                     errors.append(exc)
-                    failed.extend(by_name[name] for name, _ in batch)
+                    failed.extend(batch_paths)
 
         if errors:
             if not results and len(batches) == 1:
