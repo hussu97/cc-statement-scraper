@@ -225,10 +225,11 @@ amount as the phone formats it, currency included (`AED 12.50`, `$6.25` on an en
 arrives whole (an `IntentCurrencyAmount` would bind only the number and take the currency from a
 picker fixed in the automation). `WalletAmount.resolve` (LedgerKit) reads the amount and an ISO
 code from it: a three-letter code, else the symbol as the phone's locale writes it (`$` is USD
-in en_AE and en_US, ambiguous in en_GB), else `€ £ ₹ US$ د.إ …`. Only when the text has no
-currency, or an ambiguous symbol, does the optional **Currency if missing** (`fallbackCurrency`,
-under Show More) apply; with neither, the payment is refused in Shortcuts ("Set Currency if
-missing"), never guessed.
+in en_AE and en_US, ambiguous in en_GB; `د.ك.` is KWD on an Arabic-locale phone, which also
+writes `١٫٢٣٤`), else `€ £ ₹ US$ د.إ …`. Only when the text has no currency marker at all does the
+optional **Currency if missing** (`fallbackCurrency`, under Show More) apply; with neither, the
+payment is refused in Shortcuts ("Set Currency if missing"). A symbol that is ambiguous or unknown
+refuses it too (`ambiguous_currency`), whatever the fallback says: nothing is guessed.
 
 `WalletIntake` mirrors `SMSIntake`: `WalletCapture.payment` checks on the phone what the server
 would refuse (amount above zero, rounded half-up to cents; a 3-letter currency, uppercased;

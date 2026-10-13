@@ -83,6 +83,9 @@ public enum WalletCapture {
         /// Device-only: neither Amount was passed (the server never sees it).
         case missingAmount = "missing_amount"
         case invalidCurrency = "invalid_currency"
+        /// Device-only: the amount has a currency symbol or word that isn't
+        /// exactly one currency. *Currency if missing* never overrides it.
+        case ambiguousCurrency = "ambiguous_currency"
         case missingMerchant = "missing_merchant"
         case missingCard = "missing_card"
 
@@ -92,6 +95,8 @@ public enum WalletCapture {
             case .invalidAmount: "Not logged: the amount must be a number above zero."
             case .missingAmount: "Not logged: the amount is empty. Pass the automation's Amount."
             case .invalidCurrency: "Not logged: the amount has no currency. Set Currency if missing (e.g. AED) in the shortcut."
+            case .ambiguousCurrency:
+                "Not logged: Bank Ledger can't tell which currency the amount's symbol stands for, and won't guess. Currency if missing applies only to an amount without one."
             case .missingMerchant: "Not logged: the merchant is empty. Pass the automation's Merchant."
             case .missingCard: "Not logged: the card is empty. Pass the automation's Card or Pass."
             }
