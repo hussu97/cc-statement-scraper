@@ -174,12 +174,18 @@ if want tooling; then
   section "Workflows & scripts"
   if have actionlint; then run_check "actionlint" actionlint; else skip "actionlint" "not installed (brew install actionlint)"; fi
   if have shellcheck; then
-    run_check "shellcheck" bash -c 'shellcheck -x scripts/hooks/* scripts/ci/*.sh scripts/install-hooks.sh'
+    run_check "shellcheck" bash -c 'shellcheck -x scripts/hooks/* scripts/ci/*.sh scripts/install-hooks.sh apps/ios/scripts/*.sh'
   else
     skip "shellcheck" "not installed (brew install shellcheck)"
   fi
   run_check "destructive migration guard tests" python3 scripts/ci/sql_executed_text_test.py
   run_check "Claude Code guard tests" python3 .claude/hooks/guard_test.py
+  # Release config + Sentry release scripts, against fixture plists and fakes (needs plutil).
+  if [ "$(uname -s)" = Darwin ]; then
+    run_check "iOS release checks tests" bash apps/ios/scripts/release_checks_test.sh
+  else
+    skip "iOS release checks tests" "needs macOS (plutil)"
+  fi
 fi
 
 if want migrations; then
