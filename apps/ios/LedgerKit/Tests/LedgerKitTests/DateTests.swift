@@ -67,4 +67,21 @@ struct DateTests {
         #expect(text == "2026-10-08T05:12:44.250Z")
         #expect(LedgerDates.parseTimestamp(text) == date)
     }
+
+    @Test("the shared ISO formatters give the same answers from many threads at once (IOS-26)")
+    func isoConcurrent() async {
+        let results = await withTaskGroup(of: Bool.self) { group in
+            for i in 0..<400 {
+                group.addTask {
+                    let date = Date(timeIntervalSince1970: 1_791_436_364 + Double(i) + 0.125)
+                    let text = LedgerDates.isoTimestamp(date)
+                    let whole = LedgerDates.parseTimestamp("2026-10-08 09:12:44+04")
+                    return LedgerDates.parseTimestamp(text) == date
+                        && whole.map { Int($0.timeIntervalSince1970) } == 1_791_436_364
+                }
+            }
+            return await group.reduce(into: [Bool]()) { $0.append($1) }
+        }
+        #expect(results.count == 400 && results.allSatisfy { $0 })
+    }
 }

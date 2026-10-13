@@ -74,8 +74,13 @@ targets:
         BGTaskSchedulerPermittedIdentifiers:
           - com.hussu97.ledger.outbox-refresh
           - com.hussu97.ledger.outbox-send
-        NSAppTransportSecurity:
-          NSAllowsLocalNetworking: true
+        # Deep links: ledger://review (LedgerKit AppLink; the App Intents open it
+        # when a review is needed, BACKLOG IOS-07r).
+        CFBundleURLTypes:
+          - CFBundleURLName: $(LEDGER_BUNDLE_PREFIX)
+            CFBundleURLSchemes: [ledger]
+        # No NSAppTransportSecurity here: Release allows HTTPS only. Debug adds
+        # NSAllowsLocalNetworking in the "Debug ATS" script below (BACKLOG IOS-30).
         LedgerSupabaseURL: $(LEDGER_SUPABASE_URL)
         LedgerSupabasePublishableKey: $(LEDGER_SUPABASE_PUBLISHABLE_KEY)
         LedgerSentryDSN: $(LEDGER_SENTRY_DSN)
@@ -83,7 +88,23 @@ targets:
         LedgerAppGroup: $(LEDGER_APP_GROUP)
         LedgerKeychainGroup: $(AppIdentifierPrefix)$(LEDGER_KEYCHAIN_GROUP)
         LedgerPasskeyDomain: $(LEDGER_PASSKEY_DOMAIN)
+    preBuildScripts:
+      - name: Debug ATS
+        # Debug talks to `supabase start` over plain HTTP (127.0.0.1 from the
+        # simulator, the Mac's LAN address from a device). Debug's Info.plist is
+        # a copy of the generated one plus NSAllowsLocalNetworking; Release reads
+        # Ledger/Info.plist as generated, without it.
+        script: |
+          plutil -insert NSAppTransportSecurity -json '{"NSAllowsLocalNetworking":true}' \
+            -o - "$SCRIPT_INPUT_FILE_0" > "$SCRIPT_OUTPUT_FILE_0"
+        inputFiles:
+          - $(SRCROOT)/Ledger/Info.plist
+        outputFiles:
+          - $(DERIVED_FILE_DIR)/Info.Debug.plist
     settings:
+      configs:
+        Debug:
+          INFOPLIST_FILE: $(DERIVED_FILE_DIR)/Info.Debug.plist
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(LEDGER_BUNDLE_PREFIX)
         PRODUCT_NAME: Ledger
@@ -114,8 +135,7 @@ targets:
         CFBundleDisplayName: Add to Bank Ledger
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        NSAppTransportSecurity:
-          NSAllowsLocalNetworking: true
+        # NSAllowsLocalNetworking: Debug only, as for the app (IOS-30).
         LedgerSupabaseURL: $(LEDGER_SUPABASE_URL)
         LedgerSupabasePublishableKey: $(LEDGER_SUPABASE_PUBLISHABLE_KEY)
         LedgerSentryDSN: $(LEDGER_SENTRY_DSN)
@@ -131,7 +151,19 @@ targets:
               SUBQUERY ($extensionItem.attachments, $attachment,
               ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "com.adobe.pdf"
               ).@count >= 1).@count >= 1
+    preBuildScripts:
+      - name: Debug ATS
+        script: |
+          plutil -insert NSAppTransportSecurity -json '{"NSAllowsLocalNetworking":true}' \
+            -o - "$SCRIPT_INPUT_FILE_0" > "$SCRIPT_OUTPUT_FILE_0"
+        inputFiles:
+          - $(SRCROOT)/ShareExtension/Info.plist
+        outputFiles:
+          - $(DERIVED_FILE_DIR)/Info.Debug.plist
     settings:
+      configs:
+        Debug:
+          INFOPLIST_FILE: $(DERIVED_FILE_DIR)/Info.Debug.plist
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(LEDGER_BUNDLE_PREFIX).share
         PRODUCT_NAME: LedgerShare

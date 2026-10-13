@@ -23,6 +23,17 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>$(LEDGER_BUNDLE_PREFIX)</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>ledger</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
@@ -41,11 +52,6 @@
 	<string>$(LEDGER_SUPABASE_PUBLISHABLE_KEY)</string>
 	<key>LedgerSupabaseURL</key>
 	<string>$(LEDGER_SUPABASE_URL)</string>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsLocalNetworking</key>
-		<true/>
-	</dict>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Bank Ledger asks for Face ID to unlock when you turn on Require Face ID in Settings.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

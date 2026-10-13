@@ -74,6 +74,7 @@ public enum Telemetry {
             #endif
             options.beforeSend = { event in TelemetryScrubber.scrub(event) }
             options.beforeBreadcrumb = { crumb in TelemetryScrubber.scrub(breadcrumb: crumb) }
+            options.beforeSendSpan = { span in TelemetryScrubber.scrub(span: span) }
         }
         SentrySDK.configureScope { scope in
             for (key, value) in scopeTags(target: target) { scope.setTag(value: value, key: key) }
@@ -96,7 +97,7 @@ public enum Telemetry {
     public static func breadcrumb(_ category: String, outcome: String, data: [String: String] = [:]) {
         let crumb = Breadcrumb(level: .info, category: category)
         crumb.message = outcome
-        crumb.data = data
+        for (key, value) in data { crumb.setData(value: value, key: key) }
         SentrySDK.addBreadcrumb(crumb)
     }
 
