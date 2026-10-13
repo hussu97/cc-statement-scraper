@@ -1,5 +1,29 @@
 # Changelog
 
+## Backlog batch 4: Activity bulk actions and export, iOS transaction sheet, Dubai dates — 2026-10-13
+
+### Backend (Supabase)
+
+- **add** `20261013042808_activity_bulk_actions`: `activity_selection_summary` (count, net AED, excluded count), `bulk_update_transactions` (owner; `exclude_from_spend` and/or `manual_category_code` only) and `activity_export` take either ticked transaction codes or the Activity filter (read exactly as `activity_summary`), never neither or both; money is returned as decimal strings (WEB-24).
+- **change** `20261013042809_large_transaction_merchant_title`: the nightly `large_transaction` insight is titled with the merchant name, falling back to the cleaned description (WEB-16r).
+
+### Web
+
+- **add** The Activity bulk bar shows the selection's count and net AED from the server, "Select all N" (the whole filter), Exclude/Include from spend and Export CSV (formula-safe cells, including behind leading spaces, decimal-string money, UTF-8 BOM). Viewers can select and export; Categorise and Exclude stay owner-only (WEB-24).
+- **fix** The rule editor leaves regex syntax to the server preview, so Postgres-only syntax such as `(?b)…` can be saved (WEB-13r).
+- **fix** A `txn=` link to another ledger's transaction says so and offers to switch, instead of loading it under the wrong ledger (WEB-46).
+- **fix** Dates taken from timestamps (members, passkeys, tokens, secrets, relative time) show the Dubai day (WEB-47).
+- **fix** New service-token plaintext, PDF passwords and mailbox refresh tokens leave the request cache as soon as the form closes (WEB-50).
+
+### iOS
+
+- **add** The transaction sheet opens full height with category search; "None" clears a manual category; "Apply to every … transaction" starts on unless the category is that transaction's own choice; "Exclude from spend" and notes (owners). Activity rows swipe for Categorise and Exclude/Include; excluded rows say "Excluded" (IOS-18).
+- **fix** The overview model decodes by the server's snake_case keys instead of Foundation's `spendAvg3M` mapping, and carries `spend_avg_3m_to_date` and `projected_month_end` (X-33r).
+
+### Docs
+
+- **change** BACKLOG: batch 4 done (8 items); IOS-21r built on a branch and held back until the Sentry token is in the keychain. Lesson: build `supabase.rpc` arguments as a typed variable.
+
 ## Backlog batch 3: plain anomalies, one-call review context, first-run checklist, deep links, scraper state files — 2026-10-13
 
 ### Backend (Supabase)

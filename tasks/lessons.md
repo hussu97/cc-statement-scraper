@@ -9,6 +9,7 @@
 
 | When | Lesson |
 |---|---|
+| 2026-10-13 | [Build `supabase.rpc` arguments as a typed variable: a spread union hangs `tsc`](#build-supabaserpc-arguments-as-a-typed-variable-a-spread-union-hangs-tsc) |
 | 2026-10-12 | [Check what production serves, not what Vercel says it shipped](#check-what-production-serves-not-what-vercel-says-it-shipped) |
 | 2026-10-12 | [Git hooks export `GIT_DIR`: in a worktree, every child git uses the wrong repository](#git-hooks-export-git_dir-in-a-worktree-every-child-git-uses-the-wrong-repository) |
 | 2026-10-12 | [Beta App Review must be able to sign in: keep a demo account](#beta-app-review-must-be-able-to-sign-in-keep-a-demo-account) |
@@ -38,6 +39,16 @@
 | 2026-10-08 | [Tooling defaults that don't work here: `gh` account, Supabase MCP, `localhost`, pip](#tooling-defaults-that-dont-work-here-gh-account-supabase-mcp-localhost-pip) |
 
 ## Lessons
+
+### Build `supabase.rpc` arguments as a typed variable: a spread union hangs `tsc`
+- **What went wrong**: during WEB-24 (2026-10-13), `tsc -b` ran for 15+ minutes without finishing
+  after a union type (codes or filter) was spread straight into a `supabase.rpc("…", { ...args })`
+  call: the generated `Database` types make every overload check expand the union against every
+  RPC signature.
+- **Rule**: build RPC arguments as a typed variable first (`const args: RpcArgs<"name"> = …`) and
+  pass that; never spread a union into `supabase.rpc(...)`. If `pnpm web:typecheck` suddenly takes
+  minutes, look for a new RPC call with inline union arguments.
+- **Enforced by**: nothing yet; the pre-push hook's typecheck step would hang visibly.
 
 ### Check what production serves, not what Vercel says it shipped
 - **What went wrong**: `web-smoke.yml` failed after 9 minutes on `e9f74af`/`a346956` and again on

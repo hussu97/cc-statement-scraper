@@ -544,3 +544,6 @@ Everything still open, including the UX and iOS-native recommendations and the d
 
 **Backlog batch 3 (2026-10-13):** IOS-11 (by the IOS-10 shared fixture) fixed; outcomes in
 [BACKLOG.md](BACKLOG.md#done-backlog-batch-3-2026-10-13).
+
+**Backlog batch 4 (2026-10-13):** IOS-18 and X-33r (IOS-21r built, held back); outcomes in
+[BACKLOG.md](BACKLOG.md#done-backlog-batch-4-2026-10-13).

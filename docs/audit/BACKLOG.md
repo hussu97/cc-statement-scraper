@@ -27,11 +27,11 @@ separately):
 | Database (Supabase SQL) | 0 | 2 | – | 1 | 3 |
 | Edge Functions | 0 | 0 | – | – | 0 |
 | Parser | 1 | – | – | – | 1 |
-| Web | 1 | 20 | 5 | – | 26 |
-| iOS | 2 | 9 | 7 | 2 | 20 |
+| Web | 0 | 15 | 5 | – | 20 |
+| iOS | 1 | 8 | 7 | 2 | 18 |
 | Scraper | – | 1 | – | – | 1 |
 | CI, config and ops | 0 | 0 | – | 0 | 0 |
-| **Total** | **4** | **32** | **12** | **3** | **51** |
+| **Total** | **2** | **26** | **12** | **3** | **43** |
 
 There are no open P0 or P1 findings. The last P1 remainders (WEB-02 statements beyond 500 and
 merchant search, WEB-07 "Retry AI") landed in `98f901c`. What is left of the P1s are the device
@@ -93,14 +93,12 @@ None open. All five were done on 2026-10-09: see [Done: Edge Functions and CI pa
 
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
-| WEB-24 | Bulk bar: phone selection and Categorise are done; still no Exclude, Export CSV or server-computed selection total | UX | Add those actions (server total via an RPC) | M |
 
 ### iOS
 
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
-| IOS-18 | Category sheet opens at `.medium` (3 categories), no search, no "None", merchant toggle defaults off, no notes or exclude-from-spend | UX, out of the P1 pass | `.large` + `.searchable`, merchant toggle on unless the category is manual, "Exclude from spend" and notes, swipe actions on rows | M |
-| IOS-21r | Release config still includes the local `Secrets.xcconfig` (one dropped key ships a local value); no assertion on the archived Info.plist; no Sentry releases; the token in `Secrets.Release.xcconfig` is an Xcode build setting (also X-28) | Only the token handling in `publish-build.sh` was done | Include `Secrets.xcconfig` from `Debug.xcconfig` only; `plutil` asserts on the archived app and `.appex` (https, `production`, non-empty keys); `sentry-cli releases new/set-commits/finalize`; keep the token in the shell or keychain | M |
+| IOS-21r | Release config still includes the local `Secrets.xcconfig` (one dropped key ships a local value); no assertion on the archived Info.plist; no Sentry releases; the token in `Secrets.Release.xcconfig` is an Xcode build setting (also X-28) | Only the token handling in `publish-build.sh` was done. **Built (branch `worktree-agent-ae3b81cd59353e270`, held out of release 4):** Release reads only `Secrets.Release.xcconfig` with a "Check release config" build step, `release-config-check.sh` asserts the archive and IPA plists, `sentry-release.sh` creates Sentry releases, and the token comes from the shell or the keychain. It ships once `SENTRY_AUTH_TOKEN` is moved out of `Secrets.Release.xcconfig` into the keychain item `ledger-sentry-auth-token` (`testflight.sh` refuses otherwise); then revert `21ceeef` | Include `Secrets.xcconfig` from `Debug.xcconfig` only; `plutil` asserts on the archived app and `.appex` (https, `production`, non-empty keys); `sentry-cli releases new/set-commits/finalize`; keep the token in the shell or keychain | M |
 
 ### CI, config and ops
 
@@ -129,8 +127,6 @@ None open (SRV-12, SRV-17 and X-25r are done).
 
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
-| WEB-13r | The rule editor still pre-checks regex syntax with JS `RegExp`, so Postgres-only syntax (embedded options such as `(?b)…`) is blocked on the client | Found in the batch-1 WEB-13 fix; only the opposite direction was in scope | Drop the JS pre-check and let `preview_rule` (22023) judge | S |
-| WEB-16r | The nightly `large_transaction` insight title still uses the raw uppercase description | Found with WEB-16; needs a `private.generate_insights` rewrite | Title from `merchant_name`, as `anomalies` now returns | S |
 | WEB-31 | "Uncategorised" vs "Uncategorized" across UI, Trends and the server name | Polish | UK spelling everywhere, server name included | S |
 | WEB-34 | Mixed decimals for the same kind of figure | Polish | Two decimals for transactions, whole units for balances, limits and aggregates | S |
 | WEB-35 | "Pending from SMS" and "Recent activity" show largely the same rows | UX | Merge, or exclude pending from Recent | S |
@@ -140,10 +136,7 @@ None open (SRV-12, SRV-17 and X-25r are done).
 | WEB-40 | First-run "Key … X-Profile-Key header" jargon; "one person's cards" copy vs a "Household" example | UX copy | Move "Key" under Advanced with a generated default; fix the copy | S |
 | WEB-41 | Disabled-until-valid primary buttons are ~2:1 and give no reason | UX | Keep enabled and validate on submit, or explain | S |
 | WEB-42 | Revoked tokens are listed forever (the pluralisation is fixed) | UX | Collapse revoked tokens behind a "Show revoked" toggle | S |
-| WEB-46 | The drawer loads a `txn=` from another profile (no `profile_code` filter) | RLS still applies; confusing only | `.eq('profile_code', …)` and a "belongs to another ledger" state | S |
-| WEB-47 | `timestamptz.slice(0,10)` / `toISOString()` show the UTC day, not the Dubai day | Polish | `todayDubai(new Date(ts))` | S |
 | WEB-49 | Notes stay dirty after saving padded text; preview shows "1,000+" though counts are exact | Polish | Compare trimmed; drop the cap text | S |
-| WEB-50 | New token plaintext and PDF passwords linger in the MutationCache ~5 min | Hygiene | `gcTime: 0` on those mutations | S |
 | WEB-52 | `<a>` directly in `<dl>`, unnamed `role=meter`, 404 outside the shell, no skip link | a11y polish | `<div><dt/><dd/></div>`, `aria-label`, 404 in the shell, "Skip to content" | S |
 | WEB-53 | Overview loads the 285 kB Recharts chunk for one donut | Perf | Hand-rolled SVG ring | S |
 | WEB-54 | Two pager components, duplicated helpers, `ConfirmDialog` under `rules/`, 480-line `email-section.tsx`, 470-line `data/rules.ts` | Readability | Consolidate and split | M |
@@ -162,7 +155,6 @@ None open (SRV-12, SRV-17 and X-25r are done).
 | IOS-28 | Insights draws the partial month like a full one; no average line, values or budget rule; rows not drillable | UX | Hatched current month with projection, `RuleMark` average, `chartXSelection`, rows link to filtered Activity | M |
 | IOS-29 | Small presentation decisions in views (`prefix(4)`, `prefix(10)`, fallbacks) | Readability | Move into LedgerKit presentation extensions with tests | S |
 | IOS-30 | Sentry failed-request capture can carry Activity search text in the PostgREST URL; `NSAllowsLocalNetworking` ships in Release | Hygiene | Strip query strings in `beforeSend`; set the ATS key in Debug only | S |
-| X-33r | iOS relies on Foundation's `spend_avg_3m` → `spendAvg3M` key mapping (the DB parts of X-33 were fixed on 2026-10-09) | Minor | Explicit `CodingKeys` on the overview model | S |
 
 ### Scraper
 
@@ -279,6 +271,23 @@ CHANGELOG.
 (05's recommendations 3–5 are IOS-19r, IOS-20r, IOS-18, IOS-28 and IOS-17 above.)
 
 ---
+
+## Done: backlog batch 4 (2026-10-13)
+
+Branch `batch/backlog-4`, migrations `20261013042808_activity_bulk_actions` and
+`20261013042809_large_transaction_merchant_title`, pgTAP `44` and `45`. Audited after merge (CSV
+formula check hardened for leading spaces). IOS-21r was built but held back (see its row).
+
+| ID | Outcome |
+|---|---|
+| WEB-24 | Done: `activity_selection_summary`, `bulk_update_transactions` (owner), `activity_export` take ticked codes or the Activity filter, never neither; the bulk bar shows the server total, "Select all N", Exclude/Include and Export CSV (formula-safe cells, decimal-string money, UTF-8 BOM) |
+| WEB-16r | Done: the nightly `large_transaction` insight is titled with the merchant name |
+| WEB-13r | Done: regex syntax is judged only by `preview_rule` (22023), so Postgres-only syntax can be saved |
+| WEB-46 | Done: the drawer loads `txn=` only from the active ledger and offers to switch when it belongs to another |
+| WEB-47 | Done: `dubaiDate()`; timestamps show their Dubai day |
+| WEB-50 | Done: `SECRET_MUTATION` (`gcTime: 0`) on token, PDF password and mailbox secret mutations |
+| IOS-18 | Done: the transaction sheet is large and searchable, with None, merchant-wide by default unless the category is the transaction's own choice, exclude and notes; Activity swipe actions; viewers get no write controls |
+| X-33r | Done: the overview model decodes by its snake_case wire keys (`WireKeyedContainer`) and carries `spend_avg_3m_to_date` / `projected_month_end` |
 
 ## Done: backlog batch 3 (2026-10-13)
 
