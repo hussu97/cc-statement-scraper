@@ -62,8 +62,8 @@ export function Dot({ token, className }: { token: string | null | undefined; cl
   return <span aria-hidden className={cn("inline-block size-2 shrink-0 rounded-pill", className)} style={{ background: `var(--chart-${v})` }} />;
 }
 
-/** Thin progress bar. `value` is a display ratio (0–1+). */
-export function Meter({ value, tone = "accent", className, label }: { value: number | null; tone?: "accent" | "positive" | "warn" | "danger"; className?: string; label?: string }) {
+/** Thin progress bar. `value` is a display ratio (0–1+). `label` is required: a meter needs an accessible name (WEB-52). */
+export function Meter({ value, tone = "accent", className, label }: { value: number | null; tone?: "accent" | "positive" | "warn" | "danger"; className?: string; label: string }) {
   const pct = Math.max(0, Math.min(1, value ?? 0)) * 100;
   const color = { accent: "bg-accent", positive: "bg-positive", warn: "bg-warn", danger: "bg-danger" }[tone];
   return (
