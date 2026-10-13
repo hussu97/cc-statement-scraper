@@ -12,10 +12,9 @@ import LedgerKit
 /// logged and never echoed in the result.
 ///
 /// The Amount is read as text (`"AED 12.50"`, `"€4.20"`), so the currency comes
-/// from the transaction itself. The `IntentCurrencyAmount` parameter took its
-/// currency from a picker fixed in the automation, which filed payments abroad
-/// in that currency; it stays (identifier `amount`) so automations set up with
-/// it keep working. `fallbackCurrency` applies only to an amount without one.
+/// from the transaction itself; an `IntentCurrencyAmount` would take it from a
+/// picker fixed in the automation. `fallbackCurrency` applies only to an
+/// amount without one.
 ///
 /// App Store processing rejects intent text naming Apple products (ITMS-90626;
 /// CLAUDE.md §5.6), so the title, description and parameters say "card".
@@ -40,16 +39,9 @@ struct LogCardPaymentIntent: AppIntent {
                description: "Optional, e.g. AED. Used only when the amount arrives without a currency.")
     var fallbackCurrency: String?
 
-    /// Automations set up before `transactionAmount`: the number, with a
-    /// currency chosen in the shortcut. Used only when Amount is empty.
-    @Parameter(title: "Amount in a set currency",
-               description: "Older setups only. Use Amount instead, so a payment abroad keeps its currency.")
-    var amount: IntentCurrencyAmount?
-
     static var parameterSummary: some ParameterSummary {
         Summary("Log \(\.$transactionAmount) at \(\.$merchant) on \(\.$card)") {
             \.$fallbackCurrency
-            \.$amount
         }
     }
 
@@ -59,8 +51,7 @@ struct LogCardPaymentIntent: AppIntent {
         }
         Telemetry.start(target: .intent, config: services.config, isDebugBuild: BuildFlavor.isDebug)
         let (outcome, dialog) = await services.walletIntake().handle(
-            amountText: transactionAmount, currencyAmount: amount.map { ($0.amount, $0.currencyCode) },
-            fallbackCurrency: fallbackCurrency, merchant: merchant, card: card)
+            amountText: transactionAmount, fallbackCurrency: fallbackCurrency, merchant: merchant, card: card)
         Telemetry.breadcrumb("wallet_ingest", outcome: outcome.telemetryOutcome, data: ["entry": "intent"])
         // Saved but not sent (e.g. no data at the till): ask iOS to send it once a connection is back.
         if case .queued = outcome { await BackgroundSync.schedule(services) }

@@ -5,26 +5,18 @@ import Synchronization
 ///
 /// A Shortcuts Transaction automation hands over the Wallet transaction's
 /// Amount as the device formats it: `"AED 12.50"`, `"€4.20"`, `"$6.25"`,
-/// `"12,50 €"`. An `IntentCurrencyAmount` parameter can't keep that currency:
-/// Shortcuts binds the variable to the number and takes the currency from a
-/// picker fixed in the automation, so a payment abroad was filed in AED. The
-/// intent therefore reads the Amount as text, and the currency comes with it.
-///
-/// Order of sources:
-/// 1. The Amount text, with its own currency. Only when the text has no
-///    currency (or an ambiguous symbol) does the shortcut's optional
-///    *Currency if missing* apply, then the older currency amount's code.
-/// 2. Without text, the older `IntentCurrencyAmount` parameter (automations
-///    set up before the text Amount existed keep working, in the currency
-///    chosen in the shortcut).
+/// `"12,50 €"`. The intent reads it as text, so the currency comes with it (an
+/// `IntentCurrencyAmount` parameter would bind only the number and take the
+/// currency from a picker fixed in the automation). Only when the text has no
+/// currency, or an ambiguous symbol, does the shortcut's optional
+/// *Currency if missing* apply; with neither, the payment is refused, never
+/// filed in a guessed currency.
 public enum WalletAmount {
     public enum Source: String, Sendable, Equatable {
-        /// The Wallet Amount text, currency read from it.
+        /// The currency was read from the Amount text.
         case text
-        /// The Wallet Amount text without a currency; the fallback supplied one.
-        case textWithFallbackCurrency
-        /// The older currency-amount parameter, its currency fixed in the shortcut.
-        case currencyAmount
+        /// The Amount text had none; *Currency if missing* supplied it.
+        case fallbackCurrency
     }
 
     public struct Resolved: Sendable, Equatable {
@@ -36,33 +28,19 @@ public enum WalletAmount {
     /// Picks the amount and currency for one payment, or the problem that stops it.
     /// - Parameters:
     ///   - text: the intent's Amount (Shortcut Input → Amount), as text.
-    ///   - currencyAmount: the older currency-amount parameter, if set.
     ///   - fallbackCurrency: the shortcut's optional *Currency if missing*.
     ///   - locale: how the device formats amounts (decides `$` and `1,234`).
-    public static func resolve(text: String?, currencyAmount: (amount: Decimal, currency: String)?,
-                               fallbackCurrency: String?, locale: Locale = .current) -> Result<Resolved, WalletCapture.Problem> {
-        // Shortcuts fills an untouched currency-amount field with "0 AED" (the
-        // phone's currency): that is no amount, and its currency is no fallback.
-        let currencyAmount = currencyAmount.flatMap { $0.amount == 0 ? nil : $0 }
-        if let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            guard let parsed = WalletAmountText.parse(text, locale: locale) else { return .failure(.invalidAmount) }
-            if let currency = parsed.currency {
-                return .success(Resolved(amount: parsed.amount, currency: currency, source: .text))
-            }
-            let fallback = [fallbackCurrency, currencyAmount?.currency].lazy.compactMap { $0 }
-                .first { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-            guard let fallback, let code = isoCode(fallback) else { return .failure(.invalidCurrency) }
-            return .success(Resolved(amount: parsed.amount, currency: code, source: .textWithFallbackCurrency))
+    public static func resolve(text: String?, fallbackCurrency: String?,
+                               locale: Locale = .current) -> Result<Resolved, WalletCapture.Problem> {
+        guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return .failure(.missingAmount)
         }
-        if let currencyAmount {
-            // The amount's own currency first; the fallback only when it has none.
-            let own = currencyAmount.currency.trimmingCharacters(in: .whitespaces)
-            guard let code = isoCode(own.isEmpty ? (fallbackCurrency ?? "") : own) else {
-                return .failure(.invalidCurrency)
-            }
-            return .success(Resolved(amount: currencyAmount.amount, currency: code, source: .currencyAmount))
+        guard let parsed = WalletAmountText.parse(text, locale: locale) else { return .failure(.invalidAmount) }
+        if let currency = parsed.currency {
+            return .success(Resolved(amount: parsed.amount, currency: currency, source: .text))
         }
-        return .failure(.missingAmount)
+        guard let fallbackCurrency, let code = isoCode(fallbackCurrency) else { return .failure(.invalidCurrency) }
+        return .success(Resolved(amount: parsed.amount, currency: code, source: .fallbackCurrency))
     }
 
     /// A three-letter code, uppercased; nil for anything else.

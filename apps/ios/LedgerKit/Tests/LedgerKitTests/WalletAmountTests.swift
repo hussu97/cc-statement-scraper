@@ -39,7 +39,7 @@ struct WalletAmountTests {
     func negative() throws {
         let parsed = try #require(WalletAmountText.parse("-AED 5.00", locale: enAE))
         #expect(parsed.amount == dec("-5.00"))
-        #expect(WalletAmount.resolve(text: "−AED 5.00", currencyAmount: nil, fallbackCurrency: nil, locale: enAE)
+        #expect(WalletAmount.resolve(text: "−AED 5.00", fallbackCurrency: nil, locale: enAE)
             .map(\.amount) == .success(dec("-5.00")))
     }
 
@@ -65,55 +65,30 @@ struct WalletAmountTests {
 
     // MARK: - Which source wins
 
-    @Test("the amount's own currency wins over the fallback and the older fixed currency")
+    @Test("the amount's own currency wins over the fallback")
     func ownCurrencyWins() {
-        let r = WalletAmount.resolve(text: "€4.20", currencyAmount: (dec("4.20"), "AED"),
-                                     fallbackCurrency: "AED", locale: enAE)
+        let r = WalletAmount.resolve(text: "€4.20", fallbackCurrency: "AED", locale: enAE)
         #expect(r == .success(.init(amount: dec("4.20"), currency: "EUR", source: .text)))
     }
 
     @Test("an amount without a currency takes the fallback, uppercased")
     func fallback() {
-        let r = WalletAmount.resolve(text: "12.50", currencyAmount: nil, fallbackCurrency: " aed ", locale: enAE)
-        #expect(r == .success(.init(amount: dec("12.50"), currency: "AED", source: .textWithFallbackCurrency)))
-    }
-
-    @Test("without a fallback, the older parameter's currency fills in")
-    func fallbackFromCurrencyAmount() {
-        let r = WalletAmount.resolve(text: "12.50", currencyAmount: (dec("99"), "AED"), fallbackCurrency: nil, locale: enAE)
-        #expect(r == .success(.init(amount: dec("12.50"), currency: "AED", source: .textWithFallbackCurrency)))
+        let r = WalletAmount.resolve(text: "12.50", fallbackCurrency: " aed ", locale: enAE)
+        #expect(r == .success(.init(amount: dec("12.50"), currency: "AED", source: .fallbackCurrency)))
     }
 
     @Test("no currency anywhere, or an invalid fallback: refused, nothing guessed", arguments: [
         nil, "", "dirham", "AE1",
     ] as [String?])
     func invalidFallback(fallback: String?) {
-        let r = WalletAmount.resolve(text: "12.50", currencyAmount: nil, fallbackCurrency: fallback, locale: enAE)
+        let r = WalletAmount.resolve(text: "12.50", fallbackCurrency: fallback, locale: enAE)
         #expect(r == .failure(.invalidCurrency))
-    }
-
-    @Test("automations set up with the currency amount keep working, in its own currency")
-    func olderAutomation() {
-        let r = WalletAmount.resolve(text: nil, currencyAmount: (dec("45.10"), "usd"), fallbackCurrency: "AED", locale: enAE)
-        #expect(r == .success(.init(amount: dec("45.10"), currency: "USD", source: .currencyAmount)))
-        let empty = WalletAmount.resolve(text: "  ", currencyAmount: (dec("1"), ""), fallbackCurrency: "EUR", locale: enAE)
-        #expect(empty == .success(.init(amount: dec("1"), currency: "EUR", source: .currencyAmount)))
-    }
-
-    @Test("the untouched older field (Shortcuts shows it as 0 AED) is neither an amount nor a currency")
-    func untouchedDefault() {
-        #expect(WalletAmount.resolve(text: nil, currencyAmount: (0, "AED"), fallbackCurrency: nil, locale: enAE)
-                == .failure(.missingAmount))
-        #expect(WalletAmount.resolve(text: "12.50", currencyAmount: (0, "AED"), fallbackCurrency: nil, locale: enAE)
-                == .failure(.invalidCurrency))
-        #expect(WalletAmount.resolve(text: "€4.20", currencyAmount: (0, "AED"), fallbackCurrency: nil, locale: enAE)
-                == .success(.init(amount: dec("4.20"), currency: "EUR", source: .text)))
     }
 
     @Test("garbled text or nothing at all is refused")
     func refused() {
-        #expect(WalletAmount.resolve(text: "free", currencyAmount: nil, fallbackCurrency: "AED") == .failure(.invalidAmount))
-        #expect(WalletAmount.resolve(text: nil, currencyAmount: nil, fallbackCurrency: "AED") == .failure(.missingAmount))
+        #expect(WalletAmount.resolve(text: "free", fallbackCurrency: "AED") == .failure(.invalidAmount))
+        #expect(WalletAmount.resolve(text: nil, fallbackCurrency: "AED") == .failure(.missingAmount))
     }
 }
 
@@ -128,7 +103,7 @@ struct WalletIntakeAmountTests {
     @Test("a payment abroad is sent in its own currency")
     func abroad() async throws {
         let api = StubAPI(.succeed(status: "created"))
-        let (outcome, dialog) = await intake(api).handle(amountText: "€4.20", currencyAmount: nil, fallbackCurrency: nil,
+        let (outcome, dialog) = await intake(api).handle(amountText: "€4.20", fallbackCurrency: nil,
                                                          merchant: "Café", card: "Wio", locale: enAE)
         #expect(outcome == .delivered(status: "created"))
         #expect(dialog == "Logged to Personal.")
@@ -137,20 +112,10 @@ struct WalletIntakeAmountTests {
         #expect(item.amount == dec("4.20"))
     }
 
-    @Test("an older automation is logged, with a pointer to the Amount setting")
-    func olderAutomationTip() async {
-        let api = StubAPI(.succeed(status: "created"))
-        let (_, dialog) = await intake(api).handle(amountText: nil, currencyAmount: (dec("5"), "AED"),
-                                                   fallbackCurrency: nil, merchant: "Shop", card: "Wio")
-        #expect(dialog.hasPrefix("Logged to Personal."))
-        #expect(dialog.hasSuffix(WalletIntake.setCurrencyTip))
-        #expect(!dialog.contains("Shop"))
-    }
-
     @Test("no currency: refused before anything is queued, and the line says what to set")
     func noCurrency() async {
         let api = StubAPI(.succeed(status: "created"))
-        let (outcome, dialog) = await intake(api).handle(amountText: "12.50", currencyAmount: nil, fallbackCurrency: nil,
+        let (outcome, dialog) = await intake(api).handle(amountText: "12.50", fallbackCurrency: nil,
                                                          merchant: "Shop", card: "Wio", locale: enAE)
         #expect(outcome == .refused(code: "invalid_currency", message: WalletCapture.Problem.invalidCurrency.userMessage))
         #expect(dialog.contains("Currency if missing"))

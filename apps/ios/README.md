@@ -197,17 +197,13 @@ transaction, not two transactions.
 **Currency.** The automation's Shortcut Input is the Wallet transaction; its Amount is the
 amount as the phone formats it, currency included (`AED 12.50`, `$6.25` on an en_AE phone, `€4.20`,
 `12,50 €`). The intent's **Amount** (`transactionAmount`) is a text parameter, so that string
-arrives whole, and `WalletAmount.resolve` (LedgerKit) reads the amount and an ISO code from it:
-a three-letter code, else the symbol as the phone's locale writes it (`$` is USD in en_AE and
-en_US, ambiguous in en_GB), else `€ £ ₹ US$ د.إ …`. Only when the text has no currency, or an
-ambiguous symbol, does the optional **Currency if missing** (`fallbackCurrency`) apply; with
-neither, the payment is refused in Shortcuts ("Set Currency if missing"), never guessed.
-Automations set up before this used an `IntentCurrencyAmount` parameter (`amount`, now **Amount
-in a set currency**, optional, under Show More): Shortcuts bound the number to it and took the
-currency from a picker fixed in the automation, so a payment abroad was filed in AED. They keep
-working unchanged, and their result line adds a pointer to set **Amount** instead. Left untouched,
-that field shows **0 AED** in Shortcuts; a zero there counts as empty (no amount, no fallback
-currency).
+arrives whole (an `IntentCurrencyAmount` would bind only the number and take the currency from a
+picker fixed in the automation). `WalletAmount.resolve` (LedgerKit) reads the amount and an ISO
+code from it: a three-letter code, else the symbol as the phone's locale writes it (`$` is USD
+in en_AE and en_US, ambiguous in en_GB), else `€ £ ₹ US$ د.إ …`. Only when the text has no
+currency, or an ambiguous symbol, does the optional **Currency if missing** (`fallbackCurrency`,
+under Show More) apply; with neither, the payment is refused in Shortcuts ("Set Currency if
+missing"), never guessed.
 
 `WalletIntake` mirrors `SMSIntake`: `WalletCapture.payment` checks on the phone what the server
 would refuse (amount above zero, rounded half-up to cents; a 3-letter currency, uppercased;
