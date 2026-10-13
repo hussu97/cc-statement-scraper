@@ -17,31 +17,14 @@ public struct WalletIntake: Sendable {
     }
 
     /// Handles one payment as the intent receives it: the Wallet Amount as
-    /// text (its currency comes with it), the older currency-amount parameter,
-    /// and the optional *Currency if missing*. `WalletAmount.resolve` decides.
-    public func handle(amountText: String?, currencyAmount: (amount: Decimal, currency: String)?,
-                       fallbackCurrency: String?, merchant: String, card: String, locale: Locale = .current,
-                       occurredAt: Date = Date(), clientMsgId: UUID = UUID()) async -> (outcome: SMSIntakeOutcome, dialog: String) {
-        switch WalletAmount.resolve(text: amountText, currencyAmount: currencyAmount,
-                                    fallbackCurrency: fallbackCurrency, locale: locale) {
-        case .failure(let problem):
-            return await handle(.failure(problem), merchant: merchant, card: card,
-                                occurredAt: occurredAt, clientMsgId: clientMsgId)
-        case .success(let resolved):
-            let (outcome, dialog) = await handle(.success(resolved), merchant: merchant, card: card,
-                                                 occurredAt: occurredAt, clientMsgId: clientMsgId)
-            guard resolved.source == .currencyAmount else { return (outcome, dialog) }
-            switch outcome {
-            case .delivered, .queued: return (outcome, dialog + " " + Self.setCurrencyTip)
-            default: return (outcome, dialog)
-            }
-        }
+    /// text (its currency comes with it) and the optional *Currency if
+    /// missing*. `WalletAmount.resolve` decides.
+    public func handle(amountText: String?, fallbackCurrency: String?, merchant: String, card: String,
+                       locale: Locale = .current, occurredAt: Date = Date(),
+                       clientMsgId: UUID = UUID()) async -> (outcome: SMSIntakeOutcome, dialog: String) {
+        await handle(WalletAmount.resolve(text: amountText, fallbackCurrency: fallbackCurrency, locale: locale),
+                     merchant: merchant, card: card, occurredAt: occurredAt, clientMsgId: clientMsgId)
     }
-
-    /// Shown while an automation still passes the older currency amount, whose
-    /// currency is fixed in the shortcut.
-    public static let setCurrencyTip =
-        "To keep a payment abroad in its own currency, set the action's Amount to Shortcut Input → Amount."
 
     /// Handles one payment and returns the outcome with the line to show.
     public func handle(amount: Decimal, currency: String, merchant: String, card: String,
