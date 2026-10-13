@@ -101,7 +101,7 @@ export function MerchantsTab() {
         {m.amount === null ? (
           <span className="text-right text-sm text-muted sm:col-start-3 sm:row-start-1">—</span>
         ) : (
-          <Money value={m.amount} className="text-right text-sm text-ink sm:col-start-3 sm:row-start-1" />
+          <Money value={m.amount} total className="text-right text-sm text-ink sm:col-start-3 sm:row-start-1" />
         )}
         <div className="col-span-2 -ml-2 flex min-w-0 flex-col items-start sm:col-span-1 sm:col-start-2 sm:row-start-1">
             {state === "suggested" ? (

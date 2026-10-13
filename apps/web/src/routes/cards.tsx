@@ -5,7 +5,7 @@ import { useActiveProfile } from "@/data/profile";
 import { accountLabel } from "@/data/overview";
 import { normalizeWalletName, useAccounts, useUpdateAccount, useUpdateCard, WALLET_NAME_MAX } from "@/data/cards";
 import { errorMessage } from "@/data/api";
-import { formatMoney } from "@/lib/money";
+import { formatTotal } from "@/lib/money";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { pagePatch, sizePatch, type PageSearch } from "@/lib/infinite";
 import { Badge, Card, PageHeader } from "@/components/ui/display";
@@ -89,7 +89,7 @@ function AccountsTab({ profileCode, isOwner }: { profileCode: string; isOwner: b
           <dl className="mt-5 grid grid-cols-2 gap-4 text-[13px]">
             <div>
               <dt className="text-[12px] text-subtle">Credit limit</dt>
-              <dd className="tabular mt-0.5 text-ink">{formatMoney(a.credit_limit, { whole: true })}</dd>
+              <dd className="tabular mt-0.5 text-ink">{formatTotal(a.credit_limit)}</dd>
             </div>
             <div>
               <dt className="text-[12px] text-subtle">Cycle closes</dt>

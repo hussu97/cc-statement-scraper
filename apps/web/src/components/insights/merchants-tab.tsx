@@ -55,10 +55,10 @@ export function MerchantsTab({ profileCode, range }: { profileCode: string; rang
                       </td>
                       <td className="py-2.5 pr-3 text-right text-ink-2 tabular">{formatCount(r.txn_count)}</td>
                       <td className="py-2.5 pr-3 text-right text-ink-2">
-                        <Money value={r.avg_amount} />
+                        <Money value={r.avg_amount} total />
                       </td>
                       <td className="py-2.5 pr-3 text-right font-medium text-ink">
-                        <Money value={r.amount} />
+                        <Money value={r.amount} total />
                       </td>
                       <td className="py-2.5 pr-5 text-right whitespace-nowrap text-muted tabular">{formatDate(r.last_date, "short")}</td>
                     </tr>
@@ -74,14 +74,14 @@ export function MerchantsTab({ profileCode, range }: { profileCode: string; rang
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline justify-between gap-3">
                       <MerchantLink row={r} range={range} className="-my-2.5 truncate py-2.5 text-sm text-ink" />
-                      <Money value={r.amount} className="text-sm font-medium text-ink" />
+                      <Money value={r.amount} total className="text-sm font-medium text-ink" />
                     </div>
                     <div className="mt-1 flex items-center justify-between gap-3 text-[12px] text-muted">
                       <CategoryCell row={r} token={r.category_code ? tokenOf.get(r.category_code) : null} />
                       <span className="tabular">{formatDate(r.last_date, "short")}</span>
                     </div>
                     <p className="mt-0.5 text-[12px] text-subtle">
-                      {countLabel(r.txn_count, "transaction")} · avg <Money value={r.avg_amount} />
+                      {countLabel(r.txn_count, "transaction")} · avg <Money value={r.avg_amount} total />
                     </p>
                   </div>
                 </li>

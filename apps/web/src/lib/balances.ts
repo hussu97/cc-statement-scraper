@@ -1,17 +1,17 @@
 // What a card owes now, as the server computed it (public.v_account_balances via overview).
 // Pure display helpers only: the figures are never re-derived here (CLAUDE.md §2.2).
 import { formatDate } from "./dates";
-import { formatMoney, toAmount, type MoneyInput } from "./money";
+import { formatTotal, toAmount, type MoneyInput } from "./money";
 
 export type BalanceAnchor = "statement" | "balance_migration" | "none";
 
-/** "AED 515.26", a credit balance "AED 0.84 in credit", "—" when unknown; "≈ " when estimated. */
+/** "AED 515", a credit balance "AED 12 in credit" (whole units, WEB-34), "—" when unknown; "≈ " when estimated. */
 export function formatOutstanding(value: MoneyInput, hasEstimate = false): string {
   const n = toAmount(value);
   if (n === null) return "—";
   const approx = hasEstimate ? "≈ " : "";
-  if (n < 0) return `${approx}${formatMoney(-n)} in credit`;
-  return `${approx}${formatMoney(n)}`;
+  if (n < 0) return `${approx}${formatTotal(-n)} in credit`;
+  return `${approx}${formatTotal(n)}`;
 }
 
 /** Where the balance comes from, in one short line under it. */

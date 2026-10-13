@@ -1,4 +1,4 @@
-import { formatMoney, type MoneyInput } from "@/lib/money";
+import { formatTotal, type MoneyInput } from "@/lib/money";
 import { labelLanes, PIN_FLIP_AT, placeMarks, type PacePin } from "@/lib/pace";
 import { cn } from "@/lib/cn";
 
@@ -33,7 +33,7 @@ export function PaceRule({ spend, pins, projection }: { spend: MoneyInput; pins:
               }}
             >
               <span className={cn("text-[11px] leading-tight whitespace-nowrap", pin.tone)}>{pin.label}</span>
-              <span className="tabular text-[12px] leading-tight font-medium whitespace-nowrap text-ink">{formatMoney(pin.value, { whole: true })}</span>
+              <span className="tabular text-[12px] leading-tight font-medium whitespace-nowrap text-ink">{formatTotal(pin.value)}</span>
               <span className={cn("mt-1 w-px flex-1 bg-border-strong", pin.mark.at > PIN_FLIP_AT ? "self-end" : "self-start")} />
             </div>
           ),
@@ -49,7 +49,7 @@ export function PaceRule({ spend, pins, projection }: { spend: MoneyInput; pins:
       </div>
       {projection && <p className="tabular mt-2 text-[13px] text-muted">{projection}</p>}
       <figcaption className="sr-only">
-        Spent {formatMoney(spend)} so far; {placed.map((p) => `${p.label} ${formatMoney(p.value)}`).join("; ")}.
+        Spent {formatTotal(spend)} so far; {placed.map((p) => `${p.label} ${formatTotal(p.value)}`).join("; ")}.
         {projection ? ` ${projection}.` : ""}
       </figcaption>
     </figure>

@@ -1,4 +1,6 @@
 // Turn statement_recon.checks (jsonb) into display rows. Pure; unit-tested.
+// The sums keep two decimals although they are totals (WEB-34): a check that fails by AED 0.40
+// must show the 0.40, or the two figures it compares would read the same.
 import { formatMoney, formatPercent } from "./money";
 
 export interface ReconCheck {

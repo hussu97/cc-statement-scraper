@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, type RpcReturn } from "@/lib/supabase";
-import { toAmount } from "@/lib/money";
+import { formatTotal, toAmount, type MoneyInput } from "@/lib/money";
 import { formatMonth } from "@/lib/dates";
 import { keys } from "./keys";
 import { must, mustList } from "./api";
@@ -82,6 +82,34 @@ export function budgetTone(
   const budget = toAmount(b.budget_aed);
   if (isCurrentMonth && projected !== null && budget !== null && projected > budget) return "warn";
   return "positive";
+}
+
+export interface BudgetPace {
+  /** Where the "expected by today" tick sits on the meter (0–1); null outside the current month. */
+  tickAt: number | null;
+  /** "AED 120 over pace", "AED 80 under pace" or "On pace"; null outside the current month. */
+  label: string | null;
+  /** Spent more than the budget's even share by today. */
+  over: boolean;
+  /** "AED 1,200 expected by today", for the tick; null outside the current month. */
+  expected: string | null;
+}
+
+/**
+ * The budget's pace this month (WEB-38), from the server's budget_status figures only:
+ * `expected_share` (the month gone, today included), `expected_aed` and `over_pace_aed`
+ * (spent − expected). They are null for a past or future month, and absent from an older server.
+ */
+export function budgetPace(b: { expected_share?: number | string | null; expected_aed?: MoneyInput; over_pace_aed?: MoneyInput }): BudgetPace {
+  const share = toAmount(b.expected_share);
+  const delta = toAmount(b.over_pace_aed);
+  const expected = toAmount(b.expected_aed);
+  return {
+    tickAt: share === null ? null : Math.max(0, Math.min(1, share)),
+    label: delta === null ? null : delta > 0 ? `${formatTotal(delta)} over pace` : delta < 0 ? `${formatTotal(-delta)} under pace` : "On pace",
+    over: delta !== null && delta > 0,
+    expected: expected === null ? null : `${formatTotal(expected)} expected by today`,
+  };
 }
 
 /** Whether a month (first-of-month date) is before, at, or after today's month. */

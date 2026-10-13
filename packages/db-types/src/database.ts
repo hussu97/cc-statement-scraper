@@ -2489,7 +2489,10 @@ export type Database = {
           color_token: string
           effective_from: string
           effective_to: string
+          expected_aed: number
+          expected_share: number
           is_effective: boolean
+          over_pace_aed: number
           projected_aed: number
           share_used: number
           spent_aed: number

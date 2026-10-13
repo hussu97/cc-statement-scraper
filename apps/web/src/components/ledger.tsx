@@ -1,15 +1,39 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Check, ChevronDown, MessageSquareText, FileText, Layers, CircleDashed, Search, Tag } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { displayAmount, formatMoney, formatTxnAmount, type MoneyInput, type TxnAmountFields } from "@/lib/money";
+import { displayAmount, formatMoney, formatTotal, formatTxnAmount, type MoneyInput, type TxnAmountFields } from "@/lib/money";
 import { Popover, PopoverContent, PopoverTrigger, Checkbox, Tooltip } from "./ui/primitives";
 import { Badge, Dot, type Tone } from "./ui/display";
 import { orderCategories } from "@/data/rules";
 import { useMediaQuery } from "@/lib/hooks";
 import { BankLogo } from "./bank-logo";
 
-export function Money({ value, currency = "AED", direction, className, signed, compact }: { value: MoneyInput; currency?: string; direction?: string | null; className?: string; signed?: boolean; compact?: boolean }) {
-  const text = direction ? formatTxnAmount(value, direction, currency) : formatMoney(value, { currency, signed, compact });
+/**
+ * An amount. `total` marks a balance, limit or aggregate: whole units (formatTotal, WEB-34).
+ * Without it the amount is a transaction's own and keeps two decimals.
+ */
+export function Money({
+  value,
+  currency = "AED",
+  direction,
+  className,
+  signed,
+  compact,
+  total,
+}: {
+  value: MoneyInput;
+  currency?: string;
+  direction?: string | null;
+  className?: string;
+  signed?: boolean;
+  compact?: boolean;
+  total?: boolean;
+}) {
+  const text = direction
+    ? formatTxnAmount(value, direction, currency)
+    : total
+      ? formatTotal(value, { currency, signed, compact })
+      : formatMoney(value, { currency, signed, compact });
   return <span className={cn("tabular whitespace-nowrap", direction === "credit" && "text-positive", className)}>{text}</span>;
 }
 
@@ -44,9 +68,9 @@ export function TxnAmount({
   );
 }
 
-/** Hero figure: small currency code + large Fraunces numerals. */
+/** Hero figure: small currency code + large Fraunces numerals. Always an aggregate, so whole units (WEB-34). */
 export function HeroAmount({ value, currency = "AED", className }: { value: MoneyInput; currency?: string; className?: string }) {
-  const figure = formatMoney(value, { currency, bare: true });
+  const figure = formatTotal(value, { currency, bare: true });
   return (
     <span className={cn("inline-flex items-baseline gap-2", className)}>
       <span className="text-sm font-medium tracking-wide text-muted">{currency}</span>

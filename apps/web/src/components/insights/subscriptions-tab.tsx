@@ -97,7 +97,7 @@ function SubscriptionRow({ row }: { row: Row }) {
       </div>
 
       <div className="text-right text-[12px] text-muted md:text-sm">
-        <Money value={row.annual_cost} className="md:text-ink-2" />
+        <Money value={row.annual_cost} total className="md:text-ink-2" />
         <span className="md:hidden"> a year</span>
         <p className="hidden text-[12px] text-subtle md:block">a year</p>
       </div>
