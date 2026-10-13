@@ -8,14 +8,16 @@ import SwiftUI
 /// `TransactionDetailSheet` instead.
 struct CategorySheet: View {
     @State private var editor: TransactionEditor
-    let detail: TransactionDetailModel
+    /// Held as @State: the parent rebuilds this view whenever Activity re-renders (day totals,
+    /// an edit, Realtime); a fresh model there would lose its loaded evidence and SMS (batch 7 audit).
+    @State private var detail: TransactionDetailModel
     @Environment(\.dismiss) private var dismiss
 
     init(transaction: LedgerTransaction, categories: [FilterMeta.CategoryOption], profileCode: String,
          target: any TransactionEditing, detail: TransactionDetailModel) {
         _editor = State(initialValue: TransactionEditor(transaction: transaction, categories: categories,
                                                         profileCode: profileCode, target: target))
-        self.detail = detail
+        _detail = State(initialValue: detail)
     }
 
     var body: some View {

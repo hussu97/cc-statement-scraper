@@ -5,8 +5,11 @@ import SwiftUI
 /// related transaction pushes. Owners get `CategorySheet`, which shows the same
 /// sections under its edit controls. `TransactionDetailModel` decides.
 struct TransactionDetailSheet: View {
-    let model: TransactionDetailModel
+    /// @State, not let: kept across parent re-renders, so loaded evidence isn't thrown away.
+    @State private var model: TransactionDetailModel
     @Environment(\.dismiss) private var dismiss
+
+    init(model: TransactionDetailModel) { _model = State(initialValue: model) }
 
     var body: some View {
         NavigationStack {
@@ -19,7 +22,9 @@ struct TransactionDetailSheet: View {
 
 /// Header, details, category and notes as text, reversal and evidence.
 struct TransactionDetailList: View {
-    let model: TransactionDetailModel
+    @State private var model: TransactionDetailModel
+
+    init(model: TransactionDetailModel) { _model = State(initialValue: model) }
 
     var body: some View {
         let txn = model.transaction
