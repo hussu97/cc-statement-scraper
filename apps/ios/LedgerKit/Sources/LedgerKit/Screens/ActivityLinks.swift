@@ -40,3 +40,18 @@ extension MerchantSpend {
         return .merchant(merchantName, from: from, to: to)
     }
 }
+
+extension CategoryDrillDownRequest {
+    /// "See transactions" on a category's drill-down: that category (or the
+    /// uncategorised bucket) over the range shown, as the web's category view links.
+    public var activityQuery: ActivityQuery {
+        var query = ActivityQuery()
+        if let code = target.categoryCode {
+            query.categoryCode = code
+        } else {
+            query.uncategorizedOnly = true
+        }
+        query.setRange(from: from, to: to)
+        return query
+    }
+}

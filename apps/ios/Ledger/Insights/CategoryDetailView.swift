@@ -9,6 +9,7 @@ struct CategoryDetailView: View {
     let request: CategoryDrillDownRequest
     let profileCode: String
     @Environment(CategoryDrillDowns.self) private var drillDowns
+    @Environment(TabRouter.self) private var tabs: TabRouter?
     @State private var model: CategoryDrillDownModel?
 
     var body: some View {
@@ -21,6 +22,16 @@ struct CategoryDetailView: View {
             if let model {
                 StateContainer(state: model.state, retry: reload) { detail in
                     SummaryCard(row: detail.row, range: request.rangeLabel())
+                    if let tabs {
+                        Button { tabs.openActivity(request.activityQuery) } label: {
+                            Label("See transactions", systemImage: "list.bullet")
+                                .font(Typography.body)
+                                .frame(maxWidth: .infinity, minHeight: Metrics.tapMin)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(Palette.accent)
+                        .accessibilityHint("Shows this category's transactions in Activity")
+                    }
                     TrendCard(detail: detail, model: model)
                     MerchantsCard(detail: detail)
                 }
