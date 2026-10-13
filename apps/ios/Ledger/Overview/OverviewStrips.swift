@@ -61,3 +61,42 @@ struct OutboxStrip: View {
         .accessibilityHint("Opens Settings")
     }
 }
+
+/// Overview's latest transactions; each opens its sheet in Activity.
+struct RecentCard: View {
+    let recent: [Overview.RecentTransaction]
+    /// Opens the transaction's sheet in Activity.
+    let open: (Overview.RecentTransaction) -> Void
+
+    var body: some View {
+        Card {
+            SectionHeader(title: "Latest")
+            if recent.isEmpty {
+                Text("No transactions yet.").font(Typography.rowMeta).foregroundStyle(Palette.muted)
+            }
+            ForEach(recent) { txn in
+                Button { open(txn) } label: { recentRow(txn) }.buttonStyle(.plain)
+            }
+        }
+    }
+
+    private func recentRow(_ txn: Overview.RecentTransaction) -> some View {
+        AdaptiveRow(alignment: .center) {
+            HStack(spacing: 8) {
+                CategoryDot(token: txn.categoryColor)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(txn.title).font(Typography.rowTitle).lineLimit(2)
+                    Text(LedgerDates.relativeDayLabel(txn.txnDate)).font(Typography.caption).foregroundStyle(Palette.muted)
+                }
+            }
+        } trailing: {
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(txn.amountLabel).font(Typography.amount).moneyLine()
+                    .foregroundStyle(txn.isCredit ? Palette.positive : Palette.ink)
+                Text(txn.badge.label).font(Typography.caption).foregroundStyle(Palette.muted)
+            }
+        }
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+}

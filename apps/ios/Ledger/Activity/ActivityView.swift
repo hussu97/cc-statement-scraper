@@ -7,9 +7,10 @@ struct ActivityView: View {
     let profileCode: String
     /// Owners recategorise; viewers and view-only ledgers just read.
     let canEdit: Bool
-    /// Hands over the filters of a deep link (`ledger://uncategorised`).
+    /// Hands over the filters or transaction another screen opened Activity with.
     var tabs: TabRouter?
-    @State private var editing: LedgerTransaction?
+    /// The open transaction: owners get the edit sheet, everyone else the read-only one.
+    @State private var opened: LedgerTransaction?
     @State private var showFilters = false
 
     var body: some View {
@@ -34,19 +35,28 @@ struct ActivityView: View {
                     Image(systemName: model.query.hasFilters
                           ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
                 }
-                .accessibilityLabel(model.query.hasFilters ? "Filters, active" : "Filters")
+                .accessibilityLabel(model.query.hasFilters ? "Filters, \(model.query.filterCount) active" : "Filters")
             }
         }
         .refreshable { await model.load(profileCode: profileCode) }
-        // ledger://uncategorised (the Control): this month's uncategorised rows. Keyed on the
-        // request count, not the preset: taking the preset must not cancel this task.
+        // TabRouter.openActivity / openTransaction (Overview, Insights, ledger://uncategorised).
+        // Keyed on the request count, not the preset: taking it must not cancel this task.
         .task(id: tabs?.activityPresetRequest) {
-            guard let preset = tabs?.takeActivityPreset() else { return }
-            await model.apply(preset, profileCode: profileCode)
+            if let preset = tabs?.takeActivityPreset() {
+                await model.show(preset, profileCode: profileCode)
+            } else if let code = tabs?.takeActivityTransaction(),
+                      let txn = await model.transaction(code, profileCode: profileCode) {
+                opened = txn
+            }
         }
-        .sheet(item: $editing) { txn in
-            CategorySheet(transaction: txn, categories: model.meta?.assignableCategories ?? [],
-                          profileCode: profileCode, target: model)
+        .sheet(item: $opened) { txn in
+            if canEdit {
+                CategorySheet(transaction: txn, categories: model.meta?.assignableCategories ?? [],
+                              profileCode: profileCode, target: model,
+                              detail: model.detail(for: txn, profileCode: profileCode))
+            } else {
+                TransactionDetailSheet(model: model.detail(for: txn, profileCode: profileCode))
+            }
         }
         .sheet(isPresented: $showFilters) {
             ActivityFilterSheet(initial: model.query, meta: model.meta, months: months) { draft in
@@ -80,7 +90,16 @@ struct ActivityView: View {
                             .onAppear { Task { await model.rowAppeared(txn) } }
                     }
                 } header: {
-                    Text(section.title).font(Typography.caption.weight(.semibold)).foregroundStyle(Palette.muted)
+                    // The day's net over every matching row, from the server (activity_day_totals).
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(section.title).font(Typography.caption.weight(.semibold))
+                        Spacer(minLength: 8)
+                        if let total = model.dayTotal(for: section.day) {
+                            Text(total.label).font(Typography.caption).monospacedDigit()
+                                .accessibilityLabel(total.accessibilityLabel)
+                        }
+                    }
+                    .foregroundStyle(Palette.muted)
                 }
             }
             PagingFooter(footer: model.footer, endMessage: model.endMessage) { await model.loadMore() }
@@ -91,9 +110,9 @@ struct ActivityView: View {
 
     @ViewBuilder private func row(_ txn: LedgerTransaction) -> some View {
         if canEdit {
-            Button { editing = txn } label: { TransactionRow(txn: txn) }
+            Button { opened = txn } label: { TransactionRow(txn: txn) }
                 .swipeActions(edge: .trailing) {
-                    Button("Categorise", systemImage: "tag") { editing = txn }.tint(Palette.accent)
+                    Button("Categorise", systemImage: "tag") { opened = txn }.tint(Palette.accent)
                 }
                 .swipeActions(edge: .leading) {
                     Button(TransactionEditor.excludeActionTitle(excluded: txn.excludeFromSpend),
@@ -103,7 +122,7 @@ struct ActivityView: View {
                     .tint(Palette.info)
                 }
         } else {
-            TransactionRow(txn: txn)
+            Button { opened = txn } label: { TransactionRow(txn: txn) }
         }
     }
 

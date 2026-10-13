@@ -212,7 +212,7 @@ extension Overview {
         if uncategorizedCount > 0 {
             items.append(AttentionItem(kind: .uncategorized, count: uncategorizedCount,
                                        title: "\(uncategorizedCount) uncategorised \(LedgerDates.monthPhrase(month, today: today))",
-                                       detail: "Tap a row in Activity to categorise it"))
+                                       detail: "Tap to see them in Activity and categorise them"))
         }
         return items
     }

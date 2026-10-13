@@ -18,8 +18,8 @@ struct StatementDetailScreen: View {
 }
 
 /// One statement: header, the figures it printed, reconciliation explained,
-/// then its debit and credit lines. For an owner, tapping a matched line opens
-/// the category sheet; viewers and view-only ledgers just read. Wording and figures are `StatementDetailModel`'s.
+/// then its debit and credit lines. Tapping a matched line opens its transaction:
+/// the edit sheet for an owner, the read-only details for everyone else. Wording and figures are `StatementDetailModel`'s.
 struct StatementDetailView: View {
     @Bindable var model: StatementDetailModel
     let profileCode: String
@@ -33,11 +33,10 @@ struct StatementDetailView: View {
                 TilesGrid(tiles: header.tiles)
                 ReconCard(header: header)
                 LinesCard(title: "Debits", side: content.detail.debits, isCredit: false,
-                          empty: "No debits on this statement.", content: content, model: model, profileCode: profileCode,
-                          canEdit: canEdit)
+                          empty: "No debits on this statement.", content: content, model: model, profileCode: profileCode)
                 LinesCard(title: "Credits", side: content.detail.credits, isCredit: true,
                           empty: "No payments or refunds on this statement.", content: content, model: model,
-                          profileCode: profileCode, canEdit: canEdit)
+                          profileCode: profileCode)
             }
         }
         .navigationTitle(title)
@@ -46,8 +45,13 @@ struct StatementDetailView: View {
         .task { if model.state.value == nil { await model.load(profileCode: profileCode) } }
         .refreshable { await model.load(profileCode: profileCode) }
         .sheet(item: $model.selected) { txn in
-            CategorySheet(transaction: txn, categories: model.state.value?.assignable ?? [],
-                          profileCode: profileCode, target: model)
+            if canEdit {
+                CategorySheet(transaction: txn, categories: model.state.value?.assignable ?? [],
+                              profileCode: profileCode, target: model,
+                              detail: model.detail(for: txn, profileCode: profileCode))
+            } else {
+                TransactionDetailSheet(model: model.detail(for: txn, profileCode: profileCode))
+            }
         }
         .alert("Couldn't open", isPresented: Binding(get: { model.errorMessage != nil },
                                                     set: { if !$0 { model.errorMessage = nil } })) {
@@ -177,7 +181,6 @@ private struct LinesCard: View {
     let content: StatementDetailModel.Content
     let model: StatementDetailModel
     let profileCode: String
-    let canEdit: Bool
 
     var body: some View {
         Card {
@@ -195,22 +198,16 @@ private struct LinesCard: View {
                 if line.id != side.lines.first?.id { Divider().overlay(Palette.border) }
                 let category = line.categoryCode.flatMap { content.categories[$0] }
                 let label = line.accessibilityLabel(isCredit: isCredit, categoryName: category?.name)
-                if canEdit {
-                    Button {
-                        Task { await model.open(line, profileCode: profileCode) }
-                    } label: {
-                        StatementLineRow(line: line, isCredit: isCredit, category: category,
-                                         opening: model.opening == line.lineCode)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!line.canOpen)
-                    .accessibilityLabel(label)
-                    .accessibilityHint(line.canOpen ? "Opens the transaction" : "")
-                } else {
-                    StatementLineRow(line: line, isCredit: isCredit, category: category, opening: false)
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(label)
+                Button {
+                    Task { await model.open(line, profileCode: profileCode) }
+                } label: {
+                    StatementLineRow(line: line, isCredit: isCredit, category: category,
+                                     opening: model.opening == line.lineCode)
                 }
+                .buttonStyle(.plain)
+                .disabled(!line.canOpen)
+                .accessibilityLabel(label)
+                .accessibilityHint(line.canOpen ? "Opens the transaction" : "")
             }
         }
     }

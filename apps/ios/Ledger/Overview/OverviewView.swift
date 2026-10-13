@@ -14,6 +14,8 @@ struct OverviewView: View {
     /// The empty-ledger checklist's links: the SMS guide and Statements.
     let settings: SettingsModel
     let statements: StatementsModel
+    /// Links into Activity (PAR-4).
+    @Environment(TabRouter.self) private var tabs: TabRouter?
 
     var body: some View {
         Page {
@@ -29,11 +31,15 @@ struct OverviewView: View {
                     HeroCard(overview: overview)
                 }
                 if overview.showsLiveSections(), let pending = overview.pendingSummary {
-                    PendingStrip(summary: pending, lastSMS: overview.lastSMSLabel())
+                    Button { tabs?.openActivity(overview.pendingActivity) } label: {
+                        PendingStrip(summary: pending, lastSMS: overview.lastSMSLabel())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Shows them in Activity")
                 }
                 if !overview.attention().isEmpty {
                     AttentionCard(items: overview.attention(), review: review, profileCode: profileCode,
-                                  canResolve: canResolve)
+                                  canResolve: canResolve) { tabs?.openActivity(overview.uncategorisedActivity) }
                 }
                 if content.setup == nil {
                     CategoryRingCard(overview: overview, profileCode: profileCode)
@@ -46,7 +52,9 @@ struct OverviewView: View {
                         Task { await model.dismiss(insight, profileCode: profileCode) }
                     } : nil)
                 }
-                if overview.showsLiveSections() && content.setup == nil { RecentCard(recent: overview.recent) }
+                if overview.showsLiveSections() && content.setup == nil {
+                    RecentCard(recent: overview.recent) { tabs?.openTransaction($0.txnCode) }
+                }
             }
         }
         .ledgerNavigation("Overview")
@@ -100,12 +108,14 @@ private struct HeroCard: View {
     }
 }
 
-/// Open reviews and uncategorised spend; reviews open the Review screen.
+/// Open reviews and uncategorised spend; reviews open the Review screen, the
+/// uncategorised count Activity on those transactions.
 private struct AttentionCard: View {
     let items: [AttentionItem]
     let review: ReviewModel
     let profileCode: String
     let canResolve: Bool
+    let openUncategorised: () -> Void
 
     var body: some View {
         Card {
@@ -119,7 +129,8 @@ private struct AttentionCard: View {
                     }
                     .buttonStyle(.plain)
                 } else {
-                    row(item, systemImage: "tag")
+                    Button(action: openUncategorised) { row(item, systemImage: "tag") }
+                        .buttonStyle(.plain)
                 }
             }
         }
@@ -133,9 +144,7 @@ private struct AttentionCard: View {
                 Text(item.detail).font(Typography.caption).foregroundStyle(Palette.muted)
             }
             Spacer(minLength: 8)
-            if item.kind == .reviews {
-                Image(systemName: "chevron.right").font(.caption).foregroundStyle(Palette.muted)
-            }
+            Image(systemName: "chevron.right").font(.caption).foregroundStyle(Palette.muted)
         }
         .contentShape(Rectangle())
     }
@@ -237,37 +246,6 @@ private struct InsightsCard: View {
                         .accessibilityLabel("Dismiss insight")
                     }
                 }
-            }
-        }
-    }
-}
-
-private struct RecentCard: View {
-    let recent: [Overview.RecentTransaction]
-
-    var body: some View {
-        Card {
-            SectionHeader(title: "Latest")
-            if recent.isEmpty {
-                Text("No transactions yet.").font(Typography.rowMeta).foregroundStyle(Palette.muted)
-            }
-            ForEach(recent) { txn in
-                AdaptiveRow(alignment: .center) {
-                    HStack(spacing: 8) {
-                        CategoryDot(token: txn.categoryColor)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(txn.title).font(Typography.rowTitle).lineLimit(2)
-                            Text(LedgerDates.relativeDayLabel(txn.txnDate)).font(Typography.caption).foregroundStyle(Palette.muted)
-                        }
-                    }
-                } trailing: {
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text(txn.amountLabel).font(Typography.amount).moneyLine()
-                            .foregroundStyle(txn.isCredit ? Palette.positive : Palette.ink)
-                        Text(txn.badge.label).font(Typography.caption).foregroundStyle(Palette.muted)
-                    }
-                }
-                .accessibilityElement(children: .combine)
             }
         }
     }

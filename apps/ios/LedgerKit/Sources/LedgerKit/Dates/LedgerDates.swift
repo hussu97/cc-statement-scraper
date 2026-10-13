@@ -32,6 +32,7 @@ public enum LedgerDates {
     private static let shortMonth = formatter("MMM")
     private static let fullMonth = formatter("MMMM")
     private static let time = formatter("HH:mm")
+    private static let dayTime = formatter("d MMM yyyy, HH:mm")
 
     /// Today's business date.
     public static func today(now: Date = .now) -> CalendarDay {
@@ -64,6 +65,9 @@ public enum LedgerDates {
 
     /// `"14:05"` in Dubai time.
     public static func timeLabel(_ date: Date) -> String { time.string(from: date) }
+
+    /// `"8 Oct 2026, 14:05"` in Dubai time (the transaction sheet, SMS evidence).
+    public static func dateTimeLabel(_ date: Date) -> String { dayTime.string(from: date) }
 
     /// `"Due in 5 days"`, `"Due today"`, `"Due tomorrow"`, `"Overdue by 2 days"`.
     public static func dueLabel(_ due: CalendarDay, today: CalendarDay = LedgerDates.today()) -> String {

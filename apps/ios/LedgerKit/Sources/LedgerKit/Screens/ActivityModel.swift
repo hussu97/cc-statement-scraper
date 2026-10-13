@@ -21,6 +21,8 @@ public final class ActivityModel: TransactionEditing {
     public private(set) var meta: FilterMeta?
     /// `activity_summary` for the rows listed. Its failure only hides the header.
     public private(set) var summary: LoadState<ActivitySummary> = .idle
+    /// The date headers' net totals (`activity_day_totals`), one call per page.
+    public let dayTotals: ActivityDayTotals
     public var errorMessage: String?
 
     private let api: any LedgerAPI
@@ -38,7 +40,10 @@ public final class ActivityModel: TransactionEditing {
     /// How many times the sections were built (tests check the cache).
     @ObservationIgnored private(set) var sectionBuilds = 0
 
-    public init(api: any LedgerAPI) { self.api = api }
+    public init(api: any LedgerAPI) {
+        self.api = api
+        dayTotals = ActivityDayTotals(api: api)
+    }
 
     public var state: LoadState<[LedgerTransaction]> { list.state }
     public var rows: [LedgerTransaction] { list.items }
@@ -79,9 +84,15 @@ public final class ActivityModel: TransactionEditing {
             let result = try await api.transactions(profileCode: profileCode, query: query, page: page)
             return ListPage(items: result.rows, total: result.total)
         }
+        if loadedFor?.profileCode == profileCode, loadedFor?.query == query {
+            await dayTotals.load(days: rows.map(\.txnDate), profileCode: profileCode, query: query, refresh: true)
+        }
         await metaLoad
         await summaryLoad
     }
+
+    /// A date header's figure, once the server has said.
+    public func dayTotal(for day: CalendarDay) -> DayTotal? { dayTotals.byDay[day] }
 
     /// Loads unless these filters of this ledger are already on screen
     /// (the tab re-appearing, the search debounce firing with nothing typed).
@@ -100,19 +111,59 @@ public final class ActivityModel: TransactionEditing {
         await load(profileCode: profileCode)
     }
 
+    /// Shows exactly `query`, search included: another screen opened Activity with it.
+    public func show(_ query: ActivityQuery, profileCode: String) async {
+        self.query = query
+        await load(profileCode: profileCode)
+    }
+
     /// Realtime / foreground: refresh the newest page, keep the scrolled pages.
     public func refresh(profileCode: String) async {
         guard let loadedFor, loadedFor.profileCode == profileCode else { return }
         async let summaryLoad: Void = loadSummary(profileCode: profileCode, query: loadedFor.query)
         await list.refreshHead()
+        await dayTotals.load(days: rows.prefix(list.pageSize).map(\.txnDate), profileCode: profileCode,
+                             query: loadedFor.query, refresh: true)
         await summaryLoad
     }
 
-    public func rowAppeared(_ txn: LedgerTransaction) async { await list.rowAppeared(txn.id) }
-    public func footerAppeared() async { await list.footerAppeared() }
-    public func loadMore() async { await list.loadMore() }
+    public func rowAppeared(_ txn: LedgerTransaction) async {
+        await list.rowAppeared(txn.id)
+        await loadNewDayTotals()
+    }
+    public func footerAppeared() async {
+        await list.footerAppeared()
+        await loadNewDayTotals()
+    }
+    public func loadMore() async {
+        await list.loadMore()
+        await loadNewDayTotals()
+    }
+
+    /// The days of a page just added (days already asked for are skipped).
+    private func loadNewDayTotals() async {
+        guard let loadedFor else { return }
+        await dayTotals.load(days: rows.map(\.txnDate), profileCode: loadedFor.profileCode, query: loadedFor.query)
+    }
 
     public func clearFilters() { query.clearFilters() }
+
+    /// One transaction of the ledger, for a sheet opened from another screen;
+    /// nil (and `errorMessage`) when it is gone or the read failed.
+    public func transaction(_ txnCode: String, profileCode: String) async -> LedgerTransaction? {
+        do {
+            if let txn = try await api.transactions(profileCode: profileCode, codes: [txnCode]).first { return txn }
+            errorMessage = "This transaction is no longer in this ledger."
+        } catch {
+            errorMessage = LoadState<Int>.message(for: error)
+        }
+        return nil
+    }
+
+    /// The details sheet of a listed transaction (everyone; owners also edit).
+    public func detail(for txn: LedgerTransaction, profileCode: String) -> TransactionDetailModel {
+        TransactionDetailModel(transaction: txn, profileCode: profileCode, api: api)
+    }
 
     /// Another ledger or sign-out.
     public func reset() {
@@ -121,6 +172,7 @@ public final class ActivityModel: TransactionEditing {
         meta = nil
         summary = .idle
         summaryGate.reset()
+        dayTotals.reset()
         query = ActivityQuery()
         errorMessage = nil
     }
@@ -156,6 +208,8 @@ public final class ActivityModel: TransactionEditing {
     /// After a write: re-read these rows, patch them, drop the ones the
     /// filters no longer keep, and refresh the summary.
     private func reread(_ codes: [String], profileCode: String) async {
+        // The rows' days, before a row that left the filter is dropped: their totals change.
+        let days = rows.filter { codes.contains($0.txnCode) }.map(\.txnDate)
         do {
             let updated = try await api.transactions(profileCode: profileCode, codes: codes)
             list.patch(updated)
@@ -165,7 +219,9 @@ public final class ActivityModel: TransactionEditing {
             // Saved, but the re-read failed: refresh the head rather than show stale rows.
             await list.refreshHead()
         }
-        if let loadedFor { await loadSummary(profileCode: loadedFor.profileCode, query: loadedFor.query) }
+        guard let loadedFor else { return }
+        await dayTotals.load(days: days, profileCode: loadedFor.profileCode, query: loadedFor.query, refresh: true)
+        await loadSummary(profileCode: loadedFor.profileCode, query: loadedFor.query)
     }
 
     private func loadMetaIfNeeded(profileCode: String) async {

@@ -44,11 +44,14 @@ public final class TabRouter {
     public var showingReview = false
     /// The Settings tab's navigation stack (`ledger://add-statement` pushes Statements).
     public var settingsPath: [SettingsRoute] = []
-    /// Filters Activity applies when it next appears (`ledger://uncategorised`).
+    /// Filters Activity applies when it next appears (`openActivity`, `ledger://uncategorised`).
     public private(set) var activityPreset: ActivityQuery?
+    /// A transaction Activity opens when it next appears (`openTransaction`).
+    public private(set) var activityTransaction: String?
     /// Statements opens its PDF picker when it next appears (`ledger://add-statement`).
     public private(set) var addStatementRequested = false
-    /// Bumped by every `ledger://uncategorised` and `ledger://add-statement`.
+    /// Bumped by every `openActivity` / `openTransaction` (and so `ledger://uncategorised`)
+    /// and every `ledger://add-statement`.
     /// Activity and Statements key their `.task` on these, never on the
     /// request itself: taking the request changes it, and SwiftUI would cancel
     /// the very task applying it (mid-fetch, or in the picker's delay).
@@ -65,6 +68,25 @@ public final class TabRouter {
 
     public func show(_ tab: LedgerTab) { self.tab = tab }
 
+    /// Switches to Activity showing `query`'s filters (and search), replacing
+    /// the ones it had: Overview's counts and strips, Insights' merchants and
+    /// categories, the `ledger://uncategorised` link (PAR-4).
+    public func openActivity(_ query: ActivityQuery) {
+        activityPreset = query
+        activityTransaction = nil
+        activityPresetRequest += 1
+        tab = .activity
+    }
+
+    /// Switches to Activity with one transaction's sheet open over its current
+    /// filters (Overview's recent rows).
+    public func openTransaction(_ txnCode: String) {
+        activityPreset = nil
+        activityTransaction = txnCode
+        activityPresetRequest += 1
+        tab = .activity
+    }
+
     /// Opens `link` now when a ledger is on screen, else keeps it for `ledgerShown`.
     public func open(_ link: AppLink, ledgerOnScreen: Bool) {
         guard ledgerOnScreen else {
@@ -77,9 +99,7 @@ public final class TabRouter {
             tab = .overview
             showingReview = true
         case .uncategorised:
-            activityPreset = .uncategorised(month: today().startOfMonth)
-            activityPresetRequest += 1
-            tab = .activity
+            openActivity(.uncategorised(month: today().startOfMonth))
         case .addStatement:
             settingsPath = [.statements]
             addStatementRequested = true
@@ -94,6 +114,12 @@ public final class TabRouter {
     public func takeActivityPreset() -> ActivityQuery? {
         defer { activityPreset = nil }
         return activityPreset
+    }
+
+    /// Activity takes the transaction to open once.
+    public func takeActivityTransaction() -> String? {
+        defer { activityTransaction = nil }
+        return activityTransaction
     }
 
     /// Statements asks whether to open its picker: once, and only for someone
@@ -115,6 +141,7 @@ public final class TabRouter {
         showingReview = false
         settingsPath = []
         activityPreset = nil
+        activityTransaction = nil
         addStatementRequested = false
     }
 
