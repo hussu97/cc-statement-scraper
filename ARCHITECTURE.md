@@ -591,6 +591,26 @@ charges out, so the nightly feed doesn't raise them again.
 (`has_sms`, `has_statement`; scalar sub-queries on the evidence index, evaluated only for the
 rows a page returns), bank and last4.
 
+Activity bulk actions (SECURITY DEFINER, member check, filtered by profile) act on a selection:
+either `p_txn_codes` (the ticked rows; another profile's codes match nothing) or `p_filter`, "select
+all matching", a jsonb object with the web URL's filter keys (`from`, `to`, `account`, `card`,
+`category` with `'none'` for uncategorised, `status`, `source`, `q`), read exactly as
+`activity_summary` reads them, through `private.activity_selection`. Exactly one must be given,
+so a forgotten argument never means "everything".
+- `activity_selection_summary(profile, codes | filter)`: `{txn_count, net_aed, unpriced_count,
+  has_estimate, excluded_count}`, net as in `activity_summary` (pending and posted, debits minus
+  credits, a decimal string).
+- `bulk_update_transactions(profile, patch, codes | filter)` (owner): `patch` sets
+  `exclude_from_spend` and/or `manual_category_code` (a category of the profile, or null); returns
+  the number of rows changed. Changes are audited like single edits.
+- `activity_export(profile, codes | filter)`: a jsonb array in list order (a jsonb value, so
+  PostgREST's `max_rows` does not truncate it) of `{txn_code, txn_date, txn_time (Dubai HH:MM),
+  description, merchant_name, category_name, bank_code, card_last4, account_nickname, direction,
+  amount_original, currency_original, amount_aed, net_aed (debit +, credit −),
+  amount_aed_is_estimate, status, source, exclude_from_spend, notes}`, money as decimal strings.
+  The web app builds the CSV from it and neutralises cells that start with `= + - @` (formula
+  injection); plain decimal numbers pass through.
+
 `overview` compares month-to-date with the same days of last month, never past its last day
 (`prev_month_to_date_end`), reports `pending_unpriced_count` (pending foreign charges with no
 rate yet, which spend cannot include), and computes utilisation from `greatest(closing_balance, 0)`.
