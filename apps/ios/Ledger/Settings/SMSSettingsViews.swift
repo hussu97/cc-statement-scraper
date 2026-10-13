@@ -20,9 +20,11 @@ struct ParkedRow: View {
             Text(message.preview).font(Typography.caption).foregroundStyle(Palette.muted).lineLimit(2)
             Text(message.reason).font(Typography.caption).foregroundStyle(Palette.danger)
             HStack {
-                Button(target.map { "Retry to \($0.name)" } ?? "Retry", action: retry)
-                    .buttonStyle(.bordered).tint(Palette.accent)
-                    .disabled(target == nil)
+                if message.canRetry {
+                    Button(target.map { "Retry to \($0.name)" } ?? "Retry", action: retry)
+                        .buttonStyle(.bordered).tint(Palette.accent)
+                        .disabled(target == nil)
+                }
                 Button("Delete", role: .destructive, action: delete).buttonStyle(.bordered)
             }
             .font(Typography.rowMeta)

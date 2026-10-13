@@ -291,7 +291,7 @@ struct SMSIntakeTests {
         let outbox = Outbox(fileURL: temporaryOutboxURL(), api: StubAPI())
         try await outbox.enqueue(SMSPayload(receivedAt: Date(), sender: "FAB", body: card), profileCode: nil)
         try await outbox.enqueue(SMSPayload(receivedAt: Date(), sender: "FAB", body: card), profileCode: "prf_old")
-        #expect(try await outbox.adoptPending(profileCode: "prf_new") == 1)
+        #expect(try await outbox.adoptPending(profileCode: "prf_new", userID: nil) == 1)
         #expect(try await outbox.entries().map(\.profileCode).sorted { ($0 ?? "") < ($1 ?? "") } == ["prf_new", "prf_old"])
     }
 
