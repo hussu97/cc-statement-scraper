@@ -3,6 +3,14 @@ import { supabase } from "@/lib/supabase";
 import { keys } from "./keys";
 import { ApiError, functionError, must, mustList } from "./api";
 
+/**
+ * For a mutation whose variables or result carry a secret (a new token's
+ * plaintext, a PDF password, a refresh token): drop it from the
+ * MutationCache as soon as no component watches it, instead of keeping it
+ * for the default 5 minutes (WEB-50).
+ */
+export const SECRET_MUTATION = { gcTime: 0 } as const;
+
 // ── members ────────────────────────────────────────────────────────────────
 /** A row of list_profile_members: a member, or a pending invite (user_id null). */
 export interface ProfileMember {
@@ -112,6 +120,7 @@ export function useServiceTokens(profileCode: string) {
 export function useCreateServiceToken(profileCode: string) {
   const qc = useQueryClient();
   return useMutation({
+    ...SECRET_MUTATION,
     mutationFn: async (v: { name: string; scopes: string[] }) =>
       must(await supabase.rpc("create_service_token", { p_profile_code: profileCode, p_name: v.name.trim(), p_scopes: v.scopes })) as unknown as {
         token_code: string;
@@ -150,6 +159,7 @@ export function useProfileSecrets(profileCode: string) {
 export function useSetProfileSecret(profileCode: string) {
   const qc = useQueryClient();
   return useMutation({
+    ...SECRET_MUTATION,
     mutationFn: async (v: { key: string; value: string }) =>
       must(await supabase.rpc("set_profile_secret", { p_profile_code: profileCode, p_key: v.key, p_value: v.value })),
     onSettled: () => qc.invalidateQueries({ queryKey: keys.secrets(profileCode) }),
@@ -253,6 +263,7 @@ export function useDeleteRoute(profileCode: string) {
 
 export function useSetMailboxSecret() {
   return useMutation({
+    ...SECRET_MUTATION,
     mutationFn: async (v: { mailboxCode: string; value: string }) =>
       must(await supabase.rpc("set_mailbox_secret", { p_mailbox_code: v.mailboxCode, p_key: "refresh_token", p_value: v.value })),
   });
