@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// Overview tab: the month hero, pending SMS, category ring, accounts and insights.
+/// Overview tab: the month hero, the last card alert, category ring, accounts and insights.
 @MainActor
 @Observable
 public final class OverviewModel {
@@ -104,7 +104,7 @@ extension Overview {
         LedgerDates.monthScopeLabel(month, today: today)
     }
 
-    /// Pending alerts and the latest transactions are about now, not about the
+    /// The last card alert and the latest transactions are about now, not about the
     /// month on screen: shown on the current month only.
     public func showsLiveSections(today: CalendarDay = LedgerDates.today()) -> Bool {
         isCurrentMonth(today: today)
@@ -117,38 +117,19 @@ extension Overview {
             : "No spending \(LedgerDates.monthPhrase(month, today: today))."
     }
 
-    /// `"October 2026 · posted so far"` — the hero counts posted spend; pending
-    /// alerts are listed under it, not in it.
+    /// `"October 2026 · so far"`. The hero is the server's spend, which counts
+    /// SMS and payment charges as well as statement lines (`v_spend`).
     public func heroEyebrow(today: CalendarDay = LedgerDates.today()) -> String {
-        isCurrentMonth(today: today) ? "\(monthTitle) · posted so far" : monthTitle
+        isCurrentMonth(today: today) ? "\(monthTitle) · so far" : monthTitle
     }
 
     /// The hero (eyebrow, "AED" and the number) as one VoiceOver element:
-    /// `"October spend, posted so far, 860 dirhams"`; a past month
+    /// `"October spend so far, 860 dirhams"`; a past month
     /// `"September spend, 8,450 dirhams"`, with the year outside this one.
     public func heroAccessibilityLabel(today: CalendarDay = LedgerDates.today()) -> String {
         let name = month.year == today.year ? LedgerDates.monthName(month) : monthTitle
-        let scope = isCurrentMonth(today: today) ? "\(name) spend, posted so far" : "\(name) spend"
-        let pending = heroPendingAmount(today: today).map { ", plus \(MoneyFormat.spokenDirhams($0)) pending" } ?? ""
-        return "\(scope), \(MoneyFormat.spokenDirhams(spend))\(pending)"
-    }
-
-    /// The hero's pending line (UX-1r): `"+ AED 3,105 pending"`, from the
-    /// server's `pending_amount` and `pending_count`, never a sum on the phone.
-    /// The hero number is posted spend, so pending is shown beside it, not
-    /// folded in. Current month only (pending alerts are about now); nil when
-    /// nothing is pending. Pending charges with no AED rate yet aren't in the
-    /// amount: a count stands in when that leaves nothing to show.
-    public func heroPendingLine(today: CalendarDay = LedgerDates.today()) -> String? {
-        guard isCurrentMonth(today: today), pendingCount > 0 else { return nil }
-        if let amount = heroPendingAmount(today: today) {
-            return "+ \(MoneyFormat.aed(amount, fractionDigits: 0)) pending"
-        }
-        return pendingCount == 1 ? "+ 1 pending charge" : "+ \(pendingCount) pending charges"
-    }
-
-    private func heroPendingAmount(today: CalendarDay) -> Decimal? {
-        isCurrentMonth(today: today) && pendingCount > 0 && pendingAmount > 0 ? pendingAmount : nil
+        let scope = isCurrentMonth(today: today) ? "\(name) spend so far" : "\(name) spend"
+        return "\(scope), \(MoneyFormat.spokenDirhams(spend))"
     }
 
     public func isCurrentMonth(today: CalendarDay = LedgerDates.today()) -> Bool {
@@ -181,17 +162,16 @@ extension Overview {
         return lines
     }
 
-    /// The live strip under the hero: `"2 pending · AED 145.00"`, or nil when none.
-    public var pendingSummary: String? {
-        guard pendingCount > 0 else { return nil }
-        return "\(pendingCount) pending · \(MoneyFormat.aed(pendingAmount))"
-    }
-
-    /// `"Last SMS 14:05"` / `"Last SMS 3 Oct"`.
-    public func lastSMSLabel(today: CalendarDay = LedgerDates.today()) -> String? {
+    /// The quiet line under the hero, as the web's: when the last card alert
+    /// (bank SMS or payment shortcut) arrived, so a person can see capture is
+    /// working. `"Last card alert 14:05"` / `"Last card alert 3 Oct"`; nil
+    /// before the first one. It never counts alert charges apart: they are
+    /// transactions like any other.
+    public func lastCardAlertLabel(today: CalendarDay = LedgerDates.today()) -> String? {
         guard let at = lastSmsAt else { return nil }
         let day = CalendarDay(date: at)
-        return day == today ? "Last SMS \(LedgerDates.timeLabel(at))" : "Last SMS \(LedgerDates.dayLabel(day, today: today))"
+        let when = day == today ? LedgerDates.timeLabel(at) : LedgerDates.dayLabel(day, today: today)
+        return "Last card alert \(when)"
     }
 
     /// Categories with a positive amount — the ring cannot draw a refund-heavy

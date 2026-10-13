@@ -2,7 +2,7 @@ import LedgerKit
 import SwiftUI
 import WidgetKit
 
-/// "Month spend": this month's posted spend and the server's pace against the
+/// "Month spend": this month's spend and the server's pace against the
 /// same day last month (`SpendWidgetContent`).
 struct SpendWidget: Widget {
     var body: some WidgetConfiguration {
@@ -51,7 +51,7 @@ struct SpendWidgetView: View {
                     WidgetMessage(title: "\(c.monthName) spend", text: message)
                 } else {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(family == .systemSmall ? "\(c.monthName) so far" : "\(c.monthName) · posted so far")
+                        Text("\(c.monthName) so far")
                             .font(.caption.weight(.semibold)).foregroundStyle(Palette.accent).lineLimit(1)
                         HStack(alignment: .firstTextBaseline, spacing: 4) {
                             Text("AED").font(.caption).foregroundStyle(Palette.muted)

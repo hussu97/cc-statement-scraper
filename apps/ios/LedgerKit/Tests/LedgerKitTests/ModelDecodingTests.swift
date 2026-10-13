@@ -18,10 +18,10 @@ struct ModelDecodingTests {
         #expect(o.accounts[1].latestStatement == nil)
         #expect(o.accounts[1].title == "ADCB")
         #expect(o.recent[0].amountLabel == "AED 45.10")
-        #expect(o.recent[0].badge == .pending)
-        #expect(o.pendingSummary == "2 pending · AED 145.30")
+        #expect(o.recent[0].badge == .sms)
         #expect(o.heroAmount == "1,234,568")
-        #expect(o.lastSMSLabel(today: CalendarDay(iso: "2026-10-08")!) == "Last SMS 09:12")
+        #expect(o.lastCardAlertLabel(today: CalendarDay(iso: "2026-10-08")!) == "Last card alert 09:12")
+        #expect(o.lastCardAlertLabel(today: CalendarDay(iso: "2026-10-10")!) == "Last card alert 8 Oct")
     }
 
     @Test("v_transactions rows")
@@ -39,7 +39,7 @@ struct ModelDecodingTests {
         let refund = rows[1]
         #expect(MoneyFormat.plain(refund.amountOriginal) == "1234567.89")
         #expect(refund.amountLabel == "+ ≈ AED 1,234,567.89")
-        #expect(refund.badge == .pending)
+        #expect(refund.badge == .sms)
         #expect(refund.title == "NOON REFUND")
         #expect(refund.txnAt == nil)
     }
@@ -132,7 +132,7 @@ struct ModelDecodingTests {
         #expect(plain.spendAvg3m == o.spendAvg3m && plain.spendAvg3mToDate == o.spendAvg3mToDate)
         #expect(plain.projectedMonthEnd == o.projectedMonthEnd && plain.changeVsAvg3m == o.changeVsAvg3m)
         #expect(plain.changeVsPrevMonthToDate == o.changeVsPrevMonthToDate)
-        #expect(plain.spendPrevMonthToDate == o.spendPrevMonthToDate && plain.pendingAmount == o.pendingAmount)
+        #expect(plain.spendPrevMonthToDate == o.spendPrevMonthToDate && plain.payments == o.payments)
         #expect(plain.outstanding == o.outstanding && plain.uncategorizedCount == o.uncategorizedCount)
 
         // A future month has no projection; an older server sends neither field.
@@ -181,7 +181,7 @@ struct PresentationTests {
         let o = try LedgerJSON.decode(Overview.self, from: try fixture("overview"))
         let october = CalendarDay(iso: "2026-10-08")!
         #expect(o.comparison(today: october)?.text == "18% below the same day last month")
-        #expect(o.heroEyebrow(today: october) == "October 2026 · posted so far")
+        #expect(o.heroEyebrow(today: october) == "October 2026 · so far")
         // The current month: last month by today is a pace-rule pin, not a line here.
         #expect(o.referenceLines(today: october) == ["3-month average AED 9,000 a month"])
         // A completed month is set against the whole previous month.
@@ -200,7 +200,7 @@ struct PresentationTests {
     func heroAccessibilityLabel() throws {
         let o = try LedgerJSON.decode(Overview.self, from: try fixture("overview"))
         #expect(o.heroAccessibilityLabel(today: CalendarDay(iso: "2026-10-08")!)
-                == "October spend, posted so far, 1,234,568 dirhams, plus 145 dirhams pending")
+                == "October spend so far, 1,234,568 dirhams")
         #expect(o.heroAccessibilityLabel(today: CalendarDay(iso: "2026-11-02")!) == "October spend, 1,234,568 dirhams")
         #expect(o.heroAccessibilityLabel(today: CalendarDay(iso: "2027-01-02")!) == "October 2026 spend, 1,234,568 dirhams")
     }
@@ -267,7 +267,10 @@ struct PresentationTests {
     }
 
     @Test func evidenceBadges() {
-        #expect(EvidenceBadge.of(status: "pending", hasSms: true, hasStatement: false) == .pending)
+        // An SMS or payment charge no statement has matched yet reads "SMS", never "Pending".
+        #expect(EvidenceBadge.of(status: "pending", hasSms: true, hasStatement: false) == .sms)
+        #expect(EvidenceBadge.of(status: "pending", hasSms: true, hasStatement: false).tone == .info)
+        #expect(!EvidenceBadge.allCases.map(\.label).contains("Pending"))
         #expect(EvidenceBadge.of(status: "posted", hasSms: true, hasStatement: true) == .both)
         #expect(EvidenceBadge.of(status: "posted", hasSms: false, hasStatement: true) == .statement)
         #expect(EvidenceBadge.of(status: "orphaned", hasSms: true, hasStatement: false) == .orphaned)
