@@ -20,7 +20,7 @@
 - **add** Local notifications: unknown card, captures not sent after an hour, captures waiting while signed out, and statement due reminders 3 days before and on the due date at 09:00 Dubai (withdrawn when paid). One switch per kind in Settings → Notifications; permission is asked from the SMS guide (N-1).
 - **add** Widgets (new `LedgerWidgets` extension): Month spend and pace, Next due (paid statements dropped), Utilisation, on the Home and Lock Screen, from an App Group snapshot with no network; no amounts on the Lock Screen with Require Face ID (N-2).
 - **add** App Intents and Shortcuts phrases: Month Spend, What's Due, Categorise Last Transaction (N-3). Controls: Open Uncategorised and Add Statement, with `ledger://uncategorised` and `ledger://add-statement` (N-4).
-- **change** Log Card Payment takes Amount, Merchant and Card from the Wallet transaction automation; the currency comes with the amount (including Arabic-locale symbols); "Currency if missing" applies only to an amount with no currency, and an unrecognised symbol is refused, never guessed.
+- **change** Log Card Payment takes Amount, Merchant and Card from the Wallet transaction automation; the currency comes with the amount (including Arabic-locale symbols); "Currency if missing" applies only to an amount with no currency; an unrecognised or ambiguous symbol (for example `$` on an en_GB phone) is refused, never guessed.
 - **add** The SMS guide shows step 5 in three Shortcuts-editor screenshots (IOS-06g). A test fails the build on Apple product names in intent, widget and Control text.
 
 ### Docs
