@@ -22,13 +22,13 @@ struct SetupChecklistTests {
     @Test("a ledger with transactions or cards gets no checklist")
     func notForData() throws {
         let full = try LedgerJSON.decode(Overview.self, from: try fixture("overview"))
-        #expect(SetupChecklist.make(overview: full, uploads: 0, members: 1) == nil)
+        #expect(SetupChecklist.make(overview: full, uploads: 0, members: MemberCount(members: 1)) == nil)
         #expect(!SetupChecklist.isEmptyLedger(full))
     }
 
     @Test("nothing done: three steps to do, in order")
     func nothingDone() throws {
-        let list = try #require(SetupChecklist.make(overview: try emptyOverview(), uploads: 0, members: 1))
+        let list = try #require(SetupChecklist.make(overview: try emptyOverview(), uploads: 0, members: MemberCount(members: 1)))
         #expect(list.steps.map(\.kind) == [.sms, .statement, .invite])
         #expect(list.steps.allSatisfy { $0.status == .todo })
         #expect(list.progress == "0 of 3 done")
@@ -39,10 +39,21 @@ struct SetupChecklistTests {
     @Test("each step is ticked by server data: an SMS received, an upload, a second member or invite")
     func ticks() throws {
         let list = try #require(SetupChecklist.make(overview: try emptyOverview(lastSMS: "2026-10-08T05:12:44+00:00"),
-                                                    uploads: 1, members: 2))
+                                                    uploads: 1, members: MemberCount(members: 2)))
         #expect(list.steps.allSatisfy { $0.status == .done })
         #expect(list.progress == "3 of 3 done")
         #expect(list.steps[1].detail == "A statement is in. Its cards show here once it has been read.")
+    }
+
+    @Test("a pending invite says the invite was sent, never that someone has access")
+    func pendingInvite() throws {
+        let pending = try #require(SetupChecklist.make(overview: try emptyOverview(), uploads: 0,
+                                                       members: MemberCount(members: 1, pendingInvites: 1)))
+        #expect(pending.steps[2].status == .done)
+        #expect(pending.steps[2].detail == "Invite sent. They get access once they accept it.")
+        let joined = try #require(SetupChecklist.make(overview: try emptyOverview(), uploads: 0,
+                                                      members: MemberCount(members: 2, pendingInvites: 1)))
+        #expect(joined.steps[2].detail == "Someone else has access to this ledger.")
     }
 
     @Test("an unreadable count is unknown, never claimed done or undone")
