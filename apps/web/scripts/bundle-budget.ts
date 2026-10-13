@@ -2,7 +2,8 @@
 // CI and Vercel). It fails the build when:
 //   - the entry chunk plus everything it imports statically (what every route downloads before
 //     the first screen) is over budget, gzipped, or
-//   - a light route (sign-in, privacy) loads Radix, the chart library or the Sentry SDK.
+//   - a light route (sign-in, privacy) loads Radix, the chart library or the Sentry SDK, or
+//   - Overview loads the chart library before it renders (WEB-53: its bars load it lazily).
 // The evaluation is pure and unit-tested (bundle-budget.test.ts); the plugin only feeds it.
 import { gzipSync } from "node:zlib";
 import type { Plugin } from "vite";
@@ -21,8 +22,11 @@ export interface BudgetChunk {
 export interface BudgetRules {
   /** Gzipped bytes allowed for the entry and its static imports. */
   entryGzipBytes: number;
-  /** Routes that must stay light: the lazy chunk whose facade module matches `module`. */
-  lightRoutes: { label: string; module: RegExp }[];
+  /**
+   * Routes that must stay light: the lazy chunk whose facade module matches `module`. `heavy`
+   * names the heavy modules (by label) it may not load statically; all of them when absent.
+   */
+  lightRoutes: { label: string; module: RegExp; heavy?: string[] }[];
   /** Modules the first load and a light route may not contain. */
   heavyModules: { label: string; test: RegExp }[];
 }
@@ -63,21 +67,23 @@ export function evaluateBudget(chunks: BudgetChunk[], rules: BudgetRules): Budge
     problems.push(`first load is ${kB(entryGzipBytes)} gzipped, over the ${kB(rules.entryGzipBytes)} budget (${entryFiles.join(", ")})`);
   }
 
-  const heavyIn = (files: string[]) =>
+  const heavyIn = (files: string[], only?: string[]) =>
     rules.heavyModules.flatMap(({ label, test }) => {
+      if (only && !only.includes(label)) return [];
       const hits = files.filter((f) => byName.get(f)!.moduleIds.some((id) => test.test(id)));
       return hits.length ? [`${label} (${hits.join(", ")})`] : [];
     });
   for (const heavy of heavyIn(entryFiles)) problems.push(`the first load includes ${heavy}`);
 
-  const routes = rules.lightRoutes.map(({ label, module }) => {
+  const routes = rules.lightRoutes.map(({ label, module, heavy }) => {
+    for (const h of heavy ?? []) if (!rules.heavyModules.some((m) => m.label === h)) problems.push(`${label}: no heavy module labelled "${h}"`);
     const chunk = chunks.find((c) => c.facadeModuleId !== null && module.test(c.facadeModuleId));
     if (!chunk) {
       problems.push(`${label}: no chunk for ${module} (renamed? update the budget rules)`);
       return { label, files: [], gzipBytes: 0 };
     }
     const files = staticClosure(byName, [chunk.fileName]).filter((f) => !entryFiles.includes(f));
-    for (const heavy of heavyIn(files)) problems.push(`${label} loads ${heavy}`);
+    for (const hit of heavyIn(files, heavy)) problems.push(`${label} loads ${hit}`);
     return { label, files, gzipBytes: sum(byName, files) };
   });
   return { entryFiles, entryGzipBytes, routes, problems };
@@ -91,12 +97,16 @@ export function formatBudget(report: BudgetReport, rules: BudgetRules): string {
 
 const NODE_MODULE = (pkg: string) => new RegExp(`[\\\\/]node_modules[\\\\/]${pkg}[\\\\/]`);
 
-/** Bank Ledger's budget: ~200 kB gzipped first load; sign-in and privacy free of Radix, charts and Sentry. */
+/**
+ * Bank Ledger's budget: ~200 kB gzipped first load; sign-in and privacy free of Radix, charts
+ * and Sentry; Overview free of the charts until its bars ask for them.
+ */
 export const LEDGER_BUDGET: BudgetRules = {
   entryGzipBytes: 200_000,
   lightRoutes: [
     { label: "/signin", module: /[\\/]src[\\/]routes[\\/]auth\.tsx$/ },
     { label: "/privacy", module: /[\\/]src[\\/]routes[\\/]privacy\.tsx$/ },
+    { label: "Overview", module: /[\\/]src[\\/]routes[\\/]overview\.tsx$/, heavy: ["charts"] },
   ],
   heavyModules: [
     { label: "Radix", test: NODE_MODULE("(@radix-ui[\\\\/][^\\\\/]+|radix-ui)") },

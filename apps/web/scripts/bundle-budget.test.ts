@@ -12,7 +12,10 @@ const chunk = (fileName: string, over: Partial<BudgetChunk> = {}): BudgetChunk =
   ...over,
 });
 
-/** A bundle shaped like the real one: entry → react, supabase; lazy auth and privacy routes; a lazy shell with Radix. */
+/**
+ * A bundle shaped like the real one: entry → react, supabase; lazy auth and privacy routes; a
+ * lazy shell with Radix; a lazy Overview that may use Radix but loads the charts lazily.
+ */
 function bundle(over: Record<string, Partial<BudgetChunk>> = {}): BudgetChunk[] {
   const base: Record<string, Partial<BudgetChunk>> = {
     index: { isEntry: true, imports: ["react", "supabase"], gzipBytes: 30_000 },
@@ -23,6 +26,7 @@ function bundle(over: Record<string, Partial<BudgetChunk>> = {}): BudgetChunk[] 
     privacy: { facadeModuleId: "/repo/apps/web/src/routes/privacy.tsx", imports: ["index", "chrome"], gzipBytes: 2_000 },
     shell: { facadeModuleId: "/repo/apps/web/src/components/shell.tsx", imports: ["index", "primitives"] },
     primitives: { moduleIds: [`${NM}/@radix-ui/react-menu/dist/index.mjs`], gzipBytes: 36_000 },
+    overview: { facadeModuleId: "/repo/apps/web/src/routes/overview.tsx", imports: ["index", "primitives"], gzipBytes: 9_000 },
     charts: { facadeModuleId: "/repo/apps/web/src/components/charts/spend-split-chart.tsx", moduleIds: [`${NM}/recharts/lib/index.js`] },
     "sentry-client": { facadeModuleId: "/repo/apps/web/src/lib/sentry-client.ts", moduleIds: [`${NM}/@sentry/core/index.js`] },
   };
@@ -46,9 +50,10 @@ describe("evaluateBudget", () => {
     expect(r.routes).toEqual([
       { label: "/signin", files: ["auth", "chrome"], gzipBytes: 4_000 },
       { label: "/privacy", files: ["privacy", "chrome"], gzipBytes: 3_000 },
+      { label: "Overview", files: ["overview", "primitives"], gzipBytes: 45_000 },
     ]);
     expect(formatBudget(r, LEDGER_BUDGET)).toBe(
-      "bundle budget: first load 153.0 kB gzipped of 200.0 kB (3 files); /signin +4.0 kB, /privacy +3.0 kB",
+      "bundle budget: first load 153.0 kB gzipped of 200.0 kB (3 files); /signin +4.0 kB, /privacy +3.0 kB, Overview +45.0 kB",
     );
   });
 
@@ -65,6 +70,16 @@ describe("evaluateBudget", () => {
   it("fails when sign-in pulls in Radix or the charts", () => {
     const r = evaluateBudget(bundle({ auth: { imports: ["index", "chrome", "shell"] }, chrome: { imports: ["charts"] } }), LEDGER_BUDGET);
     expect(r.problems).toEqual(["/signin loads Radix (primitives)", "/signin loads charts (charts)", "/privacy loads charts (charts)"]);
+  });
+
+  it("fails when Overview loads the charts before it renders (WEB-53), but not for Radix", () => {
+    const r = evaluateBudget(bundle({ overview: { imports: ["index", "primitives", "charts"] } }), LEDGER_BUDGET);
+    expect(r.problems).toEqual(["Overview loads charts (charts)"]);
+  });
+
+  it("fails on a route rule naming a heavy module that doesn't exist", () => {
+    const rules = { ...LEDGER_BUDGET, lightRoutes: [{ label: "Overview", module: /overview\.tsx$/, heavy: ["chart"] }] };
+    expect(evaluateBudget(bundle(), rules).problems).toEqual(['Overview: no heavy module labelled "chart"']);
   });
 
   it("matches the umbrella radix-ui package too", () => {
