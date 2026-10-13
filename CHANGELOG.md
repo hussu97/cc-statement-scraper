@@ -15,9 +15,9 @@
 
 ### iOS
 
-- **fix** An SMS or card payment captured with no "SMS go to" ledger is saved and sent once a ledger is set, instead of being discarded (IOS-12r).
-- **add** Sign-out asks first, naming how many SMS, card payments and PDFs are waiting, then deletes them from the phone; a Settings badge and an Overview strip show items that haven't reached Bank Ledger for over an hour (IOS-12r).
-- **add** The app is covered in the app switcher; optional Settings → Privacy → Require Face ID (IOS-22).
+- **fix** An SMS or card payment captured with no "SMS go to" ledger is saved and sent once a ledger is set, instead of being discarded. Each item is stamped with the last signed-in account and is only filed for that account; another account's items wait in Not sent with Delete. "SMS go to" is cleared on every sign-out path (IOS-12r).
+- **add** Sign-out asks first, naming how many SMS, card payments and PDFs are waiting, signs out, then deletes exactly those (a failed delete is reported); a Settings badge and an Overview strip show items that haven't reached Bank Ledger for over an hour (IOS-12r).
+- **add** The app is covered in the app switcher by an opaque cover in its own window, above any open sheet; optional Settings → Privacy → Require Face ID, switched off automatically when the device no longer has Face ID or a passcode (IOS-22).
 - **add** An empty ledger shows a set-up checklist (SMS capture, a statement, a member) instead of "AED 0" (IOS-23).
 - **fix** Budgets use `budget_status`'s `is_effective` (`p_include_inactive`) instead of working out on the phone which budget applies (WEB-28i).
 - **change** `ChartPalette.categoryTokens` is generated from the tokens; bank and merchant colours cycle through 16 (WEB-17r).
