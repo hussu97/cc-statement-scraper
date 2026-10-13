@@ -18,6 +18,8 @@ public final class LedgerScreens {
     public let month: MonthSelection
     /// Makes the category drill-down's model, for whichever tab pushes it.
     public let categoryDrillDowns: CategoryDrillDowns
+    /// Makes the loaders of Insights' "More analysis" screens (PAR-12).
+    public let analysis: AnalysisScreens
 
     /// The ledger the tabs hold. The UI shows the tabs only when this equals
     /// the selected ledger, so the previous ledger's numbers never flash.
@@ -36,6 +38,7 @@ public final class LedgerScreens {
         review = ReviewModel(api: api)
         month = MonthSelection(today: today)
         categoryDrillDowns = CategoryDrillDowns(api: api)
+        analysis = AnalysisScreens(api: api, today: today)
         self.live = live ?? LiveUpdates(api: api)
         // A budget written on the Budgets tab changes Insights' budgets card.
         budgets.onChange = { [insights] code in await insights.refresh(profileCode: code) }
