@@ -61,7 +61,12 @@ public protocol LedgerAPI: SMSIngestAPI {
     func retrySMSFallback(reviewCode: String) async throws
 
     // Writes
-    func setTransactionCategory(txnCode: String, categoryCode: String, applyToMerchant: Bool) async throws
+    /// `rpc('set_transaction_category')`. A nil category clears the manual
+    /// choice (the transaction's, and with `applyToMerchant` the merchant's).
+    func setTransactionCategory(txnCode: String, categoryCode: String?, applyToMerchant: Bool) async throws
+    /// Updates one user field of `public.transactions` (`notes` or
+    /// `exclude_from_spend`, the columns `authenticated` may update). Owners only (RLS).
+    func updateTransaction(txnCode: String, edit: TransactionEdit) async throws
     func uploadStatements(profileCode: String, files: [UploadFile]) async throws -> UploadResponse
 
     // Statement detail, spend split, banks, upload timeline (SupabaseLedgerAPI+Statements.swift)

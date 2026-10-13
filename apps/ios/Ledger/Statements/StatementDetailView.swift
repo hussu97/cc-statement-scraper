@@ -46,9 +46,8 @@ struct StatementDetailView: View {
         .task { if model.state.value == nil { await model.load(profileCode: profileCode) } }
         .refreshable { await model.load(profileCode: profileCode) }
         .sheet(item: $model.selected) { txn in
-            CategorySheet(transaction: txn, categories: model.state.value?.assignable ?? []) { code, all in
-                await model.setCategory(txn, to: code, applyToMerchant: all, profileCode: profileCode)
-            }
+            CategorySheet(transaction: txn, categories: model.state.value?.assignable ?? [],
+                          profileCode: profileCode, target: model)
         }
         .alert("Couldn't open", isPresented: Binding(get: { model.errorMessage != nil },
                                                     set: { if !$0 { model.errorMessage = nil } })) {

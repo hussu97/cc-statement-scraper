@@ -5,7 +5,7 @@ import Observation
 /// credit lines. Tapping a line with a transaction opens the transaction sheet.
 @MainActor
 @Observable
-public final class StatementDetailModel {
+public final class StatementDetailModel: TransactionEditing {
     public struct Content: Sendable {
         public let detail: StatementDetail
         /// `category_code` → category, for each line's dot and name.
@@ -62,17 +62,18 @@ public final class StatementDetailModel {
         }
     }
 
-    public func setCategory(_ txn: LedgerTransaction, to categoryCode: String, applyToMerchant: Bool,
-                            profileCode: String) async -> Bool {
-        do {
-            try await api.setTransactionCategory(txnCode: txn.txnCode, categoryCode: categoryCode,
-                                                 applyToMerchant: applyToMerchant && txn.merchantCode != nil)
-            await load(profileCode: profileCode)
-            return true
-        } catch {
-            errorMessage = LoadState<Int>.message(for: error)
-            return false
-        }
+    /// Saves the line's category (nil clears the manual choice) and reloads the statement.
+    public func saveCategory(_ txn: LedgerTransaction, to categoryCode: String?, applyToMerchant: Bool,
+                             profileCode: String) async throws {
+        try await api.setTransactionCategory(txnCode: txn.txnCode, categoryCode: categoryCode,
+                                             applyToMerchant: applyToMerchant && txn.merchantCode != nil)
+        await load(profileCode: profileCode)
+    }
+
+    /// Saves a note or the exclude flag and reloads the statement.
+    public func saveEdit(_ txn: LedgerTransaction, _ edit: TransactionEdit, profileCode: String) async throws {
+        try await api.updateTransaction(txnCode: txn.txnCode, edit: edit)
+        await load(profileCode: profileCode)
     }
 
     /// P0002: the statement was superseded or removed since the list loaded.

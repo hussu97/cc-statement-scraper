@@ -141,7 +141,10 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
     /// `v_transactions` per profile, newest first; pages are sliced from it.
     var transactionRows: [String: [LedgerTransaction]] = [:]
     private(set) var transactionRequests: [(query: ActivityQuery, page: PageRequest)] = []
-    private(set) var recategorised: [(txn: String, category: String, merchant: Bool)] = []
+    private(set) var recategorised: [(txn: String, category: String?, merchant: Bool)] = []
+    /// `updateTransaction` writes; `transactionWriteError` is thrown by both transaction writes when set.
+    private(set) var transactionEdits: [(txn: String, edit: TransactionEdit)] = []
+    var transactionWriteError: LedgerAPIError?
     /// `filter_meta.date_range.min`.
     var firstTransactionDay: CalendarDay?
     /// Months `overview` was asked for (nil: current).
@@ -244,8 +247,13 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         count("documents")
         return ListPage(items: Array(documentRows.dropFirst(page.offset).prefix(page.limit)), total: documentRows.count)
     }
-    func setTransactionCategory(txnCode: String, categoryCode: String, applyToMerchant: Bool) async throws {
+    func setTransactionCategory(txnCode: String, categoryCode: String?, applyToMerchant: Bool) async throws {
+        if let transactionWriteError { throw transactionWriteError }
         lock.withLock { recategorised.append((txnCode, categoryCode, applyToMerchant)) }
+    }
+    func updateTransaction(txnCode: String, edit: TransactionEdit) async throws {
+        if let transactionWriteError { throw transactionWriteError }
+        lock.withLock { transactionEdits.append((txnCode, edit)) }
     }
     func uploadStatements(profileCode: String, files: [UploadFile]) async throws -> UploadResponse {
         var items: [UploadResponse.Item] = []

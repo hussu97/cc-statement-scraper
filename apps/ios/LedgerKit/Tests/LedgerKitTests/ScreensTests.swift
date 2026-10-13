@@ -74,7 +74,7 @@ struct ActivityModelTests {
     }
 
     @Test("recategorising patches the row in place: no reset to page 1, scrolled pages kept")
-    func recategoriseInPlace() async {
+    func recategoriseInPlace() async throws {
         let api = StubAPI()
         api.transactionRows["prf_a"] = txns(0..<250)
         let model = ActivityModel(api: api)
@@ -83,8 +83,7 @@ struct ActivityModelTests {
         let target = model.rows[150]
         let before = api.calls("transactions")
         api.transactionRows["prf_a"]![150] = txn(target.txnCode, category: "cat_food")
-        let ok = await model.setCategory(target, to: "cat_food", applyToMerchant: false, profileCode: "prf_a")
-        #expect(ok)
+        try await model.saveCategory(target, to: "cat_food", applyToMerchant: false, profileCode: "prf_a")
         #expect(api.calls("transactions") == before)          // no page reloaded
         #expect(model.rows.count == 200)
         #expect(model.rows[150].txnCode == target.txnCode && model.rows[150].categoryCode == "cat_food")
@@ -92,7 +91,7 @@ struct ActivityModelTests {
     }
 
     @Test("under 'Uncategorised only', a categorised row leaves the list and paging stays aligned")
-    func recategoriseLeavesFilter() async {
+    func recategoriseLeavesFilter() async throws {
         let api = StubAPI()
         api.transactionRows["prf_a"] = txns(0..<150)
         let model = ActivityModel(api: api)
@@ -101,7 +100,7 @@ struct ActivityModelTests {
         await model.apply(draft, profileCode: "prf_a")
         let target = model.rows[10]
         api.transactionRows["prf_a"]![10] = txn(target.txnCode, category: "cat_food")
-        _ = await model.setCategory(target, to: "cat_food", applyToMerchant: false, profileCode: "prf_a")
+        try await model.saveCategory(target, to: "cat_food", applyToMerchant: false, profileCode: "prf_a")
         #expect(!model.rows.contains { $0.txnCode == target.txnCode })
         await model.loadMore()
         #expect(api.transactionRequests.last?.page.offset == 99)
