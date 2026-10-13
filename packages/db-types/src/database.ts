@@ -2733,6 +2733,18 @@ export type Database = {
         Args: { p_review_code: string }
         Returns: undefined
       }
+      review_context: {
+        Args: { p_profile_code: string; p_review_codes: string[] }
+        Returns: {
+          candidates: Json
+          line: Json
+          review_code: string
+          sms: Json
+          statement: Json
+          template: Json
+          txn: Json
+        }[]
+      }
       revoke_service_token: {
         Args: { p_token_code: string }
         Returns: undefined
