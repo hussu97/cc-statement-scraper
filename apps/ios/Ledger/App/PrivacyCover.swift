@@ -31,7 +31,8 @@ final class PrivacyCoverWindow {
         let center = NotificationCenter.default
         observers.forEach(center.removeObserver)
         observers = [
-            center.addObserver(forName: UIScene.willDeactivateNotification, object: scene, queue: .main) { [weak self] _ in
+            // queue nil: UIKit posts this on the main thread, and running it inline covers before the snapshot.
+            center.addObserver(forName: UIScene.willDeactivateNotification, object: scene, queue: nil) { [weak self] _ in
                 MainActor.assumeIsolated { self?.show(true) }
             },
             center.addObserver(forName: UIScene.didActivateNotification, object: scene, queue: .main) { [weak self] _ in
@@ -108,5 +109,7 @@ private struct PrivacyCover: View {
             }
             .padding(Metrics.gutter)
         }
+        // VoiceOver stays on the cover, not the app content in the window below.
+        .accessibilityAddTraits(.isModal)
     }
 }
