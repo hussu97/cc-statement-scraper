@@ -10,7 +10,20 @@ import { formatDate, formatTime } from "@/lib/dates";
 import { cn } from "@/lib/cn";
 import { useActiveProfile } from "@/data/profile";
 import { useFilterMeta } from "@/data/overview";
-import { evidenceBadge, groupByDay, useInfiniteTransactions, useActivitySummary, useSetCategory, useTransactions, type TxnRow, type TxnSelection } from "@/data/transactions";
+import {
+  dayTotalLabel,
+  evidenceBadge,
+  groupByDay,
+  listDays,
+  useDayTotals,
+  useInfiniteTransactions,
+  useActivitySummary,
+  useSetCategory,
+  useTransactions,
+  type DayTotal,
+  type TxnRow,
+  type TxnSelection,
+} from "@/data/transactions";
 import { errorMessage } from "@/data/api";
 import { PageHeader, Card } from "@/components/ui/display";
 import { Checkbox } from "@/components/ui/primitives";
@@ -71,6 +84,9 @@ export function ActivityPage() {
   const outOfRange = !phone && !!q.data && (search.page ?? 1) > pageCount(q.data.total, size);
   const rows = useMemo(() => q.data?.rows ?? [], [q.data]);
   const groups = useMemo(() => groupByDay(rows), [rows]);
+  // Each date header's net over the whole filtered set, one call per page (MA-3).
+  const days = useMemo(() => listDays(groups), [groups]);
+  const dayTotals = useDayTotals(profile_code, list, days);
   const isSelected = (code: string) => allMatching || selected.has(code);
   const allSelected = rows.length > 0 && (allMatching || rows.every((r) => selected.has(r.txn_code!)));
   const selectRows = () => {
@@ -147,8 +163,9 @@ export function ActivityPage() {
             </div>
             {groups.map((g) => (
               <div key={g.day} role="rowgroup">
-                <div className="sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-[1] border-b border-border bg-surface-2/95 px-4 py-1.5 text-[12px] font-medium text-ink-2 backdrop-blur lg:top-0">
-                  {formatDate(g.day, "day")}
+                <div className="sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-[1] flex items-baseline justify-between gap-3 border-b border-border bg-surface-2/95 px-4 py-1.5 text-[12px] font-medium text-ink-2 backdrop-blur lg:top-0">
+                  <span>{formatDate(g.day, "day")}</span>
+                  <DayTotalFigure total={dayTotals.data?.get(g.day)} />
                 </div>
                 {g.rows.map((t) => (
                   <TxnLine
@@ -301,6 +318,18 @@ function TxnLine({
         <TxnAmount t={t} className="text-sm" />
       </span>
     </div>
+  );
+}
+
+/** A date header's net, from the server; nothing while it loads or for a day it did not return. */
+function DayTotalFigure({ total }: { total: DayTotal | undefined }) {
+  const label = dayTotalLabel(total);
+  if (!label || !total) return null;
+  const noun = total.txn_count === 1 ? "transaction" : "transactions";
+  return (
+    <span className="tabular font-normal text-muted" title={`Net of ${total.txn_count} ${noun} that day`}>
+      {label}
+    </span>
   );
 }
 
