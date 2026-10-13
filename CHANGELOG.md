@@ -1,5 +1,13 @@
 # Changelog
 
+## iOS app hangs from build 26 — 2026-10-13
+
+### iOS
+
+- **change** Sentry reports only app hangs that fully block the screen (2 s); non-fully-blocking hangs, whose stacks don't show the blocking call (build 26: system text selection on an iOS beta), are no longer sent. The App Intent and share extension still track no hangs.
+- **fix** The Face ID lock reads which method the device has off the main thread, when the app becomes active, at unlock and when the setting is turned on, instead of a synchronous `LAContext` call on every redraw.
+- **fix** Statements reads the share-sheet queue and picked PDFs off the main thread; the App Group folder and settings are resolved once at launch.
+
 ## Backlog batch 5: release-config hardening, polish, accessibility, lighter Overview — 2026-10-13
 
 ### Backend (Supabase)
