@@ -80,6 +80,8 @@ public enum WalletCapture {
 
     public enum Problem: String, Error, Sendable, Equatable {
         case invalidAmount = "invalid_amount"
+        /// Device-only: neither Amount was passed (the server never sees it).
+        case missingAmount = "missing_amount"
         case invalidCurrency = "invalid_currency"
         case missingMerchant = "missing_merchant"
         case missingCard = "missing_card"
@@ -87,8 +89,9 @@ public enum WalletCapture {
         /// Shown by Shortcuts. Never echoes the merchant.
         public var userMessage: String {
             switch self {
-            case .invalidAmount: "Not logged: the amount must be above zero."
-            case .invalidCurrency: "Not logged: the amount has no valid currency."
+            case .invalidAmount: "Not logged: the amount must be a number above zero."
+            case .missingAmount: "Not logged: the amount is empty. Pass the automation's Amount."
+            case .invalidCurrency: "Not logged: the amount has no currency. Set Currency if missing (e.g. AED) in the shortcut."
             case .missingMerchant: "Not logged: the merchant is empty. Pass the automation's Merchant."
             case .missingCard: "Not logged: the card is empty. Pass the automation's Card or Pass."
             }

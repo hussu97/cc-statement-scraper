@@ -180,7 +180,8 @@ Tap-to-pay payments reach Bank Ledger through a second Shortcuts personal automa
    tap", and **Run Immediately**. Tap Next.
 2. Create New Shortcut → add **Log Card Payment** (search Ledger). Set **Amount** to Shortcut
    Input's Amount, **Merchant** to Shortcut Input's Merchant and **Card** to Shortcut Input's Card
-   or Pass.
+   or Pass. Leave **Currency if missing** (under Show More) empty: the currency comes with the
+   Amount. The in-app guide is Settings → Card names for payment shortcut → **Set up card payments**.
 3. In Bank Ledger, Settings → **Card names for payment shortcut** → Card names: type each card's
    name exactly as the phone's card shows it (capitals don't matter). If a payment arrives first,
    Shortcuts shows "no card is named “…”" with the name it passed; setting that name files the
@@ -190,10 +191,24 @@ Enabling it for a card that also sends SMS alerts is safe: the server links the 
 payment (same account, amount and currency, within 30 minutes) as two pieces of evidence for one
 transaction, not two transactions.
 
+**Currency.** The automation's Shortcut Input is the Wallet transaction; its Amount is the
+amount as the phone formats it, currency included (`AED 12.50`, `$6.25` on an en_AE phone, `€4.20`,
+`12,50 €`). The intent's **Amount** (`transactionAmount`) is a text parameter, so that string
+arrives whole, and `WalletAmount.resolve` (LedgerKit) reads the amount and an ISO code from it:
+a three-letter code, else the symbol as the phone's locale writes it (`$` is USD in en_AE and
+en_US, ambiguous in en_GB), else `€ £ ₹ US$ د.إ …`. Only when the text has no currency, or an
+ambiguous symbol, does the optional **Currency if missing** (`fallbackCurrency`) apply; with
+neither, the payment is refused in Shortcuts ("Set Currency if missing"), never guessed.
+Automations set up before this used an `IntentCurrencyAmount` parameter (`amount`, now **Amount
+in a set currency**, optional, under Show More): Shortcuts bound the number to it and took the
+currency from a picker fixed in the automation, so a payment abroad was filed in AED. They keep
+working unchanged, and their result line adds a pointer to set **Amount** instead.
+
 `WalletIntake` mirrors `SMSIntake`: `WalletCapture.payment` checks on the phone what the server
 would refuse (amount above zero, rounded half-up to cents; a 3-letter currency, uppercased;
-merchant ≤ 200 and card name ≤ 64 characters, trimmed). The amount is a `Decimal` from the
-intent's currency amount and goes to `rpc('ingest_wallet_transactions')` as a decimal string.
+merchant ≤ 200 and card name ≤ 64 characters, trimmed). The amount is a `Decimal` (parsed from
+the text without a binary float) and goes to `rpc('ingest_wallet_transactions')` as a decimal
+string.
 Payments go to the **SMS go to** ledger and share the SMS outbox (each entry has a `kind`; one
 flush sends each profile's SMS and payments to their own RPC), so a payment made offline at the
 till is sent when a connection is back, and a refused one waits under Settings → **Not sent**.
