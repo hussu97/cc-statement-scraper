@@ -41,6 +41,9 @@ public enum WalletAmount {
     ///   - locale: how the device formats amounts (decides `$` and `1,234`).
     public static func resolve(text: String?, currencyAmount: (amount: Decimal, currency: String)?,
                                fallbackCurrency: String?, locale: Locale = .current) -> Result<Resolved, WalletCapture.Problem> {
+        // Shortcuts fills an untouched currency-amount field with "0 AED" (the
+        // phone's currency): that is no amount, and its currency is no fallback.
+        let currencyAmount = currencyAmount.flatMap { $0.amount == 0 ? nil : $0 }
         if let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             guard let parsed = WalletAmountText.parse(text, locale: locale) else { return .failure(.invalidAmount) }
             if let currency = parsed.currency {

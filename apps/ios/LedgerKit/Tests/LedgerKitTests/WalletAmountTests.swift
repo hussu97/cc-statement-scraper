@@ -100,6 +100,16 @@ struct WalletAmountTests {
         #expect(empty == .success(.init(amount: dec("1"), currency: "EUR", source: .currencyAmount)))
     }
 
+    @Test("the untouched older field (Shortcuts shows it as 0 AED) is neither an amount nor a currency")
+    func untouchedDefault() {
+        #expect(WalletAmount.resolve(text: nil, currencyAmount: (0, "AED"), fallbackCurrency: nil, locale: enAE)
+                == .failure(.missingAmount))
+        #expect(WalletAmount.resolve(text: "12.50", currencyAmount: (0, "AED"), fallbackCurrency: nil, locale: enAE)
+                == .failure(.invalidCurrency))
+        #expect(WalletAmount.resolve(text: "€4.20", currencyAmount: (0, "AED"), fallbackCurrency: nil, locale: enAE)
+                == .success(.init(amount: dec("4.20"), currency: "EUR", source: .text)))
+    }
+
     @Test("garbled text or nothing at all is refused")
     func refused() {
         #expect(WalletAmount.resolve(text: "free", currencyAmount: nil, fallbackCurrency: "AED") == .failure(.invalidAmount))
