@@ -240,9 +240,12 @@ function PendingStrip({ overview }: { overview: Overview | undefined }) {
           )
         )}
       </div>
-      <span className="text-[12px] text-subtle">
-        {overview?.last_sms_at ? `Last SMS ${formatRelative(overview.last_sms_at)}` : "No SMS received yet"}
-      </span>
+      {/* Only a loaded overview may claim there has been no SMS (CLAUDE.md §4.3). */}
+      {overview && (
+        <span className="text-[12px] text-subtle">
+          {overview.last_sms_at ? `Last SMS ${formatRelative(overview.last_sms_at)}` : "No SMS received yet"}
+        </span>
+      )}
     </section>
   );
 }
