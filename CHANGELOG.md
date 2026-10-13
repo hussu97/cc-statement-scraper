@@ -1,5 +1,36 @@
 # Changelog
 
+## Backlog batch 5: release-config hardening, polish, accessibility, lighter Overview — 2026-10-13
+
+### Backend (Supabase)
+
+- **change** `20261013111525_uk_uncategorised`: `category_breakdown`, `spend_series` and `spend_breakdown` label no category "Uncategorised"; pgTAP 46 keeps the US spelling out of function bodies (WEB-31).
+- **add** `20261013112601_budget_status_pace`: `budget_status` adds `expected_share`, `expected_aed` and `over_pace_aed` for the current month (null otherwise) (WEB-38).
+
+### Web
+
+- **change** One decimals rule (`formatTotal`, `<Money total>`): transactions two decimals; limits, averages and totals whole units; the outstanding balance and statement totals stay exact (WEB-34). "Uncategorised" everywhere, with a source guard (WEB-31).
+- **change** Overview: the pending strip is one line from the server's count and sum, linking to pending Activity; pending rows appear once, in Recent activity, and nothing claims "No SMS" before the overview loads (WEB-35).
+- **add** Budget meters show an "expected by today" tick and "AED X over/under pace" from the server (WEB-38).
+- **fix** Notes no longer stay dirty after saving padded text; the rule preview shows exact counts (WEB-49).
+- **fix** Accessibility: valid `dt`/`dd` groups, named meters (`Meter.label` required), the 404 inside the shell when signed in, a "Skip to content" link (WEB-52).
+- **perf** Overview's category ring is SVG and the monthly bars load Recharts lazily, so Overview renders without the 107 kB (gz) chart chunk; the bundle budget enforces it (WEB-53). A `usePager` reset test (WEB-55).
+
+### iOS
+
+- **change** Release builds read only `Config/Secrets.Release.xcconfig`; a missing or local value fails the "Check release config" phase; `testflight.sh` and `publish-build.sh` check the archived app, the share extension and the staged IPA with `plutil` (shape only). Sentry releases (`ledger-ios@<version>+<build>`: dSYMs, new, set-commits, finalize) never block a release; `SENTRY_AUTH_TOKEN` comes from the shell or the keychain item `ledger-sentry-auth-token`, never an xcconfig. Every build script phase hides the build environment (IOS-21r, X-28).
+- **fix** Sentry never receives a URL's query string or fragment (failed requests, breadcrumbs, spans); `NSAllowsLocalNetworking` ships only in Debug (IOS-30).
+- **add** `ledger://review` deep link (waits for a ledger, dropped on sign-out); Shortcut results for an unknown-card or held SMS, or a held card payment, say "Needs a look in Review" and never open the app (IOS-07r).
+- **perf** Activity rebuilds its day sections only when rows change or the day rolls over; shared, locked ISO formatters (IOS-26). No Swift 6 warnings (IOS-25r). "Uncategorised" spelling (WEB-31).
+
+### Scraper
+
+- **fix** `ccs-scraper upload` records the requests that succeeded on a partial failure, lists failed files with a retry line, and exits 1 without a traceback; uploads are tracked by path, so same-named PDFs in different folders aren't swapped (SRV-16r).
+
+### Docs
+
+- **change** BACKLOG: batch 5 done (14 items, 29 open); 03/04/05/06 Fix status; README, ci-cd, PRODUCTION and apps/ios docs for the release config and keychain token.
+
 ## Backlog batch 4: Activity bulk actions and export, iOS transaction sheet, Dubai dates — 2026-10-13
 
 ### Backend (Supabase)
