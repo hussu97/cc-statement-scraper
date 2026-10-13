@@ -11,6 +11,7 @@ describe("csvCell", () => {
 
   it("neutralises cells a spreadsheet would run as a formula", () => {
     expect(csvCell("=1+1")).toBe("'=1+1");
+    expect(csvCell("  =HYPERLINK(1)")).toBe("'  =HYPERLINK(1)");
     expect(csvCell("+971 50 000 0000")).toBe("'+971 50 000 0000");
     expect(csvCell("-cmd")).toBe("'-cmd");
     expect(csvCell("@SUM(A1)")).toBe("'@SUM(A1)");
