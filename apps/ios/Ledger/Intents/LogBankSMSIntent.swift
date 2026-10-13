@@ -27,16 +27,18 @@ struct LogBankSMSIntent: AppIntent {
         Summary("Log \(\.$message) from \(\.$sender)")
     }
 
-    func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog & OpensIntent {
+    func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog {
         guard let services = AppServices.shared else {
-            return ShortcutResult.make("not_configured", dialog: "Bank Ledger isn't configured.", link: nil)
+            return .result(value: "not_configured", dialog: "Bank Ledger isn't configured.")
         }
         Telemetry.start(target: .intent, config: services.config, isDebugBuild: BuildFlavor.isDebug)
         let (outcome, dialog) = await services.smsIntake().handle(body: message, sender: sender)
         Telemetry.breadcrumb("sms_ingest", outcome: outcome.telemetryOutcome, data: ["entry": "intent"])
         // Saved but not sent (e.g. no data): ask iOS to send it once a connection is back.
         if case .queued = outcome { await BackgroundSync.schedule(services) }
-        return ShortcutResult.make(outcome.telemetryOutcome, dialog: dialog, link: outcome.link)
+        // Never opens the app: this runs in the background for every alert. A
+        // review is named in the dialog (IOS-07r; README "Open URL ledger://review").
+        return .result(value: outcome.telemetryOutcome, dialog: IntentDialog(stringLiteral: dialog))
     }
 }
 

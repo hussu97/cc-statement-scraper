@@ -71,7 +71,7 @@ struct WalletIntakeTests {
     @Test("statuses reuse the SMS wording", arguments: [
         ("duplicate_delivery", "Already logged."),
         ("duplicate", "Logged to Personal."),
-        ("held", "Needs review"),
+        ("held", "Needs a look in Review"),
     ])
     func statuses(status: String, expected: String) async {
         let (intake, _) = intake(StubAPI(.succeed(status: status)))

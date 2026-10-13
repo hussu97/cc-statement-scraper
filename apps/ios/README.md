@@ -165,7 +165,11 @@ first one you own — never simply the ledger on screen. PDFs shared to "Add to 
    there is a network (`OutboxSync`; Info.plist `BGTaskSchedulerPermittedIdentifiers`,
    `UIBackgroundModes` fetch + processing). `received_at` stays the time the Shortcut ran.
 5. Shortcuts shows a one-line result naming the ledger and, for unknown cards or held
-   matches, pointing to Overview → Needs review. The body is never logged, echoed or sent to Sentry.
+   matches, "Needs a look in Review" (Overview → Needs attention). The body is never logged,
+   echoed or sent to Sentry. The intent never opens the app: it runs in the background for every
+   alert. To jump to the screen, open `ledger://review` (deep link, handled by `AppLink`): in
+   Shortcuts, add **Open URL** with `ledger://review` (e.g. after an **If** on the intent's
+   result being `delivered_unknown_card` or `delivered_held`), or tap it from Notes or Safari.
 
 ## Card payment capture
 

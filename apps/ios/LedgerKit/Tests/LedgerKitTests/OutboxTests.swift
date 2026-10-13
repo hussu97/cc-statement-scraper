@@ -302,9 +302,9 @@ struct SMSIntakeTests {
         let (outcome, dialog) = await intake.handle(body: card, sender: "FAB")
         #expect(outcome == .delivered(status: "unknown_card"))
         #expect(dialog.contains("doesn't know this card"))
-        #expect(dialog.contains("Needs review"))
+        #expect(dialog.contains("Needs a look in Review"))
         #expect(SMSIntakeOutcome.delivered(status: "duplicate_delivery").dialog() == "Already logged.")
-        #expect(SMSIntakeOutcome.delivered(status: "held").dialog(ledger: "Home").contains("Needs review"))
+        #expect(SMSIntakeOutcome.delivered(status: "held").dialog(ledger: "Home").contains("Needs a look in Review"))
     }
 
     @Test("every run records the last capture (outcome only, never the message)")

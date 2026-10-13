@@ -1,10 +1,11 @@
 import Foundation
 
 /// Deep links into the app: `ledger://review`. The scheme is registered in
-/// `project.yml` (`CFBundleURLTypes`); `AppModel.open(url:)` routes them, and
-/// the App Intents return one when the Shortcut result needs the app (IOS-07r).
+/// `project.yml` (`CFBundleURLTypes`) and `AppModel.open(url:)` routes them
+/// (IOS-07r). The App Intents don't open them (they run in the background for
+/// every alert); a Shortcut can, with "Open URL ledger://review".
 public enum AppLink: String, Equatable, Sendable, CaseIterable {
-    /// Overview → Needs review.
+    /// Overview → Needs attention → Review.
     case review
 
     public static let scheme = "ledger"
@@ -22,8 +23,8 @@ public enum AppLink: String, Equatable, Sendable, CaseIterable {
 }
 
 extension SMSIntakeOutcome {
-    /// What the Shortcut result opens: the Review screen for a message only a
-    /// review resolves (a card Ledger doesn't know yet, or one held for a
+    /// Where the Shortcut result points: the Review screen for a message only
+    /// a review resolves (a card Ledger doesn't know yet, or one held for a
     /// check). Nil when there is nothing to do in the app.
     public var link: AppLink? {
         switch self {

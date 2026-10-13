@@ -32,7 +32,9 @@ public enum SMSIntakeOutcome: Equatable, Sendable {
         switch self {
         case .dropped(let decision): return decision.userMessage
         case .refused(_, let message): return message
-        case .delivered(let status): return Self.statusMessage(status, to: to)
+        case .delivered(let status):
+            let line = Self.statusMessage(status, to: to)
+            return link == .review ? "\(line) \(Self.reviewPointer)" : line
         // App Intent text: "this phone", never "iPhone" (CLAUDE.md §5.6).
         case .queued(let reason):
             switch reason {
@@ -76,12 +78,16 @@ public enum SMSIntakeOutcome: Equatable, Sendable {
         }
     }
 
+    /// Where a message that needs a review is waiting (`link == .review`).
+    /// Text only: the intent never opens the app, because the SMS automation
+    /// runs in the background for every alert (IOS-07r). A Shortcut that wants
+    /// the screen can add "Open URL ledger://review".
+    public static let reviewPointer = "Needs a look in Review: open Ledger → Overview → Needs attention."
+
     static func statusMessage(_ status: String, to: String) -> String {
         switch status {
-        case "unknown_card":
-            "Logged \(to), but Ledger doesn't know this card yet. Open Ledger → Overview → Needs review to add it."
-        case "held":
-            "Logged \(to). It needs a quick check: open Ledger → Overview → Needs review."
+        case "unknown_card": "Logged \(to), but Ledger doesn't know this card yet."
+        case "held": "Logged \(to). It needs a quick check."
         case "unparsed": "Logged \(to), but Ledger can't read this message format yet."
         case "ignored": "Logged \(to) as not a card purchase."
         case "duplicate_delivery", "already_linked": "Already logged."
