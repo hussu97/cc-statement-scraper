@@ -1,5 +1,32 @@
 # Changelog
 
+## Backlog batch 6: payment status, analytics, widgets, Shortcuts, notifications, Wallet currency — 2026-10-13
+
+### Backend (Supabase)
+
+- **add** `20261013180516_statement_payment_status`: `v_statement_payments` gives each statement `payment_status` (`paid` / `part_paid` / `unpaid` / `overdue`) and `amount_paid`, carried by `overview` (latest statement), `statement_cycles` and `statement_detail`. Overdue: due date passed and payments so far under the minimum; a minimum paid late is part paid (UX-1r, WEB-36).
+- **add** `activity_day_totals` (per-day net for the Activity headers, the same filter reader as the bulk RPCs) and `merchant_context` (visits, average, 6-month total, first seen, from `v_spend`) (MA-3, MA-4).
+- **fix** `20261013183327_statement_due_skips_paid`: the nightly `statement_due` insight skips statements already paid.
+
+### Web
+
+- **add** Dues read "Due today" / "Due tomorrow" / "Due in N days" and Paid / Part paid / Overdue from the server, on Overview, Statements and the statement page (WEB-36).
+- **add** Activity date headers show each day's net; the drawer shows the merchant line (MA-3, MA-4).
+- **add** Category drill-down at `/insights/category/<code>` (trend, top merchants, change vs previous period); Cards compares accounts with balance, utilisation and spending sparklines; Insights "Worth a look" tab lists every open insight by the screen that answers it (MA-1, MA-2, MA-5).
+
+### iOS
+
+- **add** Overview hero shows "+ AED X pending"; dues say Paid, Part paid or Overdue from the server (UX-1r).
+- **add** Local notifications: unknown card, captures not sent after an hour, captures waiting while signed out, and statement due reminders 3 days before and on the due date at 09:00 Dubai (withdrawn when paid). One switch per kind in Settings → Notifications; permission is asked from the SMS guide (N-1).
+- **add** Widgets (new `LedgerWidgets` extension): Month spend and pace, Next due (paid statements dropped), Utilisation, on the Home and Lock Screen, from an App Group snapshot with no network; no amounts on the Lock Screen with Require Face ID (N-2).
+- **add** App Intents and Shortcuts phrases: Month Spend, What's Due, Categorise Last Transaction (N-3). Controls: Open Uncategorised and Add Statement, with `ledger://uncategorised` and `ledger://add-statement` (N-4).
+- **change** Log Card Payment takes Amount, Merchant and Card from the Wallet transaction automation; the currency comes with the amount (including Arabic-locale symbols); "Currency if missing" applies only to an amount with no currency, and an unrecognised symbol is refused, never guessed.
+- **add** The SMS guide shows step 5 in three Shortcuts-editor screenshots (IOS-06g). A test fails the build on Apple product names in intent, widget and Control text.
+
+### Docs
+
+- **change** BACKLOG: batch 6 done (12 items); N-5 closed by decision; iOS parity rows PAR-1…14 added.
+
 ## iOS app hangs from build 26 — 2026-10-13
 
 ### iOS

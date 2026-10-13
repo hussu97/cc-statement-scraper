@@ -550,3 +550,6 @@ Everything still open, including the UX and iOS-native recommendations and the d
 
 **Backlog batch 5 (2026-10-13):** IOS-07r, IOS-21r, IOS-25r, IOS-26 and IOS-30 fixed; outcomes in
 [BACKLOG.md](BACKLOG.md#done-backlog-batch-5-2026-10-13).
+
+**Backlog batch 6 (2026-10-13):** UX-1r, N-1 to N-4 and IOS-06g (N-5 closed by decision); outcomes in
+[BACKLOG.md](BACKLOG.md#done-backlog-batch-6-2026-10-13).
