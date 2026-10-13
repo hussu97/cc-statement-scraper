@@ -44,6 +44,18 @@ targets:
           - $(SRCROOT)/scripts/release-config-check.sh
         basedOnDependencyAnalysis: false
         showEnvVars: false
+      - name: Debug ATS
+        # Debug talks to `supabase start` over plain HTTP (127.0.0.1 from the
+        # simulator, the Mac's LAN address from a device). Debug's Info.plist is
+        # a copy of the generated one plus NSAllowsLocalNetworking; Release reads
+        # Ledger/Info.plist as generated, without it.
+        script: |
+          plutil -insert NSAppTransportSecurity -json '{"NSAllowsLocalNetworking":true}' \
+            -o - "$SCRIPT_INPUT_FILE_0" > "$SCRIPT_OUTPUT_FILE_0"
+        inputFiles:
+          - $(SRCROOT)/Ledger/Info.plist
+        outputFiles:
+          - $(DERIVED_FILE_DIR)/Info.Debug.plist
     entitlements:
       path: Ledger/Ledger.entitlements
       properties:
@@ -88,19 +100,6 @@ targets:
         LedgerAppGroup: $(LEDGER_APP_GROUP)
         LedgerKeychainGroup: $(AppIdentifierPrefix)$(LEDGER_KEYCHAIN_GROUP)
         LedgerPasskeyDomain: $(LEDGER_PASSKEY_DOMAIN)
-    preBuildScripts:
-      - name: Debug ATS
-        # Debug talks to `supabase start` over plain HTTP (127.0.0.1 from the
-        # simulator, the Mac's LAN address from a device). Debug's Info.plist is
-        # a copy of the generated one plus NSAllowsLocalNetworking; Release reads
-        # Ledger/Info.plist as generated, without it.
-        script: |
-          plutil -insert NSAppTransportSecurity -json '{"NSAllowsLocalNetworking":true}' \
-            -o - "$SCRIPT_INPUT_FILE_0" > "$SCRIPT_OUTPUT_FILE_0"
-        inputFiles:
-          - $(SRCROOT)/Ledger/Info.plist
-        outputFiles:
-          - $(DERIVED_FILE_DIR)/Info.Debug.plist
     settings:
       configs:
         Debug:
@@ -122,6 +121,14 @@ targets:
       - package: LedgerKit
     preBuildScripts:
       - *releaseConfigCheck
+      - name: Debug ATS
+        script: |
+          plutil -insert NSAppTransportSecurity -json '{"NSAllowsLocalNetworking":true}' \
+            -o - "$SCRIPT_INPUT_FILE_0" > "$SCRIPT_OUTPUT_FILE_0"
+        inputFiles:
+          - $(SRCROOT)/ShareExtension/Info.plist
+        outputFiles:
+          - $(DERIVED_FILE_DIR)/Info.Debug.plist
     entitlements:
       path: ShareExtension/LedgerShare.entitlements
       properties:
@@ -151,15 +158,6 @@ targets:
               SUBQUERY ($extensionItem.attachments, $attachment,
               ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "com.adobe.pdf"
               ).@count >= 1).@count >= 1
-    preBuildScripts:
-      - name: Debug ATS
-        script: |
-          plutil -insert NSAppTransportSecurity -json '{"NSAllowsLocalNetworking":true}' \
-            -o - "$SCRIPT_INPUT_FILE_0" > "$SCRIPT_OUTPUT_FILE_0"
-        inputFiles:
-          - $(SRCROOT)/ShareExtension/Info.plist
-        outputFiles:
-          - $(DERIVED_FILE_DIR)/Info.Debug.plist
     settings:
       configs:
         Debug:
