@@ -48,16 +48,16 @@ export function cleanConditions(c: RuleConditions): Record<string, string> {
 }
 
 /** Validate a rule draft. Returns an error sentence or null. */
+/**
+ * Client-side checks only for what the server can't be asked about: a missing
+ * category, empty text, malformed amounts. Regex syntax is NOT checked here:
+ * rules run as Postgres AREs, which accept syntax JS `RegExp` rejects (embedded
+ * options such as `(?b)…`) and vice versa, so `preview_rule` (22023) is the
+ * only judge, and the editor blocks Save while it rejects (WEB-13r).
+ */
 export function validateRule(d: { pattern: string; match_type: string; category_code: string; conditions: RuleConditions }): string | null {
   if (!d.category_code) return "Choose a category.";
   if (!d.pattern.trim()) return "Enter text to match.";
-  if (d.match_type === "regex") {
-    try {
-      new RegExp(d.pattern);
-    } catch {
-      return "That regular expression isn't valid.";
-    }
-  }
   for (const k of ["amount_min", "amount_max"] as const) {
     const v = d.conditions[k]?.trim();
     if (v && !/^\d+(\.\d{1,2})?$/.test(v)) return "Amounts must be numbers like 50 or 49.99.";

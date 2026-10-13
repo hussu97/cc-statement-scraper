@@ -79,8 +79,8 @@ export function MembersTab() {
                       </p>
                       <p className="text-[12px] text-muted">
                         {m.pending
-                          ? `Invited ${formatDate(m.created_at.slice(0, 10))} · gets access when they accept`
-                          : `Joined ${formatDate(m.created_at.slice(0, 10))}`}
+                          ? `Invited ${formatDate(m.created_at)} · gets access when they accept`
+                          : `Joined ${formatDate(m.created_at)}`}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">

@@ -121,12 +121,38 @@ export function useInfiniteTransactions(profileCode: string, search: ActivitySea
   });
 }
 
+/** One transaction of the active ledger; null when it isn't in this ledger (WEB-46). */
 export function useTransaction(profileCode: string, txnCode: string | null) {
   return useQuery({
     queryKey: keys.transaction(profileCode, txnCode ?? ""),
     enabled: !!txnCode,
-    queryFn: async () => must(await supabase.from("v_transactions").select("*").eq("txn_code", txnCode!).maybeSingle()),
+    queryFn: async () => must(await supabase.from("v_transactions").select("*").eq("profile_code", profileCode).eq("txn_code", txnCode!).maybeSingle()),
   });
+}
+
+/**
+ * The ledger a transaction outside the active one belongs to, among the
+ * ledgers the caller can see (RLS); null when it is in none of them. Asked
+ * only after useTransaction comes back empty (WEB-46).
+ */
+export function useTransactionLedger(profileCode: string, txnCode: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: [...keys.transaction(profileCode, txnCode ?? ""), "ledger"],
+    enabled: enabled && !!txnCode,
+    queryFn: async () => {
+      const row = must(await supabase.from("v_transactions").select("profile_code").eq("txn_code", txnCode!).maybeSingle());
+      return row?.profile_code ?? null;
+    },
+  });
+}
+
+/**
+ * The ledger to offer for a txn= that isn't in the active one: the owning
+ * ledger when it is in the caller's switcher list, else null ("not found"). Pure.
+ */
+export function elsewhereLedger<P extends { profile_code: string }>(ownerCode: string | null | undefined, activeCode: string, profiles: P[]): P | null {
+  if (!ownerCode || ownerCode === activeCode) return null;
+  return profiles.find((p) => p.profile_code === ownerCode) ?? null;
 }
 
 export interface EvidenceItem {
