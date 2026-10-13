@@ -38,6 +38,9 @@ public protocol LedgerAPI: SMSIngestAPI {
     func filterMeta(profileCode: String) async throws -> FilterMeta
     /// `rpc('activity_summary')`: count, net AED and date span of the rows Activity lists for `query`.
     func activitySummary(profileCode: String, query: ActivityQuery) async throws -> ActivitySummary
+    /// `rpc('activity_day_totals')`: each of `days`' totals over every row matching `query`
+    /// (days with none are left out). `p_filter` is `query.activityFilter`, as the web sends it.
+    func activityDayTotals(profileCode: String, query: ActivityQuery, days: [CalendarDay]) async throws -> [DayTotal]
 
     // Tables / views
     /// One page of `v_transactions`, newest first, with the exact total.

@@ -229,6 +229,18 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         case nil: return ActivitySummary(txnCount: 0, netAed: 0)
         }
     }
+    /// `activity_day_totals` answers by day (days not here aren't returned), the calls, and an error to throw.
+    var dayTotalRows: [CalendarDay: DayTotal] = [:]
+    var dayTotalsError: LedgerAPIError?
+    private(set) var dayTotalCalls: [(query: ActivityQuery, days: [CalendarDay])] = []
+    func activityDayTotals(profileCode: String, query: ActivityQuery, days: [CalendarDay]) async throws -> [DayTotal] {
+        let (rows, error) = lock.withLock {
+            dayTotalCalls.append((query, days))
+            return (dayTotalRows, dayTotalsError)
+        }
+        if let error { throw error }
+        return days.compactMap { rows[$0] }
+    }
     func transactions(profileCode: String, query: ActivityQuery, page: PageRequest) async throws -> TransactionPage {
         count("transactions")
         let all = lock.withLock {
