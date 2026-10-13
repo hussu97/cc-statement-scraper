@@ -541,13 +541,24 @@ document, so each account is anchored on a balance the bank printed, the latest 
 `outstanding` (active accounts), `outstanding_complete` (every account anchored, every AED
 amount known) and `outstanding_has_estimate`. Positive is owed; negative is a credit balance.
 
+And **one definition of whether a statement was paid**: `public.v_statement_payments`
+(`security_invoker`, statements of kind `statement`). `amount_paid` sums the card repayments
+(`kind = 'payment'`, credit, pending or posted, with an AED amount) dated after the statement date
+up to and including the account's next statement date (open-ended for the latest one); a payment
+on the statement date is already in that statement's balance. `payment_status` is `paid` (the
+closing balance is covered, or nothing was owed), `overdue` (the due date has passed, Asia/Dubai,
+and the payments so far cover less than the minimum, or nothing was paid when there is no minimum;
+a minimum paid late makes it `part_paid`), `part_paid` (something paid, not overdue), `unpaid` (nothing paid, due today or later) or null (no closing balance; history
+extracts). `overview` (`accounts[].latest_statement`), `statement_cycles` and `statement_detail`
+carry both, `amount_paid` as a decimal string (UX-1r, WEB-36).
+
 Analytics RPCs (security invoker, so RLS applies, except those marked *, which are
 SECURITY DEFINER with an explicit member check and filter by profile themselves):
 
 | Group | RPCs |
 |---|---|
 | Overview and trends | `overview`, `spend_pace`, `spend_series` (grain, group_by, optional `p_top` with an "Other" fold), `spend_breakdown`* |
-| Breakdowns | `category_breakdown`, `merchant_leaderboard`, `daily_spend`, `hour_weekday_pattern` |
+| Breakdowns | `category_breakdown`, `merchant_leaderboard`, `merchant_context`*, `daily_spend`, `hour_weekday_pattern` |
 | Currency and cycles | `fx_spend`, `statement_cycles`, `statement_detail`*, `yoy_compare` |
 | Exceptions and metadata | `anomalies`*, `filter_meta` |
 | Budgets and recurring | `budget_status`, `recurring_list` |
@@ -567,11 +578,18 @@ total with 4 decimals, clamped to 0..1 (a group of only refunds can be net negat
 `statement_detail(profile, stmt)` returns one statement with its current lines:
 `{statement: {stmt_code, kind, bank_code, account_code, card_last4s, statement_date, period_start,
 period_end, due_date, opening_balance, closing_balance, total_debits, total_credits, min_due,
-credit_limit, doc_code, recon_status, recon_checks}, debits: {count, total, lines}, credits: {…}}`;
+credit_limit, doc_code, recon_status, recon_checks, payment_status, amount_paid}, debits: {count, total, lines}, credits: {…}}`;
 a line is `{line_code, txn_code, txn_date, posting_date, description, merchant_name, amount_aed,
 amount_original, currency_original, category_code, kind, card_last4}`, ordered by `txn_date`,
 `line_no`. `description` is the line as the statement printed it; `merchant_name` and
 `category_code` come from the transaction the line evidences.
+
+`merchant_context(profile, merchant)` is the transaction drawer's line about a merchant (MA-4):
+`{merchant_code, visit_count, avg_aed, total_6m_aed, first_seen}` from `v_spend`. A visit is a
+purchase (a positive `v_spend` row, pending included; refunds are not visits); `avg_aed` is their
+average; `total_6m_aed` is net spend (refunds subtracted) dated after the same date 6 months ago
+(Asia/Dubai); `first_seen` is the earliest spend date. Money is a decimal string; a merchant
+with no spend in the ledger returns zero visits.
 
 `anomalies(profile, from, to)` lists the range's unusually large charges, largest first, each
 compared with the 365 days before it (its own day excluded). `reason` is `merchant_outlier` (≥ 5
@@ -597,6 +615,11 @@ all matching", a jsonb object with the web URL's filter keys (`from`, `to`, `acc
 `category` with `'none'` for uncategorised, `status`, `source`, `q`), read exactly as
 `activity_summary` reads them, through `private.activity_selection`. Exactly one must be given,
 so a forgotten argument never means "everything".
+- `activity_day_totals(profile, filter, days)`: the Activity date headers (MA-3). For the dates a
+  page shows (at most 2000), each day's `{txn_date, txn_count, net_aed, unpriced_count,
+  has_estimate}` over the whole filtered set, so a day split across pages reads the same on both;
+  net as in `activity_summary`. The page's dates also narrow the filter's `from`/`to`. One call
+  per page; days with nothing on them are left out.
 - `activity_selection_summary(profile, codes | filter)`: `{txn_count, net_aed, unpriced_count,
   has_estimate, excluded_count}`, net as in `activity_summary` (pending and posted, debits minus
   credits, a decimal string).

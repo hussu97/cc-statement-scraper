@@ -9,8 +9,10 @@ import {
   evidenceBadge,
   evidenceTime,
   isNoteDirty,
+  merchantContextLine,
   noteToSave,
   useEvidence,
+  useMerchantContext,
   useRelatedTransactions,
   useSetCategory,
   useSmsBody,
@@ -31,7 +33,7 @@ import { Sheet } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/primitives";
-import { Badge } from "@/components/ui/display";
+import { Badge, Skeleton } from "@/components/ui/display";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
 import { useToast } from "@/components/ui/toast";
 import { CategoryPicker, EvidenceBadge, Money, StatusBadge, TxnAmount } from "@/components/ledger";
@@ -123,6 +125,34 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
+/** "13 visits · avg AED 254 · AED 3,306 in 6 months" from public.merchant_context (MA-4). */
+function MerchantContextRow({ merchantCode }: { merchantCode: string }) {
+  const { profile_code } = useActiveProfile();
+  const q = useMerchantContext(profile_code, merchantCode);
+  if (q.isLoading) {
+    return (
+      <Row label="Merchant">
+        <Skeleton className="mt-1 h-3.5 w-56 max-w-full" />
+      </Row>
+    );
+  }
+  if (q.isError) {
+    return (
+      <Row label="Merchant">
+        <span className="text-muted">Couldn't load your history here.</span>
+      </Row>
+    );
+  }
+  // No spend at the merchant in this ledger (only refunds, or excluded): nothing to claim.
+  const line = merchantContextLine(q.data);
+  if (!line) return null;
+  return (
+    <Row label="Merchant">
+      <span className="tabular text-ink-2">{line}</span>
+    </Row>
+  );
+}
+
 function DrawerBody({ t, meta }: { t: TxnRow; meta: FilterMeta | undefined }) {
   const { profile_code, isOwner } = useActiveProfile();
   const toast = useToast();
@@ -180,6 +210,7 @@ function DrawerBody({ t, meta }: { t: TxnRow; meta: FilterMeta | undefined }) {
             {t.category_source && <span className="text-[11px] text-subtle">{SOURCE_LABEL[t.category_source] ?? t.category_source}</span>}
           </div>
         </Row>
+        {t.merchant_code && <MerchantContextRow merchantCode={t.merchant_code} />}
         {fx && (
           <Row label="Foreign amount">
             <span className="tabular">{formatMoney(t.amount_original, { currency: t.currency_original ?? "AED" })}</span>

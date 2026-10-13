@@ -17,8 +17,10 @@ export const keys = {
 
   transactions: (p: string, s: ActivitySearch) => ["p", p, "transactions", "list", s] as const,
   activitySummary: (p: string, s: ActivitySearch) => ["p", p, "transactions", "summary", s] as const,
+  dayTotals: (p: string, s: ActivitySearch, days: readonly string[]) => ["p", p, "transactions", "days", s, days.join(",")] as const,
   selectionSummary: (p: string, selection: unknown) => ["p", p, "transactions", "selection", selection] as const,
   transaction: (p: string, code: string) => ["p", p, "transactions", "one", code] as const,
+  merchantContext: (p: string, merchantCode: string) => ["p", p, "transactions", "merchant", merchantCode] as const,
   evidence: (p: string, code: string) => ["p", p, "transactions", "evidence", code] as const,
   smsBody: (p: string, code: string) => ["p", p, "sms", "body", code] as const,
 

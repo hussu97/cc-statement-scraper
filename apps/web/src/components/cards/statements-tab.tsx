@@ -1,8 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import { ChevronRight, FileText } from "lucide-react";
 import { STATEMENT_CYCLES_MAX, useInfiniteStatementCycles, useStatementCycles, type StatementCycle } from "@/data/cards";
-import { utilisationTone } from "@/data/statements";
-import { formatDate } from "@/lib/dates";
+import { dueInDays, utilisationTone } from "@/data/statements";
+import { formatDate, todayDubai } from "@/lib/dates";
+import { dueBadge, type DueTone } from "@/lib/dues";
 import { formatPercent, formatTotal, toAmount } from "@/lib/money";
 import { pageCount, type PageSize } from "@/lib/pagination";
 import { INFINITE_QUERY } from "@/lib/infinite";
@@ -38,6 +39,7 @@ export function StatementsTab({ profileCode, paging }: { profileCode: string; pa
 
 function StatementsPaged({ profileCode, paging }: { profileCode: string; paging: ListPaging }) {
   const q = useStatementCycles(profileCode, paging.page, paging.size);
+  const today = todayDubai();
   useClampPage(paging.page, paging.size, q.data?.total, paging.onPage);
   if (q.isLoading) return <Card><LoadingRows rows={6} /></Card>;
   if (q.isError) return <Card><ErrorState error={q.error} onRetry={() => void q.refetch()} /></Card>;
@@ -51,7 +53,7 @@ function StatementsPaged({ profileCode, paging }: { profileCode: string; paging:
         ) : (
           <ul className="divide-y divide-border">
             {rows.map((s) => (
-              <StatementRow key={s.stmt_code} s={s} />
+              <StatementRow key={s.stmt_code} s={s} today={today} />
             ))}
           </ul>
         )}
@@ -64,6 +66,7 @@ function StatementsPaged({ profileCode, paging }: { profileCode: string; paging:
 
 function StatementsInfinite({ profileCode }: { profileCode: string }) {
   const q = useInfiniteStatementCycles(profileCode);
+  const today = todayDubai();
   if (q.isLoading) return <Card><LoadingRows rows={6} /></Card>;
   if (q.isError && !q.isFetchNextPageError) return <Card><ErrorState error={q.error} onRetry={() => void q.refetch()} /></Card>;
   if (q.items.length === 0) return empty;
@@ -72,7 +75,7 @@ function StatementsInfinite({ profileCode }: { profileCode: string }) {
       <Card className="overflow-hidden">
         <ul className="divide-y divide-border">
           {q.items.map((s) => (
-            <StatementRow key={s.stmt_code} s={s} />
+            <StatementRow key={s.stmt_code} s={s} today={today} />
           ))}
         </ul>
         <InfiniteFooter
@@ -94,9 +97,14 @@ function CapNote() {
   return <p className="px-1 pt-2 text-[12px] text-muted">Showing your newest {STATEMENT_CYCLES_MAX} statements. Older ones are still in your ledger and in Activity.</p>;
 }
 
-function StatementRow({ s }: { s: StatementCycle }) {
+/** The phone line names the due state in its tone's text colour (the badge is for wider rows). */
+const DUE_TEXT: Record<DueTone, string> = { positive: "text-positive", warn: "text-warn", danger: "text-danger" };
+
+function StatementRow({ s, today }: { s: StatementCycle; today: string }) {
   const badge = reconBadge(s.recon_status);
   const util = toAmount(s.utilisation);
+  // Paid / Part paid / Overdue come from the server (WEB-36); the countdown only from the date.
+  const due = dueBadge(s.payment_status, dueInDays(s.due_date, today));
   return (
     <li>
       <Link
@@ -116,6 +124,7 @@ function StatementRow({ s }: { s: StatementCycle }) {
             <span className="tabular mt-0.5 block truncate text-[12px] text-ink-2 md:hidden">
               {formatTotal(s.closing_balance)}
               {s.due_date && <span className="text-muted"> · due {formatDate(s.due_date, "short")}</span>}
+              {due && <span className={DUE_TEXT[due.tone]}> · {due.label}</span>}
             </span>
           </span>
         </span>
@@ -127,6 +136,7 @@ function StatementRow({ s }: { s: StatementCycle }) {
           <span className="block text-[11px] text-subtle">Due</span>
           <span className="block text-ink">{s.due_date ? formatDate(s.due_date, "short") : "—"}</span>
           {s.min_due !== null && <span className="tabular block text-[11px] text-subtle">min {formatTotal(s.min_due)}</span>}
+          {due && <Badge tone={due.tone} className="mt-1">{due.label}</Badge>}
         </span>
         <span className="hidden text-[13px] md:block">
           <span className="block text-[11px] text-subtle">Utilisation</span>
