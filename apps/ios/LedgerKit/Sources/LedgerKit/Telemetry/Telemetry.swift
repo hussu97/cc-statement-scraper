@@ -69,7 +69,10 @@ public enum Telemetry {
             // transactions; never attach them.
             options.attachScreenshot = false
             options.attachViewHierarchy = false
-            options.enableAppHangTracking = target == .app
+            let hangs = HangReporting.forTarget(target)
+            options.enableAppHangTracking = hangs.enabled
+            options.appHangTimeoutInterval = hangs.timeout
+            setReportsNonFullyBlockingHangs(hangs.reportsNonFullyBlocking, on: options)
             options.enableWatchdogTerminationTracking = target == .app
             #endif
             options.beforeSend = { event in TelemetryScrubber.scrub(event) }
@@ -117,3 +120,20 @@ public enum Telemetry {
         SentrySDK.flush(timeout: timeout)
     }
 }
+
+#if os(iOS)
+/// sentry-cocoa 9.29 deprecated the setter of `enableReportNonFullyBlockingAppHangs`
+/// (with all of legacy app-hang tracking, until v10), but turning the reports off is
+/// still how the SDK is configured. Setting it through this protocol, which `Options`
+/// already satisfies, keeps the build free of the deprecation warning.
+private protocol NonFullyBlockingHangs: AnyObject {
+    var enableReportNonFullyBlockingAppHangs: Bool { get set }
+}
+
+extension Options: NonFullyBlockingHangs {}
+
+private func setReportsNonFullyBlockingHangs(_ on: Bool, on options: Options) {
+    let settable: any NonFullyBlockingHangs = options
+    settable.enableReportNonFullyBlockingAppHangs = on
+}
+#endif

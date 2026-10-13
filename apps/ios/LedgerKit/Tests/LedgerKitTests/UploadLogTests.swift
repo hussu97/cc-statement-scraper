@@ -166,4 +166,23 @@ struct UploadLogTests {
         #expect(pending.waitingLabel == "1 PDF waiting to upload")
         #expect(pending.rejected().isEmpty)
     }
+
+    @MainActor
+    @Test("Statements reads and edits the share queue off the main thread (hang review, build 26)")
+    func waitingQueueOffMain() async throws {
+        let pending = PendingUploads(container: FileManager.default.temporaryDirectory.appendingPathComponent("ledger-w-\(UUID().uuidString)"))
+        try pending.save(UploadFile(filename: "a.pdf", data: Data("%PDF-a".utf8)))
+        pending.quarantine(try #require(pending.list().first), reason: "Not a statement.")
+        try pending.save(UploadFile(filename: "b.pdf", data: Data("%PDF-b".utf8)))
+        let model = StatementsModel(api: StubAPI(), pendingUploads: pending)
+
+        await model.refreshWaiting()
+        #expect(model.waitingLabel == "1 PDF waiting to upload")
+        #expect(model.rejected.map(\.reason) == ["Not a statement."])
+        await model.discard(try #require(model.rejected.first))
+        #expect(model.rejected.isEmpty && model.waitingLabel == "1 PDF waiting to upload")
+
+        // The folder listing and file reads run on the cooperative pool, not the main thread.
+        #expect(await StatementsModel.offMain { pthread_main_np() } == 0)
+    }
 }

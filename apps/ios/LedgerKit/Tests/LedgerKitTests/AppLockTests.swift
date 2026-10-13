@@ -14,12 +14,21 @@ final class StubAuthenticator: DeviceAuthenticating, @unchecked Sendable {
         _answers = answers
     }
 
+    private var _queries = 0
+
     var prompts: [String] { lock.withLock { _prompts } }
+    /// How many times the device was asked which method it has (an XPC call on a phone).
+    var queries: Int { lock.withLock { _queries } }
     /// The owner changes the device (removes the passcode, enrols Face ID).
     func setMethod(_ method: DeviceAuthMethod?) { lock.withLock { _method = method } }
     func answer(_ values: Bool...) { lock.withLock { _answers.append(contentsOf: values) } }
 
-    func availableMethod() -> DeviceAuthMethod? { lock.withLock { _method } }
+    func availableMethod() async -> DeviceAuthMethod? {
+        lock.withLock {
+            _queries += 1
+            return _method
+        }
+    }
     func authenticate(reason: String) async -> Bool {
         lock.withLock {
             _prompts.append(reason)
@@ -65,8 +74,28 @@ struct AppLockTests {
         let none = AppLock(defaults: try defaults(), authenticator: StubAuthenticator(method: nil))
         await none.setRequireAuth(true)
         #expect(!none.requireAuth && none.message == "Set up Face ID or a passcode in the Settings app first.")
-        #expect(AppLock(defaults: try defaults(), authenticator: StubAuthenticator(method: .touchID)).settingTitle
-                == "Require Touch ID")
+        let touch = AppLock(defaults: try defaults(), authenticator: StubAuthenticator(method: .touchID))
+        await touch.refreshMethod()
+        #expect(touch.settingTitle == "Require Touch ID")
+    }
+
+    @Test("drawing the cover or Settings never asks the device: the method is read once per activation")
+    func methodIsCached() async throws {
+        let auth = StubAuthenticator(method: .faceID)
+        let lock = AppLock(defaults: try defaults(), authenticator: auth)
+        for _ in 0..<5 {
+            _ = lock.settingTitle
+            _ = lock.unlockTitle
+            _ = lock.method
+            _ = lock.showsUnlock
+        }
+        #expect(auth.queries == 0)   // init and every synchronous read: no LocalAuthentication call
+
+        // Touch ID set up while the app was away: coming back reads it, once.
+        auth.setMethod(.touchID)
+        lock.phaseChanged(.background)
+        await lock.phaseChanged(.active)?.value
+        #expect(auth.queries == 1 && lock.unlockTitle == "Unlock with Touch ID")
     }
 
     @Test("on: leaving locks, coming back asks once; a cancelled prompt leaves Unlock and never loops")

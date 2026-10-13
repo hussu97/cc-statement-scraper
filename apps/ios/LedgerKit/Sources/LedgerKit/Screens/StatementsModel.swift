@@ -54,7 +54,7 @@ public final class StatementsModel {
     public func load(profileCode: String) async {
         let same = loadedProfile == profileCode
         loadedProfile = profileCode
-        refreshWaiting()
+        await refreshWaiting()
         let api = self.api
         async let a: Void = cycles.reload(keepingRows: same) { page in
             // `statement_cycles` takes a limit only: ask for everything up to
@@ -77,7 +77,7 @@ public final class StatementsModel {
     /// Realtime / foreground: the newest pages again, scrolled pages kept.
     public func refresh(profileCode: String) async {
         guard loadedProfile == profileCode else { return }
-        refreshWaiting()
+        await refreshWaiting()
         async let a: Void = cycles.refreshHead()
         async let b: Void = documents.refreshHead()
         _ = await (a, b)
@@ -104,10 +104,14 @@ public final class StatementsModel {
     /// Reads the picked files (security-scoped URLs from the document picker)
     /// and uploads them one by one into the live log (BACKLOG IOS-17).
     public func upload(urls: [URL], profileCode: String) async {
-        var files: [UploadFile] = []
-        var unreadable: [String] = []
-        for url in urls {
-            if let file = try? Self.readFile(url) { files.append(file) } else { unreadable.append(url.lastPathComponent) }
+        // Off the main thread: a picked iCloud Drive file may download while it is read.
+        let (files, unreadable) = await Self.offMain { () -> ([UploadFile], [String]) in
+            var files: [UploadFile] = []
+            var unreadable: [String] = []
+            for url in urls {
+                if let file = try? Self.readFile(url) { files.append(file) } else { unreadable.append(url.lastPathComponent) }
+            }
+            return (files, unreadable)
         }
         uploadMessage = unreadable.isEmpty ? nil : "Couldn't read \(unreadable.joined(separator: ", "))."
         await uploads.upload(files, profileCode: profileCode)
@@ -126,10 +130,17 @@ public final class StatementsModel {
 
     // MARK: Share Extension queue (BACKLOG IOS-16r)
 
-    public func refreshWaiting() {
-        waitingLabel = pending?.waitingLabel
-        rejected = pending?.rejected() ?? []
+    /// Lists the App Group folder off the main thread (hang review, build 26).
+    public func refreshWaiting() async {
+        guard let pending else { return }
+        let (label, refused) = await Self.offMain { (pending.waitingLabel, pending.rejected()) }
+        waitingLabel = label
+        rejected = refused
     }
+
+    /// File I/O for the screen, on the cooperative pool instead of the main actor.
+    @concurrent
+    nonisolated static func offMain<T: Sendable>(_ work: @Sendable () -> T) async -> T { work() }
 
     /// Sends the waiting PDFs now (they also go when the app becomes active).
     public func sendWaiting(profileCode: String) async {
@@ -137,13 +148,14 @@ public final class StatementsModel {
         isSendingWaiting = true
         defer { isSendingWaiting = false }
         let sent = await flushPending()
-        refreshWaiting()
+        await refreshWaiting()
         if sent > 0 { await refresh(profileCode: profileCode) }
     }
 
-    public func discard(_ item: PendingUploads.Rejected) {
-        pending?.discard(item)
-        refreshWaiting()
+    public func discard(_ item: PendingUploads.Rejected) async {
+        guard let pending else { return }
+        await Self.offMain { pending.discard(item) }
+        await refreshWaiting()
     }
 
     public nonisolated static func readFile(_ url: URL) throws -> UploadFile {

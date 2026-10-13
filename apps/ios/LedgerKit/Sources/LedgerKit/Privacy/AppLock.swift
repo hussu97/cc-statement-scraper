@@ -19,7 +19,8 @@ public enum DeviceAuthMethod: String, Sendable, Equatable {
 /// The device's owner check (LocalAuthentication in the app, a stub in tests).
 public protocol DeviceAuthenticating: Sendable {
     /// What the device would ask for, or nil when it has no biometrics and no passcode.
-    func availableMethod() -> DeviceAuthMethod?
+    /// Async: LocalAuthentication answers over XPC, which must never run on the main thread.
+    func availableMethod() async -> DeviceAuthMethod?
     /// Shows the system prompt; true when the owner passed it.
     func authenticate(reason: String) async -> Bool
 }
@@ -50,6 +51,9 @@ public final class AppLock {
     public private(set) var isAuthenticating = false
     /// Why the setting couldn't be turned on.
     public private(set) var message: String?
+    /// What the device asks for (Face ID until `refreshMethod` has asked the device).
+    /// Stored, so drawing the cover or Settings never queries LocalAuthentication.
+    public private(set) var method: DeviceAuthMethod = .faceID
 
     private let defaults: UserDefaults
     private let authenticator: any DeviceAuthenticating
@@ -69,8 +73,6 @@ public final class AppLock {
     /// The cover shows the Unlock button (not just the blur).
     public var showsUnlock: Bool { isLocked && !isInactive && !isAuthenticating }
 
-    public var method: DeviceAuthMethod { authenticator.availableMethod() ?? .faceID }
-
     /// `"Require Face ID"` (or Touch ID / passcode on such a device).
     public var settingTitle: String { "Require \(method.name)" }
     public var unlockTitle: String { "Unlock with \(method.name)" }
@@ -78,7 +80,8 @@ public final class AppLock {
 
     /// Synchronous, so the cover is set in the same turn as the phase change,
     /// before iOS takes the app-switcher snapshot. Coming back to a locked app
-    /// starts the prompt and returns its task (tests await it; the app doesn't).
+    /// starts the prompt; coming back otherwise re-reads `method` (Face ID may
+    /// have been set up meanwhile). Returns that task (tests await it; the app doesn't).
     @discardableResult
     public func phaseChanged(_ phase: Phase) -> Task<Void, Never>? {
         switch phase {
@@ -96,6 +99,7 @@ public final class AppLock {
                 prompted = true
                 return Task { await self.unlock() }
             }
+            return Task { await self.refreshMethod() }
         }
         return nil
     }
@@ -103,19 +107,25 @@ public final class AppLock {
     /// The prompt (automatic on return, or the Unlock button).
     public func unlock() async {
         guard isLocked, !isAuthenticating else { return }
+        isAuthenticating = true
+        defer { isAuthenticating = false }
         // The device no longer has Face ID or a passcode (the owner removed
         // it): no prompt can ever pass, so the lock turns itself off rather
         // than strand the owner and the outbox behind it.
-        guard authenticator.availableMethod() != nil else {
+        guard let available = await authenticator.availableMethod() else {
             setRequired(false)
             isLocked = false
             message = Self.turnedOffMessage
             return
         }
-        isAuthenticating = true
-        defer { isAuthenticating = false }
+        method = available
         // Cancelling is not an error: the lock screen and its Unlock button stay.
         if await authenticator.authenticate(reason: "Unlock Bank Ledger") { isLocked = false }
+    }
+
+    /// Asks the device what it would prompt for, off the main thread.
+    public func refreshMethod() async {
+        method = await authenticator.availableMethod() ?? .faceID
     }
 
     static let turnedOffMessage = "Require Face ID was turned off: this phone no longer has Face ID or a passcode set up."
@@ -132,13 +142,15 @@ public final class AppLock {
         message = nil
         guard on != requireAuth else { return }
         if on {
-            guard let method = authenticator.availableMethod() else {
+            guard !isAuthenticating else { return }
+            isAuthenticating = true
+            defer { isAuthenticating = false }
+            guard let method = await authenticator.availableMethod() else {
                 message = "Set up Face ID or a passcode in the Settings app first."
                 return
             }
-            isAuthenticating = true
+            self.method = method
             let passed = await authenticator.authenticate(reason: "Turn on \(method.name) for Bank Ledger")
-            isAuthenticating = false
             guard passed else {
                 message = "\(method == .passcode ? "The passcode" : method.name) didn't confirm it's you, so it stays off."
                 return
