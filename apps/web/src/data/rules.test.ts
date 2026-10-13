@@ -108,7 +108,7 @@ describe("drafts and preview args", () => {
   it("returns null preview args until the draft is valid", () => {
     expect(previewArgs(emptyRuleDraft())).toBeNull();
     expect(previewArgs(emptyRuleDraft({ pattern: "x", category_code: "cat_a", match_type: "regex" }))).not.toBeNull();
-    expect(previewArgs(emptyRuleDraft({ pattern: "(", category_code: "cat_a", match_type: "regex" }))).toBeNull();
+    expect(previewArgs(emptyRuleDraft({ pattern: "   ", category_code: "cat_a", match_type: "regex" }))).toBeNull();
     expect(previewArgs(emptyRuleDraft({ pattern: " tea ", category_code: "cat_a", conditions: { amount_min: "", currency: "eur" } }))).toEqual({
       match_type: "contains",
       pattern: "tea",
@@ -128,6 +128,16 @@ describe("drafts and preview args", () => {
     expect(ruleErrorMessage(err("invalid rule: unknown match type x", "22023"))).toBe("Unknown match type x");
     expect(ruleErrorMessage(err("Failed to fetch"))).toBe("Failed to fetch");
     expect(ruleErrorMessage(err("invalid rule: x", "42501"))).toBe("invalid rule: x");
+  });
+
+  it("leaves regex syntax to the server's preview (WEB-13r)", () => {
+    // Postgres ARE embedded options: JS RegExp throws on these, Postgres accepts them.
+    for (const pattern of ["(?b)UBER.*TRIP", "(?i)coffee", "(", "[[:alpha:]]+"]) {
+      const d = emptyRuleDraft({ pattern, category_code: "cat_a", match_type: "regex" });
+      expect(validateRule(d)).toBeNull();
+      expect(previewArgs(d)?.pattern).toBe(pattern);
+    }
+    expect(validateRule(emptyRuleDraft({ pattern: "  ", category_code: "cat_a", match_type: "regex" }))).toBe("Enter text to match.");
   });
 
   it("validates amounts as decimal strings", () => {
