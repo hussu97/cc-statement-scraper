@@ -1,5 +1,32 @@
 # Changelog
 
+## Backlog batch 3: plain anomalies, one-call review context, first-run checklist, deep links, scraper state files — 2026-10-13
+
+### Backend (Supabase)
+
+- **change** `20261012234036_anomalies_plain_and_dismissals`: `anomalies` returns `merchant_name`, `category_name`, `baseline_scope` and `times_usual`; a first purchase is flagged only at a known merchant, from AED 500 and at least 2× the category's usual; the baseline comes from the scope that flagged the charge. It is now SECURITY DEFINER with a member check (a non-member gets 42501) (WEB-16).
+- **add** `dismiss_anomaly` (owners) and `anomaly_dismissals`: "This is fine" is durable, dismisses the matching insight, and the nightly feed skips the charge (WEB-16).
+- **add** `20261013001856_review_context`: `review_context(profile, review_codes[])` returns a page of reviews' context in one call, without SMS bodies (WEB-10r).
+
+### Web
+
+- **fix** Anomalies show merchant names and one plain sentence ("About 5× what you usually spend here"), with a "This is fine" action for owners (WEB-16).
+- **perf** The Review page loads every card's context in one request per page; transaction events refetch only the open-review list (WEB-10r).
+- **add** An empty ledger's Overview shows a "Get your ledger going" checklist (statement, mailbox, statement passwords, SMS capture, member) instead of AED 0.00; each step is ticked only by server data, unknown when it can't be read, and a pending invite reads "Invite sent" (WEB-27).
+- **add** Sign-in keeps the deep link: `/signin?redirect=<path>`, same-origin relative paths only (WEB-39).
+
+### Scraper
+
+- **fix** `uploaded.json` and `bank_map.json` are written atomically; a corrupt file is kept as `<name>.<timestamp>.corrupt` with a warning instead of silently resetting; uploads are matched by the server's cleaned-up filename, so long or padded names are recorded (SRV-16).
+
+### Docs
+
+- **change** `scraper/README.md` and `scraper/.env.example` document `CCS_SCRAPER_UPLOAD_MAX_FILES` / `_MAX_MB` and the batch-and-retry upload; setup uses uv (NEW-3). BACKLOG: batch 3 done (8 items incl. IOS-11), new rows WEB-16r and SRV-16r.
+
+### Tooling
+
+- **fix** `pnpm db:types` / `db:types:check` stable-sort each `Relationships` array (`packages/db-types/scripts/gen-types.mjs`), so the generated types no longer flip between resets; a failed generation no longer wipes `database.ts`; `pnpm db:types:test` (X-34).
+
 ## Backlog batch 2: pace projection, 16-hue palette, lighter first load, iOS outbox, privacy lock, set-up checklist — 2026-10-13
 
 ### Backend (Supabase)
