@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase, type Tables, type Views } from "@/lib/supabase";
+import { supabase, type RpcReturn, type Tables, type Views } from "@/lib/supabase";
 import type { Json } from "@ledger/db-types";
 import { keys, LEDGER_DOMAINS } from "./keys";
 import { fetchPage, must, mustList, toApiError, type Page } from "./api";
@@ -53,8 +53,8 @@ export const REASON_ORDER = [
   "orphaned",
 ];
 
-export function groupReviews(list: Review[]): { reason: string; items: Review[] }[] {
-  const map = new Map<string, Review[]>();
+export function groupReviews<T extends Pick<Review, "reason">>(list: T[]): { reason: string; items: T[] }[] {
+  const map = new Map<string, T[]>();
   for (const r of list) map.set(r.reason, [...(map.get(r.reason) ?? []), r]);
   const order = (r: string) => {
     const i = REASON_ORDER.indexOf(r);
@@ -90,11 +90,15 @@ export function reviewQueriesEnabled(session: unknown, profileCode: string | nul
   return !!session && !!profileCode;
 }
 
-/** Rows [from, to] of open reviews, newest first, with the exact total. */
-export function fetchOpenReviews(profileCode: string, from: number, to: number): Promise<Page<Review>> {
+/**
+ * Rows [from, to] of open reviews, newest first, with the exact total, each with its context:
+ * one page read plus one `review_context` call for the whole page (WEB-10r), so a page costs two
+ * requests however many cards it holds, and the contexts refresh with the list.
+ */
+export async function fetchOpenReviews(profileCode: string, from: number, to: number): Promise<Page<ReviewItem>> {
   const head = () =>
     supabase.from("match_reviews").select("review_code", { count: "exact", head: true }).eq("profile_code", profileCode).eq("status", "open");
-  return fetchPage<Review>(
+  const page = await fetchPage<Review>(
     () =>
       supabase
         .from("match_reviews")
@@ -106,27 +110,32 @@ export function fetchOpenReviews(profileCode: string, from: number, to: number):
         .range(from, to),
     head,
   );
+  if (page.rows.length === 0) return { rows: [], total: page.total };
+  const contexts = mustList(
+    await supabase.rpc("review_context", { p_profile_code: profileCode, p_review_codes: page.rows.map((r) => r.review_code) }),
+  );
+  return { rows: attachContexts(page.rows, contexts), total: page.total };
 }
 
-/** One page of open reviews, newest first, with the exact total. */
+/** One page of open reviews (with their contexts), newest first, with the exact total. */
 export function useOpenReviews(profileCode: string, page: number, size: number, enabled = true) {
   const { session } = useAuth();
   return useQuery({
     queryKey: [...keys.reviews(profileCode), page, size],
     enabled: enabled && reviewQueriesEnabled(session, profileCode),
     placeholderData: keepPreviousData,
-    queryFn: async (): Promise<Page<Review>> => {
+    queryFn: async (): Promise<Page<ReviewItem>> => {
       const { from, to } = pageRange(page, size);
       return fetchOpenReviews(profileCode, from, to);
     },
   });
 }
 
-const reviewId = (r: Review) => r.review_code;
-/** Phones: every open review, 100 at a time. */
+const reviewId = (r: ReviewItem) => r.review_code;
+/** Phones: every open review (with its context), 100 at a time. */
 export function useInfiniteOpenReviews(profileCode: string, enabled = true) {
   const { session } = useAuth();
-  return useInfiniteList<Review>({
+  return useInfiniteList<ReviewItem>({
     queryKey: [...keys.reviews(profileCode), "infinite"],
     enabled: enabled && reviewQueriesEnabled(session, profileCode),
     fetch: (from, to) => fetchOpenReviews(profileCode, from, to),
@@ -200,70 +209,29 @@ export interface ReviewContext {
   template: Omit<Tables<"sms_templates">, "examples"> | null;
 }
 
-const SMS_META =
-  "sms_code, profile_code, client_msg_id, received_at, sender, source, wallet_pass_name, body_hash, parse_status, ignore_reason, template_code, template_version, bank_code, msg_kind, card_last4, card_code, account_code, amount, currency, merchant_raw, description, available_limit, event_at, parsed_fields, created_at, updated_at";
+/** A review with its context, as the Review page lists it. */
+export type ReviewItem = Review & { ctx: ReviewContext };
 
-export function useReviewContext(profileCode: string, review: Review) {
-  return useQuery({
-    queryKey: keys.reviewContext(profileCode, review.review_code),
-    queryFn: async (): Promise<ReviewContext> => {
-      const ctx: ReviewContext = { line: null, sms: null, txn: null, statement: null, candidates: [], template: null };
-      const cands = candidatesOf(review);
-      const jobs: Promise<void>[] = [];
-      if (review.subject_type === "statement_line") {
-        jobs.push(
-          (async () => {
-            ctx.line = must(await supabase.from("statement_lines").select("*").eq("line_code", review.subject_code).maybeSingle());
-          })(),
-        );
-      } else if (review.subject_type === "sms") {
-        jobs.push(
-          (async () => {
-            ctx.sms = must(
-              await supabase.from("sms_messages").select(SMS_META).eq("sms_code", review.subject_code).maybeSingle(),
-            ) as ReviewContext["sms"];
-          })(),
-        );
-      } else if (review.subject_type === "transaction") {
-        jobs.push(
-          (async () => {
-            ctx.txn = must(await supabase.from("v_transactions").select("*").eq("txn_code", review.subject_code).maybeSingle());
-          })(),
-        );
-      } else if (review.subject_type === "statement") {
-        jobs.push(
-          (async () => {
-            ctx.statement = must(await supabase.from("statements").select("*").eq("stmt_code", review.subject_code).maybeSingle());
-          })(),
-        );
-      }
-      const txnCodes = cands.map((c) => c.txn_code).filter((c): c is string => !!c);
-      if (txnCodes.length) {
-        jobs.push(
-          (async () => {
-            const rows = mustList(await supabase.from("v_transactions").select("*").in("txn_code", txnCodes));
-            ctx.candidates = txnCodes.map((c) => rows.find((r) => r.txn_code === c)).filter((r): r is NonNullable<typeof r> => !!r);
-          })(),
-        );
-      }
-      const tpl = cands.find((c) => c.template_code)?.template_code;
-      if (tpl) {
-        jobs.push(
-          (async () => {
-            ctx.template = must(
-              await supabase
-                .from("sms_templates")
-                .select("template_code, bank_code, name, sender_pattern, body_pattern, field_groups, date_format, msg_kind, priority, active, version, source, created_at, updated_at")
-                .eq("template_code", tpl)
-                .maybeSingle(),
-            ) as ReviewContext["template"];
-          })(),
-        );
-      }
-      await Promise.all(jobs);
-      return ctx;
-    },
-  });
+export type ReviewContextRow = RpcReturn<"review_context">[number];
+
+const asRow = <T>(v: Json | null | undefined): T | null => (v && typeof v === "object" && !Array.isArray(v) ? (v as unknown as T) : null);
+
+/** One review_context row as the card reads it; jsonb nulls (or a missing row) become null/[]. Pure, unit-tested. */
+export function contextOf(row: ReviewContextRow | undefined): ReviewContext {
+  return {
+    line: asRow<ReviewContext["line"]>(row?.line),
+    sms: asRow<ReviewContext["sms"]>(row?.sms),
+    txn: asRow<ReviewContext["txn"]>(row?.txn),
+    statement: asRow<ReviewContext["statement"]>(row?.statement),
+    candidates: Array.isArray(row?.candidates) ? (row.candidates as unknown as ReviewContext["candidates"]) : [],
+    template: asRow<ReviewContext["template"]>(row?.template),
+  };
+}
+
+/** Pair each review with its review_context row (by code; a review without one gets an empty context). Pure, unit-tested. */
+export function attachContexts(rows: Review[], contexts: ReviewContextRow[]): ReviewItem[] {
+  const byCode = new Map(contexts.map((c) => [c.review_code, c]));
+  return rows.map((r) => ({ ...r, ctx: contextOf(byCode.get(r.review_code)) }));
 }
 
 export type ResolveAction =

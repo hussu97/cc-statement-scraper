@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { activitySummaryArgs, applyActivityFilters, evidenceBadge, groupByDay, sortEvidence, type EvidenceItem, type FilterBuilder } from "./transactions";
-import { channelTopic, domainsFor } from "./realtime";
+import { channelTopic, invalidationKeys } from "./realtime";
+import { keys, LEDGER_DOMAINS } from "./keys";
 import { chooseActiveProfile, memberProfiles, profileKeyFromName, toProfileSummaries, type ProfileRow, type ProfileSummary } from "./profile";
-import { candidatesOf, groupReviews, type Review } from "./reviews";
+import { attachContexts, candidatesOf, contextOf, groupReviews, type Review, type ReviewContextRow } from "./reviews";
 import { checkUploadFiles } from "./cards";
 import { friendlyMessage } from "./api";
 import { sortInsights } from "./overview";
@@ -94,13 +95,23 @@ describe("transaction helpers", () => {
 });
 
 describe("realtime invalidation", () => {
-  it("maps tables to cached domains", () => {
-    expect(domainsFor(["insights"])).toEqual(["insights"]);
-    const d = domainsFor(["transactions", "match_reviews"]);
-    expect(d).toContain("overview");
-    expect(d).toContain("reviews");
-    expect(new Set(d).size).toBe(d.length);
-    expect(domainsFor(["unknown"])).toEqual([]);
+  it("maps tables to cached keys", () => {
+    expect(invalidationKeys("P", ["insights"])).toEqual([["p", "P", "insights"]]);
+    expect(invalidationKeys("P", ["unknown"])).toEqual([]);
+    const both = invalidationKeys("P", ["transactions", "match_reviews"]);
+    expect(both).toContainEqual(["p", "P", "overview"]);
+    expect(both).toContainEqual(["p", "P", "reviews"]);
+    // ["reviews"] already covers the open list; no duplicates either.
+    expect(both).not.toContainEqual(keys.reviews("P"));
+    expect(new Set(both.map((k) => k.join("/"))).size).toBe(both.length);
+  });
+
+  it("a transaction event refetches only the open-review list, not every review key (WEB-10r)", () => {
+    const k = invalidationKeys("P", ["transactions"]);
+    expect(k).toContainEqual(keys.reviews("P"));
+    expect(k).not.toContainEqual(["p", "P", "reviews"]);
+    expect(k).not.toContainEqual(keys.reviewCount("P"));
+    for (const d of LEDGER_DOMAINS.filter((x) => x !== "reviews")) expect(k).toContainEqual(["p", "P", d]);
   });
 
   it("gives every subscription its own channel topic (WEB-09)", () => {
@@ -161,6 +172,25 @@ describe("reviews", () => {
   it("reads candidates defensively", () => {
     expect(candidatesOf({ candidates: [{ txn_code: "t", score: 80 }] } as unknown as Review)).toEqual([{ txn_code: "t", score: 80 }]);
     expect(candidatesOf({ candidates: {} } as unknown as Review)).toEqual([]);
+  });
+  it("pairs each review with its review_context row by code (WEB-10r)", () => {
+    const ctx = (code: string, over: Partial<ReviewContextRow> = {}) =>
+      ({ review_code: code, line: null, sms: null, txn: null, statement: null, candidates: [], template: null, ...over }) as unknown as ReviewContextRow;
+    const out = attachContexts([r("ambiguous", "a"), r("orphaned", "b"), r("orphaned", "c")], [
+      ctx("b", { txn: { txn_code: "t1" } }),
+      ctx("a", { line: { line_code: "l1" }, candidates: [{ txn_code: "t2" }, { txn_code: "t3" }] }),
+    ]);
+    expect(out.map((x) => x.review_code)).toEqual(["a", "b", "c"]);
+    expect(out[0]!.ctx.line).toEqual({ line_code: "l1" });
+    expect(out[0]!.ctx.candidates.map((t) => t.txn_code)).toEqual(["t2", "t3"]);
+    expect(out[1]!.ctx.txn).toEqual({ txn_code: "t1" });
+    // A review the server returned no row for (resolved meanwhile) gets an empty context, not a crash.
+    expect(out[2]!.ctx).toEqual({ line: null, sms: null, txn: null, statement: null, candidates: [], template: null });
+  });
+  it("reads review_context jsonb defensively", () => {
+    expect(contextOf(undefined).candidates).toEqual([]);
+    const odd = { review_code: "x", line: [], sms: "text", txn: null, statement: 1, candidates: {}, template: null } as unknown as ReviewContextRow;
+    expect(contextOf(odd)).toEqual({ line: null, sms: null, txn: null, statement: null, candidates: [], template: null });
   });
 });
 

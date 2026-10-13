@@ -33,7 +33,6 @@ export const keys = {
 
   reviews: (p: string) => ["p", p, "reviews", "open"] as const,
   reviewCount: (p: string) => ["p", p, "reviews", "count"] as const,
-  reviewContext: (p: string, code: string) => ["p", p, "reviews", "ctx", code] as const,
 
   categories: (p: string) => ["p", p, "categories"] as const,
   rules: (p: string) => ["p", p, "rules"] as const,
