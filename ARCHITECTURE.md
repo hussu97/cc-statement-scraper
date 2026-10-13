@@ -52,7 +52,7 @@ scales to zero), Vercel Hobby (web) and TestFlight (iOS). The scraper runs only 
 | **Web app** | `apps/web/` | Vite + React 19 + TanStack Router/Query + supabase-js, Tailwind v4 on `@ledger/tokens`. Renders RPC results. It never computes money. |
 | **iPhone app** | `apps/ios/` | SwiftUI app, `LedgerKit` package, `LogBankSMSIntent` App Intent, "Add to Bank Ledger" share extension. |
 | **Design tokens** | `packages/tokens/` | One `tokens.json` generates CSS variables, a chart palette module and `Tokens.swift`. |
-| **DB types** | `packages/db-types/` | `supabase gen types` output. Never hand-written; CI checks for drift. |
+| **DB types** | `packages/db-types/` | `supabase gen types` output, with each `Relationships` array stable-sorted so it is deterministic (`packages/db-types/scripts/gen-types.mjs`). Never hand-written; CI checks for drift. |
 | **Scraper** | `scraper/` | Local-only Playwright CLI that downloads statements and uploads them to `statements-upload`. Its architecture is frozen. |
 
 ### Edge Functions

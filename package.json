@@ -7,8 +7,9 @@
   },
   "scripts": {
     "tokens": "pnpm --filter @ledger/tokens build",
-    "db:types": "supabase gen types typescript --local > packages/db-types/src/database.ts",
-    "db:types:check": "supabase gen types typescript --local | diff -q - packages/db-types/src/database.ts",
+    "db:types": "node packages/db-types/scripts/gen-types.mjs",
+    "db:types:check": "node packages/db-types/scripts/gen-types.mjs --check",
+    "db:types:test": "node --test packages/db-types/scripts/gen-types.test.mjs",
     "db:test": "supabase test db",
     "web:dev": "pnpm --filter @ledger/web dev",
     "web:test": "pnpm --filter @ledger/web test",

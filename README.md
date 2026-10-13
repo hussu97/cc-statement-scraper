@@ -187,7 +187,7 @@ Create a service token in web Settings → Sources & health → Tokens, or with
 | Component | Command |
 |---|---|
 | Database (pgTAP: RLS guards, matching, categorisation, recon, analytics, SMS templates, FX, legacy import, cross-profile isolation, ingest robustness, review actions, client privilege matrix, re-parse relink, the 2026-10-09 P2/P3 fixes (`13`–`19`); hermetic, so they also pass on a non-empty local DB) | `supabase db reset && supabase test db` |
-| DB types drift | `pnpm db:types:check` (regenerate with `pnpm db:types`) |
+| DB types drift | `pnpm db:types:check` (regenerate with `pnpm db:types`; both stable-sort each `Relationships` array so the output is deterministic, tested by `pnpm db:types:test`) |
 | Edge Functions | `cd supabase/functions && deno lint && deno fmt --check && deno check . && deno test -A .` (the lock `deno.lock` is frozen; the local e2e runs only with `LEDGER_E2E=1` and a served stack) |
 | Parser | `cd services/parser && .venv/bin/ruff check . && .venv/bin/pytest -q` (golden parity needs private PDFs; skipped otherwise) |
 | Web | `pnpm web:test`, `pnpm --filter @ledger/web lint`, `pnpm web:build` |
