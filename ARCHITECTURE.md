@@ -609,6 +609,11 @@ all matching", a jsonb object with the web URL's filter keys (`from`, `to`, `acc
 `category` with `'none'` for uncategorised, `status`, `source`, `q`), read exactly as
 `activity_summary` reads them, through `private.activity_selection`. Exactly one must be given,
 so a forgotten argument never means "everything".
+- `activity_day_totals(profile, filter, days)`: the Activity date headers (MA-3). For the dates a
+  page shows (at most 2000), each day's `{txn_date, txn_count, net_aed, unpriced_count,
+  has_estimate}` over the whole filtered set, so a day split across pages reads the same on both;
+  net as in `activity_summary`. The page's dates also narrow the filter's `from`/`to`. One call
+  per page; days with nothing on them are left out.
 - `activity_selection_summary(profile, codes | filter)`: `{txn_count, net_aed, unpriced_count,
   has_estimate, excluded_count}`, net as in `activity_summary` (pending and posted, debits minus
   credits, a decimal string).

@@ -2461,6 +2461,16 @@ export type Database = {
       }
     }
     Functions: {
+      activity_day_totals: {
+        Args: { p_days?: string[]; p_filter?: Json; p_profile_code: string }
+        Returns: {
+          has_estimate: boolean
+          net_aed: string
+          txn_count: number
+          txn_date: string
+          unpriced_count: number
+        }[]
+      }
       activity_export: {
         Args: {
           p_filter?: Json
