@@ -37,6 +37,11 @@ public actor Outbox {
     /// The "SMS go to" ledger at flush time: entries saved without one are
     /// adopted by it before anything is sent.
     let pendingTarget: @Sendable () -> String?
+    /// The account last signed in on this phone (`DeviceUserStore`): stamped on
+    /// every new entry, and the only account that may adopt one saved without
+    /// a ledger. "SMS go to" is cleared on sign-out, so while `pendingTarget`
+    /// answers, this is the account signed in now.
+    let deviceUser: @Sendable () -> String?
     /// One flush at a time in this process: a second caller's flush runs after
     /// the current one (so its newly queued message is included, and no entry
     /// is sent twice by overlapping flushes).
@@ -48,13 +53,23 @@ public actor Outbox {
 
     public init(fileURL: URL, api: any SMSIngestAPI, backoff: Backoff = Backoff(),
                 now: @escaping @Sendable () -> Date = { Date() },
-                pendingTarget: @escaping @Sendable () -> String? = { nil }) {
+                pendingTarget: @escaping @Sendable () -> String? = { nil },
+                deviceUser: @escaping @Sendable () -> String? = { nil }) {
         self.fileURL = fileURL
         self.api = api
         self.backoff = backoff
         self.now = now
         self.pendingTarget = pendingTarget
+        self.deviceUser = deviceUser
     }
+
+    /// The account signed in now, as entries are stamped (`DeviceUserStore`).
+    public nonisolated var currentUser: String? { deviceUser() }
+
+    /// Why an entry captured under another account waits in Not sent.
+    public static let otherAccountReason =
+        "Captured while another account was signed in on this phone, so it isn't sent to this one. "
+        + "It goes when that account signs in again; delete it if it isn't needed."
 
     public static func defaultURL(container: URL) -> URL {
         container.appendingPathComponent("sms-outbox.json")
@@ -77,11 +92,13 @@ public actor Outbox {
     /// One coordinated write for many items of any kind. Already-queued ids are skipped.
     public func enqueue(items: [OutboxItem], profileCode: String?) throws {
         let at = now()
+        let user = deviceUser()
         try mutate { entries in
             var known = Set(entries.map(\.id))
             for item in items where !known.contains(item.clientMsgId) {
                 known.insert(item.clientMsgId)
-                entries.append(OutboxEntry(item: item, profileCode: profileCode, enqueuedAt: at, nextAttemptAt: at))
+                entries.append(OutboxEntry(item: item, profileCode: profileCode, enqueuedAt: at, nextAttemptAt: at,
+                                           capturedBy: user))
             }
         }
     }
@@ -110,21 +127,32 @@ public actor Outbox {
             stalePayments: stale.filter { $0.kind == .wallet }.count)
     }
 
-    /// Every entry, sent or not: sign-out after the user confirmed (the items
-    /// would otherwise be sent under whoever signs in next).
+    /// Every entry, sent or not (Settings → Discard waiting messages).
     public func removeAll() throws { try mutate { $0.removeAll() } }
 
     /// Files the entries saved without a ledger (SMS and card payments) in
-    /// `profileCode`, due now. Returns how many it adopted.
+    /// `profileCode`, due now, when `userID` (the account signed in now) is
+    /// the one they were captured under. Another account's entries never go to
+    /// this ledger: they are parked with `otherAccountReason` for Delete, and
+    /// adopted again if their own account signs back in. Returns how many it adopted.
     @discardableResult
-    public func adoptPending(profileCode: String) throws -> Int {
+    public func adoptPending(profileCode: String, userID: String?) throws -> Int {
         let at = now()
         var adopted = 0
         try mutate { entries in
-            for i in entries.indices where entries[i].awaitsLedger {
-                entries[i].profileCode = profileCode
-                entries[i].nextAttemptAt = at
-                adopted += 1
+            for i in entries.indices where entries[i].profileCode == nil {
+                if entries[i].belongs(to: userID) {
+                    entries[i].profileCode = profileCode
+                    entries[i].nextAttemptAt = at
+                    entries[i].parkedAt = nil
+                    entries[i].parkedReason = nil
+                    entries[i].lastError = nil
+                    adopted += 1
+                } else if !entries[i].isParked {
+                    entries[i].parkedAt = at
+                    entries[i].parkedReason = Self.otherAccountReason
+                    entries[i].lastError = Self.otherAccountReason
+                }
             }
         }
         return adopted
@@ -135,10 +163,14 @@ public actor Outbox {
     /// Puts parked entries back in the queue with a fresh attempt budget,
     /// optionally pointed at another ledger (the current "SMS go to" choice,
     /// for messages parked because they went to a ledger the user can't post to).
+    /// An entry captured under another account is never retried here (nor
+    /// pointed at this account's ledger): it can only be deleted.
     public func retry(_ ids: Set<UUID>, reassignTo profileCode: String? = nil) throws {
         let at = now()
+        let user = deviceUser()
         try mutate { entries in
-            for i in entries.indices where ids.contains(entries[i].id) {
+            for i in entries.indices where ids.contains(entries[i].id) && !entries[i].isOtherAccounts
+                && entries[i].belongs(to: user) {
                 entries[i].parkedAt = nil
                 entries[i].parkedReason = nil
                 entries[i].attempts = 0

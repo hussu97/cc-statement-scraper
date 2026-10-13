@@ -107,6 +107,10 @@ public final class ProfileStore {
         }
     }
 
+    /// Signed out, however it happened: the App Intents and the share extension
+    /// stop filing in this account's ledger and save without one (IOS-12r audit).
+    public func clearSMSTarget() { storeSMSTarget(nil) }
+
     public func reset() {
         select(nil)
         storeSMSTarget(nil)

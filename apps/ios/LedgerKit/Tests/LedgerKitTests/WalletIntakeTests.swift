@@ -103,7 +103,7 @@ struct WalletIntakeTests {
         #expect(status.awaitingLedger == 1 && status.pending == 0)
         let entry = try #require(try await outbox.entries().first)
         #expect(entry.kind == .wallet && entry.profileCode == nil)
-        #expect(try await outbox.adoptPending(profileCode: "prf_personal") == 1)
+        #expect(try await outbox.adoptPending(profileCode: "prf_personal", userID: nil) == 1)
         await outbox.flush()
         #expect(api.walletCalls.map(\.profile) == ["prf_personal"])
         #expect(await outbox.status().isEmpty)

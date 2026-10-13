@@ -23,8 +23,9 @@ extension Outbox {
         var report = FlushReport()
         var all = (try? OutboxFile.read(fileURL)) ?? []
         // Items saved before a ledger was known go to the "SMS go to" ledger now (IOS-12r).
-        if all.contains(where: \.awaitsLedger), let target = pendingTarget(),
-           (try? adoptPending(profileCode: target)) != nil {
+        // Only the account they were captured under gets them (IOS-12r audit).
+        if all.contains(where: { $0.profileCode == nil }), let target = pendingTarget(),
+           (try? adoptPending(profileCode: target, userID: deviceUser())) != nil {
             all = (try? OutboxFile.read(fileURL)) ?? []
         }
         var groups: [BatchKey: [OutboxEntry]] = [:]

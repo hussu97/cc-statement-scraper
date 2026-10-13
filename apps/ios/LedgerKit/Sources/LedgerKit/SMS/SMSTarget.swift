@@ -56,6 +56,23 @@ public struct SMSTargetStore: @unchecked Sendable {
     }
 }
 
+/// The account last signed in on this phone, in the App Group defaults so the
+/// App Intents see it. Written at every sign-in and kept after sign-out: an SMS
+/// or card payment captured while signed out is stamped with it, and only that
+/// account's ledger may adopt it (IOS-12r audit).
+public struct DeviceUserStore: @unchecked Sendable {
+    // UserDefaults is documented thread-safe.
+    private let defaults: UserDefaults
+    static let key = "ledger.lastUserID"
+
+    public init(defaults: UserDefaults) { self.defaults = defaults }
+
+    public var userID: String? {
+        get { defaults.string(forKey: Self.key) }
+        nonmutating set { defaults.set(newValue, forKey: Self.key) }
+    }
+}
+
 /// One run of "Log Bank SMS", so Settings can show that the automation fires
 /// and what it handed over ("Today 14:05 · Logged to Personal."). Holds the
 /// outcome, the sender and the text's length, never the text: an empty sender
