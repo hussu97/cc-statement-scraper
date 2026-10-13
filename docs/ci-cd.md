@@ -41,7 +41,7 @@ Deleted with the legacy code: `deploy-backend.yml`, `deploy-frontend.yml`,
 
 | Job | Runs when these change | Steps | Runner |
 |---|---|---|---|
-| `tooling` | `.github/workflows/**`, `scripts/hooks/**`, `scripts/ci/**`, `scripts/install-hooks.sh`, `scripts/cutover/*.sh`, `apps/ios/scripts/*.sh`, `.claude/hooks/**` | actionlint (incl. shellcheck of `run:` blocks), shellcheck, `sql_executed_text_test.py`, `.claude/hooks/guard_test.py` | Linux |
+| `tooling` | `.github/workflows/**`, `scripts/hooks/**`, `scripts/ci/**`, `scripts/install-hooks.sh`, `scripts/cutover/*.sh`, `apps/ios/scripts/*.sh`, `.claude/hooks/**` | actionlint (incl. shellcheck of `run:` blocks), shellcheck (incl. `apps/ios/scripts/*.sh`), `sql_executed_text_test.py`, `.claude/hooks/guard_test.py`; pre-push also runs `apps/ios/scripts/release_checks_test.sh` on macOS | Linux |
 | `supabase` | `supabase/migrations|tests/**`, `seed.sql`, `config.toml`, `packages/db-types/**`, `check-migrations.sh` | types normaliser tests → append-only check vs PR base / previous `main` (only if migrations changed) → `supabase start` → `db reset` → `test db` (pgTAP) → types drift vs `packages/db-types` (`gen-types.mjs --check`, normalised) | Linux |
 | `edge` | `supabase/functions/**`, `config.toml` | `deno lint` → `deno fmt --check` → `deno check --frozen` → `deno test --frozen -A` (the frozen `deno.lock` must match the sources) | Linux |
 | `parser` | `services/parser/**`, `docs/contracts/**` | uv venv → `ruff check` → `pytest` | Linux |
@@ -176,9 +176,33 @@ Built and signed on the Mac (free), uploaded by a Linux runner (1x), as in mm-po
    (`apps/ios/{Ledger,LedgerKit,ShareExtension,Ledger.xcodeproj,Config}/` or
    `apps/ios/project.yml`; never `build-number.json` alone) and `exec`s
    `apps/ios/scripts/publish-build.sh`, which bumps the build number, tests, archives, signs,
-   uploads dSYMs to Sentry, stages `Ledger.ipa` + `build-meta.json` on the rolling prerelease
-   **`ios-ledger-staged`**, and commits `apps/ios/build-number.json`.
-   `SKIP_RELEASE=1 git push` skips the release (checks still run).
+   checks the release config, sends dSYMs and the release to Sentry, stages `Ledger.ipa` +
+   `build-meta.json` on the rolling prerelease **`ios-ledger-staged`**, and commits
+   `apps/ios/build-number.json`. `SKIP_RELEASE=1 git push` skips the release (checks still run).
+
+   Release config (BACKLOG IOS-21r). A Release build reads only the gitignored
+   `apps/ios/Config/Secrets.Release.xcconfig`; the local `Secrets.xcconfig` is included from
+   `Debug.xcconfig` only, so a key dropped from the release file is empty, never a local value.
+   Three checks, all in `apps/ios/scripts/release-config-check.sh`, shape only, no value printed:
+   - the **"Check release config"** Run Script phase (both targets, `project.yml`) fails a
+     Release build whose `LEDGER_*` settings are empty, local, not `production` or a placeholder;
+   - `testflight.sh` runs it on the archive, and `publish-build.sh` on the IPA it stages:
+     `plutil` reads the app's **and** the share extension's Info.plist (`LedgerSupabaseURL`
+     https and not local/private, `LedgerEnvironment` = `production`,
+     `LedgerSupabasePublishableKey` `sb_publishable_…`, `LedgerSentryDSN` non-empty).
+
+   Sentry (`apps/ios/scripts/sentry-release.sh`, run by `testflight.sh` after the check):
+   uploads dSYMs, then `sentry-cli releases new` / `set-commits --auto --ignore-missing` /
+   `finalize` for `ledger-ios@<version>+<build>` (the name the app reports, LedgerKit
+   `Telemetry.releaseName`). A Sentry failure, a missing token or a missing sentry-cli is a
+   warning: Sentry never blocks a release. `SENTRY_AUTH_TOKEN` comes from the shell or the login
+   keychain item `ledger-sentry-auth-token`
+   (`security add-generic-password -U -s ledger-sentry-auth-token -a "$USER" -w`, which
+   prompts), never an xcconfig, where it would be an Xcode build setting; `testflight.sh`
+   refuses a `Secrets.Release.xcconfig` that still defines it. `SENTRY_ORG` / `SENTRY_PROJECT`
+   (not secrets) come from the shell or `Secrets.Release.xcconfig`; the project defaults to the
+   DSN's project id. `apps/ios/scripts/release_checks_test.sh` tests all of it against fixture
+   plists and fake `sentry-cli` / `security` (pre-push `tooling`, macOS only).
 3. The push triggers `ios-testflight.yml`:
    - `stage` (no secrets): downloads `build-meta.json`; ships only if its `commit` is this
      commit or differs from it **only** by `apps/ios/build-number.json`. Otherwise it says so in

@@ -120,7 +120,7 @@ jobs:
       - name: shellcheck
         run: |
           shellcheck --version | head -2
-          shellcheck -x scripts/hooks/* scripts/ci/*.sh scripts/install-hooks.sh
+          shellcheck -x scripts/hooks/* scripts/ci/*.sh scripts/install-hooks.sh apps/ios/scripts/*.sh
 
       - name: Destructive migration guard tests
         run: python3 scripts/ci/sql_executed_text_test.py

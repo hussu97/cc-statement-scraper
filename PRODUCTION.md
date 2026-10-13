@@ -613,13 +613,24 @@ it. `PROJECT=credit-card-scraper-ht`, `URL=https://nkmylznisjcnmqbxosey.supabase
    feedback email, privacy policy URL, review contact incl. phone).
 3. Release (same flow as mm-pos; the API key is the one in `~/.appstoreconnect/private_keys`):
    ```bash
-   # dSYMs → credit-card-ledger-apps: SENTRY_AUTH_TOKEN / SENTRY_ORG / SENTRY_PROJECT from the environment,
-   # or (when unset) from Config/Secrets.Release.xcconfig; the token is never printed.
-   apps/ios/scripts/testflight.sh                       # test, archive, export, dSYMs, upload
+   # Sentry (dSYMs + release ledger-ios@<version>+<build> → credit-card-ledger-apps):
+   # SENTRY_AUTH_TOKEN from the shell or the login keychain item ledger-sentry-auth-token,
+   # never an xcconfig; SENTRY_ORG / SENTRY_PROJECT from the shell or Secrets.Release.xcconfig.
+   # Once per Mac (prompts for the token):
+   #   security add-generic-password -U -s ledger-sentry-auth-token -a "$USER" -w
+   apps/ios/scripts/testflight.sh                       # test, archive, check, export, Sentry, upload
    node apps/ios/scripts/testflight-distribute.mjs      # Friends & Family + Beta App Review
    git commit --only apps/ios/build-number.json …       # testflight.sh bumps it
    ```
-   - The script refuses to run without the release xcconfig, or if it points at 127.0.0.1.
+   - The script refuses to run without the release xcconfig, if it points at 127.0.0.1, or
+     if it still defines `SENTRY_AUTH_TOKEN` (an Xcode build setting there).
+   - Release reads only `Secrets.Release.xcconfig` (never the local `Secrets.xcconfig`): a
+     missing key fails the build's "Check release config" phase, and after archiving
+     `scripts/release-config-check.sh` asserts with `plutil` on the app and share-extension
+     Info.plists (https non-local URL, `production`, publishable key and DSN present; shape
+     only, nothing printed). `publish-build.sh` repeats it on the IPA it stages.
+   - Sentry unreachable or unconfigured is a warning, never a failed release
+     (`scripts/sentry-release.sh`).
    - `apps/ios/scripts/publish-build.sh` instead builds with `--no-upload`, stages the IPA and
      `build-meta.json` on the `ios-ledger-staged` GitHub release for the TestFlight workflow,
      and commits the build number itself.
@@ -794,7 +805,7 @@ history):
 | `apps/web/.env.production.local` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SENTRY_DSN`, `VITE_SENTRY_ENVIRONMENT`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` | Vercel env (§4) |
 | `scraper/.env` | `CCS_SCRAPER_SUPABASE_PUBLISHABLE_KEY` (+ service tokens, bank credentials) | `ccs-scraper upload` (`apikey` header) |
 | `.env.cutover` | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `LEDGER_DB_URL`, …; `SUPABASE_SERVICE_ROLE_KEY` is legacy (kept until §2.8 step 3, unused by the code) | cutover scripts and one-off admin calls (secret key on `apikey` only, never from a browser) |
-| `apps/ios/Config/Secrets.Release.xcconfig` | `LEDGER_SUPABASE_URL`, `LEDGER_SUPABASE_PUBLISHABLE_KEY`, `LEDGER_SENTRY_DSN`, `LEDGER_ENVIRONMENT`; optionally `SENTRY_AUTH_TOKEN`/`SENTRY_ORG`/`SENTRY_PROJECT` for dSYMs when the shell doesn't set them (prefer the shell: in the xcconfig the token is also an Xcode build setting, BACKLOG IOS-21) | TestFlight builds (§7) |
+| `apps/ios/Config/Secrets.Release.xcconfig` | `LEDGER_SUPABASE_URL`, `LEDGER_SUPABASE_PUBLISHABLE_KEY`, `LEDGER_SENTRY_DSN`, `LEDGER_ENVIRONMENT` (all required: Release has no fallback); optionally `SENTRY_ORG`/`SENTRY_PROJECT` when the shell doesn't set them. Never `SENTRY_AUTH_TOKEN`: it lives in the shell or the login keychain item `ledger-sentry-auth-token` (BACKLOG IOS-21r) | TestFlight builds (§7) |
 
 ### 10.1 Release 2026-10-08 (main `10703b4`, iOS build 5)
 
