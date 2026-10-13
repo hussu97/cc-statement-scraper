@@ -23,14 +23,14 @@ public enum LedgerDates {
         return f
     }
 
-    // DateFormatter is thread-safe for formatting since iOS 7; these are
-    // immutable after creation.
-    nonisolated(unsafe) private static let dayMonth = formatter("d MMM")
-    nonisolated(unsafe) private static let dayMonthYear = formatter("d MMM yyyy")
-    nonisolated(unsafe) private static let monthYear = formatter("MMMM yyyy")
-    nonisolated(unsafe) private static let shortMonth = formatter("MMM")
-    nonisolated(unsafe) private static let fullMonth = formatter("MMMM")
-    nonisolated(unsafe) private static let time = formatter("HH:mm")
+    // DateFormatter is Sendable (thread-safe for formatting); these are never
+    // mutated after creation.
+    private static let dayMonth = formatter("d MMM")
+    private static let dayMonthYear = formatter("d MMM yyyy")
+    private static let monthYear = formatter("MMMM yyyy")
+    private static let shortMonth = formatter("MMM")
+    private static let fullMonth = formatter("MMMM")
+    private static let time = formatter("HH:mm")
 
     /// Today's business date.
     public static func today(now: Date = .now) -> CalendarDay {

@@ -11,7 +11,7 @@ struct TelemetryScrubberTests {
     func crumb(_ message: String?, data: [String: Any]? = nil) -> Breadcrumb {
         let b = Breadcrumb(level: .info, category: "test")
         b.message = message
-        b.data = data
+        for (key, value) in data ?? [:] { b.setData(value: value, key: key) }
         return b
     }
 
