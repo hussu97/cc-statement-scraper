@@ -5,6 +5,7 @@ import { must, mustList } from "./api";
 import { todayDubai } from "@/lib/dates";
 import { formatCount, formatTotal, type MoneyInput } from "@/lib/money";
 import type { BalanceAnchor } from "@/lib/balances";
+import type { PaymentStatus } from "@/lib/dues";
 
 export interface OverviewCategory {
   category_code: string | null;
@@ -27,6 +28,10 @@ export interface OverviewAccount {
     due_date: string | null;
     closing_balance: string | null;
     min_due: string | null;
+    /** Server-matched payments against this statement (public.v_statement_payments); null when unknown. Optional: an older server omits it. */
+    payment_status?: PaymentStatus | null;
+    /** Card repayments after the statement date, a decimal string. Optional: an older server omits it. */
+    amount_paid?: string | null;
   } | null;
   /** Latest statement balance / credit limit, 4dp decimal string (server-computed). */
   utilisation: string | null;

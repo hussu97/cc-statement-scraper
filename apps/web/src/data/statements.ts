@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { toAmount, type MoneyInput } from "@/lib/money";
 import { keys } from "./keys";
 import { must } from "./api";
+import type { PaymentStatus } from "@/lib/dues";
 
 /** Money crosses the wire as a decimal string (CLAUDE.md §1.3). */
 type Decimal = string;
@@ -54,6 +55,10 @@ export interface StatementHeader {
   doc_code: string | null;
   recon_status: string | null;
   recon_checks: Record<string, unknown> | null;
+  /** Server-matched payments (public.v_statement_payments); null for a history extract. Optional: an older server omits it. */
+  payment_status?: PaymentStatus | null;
+  /** Card repayments after the statement date, a decimal string. */
+  amount_paid?: Decimal | null;
 }
 
 /** statement_detail(p_profile_code, p_stmt_code). Generated types say Json; this is its shape (ARCHITECTURE §6). */
