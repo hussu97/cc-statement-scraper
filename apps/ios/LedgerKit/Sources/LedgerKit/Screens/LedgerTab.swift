@@ -32,6 +32,9 @@ public enum SettingsRoute: Hashable, Sendable {
     /// Statement cycles, uploads (picker and share-sheet queue) and their
     /// processing logs: the former Statements tab.
     case statements
+    /// One statement, pushed from Statements. The path is typed, so a cycle
+    /// pushed any other way has no destination and the row does nothing.
+    case statement(StatementCycle)
 }
 
 /// Which tab is showing, so a screen can send the reader to another tab
