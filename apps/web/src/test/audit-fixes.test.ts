@@ -137,7 +137,11 @@ describe("WEB-25: insight cards link to their screen", () => {
     expect(insightTarget({ kind: "statement_due", data: {} })).toMatchObject({ to: "/cards", search: { tab: "statements" } });
     expect(insightTarget({ kind: "price_change", data: {} })).toMatchObject({ to: "/insights", search: { tab: "subscriptions" } });
     expect(insightTarget({ kind: "uncategorized", data: {} })).toMatchObject({ to: "/activity", search: { category: "none" } });
-    expect(insightTarget({ kind: "category_spike", data: { category_code: cat } })).toMatchObject({ to: "/activity", search: { category: cat } });
+    expect(insightTarget({ kind: "category_spike", data: { category_code: cat } })).toMatchObject({
+      to: "/insights/category/$categoryCode",
+      params: { categoryCode: cat },
+      search: { range: "this_month" },
+    });
     expect(insightTarget({ kind: "category_spike", data: {} })).toMatchObject({ to: "/insights", search: { tab: "categories" } });
     expect(insightTarget({ kind: "large_transaction", data: { txn_code: txn } })).toMatchObject({ to: "/activity", search: { txn } });
     expect(insightTarget({ kind: "review_backlog", data: null })).toMatchObject({ to: "/review" });

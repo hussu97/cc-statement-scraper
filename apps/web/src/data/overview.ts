@@ -96,6 +96,12 @@ export function useOverview(profileCode: string, month: string) {
 
 export type Insight = Tables<"insights">;
 
+/**
+ * Open insights fetched at most: the Overview panel shows the top five, the Insights feed all of
+ * them. The nightly job dedupes by kind and key, so a ledger rarely has more than a few dozen.
+ */
+export const INSIGHTS_LIMIT = 100;
+
 export function useInsights(profileCode: string) {
   return useQuery({
     queryKey: keys.insights(profileCode),
@@ -109,7 +115,7 @@ export function useInsights(profileCode: string) {
           // Expired insights hide at once, not after the nightly cleanup (WEB-45).
           .or(`valid_until.is.null,valid_until.gte.${todayDubai()}`)
           .order("created_at", { ascending: false })
-          .limit(20),
+          .limit(INSIGHTS_LIMIT),
       ),
   });
 }
@@ -120,6 +126,7 @@ export type InsightTarget =
   | { to: "/review"; label: string }
   | { to: "/cards"; search: { tab: "statements" }; label: string }
   | { to: "/insights"; search: { tab?: string }; label: string }
+  | { to: "/insights/category/$categoryCode"; params: { categoryCode: string }; search: { range: "this_month" }; label: string }
   | { to: "/activity"; search: { category?: string; txn?: string }; label: string };
 
 /**
@@ -140,9 +147,10 @@ export function insightTarget(i: Pick<Insight, "kind" | "data">): InsightTarget 
     case "uncategorized":
       return { to: "/activity", search: { category: "none" }, label: "Categorise them" };
     case "category_spike": {
+      // "So far this month": the category view for this month, with its trend and merchants (MA-1).
       const category = str("category_code");
       return category
-        ? { to: "/activity", search: { category }, label: "See transactions" }
+        ? { to: "/insights/category/$categoryCode", params: { categoryCode: category }, search: { range: "this_month" }, label: "See the category" }
         : { to: "/insights", search: { tab: "categories" }, label: "See categories" };
     }
     case "large_transaction": {
@@ -165,6 +173,35 @@ export function insightTarget(i: Pick<Insight, "kind" | "data">): InsightTarget 
 export function pendingSummary(count: number, amount: MoneyInput): string | null {
   if (count <= 0) return null;
   return `${formatCount(count)} pending · ${formatTotal(amount)}`;
+}
+
+/** The Insights feed's sections (MA-5): which screen answers an insight, in display order. */
+export const INSIGHT_GROUPS = [
+  { key: "spending", label: "Spending", kinds: ["spend_pace", "category_spike", "large_transaction"] },
+  { key: "budgets", label: "Budgets", kinds: ["budget_risk"] },
+  { key: "subscriptions", label: "Subscriptions", kinds: ["price_change", "new_recurring"] },
+  { key: "statements", label: "Statements", kinds: ["statement_due"] },
+  { key: "tidy", label: "To tidy up", kinds: ["uncategorized", "review_backlog"] },
+] as const;
+
+export interface InsightGroup<T> {
+  key: string;
+  label: string;
+  items: T[];
+}
+
+/**
+ * Insights in feed sections, in INSIGHT_GROUPS order, each sorted alerts first; a kind the web
+ * doesn't know yet lands in "Other" at the end rather than disappearing. Empty sections are left
+ * out. Pure, unit-tested.
+ */
+export function groupInsights<T extends { kind: string; severity: string; created_at: string }>(list: T[]): InsightGroup<T>[] {
+  const known = INSIGHT_GROUPS.map((g) => ({ key: g.key as string, label: g.label as string, kinds: g.kinds as readonly string[], items: [] as T[] }));
+  const other: T[] = [];
+  for (const i of list) (known.find((g) => g.kinds.includes(i.kind))?.items ?? other).push(i);
+  return [...known, { key: "other", label: "Other", kinds: [], items: other }]
+    .filter((g) => g.items.length > 0)
+    .map((g) => ({ key: g.key, label: g.label, items: sortInsights(g.items) }));
 }
 
 /** Severity order for display: alerts first. */

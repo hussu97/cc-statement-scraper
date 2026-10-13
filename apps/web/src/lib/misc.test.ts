@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { labelLanes, placeMarks } from "./pace";
 import { reconChecks } from "./recon";
-import { insightsRange, parseInsightsSearch, parseTabSearch, withInsightsRange, withTrends } from "./search";
+import { insightsRange, parseInsightsSearch, parseRangeSearch, parseTabSearch, withInsightsRange, withRange, withTrends } from "./search";
 
 describe("pace rule geometry", () => {
   it("places marks on a shared scale with headroom", () => {
@@ -66,6 +66,19 @@ describe("search codecs", () => {
     expect(withInsightsRange({ tab: "fx", from: "2026-01-01", to: "2026-03-31" }, { range: "last_6_months" })).toEqual({
       tab: "fx",
       range: "last_6_months",
+    });
+  });
+
+  it("parses a range-only search (the category view), custom dates winning over a preset", () => {
+    expect(parseRangeSearch({ range: "ytd", tab: "fx", q: "x" })).toEqual({ range: "ytd" });
+    expect(parseRangeSearch({ range: "ytd", from: "2026-01-01", to: "2026-02-01" })).toEqual({ from: "2026-01-01", to: "2026-02-01" });
+    expect(parseRangeSearch({ from: "2026-03-01", to: "2026-02-01" })).toEqual({});
+    expect(parseRangeSearch({ range: "forever" })).toEqual({});
+    expect(withRange({ range: "last_12_months" })).toEqual({ range: "last_12_months" });
+    expect(insightsRange(parseRangeSearch({ from: "2026-10-01", to: "2026-10-31" }), "2026-10-08")).toEqual({
+      from: "2026-10-01",
+      to: "2026-10-31",
+      preset: "this_month",
     });
   });
 

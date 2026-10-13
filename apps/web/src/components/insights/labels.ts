@@ -6,6 +6,7 @@ import { MONTH_SHORT, shortMonth } from "@/components/charts/heat";
 
 export const INSIGHT_TABS = [
   { value: "trends", label: "Trends" },
+  { value: "feed", label: "Worth a look" },
   { value: "categories", label: "Categories" },
   { value: "merchants", label: "Merchants" },
   { value: "subscriptions", label: "Subscriptions" },
