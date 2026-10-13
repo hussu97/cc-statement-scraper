@@ -28,7 +28,7 @@ struct InsightsView: View {
                     BudgetsCard(budgets: content.budgets, scope: model.budgetsScope(), isCurrentMonth: month.isCurrent,
                                 seeAll: showBudgets)
                 }
-                CategoriesCard(categories: content.categories)
+                CategoriesCard(categories: content.categories, from: range.from, to: range.to, profileCode: profileCode)
                 MerchantsCard(merchants: content.merchants)
                 RecurringCard(recurring: content.activeRecurring, annualTotal: content.recurringAnnualTotal)
             }
@@ -48,8 +48,12 @@ struct InsightsView: View {
     private func reload() { Task { await model.load(profileCode: profileCode, month: month.requestMonth) } }
 }
 
+/// Each category's spend for the period; a row opens its drill-down (PAR-5).
 private struct CategoriesCard: View {
     let categories: [CategorySpend]
+    let from: CalendarDay
+    let to: CalendarDay
+    let profileCode: String
 
     var body: some View {
         Card {
@@ -57,21 +61,43 @@ private struct CategoriesCard: View {
             if categories.isEmpty {
                 Text("Nothing categorised yet.").font(Typography.rowMeta).foregroundStyle(Palette.muted)
             }
-            ForEach(categories.prefix(10)) { category in
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        CategoryDot(token: category.colorToken)
-                        Text(category.name).font(Typography.rowTitle)
-                        Spacer()
-                        Text(MoneyFormat.aed(category.amount, fractionDigits: 0)).font(Typography.amount)
-                    }
-                    ProgressView(value: category.shareFraction)
-                        .tint(ChartPalette.color(for: category.colorToken))
-                    Text(category.detailLabel)
-                        .font(Typography.caption).foregroundStyle(Palette.muted)
+            ForEach(categories) { category in
+                NavigationLink {
+                    CategoryDetailView(request: CategoryDrillDownRequest(target: CategoryTarget(category), from: from, to: to),
+                                       profileCode: profileCode)
+                } label: {
+                    row(category)
                 }
+                .buttonStyle(.plain)
             }
         }
+    }
+
+    private func row(_ category: CategorySpend) -> some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    CategoryDot(token: category.colorToken)
+                    Text(category.name).font(Typography.rowTitle)
+                    Spacer()
+                    Text(MoneyFormat.aed(category.amount, fractionDigits: 0)).font(Typography.amount)
+                }
+                ProgressView(value: category.shareFraction)
+                    .tint(ChartPalette.color(for: category.colorToken))
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(category.detailLabel)
+                        .font(Typography.caption).foregroundStyle(Palette.muted)
+                    Spacer(minLength: 4)
+                    // vs the previous period of the same length (server `change`), "New" without one.
+                    Chip(label: category.changeChip.label, tone: category.changeChip.tone)
+                        .accessibilityLabel(category.changeAccessibilityLabel)
+                }
+            }
+            Image(systemName: "chevron.right").font(.caption).foregroundStyle(Palette.subtle)
+        }
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Opens \(category.name)")
     }
 }
 
@@ -147,8 +173,7 @@ private struct BudgetsCard: View {
                         Spacer()
                         Text(budget.progressLabel).font(Typography.rowMeta).monospacedDigit()
                     }
-                    ProgressView(value: budget.progressFraction).tint(budget.tone(isCurrentMonth: isCurrentMonth).color)
-                        .accessibilityLabel(budget.meterAccessibilityLabel)
+                    BudgetMeter(row: budget, phase: isCurrentMonth ? .current : .past)
                 }
             }
             Button(action: seeAll) {

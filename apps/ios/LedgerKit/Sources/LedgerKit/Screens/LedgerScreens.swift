@@ -16,6 +16,8 @@ public final class LedgerScreens {
     public let statements: StatementsModel
     public let review: ReviewModel
     public let month: MonthSelection
+    /// Makes the category drill-down's model, for whichever tab pushes it.
+    public let categoryDrillDowns: CategoryDrillDowns
 
     /// The ledger the tabs hold. The UI shows the tabs only when this equals
     /// the selected ledger, so the previous ledger's numbers never flash.
@@ -33,6 +35,7 @@ public final class LedgerScreens {
         statements = StatementsModel(api: api, pendingUploads: pendingUploads, flushPending: flushPending)
         review = ReviewModel(api: api)
         month = MonthSelection(today: today)
+        categoryDrillDowns = CategoryDrillDowns(api: api)
         self.live = live ?? LiveUpdates(api: api)
         // A budget written on the Budgets tab changes Insights' budgets card.
         budgets.onChange = { [insights] code in await insights.refresh(profileCode: code) }

@@ -10,6 +10,9 @@ public struct CategorySpend: Decodable, Sendable, Hashable, Identifiable {
     public let txnCount: Int
     public let share: Decimal?
     public let prevAmount: Decimal
+    /// `(amount − prev_amount) / prev_amount` from the server, against the previous period of
+    /// the same length; nil when that period had no spend (or from a server without the field).
+    public let change: Decimal?
 
     /// The server's share, clamped to 0…1 for drawing a bar.
     public var shareFraction: Double { min(max((share ?? 0).chartValue, 0), 1) }
@@ -70,6 +73,12 @@ public struct BudgetStatus: Decodable, Sendable, Hashable, Identifiable {
     public let effectiveTo: CalendarDay?
     /// The server's `is_effective`; absent from an older server, whose rows all count.
     let effectiveFlag: Bool?
+    /// The month's pace (migration 20261013112601), null outside the current month and absent
+    /// from an older server: the share of the month gone, today included (0…1); the budget's
+    /// even share by today; and spent − expected (positive is over pace).
+    public let expectedShare: Decimal?
+    public let expectedAed: Decimal?
+    public let overPaceAed: Decimal?
 
     /// This budget counts for the month (the server's call, CLAUDE.md §2.2): the
     /// newest of its scope (card × category) whose range covers the month.
@@ -78,13 +87,15 @@ public struct BudgetStatus: Decodable, Sendable, Hashable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case budgetCode, categoryCode, categoryName, colorToken, budgetAed, spentAed, projectedAed, shareUsed
         case accountCode, accountName, bankCode, effectiveFrom, effectiveTo
+        case expectedShare, expectedAed, overPaceAed
         case effectiveFlag = "isEffective"
     }
 
     public init(budgetCode: String, categoryCode: String?, categoryName: String?, colorToken: String?,
                 budgetAed: Decimal, spentAed: Decimal, projectedAed: Decimal, shareUsed: Decimal,
                 accountCode: String? = nil, accountName: String? = nil, bankCode: String? = nil,
-                isEffective: Bool = true, effectiveFrom: CalendarDay? = nil, effectiveTo: CalendarDay? = nil) {
+                isEffective: Bool = true, effectiveFrom: CalendarDay? = nil, effectiveTo: CalendarDay? = nil,
+                expectedShare: Decimal? = nil, expectedAed: Decimal? = nil, overPaceAed: Decimal? = nil) {
         self.budgetCode = budgetCode
         self.categoryCode = categoryCode
         self.categoryName = categoryName
@@ -99,6 +110,9 @@ public struct BudgetStatus: Decodable, Sendable, Hashable, Identifiable {
         self.effectiveFlag = isEffective
         self.effectiveFrom = effectiveFrom
         self.effectiveTo = effectiveTo
+        self.expectedShare = expectedShare
+        self.expectedAed = expectedAed
+        self.overPaceAed = overPaceAed
     }
 
     /// `"All spending"`, `"Dining"`, `"Daily card"` or `"Dining · Daily card"` (see `BudgetScope`).
