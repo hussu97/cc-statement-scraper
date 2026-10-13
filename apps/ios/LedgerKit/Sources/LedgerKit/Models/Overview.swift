@@ -8,6 +8,12 @@ public struct Overview: Decodable, Sendable, Hashable {
     public let spendPrevMonth: Decimal
     public let spendPrevMonthToDate: Decimal
     public let spendAvg3m: Decimal
+    /// The previous 3 months' spend up to the same day of the month, averaged
+    /// over 3 (`public.spend_pace`). Nil from a server without the field.
+    public let spendAvg3mToDate: Decimal?
+    /// Where the month is heading (`public.spend_pace`): spend for a completed
+    /// month, nil for a future one or from a server without the field.
+    public let projectedMonthEnd: Decimal?
     /// `(spend − base) / base` from the server; base is last month up to the
     /// same day. Nil when the base is 0, or from a server without the field.
     public let changeVsPrevMonthToDate: Decimal?
@@ -29,14 +35,51 @@ public struct Overview: Decodable, Sendable, Hashable {
     public let accounts: [OverviewAccount]
     public let recent: [RecentTransaction]
 
-    // `.convertFromSnakeCase` turns `spend_avg_3m` into `spendAvg3M`.
+    /// The wire keys, as `public.overview` spells them (audit X-33r). Matched by
+    /// `WireKeyedContainer`, so `spend_avg_3m` never depends on how Foundation's
+    /// `.convertFromSnakeCase` capitalises the letter after a digit.
     enum CodingKeys: String, CodingKey {
-        case month, spend, spendPrevMonth, spendPrevMonthToDate, payments, pendingCount, pendingAmount
-        case uncategorizedCount, openReviews, lastSmsAt, topCategories, accounts, recent
-        case outstanding, outstandingComplete, outstandingHasEstimate
-        case changeVsPrevMonthToDate
-        case spendAvg3m = "spendAvg3M"
-        case changeVsAvg3m = "changeVsAvg3M"
+        case month, spend, payments, outstanding, accounts, recent
+        case spendPrevMonth = "spend_prev_month"
+        case spendPrevMonthToDate = "spend_prev_month_to_date"
+        case spendAvg3m = "spend_avg_3m"
+        case spendAvg3mToDate = "spend_avg_3m_to_date"
+        case projectedMonthEnd = "projected_month_end"
+        case changeVsPrevMonthToDate = "change_vs_prev_month_to_date"
+        case changeVsAvg3m = "change_vs_avg_3m"
+        case outstandingComplete = "outstanding_complete"
+        case outstandingHasEstimate = "outstanding_has_estimate"
+        case pendingCount = "pending_count"
+        case pendingAmount = "pending_amount"
+        case uncategorizedCount = "uncategorized_count"
+        case openReviews = "open_reviews"
+        case lastSmsAt = "last_sms_at"
+        case topCategories = "top_categories"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try WireKeyedContainer(decoder, keyedBy: CodingKeys.self)
+        month = try c.decode(CalendarDay.self, forKey: .month)
+        spend = try c.decode(Decimal.self, forKey: .spend)
+        spendPrevMonth = try c.decode(Decimal.self, forKey: .spendPrevMonth)
+        spendPrevMonthToDate = try c.decode(Decimal.self, forKey: .spendPrevMonthToDate)
+        spendAvg3m = try c.decode(Decimal.self, forKey: .spendAvg3m)
+        spendAvg3mToDate = try c.decodeIfPresent(Decimal.self, forKey: .spendAvg3mToDate)
+        projectedMonthEnd = try c.decodeIfPresent(Decimal.self, forKey: .projectedMonthEnd)
+        changeVsPrevMonthToDate = try c.decodeIfPresent(Decimal.self, forKey: .changeVsPrevMonthToDate)
+        changeVsAvg3m = try c.decodeIfPresent(Decimal.self, forKey: .changeVsAvg3m)
+        payments = try c.decode(Decimal.self, forKey: .payments)
+        outstanding = try c.decodeIfPresent(Decimal.self, forKey: .outstanding)
+        outstandingComplete = try c.decodeIfPresent(Bool.self, forKey: .outstandingComplete)
+        outstandingHasEstimate = try c.decodeIfPresent(Bool.self, forKey: .outstandingHasEstimate)
+        pendingCount = try c.decode(Int.self, forKey: .pendingCount)
+        pendingAmount = try c.decode(Decimal.self, forKey: .pendingAmount)
+        uncategorizedCount = try c.decode(Int.self, forKey: .uncategorizedCount)
+        openReviews = try c.decode(Int.self, forKey: .openReviews)
+        lastSmsAt = try c.decodeIfPresent(Date.self, forKey: .lastSmsAt)
+        topCategories = try c.decode([TopCategory].self, forKey: .topCategories)
+        accounts = try c.decode([OverviewAccount].self, forKey: .accounts)
+        recent = try c.decode([RecentTransaction].self, forKey: .recent)
     }
 
     public struct TopCategory: Decodable, Sendable, Hashable, Identifiable {
