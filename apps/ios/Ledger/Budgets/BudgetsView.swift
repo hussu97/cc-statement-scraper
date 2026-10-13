@@ -119,8 +119,7 @@ private struct BudgetStatusCard: View {
                 Text("of \(MoneyFormat.aed(row.budgetAed))").font(Typography.rowMeta).foregroundStyle(Palette.muted)
             }
             .moneyLine()
-            ProgressView(value: row.progressFraction).tint(tone.color)
-                .accessibilityLabel(row.meterAccessibilityLabel)
+            BudgetMeter(row: row, phase: phase)
             HStack {
                 Text(row.usedLabel).font(Typography.caption.weight(.semibold)).foregroundStyle(tone.color)
                 Spacer()

@@ -160,9 +160,11 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         guard let overviewFixture else { throw LedgerAPIError.noProfile }
         return overviewFixture
     }
+    /// `category_breakdown` rows.
+    var categoryRows: [CategorySpend] = []
     func categoryBreakdown(profileCode: String, from: CalendarDay, to: CalendarDay) async throws -> [CategorySpend] {
         count("categoryBreakdown")
-        return []
+        return categoryRows
     }
     /// `spend_series` answers (all spend when unset), and the filters it was asked for.
     var seriesPoints: [SpendPoint] = []
@@ -172,7 +174,12 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         lock.withLock { seriesFilters.append(filter) }
         return seriesPoints
     }
-    func merchantLeaderboard(profileCode: String, from: CalendarDay, to: CalendarDay, limit: Int) async throws -> [MerchantSpend] { [] }
+    /// `p_limit` of each `merchant_leaderboard` call.
+    private(set) var merchantLimits: [Int] = []
+    func merchantLeaderboard(profileCode: String, from: CalendarDay, to: CalendarDay, limit: Int) async throws -> [MerchantSpend] {
+        lock.withLock { merchantLimits.append(limit) }
+        return []
+    }
     func statementCycles(profileCode: String, limit: Int) async throws -> [StatementCycle] {
         count("statementCycles")
         return []
@@ -273,6 +280,10 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
     var detail: StatementDetail?
     var detailError: LedgerAPIError?
     var breakdown: SpendBreakdown?
+    /// Per-grouping answers, ahead of `breakdown`.
+    var breakdownByGroup: [SpendSplitGrouping: SpendBreakdown] = [:]
+    /// Each `spend_breakdown` call's range and top N.
+    private(set) var breakdownRequests: [(groupBy: SpendSplitGrouping, from: CalendarDay, to: CalendarDay, topN: Int)] = []
     private(set) var breakdownCalls: [SpendSplitGrouping] = []
     private(set) var breakdownFilters: [SpendFilter] = []
     var bankRows: [BankInfo] = []
@@ -295,9 +306,10 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         lock.withLock {
             breakdownCalls.append(groupBy)
             breakdownFilters.append(filter)
+            breakdownRequests.append((groupBy, from, to, topN))
         }
-        guard let breakdown else { throw LedgerAPIError.network("offline") }
-        return breakdown
+        guard let answer = breakdownByGroup[groupBy] ?? breakdown else { throw LedgerAPIError.network("offline") }
+        return answer
     }
     func banks() async throws -> [BankInfo] { bankRows }
     func documentEvents(profileCode: String, docCodes: [String]) async throws -> [DocumentEvent] {

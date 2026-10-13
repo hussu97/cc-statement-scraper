@@ -44,21 +44,51 @@ extension BudgetStatus {
     /// `"42% used"`, the server's `share_used`.
     public var usedLabel: String { "\(MoneyFormat.percent(shareUsed)) used" }
 
-    /// The pace line: the server's projection in the current month,
-    /// otherwise whether the month is over or still to come.
+    /// The pace line (web `budgetPace`): in the current month, how far spend is from the
+    /// budget's even share by today and the server's projection,
+    /// `"AED 120 over pace · projected AED 2,481"` (`"Projected AED 2,481"` from a server
+    /// without `over_pace_aed`); otherwise whether the month is over or still to come.
     public func paceLabel(_ phase: BudgetMonthPhase) -> String {
         switch phase {
-        case .current: "On pace for \(MoneyFormat.aed(projectedAed, fractionDigits: 0))"
-        case .past: "Month closed"
-        case .future: "Month not started"
+        case .current:
+            let projected = MoneyFormat.aed(projectedAed, fractionDigits: 0)
+            return overPaceLabel.map { "\($0) · projected \(projected)" } ?? "Projected \(projected)"
+        case .past: return "Month closed"
+        case .future: return "Month not started"
         }
     }
 
-    /// The pace line is a warning: the current month is on pace to overspend.
-    public func isOverPace(_ phase: BudgetMonthPhase) -> Bool { phase == .current && isProjectedOver }
+    /// `"AED 120 over pace"`, `"AED 80 under pace"` or `"On pace"`, from the server's
+    /// `over_pace_aed` (spent − expected by today); nil outside the current month.
+    public var overPaceLabel: String? {
+        guard let overPaceAed else { return nil }
+        if overPaceAed > 0 { return "\(MoneyFormat.aed(overPaceAed, fractionDigits: 0)) over pace" }
+        if overPaceAed < 0 { return "\(MoneyFormat.aed(-overPaceAed, fractionDigits: 0)) under pace" }
+        return "On pace"
+    }
 
-    /// VoiceOver for the meter: `"42% of Groceries budget used"`.
-    public var meterAccessibilityLabel: String { "\(MoneyFormat.percent(shareUsed)) of \(title) budget used" }
+    /// The pace line is a warning: spent more than the even share by today (the server's
+    /// `over_pace_aed`, positive exactly when the month is on pace to overspend), or, from an
+    /// older server, projected over budget.
+    public func isOverPace(_ phase: BudgetMonthPhase) -> Bool {
+        guard phase == .current else { return false }
+        return overPaceAed.map { $0 > 0 } ?? isProjectedOver
+    }
+
+    /// Where the meter's "expected by today" tick sits (0…1), in the current month only.
+    public func paceTick(_ phase: BudgetMonthPhase) -> Double? {
+        guard phase == .current, let expectedShare else { return nil }
+        return min(max(expectedShare.chartValue, 0), 1)
+    }
+
+    /// VoiceOver for the meter: `"42% of Groceries budget used"`, and in the current month
+    /// `"…; 45% expected by today (AED 900)"`.
+    public func meterAccessibilityLabel(_ phase: BudgetMonthPhase) -> String {
+        let used = "\(MoneyFormat.percent(shareUsed)) of \(title) budget used"
+        guard phase == .current, let expectedShare else { return used }
+        let amount = expectedAed.map { " (\(MoneyFormat.aed($0, fractionDigits: 0)))" } ?? ""
+        return "\(used); \(MoneyFormat.percent(expectedShare)) expected by today\(amount)"
+    }
 
     /// Why a budget the server marked not effective for `month` doesn't count
     /// (web `inactiveBudgetLabel`): it starts later, it ended, or, when its own

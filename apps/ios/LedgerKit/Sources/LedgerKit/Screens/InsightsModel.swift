@@ -25,6 +25,9 @@ public final class InsightsModel {
         public let budgets: [BudgetStatus]
     }
 
+    /// Top merchants Insights lists (`merchant_leaderboard`'s `p_limit`, BACKLOG PAR-8).
+    public static let merchantLimit = 20
+
     public var period: Period = .sixMonths
     public private(set) var state: LoadState<Content> = .idle
     private let api: any LedgerAPI
@@ -68,7 +71,8 @@ public final class InsightsModel {
         do {
             async let trend = api.spendSeries(profileCode: profileCode, from: from, to: to, grain: .month, group: .none)
             async let categories = api.categoryBreakdown(profileCode: profileCode, from: from, to: to)
-            async let merchants = api.merchantLeaderboard(profileCode: profileCode, from: from, to: to, limit: 10)
+            async let merchants = api.merchantLeaderboard(profileCode: profileCode, from: from, to: to,
+                                                             limit: Self.merchantLimit)
             async let recurring = api.recurringList(profileCode: profileCode)
             async let budgets = api.budgetStatus(profileCode: profileCode, month: month)
             let content = try await Content(trend: trend, categories: categories, merchants: merchants,
