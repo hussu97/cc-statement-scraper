@@ -559,7 +559,7 @@ SECURITY DEFINER with an explicit member check and filter by profile themselves)
 | Group | RPCs |
 |---|---|
 | Overview and trends | `overview`, `spend_pace`, `spend_series` (grain, group_by, optional `p_top` with an "Other" fold), `spend_breakdown`* |
-| Breakdowns | `category_breakdown`, `merchant_leaderboard`, `daily_spend`, `hour_weekday_pattern` |
+| Breakdowns | `category_breakdown`, `merchant_leaderboard`, `merchant_context`*, `daily_spend`, `hour_weekday_pattern` |
 | Currency and cycles | `fx_spend`, `statement_cycles`, `statement_detail`*, `yoy_compare` |
 | Exceptions and metadata | `anomalies`*, `filter_meta` |
 | Budgets and recurring | `budget_status`, `recurring_list` |
@@ -584,6 +584,13 @@ a line is `{line_code, txn_code, txn_date, posting_date, description, merchant_n
 amount_original, currency_original, category_code, kind, card_last4}`, ordered by `txn_date`,
 `line_no`. `description` is the line as the statement printed it; `merchant_name` and
 `category_code` come from the transaction the line evidences.
+
+`merchant_context(profile, merchant)` is the transaction drawer's line about a merchant (MA-4):
+`{merchant_code, visit_count, avg_aed, total_6m_aed, first_seen}` from `v_spend`. A visit is a
+purchase (a positive `v_spend` row, pending included; refunds are not visits); `avg_aed` is their
+average; `total_6m_aed` is net spend (refunds subtracted) dated after the same date 6 months ago
+(Asia/Dubai); `first_seen` is the earliest spend date. Money is a decimal string; a merchant
+with no spend in the ledger returns zero visits.
 
 `anomalies(profile, from, to)` lists the range's unusually large charges, largest first, each
 compared with the 365 days before it (its own day excluded). `reason` is `merchant_outlier` (≥ 5

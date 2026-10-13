@@ -2699,6 +2699,10 @@ export type Database = {
         }
         Returns: string
       }
+      merchant_context: {
+        Args: { p_merchant_code: string; p_profile_code: string }
+        Returns: Json
+      }
       merchant_key: { Args: { p: string }; Returns: string }
       merchant_leaderboard: {
         Args: {
