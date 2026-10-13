@@ -141,9 +141,10 @@ def upload(
         raise typer.Exit(1)
 
     typer.echo(f"Uploading {len(files)} file(s) to {client.upload_url} ...")
-    result = client.upload_pdfs(files)
-    typer.echo(_format_result(result))
-    _record_uploaded(UploadedState(cfg.download_dir / "state"), files, result, None)
+    # One group with no bank hint (the server detects it). A partial failure records
+    # the requests that succeeded and exits non-zero naming the rest (audit SRV-16r).
+    failures = _upload_groups(client, {None: list(files)}, UploadedState(cfg.download_dir / "state"))
+    _report_failures(failures, retry=_upload_retry_hint(failures, profile))
 
 
 @app.command(name="upload-pending")
@@ -292,15 +293,28 @@ def _upload_groups(client, groups: dict[str | None, list[Path]], uploaded_state)
     return failures
 
 
-def _report_failures(failures: list[tuple[str | None, list[Path], str]], profile: str) -> None:
-    """Print a failure summary and exit non-zero if any group failed."""
+def _report_failures(
+    failures: list[tuple[str | None, list[Path], str]], profile: str | None = None, *, retry: str | None = None
+) -> None:
+    """Print a failure summary naming each file that still needs uploading, then exit
+    non-zero if any group failed. *retry* overrides the ``upload-pending`` hint."""
     if not failures:
         return
     typer.echo(f"{len(failures)} upload group(s) failed:", err=True)
     for code, group, error in failures:
         typer.echo(f"  {code or '(unknown)'}: {len(group)} file(s) — {error}", err=True)
-    typer.echo(f"Retry with: ccs-scraper upload-pending --profile {profile}", err=True)
+        for path in group:
+            typer.echo(f"    {path}", err=True)
+    typer.echo(f"Retry with: {retry or f'ccs-scraper upload-pending --profile {profile}'}", err=True)
     raise typer.Exit(1)
+
+
+def _upload_retry_hint(failures: list[tuple[str | None, list[Path], str]], profile: str) -> str:
+    """``ccs-scraper upload`` command line that re-sends only the failed files."""
+    import shlex
+
+    paths = [str(path) for _, group, _ in failures for path in group]
+    return shlex.join(["ccs-scraper", "upload", "--profile", profile, *paths])
 
 
 def _collect_pending(
