@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { TooltipContentProps } from "recharts";
 import type { NameType, ValueType } from "recharts/types/component/DefaultTooltipContent";
-import { formatMoney } from "@/lib/money";
+import { formatMoney, formatTotal } from "@/lib/money";
 
 /** Shared axis/grid styling: token colours only. */
 export const AXIS_TICK = { fill: "var(--chart-axis)", fontSize: 11 } as const;
@@ -31,7 +31,7 @@ export function TooltipCard({ title, rows, footer }: { title: ReactNode; rows: R
           <li key={r.key} className="flex items-center gap-2">
             <span aria-hidden className="inline-block size-2 shrink-0 rounded-pill" style={{ background: r.color }} />
             <span className="flex-1 truncate text-ink-2">{r.label}</span>
-            <span className="tabular text-ink">{formatMoney(r.value)}</span>
+            <span className="tabular text-ink">{formatTotal(r.value)}</span>
           </li>
         ))}
       </ul>

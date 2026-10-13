@@ -1,7 +1,7 @@
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import { Link } from "@tanstack/react-router";
 import { categoryVar } from "@ledger/tokens/chart";
-import { displayRatio, formatMoney, formatPercent, toAmount, type MoneyInput } from "@/lib/money";
+import { displayRatio, formatPercent, formatTotal, toAmount, type MoneyInput } from "@/lib/money";
 import { Dot } from "@/components/ui/display";
 import type { OverviewCategory } from "@/data/overview";
 
@@ -23,7 +23,7 @@ export function CategoryRing({ categories, total, from, to }: { categories: Over
         </ResponsiveContainer>
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
           <span className="text-[11px] text-subtle">Top {data.length}</span>
-          <span className="display-num text-lg text-ink">{formatMoney(total, { compact: true })}</span>
+          <span className="display-num text-lg text-ink">{formatTotal(total, { compact: true })}</span>
         </div>
       </div>
       <ul className="flex flex-col">
@@ -37,7 +37,7 @@ export function CategoryRing({ categories, total, from, to }: { categories: Over
               <Dot token={c.color_token} />
               <span className="truncate text-ink">{c.name ?? "Uncategorised"}</span>
               <span className="tabular text-subtle">{formatPercent(displayRatio(c.amount, total))}</span>
-              <span className="tabular w-24 text-right text-ink">{formatMoney(c.amount, { whole: true })}</span>
+              <span className="tabular w-24 text-right text-ink">{formatTotal(c.amount)}</span>
             </Link>
           </li>
         ))}

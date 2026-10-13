@@ -3,7 +3,7 @@ import { ChevronRight, FileText } from "lucide-react";
 import { STATEMENT_CYCLES_MAX, useInfiniteStatementCycles, useStatementCycles, type StatementCycle } from "@/data/cards";
 import { utilisationTone } from "@/data/statements";
 import { formatDate } from "@/lib/dates";
-import { formatMoney, formatPercent, toAmount } from "@/lib/money";
+import { formatPercent, formatTotal, toAmount } from "@/lib/money";
 import { pageCount, type PageSize } from "@/lib/pagination";
 import { INFINITE_QUERY } from "@/lib/infinite";
 import { useClampPage, useMediaQuery } from "@/lib/hooks";
@@ -114,19 +114,19 @@ function StatementRow({ s }: { s: StatementCycle }) {
               {s.card_last4 ? `•${s.card_last4}` : "Card unknown"} · {s.period_start ? `${formatDate(s.period_start, "short")} – ${formatDate(s.period_end, "short")}` : "period unknown"}
             </span>
             <span className="tabular mt-0.5 block truncate text-[12px] text-ink-2 md:hidden">
-              {formatMoney(s.closing_balance)}
+              {formatTotal(s.closing_balance)}
               {s.due_date && <span className="text-muted"> · due {formatDate(s.due_date, "short")}</span>}
             </span>
           </span>
         </span>
         <span className="hidden text-[13px] md:block">
           <span className="block text-[11px] text-subtle">Closing</span>
-          <span className="tabular block text-ink">{formatMoney(s.closing_balance)}</span>
+          <span className="tabular block text-ink">{formatTotal(s.closing_balance)}</span>
         </span>
         <span className="hidden text-[13px] md:block">
           <span className="block text-[11px] text-subtle">Due</span>
           <span className="block text-ink">{s.due_date ? formatDate(s.due_date, "short") : "—"}</span>
-          {s.min_due !== null && <span className="tabular block text-[11px] text-subtle">min {formatMoney(s.min_due)}</span>}
+          {s.min_due !== null && <span className="tabular block text-[11px] text-subtle">min {formatTotal(s.min_due)}</span>}
         </span>
         <span className="hidden text-[13px] md:block">
           <span className="block text-[11px] text-subtle">Utilisation</span>

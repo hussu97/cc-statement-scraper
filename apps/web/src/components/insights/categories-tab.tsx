@@ -5,7 +5,7 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { useCategoryBreakdown } from "@/data/analytics";
 import type { RpcReturn } from "@/lib/supabase";
 import type { DateRange } from "@/lib/dates";
-import { displayRatio, formatChange, formatMoney, formatPercent, toAmount } from "@/lib/money";
+import { displayRatio, formatChange, formatPercent, formatTotal, toAmount } from "@/lib/money";
 import { UNCATEGORIZED } from "@/lib/activity-filters";
 import { Money } from "@/components/ledger";
 import { Badge, Card, CardHeader, Dot } from "@/components/ui/display";
@@ -87,7 +87,7 @@ function CategoryRow({ row, range, barRatio }: { row: Row; range: DateRange; bar
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-3">
             <span className="truncate text-sm text-ink">{row.name}</span>
-            <Money value={row.amount} className="text-sm text-ink" />
+            <Money value={row.amount} total className="text-sm text-ink" />
           </div>
           <div className="mt-1.5 flex items-center gap-3">
             <div className="h-1 flex-1 overflow-hidden rounded-pill bg-surface-3">
@@ -99,7 +99,7 @@ function CategoryRow({ row, range, barRatio }: { row: Row; range: DateRange; bar
             <span className="w-12 text-right text-[12px] text-muted tabular">{formatPercent(row.share, row.share < 0.1 ? 1 : 0)}</span>
             <span className="flex w-16 justify-end">
               {delta ? (
-                <HoverTip content={`Previous period: ${formatMoney(row.prev_amount)}`}>
+                <HoverTip content={`Previous period: ${formatTotal(row.prev_amount)}`}>
                   <Badge tone={tone === "neutral" ? "neutral" : tone} className="tabular">
                     {delta}
                   </Badge>

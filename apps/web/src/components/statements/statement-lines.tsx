@@ -2,7 +2,7 @@ import { ArrowDownLeft, ArrowUpRight, ChevronRight } from "lucide-react";
 import type { FilterMeta } from "@/data/overview";
 import { lineAmount, lineTitle, type StatementLine, type StatementSide } from "@/data/statements";
 import { formatDate } from "@/lib/dates";
-import { formatCount, formatMoney } from "@/lib/money";
+import { formatCount, formatTotal } from "@/lib/money";
 import { cn } from "@/lib/cn";
 import { Badge, Card, Dot } from "@/components/ui/display";
 import { EmptyState } from "@/components/ui/states";
@@ -47,7 +47,7 @@ export function StatementLines({
           </p>
         </div>
         <p className={cn("tabular text-[17px] font-medium", side === "credit" ? "text-positive" : "text-ink")}>
-          {side === "credit" ? formatMoney(data.total, { signed: true }) : formatMoney(data.total)}
+          {side === "credit" ? formatTotal(data.total, { signed: true }) : formatTotal(data.total)}
         </p>
       </header>
       {data.lines.length === 0 ? (
