@@ -631,7 +631,8 @@ all-profiles run, purges `document_events` older than 90 days first):
    `price_change`, `statement_due`, `uncategorized`, `spend_pace` (month-to-date total ≥ 25%
    and AED 500 above the 3-month same-day average, from day 5), `new_recurring` (a series
    detected in the last 7 days), `large_transaction` (`anomalies` over the last 3 days,
-   `data.txn_code`) and `review_backlog` (≥ 10 open reviews).
+   `data.txn_code`, titled with the merchant name, or the cleaned description when the charge has
+   no merchant) and `review_backlog` (≥ 10 open reviews).
 
 ---
 
