@@ -98,16 +98,57 @@ public enum TelemetryScrubber {
         if let request = event.request {
             request.headers = request.headers?.filter { !headerDenylist.contains($0.key.lowercased()) }
             request.cookies = nil
-            if let query = request.queryString, SensitiveText.containsSensitive(query) { request.queryString = nil }
+            // Failed-request capture copies the PostgREST query, which carries
+            // what was typed in Activity's search (`or=(description.ilike.*…*)`).
+            request.url = request.url.map(withoutQuery)
+            request.queryString = nil
+            request.fragment = nil
         }
         return event
     }
 
-    /// Drops a breadcrumb whose message or data carries SMS text or a credential.
+    /// Drops a breadcrumb whose message or data carries SMS text or a credential,
+    /// and takes the query string off an HTTP breadcrumb's URL.
     public static func scrub(breadcrumb: Breadcrumb) -> Breadcrumb? {
+        if let data = breadcrumb.data {
+            for (key, value) in urlDataEdits(data) { breadcrumb.setData(value: value, key: key) }
+        }
         if let message = breadcrumb.message, SensitiveText.containsSensitive(message) { return nil }
         if let data = breadcrumb.data, SensitiveText.valueIsSensitive(data) { return nil }
         return breadcrumb
+    }
+
+    /// HTTP spans carry the query string too (`http.query`).
+    public static func scrub(span: any Span) -> (any Span)? {
+        for (key, value) in urlDataEdits(span.data) {
+            if let value { span.setData(value: value, key: key) } else { span.removeData(key: key) }
+        }
+        return span
+    }
+
+    /// Keys Sentry's network tracking fills with a URL's query and fragment.
+    static let urlQueryKeys: Set<String> = ["http.query", "http.fragment"]
+    /// Keys holding a whole URL.
+    static let urlKeys: Set<String> = ["url", "http.url"]
+
+    /// What to change in breadcrumb or span data so no query string or
+    /// fragment reaches Sentry: key → new value, or nil to remove the key.
+    static func urlDataEdits(_ data: [String: Any]) -> [String: String?] {
+        var edits: [String: String?] = [:]
+        for (key, value) in data {
+            if urlQueryKeys.contains(key) {
+                edits[key] = .some(nil)
+            } else if urlKeys.contains(key), let url = value as? String, withoutQuery(url) != url {
+                edits[key] = withoutQuery(url)
+            }
+        }
+        return edits
+    }
+
+    /// `https://host/rest/v1/v_transactions?or=(…)#x` → `https://host/rest/v1/v_transactions`.
+    public static func withoutQuery(_ url: String) -> String {
+        guard let cut = url.firstIndex(where: { $0 == "?" || $0 == "#" }) else { return url }
+        return String(url[..<cut])
     }
 
     /// Removes denylisted keys and any value that contains sensitive text.

@@ -74,6 +74,7 @@ public enum Telemetry {
             #endif
             options.beforeSend = { event in TelemetryScrubber.scrub(event) }
             options.beforeBreadcrumb = { crumb in TelemetryScrubber.scrub(breadcrumb: crumb) }
+            options.beforeSendSpan = { span in TelemetryScrubber.scrub(span: span) }
         }
         SentrySDK.configureScope { scope in
             for (key, value) in scopeTags(target: target) { scope.setTag(value: value, key: key) }

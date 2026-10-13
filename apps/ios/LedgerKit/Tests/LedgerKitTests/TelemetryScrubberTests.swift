@@ -60,6 +60,50 @@ struct TelemetryScrubberTests {
         #expect(out.context?["custom"]?.keys.sorted() == ["ok"])
     }
 
+    @Test("a failed request reaches Sentry without its query string: Activity search text stays on the phone (IOS-30)")
+    func requestQuery() throws {
+        let base = "https://ref.supabase.co/rest/v1/v_transactions"
+        let query = "select=*&or=(description.ilike.*carrefour*,merchant_name.ilike.*carrefour*)&offset=0"
+        let event = Event(level: .error)
+        let request = SentryRequest()
+        request.url = "\(base)?\(query)#top"
+        request.queryString = query
+        request.fragment = "top"
+        event.request = request
+        let http = crumb(nil, data: ["url": base, "method": "GET", "status_code": 400, "http.query": query,
+                                     "http.fragment": "top"])
+        let older = crumb(nil, data: ["url": "\(base)?\(query)", "method": "GET"])
+        event.breadcrumbs = [http, older]
+
+        let out = try #require(TelemetryScrubber.scrub(event))
+        #expect(out.request?.url == base)
+        #expect(out.request?.queryString == nil)
+        #expect(out.request?.fragment == nil)
+        #expect(out.breadcrumbs?.count == 2)
+        #expect(out.breadcrumbs?.compactMap { $0.data?["url"] as? String } == [base, base])
+        #expect(out.breadcrumbs?.allSatisfy { $0.data?["http.query"] == nil && $0.data?["http.fragment"] == nil } == true)
+        #expect(out.breadcrumbs?.first?.data?["method"] as? String == "GET")
+        #expect(out.breadcrumbs?.first?.data?["status_code"] as? Int == 400)
+
+        // The same breadcrumb on its way in (beforeBreadcrumb).
+        let live = crumb(nil, data: ["url": "\(base)?\(query)", "http.query": query])
+        let kept = try #require(TelemetryScrubber.scrub(breadcrumb: live))
+        #expect(kept.data?["url"] as? String == base && kept.data?["http.query"] == nil)
+    }
+
+    @Test("URL edits for breadcrumb and span data")
+    func urlEdits() {
+        #expect(TelemetryScrubber.withoutQuery("https://h/rest/v1/x?a=1#f") == "https://h/rest/v1/x")
+        #expect(TelemetryScrubber.withoutQuery("https://h/rest/v1/x#f") == "https://h/rest/v1/x")
+        #expect(TelemetryScrubber.withoutQuery("https://h/rest/v1/x") == "https://h/rest/v1/x")
+        let edits = TelemetryScrubber.urlDataEdits(["url": "https://h/p?q=1", "http.url": "https://h/p",
+                                                    "http.query": "q=1", "http.fragment": "f", "method": "GET"])
+        #expect(edits.keys.sorted() == ["http.fragment", "http.query", "url"])
+        #expect(edits["url"] == .some("https://h/p"))
+        #expect(edits["http.query"] == .some(nil))
+        #expect(TelemetryScrubber.urlDataEdits(["url": "https://h/p", "method": "GET"]).isEmpty)
+    }
+
     @Test("sensitive-text detection", arguments: [
         ("Purchase of AED 1,250.00 with Credit Card ending 5678", true),
         ("Your Debit Card ending 1234 was used", true),
@@ -86,5 +130,24 @@ struct TelemetryScrubberTests {
         #expect(Telemetry.scopeTags(target: .app) == ["app": "ios", "target": "app"])
         #expect(Telemetry.scopeTags(target: .intent) == ["app": "ios", "target": "intent"])
         #expect(Telemetry.scopeTags(target: .shareExtension) == ["app": "ios", "target": "share_extension"])
+    }
+}
+
+@Suite("Plain HTTP to the local stack is a Debug-only exception (IOS-30)")
+struct TransportSecurityTests {
+    static let iosRoot = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent()
+
+    @Test("the Info.plists Release reads have no ATS exception; project.yml adds it to Debug's copy",
+          arguments: ["Ledger/Info.plist", "ShareExtension/Info.plist"])
+    func releasePlists(path: String) throws {
+        let data = try Data(contentsOf: Self.iosRoot.appendingPathComponent(path))
+        let plist = try #require(try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any])
+        #expect(plist["NSAppTransportSecurity"] == nil)
+        let spec = try String(contentsOf: Self.iosRoot.appendingPathComponent("project.yml"), encoding: .utf8)
+        let lines = spec.components(separatedBy: "\n")
+        #expect(lines.filter { $0.contains("INFOPLIST_FILE: $(DERIVED_FILE_DIR)/Info.Debug.plist") }.count == 2)
+        #expect(lines.filter { $0.contains(#"NSAllowsLocalNetworking":true"#) }.count == 2)
     }
 }
