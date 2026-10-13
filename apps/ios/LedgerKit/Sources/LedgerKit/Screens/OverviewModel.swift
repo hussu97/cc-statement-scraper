@@ -165,19 +165,18 @@ extension Overview {
         return SpendComparison.versusAverage(change: changeVsAvg3m)
     }
 
-    /// Reference figures under the chip, as the server returned them.
-    /// `["Same day last month AED 2,100", "3-month average AED 9,000 a month"]`.
-    /// A completed month shows the whole previous month instead:
-    /// `["August AED 7,400", "3-month average …"]`.
+    /// Reference figures under the chip, as the server returned them. A completed month:
+    /// `["August AED 7,400", "3-month average AED 9,000 a month"]`. The current month shows
+    /// only the average: last month by today is a pin on the pace rule (`paceRule`).
     public var referenceLines: [String] { referenceLines() }
 
     public func referenceLines(today: CalendarDay = LedgerDates.today()) -> [String] {
         let previous = month.adding(months: -1)
-        let first = isCurrentMonth(today: today)
-            ? "Same day last month \(MoneyFormat.aed(spendPrevMonthToDate, fractionDigits: 0))"
-            : "\(previous.year == today.year ? LedgerDates.monthName(previous) : LedgerDates.monthTitle(previous)) "
-                + MoneyFormat.aed(spendPrevMonth, fractionDigits: 0)
-        var lines = [first]
+        var lines: [String] = []
+        if !isCurrentMonth(today: today) {
+            lines.append("\(previous.year == today.year ? LedgerDates.monthName(previous) : LedgerDates.monthTitle(previous)) "
+                         + MoneyFormat.aed(spendPrevMonth, fractionDigits: 0))
+        }
         if spendAvg3m > 0 { lines.append("3-month average \(MoneyFormat.aed(spendAvg3m, fractionDigits: 0)) a month") }
         return lines
     }

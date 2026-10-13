@@ -15,6 +15,7 @@
 		19CA7DE96B1CF371346DD6C3 /* SpendWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3F3F9CEAC602F5DBC013256 /* SpendWidget.swift */; };
 		1D830163AD6DCE4782E30CE8 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FCEADD59EE2BBF22D5B715A /* SettingsView.swift */; };
 		26CE0764CC4FB668F3E1A97E /* LedgerKit in Frameworks */ = {isa = PBXBuildFile; productRef = 2ADB8187FA6C42789DED29D6 /* LedgerKit */; };
+		27C14FFDDFA24615121DC5DD /* PaceRuleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 397B421B503B658A12151A59 /* PaceRuleView.swift */; };
 		297FCBB42BD82D0C4AE81898 /* LocalNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = F92DD0D24E75E49A36270126 /* LocalNotifications.swift */; };
 		2AF7A777F5554D6851F1C5F0 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = A83ED65B612B753580BB01DD /* Components.swift */; };
 		2D01C44AA6A9577B970D58E4 /* CategoriseLastTransactionIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F58FDA6BA36479357BC7BFC5 /* CategoriseLastTransactionIntent.swift */; };
@@ -117,6 +118,7 @@
 		29A5D1F13A9777F8DF1C1BCC /* Ledger.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Ledger.entitlements; sourceTree = "<group>"; };
 		2C57A1D8901CB31AB03C4518 /* CategoryDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryDetailView.swift; sourceTree = "<group>"; };
 		306FF1BBB7DC9A30BCC65C13 /* LogBankSMSIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogBankSMSIntent.swift; sourceTree = "<group>"; };
+		397B421B503B658A12151A59 /* PaceRuleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaceRuleView.swift; sourceTree = "<group>"; };
 		41E5147D73DD93C7A015339F /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		440D48465D990731AC380564 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		46627BD8DB7F56C7CC4A6352 /* NotificationSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettingsSection.swift; sourceTree = "<group>"; };
@@ -268,6 +270,7 @@
 				507717F76A89EB62E91E2240 /* CategoryRingCard.swift */,
 				8D9278C556B98D50473DE68C /* OverviewStrips.swift */,
 				A31E4CF859EB1BA241A2C0C1 /* OverviewView.swift */,
+				397B421B503B658A12151A59 /* PaceRuleView.swift */,
 				7C90F3BB1055921EA00C9200 /* SetupChecklistCard.swift */,
 			);
 			path = Overview;
@@ -766,6 +769,7 @@
 				A6792114E70BC70B2162EC68 /* OpenLinkIntents.swift in Sources */,
 				04912B1C9183546039CC8D3B /* OverviewStrips.swift in Sources */,
 				ADA71066669326EC96C41A89 /* OverviewView.swift in Sources */,
+				27C14FFDDFA24615121DC5DD /* PaceRuleView.swift in Sources */,
 				AC6B124273C727CF4191CF2D /* PagingFooter.swift in Sources */,
 				67823B3F9665BD78F8BE1182 /* PasskeysView.swift in Sources */,
 				4CF8BA51B1B5A50B3C0B7185 /* PrivacyCover.swift in Sources */,
