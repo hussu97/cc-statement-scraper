@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeftRight, ChevronDown, FileText, Lock, MessageSquareText } from "lucide-react";
 import {
   EVIDENCE_LABEL,
   METHOD_LABEL,
+  elsewhereLedger,
   ROLE_LABEL,
   evidenceBadge,
   evidenceTime,
@@ -12,11 +13,12 @@ import {
   useSetCategory,
   useSmsBody,
   useTransaction,
+  useTransactionLedger,
   useUpdateTransaction,
   type EvidenceItem,
   type TxnRow,
 } from "@/data/transactions";
-import { useActiveProfile } from "@/data/profile";
+import { useActiveProfile, useProfileContext } from "@/data/profile";
 import type { FilterMeta } from "@/data/overview";
 import { errorMessage } from "@/data/api";
 import { formatDate, formatDateTime } from "@/lib/dates";
@@ -28,7 +30,7 @@ import { Textarea } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/primitives";
 import { Badge } from "@/components/ui/display";
-import { ErrorState, LoadingRows } from "@/components/ui/states";
+import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
 import { useToast } from "@/components/ui/toast";
 import { CategoryPicker, EvidenceBadge, Money, StatusBadge, TxnAmount } from "@/components/ledger";
 import { CardRef } from "@/components/bank-logo";
@@ -69,11 +71,44 @@ export function TransactionDrawer({ txnCode, onClose, meta }: { txnCode: string 
       ) : q.isError ? (
         <ErrorState error={q.error} onRetry={() => void q.refetch()} />
       ) : !t ? (
-        <ErrorState title="Transaction not found" error={new Error("It may belong to another ledger, or it was removed.")} />
+        <NotInLedger txnCode={txnCode ?? null} />
       ) : (
         <DrawerBody key={t.txn_code} t={t} meta={meta} />
       )}
     </Sheet>
+  );
+}
+
+/** A txn= outside the active ledger: name its ledger and offer to switch (WEB-46). */
+function NotInLedger({ txnCode }: { txnCode: string | null }) {
+  const { profile, profiles, setActive } = useProfileContext();
+  const active = profile?.profile_code ?? "";
+  const q = useTransactionLedger(active, txnCode, true);
+  const navigate = useNavigate();
+  if (q.isLoading) return <LoadingRows rows={2} className="p-0" />;
+  if (q.isError) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
+  const other = elsewhereLedger(q.data, active, profiles);
+  if (!other) return <ErrorState title="Transaction not found" error={new Error("It isn't in this ledger, or it was removed.")} />;
+  return (
+    <EmptyState
+      icon={<ArrowLeftRight />}
+      title="This transaction belongs to another ledger"
+      action={
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={() => {
+            setActive(other.profile_code);
+            // The old ledger's filters (and a statement page) don't apply there.
+            void navigate({ to: "/activity", search: { txn: txnCode ?? undefined } });
+          }}
+        >
+          Switch to {other.name}
+        </Button>
+      }
+    >
+      It's in {other.name}. Switch ledgers to see it.
+    </EmptyState>
   );
 }
 
