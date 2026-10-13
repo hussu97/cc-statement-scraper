@@ -98,7 +98,7 @@ struct TransactionEditorTests {
         #expect(TransactionEditor.excludeActionTitle(excluded: false) == "Exclude")
         #expect(TransactionEditor.excludeActionTitle(excluded: true) == "Include")
         #expect(row(category: "cat_a").categoryCaption == "Name cat_a")
-        #expect(row(excluded: true).categoryCaption == "Uncategorized · Excluded")
+        #expect(row(excluded: true).categoryCaption == "Uncategorised · Excluded")
     }
 
     @Test("the header names where the category came from")
