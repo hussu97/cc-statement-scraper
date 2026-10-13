@@ -9,8 +9,6 @@ struct CategoryRingCard: View {
     let profileCode: String
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var opened: CategoryDrillDownRequest?
-    /// The ring's raw selection (a running total of the slice amounts).
-    @State private var angle: Double?
 
     private var categories: [Overview.TopCategory] { overview.ringCategories }
 
@@ -42,11 +40,17 @@ struct CategoryRingCard: View {
                        innerRadius: .ratio(0.62), angularInset: 1.5)
                 .foregroundStyle(ChartPalette.color(for: category.colorToken))
         }
-        .chartAngleSelection(value: $angle)
-        .onChange(of: angle) { _, value in
-            guard let value, let category = Overview.ringCategory(categories, atAngleValue: value) else { return }
-            angle = nil
-            opened = overview.drillDown(category)
+        .chartOverlay { _ in
+            // A tap on a slice opens it (Swift Charts' angle selection wants a drag inside a scroll view).
+            GeometryReader { geo in
+                Circle().fill(.clear).contentShape(Circle())
+                    .onTapGesture { location in
+                        let fraction = Overview.ringFraction(dx: location.x - geo.size.width / 2,
+                                                             dy: location.y - geo.size.height / 2)
+                        guard let category = Overview.ringCategory(categories, atFraction: fraction) else { return }
+                        opened = overview.drillDown(category)
+                    }
+            }
         }
         .frame(width: 128, height: 128)
         .chartBackground { _ in
