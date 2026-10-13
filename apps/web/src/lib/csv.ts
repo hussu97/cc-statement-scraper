@@ -14,7 +14,9 @@ const FORMULA_START = /^[=+\-@\t\r]/;
 export function csvCell(value: string | null | undefined): string {
   if (value === null || value === undefined) return "";
   let s = value;
-  if (FORMULA_START.test(s) && !DECIMAL.test(s)) s = `'${s}`;
+  // Leading spaces don't save a cell from being read as a formula by every spreadsheet.
+  const head = s.trimStart();
+  if (FORMULA_START.test(head) && !DECIMAL.test(s)) s = `'${s}`;
   if (/[",\r\n]/.test(s) || s !== s.trim()) s = `"${s.replace(/"/g, '""')}"`;
   return s;
 }
