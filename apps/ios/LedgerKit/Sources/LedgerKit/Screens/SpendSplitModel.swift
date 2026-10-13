@@ -40,6 +40,9 @@ public final class SpendSplitModel {
 
     public init(api: any LedgerAPI) { self.api = api }
 
+    /// A Trends screen's model (Insights → Trends, PAR-10), on the same API.
+    public func makeTrends() -> TrendsModel { TrendsModel(api: api) }
+
     /// The None bars: the screen's unfiltered trend, or this model's filtered one.
     public func trend(unfiltered: [SpendPoint]) -> LoadState<[SpendPoint]> {
         filter.isEmpty ? .loaded(unfiltered) : filteredTrend
