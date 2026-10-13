@@ -31,6 +31,8 @@ public final class LedgerServices: Sendable {
     public let deviceUser: DeviceUserStore
     public let captureLog: CaptureLog
     public let sessionStorage: SharedKeychainStorage
+    /// PDFs the Share Extension saved for later, in the App Group.
+    public let pendingUploads: PendingUploads
 
     /// `debugSessionFallback`: Debug builds only — keep the session in memory
     /// when the keychain refuses it (an unsigned simulator build), instead of
@@ -47,17 +49,21 @@ public final class LedgerServices: Sendable {
                 auth: .init(storage: storage, storageKey: "ledger.auth", emitLocalSessionAsInitialSession: true),
                 global: .init(session: session)))
         api = SupabaseLedgerAPI(client: client, config: config, session: session)
-        let targets = SMSTargetStore(defaults: config.sharedDefaults)
+        // Looked up once: each lookup is a system call, and this runs in the App's init.
+        let defaults = config.sharedDefaults
+        let container = config.sharedContainerURL
+        let targets = SMSTargetStore(defaults: defaults)
         smsTargets = targets
-        let users = DeviceUserStore(defaults: config.sharedDefaults)
+        let users = DeviceUserStore(defaults: defaults)
         deviceUser = users
         // SMS and payments saved while no ledger was known go to the "SMS go to"
         // ledger as soon as one is, if it's the account they were captured under.
-        outbox = Outbox(fileURL: Outbox.defaultURL(container: config.sharedContainerURL), api: api,
+        outbox = Outbox(fileURL: Outbox.defaultURL(container: container), api: api,
                         pendingTarget: { targets.target?.profileCode }, deviceUser: { users.userID })
         outboxSync = OutboxSync(outbox: outbox)
-        selection = ProfileSelection(defaults: config.sharedDefaults)
-        captureLog = CaptureLog(defaults: config.sharedDefaults)
+        selection = ProfileSelection(defaults: defaults)
+        captureLog = CaptureLog(defaults: defaults)
+        pendingUploads = PendingUploads(container: container)
     }
 
     /// Reads config from the running bundle. Extensions carry the same `Ledger*`

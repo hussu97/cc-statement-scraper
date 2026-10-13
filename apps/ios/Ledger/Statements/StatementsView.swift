@@ -95,7 +95,7 @@ private struct WaitingCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Label(item.filename, systemImage: "xmark.octagon").font(Typography.rowTitle).foregroundStyle(Palette.danger)
                     Text(item.reason).font(Typography.caption).foregroundStyle(Palette.ink2)
-                    Button("Remove", role: .destructive) { model.discard(item) }
+                    Button("Remove", role: .destructive) { Task { await model.discard(item) } }
                         .font(Typography.rowMeta).frame(minHeight: Metrics.tapMin)
                 }
                 .accessibilityElement(children: .combine)
