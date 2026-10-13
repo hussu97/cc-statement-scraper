@@ -28,10 +28,10 @@ separately):
 | Edge Functions | 0 | 0 | – | – | 0 |
 | Parser | 1 | – | – | – | 1 |
 | Web | 0 | 6 | 0 | – | 6 |
-| iOS | 0 | 10 | 0 | 2 | 12 |
+| iOS | 0 | 4 | 0 | 2 | 6 |
 | Scraper | – | 0 | – | – | 0 |
 | CI, config and ops | 0 | 0 | – | 0 | 0 |
-| **Total** | **1** | **18** | **0** | **3** | **22** |
+| **Total** | **1** | **12** | **0** | **3** | **16** |
 
 There are no open P0 or P1 findings. The last P1 remainders (WEB-02 statements beyond 500 and
 merchant search, WEB-07 "Retry AI") landed in `98f901c`. What is left of the P1s are the device
@@ -142,21 +142,6 @@ None open (SRV-12, SRV-17 and X-25r are done).
 | IOS-28 | Insights draws the partial month like a full one; no average line, values or budget rule; rows not drillable | UX | Hatched current month with projection, `RuleMark` average, `chartXSelection`, rows link to filtered Activity | M |
 | IOS-29 | Small presentation decisions in views (`prefix(4)`, `prefix(10)`, fallbacks) | Readability | Move into LedgerKit presentation extensions with tests | S |
 
-### iOS parity with the web (2026-10-13 audit)
-
-Analysis, search and filtering the web has and the iOS app lacks. Every row is backed by an RPC
-that already exists; rules, categories and merchant management stay web-first by design, and CSV
-export is web-only. Order is the recommended build order.
-
-| ID | Gap | Backing RPC | Effort |
-|---|---|---|---|
-| PAR-9 | Anomalies with "This is fine"; full "Worth a look" feed with links | `anomalies`, `dismiss_anomaly`, `insights` | M |
-| PAR-10 | Trends: week/day buckets, account/card grouping, custom range | `spend_series`, `spend_breakdown` | M |
-| PAR-11 | Bulk select with Categorise and Exclude (CSV export stays web-only) | `activity_selection_summary`, `bulk_update_transactions` | M |
-| PAR-12 | Calendar heatmap, time of day, year over year, FX & travel, full subscriptions | `daily_spend`, `hour_weekday_pattern`, `yoy_compare`, `fx_spend`, `recurring_list` | M–L |
-| PAR-13 | Account comparison sparklines; open a statement's PDF | `statement_cycles`, `spend_series`, storage | M |
-| PAR-14 | Review: accept/reject a proposed SMS format on the phone | `resolve_review`, `set_sms_template_active` | S–M |
-
 ### Scraper
 
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
@@ -259,6 +244,21 @@ CHANGELOG.
 (05's recommendations 3–5 are IOS-19r, IOS-20r, IOS-18, IOS-28 and IOS-17 above.)
 
 ---
+
+## Done: backlog batch 8, iOS parity and no "pending" (2026-10-14)
+
+Branch `batch/backlog-8`; iOS and web, on existing RPCs. Audited and run in the simulator and browser after merge.
+
+| ID | Outcome |
+|---|---|
+| PAR-9 | Done: Insights "Worth a look" feed (every open insight, linked as on the web, dismiss for owners) and Unusual spending with "This is fine" (`anomalies`, `dismiss_anomaly`) |
+| PAR-10 | Done: Insights → Trends: presets and custom range, day/week/month buckets, grouping by category, bank, merchant, account or card, filter, stacked chart, table rows open Activity |
+| PAR-11 | Done: Activity bulk select (rows or every match) with Categorise and Exclude / Include for owners (`activity_selection_summary`, `bulk_update_transactions`) |
+| PAR-12 | Done: More analysis: daily spending calendar, weekday × hour, year over year, foreign currency, and every subscription |
+| PAR-13 | Done: Statements compares accounts (balance, utilisation and spending sparklines); a statement opens its PDF from a signed URL, in memory only |
+| PAR-14 | Done: Review accepts or rejects an AI-proposed SMS format (`set_sms_template_active`), SMS text on request |
+| — | No "pending" in the apps: SMS and payment charges look like any other transaction (no badge, strip, hero line or Pending/Posted filter); Overview keeps a neutral "Last card alert" line |
+| — | Found in QA: statement cycles didn't open on iOS since build 29 (typed Settings path); an old `?status=pending` web link still filtered (router kept the raw key). Both fixed with guards |
 
 ## Done: backlog batch 7, iOS parity (2026-10-14)
 

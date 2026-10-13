@@ -1,5 +1,27 @@
 # Changelog
 
+## Backlog batch 8: iOS parity, no "pending" — 2026-10-14
+
+### Web
+
+- **change** SMS and payment-shortcut charges look like any other transaction: no Pending badge, no "Pending from SMS" strip, no Pending or Posted status filter. Overview keeps a quiet "Last card alert …" line.
+- **fix** An old `?status=pending` link no longer filters Activity: the router laid the validated search over the raw URL, so a key the codec dropped survived.
+
+### iOS
+
+- **add** Insights "Worth a look" feed with every open insight, linked where the web links, dismissable by owners; Unusual spending with "This is fine" (PAR-9).
+- **add** Insights → Trends: range presets and custom dates, day/week/month buckets, grouping by category, bank, merchant, account or card, filter, stacked chart; rows and bars open Activity (PAR-10).
+- **add** Activity bulk select for owners: tick rows or select every match, then Categorise or Exclude / Include (PAR-11).
+- **add** More analysis: daily spending calendar, weekday × hour, year over year, foreign currency, and every subscription (PAR-12).
+- **add** Statements compares accounts with balance, utilisation and spending sparklines; a statement opens its PDF (signed URL, held in memory only) (PAR-13).
+- **add** Review accepts or rejects an AI-proposed SMS format; every SMS review can show its message on request (PAR-14).
+- **change** No "pending" anywhere: no Pending badge, strip, hero "+ AED X pending" line or Pending/Posted filter; the hero reads "October 2026 · so far" (it always included SMS charges); widgets read "October so far".
+- **fix** Statement cycles open again from Settings → Statements. Since build 29 the Settings stack's typed path had no destination for a cycle, so the row did nothing; a test now fails on any other value pushed there.
+
+### Docs
+
+- **change** BACKLOG: iOS parity PAR-9…14 done; the parity section is closed.
+
 ## Backlog batch 7: iOS parity with the web — 2026-10-14
 
 ### iOS

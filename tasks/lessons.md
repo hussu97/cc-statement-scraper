@@ -9,6 +9,8 @@
 
 | When | Lesson |
 |---|---|
+| 2026-10-14 | [A typed `NavigationStack` path drops every other value: push only its route type](#a-typed-navigationstack-path-drops-every-other-value-push-only-its-route-type) |
+| 2026-10-14 | [TanStack Router lays validated search over the raw URL: a dropped key survives](#tanstack-router-lays-validated-search-over-the-raw-url-a-dropped-key-survives) |
 | 2026-10-13 | [Build `supabase.rpc` arguments as a typed variable: a spread union hangs `tsc`](#build-supabaserpc-arguments-as-a-typed-variable-a-spread-union-hangs-tsc) |
 | 2026-10-12 | [Check what production serves, not what Vercel says it shipped](#check-what-production-serves-not-what-vercel-says-it-shipped) |
 | 2026-10-12 | [Git hooks export `GIT_DIR`: in a worktree, every child git uses the wrong repository](#git-hooks-export-git_dir-in-a-worktree-every-child-git-uses-the-wrong-repository) |
@@ -39,6 +41,26 @@
 | 2026-10-08 | [Tooling defaults that don't work here: `gh` account, Supabase MCP, `localhost`, pip](#tooling-defaults-that-dont-work-here-gh-account-supabase-mcp-localhost-pip) |
 
 ## Lessons
+
+### A typed `NavigationStack` path drops every other value: push only its route type
+- **What went wrong**: N-4 (build 29) gave Settings `NavigationStack(path: [SettingsRoute])` so a
+  deep link could push Statements. Statements' rows were `NavigationLink(value: cycle)`, a
+  `StatementCycle`, which a `[SettingsRoute]` path cannot hold: the tap did nothing, with no error,
+  for two releases. Found only by tapping it in the simulator during batch 8 QA.
+- **Rule**: inside a stack with a typed path, every `NavigationLink(value:)` and
+  `.navigationDestination(for:)` uses that route type (`SettingsRoute.statement(cycle)`). Typing a
+  path is a change to every screen that stack can reach.
+- **Enforced by**: LedgerKit `SettingsPathGuardTests` (scans `Ledger/Settings` and `Ledger/Statements`).
+
+### TanStack Router lays validated search over the raw URL: a dropped key survives
+- **What went wrong**: batch 8 dropped `pending` from the Activity status codec, but
+  `/activity?status=pending` still filtered: the root route has no `validateSearch`, passes the
+  raw search through, and a child's validated search is merged over it, so a key the child omits
+  keeps its raw value.
+- **Rule**: a `validateSearch` that may drop a key returns it explicitly as `undefined`
+  (`activityRouteSearch`). Check a codec change by loading the old URL in the browser, not only
+  with the codec's unit test.
+- **Enforced by**: `activity-filters.test.ts` ("the route search overrides a dropped raw key").
 
 ### Build `supabase.rpc` arguments as a typed variable: a spread union hangs `tsc`
 - **What went wrong**: during WEB-24 (2026-10-13), `tsc -b` ran for 15+ minutes without finishing
