@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /// Business dates are calendar dates in Asia/Dubai (`public.dubai_date()`), and
 /// every formatter pins `en_US_POSIX` so an Arabic-locale phone still renders
@@ -23,14 +24,14 @@ public enum LedgerDates {
         return f
     }
 
-    // DateFormatter is thread-safe for formatting since iOS 7; these are
-    // immutable after creation.
-    nonisolated(unsafe) private static let dayMonth = formatter("d MMM")
-    nonisolated(unsafe) private static let dayMonthYear = formatter("d MMM yyyy")
-    nonisolated(unsafe) private static let monthYear = formatter("MMMM yyyy")
-    nonisolated(unsafe) private static let shortMonth = formatter("MMM")
-    nonisolated(unsafe) private static let fullMonth = formatter("MMMM")
-    nonisolated(unsafe) private static let time = formatter("HH:mm")
+    // DateFormatter is Sendable (thread-safe for formatting); these are never
+    // mutated after creation.
+    private static let dayMonth = formatter("d MMM")
+    private static let dayMonthYear = formatter("d MMM yyyy")
+    private static let monthYear = formatter("MMMM yyyy")
+    private static let shortMonth = formatter("MMM")
+    private static let fullMonth = formatter("MMMM")
+    private static let time = formatter("HH:mm")
 
     /// Today's business date.
     public static func today(now: Date = .now) -> CalendarDay {
@@ -94,16 +95,30 @@ public enum LedgerDates {
             s.replaceSubrange(dot, with: "." + millis)
             hasFraction = true
         }
-        let f = ISO8601DateFormatter()
-        f.formatOptions = hasFraction ? [.withInternetDateTime, .withFractionalSeconds] : [.withInternetDateTime]
-        return f.date(from: s)
+        let input = s
+        return hasFraction ? isoFractional.withLock { $0.date(from: input) } : isoWhole.withLock { $0.date(from: input) }
     }
 
     /// Canonical wire form for timestamps we send (`received_at`).
     public static func isoTimestamp(_ date: Date) -> String {
+        isoFractional.withLock { $0.string(from: date) }
+    }
+
+    // One formatter per shape, built once: about two timestamps per decoded
+    // transaction row used to allocate one each (IOS-26). ISO8601DateFormatter
+    // isn't Sendable, so each sits behind a lock. (`Date.ISO8601FormatStyle`
+    // is, but it truncates on output, so a saved outbox date would drift by a
+    // millisecond per save.) It has no locale; its output is always ASCII.
+    // Timestamps are instants: the wire form stays UTC (`…Z`) and the input
+    // carries its own offset. Dubai matters only for calendar days and labels.
+    private static let isoFractional = Mutex(isoFormatter([.withInternetDateTime, .withFractionalSeconds]))
+    private static let isoWhole = Mutex(isoFormatter([.withInternetDateTime]))
+
+    private static func isoFormatter(_ options: ISO8601DateFormatter.Options) -> ISO8601DateFormatter {
         let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f.string(from: date)
+        f.timeZone = TimeZone(identifier: "UTC")!
+        f.formatOptions = options
+        return f
     }
 }
 

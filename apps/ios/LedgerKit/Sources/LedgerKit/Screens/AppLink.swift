@@ -1,0 +1,44 @@
+import Foundation
+
+/// Deep links into the app: `ledger://review`. The scheme is registered in
+/// `project.yml` (`CFBundleURLTypes`); `AppModel.open(url:)` routes them, and
+/// the App Intents return one when the Shortcut result needs the app (IOS-07r).
+public enum AppLink: String, Equatable, Sendable, CaseIterable {
+    /// Overview → Needs review.
+    case review
+
+    public static let scheme = "ledger"
+
+    /// `ledger://review` (also `ledger:///review`, any case, trailing slash,
+    /// query or fragment ignored). Nil for another scheme or an unknown screen.
+    public init?(url: URL) {
+        guard url.scheme?.lowercased() == Self.scheme else { return nil }
+        let host = url.host(percentEncoded: false) ?? ""
+        let name = host.isEmpty ? url.path(percentEncoded: false) : host
+        self.init(rawValue: name.trimmingCharacters(in: CharacterSet(charactersIn: "/")).lowercased())
+    }
+
+    public var url: URL { URL(string: "\(Self.scheme)://\(rawValue)")! }
+}
+
+extension SMSIntakeOutcome {
+    /// What the Shortcut result opens: the Review screen for a message only a
+    /// review resolves (a card Ledger doesn't know yet, or one held for a
+    /// check). Nil when there is nothing to do in the app.
+    public var link: AppLink? {
+        switch self {
+        case .delivered(let status) where ["unknown_card", "held"].contains(status): .review
+        default: nil
+        }
+    }
+}
+
+extension WalletIntake {
+    /// `SMSIntakeOutcome.link` for a card payment, except an unknown card: for
+    /// a payment that means no card has this name yet, which Settings → Card
+    /// names fixes, not Review.
+    public static func link(_ outcome: SMSIntakeOutcome) -> AppLink? {
+        if case .delivered(status: "unknown_card") = outcome { return nil }
+        return outcome.link
+    }
+}

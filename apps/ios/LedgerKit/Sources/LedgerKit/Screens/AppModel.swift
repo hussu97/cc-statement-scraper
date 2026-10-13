@@ -115,7 +115,28 @@ public final class AppModel {
         if screens.activeProfile != code { tabs.reset() }
         async let logos: Void = banks.refresh()
         await screens.select(code)
+        if screens.activeProfile == code { tabs.ledgerShown() }
         await logos
+    }
+
+    /// A `ledger://` deep link (a Shortcut result's "Needs review"). It opens
+    /// now when a ledger is on screen; otherwise once one is (after restoring
+    /// the session, signing in or picking a ledger). False for a URL the app
+    /// doesn't handle.
+    @discardableResult
+    public func open(url: URL) -> Bool {
+        guard let link = AppLink(url: url) else { return false }
+        tabs.open(link, ledgerOnScreen: ledgerOnScreen)
+        return true
+    }
+
+    /// The main tabs are showing the selected ledger.
+    var ledgerOnScreen: Bool { Self.ledgerOnScreen(route: route, activeProfile: screens.activeProfile) }
+
+    /// Until the tabs point at the selected ledger, a deep link waits.
+    nonisolated static func ledgerOnScreen(route: AppRoute, activeProfile: String?) -> Bool {
+        guard case .main(let code) = route else { return false }
+        return activeProfile == code
     }
 
     /// The app came to the foreground: send anything the intent or the Share
@@ -153,7 +174,7 @@ public final class AppModel {
     public func signOut(deleting plan: SignOutPlan) async {
         profiles.clearSMSTarget()
         screens.stop()
-        tabs.reset()
+        tabs.signedOut()
         await session.signOut()
         profiles.reset()
         do {

@@ -126,6 +126,39 @@ struct ActivityModelTests {
         a.status = .pending
         #expect(!ActivityModel.keepsRows(from: ("prf_a", a), to: ("prf_a", b)))
     }
+
+    @Test("day sections are built once per change of the rows or the day, not per redraw (IOS-26)")
+    func sectionsCached() async throws {
+        let api = StubAPI()
+        api.transactionRows["prf_a"] = (0..<150).map { i in txn("txn_\(i)", day: i < 60 ? "2026-10-08" : "2026-10-07") }
+        let model = ActivityModel(api: api)
+        let today = try #require(CalendarDay(iso: "2026-10-08"))
+        #expect(model.sections(today: today).isEmpty)
+        await model.load(profileCode: "prf_a")
+        let first = model.sections(today: today)
+        let builds = model.sectionBuilds
+        // Redraws with nothing changed reuse the sections.
+        for _ in 0..<5 { #expect(model.sections(today: today) == first) }
+        #expect(model.sectionBuilds == builds)
+        #expect(first.map(\.title) == ["Today", "Yesterday"] && first.map(\.rows.count) == [60, 40])
+
+        // A new page rebuilds them.
+        await model.loadMore()
+        #expect(model.sections(today: today).map(\.rows.count) == [60, 90])
+        #expect(model.sectionBuilds == builds + 1)
+
+        // A patched row shows (a recategorise re-reads it in place).
+        api.transactionRows["prf_a"]![0] = txn("txn_0", day: "2026-10-08", category: "cat_food")
+        try await model.saveCategory(model.rows[0], to: "cat_food", applyToMerchant: false, profileCode: "prf_a")
+        #expect(model.sections(today: today).first?.rows.first?.categoryCode == "cat_food")
+
+        // The day rolling over relabels them without a reload.
+        #expect(model.sections(today: today.adding(days: 1)).map(\.title) == ["Yesterday", "7 Oct"])
+
+        // Another ledger: nothing of the old rows.
+        model.reset()
+        #expect(model.sections(today: today).isEmpty)
+    }
 }
 
 @MainActor

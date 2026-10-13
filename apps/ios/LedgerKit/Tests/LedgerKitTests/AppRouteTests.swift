@@ -58,6 +58,90 @@ struct AppRouteTests {
     }
 }
 
+@MainActor
+@Suite("Deep links: ledger://review from a Shortcut result (IOS-07r)")
+struct AppLinkTests {
+    @Test("ledger://review parses in the shapes iOS hands over; other URLs are not ours", arguments: [
+        ("ledger://review", true),
+        ("LEDGER://Review", true),
+        ("ledger://review/", true),
+        ("ledger:///review", true),
+        ("ledger://review?from=shortcut#x", true),
+        ("ledger://settings", false),
+        ("ledger://", false),
+        ("https://<web-host>/review", false),
+        ("ledgers://review", false),
+    ])
+    func parse(raw: String, isReview: Bool) throws {
+        let url = try #require(URL(string: raw))
+        #expect((AppLink(url: url) == .review) == isReview)
+    }
+
+    @Test func roundTrip() {
+        #expect(AppLink.review.url.absoluteString == "ledger://review")
+        for link in AppLink.allCases { #expect(AppLink(url: link.url) == link) }
+    }
+
+    @Test("Shortcut results link to Review only for what a review resolves")
+    func outcomeLinks() {
+        #expect(SMSIntakeOutcome.delivered(status: "unknown_card").link == .review)
+        #expect(SMSIntakeOutcome.delivered(status: "held").link == .review)
+        for status in ["new", "linked", "unparsed", "ignored", "duplicate_delivery", "already_linked", "rejected_otp"] {
+            #expect(SMSIntakeOutcome.delivered(status: status).link == nil)
+        }
+        #expect(SMSIntakeOutcome.queued(.offline).link == nil)
+        #expect(SMSIntakeOutcome.parked(reason: "x").link == nil)
+        #expect(SMSIntakeOutcome.dropped(.dropOTP).link == nil)
+        // A payment's unknown card is a card name to set in Settings, not a review.
+        #expect(WalletIntake.link(.delivered(status: "unknown_card")) == nil)
+        #expect(WalletIntake.link(.delivered(status: "held")) == .review)
+        #expect(WalletIntake.link(.delivered(status: "new")) == nil)
+    }
+
+    @Test("with a ledger on screen the link opens Overview → Review at once")
+    func opensNow() {
+        let router = TabRouter()
+        router.show(.activity)
+        router.open(.review, ledgerOnScreen: true)
+        #expect(router.tab == .overview && router.showingReview && router.pendingLink == nil)
+        router.reset()
+        #expect(!router.showingReview)
+    }
+
+    @Test("before a ledger is on screen the link waits, survives the new ledger's reset, then opens once")
+    func waits() {
+        let router = TabRouter()
+        router.open(.review, ledgerOnScreen: false)
+        #expect(!router.showingReview && router.pendingLink == .review)
+        router.reset()                      // profileSelected resets the tabs for the new ledger
+        #expect(router.pendingLink == .review)
+        router.ledgerShown()
+        #expect(router.tab == .overview && router.showingReview && router.pendingLink == nil)
+        router.showingReview = false        // back from Review
+        router.ledgerShown()                // the next ledger switch opens nothing
+        #expect(!router.showingReview)
+    }
+
+    @Test("signing out forgets a waiting link")
+    func signOut() {
+        let router = TabRouter()
+        router.open(.review, ledgerOnScreen: false)
+        router.signedOut()
+        router.ledgerShown()
+        #expect(!router.showingReview && router.pendingLink == nil)
+    }
+
+    @Test("a ledger is on screen only once the tabs point at the selected one")
+    func onScreen() {
+        #expect(AppModel.ledgerOnScreen(route: .main(profileCode: "prf_a"), activeProfile: "prf_a"))
+        #expect(!AppModel.ledgerOnScreen(route: .main(profileCode: "prf_a"), activeProfile: nil))
+        #expect(!AppModel.ledgerOnScreen(route: .main(profileCode: "prf_a"), activeProfile: "prf_b"))
+        #expect(!AppModel.ledgerOnScreen(route: .signIn, activeProfile: "prf_a"))
+        #expect(!AppModel.ledgerOnScreen(route: .restoring, activeProfile: nil))
+        #expect(!AppModel.ledgerOnScreen(route: .pickProfile, activeProfile: "prf_a"))
+    }
+}
+
 @Suite("Share Extension upload decisions")
 struct ShareOutcomeTests {
     func pending() -> PendingUploads {
