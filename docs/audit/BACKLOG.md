@@ -27,11 +27,11 @@ separately):
 | Database (Supabase SQL) | 0 | 2 | – | 1 | 3 |
 | Edge Functions | 0 | 0 | – | – | 0 |
 | Parser | 1 | – | – | – | 1 |
-| Web | 0 | 7 | 5 | – | 12 |
-| iOS | 0 | 18 | 6 | 2 | 26 |
+| Web | 0 | 6 | 0 | – | 6 |
+| iOS | 0 | 18 | 0 | 2 | 20 |
 | Scraper | – | 0 | – | – | 0 |
 | CI, config and ops | 0 | 0 | – | 0 | 0 |
-| **Total** | **1** | **27** | **11** | **3** | **42** |
+| **Total** | **1** | **26** | **0** | **3** | **30** |
 
 There are no open P0 or P1 findings. The last P1 remainders (WEB-02 statements beyond 500 and
 merchant search, WEB-07 "Retry AI") landed in `98f901c`. What is left of the P1s are the device
@@ -126,7 +126,6 @@ None open (SRV-12, SRV-17 and X-25r are done).
 
 | ID | Summary | Why deferred / dependency | Suggested fix | Effort |
 |---|---|---|---|---|
-| WEB-36 | "Due in 0 d"; past dues show no paid/overdue state | Needs payment-matched status from the server (also iOS "Paid") | "Due today/tomorrow"; server flag for a payment covering the statement | M |
 | WEB-37 | No headline totals (subscriptions per year, YoY YTD delta, Trends period total/avg); partial month unmarked | Needs small RPC additions | Server totals and an "Oct (to date)" marker | M |
 | WEB-40 | First-run "Key … X-Profile-Key header" jargon; "one person's cards" copy vs a "Household" example | UX copy | Move "Key" under Advanced with a generated default; fix the copy | S |
 | WEB-41 | Disabled-until-valid primary buttons are ~2:1 and give no reason | UX | Keep enabled and validate on submit, or explain | S |
@@ -257,11 +256,6 @@ CHANGELOG.
 
 | ID | Recommendation | Dependency | Effort |
 |---|---|---|---|
-| MA-1 | Category drill-down over time: a per-category trend and its top merchants instead of jumping to Activity | `spend_series(p_group='category')`, `category_breakdown.prev_amount` exist | M |
-| MA-2 | Card and account comparison: statement-balance trend and utilisation sparkline per account on Cards | `spend_series` account/card grouping, statement utilisation | M |
-| MA-3 | Activity summary row ("498 transactions · AED 52,300") and per-day totals in date headers | A small sum RPC for the filtered set | S |
-| MA-4 | Merchant context in the drawer ("13th visit · avg AED 254 · AED 3,306 in 6 months") | `merchant_leaderboard` / `v_spend` | S |
-| MA-5 | "Worth a look" insight feed on Insights, linked by kind (cards on Overview already link) | — | S |
 
 (04's sixth item, projected month end and subscriptions total, is WEB-26 and WEB-37 above.)
 
@@ -269,16 +263,34 @@ CHANGELOG.
 
 | ID | Recommendation | Dependency | Effort |
 |---|---|---|---|
-| UX-1r | Overview truthfulness, remaining part: show pending in the hero ("incl. AED 3,105 pending") and "Paid" for past dues | "Paid" needs the server payment flag (WEB-36) | S (+ server M) |
-| N-1 | Local notifications: (a) only for actionable intent outcomes (unknown card, outbox stuck > 1 h, signed out), permission asked from the SMS guide; (b) statement due reminders at T-3 and T-0 from `statement_cycles` | — | M |
-| N-2 | WidgetKit Home and Lock Screen widgets (month spend and pace, next due, utilisation) from an App Group snapshot JSON, no network | Also ROADMAP §5 | M |
-| N-3 | App Intents beyond SMS: "How much have I spent this month?", "What's due?", a `CategoryEntity` with "Categorise last transaction" | Existing `AppShortcutsProvider` | M |
-| N-4 | Controls (Control Center / Action button): "Open Uncategorised", "Add statement" | — | S |
-| IOS-06g | SMS guide: an inline three-image strip for the iOS 18 Shortcuts UI (variable picker for "Shortcut Input") | Screenshots from a device | S |
 
 (05's recommendations 3–5 are IOS-19r, IOS-20r, IOS-18, IOS-28 and IOS-17 above.)
 
 ---
+
+## Done: backlog batch 6 (2026-10-13)
+
+Branch `batch/backlog-6`, migrations `20261013180516_statement_payment_status`,
+`…181102_activity_day_totals`, `…181400_merchant_context`, `…183327_statement_due_skips_paid`,
+pgTAP `48`–`50`. New iOS target `LedgerWidgets` (`com.example.ledger.widgets`). Audited after merge:
+the overdue rule counts payments made so far (a minimum paid late is part paid), the nightly
+`statement_due` insight skips paid statements, and the iOS fixes for due reminders, paid
+statements in widgets and Arabic-locale Wallet currencies. N-5 was closed by decision.
+
+| ID | Outcome |
+|---|---|
+| UX-1r, WEB-36 | Done: `v_statement_payments` → `payment_status` / `amount_paid` on `overview`, `statement_cycles`, `statement_detail`; web and iOS show Paid / Part paid / Overdue and "Due today / tomorrow / in N days"; iOS hero shows "+ AED X pending" |
+| MA-1 | Done: `/insights/category/$code` with trend, top merchants and change vs previous period |
+| MA-2 | Done: Cards "Balances, utilisation and spending" sparklines per account |
+| MA-3 | Done: `activity_day_totals`; per-day net in Activity date headers |
+| MA-4 | Done: `merchant_context`; visits, average, 6-month total in the drawer |
+| MA-5 | Done: Insights "Worth a look" tab grouping every open insight |
+| N-1 | Done: local notifications (unknown card, captures stuck > 1 h, waiting while signed out) and due reminders T-3 / T-0 at 09:00 Dubai; one switch per kind |
+| N-2 | Done: Home and Lock Screen widgets from an App Group snapshot; no amounts on the Lock Screen with Require Face ID |
+| N-3 | Done: Month Spend, What's Due, Categorise Last Transaction intents and Shortcuts phrases |
+| N-4 | Done: Open Uncategorised and Add Statement controls; `ledger://uncategorised`, `ledger://add-statement` |
+| IOS-06g | Done: three Shortcuts-editor screenshots in the SMS guide |
+| (user) | Log Card Payment takes the currency from the Wallet transaction's Amount; "Currency if missing" is only a fallback, never for an unrecognised symbol |
 
 ## Done: backlog batch 5 (2026-10-13)
 
