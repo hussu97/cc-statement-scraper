@@ -1,9 +1,9 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, type Views, type RpcArgs, type RpcReturn } from "@/lib/supabase";
-import { formatTotal } from "@/lib/money";
+import { formatCount, formatTotal, toAmount } from "@/lib/money";
 import { activityFilter, searchOrFilter, UNCATEGORIZED, type ActivityFilter, type ActivitySearch } from "@/lib/activity-filters";
 import type { ExportRow } from "@/lib/csv";
-import type { ISODate } from "@/lib/dates";
+import { formatDate, type ISODate } from "@/lib/dates";
 import { DEFAULT_PAGE_SIZE, pageRange } from "@/lib/pagination";
 import { keys, LEDGER_DOMAINS } from "./keys";
 import { fetchPage, must, mustList, type Page } from "./api";
@@ -109,6 +109,40 @@ export function useDayTotals(profileCode: string, search: ActivitySearch, days: 
       const args: RpcArgs<"activity_day_totals"> = { p_profile_code: profileCode, p_filter: activityFilter(filters), p_days: days };
       const rows: DayTotal[] = mustList(await supabase.rpc("activity_day_totals", args));
       return new Map(rows.map((r) => [r.txn_date, r]));
+    },
+  });
+}
+
+/** public.merchant_context: a merchant in this ledger, from v_spend (audit MA-4). */
+export interface MerchantContext {
+  merchant_code: string;
+  /** Purchases at the merchant, all time (refunds are not visits). */
+  visit_count: number;
+  /** Their average: a decimal string; null with no visit. */
+  avg_aed: string | null;
+  /** Net spend in the last 6 months: a decimal string. */
+  total_6m_aed: string;
+  first_seen: ISODate | null;
+}
+
+/** "13 visits · avg AED 254 · AED 3,306 in 6 months · since 2 Mar 2024"; null with no visit. Pure. */
+export function merchantContextLine(c: MerchantContext | null | undefined): string | null {
+  if (!c || c.visit_count < 1) return null;
+  const parts = [c.visit_count === 1 ? "First visit" : `${formatCount(c.visit_count)} visits`];
+  if (c.visit_count > 1 && c.avg_aed !== null) parts.push(`avg ${formatTotal(c.avg_aed)}`);
+  if (toAmount(c.total_6m_aed)) parts.push(`${formatTotal(c.total_6m_aed)} in 6 months`);
+  if (c.first_seen && c.visit_count > 1) parts.push(`since ${formatDate(c.first_seen)}`);
+  return parts.join(" · ");
+}
+
+/** The drawer's merchant line, computed on the server (§2.2). Disabled without a merchant. */
+export function useMerchantContext(profileCode: string, merchantCode: string | null | undefined) {
+  return useQuery({
+    queryKey: keys.merchantContext(profileCode, merchantCode ?? ""),
+    enabled: !!merchantCode,
+    queryFn: async () => {
+      const args: RpcArgs<"merchant_context"> = { p_profile_code: profileCode, p_merchant_code: merchantCode! };
+      return must(await supabase.rpc("merchant_context", args)) as unknown as MerchantContext;
     },
   });
 }
