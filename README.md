@@ -286,10 +286,8 @@ JWTs. The service client logs which source it used (never the value).
 | `LEDGER_ENVIRONMENT` | `local` / `production`. Sentry starts only in Release builds with an environment other than local/development/dev/test |
 
 `apps/ios/scripts/testflight.sh` (and `publish-build.sh`, which calls it) also reads these:
-- `SENTRY_AUTH_TOKEN` for dSYMs and the Sentry release, from the environment or the login
-  keychain item `ledger-sentry-auth-token` (never an xcconfig); `SENTRY_ORG` and `SENTRY_PROJECT`
-  (default `credit-card-ledger-apps`) from the environment or else `Secrets.Release.xcconfig`.
-  The token is never printed, and Sentry failing never fails the release
+- `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` and `SENTRY_PROJECT` (set `credit-card-ledger-apps`) for dSYM upload,
+  from the environment or else `Secrets.Release.xcconfig`; the token is never printed
 - `ASC_KEY_ID` and `ASC_ISSUER_ID` (with the AuthKey `.p8`) for the TestFlight upload and
   `testflight-distribute.mjs`; both default to the single key in `~/.appstoreconnect/private_keys`
 - `LEDGER_REVIEW_EMAIL` and `LEDGER_REVIEW_PASSWORD` for `testflight-distribute.mjs --review-account`

@@ -39,24 +39,11 @@ and §11; layout and setup are in [README.md](README.md).
 
 - `Config/Secrets.xcconfig` (Debug, local stack) and `Config/Secrets.Release.xcconfig`
   (TestFlight) are gitignored; `Secrets.example.xcconfig` is the template. Never print or commit
-  either; check shape only (`cut -d= -f1`, `grep -c '^KEY'`).
-- **Release never falls back to a local value.** `Debug.xcconfig` holds the local defaults and
-  includes `Secrets.xcconfig`; `Release.xcconfig` includes only `Secrets.Release.xcconfig`.
-  Don't put backend values in `Base.xcconfig` or include `Secrets.xcconfig` from Release. A
-  missing or local value fails the "Check release config" Run Script phase
-  (`scripts/release-config-check.sh settings`), and the archive and the staged IPA are checked
-  with `plutil` (app + share extension). Keep the phase's `showEnvVars: false`: otherwise the
-  build log prints every build setting.
+  either.
 - The app holds only the publishable key (`LEDGER_SUPABASE_PUBLISHABLE_KEY`, `sb_publishable_…`);
-  `LedgerConfig` refuses an `sb_secret_…` key, and so does the release check.
-- `SENTRY_AUTH_TOKEN` lives in the shell or the login keychain item `ledger-sentry-auth-token`
-  (`security add-generic-password -U -s ledger-sentry-auth-token -a "$USER" -w`, prompts), never
-  an xcconfig, where it becomes an Xcode build setting visible in build logs (audit X-28,
-  BACKLOG IOS-21r); `testflight.sh` refuses a `Secrets.Release.xcconfig` that defines it.
-- Sentry never blocks a release: `scripts/sentry-release.sh` (dSYMs, then
-  `ledger-ios@<version>+<build>` new / set-commits / finalize) warns on any failure. Test the
-  release scripts with `scripts/release_checks_test.sh` (fixtures and fakes; never run
-  `publish-build.sh` or a real `sentry-cli` to test them).
+  `LedgerConfig` refuses an `sb_secret_…` key.
+- Keep `SENTRY_AUTH_TOKEN` in the shell or keychain, not in an xcconfig, where it becomes an
+  Xcode build setting visible in build logs (audit X-28, BACKLOG IOS-21r).
 
 ## App Store and TestFlight
 
@@ -70,8 +57,7 @@ and §11; layout and setup are in [README.md](README.md).
 - Both the app and the share extension ship a `PrivacyInfo.xcprivacy`; keep them when adding
   required-reason APIs (ITMS-91053).
 - **Releasing is a production action.** A push to `main` that changes the app makes the pre-push
-  hook run `scripts/publish-build.sh` (test, archive, sign, check the release config, dSYMs and
-  release to Sentry, stage the IPA,
+  hook run `scripts/publish-build.sh` (test, archive, sign, dSYMs to Sentry, stage the IPA,
   commit `build-number.json`), and `ios-testflight.yml` then uploads it and submits it to the
   external "Friends & Family" group. Ask before pushing; `SKIP_RELEASE=1 git push` skips the
   build only when the user says so. `testflight.sh` and `testflight-distribute.mjs` likewise

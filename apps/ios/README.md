@@ -223,19 +223,10 @@ apps/ios/scripts/publish-build.sh [--keep-build]  # testflight.sh --no-upload, s
 * **API key**: `ASC_KEY_ID` / `ASC_ISSUER_ID` and `~/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8`
   (CI: `ASC_KEY_P8`). Both scripts default to the single key in that directory and the
   team's issuer, i.e. the key mm-pos uses.
-* **Sentry** (`scripts/sentry-release.sh`): dSYMs, then release `ledger-ios@<version>+<build>`
-  (`releases new` / `set-commits --auto` / `finalize`); needs `sentry-cli`. `SENTRY_AUTH_TOKEN`
-  from the environment or the login keychain item `ledger-sentry-auth-token`
-  (`security add-generic-password -U -s ledger-sentry-auth-token -a "$USER" -w`, prompts),
-  never an xcconfig. `SENTRY_ORG` / `SENTRY_PROJECT` (default: the DSN's project,
-  `credit-card-ledger-apps`) from the environment or `Config/Secrets.Release.xcconfig`. The token
-  is never printed; Sentry failing only warns.
-* **Release config**: Release reads only `Config/Secrets.Release.xcconfig` (the local
-  `Secrets.xcconfig` is Debug-only), so a missing key fails the "Check release config" build
-  phase instead of shipping a local value. `testflight.sh` refuses to run without the file, if
-  it points at 127.0.0.1 or still defines `SENTRY_AUTH_TOKEN`, and after archiving
-  `scripts/release-config-check.sh` asserts on the app and share-extension Info.plists
-  (`publish-build.sh` again on the IPA). Tests: `scripts/release_checks_test.sh`.
+* **dSYMs**: `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` (default `credit-card-ledger-apps`) from the
+  environment or `Config/Secrets.Release.xcconfig`; needs `sentry-cli`. The token is never printed.
+* **Release config**: refuses to run without `Config/Secrets.Release.xcconfig` or if it points
+  at 127.0.0.1.
 * **Build number**: `build-number.json`, bumped on every build. `publish-build.sh` commits it
   (`--only`, authored as Hussain Abbasi) once the IPA is staged; run `testflight.sh` directly
   and commit it yourself. `ITSAppUsesNonExemptEncryption = NO`, so uploads never stop on

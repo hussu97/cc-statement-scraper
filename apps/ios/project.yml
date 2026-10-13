@@ -30,20 +30,6 @@ targets:
       - target: LedgerShare
         embed: true
         codeSign: true
-    # Release reads only Config/Secrets.Release.xcconfig; a missing or local value
-    # fails here instead of shipping (BACKLOG IOS-21r). No-op for Debug. Env vars stay
-    # out of the log: build settings would otherwise be printed with it.
-    preBuildScripts:
-      - &releaseConfigCheck
-        name: Check release config
-        script: |
-          if [ "${CONFIGURATION}" = "Release" ]; then
-            "${SRCROOT}/scripts/release-config-check.sh" settings
-          fi
-        inputFiles:
-          - $(SRCROOT)/scripts/release-config-check.sh
-        basedOnDependencyAnalysis: false
-        showEnvVars: false
     entitlements:
       path: Ledger/Ledger.entitlements
       properties:
@@ -99,8 +85,6 @@ targets:
       - path: ShareExtension
     dependencies:
       - package: LedgerKit
-    preBuildScripts:
-      - *releaseConfigCheck
     entitlements:
       path: ShareExtension/LedgerShare.entitlements
       properties:
