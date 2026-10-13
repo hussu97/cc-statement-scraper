@@ -7,8 +7,8 @@ const CAT = "cat_01k00000000000000000000000";
 
 describe("activityFilter (the bulk RPCs' p_filter)", () => {
   it("keeps the filter keys and drops paging and the drawer", () => {
-    const s: ActivitySearch = { from: "2026-08-01", to: "2026-08-31", category: CAT, status: "posted", source: "sms", q: "cafe", page: 3, size: 200, txn: "txn_x" };
-    expect(activityFilter(s)).toEqual({ from: "2026-08-01", to: "2026-08-31", category: CAT, status: "posted", source: "sms", q: "cafe" });
+    const s: ActivitySearch = { from: "2026-08-01", to: "2026-08-31", category: CAT, status: "void", source: "sms", q: "cafe", page: 3, size: 200, txn: "txn_x" };
+    expect(activityFilter(s)).toEqual({ from: "2026-08-01", to: "2026-08-31", category: CAT, status: "void", source: "sms", q: "cafe" });
   });
 
   it("passes 'none' through for uncategorised and drops a blank search", () => {

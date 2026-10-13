@@ -154,7 +154,6 @@ function FilterFields({ search, patch, meta }: { search: ActivitySearch; patch: 
       onValueChange={(x) => patch({ status: u(x) as ActivitySearch["status"] })}
       options={[
         { value: ANY, label: "Any status" },
-        { value: "posted", label: "Posted" },
         { value: "void", label: "Void" },
         { value: "orphaned", label: "Orphaned" },
       ]}

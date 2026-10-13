@@ -52,10 +52,10 @@ describe("activity summary args", () => {
   it("maps every filter and ignores paging and the drawer", () => {
     expect(
       activitySummaryArgs("prf_1", {
-        from: "2026-10-01", to: "2026-10-31", account: "acc_x", card: "crd_x", category: "cat_1", status: "posted", source: "both", q: "cafe", page: 3, size: 200, txn: "txn_x",
+        from: "2026-10-01", to: "2026-10-31", account: "acc_x", card: "crd_x", category: "cat_1", status: "void", source: "both", q: "cafe", page: 3, size: 200, txn: "txn_x",
       }),
     ).toEqual({
-      p_profile_code: "prf_1", p_from: "2026-10-01", p_to: "2026-10-31", p_account_code: "acc_x", p_card_code: "crd_x", p_category_code: "cat_1", p_status: "posted", p_source: "both", p_q: "cafe",
+      p_profile_code: "prf_1", p_from: "2026-10-01", p_to: "2026-10-31", p_account_code: "acc_x", p_card_code: "crd_x", p_category_code: "cat_1", p_status: "void", p_source: "both", p_q: "cafe",
     });
   });
 
@@ -76,9 +76,9 @@ describe("transaction helpers", () => {
   });
 
   it("names the evidence badge", () => {
-    expect(evidenceBadge({ has_sms: true, has_statement: true, status: "posted" })).toBe("both");
+    expect(evidenceBadge({ has_sms: true, has_statement: true, status: "void" })).toBe("both");
     expect(evidenceBadge({ has_sms: true, has_statement: false, status: "pending" })).toBe("sms");
-    expect(evidenceBadge({ has_sms: false, has_statement: true, status: "posted" })).toBe("statement");
+    expect(evidenceBadge({ has_sms: false, has_statement: true, status: "void" })).toBe("statement");
     expect(evidenceBadge({ has_sms: false, has_statement: false, status: "orphaned" })).toBe("orphaned");
   });
 

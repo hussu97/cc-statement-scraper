@@ -141,7 +141,7 @@ struct ActivityBulkModelTests {
         model.selection.toggle(model.loadedCodes[0], loaded: model.loadedCodes)
         await model.load(profileCode: "prf_a")
         #expect(model.selection.ticked.count == 1)
-        model.query.status = .posted
+        model.query.status = .void
         await model.load(profileCode: "prf_a")
         #expect(model.selection.ticked.isEmpty && model.selection.isSelecting)
         model.reset()
