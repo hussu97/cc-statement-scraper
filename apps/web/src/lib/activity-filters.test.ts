@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activeFilterCount, listSearch, sanitizedSearch, searchOrFilter, parseActivitySearch, withFilter } from "./activity-filters";
+import { activeFilterCount, activityRouteSearch, listSearch, sanitizedSearch, searchOrFilter, parseActivitySearch, withFilter } from "./activity-filters";
 import { pageCount, pageRange, normalizePageSize } from "./pagination";
 
 const ACC = "acc_01hzzzzzzzzzzzzzzzzzzzzzzz";
@@ -9,8 +9,8 @@ const TXN = "txn_01hzzzzzzzzzzzzzzzzzzzzzzz";
 describe("activity search codec", () => {
   it("keeps valid params and drops junk", () => {
     expect(
-      parseActivitySearch({ from: "2026-10-01", to: "2026-10-31", account: ACC, category: CAT, status: "posted", source: "both", q: "  coffee ", page: "2", size: "500" }),
-    ).toEqual({ from: "2026-10-01", to: "2026-10-31", account: ACC, category: CAT, status: "posted", source: "both", q: "coffee", page: 2, size: 500 });
+      parseActivitySearch({ from: "2026-10-01", to: "2026-10-31", account: ACC, category: CAT, status: "void", source: "both", q: "  coffee ", page: "2", size: "500" }),
+    ).toEqual({ from: "2026-10-01", to: "2026-10-31", account: ACC, category: CAT, status: "void", source: "both", q: "coffee", page: 2, size: 500 });
     expect(parseActivitySearch({ from: "yesterday", account: "acc_bad", status: "weird", source: "x", page: "-1", size: "7", category: "drop table" })).toEqual({});
   });
 
@@ -20,6 +20,13 @@ describe("activity search codec", () => {
     expect(activeFilterCount(s)).toBe(1);
   });
 
+  it("the route search overrides a dropped raw key, since the router lays it over the raw URL", () => {
+    const raw = { status: "pending", source: "sms", junk: "x" };
+    const merged = { ...raw, ...activityRouteSearch(raw) };
+    expect(merged.status).toBeUndefined();
+    expect(merged.source).toBe("sms");
+    expect(activeFilterCount(activityRouteSearch(raw))).toBe(1);
+  });
   it("accepts the uncategorised sentinel and the drawer txn", () => {
     expect(parseActivitySearch({ category: "none", txn: TXN })).toEqual({ category: "none", txn: TXN });
   });
@@ -29,7 +36,7 @@ describe("activity search codec", () => {
   });
 
   it("resets the page when a filter changes", () => {
-    expect(withFilter({ page: 3, q: "a" }, { status: "posted" })).toEqual({ q: "a", status: "posted" });
+    expect(withFilter({ page: 3, q: "a" }, { status: "void" })).toEqual({ q: "a", status: "void" });
     expect(withFilter({ q: "a" }, { q: undefined })).toEqual({});
   });
 

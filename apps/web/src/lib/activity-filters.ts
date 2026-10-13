@@ -3,11 +3,11 @@ import { isISODate, type ISODate } from "./dates";
 import { DEFAULT_PAGE_SIZE, normalizePage, normalizePageSize, type PageSize } from "./pagination";
 
 /**
- * The status filter's values. `pending` (an SMS or payment charge no statement has matched yet)
- * is not one: those charges are transactions like any other, so an old `?status=pending` link
- * parses to no status filter.
+ * The status filter's values. Neither `pending` (an SMS or payment charge no statement has matched
+ * yet) nor `posted` is one: those charges are transactions like any other, and "Posted" would hide
+ * them. An old `?status=pending` or `?status=posted` link parses to no status filter.
  */
-export const TXN_STATUSES = ["posted", "void", "orphaned"] as const;
+export const TXN_STATUSES = ["void", "orphaned"] as const;
 export type TxnStatus = (typeof TXN_STATUSES)[number];
 export const TXN_SOURCES = ["sms", "statement", "both"] as const;
 export type TxnSource = (typeof TXN_SOURCES)[number];
@@ -82,6 +82,19 @@ export function parseActivitySearch(raw: Record<string, unknown>): ActivitySearc
   const size = normalizePageSize(raw.size);
   if (size !== DEFAULT_PAGE_SIZE) out.size = size;
   return out;
+}
+
+const ACTIVITY_SEARCH_KEYS = [...FILTER_KEYS, "txn", "page", "size"] as const;
+
+/**
+ * The Activity route's `validateSearch`. TanStack Router lays a route's validated search over its
+ * parents' (the root passes the raw URL through), so a key the codec drops would survive from the
+ * raw URL: an old `?status=pending` link kept filtering. Every key is therefore present, set to
+ * undefined when the codec dropped it, which overrides the raw value.
+ */
+export function activityRouteSearch(raw: Record<string, unknown>): ActivitySearch {
+  const blank = Object.fromEntries(ACTIVITY_SEARCH_KEYS.map((k) => [k, undefined])) as ActivitySearch;
+  return { ...blank, ...parseActivitySearch(raw) };
 }
 
 /** Filters that narrow the result set (excludes paging). */
