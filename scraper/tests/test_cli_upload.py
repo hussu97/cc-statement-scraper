@@ -111,6 +111,49 @@ def test_uploaded_state_corrupt_file_starts_fresh(tmp_path: Path) -> None:
     assert UploadedState(tmp_path).is_uploaded("abc") is False
 
 
+def test_record_uploaded_matches_padded_name(tmp_path: Path) -> None:
+    padded = _pdf(tmp_path / "in", " fab statement.pdf ")
+    state = UploadedState(tmp_path / "state")
+    result = {"uploads": [{"filename": "fab statement.pdf", "doc_code": "doc_p", "status": "queued"}]}
+
+    cli._record_uploaded(state, [padded], result, "FAB")
+
+    entry = state.get(sha256_file(padded))
+    assert entry is not None and entry["doc_code"] == "doc_p"
+    assert entry["filename"] == " fab statement.pdf "  # the local name is what is kept
+
+
+def test_record_uploaded_matches_long_name_truncated_by_server(tmp_path: Path) -> None:
+    long_pdf = _pdf(tmp_path / "in", "x" * 230 + ".pdf")
+    state = UploadedState(tmp_path / "state")
+    echoed = long_pdf.name[-200:]
+    result = {"uploads": [{"filename": echoed, "doc_code": "doc_l", "status": "queued"}]}
+
+    cli._record_uploaded(state, [long_pdf], result, None)
+
+    entry = state.get(sha256_file(long_pdf))
+    assert entry is not None and entry["doc_code"] == "doc_l"
+
+
+def test_record_uploaded_same_name_matches_entries_in_order(tmp_path: Path) -> None:
+    first = _pdf(tmp_path / "a", "stmt.pdf")
+    second = tmp_path / "b" / "stmt.pdf"
+    second.parent.mkdir()
+    second.write_bytes(b"%PDF-1.4 other")
+    state = UploadedState(tmp_path / "state")
+    result = {
+        "uploads": [
+            {"filename": "stmt.pdf", "doc_code": "doc_1", "status": "queued"},
+            {"filename": "stmt.pdf", "doc_code": "doc_2", "status": "duplicate"},
+        ]
+    }
+
+    cli._record_uploaded(state, [first, second], result, None)
+
+    assert state.get(sha256_file(first))["doc_code"] == "doc_1"  # type: ignore[index]
+    assert state.get(sha256_file(second))["doc_code"] == "doc_2"  # type: ignore[index]
+
+
 # ---------------------------------------------------------------------------
 # upload-pending selection
 # ---------------------------------------------------------------------------
