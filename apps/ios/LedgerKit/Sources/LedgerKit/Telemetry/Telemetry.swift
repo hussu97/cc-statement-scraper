@@ -96,7 +96,7 @@ public enum Telemetry {
     public static func breadcrumb(_ category: String, outcome: String, data: [String: String] = [:]) {
         let crumb = Breadcrumb(level: .info, category: category)
         crumb.message = outcome
-        crumb.data = data
+        for (key, value) in data { crumb.setData(value: value, key: key) }
         SentrySDK.addBreadcrumb(crumb)
     }
 
