@@ -36,8 +36,7 @@ struct OverviewView: View {
                                   canResolve: canResolve)
                 }
                 if content.setup == nil {
-                    CategoryRingCard(categories: overview.ringCategories, total: overview.spend,
-                                     scope: overview.scopeLabel(), emptyMessage: overview.emptyCategoriesMessage())
+                    CategoryRingCard(overview: overview, profileCode: profileCode)
                     AccountsCard(accounts: content.accounts, owedNow: content.overview.owedNowText,
                                  owedNowCaveat: content.overview.owedNowCaveat)
                 }
@@ -138,66 +137,6 @@ private struct AttentionCard: View {
             }
         }
         .contentShape(Rectangle())
-    }
-}
-
-private struct CategoryRingCard: View {
-    let categories: [Overview.TopCategory]
-    let total: Decimal
-    let scope: String
-    let emptyMessage: String
-    @Environment(\.dynamicTypeSize) private var typeSize
-
-    var body: some View {
-        Card {
-            SectionHeader(title: "Where it went", trailing: scope)
-            if categories.isEmpty {
-                Text(emptyMessage).font(Typography.rowMeta).foregroundStyle(Palette.muted)
-            } else if typeSize.prefersStackedRows {
-                VStack(alignment: .leading, spacing: 16) {
-                    ring.frame(maxWidth: .infinity)
-                    legend
-                }
-            } else {
-                HStack(alignment: .center, spacing: 16) {
-                    ring
-                    legend
-                }
-            }
-        }
-    }
-
-    private var ring: some View {
-        Chart(categories) { category in
-            SectorMark(angle: .value("Amount", category.amount.chartValue),
-                       innerRadius: .ratio(0.62), angularInset: 1.5)
-                .foregroundStyle(ChartPalette.color(for: category.colorToken))
-        }
-        .frame(width: 128, height: 128)
-        .chartBackground { _ in
-            VStack(spacing: 0) {
-                Text(MoneyFormat.compact(total)).font(Typography.amountLarge).moneyLine()
-                Text("AED").font(Typography.caption).foregroundStyle(Palette.muted)
-            }
-            .padding(.horizontal, 22)
-            .dynamicTypeSize(...DynamicTypeSize.xxLarge)
-        }
-        .chartAccessibility(.categoryRing(categories, total: total))
-    }
-
-    private var legend: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(categories) { category in
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    CategoryDot(token: category.colorToken)
-                    Text(category.displayName).font(Typography.rowMeta)
-                        .lineLimit(typeSize.prefersStackedRows ? 2 : 1)
-                    Spacer(minLength: 4)
-                    Text(MoneyFormat.compact(category.amount)).font(Typography.rowMeta).moneyLine()
-                        .foregroundStyle(Palette.muted)
-                }
-            }
-        }
     }
 }
 
