@@ -95,6 +95,13 @@ public protocol LedgerAPI: SMSIngestAPI {
     /// New `document_events` rows of the profile, live (Realtime INSERTs).
     func documentEventStream(profileCode: String) -> AsyncStream<DocumentEvent>
 
+    // Activity bulk actions (SupabaseLedgerAPI+Activity.swift, PAR-11)
+    /// `rpc('activity_selection_summary')`: count, net AED and excluded count of a selection (members).
+    func activitySelectionSummary(profileCode: String, selection: ActivityBulkSelection) async throws -> ActivitySelectionSummary
+    /// `rpc('bulk_update_transactions')`: writes `patch` to every selected row (owners; 42501
+    /// otherwise). Returns how many rows changed.
+    func bulkUpdateTransactions(profileCode: String, patch: ActivityBulkPatch, selection: ActivityBulkSelection) async throws -> Int
+
     // Budgets (SupabaseLedgerAPI+Budgets.swift)
     /// Inserts a new budget (no `budgetCode`) or updates one. Owners only (RLS).
     func saveBudget(profileCode: String, draft: BudgetDraft) async throws

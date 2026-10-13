@@ -23,6 +23,8 @@ public final class ActivityModel: TransactionEditing {
     public private(set) var summary: LoadState<ActivitySummary> = .idle
     /// The date headers' net totals (`activity_day_totals`), one call per page.
     public let dayTotals: ActivityDayTotals
+    /// Bulk select (PAR-11): owners tick rows, then Categorise or Exclude / Include them.
+    public let selection: ActivitySelection
     public var errorMessage: String?
 
     private let api: any LedgerAPI
@@ -43,6 +45,7 @@ public final class ActivityModel: TransactionEditing {
     public init(api: any LedgerAPI) {
         self.api = api
         dayTotals = ActivityDayTotals(api: api)
+        selection = ActivitySelection(api: api)
     }
 
     public var state: LoadState<[LedgerTransaction]> { list.state }
@@ -54,6 +57,8 @@ public final class ActivityModel: TransactionEditing {
     /// grouped and sorted per keystroke (IOS-26).
     public var sections: [DaySection] { sections(today: LedgerDates.today()) }
     public var hasLoaded: Bool { loadedFor != nil }
+    /// The filters the rows on screen were loaded with (the search box may hold newer text).
+    public var listedQuery: ActivityQuery { loadedFor?.query ?? query }
     public var summaryDisplay: ActivitySummaryDisplay { .of(summary) }
 
     /// A failed load with nothing cached shows the error; an empty result shows
@@ -76,6 +81,8 @@ public final class ActivityModel: TransactionEditing {
     public func load(profileCode: String) async {
         let query = self.query
         let same = loadedFor.map { Self.keepsRows(from: $0, to: (profileCode, query)) } ?? false
+        // Another ledger, filter or search is another list: its selection starts empty (as on the web).
+        if loadedFor.map({ $0.profileCode != profileCode || $0.query != query }) ?? false { selection.clear() }
         loadedFor = (profileCode, query)
         let api = self.api
         async let metaLoad: Void = loadMetaIfNeeded(profileCode: profileCode)
@@ -174,6 +181,7 @@ public final class ActivityModel: TransactionEditing {
         summaryGate.reset()
         dayTotals.reset()
         query = ActivityQuery()
+        selection.setSelecting(false)
         errorMessage = nil
     }
 
@@ -207,7 +215,7 @@ public final class ActivityModel: TransactionEditing {
 
     /// After a write: re-read these rows, patch them, drop the ones the
     /// filters no longer keep, and refresh the summary.
-    private func reread(_ codes: [String], profileCode: String) async {
+    func reread(_ codes: [String], profileCode: String) async {
         // The rows' days, before a row that left the filter is dropped: their totals change.
         let days = rows.filter { codes.contains($0.txnCode) }.map(\.txnDate)
         do {

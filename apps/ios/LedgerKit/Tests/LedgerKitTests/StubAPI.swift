@@ -362,6 +362,34 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         }
     }
 
+    // MARK: Activity bulk actions (PAR-11)
+
+    /// `activity_selection_summary`'s answer (zero rows when unset), and each call's selection.
+    var selectionSummaryResult: Result<ActivitySelectionSummary, LedgerAPIError>?
+    private(set) var selectionSummaryCalls: [ActivityBulkSelection] = []
+    /// `bulk_update_transactions`' answer: rows changed, or the error to throw.
+    var bulkUpdateResult: Result<Int, LedgerAPIError> = .success(0)
+    private(set) var bulkUpdates: [(patch: ActivityBulkPatch, selection: ActivityBulkSelection)] = []
+    func activitySelectionSummary(profileCode: String, selection: ActivityBulkSelection) async throws -> ActivitySelectionSummary {
+        let result = lock.withLock {
+            selectionSummaryCalls.append(selection)
+            return selectionSummaryResult
+        }
+        switch result {
+        case .success(let s)?: return s
+        case .failure(let e)?: throw e
+        case nil: return ActivitySelectionSummary(txnCount: 0, netAed: 0)
+        }
+    }
+    func bulkUpdateTransactions(profileCode: String, patch: ActivityBulkPatch,
+                                selection: ActivityBulkSelection) async throws -> Int {
+        let result = lock.withLock {
+            bulkUpdates.append((patch, selection))
+            return bulkUpdateResult
+        }
+        return try result.get()
+    }
+
     func changes(profileCode: String) -> AsyncStream<LedgerChange> {
         let script: [String]? = lock.withLock {
             defer { subscriptions += 1 }
