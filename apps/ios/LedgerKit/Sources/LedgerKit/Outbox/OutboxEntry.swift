@@ -56,9 +56,15 @@ public struct OutboxEntry: Sendable, Hashable, Identifiable {
     /// parking existed, which decode as not parked.
     public var parkedAt: Date?
     public var parkedReason: String?
+    /// The account last signed in on this phone when it was captured
+    /// (`DeviceUserStore`). An entry saved without a ledger goes only to that
+    /// account's ledger, never to whoever signs in next (IOS-12r audit). Nil
+    /// when nobody had signed in on this phone yet, or in older files.
+    public let capturedBy: String?
 
     public init(item: OutboxItem, profileCode: String?, enqueuedAt: Date, attempts: Int = 0, nextAttemptAt: Date,
-                lastError: String? = nil, parkedAt: Date? = nil, parkedReason: String? = nil) {
+                lastError: String? = nil, parkedAt: Date? = nil, parkedReason: String? = nil,
+                capturedBy: String? = nil) {
         self.item = item
         self.profileCode = profileCode
         self.enqueuedAt = enqueuedAt
@@ -67,11 +73,18 @@ public struct OutboxEntry: Sendable, Hashable, Identifiable {
         self.lastError = lastError
         self.parkedAt = parkedAt
         self.parkedReason = parkedReason
+        self.capturedBy = capturedBy
     }
 
     public var isParked: Bool { parkedAt != nil }
     /// Waiting for a ledger to be known before it can be sent.
     public var awaitsLedger: Bool { profileCode == nil && !isParked }
+    /// Parked without a ledger: captured under another account, so it can't be
+    /// retried into this one, only deleted (or sent once that account signs in again).
+    public var isOtherAccounts: Bool { profileCode == nil && isParked }
+
+    /// Whether `userID` (the account signed in now) may file this entry in its ledger.
+    public func belongs(to userID: String?) -> Bool { capturedBy == nil || capturedBy == userID }
     public var kind: OutboxItem.Kind { item.kind }
 
     /// The SMS, when this entry is one.
@@ -91,7 +104,7 @@ public struct OutboxEntry: Sendable, Hashable, Identifiable {
 // before payments existed have no `kind`, and their entries decode as SMS.
 extension OutboxEntry: Codable {
     enum CodingKeys: String, CodingKey {
-        case kind, payload, profileCode, enqueuedAt, attempts, nextAttemptAt, lastError, parkedAt, parkedReason
+        case kind, payload, profileCode, enqueuedAt, attempts, nextAttemptAt, lastError, parkedAt, parkedReason, capturedBy
     }
 
     public init(from decoder: any Decoder) throws {
@@ -107,6 +120,7 @@ extension OutboxEntry: Codable {
         lastError = try c.decodeIfPresent(String.self, forKey: .lastError)
         parkedAt = try c.decodeIfPresent(Date.self, forKey: .parkedAt)
         parkedReason = try c.decodeIfPresent(String.self, forKey: .parkedReason)
+        capturedBy = try c.decodeIfPresent(String.self, forKey: .capturedBy)
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -123,5 +137,6 @@ extension OutboxEntry: Codable {
         try c.encodeIfPresent(lastError, forKey: .lastError)
         try c.encodeIfPresent(parkedAt, forKey: .parkedAt)
         try c.encodeIfPresent(parkedReason, forKey: .parkedReason)
+        try c.encodeIfPresent(capturedBy, forKey: .capturedBy)
     }
 }

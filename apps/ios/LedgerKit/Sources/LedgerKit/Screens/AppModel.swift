@@ -84,10 +84,14 @@ public final class AppModel {
         let phase = session.phase
         defer { lastPhase = phase }
         switch phase {
-        case .signedIn:
+        case .signedIn(let userID, _):
             if case .signedIn = lastPhase { return }
+            // Stamped on what the intents capture from now on, and kept after
+            // sign-out: only this account adopts what it captured (IOS-12r audit).
+            services.deviceUser.userID = userID
             await profiles.load()
             if profiles.sessionRejected {
+                profiles.clearSMSTarget()
                 await session.signOut()
                 return
             }
@@ -96,6 +100,9 @@ public final class AppModel {
             await services.outbox.flush()
             await settings.refresh()
         case .signedOut:
+            // Every way of being signed out (the button, a rejected session, a
+            // refresh that failed): nothing is filed in the last ledger any more.
+            profiles.clearSMSTarget()
             screens.stop()
         default:
             break
