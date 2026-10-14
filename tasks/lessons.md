@@ -9,6 +9,7 @@
 
 | When | Lesson |
 |---|---|
+| 2026-10-14 | [`invalid_client` is the app's secret, not the mailbox: rotate it, don't reconnect](#invalid_client-is-the-apps-secret-not-the-mailbox-rotate-it-dont-reconnect) |
 | 2026-10-14 | [A typed `NavigationStack` path drops every other value: push only its route type](#a-typed-navigationstack-path-drops-every-other-value-push-only-its-route-type) |
 | 2026-10-14 | [TanStack Router lays validated search over the raw URL: a dropped key survives](#tanstack-router-lays-validated-search-over-the-raw-url-a-dropped-key-survives) |
 | 2026-10-13 | [Build `supabase.rpc` arguments as a typed variable: a spread union hangs `tsc`](#build-supabaserpc-arguments-as-a-typed-variable-a-spread-union-hangs-tsc) |
@@ -41,6 +42,19 @@
 | 2026-10-08 | [Tooling defaults that don't work here: `gh` account, Supabase MCP, `localhost`, pip](#tooling-defaults-that-dont-work-here-gh-account-supabase-mcp-localhost-pip) |
 
 ## Lessons
+
+### `invalid_client` is the app's secret, not the mailbox: rotate it, don't reconnect
+- **What went wrong**: on 2026-10-14 `outlook-poll` went from a clean 06:05 UTC run to
+  `HTTP 401 invalid_client` at 07:05, with no deploy in between. Microsoft answers
+  `invalid_client` when the Azure app's own credentials fail (expired secret AADSTS7000222,
+  wrong value AADSTS7000215, deleted app), so reconnecting the mailbox cannot fix it. The error
+  carried only the `error` field, which can't tell those cases apart.
+- **Rule**: `TOKEN_REFRESH_FAILED:invalid_client` means rotate `MS_OAUTH_CLIENT_SECRET`
+  (PRODUCTION.md §6.5) and record the new expiry there; `invalid_grant` is the one that means
+  re-authorise the mailbox. Token-refresh errors carry the provider's codes, never
+  `error_description`.
+- **Enforced by**: `supabase/functions/_tests/outlook_poll_test.ts` (the AADSTS code reaches the
+  error; `error_description` never does).
 
 ### A typed `NavigationStack` path drops every other value: push only its route type
 - **What went wrong**: N-4 (build 29) gave Settings `NavigationStack(path: [SettingsRoute])` so a

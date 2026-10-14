@@ -2,10 +2,11 @@
 // resume from a stored nextLink, per-page cursor saves, 410 restart, deadline, and
 // Microsoft refresh-token rotation (SRV-14).
 
-import { assert, assertEquals } from "jsr:@std/assert@1.0.13";
+import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1.0.13";
 import { pollMailbox } from "../outlook-poll/poll.ts";
 import { deltaKey, GRAPH } from "../outlook-poll/graph.ts";
-import type { Mailbox } from "../_shared/email_ingest.ts";
+import { type Mailbox, mailboxErrorCode } from "../_shared/email_ingest.ts";
+import { refreshErrorDetail } from "../_shared/oauth.ts";
 import { FakeDb, fakeFetch, type FetchRoute, PDF_BYTES, saveSyncStateRpc } from "./fake_db.ts";
 
 Deno.env.delete("SENTRY_DSN");
@@ -163,4 +164,33 @@ Deno.test("Microsoft refresh-token rotation is persisted; a failed save is not f
     fetchFn: fakeFetch(graphRoute(failing.tokenBody)).fetch,
   });
   assertEquals(r.status, "ok", "the poll continues with the access token");
+});
+
+Deno.test("a rejected client secret names Microsoft's AADSTS code; the mailbox code stays opaque", async () => {
+  const { db, mailbox } = setup({});
+  const f = fakeFetch((url) =>
+    url.host === "login.microsoftonline.com"
+      ? Response.json({
+        error: "invalid_client",
+        error_description: "AADSTS7000222: The provided client secret keys for app '…' are expired.",
+        error_codes: [7000222],
+      }, { status: 401 })
+      : null
+  );
+  const e = await assertRejects(() =>
+    pollMailbox(db.asDb(), mailbox, { deadline: Infinity, lookbackDays: 1, fetchFn: f.fetch })
+  );
+  assertEquals((e as Error).message, "outlook token refresh failed: HTTP 401 invalid_client AADSTS7000222");
+  assertEquals(mailboxErrorCode(e, "outlook"), "TOKEN_REFRESH_FAILED:invalid_client");
+  assert(!(e as Error).message.includes("expired"), "error_description (free text) is never copied");
+});
+
+Deno.test("refreshErrorDetail keeps codes only", () => {
+  assertEquals(refreshErrorDetail({ error: "invalid_grant" }), "invalid_grant");
+  assertEquals(
+    refreshErrorDetail({ error: "invalid_client", error_codes: [7000215, 1] }),
+    "invalid_client AADSTS7000215",
+  );
+  assertEquals(refreshErrorDetail({ error: "<script>", error_codes: ["x"] }), "");
+  assertEquals(refreshErrorDetail({}), "");
 });
