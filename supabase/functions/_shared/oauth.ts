@@ -44,6 +44,18 @@ function clientCredentials(provider: Provider): { id: string; secret: string } {
   return { id, secret };
 }
 
+/**
+ * The provider's error code, plus Microsoft's numeric AADSTS code when present: one
+ * `invalid_client` covers an expired secret (AADSTS7000222), a wrong one (AADSTS7000215)
+ * and a deleted app, which need different fixes. Codes only; error_description is free text.
+ */
+export function refreshErrorDetail(doc: { error?: unknown; error_codes?: unknown }): string {
+  const error = typeof doc.error === "string" && /^[a-z_]{1,64}$/.test(doc.error) ? doc.error : "";
+  const first = Array.isArray(doc.error_codes) ? doc.error_codes[0] : undefined;
+  const aadsts = Number.isInteger(first) ? ` AADSTS${first}` : "";
+  return `${error}${aadsts}`.trim();
+}
+
 export interface AccessToken {
   accessToken: string;
   expiresIn: number;
@@ -83,7 +95,7 @@ export async function mailboxAccessToken(
     throw new HttpError(
       502,
       "TOKEN_REFRESH_FAILED",
-      `${provider} token refresh failed: HTTP ${res.status} ${doc.error ?? ""}`,
+      `${provider} token refresh failed: HTTP ${res.status} ${refreshErrorDetail(doc)}`.trimEnd(),
     );
   }
   // Microsoft rotates refresh tokens; keep the newest one. A failed save is not fatal

@@ -199,7 +199,7 @@ reads a key it doesn't list.
 | `SENTRY_DSN`, `SENTRY_ENVIRONMENT` | Sentry `credit-card-ledger-backend` DSN; `production` | yes |
 | `SENTRY_RELEASE` | the commit being deployed: pass `--sentry-release "$(git rev-parse --short HEAD)"` (the Deploy Supabase workflow also sets it) | placeholder |
 | `GMAIL_OAUTH_CLIENT_ID`, `GMAIL_OAUTH_CLIENT_SECRET` | the Google OAuth client `ledger-gmail` in `credit-card-scraper-ht` (§5) | set (2026-10-12) |
-| `MS_OAUTH_CLIENT_ID`, `MS_OAUTH_CLIENT_SECRET` | the Azure app registration (§6); moved from the legacy DB at cutover | set |
+| `MS_OAUTH_CLIENT_ID`, `MS_OAUTH_CLIENT_SECRET` | the Azure app registration (§6); moved from the legacy DB at cutover. The secret expires: rotate it per §6.5 | set (secret failed 2026-10-14) |
 | `GMAIL_PUSH_AUDIENCE` | `https://nkmylznisjcnmqbxosey.supabase.co/functions/v1/gmail-push` | set |
 | `GMAIL_PUSH_SA_EMAIL`, `GMAIL_PUBSUB_TOPIC` | §5: `gmail-push-invoker@credit-card-scraper-ht.iam.gserviceaccount.com`, `projects/credit-card-scraper-ht/topics/gmail-statements` | set |
 | `ALLOWED_ORIGINS` | the Vercel production URL(s), comma-separated | set |
@@ -593,6 +593,16 @@ it. `PROJECT=credit-card-scraper-ht`, `URL=https://nkmylznisjcnmqbxosey.supabase
    Settings → Sources.
 4. `ledger-outlook-poll` runs hourly at :05. Run it once by hand to verify:
    `curl -X POST …/functions/v1/outlook-poll -H "x-cron-secret: $CRON_SECRET"`.
+5. **Client secret rotation.** Azure client secrets expire on a fixed date. When the secret
+   expires or is wrong, every Outlook mailbox fails with `TOKEN_REFRESH_FAILED:invalid_client`
+   (Sentry: `outlook token refresh failed: HTTP 401 invalid_client AADSTS7000222` for an expired
+   secret, `AADSTS7000215` for a wrong value). The refresh tokens in Vault are still good: don't
+   reconnect the mailbox. In the Azure portal (App registrations → the app → Certificates &
+   secrets), create a new client secret and copy its **Value** (not the Secret ID). Put it in
+   `supabase/functions/.env.production` as `MS_OAUTH_CLIENT_SECRET` with an editor, push it with
+   `scripts/cutover/set-edge-secrets.sh` (a production action, §2.5), run the item 4 curl, then
+   delete the old secret in Azure. Record the new expiry here:
+   - current secret expires: _unknown; the previous one stopped working 2026-10-14 between 06:05 and 07:05 UTC_
 
 ---
 

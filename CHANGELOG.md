@@ -1,5 +1,15 @@
 # Changelog
 
+## Outlook token refresh diagnostics — 2026-10-14
+
+### Backend (Supabase)
+
+- **fix** A failed Microsoft token refresh names the AADSTS code, e.g. `outlook token refresh failed: HTTP 401 invalid_client AADSTS7000222` (expired client secret), instead of only `invalid_client`, which also covers a wrong secret or a deleted app. Codes only: `error_description` is never copied. `last_error` stays `TOKEN_REFRESH_FAILED:invalid_client`.
+
+### Docs
+
+- **docs** PRODUCTION.md §6.5: rotating the Azure client secret (`MS_OAUTH_CLIENT_SECRET`) and where to record its expiry; a lesson on `invalid_client` vs `invalid_grant`.
+
 ## Backlog batch 8: iOS parity, no "pending" — 2026-10-14
 
 ### Web
