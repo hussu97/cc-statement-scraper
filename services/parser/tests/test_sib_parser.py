@@ -149,7 +149,7 @@ def test_sib_history_of_a_replacement_card_reads_the_new_number(monkeypatch: pyt
                 "Currency AED",
                 "Date Details Amount",
                 "20 Aug 2026 CORNER GROCERY SHARJAH AED -150.00",
-                "14 Sep 2026 BOOK SHOP DUBAI AED -45.50",
+                "16 Sep 2026 BOOK SHOP DUBAI AED -45.50",
             ]
         ),
     )
@@ -269,3 +269,37 @@ def test_sib_billed_statement_details_export_is_a_history(monkeypatch: pytest.Mo
     assert results[0].metadata["card_holder"] == "JANE Q SAMPLE"
     assert txns["AIRLINE MUMBAI"].currency_original == "INR"
     assert txns["Credit Card Payment"].transaction_kind == "payment"
+
+
+def test_sib_history_cycles_close_on_the_14th(monkeypatch: pytest.MonkeyPatch) -> None:
+    """SIB closes on the 14th: the 13th and 14th are this month's cycle, the 15th is next month's."""
+    _fake_pdf(
+        monkeypatch,
+        "\n".join(
+            [
+                "Transaction history",
+                "JANE Q SAMPLE",
+                "Account no. 5290 xxxx xxxx 9213",
+                "Date Details Amount",
+                "15 Dec 2026 YEAR END SHOP SHARJAH AED -40.00",
+                "15 Sep 2026 CAFE ON THE 15TH SHARJAH AED -30.00",
+                "14 Sep 2026 CAFE ON THE 14TH SHARJAH AED -20.00",
+                "13 Sep 2026 CAFE ON THE 13TH SHARJAH AED -10.00",
+            ]
+        ),
+    )
+    results = parse_sib_transaction_history(Path("dummy-sib-history.pdf"))
+    cycles = {
+        r.metadata["statement_date"]: (
+            r.metadata["statement_period_start"],
+            r.metadata["statement_period_end"],
+            sorted(tx.merchant_raw for tx in r.transactions),
+        )
+        for r in results
+    }
+    assert cycles == {
+        "2026-09-14": ("2026-08-15", "2026-09-14", ["CAFE ON THE 13TH SHARJAH", "CAFE ON THE 14TH SHARJAH"]),
+        "2026-10-14": ("2026-09-15", "2026-10-14", ["CAFE ON THE 15TH SHARJAH"]),
+        "2027-01-14": ("2026-12-15", "2027-01-14", ["YEAR END SHOP SHARJAH"]),
+    }
+    assert {r.statement_month for r in results} == {"2026-09", "2026-10", "2027-01"}

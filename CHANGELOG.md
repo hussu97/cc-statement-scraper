@@ -1,5 +1,16 @@
 # Changelog
 
+## SIB history exports close on the 14th — 2026-10-15
+
+### Parser
+
+- **fix** Parser 2026.10.15.1: SIB history exports are bucketed into cycles closing on the 14th (15th to 14th), not the 12th, so rows dated the 13th and 14th land in the cycle the bank bills them in and the export pairs with the cycle's SMS statement on the same date.
+
+### Backend (Supabase)
+
+- **fix** `private.rebucket_history_lines` (called by `ingest_one_statement`): a history row that arrives on a history statement with another date while it is still current on an older one moves to the new statement with its transaction, evidence and documents, instead of creating a duplicate transaction; an old history statement left with no current row is superseded by the new one. The existing 12th-dated SIB exports turn into 14th-dated ones the next time an export is uploaded or re-parsed, with every transaction code and user field kept.
+- **feat** An export whose cycles close on another day than the account's `cycle_close_day` adds an ingest warning.
+
 ## SIB statements from the statement-summary SMS — 2026-10-15
 
 ### Backend (Supabase)

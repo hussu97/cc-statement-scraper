@@ -72,7 +72,11 @@ def _header_card_last4(value: str) -> str | None:
     digits = re.sub(r"[^0-9]", "", value or "")
     return digits[-4:] if len(digits) >= 4 else None
 _ACCOUNT_TYPE_RE = re.compile(r"(?:Account\s+type|Card\s+issuer)\s+(.+)", re.IGNORECASE)
-_STATEMENT_CUTOFF_DAY = 12
+# SIB cycles close on the 14th (the owner's cards, confirmed 2026-10-15; until parser
+# 2026.10.15.1 this was the 12th). History exports are bucketed into cycles by this day; the
+# ingest moves a row whose cycle changed rather than duplicating it (rebucket_history_lines),
+# and warns when an export's close day differs from the account's cycle_close_day.
+_STATEMENT_CUTOFF_DAY = 14
 _TH_PAYMENT_KEYWORDS = ("CREDIT CARD PAYMENT",)
 _TH_FEE_KEYWORDS = ("MURABAHA PROFIT", "FINANCE CHARGE", "SERVICE CHARGE")
 # A replaced card opens with the old card's billed balance moved onto it ("Balance Migration -
@@ -227,26 +231,26 @@ def is_transaction_history(lines: list[str]) -> bool:
 
 
 def _statement_date_for_txn(txn_date: date) -> date:
-    """Map a transaction date to its billing cycle statement date (12th of month)."""
+    """Map a transaction date to its billing cycle statement date (the close day of its cycle)."""
     if txn_date.day <= _STATEMENT_CUTOFF_DAY:
-        # Belongs to the statement closing on the 12th of the same month
+        # Belongs to the statement closing this month
         return date(txn_date.year, txn_date.month, _STATEMENT_CUTOFF_DAY)
     else:
-        # Belongs to the statement closing on the 12th of the next month
+        # Belongs to the statement closing next month
         if txn_date.month == 12:
             return date(txn_date.year + 1, 1, _STATEMENT_CUTOFF_DAY)
         return date(txn_date.year, txn_date.month + 1, _STATEMENT_CUTOFF_DAY)
 
 
 def _period_start_for_statement_date(stmt_date: date) -> date:
-    """Return the 13th of the prior month (start of this billing cycle)."""
+    """Return the day after the prior month's close day (start of this billing cycle)."""
     if stmt_date.month == 1:
         prior_year = stmt_date.year - 1
         prior_month = 12
     else:
         prior_year = stmt_date.year
         prior_month = stmt_date.month - 1
-    return date(prior_year, prior_month, 13)
+    return date(prior_year, prior_month, _STATEMENT_CUTOFF_DAY + 1)
 
 
 def _sib_history_platform_amount(source_amount: float) -> float:
@@ -270,8 +274,8 @@ def _classify_sib_history_kind(merchant_normalized: str, source_amount: float, p
 def parse_sib_transaction_history(pdf_path: str | Path, pdf_password: str | None = None) -> list[StatementParseResult]:
     """Parse a SIB 'Transaction history' PDF and split into per-billing-cycle statements.
 
-    Each billing cycle closes on the 12th of the month: transactions dated 13th of month M
-    through 12th of month M+1 are grouped into the statement dated 12th of M+1.
+    Each billing cycle closes on the 14th of the month: transactions dated 15th of month M
+    through 14th of month M+1 are grouped into the statement dated 14th of M+1.
     """
     path = Path(pdf_path)
     open_kwargs: dict = {}
