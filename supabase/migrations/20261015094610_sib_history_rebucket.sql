@@ -17,8 +17,9 @@
 -- withdraws the old line first and the matcher re-links by lineage); the helper covers a
 -- row that another, not yet re-parsed, export still evidences, and a new export.
 --
--- ingest_one_statement is unchanged apart from the call, and a warning when an export's
--- cycles close on a different day than the account's cycle_close_day.
+-- ingest_one_statement is unchanged apart from the call, a warning when an export's cycles
+-- close on a different day than the account's cycle_close_day, and hashing line_key with
+-- private.statement_line_key (the same expression, now in one place).
 
 create index if not exists statement_lines_account_key_idx
   on public.statement_lines (account_code, line_key) where is_current;
@@ -235,9 +236,10 @@ begin
          x.card_holder, x.legacy_fingerprint, x.raw
   from (
     select (j->>'line_no')::int as line_no,
-           encode(sha256(convert_to(concat_ws('|', v_account, j->>'txn_date', j->>'posting_date',
-             (j->>'amount_original')::numeric(14,2), j->>'currency_original', (j->>'amount_aed')::numeric(14,2),
-             j->>'direction', regexp_replace(btrim(j->>'description_raw'), '\s+', ' ', 'g')), 'UTF8')), 'hex') as line_key,
+           -- One definition of a line's identity (case-insensitive since 20261015095636).
+           private.statement_line_key(v_account, (j->>'txn_date')::date, (j->>'posting_date')::date,
+             (j->>'amount_original')::numeric, j->>'currency_original', (j->>'amount_aed')::numeric,
+             j->>'direction', j->>'description_raw') as line_key,
            (j->>'txn_date')::date as txn_date,
            (j->>'txn_time')::time as txn_time,
            (j->>'posting_date')::date as posting_date,
