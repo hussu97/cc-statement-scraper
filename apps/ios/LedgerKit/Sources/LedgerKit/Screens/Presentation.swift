@@ -116,6 +116,7 @@ public struct ReconChip: Sendable, Hashable, Identifiable {
         if checks.balanceEquation == false { chips.append(.init(label: "Balance off", tone: .danger)) }
         if checks.totals == "not_extracted" { chips.append(.init(label: "No totals", tone: .warn)) }
         if checks.noLines == true { chips.append(.init(label: "No lines read", tone: .warn)) }
+        if checks.historyUploaded == false { chips.append(.init(label: "No history export", tone: .info)) }
         if let n = checks.unpricedLines, n > 0 { chips.append(.init(label: "\(n) awaiting FX", tone: .info)) }
         if let n = checks.unmatchedSms, n > 0 {
             chips.append(.init(label: "\(n) SMS not on statement", tone: .warn))

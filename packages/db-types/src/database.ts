@@ -1697,6 +1697,20 @@ export type Database = {
             foreignKeyName: "statement_lines_stmt_fkey"
             columns: ["profile_code", "stmt_code"]
             isOneToOne: false
+            referencedRelation: "v_sms_statements"
+            referencedColumns: ["profile_code", "history_stmt_code"]
+          },
+          {
+            foreignKeyName: "statement_lines_stmt_fkey"
+            columns: ["profile_code", "stmt_code"]
+            isOneToOne: false
+            referencedRelation: "v_sms_statements"
+            referencedColumns: ["profile_code", "stmt_code"]
+          },
+          {
+            foreignKeyName: "statement_lines_stmt_fkey"
+            columns: ["profile_code", "stmt_code"]
+            isOneToOne: false
             referencedRelation: "v_statement_payments"
             referencedColumns: ["profile_code", "stmt_code"]
           },
@@ -1743,6 +1757,20 @@ export type Database = {
             foreignKeyName: "statement_recon_stmt_fkey"
             columns: ["profile_code", "stmt_code"]
             isOneToOne: false
+            referencedRelation: "v_sms_statements"
+            referencedColumns: ["profile_code", "history_stmt_code"]
+          },
+          {
+            foreignKeyName: "statement_recon_stmt_fkey"
+            columns: ["profile_code", "stmt_code"]
+            isOneToOne: false
+            referencedRelation: "v_sms_statements"
+            referencedColumns: ["profile_code", "stmt_code"]
+          },
+          {
+            foreignKeyName: "statement_recon_stmt_fkey"
+            columns: ["profile_code", "stmt_code"]
+            isOneToOne: false
             referencedRelation: "v_statement_payments"
             referencedColumns: ["profile_code", "stmt_code"]
           },
@@ -1768,6 +1796,7 @@ export type Database = {
           primary_card_last4: string | null
           profile_code: string
           reference_source: string | null
+          sms_code: string | null
           statement_date: string
           statement_reference: string | null
           status: string
@@ -1797,6 +1826,7 @@ export type Database = {
           primary_card_last4?: string | null
           profile_code: string
           reference_source?: string | null
+          sms_code?: string | null
           statement_date: string
           statement_reference?: string | null
           status?: string
@@ -1826,6 +1856,7 @@ export type Database = {
           primary_card_last4?: string | null
           profile_code?: string
           reference_source?: string | null
+          sms_code?: string | null
           statement_date?: string
           statement_reference?: string | null
           status?: string
@@ -1866,10 +1897,31 @@ export type Database = {
             referencedColumns: ["profile_code"]
           },
           {
+            foreignKeyName: "statements_sms_code_fkey"
+            columns: ["sms_code"]
+            isOneToOne: false
+            referencedRelation: "sms_messages"
+            referencedColumns: ["sms_code"]
+          },
+          {
             foreignKeyName: "statements_superseded_by_fkey"
             columns: ["profile_code", "superseded_by"]
             isOneToOne: false
             referencedRelation: "statements"
+            referencedColumns: ["profile_code", "stmt_code"]
+          },
+          {
+            foreignKeyName: "statements_superseded_by_fkey"
+            columns: ["profile_code", "superseded_by"]
+            isOneToOne: false
+            referencedRelation: "v_sms_statements"
+            referencedColumns: ["profile_code", "history_stmt_code"]
+          },
+          {
+            foreignKeyName: "statements_superseded_by_fkey"
+            columns: ["profile_code", "superseded_by"]
+            isOneToOne: false
+            referencedRelation: "v_sms_statements"
             referencedColumns: ["profile_code", "stmt_code"]
           },
           {
@@ -2204,6 +2256,20 @@ export type Database = {
             foreignKeyName: "transactions_stmt_fkey"
             columns: ["profile_code", "stmt_code"]
             isOneToOne: false
+            referencedRelation: "v_sms_statements"
+            referencedColumns: ["profile_code", "history_stmt_code"]
+          },
+          {
+            foreignKeyName: "transactions_stmt_fkey"
+            columns: ["profile_code", "stmt_code"]
+            isOneToOne: false
+            referencedRelation: "v_sms_statements"
+            referencedColumns: ["profile_code", "stmt_code"]
+          },
+          {
+            foreignKeyName: "transactions_stmt_fkey"
+            columns: ["profile_code", "stmt_code"]
+            isOneToOne: false
             referencedRelation: "v_statement_payments"
             referencedColumns: ["profile_code", "stmt_code"]
           },
@@ -2227,6 +2293,45 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "accounts_profile_code_fkey"
+            columns: ["profile_code"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["profile_code"]
+          },
+        ]
+      }
+      v_sms_statements: {
+        Row: {
+          account_code: string | null
+          activity_aed: number | null
+          expected_closing: number | null
+          history_stmt_code: string | null
+          ledger_gap: number | null
+          opening_balance: number | null
+          opening_basis: string | null
+          opening_date: string | null
+          profile_code: string | null
+          recon_checks: Json | null
+          recon_status: string | null
+          stmt_code: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "statements_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "statements_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "v_account_balances"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "statements_profile_code_fkey"
             columns: ["profile_code"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -2447,6 +2552,20 @@ export type Database = {
             columns: ["profile_code", "stmt_code"]
             isOneToOne: false
             referencedRelation: "statements"
+            referencedColumns: ["profile_code", "stmt_code"]
+          },
+          {
+            foreignKeyName: "transactions_stmt_fkey"
+            columns: ["profile_code", "stmt_code"]
+            isOneToOne: false
+            referencedRelation: "v_sms_statements"
+            referencedColumns: ["profile_code", "history_stmt_code"]
+          },
+          {
+            foreignKeyName: "transactions_stmt_fkey"
+            columns: ["profile_code", "stmt_code"]
+            isOneToOne: false
+            referencedRelation: "v_sms_statements"
             referencedColumns: ["profile_code", "stmt_code"]
           },
           {
@@ -2944,6 +3063,7 @@ export type Database = {
           debits: number
           doc_code: string
           due_date: string
+          from_sms: boolean
           kind: string
           line_count: number
           logo_path: string

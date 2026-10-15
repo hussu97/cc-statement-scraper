@@ -59,6 +59,27 @@ struct ModelDecodingTests {
         #expect(cycles[1].due(isLatest: false) == nil)
     }
 
+    @Test("statement_cycles: an SMS statement is labelled and flags a missing history export")
+    func smsCycle() throws {
+        let cycles = try LedgerJSON.decode([StatementCycle].self, from: Data(#"""
+            [{"stmt_code": "stm_01hzy3k8w9m2n4p6q8r0s2t4v9", "account_code": "acc_01hzy3k8w9m2n4p6q8r0s2t4v7",
+              "bank_code": "SIB", "card_last4": "9213", "kind": "statement", "statement_date": "2026-10-12",
+              "period_start": "2026-09-13", "period_end": "2026-10-12", "due_date": "2026-10-30",
+              "closing_balance": 4396.67, "min_due": 219.83, "credit_limit": 10000, "utilisation": 0.4397,
+              "line_count": 0, "debits": 0, "credits": 0, "recon_status": "warn",
+              "recon_checks": {"source": "sms", "history_uploaded": false, "opening_basis": "statement",
+                               "expected_closing": "4335.82", "ledger_gap": "60.85", "balance_equation": false},
+              "doc_code": null, "from_sms": true}]
+            """#.utf8))
+        let c = cycles[0]
+        #expect(c.kindLabel == "SMS statement")
+        #expect(c.rowSubtitle == "13 Sep – 12 Oct · from SMS")
+        #expect(c.chips.map(\.label) == ["Check", "Balance off", "No history export"])
+        let plain = try LedgerJSON.decode([StatementCycle].self, from: try fixture("statement_cycles"))
+        #expect(plain[0].rowSubtitle == "26 Aug – 25 Sep")
+        #expect(plain[1].rowSubtitle == "History extract · 1 Sep")
+    }
+
     @Test("ingest_sms results")
     func ingest() throws {
         let results = try LedgerJSON.decode([SMSIngestResult].self, from: try fixture("ingest_sms"))

@@ -151,7 +151,7 @@ private struct CycleRow: View {
                     BankLogo(bankCode: cycle.bankCode, size: 28)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(cycle.cardSuffix).font(Typography.rowTitle).foregroundStyle(Palette.ink)
-                        Text(cycle.periodLabel ?? "\(cycle.kindLabel) · \(LedgerDates.dayLabel(cycle.statementDate))")
+                        Text(cycle.rowSubtitle)
                             .font(Typography.caption).foregroundStyle(Palette.muted)
                     }
                 }

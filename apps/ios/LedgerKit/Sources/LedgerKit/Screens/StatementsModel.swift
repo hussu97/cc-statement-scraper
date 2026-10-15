@@ -180,7 +180,14 @@ extension StatementCycle {
         DueStatus.describe(due: dueDate, isLatest: isLatest, payment: duePayment, today: today)
     }
 
-    public var kindLabel: String { kind == "history_extract" ? "History extract" : "Statement" }
+    public var kindLabel: String { kind == "history_extract" ? "History extract" : fromSms == true ? "SMS statement" : "Statement" }
+
+    /// The row's second line: the period (`"· from SMS"` for an SMS statement),
+    /// else the kind and date.
+    public var rowSubtitle: String {
+        guard let periodLabel else { return "\(kindLabel) · \(LedgerDates.dayLabel(statementDate))" }
+        return fromSms == true ? "\(periodLabel) · from SMS" : periodLabel
+    }
 
     /// `"1 Sep – 30 Sep"` when the period is known.
     public var periodLabel: String? {

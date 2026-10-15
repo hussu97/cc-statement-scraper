@@ -222,6 +222,20 @@ timeout applies.
    `history_line` evidence. A transaction may hold one statement line **and** one history line,
    so a history row and the real statement row land on the same transaction and are never
    double-counted. Statement amounts win. History windows are additive (rule 2).
+   **SMS statements.** SIB sends no statement document: its monthly statement-summary SMS
+   (`msg_kind = 'statement_summary'`: outstanding amount, minimum due, due date) makes a
+   header-only `kind = statement` row with `statements.sms_code` set and no `doc_code`
+   (`private.apply_sms_statement`, called by `process_sms`). Its date is the cycle close on or
+   before the day the SMS arrived (Dubai): `accounts.cycle_close_day`, else the day the
+   account's latest history export ends on. The first summary of a cycle wins; a reminder
+   leaves it alone, and a PDF for the same date takes the row over (it has no document).
+   `public.v_sms_statements` pairs it with the cycle's history export (±3 days), whose lines
+   are its lines, and checks the SMS closing balance against the ledger: the previous closing
+   (or the BALANCE MIGRATION anchor) plus every pending or posted transaction up to the close.
+   The check is live (`statement_cycles`, `statement_detail`), so a later history upload or
+   late SMS closes a gap without a re-run; `reconcile_statement` stores the same result and
+   raises no `missing_from_statement` reviews for it. `statement_cycles` lists the pair as one
+   row (`from_sms`), and `statement_detail` of the export opens the SMS statement.
 4. **Matching.** `match_statement_lines` runs (below).
 5. **Period overlap.** Overlap of more than 3 days with another active real statement of the
    same account opens a `period_overlap` review. Nothing is superseded automatically;
@@ -536,6 +550,9 @@ document, so each account is anchored on a balance the bank printed, the latest 
   whose histories print no balance). The old card's billed balance moved onto the new one, so the
   balance restarts at 0 that day and every live transaction from it on counts.
 - `none`: `outstanding_aed` is null, not a guess.
+
+An SMS statement anchor has no lines to say what it covers, so the activity added to it is by
+date (after the statement date), not by `stmt_code`.
 
 `overview` carries each account's `outstanding_aed` and anchor, and the profile's
 `outstanding` (active accounts), `outstanding_complete` (every account anchored, every AED

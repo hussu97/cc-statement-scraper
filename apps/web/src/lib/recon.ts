@@ -19,7 +19,27 @@ export function reconChecks(checks: Checks): ReconCheck[] {
   const bool = (k: string) => (typeof c[k] === "boolean" ? (c[k] as boolean) : null);
   if ("debits_match" in c) out.push({ key: "debits", label: "Debits add up to the statement total", ok: bool("debits_match"), detail: `Lines: ${formatMoney(c.sum_debits as string)}` });
   if ("credits_match" in c) out.push({ key: "credits", label: "Credits add up to the statement total", ok: bool("credits_match"), detail: `Lines: ${formatMoney(c.sum_credits as string)}` });
-  if ("balance_equation" in c)
+  // An SMS statement (v_sms_statements): no lines of its own, so the check is the ledger
+  // (previous closing + the cycle's transactions) against the closing balance the bank texted.
+  const fromSms = c.source === "sms";
+  if (fromSms && "balance_equation" in c)
+    out.push({
+      key: "balance",
+      label: "The ledger adds up to the closing balance in the bank's SMS",
+      ok: bool("balance_equation"),
+      detail: smsGapDetail(c),
+    });
+  if (fromSms && c.opening_basis === "none")
+    out.push({ key: "opening", label: "No earlier statement to start from, so this cycle can't be checked yet", ok: null });
+  if (fromSms && c.history_uploaded === false)
+    out.push({ key: "history", label: "No history export for this cycle yet: upload one to see its lines", ok: null });
+  if (fromSms && typeof c.unpriced_txns === "number" && c.unpriced_txns > 0)
+    out.push({
+      key: "unpriced",
+      label: `${c.unpriced_txns} transaction${c.unpriced_txns === 1 ? "" : "s"} without an AED amount yet, so the ledger total is approximate`,
+      ok: null,
+    });
+  if (!fromSms && "balance_equation" in c)
     out.push({
       key: "balance",
       label: "Opening + debits − credits = closing",
@@ -49,8 +69,20 @@ export function reconChecks(checks: Checks): ReconCheck[] {
     });
   if (c.sms_coverage !== null && c.sms_coverage !== undefined)
     out.push({ key: "coverage", label: "Purchases also seen by SMS", ok: null, detail: formatPercent(c.sms_coverage as number) });
-  if (typeof c.line_count === "number") out.push({ key: "lines", label: "Lines on the statement", ok: null, detail: String(c.line_count) });
+  if (typeof c.line_count === "number")
+    out.push({ key: "lines", label: fromSms ? "Lines from the history export" : "Lines on the statement", ok: null, detail: String(c.line_count) });
   return out;
+}
+
+/** "Ledger AED 4,335.82 · AED 60.85 short of the bank" for an SMS statement's balance check. */
+function smsGapDetail(c: Record<string, unknown>): string | undefined {
+  if (c.expected_closing === undefined) return undefined;
+  const ledger = `Ledger ${formatMoney(c.expected_closing as string)}`;
+  // gap = bank − ledger, a decimal string: positive means the ledger is missing spends.
+  const gap = typeof c.ledger_gap === "string" ? c.ledger_gap : "0";
+  if (/^-?0*(\.0*)?$/.test(gap)) return ledger;
+  const size = formatMoney(gap.replace(/^-/, ""));
+  return gap.startsWith("-") ? `${ledger} · ${size} more than the bank` : `${ledger} · ${size} less than the bank`;
 }
 
 export type ReconTone = "positive" | "warn" | "danger" | "neutral";

@@ -1,5 +1,25 @@
 # Changelog
 
+## SIB statements from the statement-summary SMS — 2026-10-15
+
+### Backend (Supabase)
+
+- **feat** SIB's monthly "payment is due … outstanding amount … minimum payment due" SMS now makes a statement (`msg_kind = 'statement_summary'`, new SIB template) for the cycle that closed before it arrived, with the closing balance, minimum due and due date. SIB gets a payment status, the due-date reminder, a statement anchor for its outstanding balance and a "latest statement" on Overview. The existing 2026-10-14 SMS is reprocessed on deploy into the 2026-10-12 statement.
+- **feat** `public.v_sms_statements`: an SMS statement takes its lines from the cycle's history export and is checked live against the ledger (previous closing + the cycle's pending and posted transactions); the gap shows missing spends or a history export not uploaded yet. `statement_cycles` lists the pair as one row (new `from_sms` column) and `statement_detail` carries `from_sms` and `history_stmt_code`.
+- **fix** `v_account_balances`: activity on top of an SMS statement is counted by date after the close, so pending SMS spends inside the closed cycle aren't counted twice.
+
+### Web
+
+- **feat** Statements: an SMS statement is labelled "from SMS", has no Open PDF, and its check reads "The ledger adds up to the closing balance in the bank's SMS" with the ledger total and the gap; a missing history export is called out.
+
+### iOS
+
+- **feat** Statements: "SMS statement" rows and detail, a "No history export" chip, the ledger-vs-SMS check as a sentence, and no PDF button for an SMS statement.
+
+### Docs
+
+- **docs** ARCHITECTURE.md: SMS statements and their balance anchor rule.
+
 ## SIB billed "Statement details" detected — 2026-10-15
 
 ### Parser

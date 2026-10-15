@@ -117,6 +117,7 @@ function StatementRow({ s, today }: { s: StatementCycle; today: string }) {
           <span className="min-w-0">
             <span className="block truncate text-sm text-ink">
               {formatDate(s.statement_date)} {s.kind !== "statement" && <span className="text-subtle">· history export</span>}
+              {s.from_sms && <span className="text-subtle">· from SMS</span>}
             </span>
             <span className="block truncate text-[12px] text-muted">
               {s.card_last4 ? `•${s.card_last4}` : "Card unknown"} · {s.period_start ? `${formatDate(s.period_start, "short")} – ${formatDate(s.period_end, "short")}` : "period unknown"}

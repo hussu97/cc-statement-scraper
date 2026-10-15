@@ -31,6 +31,9 @@ public struct StatementDetail: Decodable, Sendable, Hashable {
         public let paymentStatus: String?
         /// Paid towards this statement (AED); absent from older servers.
         public let amountPaid: Decimal?
+        /// Header from the bank's statement SMS; lines from `historyStmtCode`.
+        public let fromSms: Bool
+        public let historyStmtCode: String?
 
         /// Whether this statement was paid; nil from an older server.
         public var duePayment: DuePayment? { DuePayment(status: paymentStatus, amountPaid: amountPaid) }
@@ -40,7 +43,7 @@ public struct StatementDetail: Decodable, Sendable, Hashable {
             // `.convertFromSnakeCase` capitalises after the digit: `card_last4s` → `cardLast4S`.
             case cardLast4s = "cardLast4S"
             case openingBalance, closingBalance, totalDebits, totalCredits, minDue, creditLimit, docCode
-            case reconStatus, reconChecks, paymentStatus, amountPaid
+            case reconStatus, reconChecks, paymentStatus, amountPaid, fromSms, historyStmtCode
         }
 
         public init(from decoder: any Decoder) throws {
@@ -65,6 +68,8 @@ public struct StatementDetail: Decodable, Sendable, Hashable {
             reconChecks = try? c.decodeIfPresent(ReconChecks.self, forKey: .reconChecks)
             paymentStatus = try c.decodeIfPresent(String.self, forKey: .paymentStatus)
             amountPaid = try c.decodeIfPresent(Decimal.self, forKey: .amountPaid)
+            fromSms = try c.decodeIfPresent(Bool.self, forKey: .fromSms) ?? false
+            historyStmtCode = try c.decodeIfPresent(String.self, forKey: .historyStmtCode)
         }
     }
 

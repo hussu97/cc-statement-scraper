@@ -106,6 +106,12 @@ function Detail({ data, categories, onOpen }: { data: StatementDetail; categorie
               {isHistory ? "History export" : "Statement"} · {formatDate(s.statement_date)}
             </h1>
             <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-muted">
+              {s.from_sms && (
+                <>
+                  <span>From the bank's SMS</span>
+                  <span aria-hidden>·</span>
+                </>
+              )}
               {s.card_last4s.length > 0 ? (
                 <span className="tabular">{s.card_last4s.map((l) => `•${l}`).join("  ")}</span>
               ) : (
@@ -117,9 +123,11 @@ function Detail({ data, categories, onOpen }: { data: StatementDetail; categorie
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" icon={<ExternalLink className="size-3.5" />} onClick={() => void openPdf(s.doc_code)} disabled={!s.doc_code}>
-            Open PDF
-          </Button>
+          {!s.from_sms && (
+            <Button size="sm" icon={<ExternalLink className="size-3.5" />} onClick={() => void openPdf(s.doc_code)} disabled={!s.doc_code}>
+              Open PDF
+            </Button>
+          )}
           <Link
             to="/activity"
             search={{ account: s.account_code, from: s.period_start ?? undefined, to: s.period_end ?? s.statement_date }}

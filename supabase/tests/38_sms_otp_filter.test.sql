@@ -87,6 +87,7 @@ create temp table fx as select $sms_otp_fixture${
   "Reversal of AED 850.00 on ADCB Credit Card XXX4821 at GRANDVIEW HOTEL on 05/10/2026.",
   "Review your transaction\nTap to approve your transaction at Vox Cinemas for AED46.00 on your ADCB Card XXX9208, valid for 10 minutes. If not initiated by you, please deny and call +971600502030",
   "Thank you for activating your new SIB Covered Card and accepting the updated Terms & Conditions. Your new card is now ready to use. Remember to update your card details across secure digital wallets and subscriptions. To view Terms & Conditions and Key Facts Statement, visit www.sib.ae/CSU",
+  "Covered Card ending with XXXX9213 payment is due on 30-10-2026, outstanding amount is AED 4,396.67, minimum payment due is AED 219.83. Ensure paying before 30-10-2026 to avoid deducting any amount under commitment to donate clause.",
   "Your account number XXX310001 has been inactive since 2026.01.31. Kindly make a transaction to avoid account from becoming dormant.",
   "Your ADCB Credit Card XXX4821 was used for AED 52.25 at SAFFRON KITCHEN,DUBAI on 03/10/2026 14:22. Available limit: AED 21,345.10.",
   "Your ADCB Credit Card XXX4821 was used for EUR 86.40 at RESTAURANTE MIRADOURO on 13/09/2026 20:40. Available limit: AED 18,002.00.",

@@ -59,6 +59,9 @@ export interface StatementHeader {
   payment_status?: PaymentStatus | null;
   /** Card repayments after the statement date, a decimal string. */
   amount_paid?: Decimal | null;
+  /** Header from the bank's statement SMS (v_sms_statements); lines from the cycle's history export. Optional: an older server omits it. */
+  from_sms?: boolean;
+  history_stmt_code?: string | null;
 }
 
 /** statement_detail(p_profile_code, p_stmt_code). Generated types say Json; this is its shape (ARCHITECTURE §6). */

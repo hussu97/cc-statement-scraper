@@ -180,6 +180,9 @@ public struct StatementCycle: Decodable, Sendable, Hashable, Identifiable {
     public let paymentStatus: String?
     /// Paid towards this statement (AED); absent from older servers.
     public let amountPaid: Decimal?
+    /// Header from the bank's statement SMS, lines from the cycle's history
+    /// export (`v_sms_statements`); absent from older servers.
+    public let fromSms: Bool?
 
     /// Whether this statement was paid; nil from an older server.
     public var duePayment: DuePayment? { DuePayment(status: paymentStatus, amountPaid: amountPaid) }
@@ -207,6 +210,17 @@ public struct ReconChecks: Decodable, Sendable, Hashable {
     public let unpricedLines: Int?
     /// No lines although the header shows activity, or all were superseded.
     public let noLines: Bool?
+    /// `sms` for a statement made from the bank's SMS: then `balanceEquation`
+    /// compares the ledger (previous closing + the cycle's transactions) with
+    /// the SMS closing balance, and `ledgerGap` = bank − ledger.
+    public let source: String?
+    public let ledgerGap: Decimal?
+    public let historyUploaded: Bool?
+    /// `statement | balance_migration | none`: what the ledger started from.
+    public let openingBasis: String?
+    public let unpricedTxns: Int?
+
+    public var isFromSms: Bool { source == "sms" }
 }
 
 /// `rpc('filter_meta')`.
