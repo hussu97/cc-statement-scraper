@@ -1,5 +1,11 @@
 # Changelog
 
+## SIB billed "Statement details" detected — 2026-10-15
+
+### Parser
+
+- **fix** Parser 2026.10.15: the SIB app's "Statement details" export in its billed-statement view (Statement date, Opening balance, Payment due date) is detected as SIB. Its only bank name is the header logo image and, unlike the card-summary view, it has no "Card issuer SIB" line, so an upload without a bank hint failed permanently with `BANK_UNDETECTED` (Sentry 7783440279). Detection now reads the template: the title, the bare masked "Card 5290 xxxx xxxx 4821" line and the "Date Details Amount" header. It parses as a history extract, like the card-summary view.
+
 ## Outlook token refresh diagnostics — 2026-10-14
 
 ### Backend (Supabase)

@@ -241,3 +241,31 @@ def test_sib_statement_details_export_is_a_history(monkeypatch: pytest.MonkeyPat
     assert txns["Credit Card Payment"].transaction_kind == "payment"
     # The old card's billed balance moved onto the new card is not new spend.
     assert txns["Balance Migration - Retail POS"].transaction_kind == "adjustment"
+
+
+def test_sib_billed_statement_details_export_is_a_history(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The billed-statement view of "Statement details" ("Statement date", "Payment due date")."""
+    text = "\n".join(
+        [
+            "Statement details",
+            "JANE Q SAMPLE",
+            "Card 5290 xxxx xxxx 4821",
+            "Statement date 14 Oct 2026",
+            "Opening balance AED 2,150.25",
+            "Outstanding amount AED 2,150.25",
+            "Payment due date 30 Oct 2026",
+            "Minimum payment due AED 107.51",
+            "Date Details Amount",
+            "12 Oct 2026 CORNER GROCERY SHARJAH AED -105.75",
+            "03 Oct 2026 AIRLINE MUMBAI INR -12,400.00",
+            "15 Sep 2026 Credit Card Payment AED 1,800.00",
+        ]
+    )
+    _fake_pdf(monkeypatch, text)
+    results = parse_sib_transaction_history(Path("dummy-sib-billed-details.pdf"))
+    txns = {tx.merchant_raw: tx for r in results for tx in r.transactions}
+    assert set(txns) == {"CORNER GROCERY SHARJAH", "AIRLINE MUMBAI", "Credit Card Payment"}
+    assert {tx.card_last4 for tx in txns.values()} == {"4821"}
+    assert results[0].metadata["card_holder"] == "JANE Q SAMPLE"
+    assert txns["AIRLINE MUMBAI"].currency_original == "INR"
+    assert txns["Credit Card Payment"].transaction_kind == "payment"
