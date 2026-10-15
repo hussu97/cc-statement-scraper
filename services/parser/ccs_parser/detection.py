@@ -125,6 +125,16 @@ def _shared_enbd_template(text: str) -> bool:
     return "STATEMENT PERIOD:" in text and "CARD TYPE:" in text
 
 
+# The SIB app's "Statement details" export names the bank only in its header logo (an image).
+# Its billed-statement view has no "Card issuer SIB" line either, just the template: a bare
+# masked card line and the history column header.
+_SIB_BARE_CARD_RE = re.compile(r"^\s*CARD\s+\d{4}\s+X{4}\s+X{4}\s+\d{4}\s*$", re.MULTILINE)
+
+
+def _sib_statement_details(text: str) -> bool:
+    return "DATE DETAILS AMOUNT" in text and _SIB_BARE_CARD_RE.search(text) is not None
+
+
 def _layout_scores(text: str) -> dict[str, int]:
     """Statement-template labels. ENBD and EIB share one template; names tell them apart."""
     scores: dict[str, int] = {}
@@ -148,7 +158,7 @@ def _layout_scores(text: str) -> dict[str, int]:
         vote("SIB", 3)
     if "TRANSACTION HISTORY" in text and "ACCOUNT NO." in text and "ACCOUNT TYPE" in text:
         vote("SIB", 3)
-    if "STATEMENT DETAILS" in text and "CARD ISSUER SIB" in text:
+    if "STATEMENT DETAILS" in text and ("CARD ISSUER SIB" in text or _sib_statement_details(text)):
         vote("SIB", 3)
     if _word("SIB", text) and "ISLAMIC BANK" in text:
         vote("SIB", 1)
