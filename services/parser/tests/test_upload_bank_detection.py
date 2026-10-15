@@ -144,3 +144,23 @@ def test_sib_app_statement_details_export_is_detected() -> None:
     Date Details Amount
     08 Oct 2026 CORNER GROCERY SHARJAH AED -105.75"""
     assert _infer_bank_code_from_text(text) == "SIB"
+
+
+def test_sib_app_billed_statement_details_is_detected() -> None:
+    """The billed-statement view: no "Card issuer SIB" line; the bank is only in the logo image."""
+    text = """Statement details
+    JANE Q SAMPLE
+    Card 5290 xxxx xxxx 4821
+    Statement date 14 Oct 2026
+    Opening balance AED 2,150.25
+    Outstanding amount AED 2,150.25
+    Payment due date 30 Oct 2026
+    Minimum payment due AED 107.51
+    Date Details Amount
+    12 Oct 2026 CORNER GROCERY SHARJAH AED -105.75
+    15 Sep 2026 Credit Card Payment AED 1,800.00"""
+    assert _infer_bank_code_from_text(text) == "SIB"
+
+
+def test_statement_details_title_alone_is_not_sib() -> None:
+    assert _infer_bank_code_from_text("Statement details\nDate Details Amount") is None
