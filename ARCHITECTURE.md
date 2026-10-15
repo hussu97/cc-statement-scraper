@@ -222,6 +222,13 @@ timeout applies.
    `history_line` evidence. A transaction may hold one statement line **and** one history line,
    so a history row and the real statement row land on the same transaction and are never
    double-counted. Statement amounts win. History windows are additive (rule 2).
+   The parser buckets an export's rows into cycles (SIB: 15th to 14th). When the bucketing
+   changes, a row arrives on a history statement with another date while it is still current
+   on the old one: `private.rebucket_history_lines` moves it (the new line takes the old line's
+   transaction evidence and documents; the old line stops being current), so the transaction
+   keeps its code and user fields, and an old history statement left with no current line is
+   superseded by the new one. An export whose cycles close on another day than
+   `accounts.cycle_close_day` gets an ingest warning.
    **SMS statements.** SIB sends no statement document: its monthly statement-summary SMS
    (`msg_kind = 'statement_summary'`: outstanding amount, minimum due, due date) makes a
    header-only `kind = statement` row with `statements.sms_code` set and no `doc_code`
