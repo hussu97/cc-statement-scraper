@@ -138,7 +138,7 @@ public enum ReconPresentation {
     public static func findings(status: String?, checks: ReconChecks?, header: StatementDetail.Header) -> [ReconFinding] {
         var out: [ReconFinding] = []
         switch status {
-        case "n/a":
+        case "n/a" where checks?.isFromSms != true:
             out.append(.init(text: "A history extract has no totals, so there is nothing to check its lines against.", tone: .neutral, passed: nil))
         case nil:
             out.append(.init(text: "Not reconciled yet. Checks run after the statement is imported.", tone: .neutral, passed: nil))
@@ -159,7 +159,9 @@ public enum ReconPresentation {
                 ? .init(text: "Credit lines add up to the statement's total credits (\(aed(header.totalCredits))).", tone: .positive, passed: true)
                 : .init(text: "Credit lines add up to \(aed(checks.sumCredits)), but the statement says \(aed(header.totalCredits)).", tone: .danger, passed: false))
         }
-        if let ok = checks.balanceEquation {
+        if checks.isFromSms {
+            out.append(contentsOf: smsFindings(checks, header: header))
+        } else if let ok = checks.balanceEquation {
             out.append(ok
                 ? .init(text: "Opening balance + debits − credits = closing balance.", tone: .positive, passed: true)
                 : .init(text: "Opening balance + debits − credits gives \(aed(checks.expectedClosing)), not the closing balance of \(aed(header.closingBalance)).", tone: .danger, passed: false))
@@ -183,10 +185,36 @@ public enum ReconPresentation {
     }
 
     static func plural(_ n: Int, _ one: String, _ many: String) -> String { "\(n) \(n == 1 ? one : many)" }
+
+    /// An SMS statement has no lines of its own: the check is the ledger against
+    /// the closing balance the bank texted (`ledgerGap` = bank − ledger).
+    static func smsFindings(_ checks: ReconChecks, header: StatementDetail.Header) -> [ReconFinding] {
+        var out: [ReconFinding] = []
+        func aed(_ v: Decimal?) -> String { v.map { MoneyFormat.aed($0) } ?? "—" }
+        if let ok = checks.balanceEquation {
+            if ok {
+                out.append(.init(text: "The ledger adds up to the closing balance in the bank's SMS (\(aed(header.closingBalance))).", tone: .positive, passed: true))
+            } else {
+                let gap = checks.ledgerGap ?? 0
+                let side = gap > 0 ? "less" : "more"
+                out.append(.init(text: "The ledger adds up to \(aed(checks.expectedClosing)), \(aed(gap < 0 ? -gap : gap)) \(side) than the closing balance of \(aed(header.closingBalance)) in the bank's SMS.", tone: .warn, passed: false))
+            }
+        }
+        if checks.openingBasis == "none" {
+            out.append(.init(text: "There's no earlier statement to start from, so this cycle can't be checked yet.", tone: .neutral, passed: nil))
+        }
+        if checks.historyUploaded == false {
+            out.append(.init(text: "No history export for this cycle yet: upload one to see its lines.", tone: .info, passed: nil))
+        }
+        if let n = checks.unpricedTxns, n > 0 {
+            out.append(.init(text: "\(plural(n, "transaction is", "transactions are")) waiting for an AED amount, so the ledger total is approximate.", tone: .info, passed: nil))
+        }
+        return out
+    }
 }
 
 extension StatementDetail.Header {
-    public var kindLabel: String { kind == "history_extract" ? "History extract" : "Statement" }
+    public var kindLabel: String { kind == "history_extract" ? "History extract" : fromSms ? "SMS statement" : "Statement" }
 
     /// `"•1234 · •5678"`, nil when no card is known.
     public var cardsLabel: String? {

@@ -1,0 +1,21 @@
+{
+  "statement": {
+    "stmt_code": "stm_01hzy3k8w9m2n4p6q8r0s2t4v9", "kind": "statement", "bank_code": "SIB",
+    "account_code": "acc_01hzy3k8w9m2n4p6q8r0s2t4v7", "card_last4s": ["5052"],
+    "statement_date": "2026-10-12", "period_start": "2026-09-13", "period_end": "2026-10-12", "due_date": "2026-10-30",
+    "opening_balance": null, "closing_balance": "4396.67", "total_debits": null, "total_credits": null,
+    "min_due": "219.83", "credit_limit": null, "doc_code": null, "utilisation": "0.4397",
+    "recon_status": "warn",
+    "recon_checks": {"source": "sms", "history_uploaded": true, "line_count": 1, "opening_basis": "balance_migration",
+                     "opening_balance": "0.00", "ledger_activity": "4335.82", "expected_closing": "4335.82",
+                     "ledger_gap": "60.85", "balance_equation": false},
+    "payment_status": "unpaid", "amount_paid": "0.00",
+    "from_sms": true, "history_stmt_code": "stm_01hzy3k8w9m2n4p6q8r0s2t4v8"
+  },
+  "debits": {"count": 1, "total": "105.75", "lines": [
+    {"line_code": "lin_01hzy3k8w9m2n4p6q8r0s2t4v7", "txn_code": "txn_01hzy3k8w9m2n4p6q8r0s2t4v7",
+     "txn_date": "2026-10-08", "posting_date": "2026-10-08", "description": "INTEGRATED GAS SERVICE DU",
+     "merchant_name": "Integrated Gas Service", "amount_aed": "105.75", "amount_original": "105.75",
+     "currency_original": "AED", "category_code": null, "kind": "purchase", "card_last4": "5052"}]},
+  "credits": {"count": 0, "total": "0.00", "lines": []}
+}

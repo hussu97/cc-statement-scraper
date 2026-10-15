@@ -37,6 +37,26 @@ describe("recon checks", () => {
     expect(rows.find((r) => r.key === "sms")!.label).toBe("2 SMS purchases missing from this statement");
     expect(reconChecks(null)).toEqual([]);
   });
+
+  it("checks an SMS statement's ledger against the bank's closing balance", () => {
+    const rows = reconChecks({ source: "sms", history_uploaded: true, line_count: 24, opening_basis: "statement", expected_closing: "4335.82", ledger_gap: "60.85", balance_equation: false });
+    expect(rows.map((r) => [r.key, r.ok])).toEqual([
+      ["balance", false],
+      ["lines", null],
+    ]);
+    expect(rows[0]!.label).toBe("The ledger adds up to the closing balance in the bank's SMS");
+    expect(rows[0]!.detail).toBe("Ledger AED 4,335.82 · AED 60.85 less than the bank");
+    expect(rows[1]!.label).toBe("Lines from the history export");
+    expect(reconChecks({ source: "sms", expected_closing: "10.00", ledger_gap: "-2.50", balance_equation: false })[0]!.detail).toBe(
+      "Ledger AED 10.00 · AED 2.50 more than the bank",
+    );
+    expect(reconChecks({ source: "sms", expected_closing: "10.00", ledger_gap: "0.00", balance_equation: true })[0]!.detail).toBe("Ledger AED 10.00");
+    expect(reconChecks({ source: "sms", history_uploaded: false, opening_basis: "none", unpriced_txns: 1 }).map((r) => r.key)).toEqual([
+      "opening",
+      "history",
+      "unpriced",
+    ]);
+  });
 });
 
 describe("search codecs", () => {

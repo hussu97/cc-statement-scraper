@@ -63,6 +63,34 @@ struct StatementDetailTests {
         #expect(none.map(\.text) == ["A history extract has no totals, so there is nothing to check its lines against."])
     }
 
+    @Test("an SMS statement: labelled, checked against the ledger, lines from the history export")
+    func smsStatement() throws {
+        let d = try LedgerJSON.decode(StatementDetail.self, from: try fixture("statement_detail_sms"))
+        let h = d.statement
+        #expect(h.fromSms)
+        #expect(h.historyStmtCode == "stm_01hzy3k8w9m2n4p6q8r0s2t4v8")
+        #expect(h.kindLabel == "SMS statement")
+        #expect(h.reconChecks?.isFromSms == true)
+        #expect(h.reconChecks?.ledgerGap == Decimal(string: "60.85")!)
+        let findings = ReconPresentation.findings(status: h.reconStatus, checks: h.reconChecks, header: h)
+        #expect(findings.map(\.text) == [
+            "The ledger adds up to AED 4,335.82, AED 60.85 less than the closing balance of AED 4,396.67 in the bank's SMS.",
+        ])
+        #expect(findings.map(\.passed) == [false])
+
+        let missing = try LedgerJSON.decode(ReconChecks.self, from: Data(#"""
+            {"source": "sms", "history_uploaded": false, "opening_basis": "none", "unpriced_txns": 2}
+            """#.utf8))
+        #expect(ReconPresentation.findings(status: "n/a", checks: missing, header: h).map(\.text) == [
+            "There's no earlier statement to start from, so this cycle can't be checked yet.",
+            "No history export for this cycle yet: upload one to see its lines.",
+            "2 transactions are waiting for an AED amount, so the ledger total is approximate.",
+        ])
+
+        let plain = try LedgerJSON.decode(StatementDetail.self, from: try fixture("statement_detail")).statement
+        #expect(!plain.fromSms && plain.kindLabel == "Statement")
+    }
+
     @Test("lines: merchant over printed text, FX original, kind chip, VoiceOver sentence")
     func lines() throws {
         let d = try LedgerJSON.decode(StatementDetail.self, from: try fixture("statement_detail"))

@@ -122,7 +122,7 @@ select set_eq(
     'statement_lines:authenticated:SELECT', 'statement_recon:authenticated:SELECT', 'statements:authenticated:SELECT',
     'transaction_evidence:authenticated:SELECT', 'transactions.exclude_from_spend:authenticated:UPDATE', 'transactions.manual_category_code:authenticated:UPDATE',
     'transactions.notes:authenticated:UPDATE', 'transactions:authenticated:SELECT', 'v_account_balances:authenticated:SELECT',
-    'v_spend:authenticated:SELECT', 'v_statement_payments:authenticated:SELECT',
+    'v_sms_statements:authenticated:SELECT', 'v_spend:authenticated:SELECT', 'v_statement_payments:authenticated:SELECT',
     'v_transactions:authenticated:SELECT'
   ]::text[],
   'client privileges on public tables match the intended matrix exactly'
