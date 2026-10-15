@@ -10,6 +10,7 @@
 
 - **fix** `private.rebucket_history_lines` (called by `ingest_one_statement`): a history row that arrives on a history statement with another date while it is still current on an older one moves to the new statement with its transaction, evidence and documents, instead of creating a duplicate transaction; an old history statement left with no current row is superseded by the new one. The existing 12th-dated SIB exports turn into 14th-dated ones the next time an export is uploaded or re-parsed, with every transaction code and user field kept.
 - **feat** An export whose cycles close on another day than the account's `cycle_close_day` adds an ingest warning.
+- **fix** A line's identity (`line_key`, `private.statement_line_key`, now the only definition ingest uses) ignores letter case: SIB's card-summary and billed "Statement details" exports print one row as `…SERVICEDubai` and `…SERVICEDUBAI`, which made two lines and a duplicate transaction. The migration re-keys existing lines (`private.rekey_statement_lines`): case variants of one row in a statement merge into the older line, and the duplicate transaction hands over its SMS/statement evidence, notes and manual category and is voided (`duplicate_line`).
 
 ## SIB statements from the statement-summary SMS — 2026-10-15
 
