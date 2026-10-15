@@ -231,7 +231,8 @@ timeout applies.
    leaves it alone, and a PDF for the same date takes the row over (it has no document).
    `public.v_sms_statements` pairs it with the cycle's history export (±3 days), whose lines
    are its lines, and checks the SMS closing balance against the ledger: the previous closing
-   (or the BALANCE MIGRATION anchor) plus every pending or posted transaction up to the close.
+   (or the BALANCE MIGRATION anchor) plus every pending or posted transaction up to the close,
+   except a charge still pending on the close day (the bank closes with what has posted).
    The check is live (`statement_cycles`, `statement_detail`), so a later history upload or
    late SMS closes a gap without a re-run; `reconcile_statement` stores the same result and
    raises no `missing_from_statement` reviews for it. `statement_cycles` lists the pair as one
@@ -552,7 +553,7 @@ document, so each account is anchored on a balance the bank printed, the latest 
 - `none`: `outstanding_aed` is null, not a guess.
 
 An SMS statement anchor has no lines to say what it covers, so the activity added to it is by
-date (after the statement date), not by `stmt_code`.
+date (after the statement date, plus charges dated on it that are still pending), not by `stmt_code`.
 
 `overview` carries each account's `outstanding_aed` and anchor, and the profile's
 `outstanding` (active accounts), `outstanding_complete` (every account anchored, every AED

@@ -22,7 +22,9 @@
 --   • public.v_sms_statements: per SMS statement, the history export of the same cycle (its
 --     lines are the statement's lines) and a check of the SMS closing balance against the
 --     ledger: previous closing (or the BALANCE MIGRATION anchor) + every pending/posted
---     transaction up to the close. A gap means spends are missing or the cycle's history
+--     transaction up to the close, except a charge still pending on the close day: the bank
+--     closes with what has posted, so an authorisation made that day lands in the next cycle
+--     (SIB, 14 Oct: the DESCO charge is in the available balance but not the closing). A gap means spends are missing or the cycle's history
 --     export was never uploaded; uploading it or later SMS close the gap. Computed live, so
 --     it is never stale; reconcile_statement stores the same result in statement_recon.
 --     No missing_from_statement reviews: without lines there is nothing to be missing from.
@@ -31,11 +33,12 @@
 --     and the live check. statement_detail of a merged history export returns the SMS
 --     statement (activity links point at the export).
 --   • v_account_balances: an SMS statement has no lines to tell what it covers, so activity
---     on top of it is by date (after the close), not by stmt_code.
+--     on top of it is by date (after the close, plus close-day charges still pending), not by
+--     stmt_code.
 --
 -- Content (CLAUDE.md §1.9): the SIB template is inserted when no SIB template of that
 -- name exists. Inserting it re-processes SIB's unparsed messages (DB-22), which turns the
--- 2026-10-14 summary into the 2026-10-12 statement on deploy.
+-- 2026-10-14 summary into the 2026-10-14 statement on deploy (SIB •5052 closes on the 14th).
 
 -- ── msg_kind ────────────────────────────────────────────────────────────────
 alter table public.sms_templates drop constraint sms_templates_msg_kind_check;
@@ -231,7 +234,8 @@ cross join lateral (
          count(*) filter (where t.amount_aed is null)::integer as unpriced_count
   from public.transactions t
   where t.profile_code = st.profile_code and t.account_code = st.account_code
-    and t.status in ('pending', 'posted') and t.txn_date <= st.statement_date
+    and t.status in ('pending', 'posted')
+    and (t.txn_date < st.statement_date or (t.txn_date = st.statement_date and t.status = 'posted'))
     and case k.basis
           when 'statement' then t.txn_date > p.statement_date
           when 'balance_migration' then t.txn_date >= m.migration_date
@@ -617,6 +621,7 @@ cross join lateral (
     and case k.anchor_kind
           when 'statement' then
             case when s.from_sms then t.txn_date > s.statement_date
+                                      or (t.txn_date = s.statement_date and t.status = 'pending')
                  else t.stmt_code is null
                       or exists (select 1 from public.statements ts
                                  where ts.stmt_code = t.stmt_code and ts.statement_date > s.statement_date)
@@ -771,6 +776,13 @@ begin
   );
 end;
 $$;
+
+-- ── SIB close day ───────────────────────────────────────────────────────────
+-- Hussain's SIB Covered Card (•5052) closes on the 14th (confirmed 2026-10-15; the SIB
+-- parser's history buckets assume the 12th). Set before the template below so the
+-- reprocessed 2026-10-14 summary lands on the 14 Oct cycle. Guarded: only while unset.
+update public.accounts set cycle_close_day = 14
+where account_code = 'acc_01m4dnjv0ygcmgpn34ztzardjq' and bank_code = 'SIB' and cycle_close_day is null;
 
 -- ── SIB statement summary template ──────────────────────────────────────────
 insert into public.sms_templates (bank_code, name, sender_pattern, body_pattern, field_groups, date_format,

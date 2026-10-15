@@ -70,7 +70,8 @@ values (pg_temp.v('hist'), pg_temp.v('p'), pg_temp.v('acc'), 'history_line', 1, 
         'T51 SPEND', 'T51 SPEND', 100, 'AED', 100, 'debit', 'purchase');
 select pg_temp.txn('2026-09-20', 200, 'credit', 'posted', pg_temp.v('hist'), 'payment');
 select pg_temp.txn('2026-10-01', 100, 'debit', 'posted', pg_temp.v('hist'));
-select pg_temp.txn('2026-10-12', 50, 'debit', 'pending');   -- by SMS, on the close day: inside the closing
+select pg_temp.txn('2026-10-11', 50, 'debit', 'pending');   -- by SMS, before the close: inside the closing
+select pg_temp.txn('2026-10-12', 30, 'debit', 'pending');   -- on the close day, not posted: next cycle
 select pg_temp.txn('2026-10-14', 25, 'debit', 'pending');   -- after the close
 
 -- 1000 + 100 + 50 − 200 = 950. Arrives 00:03 Dubai on the 15th (20:03 UTC on the 14th).
@@ -123,7 +124,8 @@ select is((pg_temp.v('d')::jsonb#>>'{statement,from_sms}', pg_temp.v('d')::jsonb
 
 -- ── the balance and the payment status anchor on it ────────────────────────
 select is((select (anchor_stmt_code, outstanding_aed)::text from public.v_account_balances where account_code = pg_temp.v('acc')),
-          '(' || pg_temp.v('stmt') || ',975.00)', 'outstanding = SMS closing + spends after the close (the 12th''s pending is inside it)');
+          '(' || pg_temp.v('stmt') || ',1005.00)',
+          'outstanding = SMS closing + spends after the close + the close day''s pending charge (the 11th''s is inside it)');
 select is((select payment_status from public.v_statement_payments where stmt_code = pg_temp.v('stmt')), 'unpaid',
           'the SMS statement has a payment status');
 

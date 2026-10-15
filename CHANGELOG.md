@@ -4,9 +4,9 @@
 
 ### Backend (Supabase)
 
-- **feat** SIB's monthly "payment is due … outstanding amount … minimum payment due" SMS now makes a statement (`msg_kind = 'statement_summary'`, new SIB template) for the cycle that closed before it arrived, with the closing balance, minimum due and due date. SIB gets a payment status, the due-date reminder, a statement anchor for its outstanding balance and a "latest statement" on Overview. The existing 2026-10-14 SMS is reprocessed on deploy into the 2026-10-12 statement.
-- **feat** `public.v_sms_statements`: an SMS statement takes its lines from the cycle's history export and is checked live against the ledger (previous closing + the cycle's pending and posted transactions); the gap shows missing spends or a history export not uploaded yet. `statement_cycles` lists the pair as one row (new `from_sms` column) and `statement_detail` carries `from_sms` and `history_stmt_code`.
-- **fix** `v_account_balances`: activity on top of an SMS statement is counted by date after the close, so pending SMS spends inside the closed cycle aren't counted twice.
+- **feat** SIB's monthly "payment is due … outstanding amount … minimum payment due" SMS now makes a statement (`msg_kind = 'statement_summary'`, new SIB template) for the cycle that closed before it arrived, with the closing balance, minimum due and due date. SIB gets a payment status, the due-date reminder, a statement anchor for its outstanding balance and a "latest statement" on Overview. The SIB •5052 account's close day is set to the 14th (confirmed by the owner), so the existing 2026-10-14 SMS is reprocessed on deploy into the 2026-10-14 statement.
+- **feat** `public.v_sms_statements`: an SMS statement takes its lines from the cycle's history export and is checked live against the ledger (previous closing + the cycle's pending and posted transactions); the gap shows missing spends or a history export not uploaded yet. A charge still pending on the close day counts in the next cycle, since the bank closes with what has posted. `statement_cycles` lists the pair as one row (new `from_sms` column) and `statement_detail` carries `from_sms` and `history_stmt_code`.
+- **fix** `v_account_balances`: activity on top of an SMS statement is counted by date after the close, plus close-day charges still pending, so pending SMS spends inside the closed cycle aren't counted twice. For SIB this gives AED 4,497.21, the bank's own figure.
 
 ### Web
 
