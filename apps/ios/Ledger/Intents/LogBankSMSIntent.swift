@@ -18,7 +18,7 @@ struct LogBankSMSIntent: AppIntent {
 
     @Parameter(title: "Message", description: "The message text (Shortcut Input → Content).",
                inputOptions: String.IntentInputOptions(multiline: true))
-    var message: String
+    var message: String?
 
     @Parameter(title: "Sender", description: "The sender (Shortcut Input → Sender). Optional.")
     var sender: String?
@@ -32,7 +32,9 @@ struct LogBankSMSIntent: AppIntent {
             return .result(value: "not_configured", dialog: "Bank Ledger isn't configured.")
         }
         Telemetry.start(target: .intent, config: services.config, isDebugBuild: BuildFlavor.isDebug)
-        let (outcome, dialog) = await services.smsIntake().handle(body: message, sender: sender)
+        // Optional so an empty Content reaches `SMSIntake` (dropped as empty) instead of
+        // iOS asking for a value mid-automation, which hung the app on launch (Sentry 7796165023).
+        let (outcome, dialog) = await services.smsIntake().handle(body: message ?? "", sender: sender)
         Telemetry.breadcrumb("sms_ingest", outcome: outcome.telemetryOutcome, data: ["entry": "intent"])
         // Saved but not sent (e.g. no data): ask iOS to send it once a connection is back.
         if case .queued = outcome { await BackgroundSync.schedule(services) }

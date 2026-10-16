@@ -1,5 +1,11 @@
 # Changelog
 
+## Capture intents never ask for a value — 2026-10-16
+
+### iOS
+
+- **fix** "Log Bank SMS" (Message) and "Log Card Payment" (Merchant, Card) take optional parameters. A required one that arrived empty in a personal automation made iOS ask for a value instead of running the intent, and build 32 hung on launch with that request in flight (Sentry 7796165023). Empty input now reaches LedgerKit, which drops an empty SMS and refuses a payment with no merchant or card, with its reason. Guarded by LedgerKit `BackgroundIntentParameterGuardTests`.
+
 ## SIB history exports close on the 14th — 2026-10-15
 
 ### Parser

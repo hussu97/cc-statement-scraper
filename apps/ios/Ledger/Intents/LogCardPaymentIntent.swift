@@ -30,10 +30,10 @@ struct LogCardPaymentIntent: AppIntent {
     var transactionAmount: String?
 
     @Parameter(title: "Merchant", description: "Where you paid (Shortcut Input → Merchant).")
-    var merchant: String
+    var merchant: String?
 
     @Parameter(title: "Card", description: "The card's name (Shortcut Input → Card or Pass).")
-    var card: String
+    var card: String?
 
     @Parameter(title: "Currency if missing",
                description: "Optional, e.g. AED. Used only when the amount arrives without a currency.")
@@ -50,13 +50,15 @@ struct LogCardPaymentIntent: AppIntent {
             return .result(value: "not_configured", dialog: "Bank Ledger isn't configured.")
         }
         Telemetry.start(target: .intent, config: services.config, isDebugBuild: BuildFlavor.isDebug)
+        // Optional so an empty Merchant or Card reaches `WalletCapture` (refused with its reason)
+        // instead of iOS asking for a value mid-automation, which hung the app on launch (Sentry 7796165023).
         let (outcome, dialog) = await services.walletIntake().handle(
-            amountText: transactionAmount, fallbackCurrency: fallbackCurrency, merchant: merchant, card: card)
+            amountText: transactionAmount, fallbackCurrency: fallbackCurrency, merchant: merchant ?? "", card: card ?? "")
         Telemetry.breadcrumb("wallet_ingest", outcome: outcome.telemetryOutcome, data: ["entry": "intent"])
         // Saved but not sent (e.g. no data at the till): ask iOS to send it once a connection is back.
         if case .queued = outcome { await BackgroundSync.schedule(services) }
         // Only what needs the person notifies (unknown card, signed out, not sent in an hour).
-        await LocalNotifications.afterCapture(outcome, capture: .payment(card: card), services: services)
+        await LocalNotifications.afterCapture(outcome, capture: .payment(card: card ?? ""), services: services)
         // Never opens the app: this runs in the background for every alert. A
         // review is named in the dialog (IOS-07r; README "Open URL ledger://review").
         return .result(value: outcome.telemetryOutcome, dialog: IntentDialog(stringLiteral: dialog))
