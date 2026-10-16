@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Tests for release-config-check.sh and sentry-release.sh against fixture
+# Tests for release-config-check.sh, sentry-release.sh and asc-retry.mjs against fixture
 # Info.plists and fake `sentry-cli` / `security` binaries: nothing here reaches
 # Sentry, the keychain or a real build. macOS only (plutil).
 #
@@ -208,6 +208,9 @@ expect pass "no org: warn, skip" "SENTRY_ORG not set" -- sentry_run SENTRY_AUTH_
 expect pass "org + project from env" "credit-card-ledger-apps" -- \
   sentry_run SENTRY_AUTH_TOKEN="$TOKEN" SENTRY_ORG=env-org SENTRY_PROJECT=credit-card-ledger-apps
 log_has "releases new --org env-org --project credit-card-ledger-apps ledger-ios@1.0.0+42" "env org/project"
+
+# testflight-distribute.mjs's App Store Connect retries (no network).
+if node --test "$HERE/asc-retry.test.mjs" > "$T/node-test.log" 2>&1; then ok; else cat "$T/node-test.log" >&2; bad "asc-retry.test.mjs"; fi
 
 echo "release_checks_test: $PASS passed, $FAILS failed"
 [[ $FAILS -eq 0 ]]
