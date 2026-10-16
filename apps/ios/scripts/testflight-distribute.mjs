@@ -39,6 +39,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { withRetry } from './asc-retry.mjs';
 
 const APP = { scheme: 'Ledger', bundleId: 'com.example.ledger', label: 'Bank Ledger (iPhone)' };
 const DEFAULT_GROUP = 'Friends & Family';
@@ -123,19 +124,23 @@ function token() {
 async function asc(method, endpoint, { query, body } = {}) {
   const url = new URL(`https://api.appstoreconnect.apple.com${endpoint}`);
   for (const [k, v] of Object.entries(query ?? {})) url.searchParams.set(k, v);
-  const res = await fetch(url, {
-    method,
-    headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const text = await res.text();
-  let json = null;
-  try {
-    json = text ? JSON.parse(text) : null;
-  } catch {
-    json = { raw: text };
-  }
-  return { status: res.status, ok: res.ok, json };
+  // A timeout per request, and GETs retried when Apple doesn't answer (asc-retry.mjs).
+  return withRetry(method, async (signal) => {
+    const res = await fetch(url, {
+      method,
+      headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+      signal,
+    });
+    const text = await res.text();
+    let json = null;
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      json = { raw: text };
+    }
+    return { status: res.status, ok: res.ok, json };
+  }, { log: (msg) => console.log(`[asc] ${method} ${endpoint}: ${msg}`) });
 }
 
 const details = (r) => (r.json?.errors ?? []).map((e) => e.detail || e.title).join('; ') || `HTTP ${r.status}`;

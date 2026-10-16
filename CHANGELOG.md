@@ -1,5 +1,11 @@
 # Changelog
 
+## TestFlight release retries App Store Connect — 2026-10-16
+
+### iOS
+
+- **fix** `testflight-distribute.mjs`: every App Store Connect request has a 60 s timeout, and a GET is retried (5 s, 15 s, 45 s) on a network error, a timeout, 429 or 5xx. Build 33's release step failed with a bare `fetch failed` after Apple's API didn't answer its first call for 5 minutes, although the upload had worked; a re-run released it. POSTs are still sent once. Tested by `asc-retry.test.mjs`, run from `release_checks_test.sh`.
+
 ## Capture intents never ask for a value — 2026-10-16
 
 ### iOS
