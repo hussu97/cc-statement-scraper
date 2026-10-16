@@ -9,6 +9,7 @@
 
 | When | Lesson |
 |---|---|
+| 2026-10-16 | [A background intent's parameters are optional: an empty required one makes iOS ask, and nobody answers](#a-background-intents-parameters-are-optional-an-empty-required-one-makes-ios-ask-and-nobody-answers) |
 | 2026-10-14 | [`invalid_client` is the app's secret, not the mailbox: rotate it, don't reconnect](#invalid_client-is-the-apps-secret-not-the-mailbox-rotate-it-dont-reconnect) |
 | 2026-10-14 | [A typed `NavigationStack` path drops every other value: push only its route type](#a-typed-navigationstack-path-drops-every-other-value-push-only-its-route-type) |
 | 2026-10-14 | [TanStack Router lays validated search over the raw URL: a dropped key survives](#tanstack-router-lays-validated-search-over-the-raw-url-a-dropped-key-survives) |
@@ -42,6 +43,17 @@
 | 2026-10-08 | [Tooling defaults that don't work here: `gh` account, Supabase MCP, `localhost`, pip](#tooling-defaults-that-dont-work-here-gh-account-supabase-mcp-localhost-pip) |
 
 ## Lessons
+
+### A background intent's parameters are optional: an empty required one makes iOS ask, and nobody answers
+- **What went wrong**: build 32 hit a fatal app hang 4 s after launch (Sentry 7796165023) with an
+  `LNNeedsValueRequest` being sent from the App Intents runtime: a non-optional `@Parameter`
+  ("Log Bank SMS" Message, "Log Card Payment" Merchant/Card) arrived empty from an automation,
+  so iOS asked for a value instead of running `perform()`, while LedgerKit already had the
+  empty-input answers (`dropEmpty`, `missingMerchant`, `missingCard`) that never got the chance.
+- **Rule**: every parameter of an `openAppWhenRun = false` intent run by automations is optional;
+  pass `?? ""` and let LedgerKit refuse empty input. A `requestValueDialog` belongs only on
+  intents a person runs by hand.
+- **Enforced by**: LedgerKit `BackgroundIntentParameterGuardTests`.
 
 ### `invalid_client` is the app's secret, not the mailbox: rotate it, don't reconnect
 - **What went wrong**: on 2026-10-14 `outlook-poll` went from a clean 06:05 UTC run to
