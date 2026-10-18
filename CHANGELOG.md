@@ -1,5 +1,11 @@
 # Changelog
 
+## Capture intents are actions, not App Shortcuts — 2026-10-18
+
+### iOS
+
+- **fix** "Log Bank SMS" and "Log Card Payment" are no longer App Shortcuts, only Shortcuts actions. On iOS 26 a Transaction automation's "Do" picker offered the "Log Card Payment" App Shortcut tile, which runs with no fields to bind to Shortcut Input, so every tap arrived without merchant or card and was refused. The actions stay discoverable (`isDiscoverable`), and the in-app guides (Set up SMS capture, Set up card payments) now say to add the action that reads "Log Amount at Merchant on Card" / "Log Message from Sender". The Siri phrases "Log card payment in Bank Ledger" and "Log bank SMS in Bank Ledger" are gone: they ran with empty fields and could never log anything. An automation already built from the action is unaffected; one built from the tile must be rebuilt with the action. Guarded by LedgerKit `BackgroundIntentParameterGuardTests`.
+
 ## TestFlight release retries App Store Connect — 2026-10-16
 
 ### iOS

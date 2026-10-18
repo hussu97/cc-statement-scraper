@@ -9,7 +9,7 @@ public enum CardPaymentGuide {
         .init(number: 2, title: "Choose your cards, When I Tap",
               detail: "Pick the cards whose payments to log, keep When I Tap, choose Run Immediately and tap Next."),
         .init(number: 3, title: "Add “Log Card Payment”",
-              detail: "Create New Shortcut → search Ledger → Log Card Payment."),
+              detail: "Create New Shortcut, search the actions for Log Card Payment and tap the action, which reads “Log Amount at Merchant on Card”. Its fields are what step 4 fills in."),
         .init(number: 4, title: "Pass the payment",
               detail: "Tap Amount and choose Shortcut Input, then Amount. Its currency comes with it, so a payment abroad keeps its own. Set Merchant to Shortcut Input's Merchant and Card to its Card or Pass."),
         .init(number: 5, title: "Leave the currency to the payment",

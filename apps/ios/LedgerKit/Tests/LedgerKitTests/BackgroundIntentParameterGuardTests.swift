@@ -35,4 +35,23 @@ struct BackgroundIntentParameterGuardTests {
         }
         #expect(offenders.isEmpty, "make these optional and let LedgerKit refuse empty input: \(offenders)")
     }
+
+    /// An App Shortcut runs with the parameters fixed in `AppShortcutsProvider`
+    /// (none here), and iOS 26 offers its tile in an automation's "Do" picker
+    /// with no way to bind Shortcut Input: picked, it always ran empty and was
+    /// refused. The capture intents are actions only.
+    @Test("the capture intents are not App Shortcuts")
+    func notAppShortcuts() throws {
+        let app = AnalysisContractTests.repoRoot.appendingPathComponent("apps/ios/Ledger")
+        let files = try #require(FileManager.default.enumerator(at: app, includingPropertiesForKeys: nil))
+        var offenders: [String] = []
+        for case let url as URL in files where url.pathExtension == "swift" {
+            let source = try String(contentsOf: url, encoding: .utf8)
+            let flat = source.replacingOccurrences(of: "\\s+", with: "", options: .regularExpression)
+            for intent in ["LogBankSMSIntent", "LogCardPaymentIntent"] where flat.contains("AppShortcut(intent:\(intent)(") {
+                offenders.append("\(url.lastPathComponent): \(intent)")
+            }
+        }
+        #expect(offenders.isEmpty, "an automation can't feed an App Shortcut's parameters: \(offenders)")
+    }
 }
