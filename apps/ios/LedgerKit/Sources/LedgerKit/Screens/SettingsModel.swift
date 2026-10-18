@@ -150,7 +150,7 @@ public enum SMSAutomationGuide {
         Step(number: 3, title: "Run Immediately, keep Notify When Run on",
              detail: "Choose Run Immediately and leave Notify When Run ON, so you see what Ledger did with each message (logged, unknown card, waiting). Tap Next."),
         Step(number: 4, title: "Add “Log Bank SMS”",
-             detail: "Create New Shortcut → search Ledger → Log Bank SMS."),
+             detail: "Create New Shortcut, search the actions for Log Bank SMS and tap the action, which reads “Log Message from Sender”. Its fields are what step 5 fills in."),
         Step(number: 5, title: "Pass the message",
              detail: "Tap Message and choose Shortcut Input, then Content. Set Sender to Shortcut Input's Sender."),
         Step(number: 6, title: "Check it",

@@ -9,6 +9,7 @@
 
 | When | Lesson |
 |---|---|
+| 2026-10-18 | [An automation can't feed an App Shortcut: capture intents are actions only](#an-automation-cant-feed-an-app-shortcut-capture-intents-are-actions-only) |
 | 2026-10-16 | [A background intent's parameters are optional: an empty required one makes iOS ask, and nobody answers](#a-background-intents-parameters-are-optional-an-empty-required-one-makes-ios-ask-and-nobody-answers) |
 | 2026-10-14 | [`invalid_client` is the app's secret, not the mailbox: rotate it, don't reconnect](#invalid_client-is-the-apps-secret-not-the-mailbox-rotate-it-dont-reconnect) |
 | 2026-10-14 | [A typed `NavigationStack` path drops every other value: push only its route type](#a-typed-navigationstack-path-drops-every-other-value-push-only-its-route-type) |
@@ -43,6 +44,16 @@
 | 2026-10-08 | [Tooling defaults that don't work here: `gh` account, Supabase MCP, `localhost`, pip](#tooling-defaults-that-dont-work-here-gh-account-supabase-mcp-localhost-pip) |
 
 ## Lessons
+
+### An automation can't feed an App Shortcut: capture intents are actions only
+- **What went wrong**: on iOS 26 a Transaction automation's "Do" picker offered the
+  "Log Card Payment" App Shortcut tile (from `LedgerShortcuts`). Picked, it runs with the
+  parameters fixed in the `AppShortcutsProvider` (none) and shows no fields, so Amount, Merchant
+  and Card could not be bound to Shortcut Input and every payment was refused as missing a
+  merchant. iOS 27's editor showed the fields, which hid the problem there.
+- **Rule**: an intent whose parameters come from Shortcut Input is an action only
+  (`isDiscoverable = true`), never an `AppShortcut`; guides say which action text to tap.
+- **Enforced by**: LedgerKit `BackgroundIntentParameterGuardTests` (`notAppShortcuts`).
 
 ### A background intent's parameters are optional: an empty required one makes iOS ask, and nobody answers
 - **What went wrong**: build 32 hit a fatal app hang 4 s after launch (Sentry 7796165023) with an

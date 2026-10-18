@@ -206,7 +206,10 @@ Tap-to-pay payments reach Bank Ledger through a second Shortcuts personal automa
 
 1. Shortcuts → Automation → + → **Transaction**. Choose the card(s) (e.g. the Wio card), "When I
    tap", and **Run Immediately**. Tap Next.
-2. Create New Shortcut → add **Log Card Payment** (search Ledger). Set **Amount** to Shortcut
+2. Create New Shortcut → add the **Log Card Payment** action (search the actions for it; it reads
+   "Log Amount at Merchant on Card"). It is deliberately not an App Shortcut: on iOS 26 an App
+   Shortcut's tile in the "Do" picker runs with no fields to bind, so every payment arrived empty
+   (guarded by `BackgroundIntentParameterGuardTests`; Log Bank SMS likewise). Set **Amount** to Shortcut
    Input's Amount, **Merchant** to Shortcut Input's Merchant and **Card** to Shortcut Input's Card
    or Pass. Leave **Currency if missing** (under Show More) empty: the currency comes with the
    Amount. The in-app guide is Settings → Card names for payment shortcut → **Set up card payments**.

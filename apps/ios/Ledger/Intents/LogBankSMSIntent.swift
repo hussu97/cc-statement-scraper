@@ -46,19 +46,15 @@ struct LogBankSMSIntent: AppIntent {
     }
 }
 
-/// Makes the action appear in Shortcuts and Spotlight without setup.
+/// Makes the actions appear in Shortcuts and Spotlight without setup.
+///
+/// "Log Bank SMS" and "Log Card Payment" are not App Shortcuts: an App Shortcut
+/// runs with the parameters fixed here (none), and iOS 26 offers its tile in an
+/// automation's "Do" picker with no way to bind Shortcut Input, so it always
+/// arrived empty and was refused. They stay discoverable as actions
+/// (`isDiscoverable`), the only form an automation can feed.
 struct LedgerShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
-        AppShortcut(
-            intent: LogBankSMSIntent(),
-            phrases: ["Log bank SMS in \(.applicationName)", "Send SMS to \(.applicationName)"],
-            shortTitle: "Log Bank SMS",
-            systemImageName: "message.badge")
-        AppShortcut(
-            intent: LogCardPaymentIntent(),
-            phrases: ["Log card payment in \(.applicationName)", "Add card payment to \(.applicationName)"],
-            shortTitle: "Log Card Payment",
-            systemImageName: "creditcard")
         // N-3: questions and one action beyond capture (no Apple product names, ITMS-90626).
         AppShortcut(
             intent: MonthSpendIntent(),
