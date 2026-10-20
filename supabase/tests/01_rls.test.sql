@@ -66,8 +66,8 @@ reset role;
 
 select is((select count(*)::int from public.categories where profile_code = (select v from ids where k = 'pa')), 32,
           'create_profile seeds 32 default categories');
-select is((select count(*)::int from public.category_rules where profile_code = (select v from ids where k = 'pa')), 244,
-          'create_profile seeds 244 default rules');
+select is((select count(*)::int from public.category_rules where profile_code = (select v from ids where k = 'pa')), 245,
+          'create_profile seeds 245 default rules');
 
 -- Data for bob's profile, written by the system.
 insert into public.accounts (profile_code, bank_code) select v, 'FAB' from ids where k = 'pb';

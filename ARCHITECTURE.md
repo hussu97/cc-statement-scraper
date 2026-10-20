@@ -572,7 +572,11 @@ category, such as rent) and `money_out`. `cash_flow(profile, from, to)` sums the
 adds `net` = money in − spend − spend by transfer − support − saving − unfiled out; card
 repayments and internal moves are settlement and never change it. Payees are category rules: a
 rule on kind, amount and bank ("ADCB transfer out of 23,700 → Family support") files a transfer
-that names no counterparty.
+that names no counterparty. An unfiled transfer is a move between the ledger's own accounts
+(`internal_in`/`internal_out`) when another of its bank accounts has the opposite transfer of the
+same AED amount within 3 days, or when a `transfer_notice` SMS (FAB's funds-transfer confirmation)
+for it names one of its bank accounts' digits (`parsed_fields.counterparty_ref`). FAB's "Salary
+Credit" alert is an `account_credit` described SALARY CREDIT, which a seed rule files under Salary.
 
 There is likewise **one definition of what a card owes**: `public.v_account_balances`
 (`security_invoker`). A sum of transactions cannot know the balance carried in before the first

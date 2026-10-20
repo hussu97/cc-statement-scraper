@@ -77,6 +77,8 @@ create temp table fx as select $sms_otp_fixture${
   "October statement due on 26/10/2026\nCredit Card Purchase\nCard No XXXX2132\nUSD 6.00\nINDIGO AIRLINES NEW YORK USA\n04/10/26 10:38",
   "Outward Remittance Debit\nAccount XXXX9001\nAED 2100.00\nDate 02/10/2026\nBalance AED 3644.98",
   "Inward Remittance Credit\nAccount XXXX9001\nAED 500.00\nDate 03/10/2026\nBalance AED 4144.98",
+  "Salary Credit\nAccount XXXX9001\nAED 52290.00\n28/09/2026\nBalance AED 55521.07",
+  "Dear Customer, your funds transfer request of  AED 50,000.00 to IBAN/Account/Card XXXX2289  has been processed successfully from your account/ card XXXX9001 on 28/09/2026 13:58",
   "Payment for Credit Card ending 7205 is due on 22/09/26. Total Amt - AED 48.77; Min Amt - AED 48.77. Please pay by due date to avoid charges.",
   "Payment of AED 12.50 to noon one with Credit Card ending 7205. Avl Cr. Limit is AED 19,938.73.",
   "Payment of AED 42.00 to Noon with Credit Card ending 7205. Avl Cr. Limit is AED 19,951.23.",
