@@ -9,13 +9,14 @@ describe("groupInsights (MA-5)", () => {
       i("review_backlog", "info", "2026-10-10"),
       i("budget_risk", "warn", "2026-10-09"),
       i("large_transaction", "info", "2026-10-12"),
+      i("cash_advance", "warn", "2026-10-13"),
       i("category_spike", "alert", "2026-10-01"),
       i("statement_due", "warn", "2026-10-11"),
       i("price_change", "info", "2026-10-02"),
       i("uncategorized", "warn", "2026-10-03"),
     ]);
     expect(groups.map((g) => [g.key, g.label, g.items.map((x) => x.kind)])).toEqual([
-      ["spending", "Spending", ["category_spike", "large_transaction"]],
+      ["spending", "Spending", ["category_spike", "cash_advance", "large_transaction"]],
       ["budgets", "Budgets", ["budget_risk"]],
       ["subscriptions", "Subscriptions", ["price_change"]],
       ["statements", "Statements", ["statement_due"]],
@@ -34,7 +35,7 @@ describe("groupInsights (MA-5)", () => {
   });
 
   it("covers every kind the server's CHECK allows", () => {
-    const serverKinds = ["spend_pace", "category_spike", "budget_risk", "price_change", "new_recurring", "statement_due", "uncategorized", "review_backlog", "large_transaction"];
+    const serverKinds = ["spend_pace", "category_spike", "budget_risk", "price_change", "new_recurring", "statement_due", "uncategorized", "review_backlog", "large_transaction", "cash_advance"];
     const grouped = INSIGHT_GROUPS.flatMap((g) => [...g.kinds]);
     expect([...grouped].sort()).toEqual([...serverKinds].sort());
   });
