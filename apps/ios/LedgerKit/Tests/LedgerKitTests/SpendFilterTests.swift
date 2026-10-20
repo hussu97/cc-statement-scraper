@@ -29,6 +29,24 @@ struct SpendFilterTests {
         #expect(f.isEmpty && f.activeCount == 0)
         #expect(f.rpcParams == ["p_category_codes": .null, "p_bank_codes": .null, "p_card_codes": .null, "p_q": .null])
         #expect(f.summary(options: nil) == nil)
+        // "All cards" sends no p_instruments: a server before Phase 2c answers the same request.
+        #expect(f.rpcParams["p_instruments"] == nil)
+    }
+
+    @Test("card type: one instrument goes as p_instruments, counts as a filter and reads in the summary")
+    func instrument() {
+        var f = SpendFilter()
+        f.instrument = .debitCard
+        #expect(!f.isEmpty && f.activeCount == 1)
+        #expect(f.rpcParams["p_instruments"] == .array([.string("debit_card")]))
+        #expect(f.rpcParams["p_card_codes"] == .null)
+        #expect(f.summary(options: nil) == "Debit cards")
+        f.instrument = .creditCard
+        f.bankCodes = ["FAB"]
+        #expect(f.rpcParams["p_instruments"] == .array([.string("credit_card")]))
+        #expect(f.summary(options: SpendFilterOptions(meta: Self.meta)) == "FAB · Credit cards")
+        #expect(SpendInstrument.choices.map(\.label) == ["All cards", "Credit", "Debit"])
+        #expect(SpendInstrument.choices.map(\.instrument) == [nil, .creditCard, .debitCard])
     }
 
     @Test("codes go sorted, Uncategorised as its key, the search trimmed but otherwise raw")
@@ -104,6 +122,11 @@ struct SpendFilterTests {
         #expect(model.selectedMonth == nil)
         await model.load(profileCode: "prf_a", from: from, to: to)
         #expect(api.breakdownFilters.last == SpendFilter(bankCodes: ["FAB"], cardCodes: ["crd_a"], search: "careem"))
+
+        // The card type alone is a filter: the split asks the server again with it.
+        model.filter = SpendFilter(instrument: .debitCard)
+        await model.load(profileCode: "prf_a", from: from, to: to)
+        #expect(api.breakdownFilters.last?.instrument == .debitCard)
 
         // Another ledger: the codes mean nothing there.
         await model.load(profileCode: "prf_b", from: from, to: to)

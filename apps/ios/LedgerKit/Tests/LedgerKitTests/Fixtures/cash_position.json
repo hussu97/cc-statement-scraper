@@ -1,0 +1,37 @@
+{
+  "as_of": "2026-10-06T12:00:00+00:00",
+  "accounts": [
+    {
+      "kind": "current",
+      "as_of": "2026-10-06T12:00:00+00:00",
+      "balance": "28650.40",
+      "currency": "AED",
+      "is_stale": true,
+      "nickname": "Salary account",
+      "bank_code": "ADCB",
+      "account_ref": "310001",
+      "balance_aed": "28650.40",
+      "account_code": "acc_01k5cqf87nt7403a5ncpzh3gph",
+      "anchor_source": "sms",
+      "unpriced_count": 0
+    },
+    {
+      "kind": "savings",
+      "as_of": "2026-10-20T12:19:00+00:00",
+      "balance": "79735.50",
+      "currency": "AED",
+      "is_stale": false,
+      "nickname": "Savings",
+      "bank_code": "FAB",
+      "account_ref": "9221",
+      "balance_aed": "79735.50",
+      "account_code": "acc_01k5cqf87rq262qx5sbzyv3ydc",
+      "anchor_source": "sms",
+      "unpriced_count": 0
+    }
+  ],
+  "complete": true,
+  "total_aed": "108385.90",
+  "stale_count": 1,
+  "missing_count": 0
+}
