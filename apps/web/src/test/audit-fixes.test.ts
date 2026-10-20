@@ -144,6 +144,7 @@ describe("WEB-25: insight cards link to their screen", () => {
     });
     expect(insightTarget({ kind: "category_spike", data: {} })).toMatchObject({ to: "/insights", search: { tab: "categories" } });
     expect(insightTarget({ kind: "large_transaction", data: { txn_code: txn } })).toMatchObject({ to: "/activity", search: { txn } });
+    expect(insightTarget({ kind: "cash_advance", data: { txn_code: txn } })).toMatchObject({ to: "/activity", search: { txn }, label: "See transaction" });
     expect(insightTarget({ kind: "review_backlog", data: null })).toMatchObject({ to: "/review" });
   });
   it("ignores unknown kinds and non-code data", () => {
