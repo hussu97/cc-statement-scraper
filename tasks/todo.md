@@ -281,3 +281,66 @@ Goal: say what the money should do each month, and show whether it did.
 - [ ] Months before account alerts were captured show negative net (card spend, no income):
       either start cash flow at the first account alert or mark earlier months as partial.
 
+
+## 5. Wealth mode: bank accounts, their ledgers, cash flow and net worth (2026-10-20)
+
+Ask (20 Oct): show debit accounts and their transactions cleanly, apart from the credit-card
+spend that budgets track, because the accounts are the user's real financial value.
+
+### Decisions (user, 20 Oct)
+1. **Two modes, one switcher.** A header dropdown switches between **Spending** (today's app:
+   Overview, Activity, Insights, Budgets, Cards) and **Wealth** (bank accounts, cash flow, net
+   worth; investments and goals later). Shared screens (Review, Rules, Settings with cards and
+   statements) appear in both. iOS swaps the tab bar per mode.
+2. **Debit-card purchases stay in spend and budgets** (Phase 2 decision 1 stands), tagged Debit in
+   Activity. Salary, transfers, autopay, support and saving rows leave Spending's Activity and
+   live in the account's ledger under Wealth.
+3. **No holdings or sheet import now** (Google Sheets is not the way in). Net worth for now is
+   bank cash − what the cards owe; holdings join it in Phase 1.
+
+### 5a. Backend
+- [ ] `v_transactions` gains `account_kind` and `in_spending` (a card row, or a purchase, refund,
+      fee, interest or cash advance on any account). Activity's reader (`activity_selection`,
+      `activity_summary`) takes `scope = spending`; absent = everything (old app builds).
+- [ ] `account_ledger(profile, account, from, to)`: the account's rows like a bank statement,
+      each with its cash-flow flow and a **running balance** anchored on the nearest balance
+      checkpoint (next one after the row, else the latest before), plus opening/closing balance
+      and money in/out for the period. Server-side (§2.2).
+- [ ] `bank_balance_series(profile, account, from, to)`: end-of-day balances for the account
+      chart, known from the account's first transaction or checkpoint on.
+- [ ] `net_worth(profile)`: cash (bank balances) − owed (cards, `v_account_balances`) with
+      completeness; `net_worth_snapshots` written nightly; `net_worth_series` = month-end
+      snapshots + today's live figure.
+- [ ] `cash_flow` takes an optional account and flags `is_partial` months (before the ledger,
+      or the account, has any bank evidence), so pre-capture months stop reading as losses.
+- [ ] Insights: `balance_stale` (or never entered), `balance_drift` (an SMS balance disagrees
+      with the previous one plus the activity between: a missed alert), `salary_late` (income
+      not in by its usual day), `annual_fee` (a card's annual fee above the cashback it earned
+      in 12 months). `private.generate_insights` becomes a wrapper over the spending generator
+      and a new wealth generator.
+- [ ] pgTAP for each; privileges matrix; `pnpm db:types`.
+
+### 5b. Web
+- [ ] Mode switcher at the top of the sidebar (and the mobile header); routes under `/wealth`.
+- [ ] Wealth overview: net worth hero (cash, owed, net; as-of and completeness), net worth over
+      time, accounts (bank) and liabilities (cards owed), this month's cash flow, wealth insights.
+- [ ] Accounts: list → account page (balance, update balance, balance chart, month in/out,
+      ledger with running balance and flow chips; category editing for transfers).
+- [ ] Cash flow moves to `/wealth/cash-flow` (old path redirects); Unfiled links open the account.
+- [ ] Spending: Activity uses `scope = spending` and tags debit purchases; Overview's Cash tile
+      goes (the switcher is the way across).
+
+### 5c. iOS
+- [ ] `AppMode` in LedgerKit (persisted), a title menu to switch, tabs per mode: Spending
+      (Overview, Activity, Insights, Budgets, Settings), Wealth (Overview, Accounts, Cash flow,
+      Settings).
+- [ ] Wealth overview, account list + account ledger, cash flow; spending Activity scoped.
+
+### 5d. Verify and ship
+- [ ] Fresh reset + pgTAP, deno, web tests/build, `swift test`, app build, `pnpm check`; click
+      through both modes on web and in the simulator with demo bank data.
+- [ ] Docs: ARCHITECTURE (§6 wealth), README (screens), CHANGELOG, lessons if any.
+- [ ] PR from `wio-accounts`; merging deploys migrations, functions, web and a TestFlight build.
+
+Left in §4: holdings (Phase 1 proper), goals (Phase 3), FX markup and subscription-creep
+insights, Wio Credit SMS statement anchor, Wio autopay's debit leg, rent-by-transfer in spend.
