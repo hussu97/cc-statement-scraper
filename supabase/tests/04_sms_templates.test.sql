@@ -67,7 +67,7 @@ insert into cases values
  ('FAB d2', 'FAB', E'Inward Remittance Credit\nAccount XXXX9221\nAED 500.00\nDate 03/10/2026\nBalance AED 4144.98',
   'account_credit', 'FAB inward remittance', '{"amount":"500.00","account_ref":"9221","available":"4144.98"}'),
  ('FAB e', 'FAB', 'Dear Customer, your funds transfer request of  AED 2,100.00 to IBAN/Account/Card XXXX9209  has been processed successfully from your account/ card XXXX9221 on 02/10/2026 14:19',
-  'other', 'FAB funds transfer (ignored)', '{"amount":"2100.00","currency":"AED","date":"2026-10-02","time":"14:19"}'),
+  'transfer_notice', 'FAB funds transfer', '{"amount":"2100.00","currency":"AED","date":"2026-10-02","time":"14:19","counterparty_ref":"9209","account_ref":"9221"}'),
  ('FAB f', 'FAB', 'Your statement of the card ending with 9206 dated 01Oct26 has been sent to you and can also be viewed in the new FAB mobile banking app. Download it from the App Store https://apple.co/FB7qEZ or Google Play https://goo.gl/7dXnNc. The total amount due is AED 515.26. Minimum due is AED 100.00. Due date is 26Oct26',
   'other', 'FAB statement issued (ignored)', '{"last4":"9206"}'),
  ('FAB g', 'FAB', 'Login detected on FAB Mobile', 'other', 'FAB login notice (ignored)', '{}'),
@@ -169,7 +169,7 @@ select pg_temp.set('sib', pg_temp.sms('SIB', (select body from cases where label
 select is(pg_temp.v('a')::jsonb->>'status', 'created', 'ADCB a (old Cr.Card format) creates a transaction');
 select is(pg_temp.v('b')::jsonb->>'status', 'created', 'ADCB b (new Credit Card format, EGP) creates a transaction');
 select is(pg_temp.v('d')::jsonb->>'status', 'ignored', 'ADCB d approval prompt is ignored');
-select is(pg_temp.v('e')::jsonb->>'status', 'ignored', 'ADCB e account credit is ignored');
+select is(pg_temp.v('e')::jsonb->>'status', 'no_bank_account', 'ADCB e account credit waits for its bank account');
 select is(pg_temp.v('g')::jsonb->>'status', 'ignored', 'ADCB g billing alert is ignored');
 select is(pg_temp.v('sib')::jsonb->>'status', 'unknown_card', 'SIB alert for an unregistered card is held as unknown_card');
 

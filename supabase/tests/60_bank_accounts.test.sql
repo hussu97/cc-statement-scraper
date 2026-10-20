@@ -146,8 +146,10 @@ select pg_temp.as_user('uid');
 set local role authenticated;
 select is((select jsonb_agg(x->>'account_code') from jsonb_array_elements(public.overview(pg_temp.v('p'))->'accounts') x),
           jsonb_build_array(pg_temp.v('card_acc')), 'overview lists the card only');
-select is((select jsonb_agg(x->>'kind') from jsonb_array_elements(public.filter_meta(pg_temp.v('p'))->'accounts') x),
-          '["credit_card", "current", "savings", "current"]'::jsonb,
+-- Order past the card by bank; two FAB accounts made in one millisecond may come either way.
+select is((select jsonb_agg(x->>'kind' order by n <> 1, x->>'bank_code', x->>'kind')
+           from jsonb_array_elements(public.filter_meta(pg_temp.v('p'))->'accounts') with ordinality a(x, n)),
+          '["credit_card", "current", "current", "savings"]'::jsonb,
           'filter_meta lists every account with its kind, the card first (Phase 2d)');
 -- cash_position: the three bank accounts, their balances and the AED total (Phase 2d).
 select results_eq(

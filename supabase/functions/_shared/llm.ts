@@ -199,6 +199,7 @@ export const MSG_KINDS = [
   "debit_purchase",
   "account_credit",
   "account_debit",
+  "transfer_notice",
   "debit_card",
   "other",
 ];
@@ -211,6 +212,7 @@ export const FIELD_NAMES = [
   "time",
   "available",
   "account_ref",
+  "counterparty_ref",
 ] as const;
 
 export const SMS_SYSTEM = [
@@ -227,7 +229,9 @@ export const SMS_SYSTEM = [
   "msg_kind: purchase (completed card spend), preauth (authorisation/hold), refund, reversal, payment (card bill payment),",
   "declined, debit_purchase (a debit-card purchase from a bank account), account_credit (money into a bank account:",
   "salary, transfer in, remittance), account_debit (money out of a bank account: transfer, remittance, standing order),",
-  "debit_card (any other debit-card or account notice), other (not a transaction).",
+  "transfer_notice (a bank confirming a transfer it made, naming the destination account: put its digits in",
+  "counterparty_ref and the sending account's in account_ref), debit_card (any other debit-card or account notice),",
+  "other (not a transaction).",
   "If the SMS is not a card transaction at all (OTP, promotion, balance or service notice), set msg_kind to other",
   "and field_groups.amount and expect.amount to null; the other fields can then be null or a best effort.",
   "expect: the values your template extracts from THIS message (amount as written without separators, currency code,",

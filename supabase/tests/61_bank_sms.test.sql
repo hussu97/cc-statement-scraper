@@ -82,7 +82,7 @@ select results_eq(
 -- ── a debit card on an account the ledger doesn't have yet ──────────────────
 select pg_temp.set('adcb_debit', 'Debit card XXX9211 linked to acc. XXX320001 used for AED3.50 (+2.49% foreign txn fee) on '
   || to_char(pg_temp.v('t0')::timestamptz at time zone 'Asia/Dubai', 'Mon FMDD YYYY') || '  4:33PM at GOOGLEYOUTUBE M,US. Avl.Bal AED 51.54.');
-select is(pg_temp.sms('ADCBAlert', pg_temp.v('adcb_debit'), pg_temp.v('t0')::timestamptz)->>'status', 'ignored',
+select is(pg_temp.sms('ADCBAlert', pg_temp.v('adcb_debit'), pg_temp.v('t0')::timestamptz)->>'status', 'no_bank_account',
           'an alert for account …320001, which the ledger lacks, waits');
 select results_eq(
   $$ select parse_status, ignore_reason, msg_kind from pg_temp.msg(pg_temp.v('adcb_debit')) $$,
@@ -147,10 +147,50 @@ select results_eq(
   $$ values (pg_temp.v('cur'), true) $$,
   'a debit card sharing a credit card''s digits stays on its bank account, without a card');
 
+-- ── FAB salary, and a transfer to the ledger's own Wio account (real formats, 2026-10-20) ─────
+select pg_temp.set('salary', E'Salary Credit\nAccount XXXX9221\nAED 41250.00\n'
+  || to_char(pg_temp.v('t0')::timestamptz at time zone 'Asia/Dubai', 'DD/MM/YYYY') || E'\nBalance AED 44481.07');
+select is(pg_temp.sms('FAB', pg_temp.v('salary'), pg_temp.v('t0')::timestamptz + interval '7 hours')->>'status', 'created',
+          'a FAB salary credit is captured');
+select results_eq(
+  $$ select t.account_code, t.kind, t.description, c.name, c.kind
+     from pg_temp.txn_of(pg_temp.v('salary')) t left join public.categories c on c.category_code = t.effective_category_code $$,
+  $$ values (pg_temp.v('sav'), 'transfer_in'::text, 'SALARY CREDIT'::text, 'Salary'::text, 'income'::text) $$,
+  'on FAB …9221, filed under Salary by the seed rule');
+
+select pg_temp.set('notice', 'Dear Customer, your funds transfer request of  AED 50,000.00 to IBAN/Account/Card XXXX9204  has been processed successfully from your account/ card XXXX9221 on '
+  || to_char(pg_temp.v('t0')::timestamptz at time zone 'Asia/Dubai', 'DD/MM/YYYY') || ' 13:58');
+select is(pg_temp.sms('FAB', pg_temp.v('notice'), pg_temp.v('t0')::timestamptz + interval '8 hours')->>'status', 'noted',
+          'the funds-transfer notice is noted, not a transaction');
+select results_eq(
+  $$ select parse_status, msg_kind, account_code, parsed_fields->>'counterparty_ref' from pg_temp.msg(pg_temp.v('notice')) $$,
+  $$ values ('parsed'::text, 'transfer_notice'::text, pg_temp.v('sav'), '9204'::text) $$,
+  'parsed against FAB …9221, naming …9204');
+select pg_temp.set('to_wio', E'Outward Remittance Debit\nAccount XXXX9221\nAED 50000.00\nDate '
+  || to_char(pg_temp.v('t0')::timestamptz at time zone 'Asia/Dubai', 'DD/MM/YYYY') || E'\nBalance AED 5520.58');
+select pg_temp.sms('FAB', pg_temp.v('to_wio'), pg_temp.v('t0')::timestamptz + interval '8 hours 1 minute');
+select is((select flow from public.v_cash_flow where txn_code = (pg_temp.txn_of(pg_temp.v('to_wio'))).txn_code),
+          'money_out', 'with no …9204 account in the ledger, the 50,000 is unfiled money out');
+
+select set_config('request.jwt.claims', json_build_object('sub', pg_temp.v('uid'), 'role', 'authenticated')::text, true);
+set local role authenticated;
+select pg_temp.set('wio', public.create_bank_account(pg_temp.v('p'), 'WIO', 'current', '9204', 'Wio'));
+reset role;
+select is((select flow from public.v_cash_flow where txn_code = (pg_temp.txn_of(pg_temp.v('to_wio'))).txn_code),
+          'internal_out', 'once Wio …9204 is in the ledger, the notice makes it a move between own accounts');
+insert into public.transactions (profile_code, account_code, status, kind, direction, txn_date, description,
+                                 amount_original, currency_original, amount_aed, amount_source)
+values (pg_temp.v('p'), pg_temp.v('wio'), 'posted', 'transfer_in', 'credit',
+        (pg_temp.v('t0')::timestamptz at time zone 'Asia/Dubai')::date, 'ACCOUNT CREDIT', 50000, 'AED', 50000, 'manual')
+returning pg_temp.set('wio_in', txn_code);
+select is((select flow from public.v_cash_flow where txn_code = pg_temp.v('wio_in')), 'internal_in',
+          'Wio''s side of the same 50,000 is a move in, not new money');
+
 -- ── the old "(ignored)" templates stepped aside ─────────────────────────────
 select is((select count(*)::int from public.sms_templates
            where name in ('ADCB account credit/debit (ignored)', 'ADCB debit card purchase (ignored)',
-                          'FAB debit card purchase (ignored)', 'FAB outward remittance (ignored)') and active), 0,
+                          'FAB debit card purchase (ignored)', 'FAB outward remittance (ignored)',
+                          'FAB funds transfer (ignored)') and active), 0,
           'the seeded ignored debit and account templates are off');
 
 select * from finish();

@@ -1,5 +1,13 @@
 # Changelog
 
+## FAB salary and moves between your own accounts — 2026-10-20
+
+### Backend (Supabase)
+
+- **feat** FAB's "Salary Credit" alert is captured (with its balance) and a seed rule files it under Salary.
+- **feat** FAB's funds-transfer confirmation becomes a `transfer_notice`: it names where the money went (`counterparty_ref`) and never becomes a transaction. A transfer to one of the ledger's own bank accounts (named by the notice, or matched by the other account's same-amount transfer within 3 days) shows in cash flow as a move, not as money out or new money in.
+- **fix** A bank alert waiting for its account is reported as such, not as "not a card purchase". Rules can test the transfer kinds.
+
 ## Cash flow and bank account screens (Phase 2d) — 2026-10-20
 
 ### Backend (Supabase)
