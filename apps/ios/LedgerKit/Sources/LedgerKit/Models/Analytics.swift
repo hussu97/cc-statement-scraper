@@ -237,7 +237,18 @@ public struct FilterMeta: Decodable, Sendable, Hashable {
         public let bankCode: String
         public let nickname: String?
         public let productName: String?
-        public var title: String { nickname ?? productName ?? bankCode }
+        /// `credit_card`, `current` or `savings` (nil from a server before Phase 2d: a card).
+        public var kind: String? = nil
+        /// A bank account's digits after the mask.
+        public var accountRef: String? = nil
+
+        /// A card's nickname or product; a bank account's `"ADCB Salary account"` / `"ADCB Current ··· 810001"`.
+        public var title: String {
+            guard let kind, kind != "credit_card" else { return nickname ?? productName ?? bankCode }
+            return "\(bankCode) \(BankAccountLabel.title(kind: kind, nickname: nickname, accountRef: accountRef))"
+        }
+
+        public var isBankAccount: Bool { kind == "current" || kind == "savings" }
     }
 
     public struct CardOption: Decodable, Sendable, Hashable, Identifiable {

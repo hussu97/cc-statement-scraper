@@ -3,6 +3,7 @@ import { activityRouteSearch } from "@/lib/activity-filters";
 import { insightsRouteSearch, parseRangeSearch, parseTabSearch } from "@/lib/search";
 import { parsePageSearch } from "@/lib/infinite";
 import { parseSignInSearch } from "@/lib/redirect";
+import { parseCashFlowSearch } from "@/lib/cash-flow";
 
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
@@ -72,6 +73,14 @@ export const categoryRoute = createRoute({
   component: lazyRouteComponent(() => import("@/routes/category"), "CategoryPage"),
 });
 
+/** Bank accounts and cash flow (Phase 2d). `?month=` is a first-of-month, this month when absent. */
+const cashFlowRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/cash-flow",
+  validateSearch: (s: Record<string, unknown>) => parseCashFlowSearch(s),
+  component: lazyRouteComponent(() => import("@/routes/cash-flow"), "CashFlowPage"),
+});
+
 const budgetsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/budgets",
@@ -119,7 +128,7 @@ const routeTree = rootRoute.addChildren([
   signInRoute,
   welcomeRoute,
   privacyRoute,
-  appRoute.addChildren([overviewRoute, activityRoute, insightsRoute, categoryRoute, budgetsRoute, cardsRoute, statementRoute, reviewRoute, rulesRoute, settingsRoute]),
+  appRoute.addChildren([overviewRoute, activityRoute, insightsRoute, categoryRoute, cashFlowRoute, budgetsRoute, cardsRoute, statementRoute, reviewRoute, rulesRoute, settingsRoute]),
 ]);
 
 export const router = createRouter({ routeTree, defaultPreload: "intent", scrollRestoration: true });

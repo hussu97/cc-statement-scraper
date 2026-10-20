@@ -1,5 +1,19 @@
 # Changelog
 
+## Cash flow and bank account screens (Phase 2d) — 2026-10-20
+
+### Backend (Supabase)
+
+- **feat** `cash_position()`: each bank account's balance, as-of and staleness, and the AED total. `filter_meta` lists bank accounts again, with their kind and digits.
+
+### Web
+
+- **feat** Cash flow page (`/cash-flow`): bank accounts with balances, Update balance and Add bank account; the month's money in, committed, spent, unfiled out and moves, the net, and six months of net. Overview gets a Cash tile when the ledger has a bank account. Activity's account filter names bank accounts ("ADCB · Current ··· 810001").
+
+### iOS
+
+- **feat** Cash & accounts screen from a new Overview Cash tile: balances, Update balance, Add bank account, the month's cash flow and six months of net. The spend filter sheet gains All cards / Credit / Debit.
+
 ## Cash flow, saving and support, card type filter (Phase 2c) — 2026-10-20
 
 ### Backend (Supabase)

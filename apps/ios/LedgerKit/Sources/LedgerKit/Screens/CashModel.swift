@@ -1,0 +1,149 @@
+import Foundation
+import Observation
+
+/// Cash & accounts (Phase 2d): the bank accounts with their balances (`cash_position`) and the
+/// last months' cash flow (`cash_flow`), plus Update balance and Add bank account for owners.
+/// Every figure is the server's; the model only groups and words them.
+@MainActor
+@Observable
+public final class CashModel {
+    public struct Content: Sendable {
+        public let position: CashPosition
+        /// The months' flows, newest first; empty when they failed (`flowError`).
+        public let months: [CashFlowMonth]
+        /// Cash flow failed to load: the accounts still show.
+        public let flowError: String?
+
+        public init(position: CashPosition, months: [CashFlowMonth], flowError: String? = nil) {
+            self.position = position
+            self.months = months
+            self.flowError = flowError
+        }
+    }
+
+    public struct Notice: Equatable, Sendable {
+        public let text: String
+        public let isError: Bool
+    }
+
+    public private(set) var state: LoadState<Content> = .idle
+    /// The month whose flows are shown (first of the month).
+    public var selectedMonth: CalendarDay
+    public private(set) var isSaving = false
+    /// The last write's outcome, shown above the accounts.
+    public var notice: Notice?
+    /// Runs after a successful write, with the ledger: Overview's cash tile reloads.
+    @ObservationIgnored public var onChange: (@MainActor (String) async -> Void)?
+
+    private let api: any LedgerAPI
+    private let today: @Sendable () -> CalendarDay
+    private var gate = RequestGate<String>()
+
+    public init(api: any LedgerAPI, today: @escaping @Sendable () -> CalendarDay = { LedgerDates.today() }) {
+        self.api = api
+        self.today = today
+        selectedMonth = today().startOfMonth
+    }
+
+    /// The months the screen offers, newest first.
+    public var monthChoices: [CalendarDay] { CashFlow.monthChoices(today: today()) }
+
+    /// The selected month's flows (an empty month when nothing moved).
+    public var selected: CashFlowMonth? {
+        state.value.map { CashFlow.month(selectedMonth, in: $0.months) }
+    }
+
+    /// The month list under the groups: each offered month with the server's net, if any.
+    public var monthNets: [CashFlowMonth] {
+        guard let months = state.value?.months else { return [] }
+        return monthChoices.map { CashFlow.month($0, in: months) }
+    }
+
+    public func emptyMessage(for month: CalendarDay) -> String { CashFlow.emptyMessage(month, today: today()) }
+
+    public func load(profileCode: String) async {
+        let (ticket, sameKey) = gate.begin(profileCode)
+        state = sameKey ? state.startLoading() : .loading(previous: nil)
+        let choices = monthChoices
+        let from = choices.last ?? today().startOfMonth
+        let to = today().endOfMonth
+        let api = self.api
+        do {
+            async let position = api.cashPosition(profileCode: profileCode)
+            async let flow: Result<[CashFlowRow], any Error> = {
+                do { return .success(try await api.cashFlow(profileCode: profileCode, from: from, to: to)) } catch {
+                    return .failure(error)
+                }
+            }()
+            let (p, f) = try await (position, flow)
+            guard gate.isCurrent(ticket) else { return }
+            gate.finish(profileCode)
+            switch f {
+            case .success(let rows):
+                state = .loaded(Content(position: p, months: CashFlow.months(rows)))
+            case .failure(let error):
+                state = .loaded(Content(position: p, months: [], flowError: LoadState<Content>.message(for: error)))
+            }
+        } catch {
+            guard gate.isCurrent(ticket) else { return }
+            state = state.fail(error)
+        }
+    }
+
+    /// Loads unless this ledger is already on screen or loading.
+    public func loadIfNeeded(profileCode: String) async {
+        guard gate.requested != profileCode || state.value == nil && !state.isLoading else { return }
+        await load(profileCode: profileCode)
+    }
+
+    /// Reloads what is on screen (foreground, Realtime, after a write), if anything is.
+    public func refresh(profileCode: String) async {
+        guard gate.requested == profileCode else { return }
+        await load(profileCode: profileCode)
+    }
+
+    public func reset() {
+        gate.reset()
+        state = .idle
+        notice = nil
+        isSaving = false
+        selectedMonth = today().startOfMonth
+    }
+
+    // MARK: Writes (owners)
+
+    /// Validates and records the balance. Nil when saved (the sheet closes), else the sentence the form shows.
+    public func updateBalance(_ draft: UpdateBalanceDraft, profileCode: String) async -> String? {
+        if let problem = draft.validate() { return problem }
+        return await write(profileCode: profileCode, saved: UpdateBalanceDraft.savedMessage) {
+            try await $0.recordBalance(profileCode: profileCode, accountCode: draft.accountCode,
+                                       balance: draft.normalizedAmount)
+        } failure: { UpdateBalanceDraft.message(for: $0) }
+    }
+
+    /// Validates and adds the account. Nil when added, else the sentence the form shows.
+    public func addAccount(_ draft: AddBankAccountDraft, profileCode: String) async -> String? {
+        if let problem = draft.validate() { return problem }
+        guard let bank = draft.bankCode else { return nil }
+        return await write(profileCode: profileCode, saved: draft.savedMessage) {
+            _ = try await $0.createBankAccount(profileCode: profileCode, bankCode: bank, kind: draft.kind,
+                                               accountRef: draft.normalizedRef, nickname: draft.normalizedNickname)
+        } failure: { draft.message(for: $0) }
+    }
+
+    private func write(profileCode: String, saved: String, _ call: (any LedgerAPI) async throws -> Void,
+                       failure: (any Error) -> String) async -> String? {
+        guard !isSaving else { return nil }
+        isSaving = true
+        defer { isSaving = false }
+        do {
+            try await call(api)
+        } catch {
+            return failure(error)
+        }
+        notice = Notice(text: saved, isError: false)
+        await refresh(profileCode: profileCode)
+        await onChange?(profileCode)
+        return nil
+    }
+}

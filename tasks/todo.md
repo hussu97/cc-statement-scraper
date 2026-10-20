@@ -176,12 +176,19 @@ user's go-ahead before code (CLAUDE.md §12.1).
       says). Not merged or deployed.
 
 ### 2d. Screens and insights
-- [ ] Web and iOS: an Accounts section (balance, "as of", update balance), a Cash flow screen for the
+- [x] Web and iOS: an Accounts section (balance, "as of", update balance), a Cash flow screen for the
       month, an instrument filter on spend, and Overview's cash tile. Loading, empty and failed
       states for each (§4.3).
 - [ ] Insights: salary not received by the usual day, a stale balance, a balance that disagrees with
       the computed one (missed SMS), cash withdrawals, and support/saving below the plan (once
       Phase 3 adds plans).
+- [x] Review (2026-10-20): built by two parallel agents on the `cash_position` / `cash_flow` contract;
+      re-checked here: web 538 tests, tsc, lint, build; LedgerKit 577; app build; pgTAP 1,669 on the
+      isolated stack. Both ran it against demo data (balances updated, accounts added, duplicate and
+      bad-input errors, light/dark, phone width; iOS in the simulator). Not checked: the viewer role
+      and the Moves group with real repayments. Insights (salary late, stale balance, drift) are
+      still open: not asked for in this round. Known: months before account alerts were captured
+      show a negative net (card spend, no income). Not merged or deployed.
 
 ### Verify and ship
 - [ ] `supabase db reset && supabase test db`, `pnpm db:types`, `deno test`, web tests, `swift test`,

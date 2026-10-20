@@ -561,6 +561,8 @@ transactions, and anything marked `exclude_from_spend`. Each row carries `instru
 `p_instruments` (null = both). Buckets use `txn_date`, a Dubai date. Every analytics RPC builds
 on it. Clients render results and never re-derive money.
 
+**Cash position** (Phase 2d) is `cash_position(profile)`: every active bank account with its `v_bank_balances` balance, as-of, source and staleness, the AED total and whether it is complete; Overview's Cash tile and the Accounts lists render it. `filter_meta` lists bank accounts too (cards first, with `kind` and `account_ref`).
+
 **Cash flow** (Phase 2c) is `public.v_cash_flow`: every row of `v_spend` as `spend`, plus each
 bank-account transfer by flow: `income` (filed under an income category such as Salary),
 `money_in`, `internal_in`/`internal_out` (a Transfers category), `card_repayment` (paired with a
