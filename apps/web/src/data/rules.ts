@@ -15,6 +15,8 @@ export const CATEGORY_KINDS = [
   { value: "transfer", label: "Transfer" },
   { value: "fee", label: "Fee" },
   { value: "ignore", label: "Ignore" },
+  { value: "support", label: "Family support" },
+  { value: "saving", label: "Saving & investing" },
 ] as const;
 
 export const MATCH_TYPES = [

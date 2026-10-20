@@ -51,6 +51,19 @@ export function parseInsightsSearch(raw: Record<string, unknown>): InsightsSearc
   return { ...out, ...parseTrendFilterSearch(raw) };
 }
 
+/** Every key parseInsightsSearch may return. */
+const INSIGHTS_SEARCH_KEYS = ["tab", "range", "from", "to", "group", "grain", "cat", "bank", "card", "q", "inst"] as const;
+
+/**
+ * The Insights route's validateSearch. TanStack Router lays a route's validated search over the raw
+ * URL, so a key the parser drops (`?range=junk`, `?inst=cash`) would survive with its raw value and
+ * reach the page: every key is returned, the dropped ones as undefined (lessons: TanStack Router).
+ */
+export function insightsRouteSearch(raw: Record<string, unknown>): InsightsSearch {
+  const blank = Object.fromEntries(INSIGHTS_SEARCH_KEYS.map((k) => [k, undefined])) as InsightsSearch;
+  return { ...blank, ...parseInsightsSearch(raw) };
+}
+
 /** Replace the date range, keeping the tab and Trends options. */
 export function withInsightsRange(s: InsightsSearch, r: { range: RangePreset } | { from: ISODate; to: ISODate }): InsightsSearch {
   const { range: _range, from: _from, to: _to, ...rest } = s;
@@ -64,7 +77,7 @@ export function withTrends(s: InsightsSearch, patch: { group?: SpendGroup; grain
 
 /** Replace the Trends filters, keeping everything else. */
 export function withTrendFilters(s: InsightsSearch, f: TrendFilters): InsightsSearch {
-  const { cat: _cat, bank: _bank, card: _card, q: _q, ...rest } = s;
+  const { cat: _cat, bank: _bank, card: _card, q: _q, inst: _inst, ...rest } = s;
   return parseInsightsSearch({ ...rest, ...serializeTrendFilters(f) });
 }
 

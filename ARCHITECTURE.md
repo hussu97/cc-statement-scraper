@@ -554,10 +554,23 @@ repository holds no real pattern (tests use a fake token).
 ## 6. Analytics and insights
 
 There is **one definition of spend**: `public.v_spend` (`security_invoker`). It counts debit
-purchases, fees, interest and cash advances, minus refunds. It excludes payments, transfer,
-ignore and income categories, void and orphaned transactions, and anything marked
-`exclude_from_spend`. Buckets use `txn_date`, a Dubai date. Every analytics RPC builds on it.
-Clients render results and never re-derive money.
+purchases, fees, interest and cash advances, minus refunds. It excludes payments, transfers
+in and out, transfer, ignore, income, saving and support categories, void and orphaned
+transactions, and anything marked `exclude_from_spend`. Each row carries `instrument`
+(`credit_card` / `debit_card`, from its account); `spend_series` and `spend_breakdown` take
+`p_instruments` (null = both). Buckets use `txn_date`, a Dubai date. Every analytics RPC builds
+on it. Clients render results and never re-derive money.
+
+**Cash flow** (Phase 2c) is `public.v_cash_flow`: every row of `v_spend` as `spend`, plus each
+bank-account transfer by flow: `income` (filed under an income category such as Salary),
+`money_in`, `internal_in`/`internal_out` (a Transfers category), `card_repayment` (paired with a
+card payment through `card_transfers`: same AED amount within 3 days, so paying a card from the
+bank counts once), `support`, `saving`, `spend_transfer` (a transfer filed under a spend or fee
+category, such as rent) and `money_out`. `cash_flow(profile, from, to)` sums them per month and
+adds `net` = money in − spend − spend by transfer − support − saving − unfiled out; card
+repayments and internal moves are settlement and never change it. Payees are category rules: a
+rule on kind, amount and bank ("ADCB transfer out of 23,700 → Family support") files a transfer
+that names no counterparty.
 
 There is likewise **one definition of what a card owes**: `public.v_account_balances`
 (`security_invoker`). A sum of transactions cannot know the balance carried in before the first

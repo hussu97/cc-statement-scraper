@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseTrendFilterSearch, serializeTrendFilters, toggleCode, trendFilterCount, trendFilters, UNCATEGORIZED_KEY } from "./trend-filters";
-import { parseInsightsSearch, withInsightsRange, withTrendFilters, withTrends } from "./search";
+import { insightsRouteSearch, parseInsightsSearch, withInsightsRange, withTrendFilters, withTrends } from "./search";
 
 const CAT_A = `cat_${"a".repeat(26)}`;
 const CAT_B = `cat_${"b".repeat(26)}`;
@@ -40,6 +40,15 @@ describe("trend filter codec", () => {
     expect(trendFilterCount({ categories: [], banks: [], cards: [] })).toBe(0);
   });
 
+  it("carries the card type as ?inst=credit|debit and drops anything else (Phase 2c)", () => {
+    expect(parseTrendFilterSearch({ inst: "debit" })).toEqual({ inst: "debit" });
+    expect(parseTrendFilterSearch({ inst: "cash" })).toEqual({});
+    const f = { categories: [], banks: [], cards: [], instrument: "credit_card" as const };
+    expect(serializeTrendFilters(f)).toEqual({ inst: "credit" });
+    expect(trendFilters(serializeTrendFilters(f))).toEqual(f);
+    expect(trendFilterCount(f)).toBe(1);
+  });
+
   it("toggles a code in a list", () => {
     expect(toggleCode([CAT_A], CAT_B)).toEqual([CAT_A, CAT_B]);
     expect(toggleCode([CAT_A, CAT_B], CAT_A)).toEqual([CAT_B]);
@@ -47,6 +56,13 @@ describe("trend filter codec", () => {
 });
 
 describe("Insights search with trend filters", () => {
+  it("the route returns a dropped key as undefined, so an invalid ?range or ?inst can't survive from the raw URL", () => {
+    const s = insightsRouteSearch({ range: "this-month", inst: "cash", tab: "trends" });
+    expect(s.tab).toBe("trends");
+    expect("range" in s && s.range === undefined).toBe(true);
+    expect("inst" in s && s.inst === undefined).toBe(true);
+  });
+
   it("keeps filters alongside range, tab and trend options", () => {
     expect(parseInsightsSearch({ range: "ytd", group: "bank", cat: CAT_A, bank: "FAB", q: "noon" })).toEqual({
       range: "ytd",
