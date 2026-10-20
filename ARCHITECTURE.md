@@ -587,6 +587,25 @@ another card is a `transfer_out` there, paired with that card's payment through 
 and outside cash flow (debt moving between cards). The monthly autopay is a payment on Wio Credit.
 A local transfer's recipient is its description, so it is filed once like a merchant.
 
+**Wealth mode** (`20261020162834`, `tasks/todo.md` §5). The apps have two modes: Spending
+(cards, budgets, Activity) and Wealth (bank accounts, cash flow, net worth). `v_transactions`
+carries `account_kind` and `in_spending` (every card row, plus purchases, refunds, fees, interest
+and cash advances on any account, so a debit-card purchase is still spend); Activity passes
+`scope = spending` to `activity_selection` / `activity_summary`, and salary, transfers and
+autopay appear only in the account's ledger. `account_ledger(profile, account, from, to)` returns
+a bank account's rows newest first with their cash-flow `flow` and `balance_after`, plus opening
+and closing balance and money in/out, all in the account's currency. A row's balance is anchored
+on the next balance checkpoint at or after it, else the latest one (`private.bank_running_balances`:
+balance = checkpoint + running sum − the running sum the checkpoint already includes), so the
+bank's printed figures win and the newest row matches `v_bank_balances`; a gap between two
+checkpoints shows as a jump, which `balance_drift` reports. `bank_balance_series` gives end-of-day
+balances from the account's first evidence on. `net_worth(profile)` is bank cash − card
+outstanding (`v_account_balances`) with completeness, and `net_worth_series` reads the month's
+last nightly `net_worth_snapshots` row plus today's live figure (holdings join in Phase 1).
+`cash_flow` takes an optional account and returns `is_partial` for months that begin before the
+ledger's (or account's) first bank evidence, so a month of card spend with no captured income
+is not read as a loss.
+
 There is likewise **one definition of what a card owes**: `public.v_account_balances`
 (`security_invoker`). A sum of transactions cannot know the balance carried in before the first
 document, so each account is anchored on a balance the bank printed, the latest of:
@@ -722,7 +741,7 @@ so 31 Oct covers all of September), and `projected_month_end` is
 when the 3 months before hold no spend; a past month projects to its spend, a future one to null.
 Business dates stay `Asia/Dubai`: `profiles.timezone` and `base_currency` are reserved, not used.
 
-The nightly job `private.nightly()` (22:00 UTC = 02:00 Dubai) runs three steps (and, for the
+The nightly job `private.nightly()` (22:00 UTC = 02:00 Dubai) runs four steps (and, for the
 all-profiles run, purges `document_events` older than 90 days first):
 1. Voids released authorisations.
 2. Detects recurring charges. A merchant's charges on one day are one billing event (their
@@ -736,7 +755,16 @@ all-profiles run, purges `document_events` older than 90 days first):
    `data.txn_code`, titled with the merchant name, or the cleaned description when the charge has
    no merchant), `cash_advance` (every cash advance of the last 30 days, with the same-day
    CASH ADVANCE FEE and its VAT, `data.txn_code`, kept 30 days from the withdrawal) and
-   `review_backlog` (≥ 10 open reviews).
+   `review_backlog` (≥ 10 open reviews). Wealth insights (`private.generate_wealth_insights`):
+   `balance_stale` (a bank balance never entered or over 7 days old, keyed on the balance's
+   date, retired once current), `balance_drift` (an SMS balance of the last 30 days that differs
+   from the previous checkpoint plus the activity between by AED 1 or more: a missed alert),
+   `salary_late` (no income credit by three days after the usual day of the last three months'
+   largest one, retired once it lands) and `annual_fee` (a card's annual or membership fee, net of
+   reversals, above its cashback over 12 months, for 60 days after the fee).
+   `private.generate_insights` is a wrapper over `generate_spending_insights` and
+   `generate_wealth_insights`: change the generators, never the wrapper.
+4. Writes the day's `net_worth_snapshots` row per ledger.
 
 ---
 

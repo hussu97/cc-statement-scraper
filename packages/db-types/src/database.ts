@@ -1250,6 +1250,50 @@ export type Database = {
         }
         Relationships: []
       }
+      net_worth_snapshots: {
+        Row: {
+          cash_aed: number
+          complete: boolean
+          created_at: string
+          net_aed: number
+          owed_aed: number
+          profile_code: string
+          snap_date: string
+          snapshot_code: string
+          updated_at: string
+        }
+        Insert: {
+          cash_aed: number
+          complete: boolean
+          created_at?: string
+          net_aed: number
+          owed_aed: number
+          profile_code: string
+          snap_date: string
+          snapshot_code?: string
+          updated_at?: string
+        }
+        Update: {
+          cash_aed?: number
+          complete?: boolean
+          created_at?: string
+          net_aed?: number
+          owed_aed?: number
+          profile_code?: string
+          snap_date?: string
+          snapshot_code?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "net_worth_snapshots_profile_code_fkey"
+            columns: ["profile_code"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["profile_code"]
+          },
+        ]
+      }
       profile_members: {
         Row: {
           created_at: string
@@ -2621,6 +2665,7 @@ export type Database = {
       v_transactions: {
         Row: {
           account_code: string | null
+          account_kind: string | null
           account_nickname: string | null
           amount_aed: number | null
           amount_aed_is_estimate: boolean | null
@@ -2643,6 +2688,7 @@ export type Database = {
           fx_rate: number | null
           has_sms: boolean | null
           has_statement: boolean | null
+          in_spending: boolean | null
           kind: string | null
           merchant_code: string | null
           merchant_name: string | null
@@ -2777,6 +2823,15 @@ export type Database = {
       }
     }
     Functions: {
+      account_ledger: {
+        Args: {
+          p_account_code: string
+          p_from: string
+          p_profile_code: string
+          p_to: string
+        }
+        Returns: Json
+      }
       activity_day_totals: {
         Args: { p_days?: string[]; p_filter?: Json; p_profile_code: string }
         Returns: {
@@ -2811,6 +2866,7 @@ export type Database = {
           p_from?: string
           p_profile_code: string
           p_q?: string
+          p_scope?: string
           p_source?: string
           p_status?: string
           p_to?: string
@@ -2862,6 +2918,15 @@ export type Database = {
         Args: { p_profile_key?: string; p_scope: string; p_token: string }
         Returns: string
       }
+      bank_balance_series: {
+        Args: {
+          p_account_code: string
+          p_from: string
+          p_profile_code: string
+          p_to: string
+        }
+        Returns: Json
+      }
       begin_document_parse: {
         Args: { p_attempt?: number; p_doc_code: string }
         Returns: Json
@@ -2906,10 +2971,16 @@ export type Database = {
         Returns: undefined
       }
       cash_flow: {
-        Args: { p_from: string; p_profile_code: string; p_to: string }
+        Args: {
+          p_account_code?: string
+          p_from: string
+          p_profile_code: string
+          p_to: string
+        }
         Returns: {
           amount_aed: number
           flow: string
+          is_partial: boolean
           month: string
           txn_count: number
         }[]
@@ -3078,6 +3149,11 @@ export type Database = {
       month_to_date_end: {
         Args: { p_month: string; p_today: string; p_viewed_month: string }
         Returns: string
+      }
+      net_worth: { Args: { p_profile_code: string }; Returns: Json }
+      net_worth_series: {
+        Args: { p_months?: number; p_profile_code: string }
+        Returns: Json
       }
       ops_health: { Args: never; Returns: Json }
       overview: {

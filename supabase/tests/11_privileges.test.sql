@@ -107,6 +107,7 @@ select set_eq(
     'email_routes.sender_allowlist:authenticated:UPDATE', 'email_routes.subject_keywords:authenticated:UPDATE', 'email_routes:authenticated:DELETE',
     'email_routes:authenticated:INSERT', 'email_routes:authenticated:SELECT', 'fx_rates:authenticated:SELECT',
     'insights.dismissed_at:authenticated:UPDATE', 'insights:authenticated:SELECT', 'match_reviews:authenticated:SELECT',
+    'net_worth_snapshots:authenticated:SELECT',
     'merchant_aliases:authenticated:SELECT', 'merchant_category_skips:authenticated:SELECT', 'merchant_profile_category:authenticated:DELETE', 'merchant_profile_category:authenticated:INSERT',
     'merchant_profile_category:authenticated:SELECT', 'merchant_profile_category:authenticated:UPDATE', 'merchants:authenticated:SELECT',
     'profile_members:authenticated:SELECT', 'profile_state:authenticated:SELECT', 'profiles.base_currency:authenticated:UPDATE',
