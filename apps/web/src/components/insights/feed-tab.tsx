@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Lightbulb } from "lucide-react";
 import { useActiveProfile } from "@/data/profile";
-import { groupInsights, INSIGHTS_LIMIT, useDismissInsight, useInsights } from "@/data/overview";
+import { groupInsights, INSIGHTS_LIMIT, isWealthInsight, useDismissInsight, useInsights } from "@/data/overview";
 import { formatCount } from "@/lib/money";
 import { Card, CardHeader } from "@/components/ui/display";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
@@ -15,7 +15,8 @@ export function FeedTab({ profileCode }: { profileCode: string }) {
   const { isOwner } = useActiveProfile();
   const q = useInsights(profileCode);
   const dismiss = useDismissInsight(profileCode);
-  const groups = useMemo(() => groupInsights(q.data ?? []), [q.data]);
+  // Bank balance and income insights live on the Wealth overview.
+  const groups = useMemo(() => groupInsights((q.data ?? []).filter((i) => !isWealthInsight(i))), [q.data]);
 
   if (q.isLoading) return <Card><LoadingRows rows={4} /></Card>;
   if (q.isError) return <Card><ErrorState error={q.error} onRetry={() => void q.refetch()} /></Card>;

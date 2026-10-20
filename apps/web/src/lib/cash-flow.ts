@@ -55,6 +55,11 @@ export interface CashFlowRow {
   flow: string;
   amount_aed: MoneyInput;
   txn_count: number;
+  /**
+   * The month starts before the ledger's (or the account's) first bank evidence: card spend with no
+   * income captured, so its net is not a loss. Optional: an older server omits it.
+   */
+  is_partial?: boolean;
 }
 
 export interface FlowLine {
@@ -79,6 +84,8 @@ export interface MonthFlows {
   /** The server's net for the month; null when nothing moved. */
   net: MoneyInput;
   hasMovements: boolean;
+  /** Before the first bank evidence: money in wasn't captured, so the net isn't a loss (is_partial). */
+  partial: boolean;
 }
 
 /**
@@ -102,7 +109,7 @@ export function monthFlows(rows: readonly CashFlowRow[], month: ISODate): MonthF
       }),
   })).filter((g) => g.lines.length > 0);
   const net = byFlow.get("net");
-  return { groups, net: net ? net.amount_aed : null, hasMovements: groups.length > 0 };
+  return { groups, net: net ? net.amount_aed : null, hasMovements: groups.length > 0, partial: mine.some((r) => r.is_partial === true) };
 }
 
 /** "+AED 50,000" for money in, "−AED 23,700" for money out (a negative out, e.g. refunds, reads "+"). */
@@ -134,22 +141,68 @@ export interface NetRow {
   month: ISODate;
   label: string;
   net: MoneyInput;
+  /** Before the first bank evidence (is_partial): shown muted, never as a loss. */
+  partial: boolean;
 }
 
 /** The month-by-month net table, newest first. A month with no movement has a null net. */
 export function netByMonth(rows: readonly CashFlowRow[], month: ISODate): NetRow[] {
-  const nets = new Map(rows.filter((r) => r.flow === "net").map((r) => [r.month.slice(0, 10), r.amount_aed]));
+  const nets = new Map(rows.filter((r) => r.flow === "net").map((r) => [r.month.slice(0, 10), r]));
   return Array.from({ length: NET_MONTHS }, (_, i) => {
     const m = addMonths(month, -i);
-    return { month: m, label: formatMonth(m, "short"), net: nets.get(m) ?? null };
+    const r = nets.get(m);
+    return { month: m, label: formatMonth(m, "short"), net: r ? r.amount_aed : null, partial: r?.is_partial === true };
   });
 }
 
-/** `/cash-flow?month=YYYY-MM-01`: a first-of-month no later than this month, else none. */
-export function parseCashFlowSearch(raw: Record<string, unknown>, today: ISODate = todayDubai()): { month?: string } {
+export interface CashFlowSearch {
+  /** A first-of-month (YYYY-MM-01) no later than this month; absent = this month. */
+  month?: string;
+  /** One bank account (cash_flow's p_account_code); absent = every account. */
+  account?: string;
+}
+
+const ACC_RE = /^acc_[0-9a-z]{26}$/;
+
+/**
+ * `/wealth/cash-flow?month=YYYY-MM-01&account=acc_…`. A dropped key comes back as undefined, so
+ * it overrides the raw URL the root route passes through (tasks/lessons.md, TanStack Router).
+ */
+export function parseCashFlowSearch(raw: Record<string, unknown>, today: ISODate = todayDubai()): CashFlowSearch {
   const m = raw.month;
-  if (typeof m !== "string" || !/^\d{4}-\d{2}-01$/.test(m) || !isISODate(m)) return { month: undefined };
-  return { month: m <= today ? m : undefined };
+  const month = typeof m === "string" && /^\d{4}-\d{2}-01$/.test(m) && isISODate(m) && m <= today ? m : undefined;
+  const account = typeof raw.account === "string" && ACC_RE.test(raw.account) ? raw.account : undefined;
+  return { month, account };
+}
+
+// ── one transaction's flow (account ledger chips) ──────────────────────────
+
+export interface FlowChip {
+  label: string;
+  tone: "neutral" | "positive" | "warn" | "info" | "accent";
+}
+
+/** A ledger row's flow, as a chip: the cash-flow vocabulary for one transaction. */
+export const FLOW_CHIP: Record<Flow, FlowChip> = {
+  spend: { label: "Spent", tone: "neutral" },
+  income: { label: "Income", tone: "positive" },
+  money_in: { label: "Money in (unfiled)", tone: "warn" },
+  internal_in: { label: "From your account", tone: "neutral" },
+  internal_out: { label: "To your account", tone: "neutral" },
+  card_repayment: { label: "Card repayment", tone: "neutral" },
+  support: { label: "Support", tone: "info" },
+  saving: { label: "Saving", tone: "accent" },
+  spend_transfer: { label: "Spent by transfer", tone: "neutral" },
+  money_out: { label: "Money out (unfiled)", tone: "warn" },
+};
+
+export function isFlow(v: unknown): v is Flow {
+  return typeof v === "string" && (FLOWS as readonly string[]).includes(v);
+}
+
+/** The chip for a row's flow; null for no flow (void, or a flow this web doesn't know yet). */
+export function flowChip(flow: string | null | undefined): FlowChip | null {
+  return isFlow(flow) ? FLOW_CHIP[flow] : null;
 }
 
 // ── bank accounts ──────────────────────────────────────────────────────────

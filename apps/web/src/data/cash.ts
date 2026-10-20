@@ -1,7 +1,7 @@
 // Bank balances and cash flow (Phase 2d): public.cash_position, public.cash_flow,
 // create_bank_account and record_balance. The server computes every figure (CLAUDE.md §2.2).
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
+import { supabase, type RpcArgs } from "@/lib/supabase";
 import type { BankAccountKind, CashFlowRow } from "@/lib/cash-flow";
 import { keys, LEDGER_DOMAINS, type Domain } from "./keys";
 import { ApiError, errorMessage, must, mustList } from "./api";
@@ -43,13 +43,19 @@ export function useCashPosition(profileCode: string) {
   });
 }
 
-/** public.cash_flow over [from, to]: each month's flows and its net, amounts as positive magnitudes. */
-export function useCashFlow(profileCode: string, range: { from: string; to: string }) {
+/**
+ * public.cash_flow over [from, to]: each month's flows and its net, amounts as positive magnitudes;
+ * `account` narrows it to one bank account.
+ */
+export function useCashFlow(profileCode: string, range: { from: string; to: string }, account?: string) {
   return useQuery({
-    queryKey: keys.cashFlow(profileCode, range.from, range.to),
+    queryKey: keys.cashFlow(profileCode, range.from, range.to, account),
     placeholderData: keepPreviousData,
-    queryFn: async (): Promise<CashFlowRow[]> =>
-      mustList(await supabase.rpc("cash_flow", { p_profile_code: profileCode, p_from: range.from, p_to: range.to })),
+    queryFn: async (): Promise<CashFlowRow[]> => {
+      const args: RpcArgs<"cash_flow"> = { p_profile_code: profileCode, p_from: range.from, p_to: range.to };
+      if (account) args.p_account_code = account;
+      return mustList(await supabase.rpc("cash_flow", args));
+    },
   });
 }
 

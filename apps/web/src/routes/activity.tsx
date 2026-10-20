@@ -25,7 +25,7 @@ import {
   type TxnSelection,
 } from "@/data/transactions";
 import { errorMessage } from "@/data/api";
-import { PageHeader, Card } from "@/components/ui/display";
+import { Badge, PageHeader, Card } from "@/components/ui/display";
 import { Checkbox } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
@@ -39,6 +39,7 @@ import { TransactionDrawer } from "@/components/activity/drawer";
 import { BulkBar } from "@/components/activity/bulk-bar";
 import { CardRef } from "@/components/bank-logo";
 import { transferPeer } from "@/lib/transfers";
+import { debitTag } from "@/lib/wealth";
 
 export function ActivityPage() {
   const { profile_code, isOwner } = useActiveProfile();
@@ -112,7 +113,7 @@ export function ActivityPage() {
     <div>
       <PageHeader
         title="Activity"
-        description="Every card transaction from SMS alerts and statements, matched into one ledger."
+        description="Every purchase on your cards and debit cards, from alerts and statements. Salary and transfers are in Wealth, on each account's page."
         actions={
           rows.length > 0 ? (
             <Button
@@ -292,6 +293,7 @@ function TxnLine({
           <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-muted">
             {t.txn_at && <span className="tabular">{formatTime(t.txn_at)}</span>}
             <CardRef bankCode={t.bank_code} last4={t.card_last4} className="md:hidden" />
+            <DebitTag accountKind={t.account_kind} />
             <EvidenceBadge kind={evidenceBadge(t)} />
             <TransferRef t={t} />
             <StatusBadge status={t.status} />
@@ -330,6 +332,17 @@ function DayTotalFigure({ total }: { total: DayTotal | undefined }) {
     <span className="tabular font-normal text-muted" title={`Net of ${total.txn_count} ${noun} that day`}>
       {label}
     </span>
+  );
+}
+
+/** "Debit" on a purchase from a bank account's debit card: it counts in spend like a card's. */
+function DebitTag({ accountKind }: { accountKind: string | null }) {
+  const tag = debitTag(accountKind);
+  if (!tag) return null;
+  return (
+    <Badge tone="neutral" title="Paid by debit card from a bank account">
+      {tag}
+    </Badge>
   );
 }
 

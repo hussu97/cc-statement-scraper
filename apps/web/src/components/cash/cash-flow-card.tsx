@@ -1,37 +1,44 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeftRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { useCashFlow } from "@/data/cash";
 import { cashFlowRange, formatFlow, formatNet, monthFlows, netByMonth, netTone, type FlowGroup, type FlowLine } from "@/lib/cash-flow";
-import { UNCATEGORIZED } from "@/lib/activity-filters";
-import { addMonths, formatMonth, monthEnd } from "@/lib/dates";
+import { addMonths, formatMonth } from "@/lib/dates";
 import { formatCount } from "@/lib/money";
 import { cn } from "@/lib/cn";
-import { Card, CardHeader, Skeleton } from "@/components/ui/display";
+import { Badge, Card, CardHeader, Skeleton } from "@/components/ui/display";
 import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 
 const TONE_TEXT = { positive: "text-positive", danger: "text-danger", neutral: "text-ink" } as const;
 
+/** What a partial month (cash_flow.is_partial) means, in one sentence. */
+const PARTIAL_NOTE = "Before your first bank alert or balance: card spending is here but money in wasn't captured, so this net isn't a loss.";
+
 /**
  * One month's money in and out by group, and the net of the last six months (public.cash_flow).
- * `unfiledAccount` narrows the Unfiled links to the ledger's one bank account, when it has one.
+ * `account` narrows it to one bank account. The Unfiled lines open `unfiledAccount`'s ledger for
+ * the month (one account), else the accounts list.
  */
 export function CashFlowCard({
   profileCode,
   month,
   thisMonth,
   onMonth,
+  account,
   unfiledAccount,
+  headerExtra,
 }: {
   profileCode: string;
   month: string;
   thisMonth: string;
   onMonth: (m: string) => void;
+  account?: string;
   unfiledAccount?: string;
+  headerExtra?: ReactNode;
 }) {
   const range = cashFlowRange(month);
-  const q = useCashFlow(profileCode, range);
+  const q = useCashFlow(profileCode, range, account);
   const flows = useMemo(() => monthFlows(q.data ?? [], month), [q.data, month]);
   const nets = useMemo(() => netByMonth(q.data ?? [], month), [q.data, month]);
   const isCurrent = month === thisMonth;
@@ -43,6 +50,7 @@ export function CashFlowCard({
         title={`${formatMonth(month)}${isCurrent ? " so far" : ""}`}
         action={
           <div className="flex items-center gap-1">
+            {headerExtra}
             <Button size="icon-sm" variant="ghost" aria-label="Previous month" onClick={() => onMonth(addMonths(month, -1))}>
               <ChevronLeft className="size-4" />
             </Button>
@@ -64,6 +72,12 @@ export function CashFlowCard({
       ) : (
         <div className={cn("grid gap-6 px-5 pb-5 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]", q.isPlaceholderData && "opacity-60")}>
           <div>
+            {flows.partial && flows.hasMovements && (
+              <p className="mb-4 flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-md bg-surface-2 px-3 py-2 text-[12px] text-muted">
+                <Badge tone="info">Partial month</Badge>
+                <span>{PARTIAL_NOTE}</span>
+              </p>
+            )}
             {flows.hasMovements ? (
               <>
                 <div className="flex flex-col gap-4">
@@ -72,8 +86,8 @@ export function CashFlowCard({
                   ))}
                 </div>
                 <div className="mt-4 flex items-baseline justify-between gap-3 border-t border-border pt-3">
-                  <span className="text-sm font-semibold text-ink">Net</span>
-                  <span className={cn("tabular text-lg font-medium", TONE_TEXT[netTone(flows.net)])}>{formatNet(flows.net)}</span>
+                  <span className="text-sm font-semibold text-ink">Net{flows.partial && <span className="ml-2 text-[11px] font-normal text-subtle">partial month</span>}</span>
+                  <span className={cn("tabular text-lg font-medium", flows.partial ? "text-muted" : TONE_TEXT[netTone(flows.net)])}>{formatNet(flows.net)}</span>
                 </div>
               </>
             ) : (
@@ -100,12 +114,16 @@ export function CashFlowCard({
                         {r.label}
                       </button>
                     </th>
-                    <td className={cn("tabular py-2 pr-2 text-right", r.net === null ? "text-subtle" : TONE_TEXT[netTone(r.net)])}>{formatNet(r.net)}</td>
+                    <td className={cn("tabular py-2 pr-2 text-right", r.net === null ? "text-subtle" : r.partial ? "text-muted" : TONE_TEXT[netTone(r.net)])}>
+                      {r.partial && r.net !== null && <span className="mr-2 text-[11px] text-subtle">partial</span>}
+                      {formatNet(r.net)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
             <p className="mt-2 text-[11px] text-subtle">Money in less spending, commitments and unfiled money out. Card repayments and moves between your own accounts don't count.</p>
+            {nets.some((r) => r.partial && r.net !== null) && <p className="mt-1 text-[11px] text-subtle">Partial: before your first bank alert or balance, so money in is missing.</p>}
           </div>
         </div>
       )}
@@ -136,13 +154,21 @@ function LineRow({ line: l, muted, month, unfiledAccount }: { line: FlowLine; mu
     <li className="flex items-baseline justify-between gap-3 py-1">
       <span className="min-w-0 truncate text-sm">
         {l.unfiled ? (
-          <Link
-            to="/activity"
-            search={{ category: UNCATEGORIZED, from: month, to: monthEnd(month), ...(unfiledAccount ? { account: unfiledAccount } : {}) }}
-            className="text-accent hover:underline"
-          >
-            {l.label}
-          </Link>
+          unfiledAccount ? (
+            <Link
+              to="/wealth/accounts/$accountCode"
+              params={{ accountCode: unfiledAccount }}
+              search={{ month: month.slice(0, 7) }}
+              className="text-accent hover:underline"
+              title="File them from the account's ledger"
+            >
+              {l.label}
+            </Link>
+          ) : (
+            <Link to="/wealth/accounts" className="text-accent hover:underline" title="File them from each account's ledger">
+              {l.label}
+            </Link>
+          )
         ) : (
           <span className={muted ? "text-muted" : "text-ink"}>{l.label}</span>
         )}

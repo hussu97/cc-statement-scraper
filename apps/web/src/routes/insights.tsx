@@ -16,7 +16,7 @@ import { TimeOfDayTab } from "@/components/insights/time-tab";
 import { YoyTab } from "@/components/insights/yoy-tab";
 import { AnomaliesTab } from "@/components/insights/anomalies-tab";
 import { FeedTab } from "@/components/insights/feed-tab";
-import { useInsights } from "@/data/overview";
+import { isWealthInsight, useInsights } from "@/data/overview";
 import { formatBadgeCount } from "@/lib/money";
 
 /** Tabs that ignore the date range (they have their own period, or none). */
@@ -32,7 +32,7 @@ export function InsightsPage() {
   const props = { profileCode, range };
   // The feed tab's count; the same cached query as Overview's insights panel.
   const insights = useInsights(profileCode);
-  const open = insights.data?.length ?? 0;
+  const open = insights.data?.filter((i) => !isWealthInsight(i)).length ?? 0;
 
   return (
     <div className="animate-fade-in">

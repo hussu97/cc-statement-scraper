@@ -6,7 +6,12 @@ import { keys, LEDGER_DOMAINS } from "./keys";
 describe("cash keys", () => {
   it("live under the profile's cash domain, which ledger changes refresh", () => {
     expect(keys.cashPosition("P")).toEqual(["p", "P", "cash", "position"]);
-    expect(keys.cashFlow("P", "2026-05-01", "2026-10-31")).toEqual(["p", "P", "cash", "flow", "2026-05-01", "2026-10-31"]);
+    expect(keys.cashFlow("P", "2026-05-01", "2026-10-31")).toEqual(["p", "P", "cash", "flow", "2026-05-01", "2026-10-31", "all"]);
+    expect(keys.cashFlow("P", "2026-05-01", "2026-10-31", "acc_1")).toEqual(["p", "P", "cash", "flow", "2026-05-01", "2026-10-31", "acc_1"]);
+    // Wealth mode's reads refresh with the same domain: a balance or a category change.
+    for (const k of [keys.netWorth("P"), keys.netWorthSeries("P", 12), keys.accountLedger("P", "acc_1", "a", "b"), keys.balanceSeries("P", "acc_1", "a", "b")]) {
+      expect(k.slice(0, 3)).toEqual(["p", "P", "cash"]);
+    }
     expect(LEDGER_DOMAINS).toContain("cash");
   });
 });

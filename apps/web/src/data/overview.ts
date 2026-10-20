@@ -130,7 +130,11 @@ export type InsightTarget =
   | { to: "/cards"; search: { tab: "statements" }; label: string }
   | { to: "/insights"; search: { tab?: string }; label: string }
   | { to: "/insights/category/$categoryCode"; params: { categoryCode: string }; search: { range: "this_month" }; label: string }
-  | { to: "/activity"; search: { category?: string; txn?: string }; label: string };
+  | { to: "/activity"; search: { category?: string; txn?: string }; label: string }
+  | { to: "/cards"; search: Record<string, never>; label: string }
+  | { to: "/wealth/accounts/$accountCode"; params: { accountCode: string }; search: Record<string, never>; label: string }
+  | { to: "/wealth/accounts"; label: string }
+  | { to: "/wealth/cash-flow"; search: Record<string, never>; label: string };
 
 /**
  * Map an insight to the screen that answers it (WEB-25). Pure, unit-tested;
@@ -165,6 +169,18 @@ export function insightTarget(i: Pick<Insight, "kind" | "data">): InsightTarget 
       return { to: "/review", label: "Open review" };
     case "spend_pace":
       return { to: "/insights", search: {}, label: "See trends" };
+    case "annual_fee":
+      return { to: "/cards", search: {}, label: "See cards" };
+    case "balance_stale":
+    case "balance_drift": {
+      // Wealth: the account's page, with its balance and ledger.
+      const account = str("account_code");
+      return account
+        ? { to: "/wealth/accounts/$accountCode", params: { accountCode: account }, search: {}, label: i.kind === "balance_stale" ? "Update the balance" : "See the account" }
+        : { to: "/wealth/accounts", label: "See accounts" };
+    }
+    case "salary_late":
+      return { to: "/wealth/cash-flow", search: {}, label: "See cash flow" };
     default:
       return null;
   }
@@ -184,9 +200,19 @@ export const INSIGHT_GROUPS = [
   { key: "spending", label: "Spending", kinds: ["spend_pace", "category_spike", "large_transaction", "cash_advance"] },
   { key: "budgets", label: "Budgets", kinds: ["budget_risk"] },
   { key: "subscriptions", label: "Subscriptions", kinds: ["price_change", "new_recurring"] },
-  { key: "statements", label: "Statements", kinds: ["statement_due"] },
+  { key: "statements", label: "Cards and statements", kinds: ["statement_due", "annual_fee"] },
   { key: "tidy", label: "To tidy up", kinds: ["uncategorized", "review_backlog"] },
 ] as const;
+
+/**
+ * Wealth mode's insights (bank balances and income): shown on the Wealth overview, never in
+ * Spending's Overview panel or Insights feed.
+ */
+export const WEALTH_INSIGHT_KINDS = ["balance_stale", "balance_drift", "salary_late"] as const;
+
+export function isWealthInsight(i: { kind: string }): boolean {
+  return (WEALTH_INSIGHT_KINDS as readonly string[]).includes(i.kind);
+}
 
 export interface InsightGroup<T> {
   key: string;

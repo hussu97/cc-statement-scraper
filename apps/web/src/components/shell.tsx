@@ -1,10 +1,12 @@
-import { useState, type ReactNode } from "react";
-import { Link, Navigate, Outlet, useLocation, useRouterState } from "@tanstack/react-router";
+import { useEffect, useState, type ReactNode } from "react";
+import { Link, Navigate, Outlet, useLocation, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
+  ArrowLeftRight,
   ChartColumnBig,
   ChevronsUpDown,
   CreditCard,
   Inbox,
+  Landmark,
   LayoutGrid,
   LogOut,
   Menu as MenuIcon,
@@ -23,7 +25,8 @@ import { useAuth, signOut } from "@/data/auth";
 import { memberProfiles, useProfileContext, type ProfileSummary } from "@/data/profile";
 import { useRealtimeInvalidation } from "@/data/realtime";
 import { useOpenReviewCount } from "@/data/reviews";
-import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger, TooltipProvider } from "./ui/primitives";
+import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger, Segmented, TooltipProvider } from "./ui/primitives";
+import { APP_MODES, MODE_INFO, modeOfPath, readRememberedMode, rememberMode, resolveMode, type AppMode } from "@/lib/mode";
 import { Toaster } from "./ui/toast";
 import { Sheet } from "./ui/dialog";
 import { ErrorState } from "./ui/states";
@@ -37,26 +40,115 @@ interface NavItem {
   badge?: number;
 }
 
-function useNav(profileCode: string | null): NavItem[] {
-  const reviews = useOpenReviewCount(profileCode);
-  const open = profileCode ? (reviews.data ?? 0) : 0;
-  return [
+/** Each mode's own screens, in sidebar order. Investments and goals join Wealth later. */
+const MODE_NAV: Record<AppMode, NavItem[]> = {
+  spending: [
     { to: "/", label: "Overview", icon: <LayoutGrid /> },
     { to: "/activity", label: "Activity", icon: <ReceiptText /> },
     { to: "/insights", label: "Insights", icon: <ChartColumnBig /> },
-    { to: "/cash-flow", label: "Cash flow", icon: <Wallet /> },
     { to: "/budgets", label: "Budgets", icon: <Target /> },
     { to: "/cards", label: "Cards & statements", icon: <CreditCard /> },
-    { to: "/review", label: "Review", icon: <Inbox />, badge: open || undefined },
-    { to: "/rules", label: "Rules", icon: <Shapes /> },
-    { to: "/settings", label: "Settings", icon: <Settings2 /> },
-  ];
+  ],
+  wealth: [
+    { to: "/wealth", label: "Overview", icon: <LayoutGrid /> },
+    { to: "/wealth/accounts", label: "Accounts", icon: <Landmark /> },
+    { to: "/wealth/cash-flow", label: "Cash flow", icon: <ArrowLeftRight /> },
+  ],
+};
+
+/** Each mode's phone tabs (the rest go in More). Review, the daily action surface, is always one. */
+const MOBILE_TABS: Record<AppMode, string[]> = {
+  spending: ["/", "/activity", "/insights", "/review"],
+  wealth: ["/wealth", "/wealth/accounts", "/wealth/cash-flow", "/review"],
+};
+
+interface Nav {
+  mode: AppMode;
+  /** The mode's own screens. */
+  primary: NavItem[];
+  /** Review, Rules and Settings: in both modes. */
+  shared: NavItem[];
+  setMode: (m: AppMode) => void;
 }
+
+/**
+ * The mode comes from the path (/wealth/* is Wealth); a shared screen keeps the last mode,
+ * remembered across visits (localStorage, wrapped). Switching goes to that mode's home.
+ */
+function useNav(profileCode: string | null): Nav {
+  const reviews = useOpenReviewCount(profileCode);
+  const open = profileCode ? (reviews.data ?? 0) : 0;
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  const navigate = useNavigate();
+  const [remembered, setRemembered] = useState<AppMode | null>(readRememberedMode);
+  // A mode's own screen makes it the remembered one (adjusting state while rendering, not in an effect).
+  const fromPath = modeOfPath(path);
+  if (fromPath && fromPath !== remembered) setRemembered(fromPath);
+  const mode = resolveMode(path, remembered);
+  useEffect(() => rememberMode(mode), [mode]);
+  return {
+    mode,
+    primary: MODE_NAV[mode],
+    shared: [
+      { to: "/review", label: "Review", icon: <Inbox />, badge: open || undefined },
+      { to: "/rules", label: "Rules", icon: <Shapes /> },
+      { to: "/settings", label: "Settings", icon: <Settings2 /> },
+    ],
+    setMode: (m) => {
+      setRemembered(m);
+      void navigate({ to: MODE_INFO[m].home });
+    },
+  };
+}
+
+/** A mode's home and Overview match only exactly; every other entry also owns its sub-paths. */
+const EXACT = new Set(["/", "/wealth"]);
 
 function useIsActive() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   // A statement page belongs to "Cards & statements".
-  return (to: string) => (to === "/" ? path === "/" : path === to || path.startsWith(`${to}/`) || (to === "/cards" && path.startsWith("/statements/")));
+  return (to: string) => (EXACT.has(to) ? path === to : path === to || path.startsWith(`${to}/`) || (to === "/cards" && path.startsWith("/statements/")));
+}
+
+const MODE_ICON: Record<AppMode, ReactNode> = { spending: <Wallet />, wealth: <Landmark /> };
+
+/** The Spending / Wealth dropdown at the top of the sidebar (and in the phone header). */
+function ModeSwitcher({ nav, compact }: { nav: Nav; compact?: boolean }) {
+  const info = MODE_INFO[nav.mode];
+  return (
+    <Menu>
+      <MenuTrigger asChild>
+        <button
+          type="button"
+          aria-label={`Mode: ${info.label}. Switch mode`}
+          className={cn(
+            "flex min-w-0 items-center gap-2 rounded-md border border-border bg-surface text-left transition-colors hover:border-border-strong [&_svg]:size-4",
+            compact ? "h-9 px-2.5" : "w-full px-2.5 py-2",
+          )}
+        >
+          <span className="text-accent">{MODE_ICON[nav.mode]}</span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[13px] font-medium text-ink">{info.label}</span>
+            {!compact && <span className="block truncate text-[11px] text-subtle">{info.hint}</span>}
+          </span>
+          <ChevronsUpDown className="size-3.5 shrink-0 text-subtle" aria-hidden />
+        </button>
+      </MenuTrigger>
+      <MenuContent align="start" className="w-60">
+        <MenuLabel>Mode</MenuLabel>
+        {APP_MODES.map((m) => (
+          <MenuItem key={m} onSelect={() => nav.setMode(m)}>
+            <span className="text-subtle [&_svg]:size-4">{MODE_ICON[m]}</span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[13px] text-ink">{MODE_INFO[m].label}</span>
+              <span className="block text-[11px] text-subtle">{MODE_INFO[m].hint}</span>
+            </span>
+            {m === nav.mode && <Check className="size-3.5 text-accent" />}
+          </MenuItem>
+        ))}
+      </MenuContent>
+    </Menu>
+  );
 }
 
 function profileRoleLabel(p: ProfileSummary | null): string {
@@ -127,26 +219,38 @@ function Wordmark() {
   return <BrandLockup to="/" className="px-2" />;
 }
 
-function Sidebar({ nav }: { nav: NavItem[] }) {
+function SideLink({ n, active }: { n: NavItem; active: boolean }) {
+  return (
+    <Link
+      to={n.to}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "group flex h-9 items-center gap-3 rounded-md px-2.5 text-[13.5px] transition-colors [&_svg]:size-4",
+        active ? "bg-surface text-ink shadow-[inset_0_0_0_1px_var(--color-border)]" : "text-muted hover:bg-surface-2 hover:text-ink",
+      )}
+    >
+      <span className={cn(active ? "text-accent" : "text-subtle group-hover:text-ink-2")}>{n.icon}</span>
+      <span className="flex-1">{n.label}</span>
+      {n.badge ? <span className="tabular rounded-pill bg-accent px-1.5 text-[11px] leading-[18px] font-medium text-accent-ink">{formatBadgeCount(n.badge)}</span> : null}
+    </Link>
+  );
+}
+
+function Sidebar({ nav }: { nav: Nav }) {
   const isActive = useIsActive();
   return (
     <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-border bg-bg px-3 py-5 lg:flex">
       <Wordmark />
-      <nav aria-label="Main" className="mt-8 flex flex-1 flex-col gap-0.5">
-        {nav.map((n) => (
-          <Link
-            key={n.to}
-            to={n.to}
-            aria-current={isActive(n.to) ? "page" : undefined}
-            className={cn(
-              "group flex h-9 items-center gap-3 rounded-md px-2.5 text-[13.5px] transition-colors [&_svg]:size-4",
-              isActive(n.to) ? "bg-surface text-ink shadow-[inset_0_0_0_1px_var(--color-border)]" : "text-muted hover:bg-surface-2 hover:text-ink",
-            )}
-          >
-            <span className={cn(isActive(n.to) ? "text-accent" : "text-subtle group-hover:text-ink-2")}>{n.icon}</span>
-            <span className="flex-1">{n.label}</span>
-            {n.badge ? <span className="tabular rounded-pill bg-accent px-1.5 text-[11px] leading-[18px] font-medium text-accent-ink">{formatBadgeCount(n.badge)}</span> : null}
-          </Link>
+      <div className="mt-6">
+        <ModeSwitcher nav={nav} />
+      </div>
+      <nav aria-label="Main" className="mt-4 flex flex-1 flex-col gap-0.5">
+        {nav.primary.map((n) => (
+          <SideLink key={n.to} n={n} active={isActive(n.to)} />
+        ))}
+        <div className="my-2 border-t border-border" role="separator" />
+        {nav.shared.map((n) => (
+          <SideLink key={n.to} n={n} active={isActive(n.to)} />
         ))}
       </nav>
       <div className="flex flex-col gap-3 border-t border-border pt-3">
@@ -157,22 +261,24 @@ function Sidebar({ nav }: { nav: NavItem[] }) {
   );
 }
 
-/** Bottom-bar tabs on mobile; Review (the daily action surface) is one of them, Cards moves to More. */
-const MOBILE_TABS = ["/", "/activity", "/insights", "/review"];
-
-function MobileNav({ nav }: { nav: NavItem[] }) {
+function MobileNav({ nav }: { nav: Nav }) {
   const isActive = useIsActive();
   const [more, setMore] = useState(false);
-  const tabs = nav.filter((n) => MOBILE_TABS.includes(n.to));
-  const rest = nav.filter((n) => !MOBILE_TABS.includes(n.to));
+  const all = [...nav.primary, ...nav.shared];
+  const tabPaths = MOBILE_TABS[nav.mode];
+  const tabs = tabPaths.map((to) => all.find((n) => n.to === to)).filter((n): n is NavItem => !!n);
+  const rest = all.filter((n) => !tabPaths.includes(n.to));
   const restBadge = rest.reduce((s, n) => s + (n.badge ?? 0), 0);
   const moreActive = rest.some((n) => isActive(n.to));
   return (
     <>
-      <header className="sticky top-0 z-30 flex h-[calc(3.5rem+env(safe-area-inset-top))] items-center justify-between gap-3 border-b border-border bg-bg/90 pt-[env(safe-area-inset-top)] pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))] backdrop-blur lg:hidden">
-        <Wordmark />
-        <div className="w-48 min-w-0 shrink">
-          <ProfileSwitcher compact />
+      <header className="sticky top-0 z-30 flex h-[calc(3.5rem+env(safe-area-inset-top))] items-center justify-between gap-2 border-b border-border bg-bg/90 pt-[env(safe-area-inset-top)] pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))] backdrop-blur lg:hidden">
+        <BrandLockup to="/" className="shrink-0 [&>span:last-child]:hidden sm:[&>span:last-child]:inline" />
+        <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+          <ModeSwitcher nav={nav} compact />
+          <div className="w-36 min-w-0 shrink sm:w-48">
+            <ProfileSwitcher compact />
+          </div>
         </div>
       </header>
       <nav
@@ -207,6 +313,18 @@ function MobileNav({ nav }: { nav: NavItem[] }) {
         </button>
       </nav>
       <Sheet open={more} onOpenChange={setMore} title="More">
+        <div className="mb-4 flex items-center justify-between gap-3 border-b border-border pb-4">
+          <span className="text-sm text-muted">Mode</span>
+          <Segmented
+            ariaLabel="Mode"
+            value={nav.mode}
+            onChange={(m) => {
+              setMore(false);
+              nav.setMode(m);
+            }}
+            options={APP_MODES.map((m) => ({ value: m, label: MODE_INFO[m].label }))}
+          />
+        </div>
         <nav className="flex flex-col gap-1" aria-label="More">
           {rest.map((n) => (
             <Link key={n.to} to={n.to} onClick={() => setMore(false)} className="flex h-11 items-center gap-3 rounded-md px-2 text-sm text-ink hover:bg-surface-2 [&_svg]:size-4 [&_svg]:text-subtle">

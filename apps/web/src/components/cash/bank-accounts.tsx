@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { Landmark, Plus } from "lucide-react";
 import { useCashPosition, type CashAccount } from "@/data/cash";
@@ -11,8 +11,11 @@ import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
 import { AddBankAccountDialog, UpdateBalanceDialog } from "./bank-account-dialogs";
 
-/** The ledger's bank accounts with their balances and the AED total (public.cash_position). */
-export function BankAccountsCard({ profileCode, isOwner }: { profileCode: string; isOwner: boolean }) {
+/**
+ * The ledger's bank accounts with their balances and the AED total (public.cash_position). Each
+ * row opens the account's page (Wealth mode). `headerLink` sits beside Add in the header.
+ */
+export function BankAccountsCard({ profileCode, isOwner, eyebrow = "Cash", headerLink }: { profileCode: string; isOwner: boolean; eyebrow?: string; headerLink?: ReactNode }) {
   const q = useCashPosition(profileCode);
   const [adding, setAdding] = useState(false);
   const [updating, setUpdating] = useState<CashAccount | null>(null);
@@ -21,13 +24,19 @@ export function BankAccountsCard({ profileCode, isOwner }: { profileCode: string
   return (
     <Card>
       <CardHeader
-        eyebrow="Cash"
+        eyebrow={eyebrow}
         title="Bank accounts"
         action={
-          isOwner && (
-            <Button size="sm" icon={<Plus className="size-3.5" />} onClick={() => setAdding(true)}>
-              Add bank account
-            </Button>
+          (isOwner || headerLink) && (
+            <div className="flex items-center gap-3">
+              {headerLink}
+              {isOwner && (
+                <Button size="sm" icon={<Plus className="size-3.5" />} onClick={() => setAdding(true)}>
+                  <span className="sm:hidden">Add</span>
+                  <span className="hidden sm:inline">Add bank account</span>
+                </Button>
+              )}
+            </div>
           )
         }
       />
@@ -74,7 +83,13 @@ function AccountRow({ account: a, onUpdate }: { account: CashAccount; onUpdate?:
     <li className="flex items-start gap-3 px-5 py-3.5">
       <BankLogo bankCode={a.bank_code} />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-ink">{bankAccountLabel(a)}</p>
+        <Link
+          to="/wealth/accounts/$accountCode"
+          params={{ accountCode: a.account_code }}
+          className="block truncate text-sm font-medium text-ink hover:text-accent hover:underline"
+        >
+          {bankAccountLabel(a)}
+        </Link>
         <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-subtle">
           <span className="whitespace-nowrap">{a.bank_code}{a.nickname && a.account_ref ? ` ··· ${a.account_ref}` : ""}</span>
           {a.balance !== null && a.as_of && <span className="whitespace-nowrap">as of {formatRelative(a.as_of)}{source ? `, ${source}` : ""}</span>}

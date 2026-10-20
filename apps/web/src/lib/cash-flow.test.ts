@@ -7,6 +7,7 @@ import {
   bankAccountLabel,
   cashCaveat,
   cashFlowRange,
+  flowChip,
   formatFlow,
   formatNet,
   monthFlows,
@@ -64,11 +65,37 @@ describe("flow groups", () => {
 
   it("an empty month has no groups and no net; an unknown flow is ignored", () => {
     const m = monthFlows([...OCT, row("2026-08-01", "something_new", 5)], "2026-08-01");
-    expect(m).toEqual({ groups: [], net: null, hasMovements: false });
+    expect(m).toEqual({ groups: [], net: null, hasMovements: false, partial: false });
   });
 
   it("accepts a timestamp-shaped month", () => {
     expect(monthFlows([row("2026-10-01T00:00:00", "income", 1)], "2026-10-01").hasMovements).toBe(true);
+  });
+});
+
+describe("partial months (is_partial)", () => {
+  it("marks a month before the first bank evidence, in the month's flows and the net table", () => {
+    const rows = [
+      { ...row("2026-08-01", "spend", 400, 3), is_partial: true },
+      { ...row("2026-08-01", "net", -400, 3), is_partial: true },
+      ...OCT,
+    ];
+    expect(monthFlows(rows, "2026-08-01").partial).toBe(true);
+    expect(monthFlows(rows, "2026-10-01").partial).toBe(false);
+    const nets = netByMonth(rows, "2026-10-01");
+    expect(nets.find((n) => n.month === "2026-08-01")).toMatchObject({ net: -400, partial: true });
+    expect(nets.find((n) => n.month === "2026-10-01")).toMatchObject({ partial: false });
+  });
+});
+
+describe("flow chips", () => {
+  it("names every flow for a ledger row; no chip for none or an unknown flow", () => {
+    for (const f of FLOWS) expect(flowChip(f)?.label).toBeTruthy();
+    expect(flowChip("income")).toEqual({ label: "Income", tone: "positive" });
+    expect(flowChip("money_out")).toEqual({ label: "Money out (unfiled)", tone: "warn" });
+    expect(flowChip("internal_in")?.label).toBe("From your account");
+    expect(flowChip(null)).toBeNull();
+    expect(flowChip("net")).toBeNull();
   });
 });
 
@@ -114,6 +141,15 @@ describe("months", () => {
     expect(parseCashFlowSearch({ month: "2026-13-01" }, today)).toEqual({ month: undefined });
     expect(parseCashFlowSearch({ month: 5 }, today)).toEqual({ month: undefined });
     expect(parseCashFlowSearch({}, today)).toEqual({ month: undefined });
+  });
+
+  it("reads ?account= as a bank account code, and returns dropped keys as undefined", () => {
+    const today = "2026-10-20";
+    const acc = "acc_01m5d2t402gjg9em2wfdbx98es";
+    expect(parseCashFlowSearch({ month: "2026-09-01", account: acc }, today)).toEqual({ month: "2026-09-01", account: acc });
+    const bad = parseCashFlowSearch({ account: "acc_nope" }, today);
+    expect(bad).toHaveProperty("account", undefined);
+    expect(bad).toHaveProperty("month", undefined);
   });
 });
 

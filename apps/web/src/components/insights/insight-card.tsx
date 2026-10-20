@@ -68,6 +68,13 @@ function TargetLink({ target, className, children }: { target: InsightTarget; cl
       </Link>
     );
   }
+  if (target.to === "/wealth/accounts/$accountCode") {
+    return (
+      <Link to={target.to} params={target.params} search={target.search} className={className}>
+        {children}
+      </Link>
+    );
+  }
   return (
     <Link to={target.to} search={"search" in target ? target.search : undefined} className={className}>
       {children}
