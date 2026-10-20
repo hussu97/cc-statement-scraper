@@ -2914,6 +2914,7 @@ export type Database = {
           txn_count: number
         }[]
       }
+      cash_position: { Args: { p_profile_code: string }; Returns: Json }
       category_breakdown: {
         Args: { p_from: string; p_profile_code: string; p_to: string }
         Returns: {

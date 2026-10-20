@@ -146,8 +146,18 @@ select pg_temp.as_user('uid');
 set local role authenticated;
 select is((select jsonb_agg(x->>'account_code') from jsonb_array_elements(public.overview(pg_temp.v('p'))->'accounts') x),
           jsonb_build_array(pg_temp.v('card_acc')), 'overview lists the card only');
-select is((select jsonb_agg(x->>'account_code') from jsonb_array_elements(public.filter_meta(pg_temp.v('p'))->'accounts') x),
-          jsonb_build_array(pg_temp.v('card_acc')), 'filter_meta lists the card only');
+select is((select jsonb_agg(x->>'kind') from jsonb_array_elements(public.filter_meta(pg_temp.v('p'))->'accounts') x),
+          '["credit_card", "current", "savings", "current"]'::jsonb,
+          'filter_meta lists every account with its kind, the card first (Phase 2d)');
+-- cash_position: the three bank accounts, their balances and the AED total (Phase 2d).
+select results_eq(
+  $$ select (c->>'total_aed')::numeric, (c->>'complete')::boolean, (c->>'stale_count')::int, (c->>'missing_count')::int,
+            jsonb_array_length(c->'accounts')
+     from (select public.cash_position(pg_temp.v('p')) c) x $$,
+  $$ values (749.75::numeric, false, 1, 1, 3) $$,
+  'cash_position: 800.00 + (−50.25), one stale, one with no balance yet (so not complete)');
+select is((select x->>'balance' from jsonb_array_elements(public.cash_position(pg_temp.v('p'))->'accounts') x
+           where x->>'account_code' = pg_temp.v('cur')), '800.00', 'balances are decimal strings');
 reset role;
 select is(private.resolve_statement_account(pg_temp.v('p'), 'ADCB', null, null, null, null, null, null, null),
           pg_temp.v('card_acc'), 'a statement without a card number still finds the one ADCB card account');
@@ -165,11 +175,12 @@ select set_eq(
   array[
     -- card-only, filtered on kind = 'credit_card'
     'private.process_sms', 'private.reprocess_waiting_sms', 'private.resolve_statement_account',
-    'private.successor_card_account', 'public.overview', 'public.filter_meta', 'public.resolve_review',
+    'private.successor_card_account', 'public.overview', 'public.resolve_review',
     -- refuses to mix kinds
     'private.merge_accounts',
-    -- bank accounts (Phase 2a)
+    -- bank accounts (Phase 2a), and every account (2d)
     'public.create_bank_account', 'public.record_balance', 'private.balance_checkpoint_bank_only',
+    'public.cash_position', 'public.filter_meta',
     -- reach an account through its statements or transactions, or read a single known account
     -- (refresh_transaction: bank-account SMS is final, Phase 2b)
     'private.account_bank', 'private.apply_sms_statement', 'private.refresh_transaction', 'private.estimate_fx', 'private.filtered_spend',
