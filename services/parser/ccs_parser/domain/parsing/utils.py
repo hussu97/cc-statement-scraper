@@ -6,6 +6,8 @@ from datetime import date, datetime
 
 
 _FEE_WORD_RE = re.compile(r"\bFEES?\b|\bCHARGES?\b")
+# An ATM or cash withdrawal on a credit card is a cash advance, not a purchase.
+_CASH_WITHDRAWAL_RE = re.compile(r"\bATM\b|\bCASH\s+(?:WITHDRAWAL|WDL)\b")
 
 
 def parse_amount(raw: str) -> float:
@@ -52,6 +54,8 @@ def classify_transaction_kind(merchant_normalized: str, amount_aed: float | None
     if _FEE_WORD_RE.search(merchant):
         return "fee"
     if "CASH ADV" in merchant:
+        return "cash_advance"
+    if _CASH_WITHDRAWAL_RE.search(merchant) and (amount_aed is None or amount_aed > 0):
         return "cash_advance"
     if amount_aed is not None and amount_aed < 0:
         return "payment"
