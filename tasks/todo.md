@@ -260,12 +260,16 @@ Goal: say what the money should do each month, and show whether it did.
 - [ ] Support or saving below the plan (needs Phase 3).
 
 ### Phase 2 leftovers
-- [ ] Wio Credit statement anchor: its outstanding has no anchor (no statement PDF or summary
-      read), so `v_account_balances` shows it unanchored. Read the "credit payment is due today.
-      Statement amount" SMS (it arrives on the due date, after the close) or support Wio statement
-      PDFs in the parser.
-- [ ] Wio Credit autopay has one SMS for two legs: it pays Wio Credit, but the Wio debit account's
-      balance drifts by the autopay until a balance update. Model a known autopay source account.
+- [x] Wio Credit statement anchor (`20261020170933`): the "credit payment is due today.
+      Statement amount" SMS is a `statement_summary` with `due_on_receipt` (due = the day it
+      arrives); Wio credit accounts close at month end (`cycle_close_day = 31`), so the 1st's SMS
+      is the previous month's statement and anchors `v_account_balances`. pgTAP 65.
+      Open: a Wio Credit account created later has no close day until it is set (the summary then
+      says `cycle_unknown` and is not re-read when the day is set); a card purchase pending on the
+      close day counts after the close (the SIB rule), which may not match Wio's 11:59 PM close.
+- [x] Wio Credit autopay debit leg (`20261020170933`): templates with `pays_from_current_account`
+      add a `transfer_out` on the bank's one active current account (`leg_of_txn_code`, facts
+      derived from the payment), paired in `card_transfers` (one `card_repayment`). pgTAP 65.
 - [ ] Guides (web + iOS): a third optional automation on "Wio" for the autopay (only noted in
       README so far); ship with the next app release.
 - [ ] Rent or bills paid by transfer: a transfer filed under a spend category is `spend_transfer`

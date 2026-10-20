@@ -1648,10 +1648,12 @@ export type Database = {
           body_pattern: string
           created_at: string
           date_format: string | null
+          due_on_receipt: boolean
           examples: Json
           field_groups: Json
           msg_kind: string
           name: string
+          pays_from_current_account: boolean
           priority: number
           scope_profile_code: string | null
           sender_pattern: string
@@ -1666,10 +1668,12 @@ export type Database = {
           body_pattern: string
           created_at?: string
           date_format?: string | null
+          due_on_receipt?: boolean
           examples?: Json
           field_groups: Json
           msg_kind: string
           name: string
+          pays_from_current_account?: boolean
           priority?: number
           scope_profile_code?: string | null
           sender_pattern?: string
@@ -1684,10 +1688,12 @@ export type Database = {
           body_pattern?: string
           created_at?: string
           date_format?: string | null
+          due_on_receipt?: boolean
           examples?: Json
           field_groups?: Json
           msg_kind?: string
           name?: string
+          pays_from_current_account?: boolean
           priority?: number
           scope_profile_code?: string | null
           sender_pattern?: string
@@ -2209,6 +2215,7 @@ export type Database = {
           exclude_from_spend: boolean
           fx_rate: number | null
           kind: string
+          leg_of_txn_code: string | null
           manual_at: string | null
           manual_category_code: string | null
           merchant_category_code: string | null
@@ -2247,6 +2254,7 @@ export type Database = {
           exclude_from_spend?: boolean
           fx_rate?: number | null
           kind: string
+          leg_of_txn_code?: string | null
           manual_at?: string | null
           manual_category_code?: string | null
           merchant_category_code?: string | null
@@ -2285,6 +2293,7 @@ export type Database = {
           exclude_from_spend?: boolean
           fx_rate?: number | null
           kind?: string
+          leg_of_txn_code?: string | null
           manual_at?: string | null
           manual_category_code?: string | null
           merchant_category_code?: string | null
@@ -2335,6 +2344,34 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "cards"
             referencedColumns: ["profile_code", "card_code"]
+          },
+          {
+            foreignKeyName: "transactions_leg_of_fkey"
+            columns: ["profile_code", "leg_of_txn_code"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["profile_code", "txn_code"]
+          },
+          {
+            foreignKeyName: "transactions_leg_of_fkey"
+            columns: ["profile_code", "leg_of_txn_code"]
+            isOneToOne: false
+            referencedRelation: "v_spend"
+            referencedColumns: ["profile_code", "txn_code"]
+          },
+          {
+            foreignKeyName: "transactions_leg_of_fkey"
+            columns: ["profile_code", "leg_of_txn_code"]
+            isOneToOne: false
+            referencedRelation: "v_transactions"
+            referencedColumns: ["profile_code", "transfer_txn_code"]
+          },
+          {
+            foreignKeyName: "transactions_leg_of_fkey"
+            columns: ["profile_code", "leg_of_txn_code"]
+            isOneToOne: false
+            referencedRelation: "v_transactions"
+            referencedColumns: ["profile_code", "txn_code"]
           },
           {
             foreignKeyName: "transactions_merchant_code_fkey"

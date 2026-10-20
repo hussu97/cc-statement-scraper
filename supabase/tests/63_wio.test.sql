@@ -107,7 +107,8 @@ select ok(not exists (select 1 from public.v_spend where txn_code = (pg_temp.txn
 
 -- ── notices ─────────────────────────────────────────────────────────────────
 select is(pg_temp.sms('Your credit payment is due today. Statement amount: AED 19,082. Auto-pay will be processed at 9:00 PM tonight. You can adjust the repayment amount in the app before then.',
-                      pg_temp.v('t0')::timestamptz + interval '6 hours')->>'status', 'ignored', 'the due-today notice is ignored');
+                      pg_temp.v('t0')::timestamptz + interval '6 hours')->>'status', 'cycle_unknown',
+          'the due-today notice is a statement summary (65_wio_credit_anchor); this Wio Credit has no close day');
 select is(pg_temp.sms('DAWOUD ALI MOHAMED AHMED ALZEYOUDI has been added as a local transfer beneficiary. If it wasn''t you, reset your password right away and call us on 600 500 946',
                       pg_temp.v('t0')::timestamptz + interval '7 hours')->>'status', 'ignored', 'a new beneficiary is ignored');
 
