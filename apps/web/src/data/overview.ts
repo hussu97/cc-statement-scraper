@@ -155,7 +155,8 @@ export function insightTarget(i: Pick<Insight, "kind" | "data">): InsightTarget 
         ? { to: "/insights/category/$categoryCode", params: { categoryCode: category }, search: { range: "this_month" }, label: "See the category" }
         : { to: "/insights", search: { tab: "categories" }, label: "See categories" };
     }
-    case "large_transaction": {
+    case "large_transaction":
+    case "cash_advance": {
       const txn = str("txn_code");
       return txn ? { to: "/activity", search: { txn }, label: "See transaction" } : { to: "/activity", search: {}, label: "See activity" };
     }
@@ -179,7 +180,7 @@ export function lastCardAlertLabel(lastSmsAt: string | null, now: Date = new Dat
 
 /** The Insights feed's sections (MA-5): which screen answers an insight, in display order. */
 export const INSIGHT_GROUPS = [
-  { key: "spending", label: "Spending", kinds: ["spend_pace", "category_spike", "large_transaction"] },
+  { key: "spending", label: "Spending", kinds: ["spend_pace", "category_spike", "large_transaction", "cash_advance"] },
   { key: "budgets", label: "Budgets", kinds: ["budget_risk"] },
   { key: "subscriptions", label: "Subscriptions", kinds: ["price_change", "new_recurring"] },
   { key: "statements", label: "Statements", kinds: ["statement_due"] },

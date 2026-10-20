@@ -72,6 +72,11 @@ def test_fx_rate_contract_nits() -> None:
         ("VAT ON SERVICE CHARGES", 5.0, "fee"),
         ("FINANCE CHARGES", 12.0, "fee"),
         ("CASH ADV ATM DUBAI", 500.0, "cash_advance"),
+        ("ATM WDL ENBD MALL OF EMIRATES", 500.0, "cash_advance"),
+        ("CASH WITHDRAWAL KENYA", 500.0, "cash_advance"),
+        ("ATMOSPHERE BURJ KHALIFA DUBAI", 500.0, "purchase"),
+        ("ATM REVERSAL", -500.0, "refund"),
+        ("CASH ADVANCE FEE", 150.0, "fee"),
         ("PAYMENT RECEIVED - THANK YOU", -1000.0, "payment"),
         ("AMAZON REFUND", -10.0, "refund"),
     ],
@@ -87,3 +92,86 @@ def test_finance_charges_maps_to_interest_in_contract() -> None:
 
     legacy = classify_transaction_kind("FINANCE CHARGES", 12.0)
     assert map_kind(legacy, "FINANCE CHARGES", "debit") == "interest"
+
+
+def _row(desc: str, kind: str, *, day: int = 24, card: str = "2777", direction: str = "debit"):
+    from datetime import date
+
+    from ccs_parser.domain.statements.types import ParsedLine
+
+    return ParsedLine(
+        line_no=0,
+        transaction_date=date(2026, 9, day),
+        transaction_time=None,
+        posting_date=None,
+        merchant_raw=desc,
+        merchant_normalized=desc,
+        amount_original=1.0,
+        currency_original="AED",
+        amount_aed=1.0,
+        direction=direction,
+        transaction_kind=kind,
+        country_code=None,
+        card_last4=card,
+    )
+
+
+def _paired(rows) -> list[str]:
+    from ccs_parser.kinds import pair_cash_advances
+
+    return pair_cash_advances(rows, [map_kind(r.transaction_kind, r.merchant_normalized, r.direction) for r in rows])
+
+
+def test_cash_advance_fee_marks_the_withdrawal_before_it() -> None:
+    # FAB 2026-09-24: an ATM abroad is printed as its bank's name; VAT sits between it and the fee.
+    rows = [
+        _row("CARREFOUR DUBAI ARE", "purchase"),
+        _row("DTBKEN NAIROBI KEN", "purchase"),
+        _row("VAT ON SERVICE CHARGES", "fee"),
+        _row("CASH ADVANCE FEE", "fee"),
+        _row("VAT ON SERVICE CHARGES", "fee"),
+    ]
+    assert _paired(rows) == ["purchase", "cash_advance", "fee", "fee", "fee"]
+
+
+def test_cash_advance_fee_directly_after_withdrawal() -> None:
+    # ADCB / ENBD: fee then "VAT ON CASH ADVANCE FEE", which is not an anchor of its own.
+    rows = [
+        _row("BANGKOK BANK PHUKET", "purchase"),
+        _row("CASH ADVANCE FEE", "fee"),
+        _row("VAT ON CASH ADVANCE FEE", "fee"),
+        _row("KOR RA KANG PHUKET", "purchase"),
+    ]
+    assert _paired(rows) == ["cash_advance", "fee", "fee", "purchase"]
+
+
+@pytest.mark.parametrize(
+    "before",
+    [
+        _row("DTBKEN NAIROBI KEN", "purchase", day=23),  # another date
+        _row("DTBKEN NAIROBI KEN", "purchase", card="1111"),  # another card
+        _row("AMAZON REFUND", "refund", direction="credit"),  # not a debit purchase
+    ],
+)
+def test_cash_advance_fee_needs_same_card_and_date(before) -> None:
+    rows = [before, _row("CASH ADVANCE FEE", "fee")]
+    assert _paired(rows)[0] == map_kind(before.transaction_kind, before.merchant_normalized, before.direction)
+
+
+def test_cash_advance_fee_does_not_reach_past_another_purchase() -> None:
+    rows = [
+        _row("DTBKEN NAIROBI KEN", "purchase"),
+        _row("JAVA HOUSE NAIROBI", "purchase"),
+        _row("CASH ADVANCE FEE", "fee"),
+    ]
+    assert _paired(rows) == ["purchase", "cash_advance", "fee"]
+
+
+def test_lines_out_pairs_cash_advances() -> None:
+    from ccs_parser.service import _lines_out
+
+    rows = [_row("DTBKEN NAIROBI KEN", "purchase"), _row("CASH ADVANCE FEE", "fee")]
+    for i, row in enumerate(rows):
+        row.line_no = i + 1
+        row.fingerprint = str(i) * 64
+    assert [line["kind"] for line in _lines_out(rows)] == ["cash_advance", "fee"]

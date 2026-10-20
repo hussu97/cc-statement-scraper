@@ -50,6 +50,12 @@ struct InsightFeedTests {
         let backlog = Insight(insightCode: "ins_x", kind: "review_backlog", severity: "info", title: "", body: "")
         let pace = Insight(insightCode: "ins_y", kind: "spend_pace", severity: "warn", title: "", body: "")
         #expect(backlog.link(categories: []) == .review)
+        let cashNoCode = Insight(insightCode: "ins_z", kind: "cash_advance", severity: "warn", title: "", body: "")
+        let cash = Insight(insightCode: "ins_z", kind: "cash_advance", severity: "warn", title: "", body: "",
+                           data: InsightData(txnCode: "txn_01hzy3k8w9m2n4p6q8r0s2t4v6"))
+        #expect(cashNoCode.link(categories: []) == .activity(ActivityQuery()))
+        #expect(cash.link(categories: []) == .transaction(txnCode: "txn_01hzy3k8w9m2n4p6q8r0s2t4v6"))
+        #expect(InsightFeed.group([cash]).map(\.key) == ["spending"])
         #expect(pace.link(categories: []) == .trends)
     }
 

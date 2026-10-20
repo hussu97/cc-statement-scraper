@@ -80,7 +80,7 @@ extension Insight {
             else { return .categories }
             let target = CategoryTarget(categoryCode: code, name: option.name, colorToken: option.colorToken)
             return .category(CategoryDrillDownRequest(target: target, from: today.startOfMonth, to: today))
-        case "large_transaction":
+        case "large_transaction", "cash_advance":
             return data.txnCode.map { .transaction(txnCode: $0) } ?? .activity(ActivityQuery())
         case "review_backlog": return .review
         case "spend_pace": return .trends
@@ -118,7 +118,7 @@ public struct InsightFeedGroup: Sendable, Hashable, Identifiable {
 /// The feed's sections and their order (the web's `INSIGHT_GROUPS`, MA-5).
 public enum InsightFeed {
     public static let groups: [(key: String, label: String, kinds: [String])] = [
-        ("spending", "Spending", ["spend_pace", "category_spike", "large_transaction"]),
+        ("spending", "Spending", ["spend_pace", "category_spike", "large_transaction", "cash_advance"]),
         ("budgets", "Budgets", ["budget_risk"]),
         ("subscriptions", "Subscriptions", ["price_change", "new_recurring"]),
         ("statements", "Statements", ["statement_due"]),
