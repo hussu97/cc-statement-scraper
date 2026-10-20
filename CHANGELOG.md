@@ -1,5 +1,15 @@
 # Changelog
 
+## Wealth mode — 2026-10-20
+
+### Backend (Supabase)
+
+- **feat** Spending and Wealth: `v_transactions` carries `account_kind` and `in_spending`; Activity's summary and filters take `scope = spending` (card rows, plus purchases, refunds, fees, interest and cash advances on any account). Salary, transfers and autopay move to the account's ledger.
+- **feat** `account_ledger()`: a bank account's rows like a statement, with flow and running balance (anchored on the bank's balances), opening and closing balance, money in and out. `bank_balance_series()`: end-of-day balances.
+- **feat** `net_worth()` (bank cash − what the cards owe) and `net_worth_series()`, from a nightly `net_worth_snapshots` row per ledger.
+- **feat** `cash_flow()` takes an account and marks partial months (before any bank evidence).
+- **feat** Insights: a stale or missing bank balance, a balance that disagrees with the alerts (a missed SMS), salary not in by its usual day, and a card's annual fee above the cashback it earned.
+
 ## Wio debit and Wio Credit — 2026-10-20
 
 ### Backend (Supabase)

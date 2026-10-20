@@ -183,10 +183,14 @@ select set_eq(
     -- bank accounts (Phase 2a), and every account (2d)
     'public.create_bank_account', 'public.record_balance', 'private.balance_checkpoint_bank_only',
     'public.cash_position', 'public.filter_meta',
+    -- Wealth mode (20261020162834): bank ledgers, net worth (cards through v_account_balances),
+    -- cash flow's coverage, wealth insights
+    'private.bank_amounts', 'public.account_ledger', 'public.bank_balance_series', 'private.net_worth',
+    'public.net_worth', 'public.cash_flow', 'private.generate_wealth_insights',
     -- reach an account through its statements or transactions, or read a single known account
     -- (refresh_transaction: bank-account SMS is final, Phase 2b)
     'private.account_bank', 'private.apply_sms_statement', 'private.refresh_transaction', 'private.estimate_fx', 'private.filtered_spend',
-    'private.generate_insights', 'private.ingest_one_statement', 'private.recategorize',
+    'private.generate_spending_insights', 'private.ingest_one_statement', 'private.recategorize',
     'public.budget_status', 'public.preview_rule', 'public.spend_breakdown', 'public.spend_series',
     'public.statement_cycles', 'public.statement_detail',
     -- one-off tooling
