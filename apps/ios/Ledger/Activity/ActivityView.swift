@@ -20,7 +20,7 @@ struct ActivityView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(Palette.bg)
-        .ledgerNavigation("Activity")
+        .rootNavigation("Activity")
         .searchable(text: $model.query.search, prompt: "Merchant or description")
         .onSubmit(of: .search) { reload() }
         .task(id: model.query.search) {
@@ -178,9 +178,9 @@ struct TransactionRow: View {
                 }
             } trailing: {
                 if typeSize.prefersStackedRows {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) { amounts; Chip(label: txn.badge.label, tone: txn.badge.tone) }
+                    HStack(alignment: .firstTextBaseline, spacing: 8) { amounts; chips }
                 } else {
-                    VStack(alignment: .trailing, spacing: 3) { amounts; Chip(label: txn.badge.label, tone: txn.badge.tone) }
+                    VStack(alignment: .trailing, spacing: 3) { amounts; chips }
                 }
             }
         }
@@ -206,6 +206,14 @@ struct TransactionRow: View {
             .font(Typography.caption)
             .foregroundStyle(Palette.muted)
             .lineLimit(1)
+        }
+    }
+
+    /// The evidence badge, after "Debit" for a purchase paid from a bank account (Wealth mode).
+    private var chips: some View {
+        HStack(spacing: 4) {
+            if let tag = txn.paymentTag { Chip(label: tag, tone: .info) }
+            Chip(label: txn.badge.label, tone: txn.badge.tone)
         }
     }
 

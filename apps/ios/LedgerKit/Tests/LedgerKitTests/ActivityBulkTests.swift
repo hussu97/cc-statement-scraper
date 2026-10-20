@@ -21,10 +21,11 @@ struct ActivityBulkContractTests {
         q.month = CalendarDay(iso: "2026-09-14")
         let p = ActivityBulkSelection.matching(q).params(profileCode: "prf_a")
         #expect(p["p_txn_codes"] == nil)
-        #expect(p["p_filter"] == .object(["from": .string("2026-09-01"), "to": .string("2026-09-30"),
+        #expect(p["p_filter"] == .object(["scope": .string("spending"), "from": .string("2026-09-01"), "to": .string("2026-09-30"),
                                           "category": .string("none"), "source": .string("sms"), "q": .string("noon")]))
-        // No filters: '{}' is every transaction of the ledger, said explicitly.
-        #expect(ActivityBulkSelection.matching(ActivityQuery()).params(profileCode: "prf_a")["p_filter"] == .object([:]))
+        // No filters: every transaction Spending's Activity lists, said explicitly.
+        #expect(ActivityBulkSelection.matching(ActivityQuery()).params(profileCode: "prf_a")["p_filter"]
+                == .object(["scope": .string("spending")]))
     }
 
     @Test("bulk_update_transactions gets the patch keys the server accepts")

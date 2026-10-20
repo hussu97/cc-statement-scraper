@@ -23,8 +23,12 @@ public final class LedgerScreens {
     /// "Worth a look" and Unusual spending (PAR-9), pushed from Overview and Insights.
     public let feed: InsightFeedModel
     public let anomalies: AnomaliesModel
-    /// Cash & accounts (Phase 2d), pushed from Overview's cash tile.
+    /// Wealth mode's Accounts and Cash flow tabs (bank balances, writes, cash flow).
     public let cash: CashModel
+    /// Wealth mode's Overview: net worth, accounts, cards owed, this month, wealth insights.
+    public let wealthOverview: WealthOverviewModel
+    /// Each bank account's ledger, pushed from Accounts and Wealth's Overview.
+    public let accountLedgers: AccountLedgers
 
     /// The ledger the tabs hold. The UI shows the tabs only when this equals
     /// the selected ledger, so the previous ledger's numbers never flash.
@@ -49,13 +53,25 @@ public final class LedgerScreens {
         feed = InsightFeedModel(api: api, categories: { activity.meta?.categories ?? [] })
         anomalies = AnomaliesModel(api: api)
         cash = CashModel(api: api, today: today)
+        wealthOverview = WealthOverviewModel(api: api, today: today)
+        accountLedgers = AccountLedgers(api: api, today: today,
+                                        categories: { activity.meta?.assignableCategories ?? [] })
         self.live = live ?? LiveUpdates(api: api)
         // A budget written on the Budgets tab changes Insights' budgets card.
         budgets.onChange = { [insights] code in await insights.refresh(profileCode: code) }
         // A dismissed insight leaves Overview's card; "This is fine" also dismisses its insight.
         feed.onChange = { [overview] code in await overview.refresh(profileCode: code) }
-        // A balance or a new account changes Overview's cash tile.
-        cash.onChange = { [overview] code in await overview.refresh(profileCode: code) }
+        // A balance or a new account changes net worth and the opened ledgers' balances.
+        cash.onChange = { [wealthOverview, accountLedgers] code in
+            await wealthOverview.refresh(profileCode: code)
+            await accountLedgers.refresh(profileCode: code)
+        }
+        // A transfer filed in a ledger moves cash flow (and Activity, when it became a purchase).
+        accountLedgers.onChange = { [wealthOverview, cash, activity] code in
+            await wealthOverview.refresh(profileCode: code)
+            await cash.refresh(profileCode: code)
+            await activity.refresh(profileCode: code)
+        }
         anomalies.onChange = { [overview, feed] code in
             await overview.refresh(profileCode: code)
             await feed.refresh(profileCode: code)
@@ -95,11 +111,14 @@ public final class LedgerScreens {
         let reviews = !tables.isDisjoint(with: ["transactions", "sms_messages", "documents"])
         let (overview, activity, insights, budgets, statements, review) = (overview, activity, insights, budgets, statements, review)
         let (feed, anomalies, cash) = (feed, anomalies, cash)
+        let (wealthOverview, accountLedgers) = (wealthOverview, accountLedgers)
         await withDiscardingTaskGroup { group in
             if money { group.addTask { await overview.refresh(profileCode: code) } }
             if money { group.addTask { await feed.refresh(profileCode: code) } }
             // Balances move with bank transactions and their SMS.
             if money { group.addTask { await cash.refresh(profileCode: code) } }
+            if money { group.addTask { await wealthOverview.refresh(profileCode: code) } }
+            if money { group.addTask { await accountLedgers.refresh(profileCode: code) } }
             if txns { group.addTask { await anomalies.refresh(profileCode: code) } }
             if txns {
                 group.addTask { await activity.refresh(profileCode: code) }
@@ -126,6 +145,8 @@ public final class LedgerScreens {
         feed.reset()
         anomalies.reset()
         cash.reset()
+        wealthOverview.reset()
+        accountLedgers.reset()
         month.reset()
     }
 }

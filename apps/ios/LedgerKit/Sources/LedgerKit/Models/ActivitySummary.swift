@@ -43,6 +43,8 @@ extension ActivityQuery {
             "p_status": status == .all ? .null : .string(status.rawValue),
             "p_source": source == .all ? .null : .string(source.rawValue),
             "p_q": search.isEmpty ? .null : .string(search),
+            // The list's rows and these totals agree (Wealth mode's spending scope).
+            "p_scope": spendingOnly ? .string("spending") : .null,
         ]
     }
 }

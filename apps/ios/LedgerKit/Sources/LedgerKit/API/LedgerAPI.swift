@@ -135,8 +135,9 @@ public protocol LedgerAPI: SMSIngestAPI, AnalysisAPI {
     // Cash: bank accounts, balances and cash flow (SupabaseLedgerAPI+Cash.swift, Phase 2d)
     /// `rpc('cash_position')`: every active bank account's balance and the AED total (members).
     func cashPosition(profileCode: String) async throws -> CashPosition
-    /// `rpc('cash_flow')`: each month's total per flow plus its `net` row, between the dates (members).
-    func cashFlow(profileCode: String, from: CalendarDay, to: CalendarDay) async throws -> [CashFlowRow]
+    /// `rpc('cash_flow')`: each month's total per flow plus its `net` row, between the dates, for
+    /// the whole ledger or one account (members). Rows say whether their month `is_partial`.
+    func cashFlow(profileCode: String, from: CalendarDay, to: CalendarDay, accountCode: String?) async throws -> [CashFlowRow]
     /// `rpc('record_balance')`: the account's balance as of now, as a decimal string (owners; 42501
     /// otherwise, 22023 for a malformed amount, P0002 for an account not in the ledger).
     func recordBalance(profileCode: String, accountCode: String, balance: String) async throws
@@ -145,12 +146,28 @@ public protocol LedgerAPI: SMSIngestAPI, AnalysisAPI {
     func createBankAccount(profileCode: String, bankCode: String, kind: BankAccountKind, accountRef: String,
                            nickname: String?) async throws -> String
 
+    // Wealth mode (SupabaseLedgerAPI+Wealth.swift)
+    /// `rpc('account_ledger')`: a bank account's rows for the period with flow and running balance,
+    /// plus opening/closing balance and money in/out (members; at most 400 days; P0002 for a card).
+    func accountLedger(profileCode: String, accountCode: String, from: CalendarDay, to: CalendarDay) async throws -> AccountLedger
+    /// `rpc('bank_balance_series')`: a bank account's end-of-day balances (members; at most 400 days).
+    func bankBalanceSeries(profileCode: String, accountCode: String, from: CalendarDay, to: CalendarDay) async throws -> [BalancePoint]
+    /// `rpc('net_worth')`: bank cash − what the cards owe, with completeness and each card (members).
+    func netWorth(profileCode: String) async throws -> NetWorth
+    /// `rpc('net_worth_series')`: each month's last nightly snapshot, then today's live figure (members).
+    func netWorthSeries(profileCode: String, months: Int) async throws -> [NetWorthPoint]
+
     /// Fires whenever a row the screens show changes (transactions, SMS,
     /// documents, insights) for the profile. Ends when the caller stops iterating.
     func changes(profileCode: String) -> AsyncStream<LedgerChange>
 }
 
 extension LedgerAPI {
+    /// The whole ledger's cash flow.
+    public func cashFlow(profileCode: String, from: CalendarDay, to: CalendarDay) async throws -> [CashFlowRow] {
+        try await cashFlow(profileCode: profileCode, from: from, to: to, accountCode: nil)
+    }
+
     /// The budgets that count for the month only (Insights' budgets card).
     public func budgetStatus(profileCode: String, month: CalendarDay?) async throws -> [BudgetStatus] {
         try await budgetStatus(profileCode: profileCode, month: month, includeInactive: false)

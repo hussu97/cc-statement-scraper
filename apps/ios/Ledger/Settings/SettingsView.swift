@@ -152,7 +152,7 @@ struct SettingsView: View {
         }
         .scrollContentBackground(.hidden)
         .background(Palette.bg)
-        .ledgerNavigation("Settings")
+        .rootNavigation("Settings")
         .navigationDestination(for: SettingsRoute.self) { route in
             switch route {
             case .statements:

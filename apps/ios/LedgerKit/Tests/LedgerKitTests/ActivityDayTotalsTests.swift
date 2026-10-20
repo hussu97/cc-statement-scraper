@@ -48,11 +48,11 @@ struct ActivityDayTotalsTests {
         draft.cardCode = "crd_1"
         api.dayTotalRows = [:]
         await model.apply(draft, profileCode: "prf_a")
-        #expect(api.dayTotalCalls.last?.query.activityFilter == ["status": "void", "card": "crd_1"])
+        #expect(api.dayTotalCalls.last?.query.activityFilter == ["status": "void", "card": "crd_1", "scope": "spending"])
         #expect(model.dayTotal(for: day(28)) == nil)                          // the old filter's figure is gone
 
         let params = draft.dayTotalsParams(profileCode: "prf_a", days: [day(28), day(27)])
-        #expect(params["p_filter"] == .object(["status": .string("void"), "card": .string("crd_1")]))
+        #expect(params["p_filter"] == .object(["status": .string("void"), "card": .string("crd_1"), "scope": .string("spending")]))
         #expect(params["p_days"] == .array([.string("2026-10-28"), .string("2026-10-27")]))
         #expect(params["p_profile_code"] == .string("prf_a"))
     }

@@ -45,6 +45,10 @@ public struct LedgerTransaction: Decodable, Identifiable, Hashable, Sendable {
     public let transferTxnCode: String?
     public let transferBankCode: String?
     public let transferCardLast4: String?
+    /// `credit_card`, `current` or `savings` (Wealth mode); nil from a server before it.
+    public let accountKind: String?
+    /// Whether Spending's Activity lists it (`v_transactions.in_spending`); true when absent.
+    public let inSpending: Bool
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -85,6 +89,8 @@ public struct LedgerTransaction: Decodable, Identifiable, Hashable, Sendable {
         transferTxnCode = try c.decodeIfPresent(String.self, forKey: .transferTxnCode)
         transferBankCode = try c.decodeIfPresent(String.self, forKey: .transferBankCode)
         transferCardLast4 = try c.decodeIfPresent(String.self, forKey: .transferCardLast4)
+        accountKind = try c.decodeIfPresent(String.self, forKey: .accountKind)
+        inSpending = try c.decodeIfPresent(Bool.self, forKey: .inSpending) ?? true
     }
 
     enum CodingKeys: String, CodingKey {
@@ -93,7 +99,7 @@ public struct LedgerTransaction: Decodable, Identifiable, Hashable, Sendable {
         case currencyOriginal, amountAed, amountAedIsEstimate, fxRate, authAmount, amountSource
         case relatedTxnCode, excludeFromSpend, notes, categoryCode, categoryName, categoryColor
         case categoryKind, categorySource, bankCode, cardLast4, accountNickname, hasSms, hasStatement
-        case transferTxnCode, transferBankCode, transferCardLast4
+        case transferTxnCode, transferBankCode, transferCardLast4, accountKind, inSpending
     }
 }
 
@@ -146,6 +152,13 @@ extension LedgerTransaction {
     }
 
     public var isCredit: Bool { direction == "credit" }
+
+    /// Paid from a bank account (a debit-card purchase): Activity tags it, since budgets count
+    /// it like a card purchase while its money left the account directly.
+    public var isDebit: Bool { accountKind == "current" || accountKind == "savings" }
+
+    /// The row's payment tag: `"Debit"` for a bank-account row, else nil.
+    public var paymentTag: String? { isDebit ? "Debit" : nil }
 
     /// The row's category caption; an excluded transaction says so, since it
     /// has left the spend totals (`v_spend`).

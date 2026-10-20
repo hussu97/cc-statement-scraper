@@ -14,8 +14,6 @@ struct OverviewView: View {
     /// The empty-ledger checklist's links: the SMS guide and Statements.
     let settings: SettingsModel
     let statements: StatementsModel
-    /// Cash & accounts, opened from the cash tile (Phase 2d).
-    let cash: CashModel
     /// Links into Activity (PAR-4).
     @Environment(TabRouter.self) private var tabs: TabRouter?
 
@@ -34,9 +32,6 @@ struct OverviewView: View {
                 }
                 if overview.showsLiveSections(), let lastAlert = overview.lastCardAlertLabel() {
                     Text(lastAlert).font(Typography.caption).foregroundStyle(Palette.muted)
-                }
-                if content.showsCashTile, let position = content.cash {
-                    CashTile(position: position, cash: cash, profileCode: profileCode, canEdit: canResolve)
                 }
                 if !overview.attention().isEmpty {
                     AttentionCard(items: overview.attention(), review: review, profileCode: profileCode,
@@ -59,7 +54,7 @@ struct OverviewView: View {
                 }
             }
         }
-        .ledgerNavigation("Overview")
+        .rootNavigation("Overview")
         .task(id: month.requestMonth) { await model.loadIfNeeded(profileCode: profileCode, month: month.requestMonth) }
         .refreshable { await model.load(profileCode: profileCode, month: month.requestMonth) }
     }

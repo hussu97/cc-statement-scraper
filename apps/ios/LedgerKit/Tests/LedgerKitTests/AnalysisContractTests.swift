@@ -22,10 +22,12 @@ struct AnalysisContractTests {
         let files = try FileManager.default.contentsOfDirectory(atPath: dir.path)
             .filter { $0.hasSuffix(".sql") }.sorted()
         // A definition, not a grant or comment naming it; its `returns table` comes before its body.
-        let marker = "create or replace function public.\(name)("
+        // A changed signature is dropped and re-created with plain `create function`.
+        let markers = ["create or replace function public.\(name)(", "create function public.\(name)("]
         for file in files.reversed() {
             let sql = try String(contentsOf: dir.appending(path: file), encoding: .utf8)
-            guard let def = sql.range(of: marker, options: [.backwards, .caseInsensitive]) else { continue }
+            let defs = markers.compactMap { sql.range(of: $0, options: [.backwards, .caseInsensitive]) }
+            guard let def = defs.max(by: { $0.lowerBound < $1.lowerBound }) else { continue }
             let body = sql.range(of: "$$", range: def.upperBound..<sql.endIndex)?.lowerBound ?? sql.endIndex
             guard let open = sql.range(of: "returns table (", range: def.upperBound..<body) else {
                 throw ContractMissing(description: "public.\(name) in \(file) no longer returns a table")

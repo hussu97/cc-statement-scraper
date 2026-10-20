@@ -115,7 +115,8 @@ struct CashFlowTests {
     @Test("cash_flow decodes JSON-number amounts exactly and groups a month newest first")
     func groups() throws {
         let rows = try LedgerJSON.decode([CashFlowRow].self, from: try fixture("cash_flow"))
-        #expect(rows.first == CashFlowRow(month: day("2026-08-01"), flow: "net", amountAed: dec("-9111.51"), txnCount: 58))
+        #expect(rows.first == CashFlowRow(month: day("2026-08-01"), flow: "net", amountAed: dec("-9111.51"), txnCount: 58,
+                                          isPartial: true))
         let months = CashFlow.months(rows)
         #expect(months.map(\.month) == [day("2026-10-01"), day("2026-09-01"), day("2026-08-01")])
 
@@ -130,7 +131,9 @@ struct CashFlowTests {
         #expect(oct.title == "October 2026" && !oct.isEmpty)
 
         let aug = months[2]
-        #expect(aug.groups.map(\.kind) == [.spent] && aug.netText == "−AED 9,111.51" && aug.netTone == .warn)
+        // August is partial (before the first bank evidence): its net is not a loss.
+        #expect(aug.groups.map(\.kind) == [.spent] && aug.netText == "−AED 9,111.51" && aug.netTone == .neutral)
+        #expect(months[1].netTone == .warn)
     }
 
     @Test("moves carry their note; empty and unknown flows are left out; a month with no net row has no net")
@@ -327,26 +330,16 @@ struct CashModelTests {
         #expect(await model.addAccount(draft, profileCode: "prf_a") == "The EIB account ending 4301 is already in this ledger.")
     }
 
-    @Test("Overview: the cash tile shows for a ledger with a bank account, and not when cash_position fails")
-    func overviewTile() async throws {
+    @Test("Spending's Overview no longer reads cash_position (the cash tile moved to Wealth)")
+    func overviewHasNoCashTile() async throws {
         let api = try Self.api()
         api.overviewFixture = try LedgerJSON.decode(Overview.self, from: try fixture("overview"))
         let overview = OverviewModel(api: api)
         await overview.load(profileCode: "prf_a")
-        #expect(overview.state.value?.showsCashTile == true)
-        #expect(overview.state.value?.cash?.totalAed == dec("108385.90"))
-
-        api.cashPositionFixture = CashPosition(totalAed: 0, complete: true, staleCount: 0, missingCount: 0, asOf: nil,
-                                               accounts: [])
-        await overview.load(profileCode: "prf_a")
-        #expect(overview.state.value?.showsCashTile == false)
-
-        api.cashPositionFixture = nil
-        await overview.load(profileCode: "prf_a")
-        #expect(overview.state.value != nil && overview.state.value?.cash == nil)   // Overview still loads
+        #expect(overview.state.value != nil && api.calls("cashPosition") == 0)
     }
 
-    @Test("ledger screens: a write on Cash refreshes Overview; Realtime refreshes Cash once opened; a switch clears it")
+    @Test("ledger screens: a write on Cash refreshes Wealth's Overview; Realtime refreshes Cash once opened; a switch clears it")
     func screens() async throws {
         let api = try Self.api()
         api.overviewFixture = try LedgerJSON.decode(Overview.self, from: try fixture("overview"))
@@ -357,10 +350,12 @@ struct CashModelTests {
         await s.cash.loadIfNeeded(profileCode: "prf_a")
         await s.refresh(after: ["sms_messages"])
         #expect(api.calls("cashFlow") == 2)
-        let overviewLoads = api.calls("overview")
+        api.netWorthFixture = NetWorth(cashAed: 1, owedAed: 0, netAed: 1)
+        await s.wealthOverview.loadIfNeeded(profileCode: "prf_a")
+        let worthLoads = api.calls("netWorth")
         _ = await s.cash.updateBalance(UpdateBalanceDraft(accountCode: "a", accountTitle: "t", amount: "1"),
                                        profileCode: "prf_a")
-        #expect(api.calls("overview") == overviewLoads + 1)
+        #expect(api.calls("netWorth") == worthLoads + 1)
         await s.select("prf_b")
         #expect(s.cash.state.value == nil)
         s.stop()

@@ -1,9 +1,10 @@
 import Foundation
 import Observation
 
-/// Cash & accounts (Phase 2d): the bank accounts with their balances (`cash_position`) and the
-/// last months' cash flow (`cash_flow`), plus Update balance and Add bank account for owners.
-/// Every figure is the server's; the model only groups and words them.
+/// Wealth mode's Accounts and Cash flow tabs: the bank accounts with their balances
+/// (`cash_position`) and the last months' cash flow (`cash_flow`, the whole ledger or one
+/// account), plus Update balance and Add bank account for owners. Every figure is the server's;
+/// the model only groups and words them.
 @MainActor
 @Observable
 public final class CashModel {
@@ -29,10 +30,12 @@ public final class CashModel {
     public private(set) var state: LoadState<Content> = .idle
     /// The month whose flows are shown (first of the month).
     public var selectedMonth: CalendarDay
+    /// The Cash flow tab's account; nil is every account.
+    public private(set) var accountFilter: String?
     public private(set) var isSaving = false
     /// The last write's outcome, shown above the accounts.
     public var notice: Notice?
-    /// Runs after a successful write, with the ledger: Overview's cash tile reloads.
+    /// Runs after a successful write, with the ledger: Wealth's Overview reloads.
     @ObservationIgnored public var onChange: (@MainActor (String) async -> Void)?
 
     private let api: any LedgerAPI
@@ -61,6 +64,22 @@ public final class CashModel {
 
     public func emptyMessage(for month: CalendarDay) -> String { CashFlow.emptyMessage(month, today: today()) }
 
+    /// The account filter's choices: the bank accounts (cards' flows are their spend, under every account).
+    public var accountChoices: [BankAccountBalance] { state.value?.position.accounts ?? [] }
+
+    /// `"All accounts"`, or the filtered account's name.
+    public var accountFilterLabel: String {
+        guard let accountFilter else { return "All accounts" }
+        return accountChoices.first { $0.accountCode == accountFilter }?.title ?? "One account"
+    }
+
+    /// Shows one account's flows (nil: every account) and reloads them.
+    public func setAccountFilter(_ code: String?, profileCode: String) async {
+        guard code != accountFilter else { return }
+        accountFilter = code
+        await load(profileCode: profileCode)
+    }
+
     public func load(profileCode: String) async {
         let (ticket, sameKey) = gate.begin(profileCode)
         state = sameKey ? state.startLoading() : .loading(previous: nil)
@@ -68,10 +87,13 @@ public final class CashModel {
         let from = choices.last ?? today().startOfMonth
         let to = today().endOfMonth
         let api = self.api
+        let account = accountFilter
         do {
             async let position = api.cashPosition(profileCode: profileCode)
             async let flow: Result<[CashFlowRow], any Error> = {
-                do { return .success(try await api.cashFlow(profileCode: profileCode, from: from, to: to)) } catch {
+                do {
+                    return .success(try await api.cashFlow(profileCode: profileCode, from: from, to: to, accountCode: account))
+                } catch {
                     return .failure(error)
                 }
             }()
@@ -108,6 +130,7 @@ public final class CashModel {
         notice = nil
         isSaving = false
         selectedMonth = today().startOfMonth
+        accountFilter = nil
     }
 
     // MARK: Writes (owners)

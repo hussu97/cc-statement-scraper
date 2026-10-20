@@ -381,9 +381,9 @@ struct CardBudgetTests {
 @MainActor
 @Suite("Tabs: Budgets replaces Statements")
 struct LedgerTabTests {
-    @Test("the tab bar is Overview, Activity, Insights, Budgets, Settings")
+    @Test("Spending's tab bar is Overview, Activity, Insights, Budgets, Settings")
     func order() {
-        #expect(LedgerTab.allCases.map(\.title) == ["Overview", "Activity", "Insights", "Budgets", "Settings"])
+        #expect(AppMode.spending.tabs.map(\.title) == ["Overview", "Activity", "Insights", "Budgets", "Settings"])
     }
 
     @Test("See all switches tabs; a new ledger starts on Overview")

@@ -41,6 +41,11 @@ public struct ActivityQuery: Sendable, Hashable {
     public var source: SourceFilter = .all
     public var from: CalendarDay?
     public var to: CalendarDay?
+    /// Spending's Activity (Wealth mode): card rows, and purchases, refunds, fees, interest and
+    /// cash advances on any account (`v_transactions.in_spending`). Salary, transfers and autopay
+    /// live in the account's ledger under Wealth. On for every query the app makes; not a filter
+    /// the reader sets, so `filterCount` and `clearFilters` leave it alone.
+    public var spendingOnly = true
 
     public init() {}
 

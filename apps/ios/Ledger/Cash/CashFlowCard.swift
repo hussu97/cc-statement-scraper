@@ -10,7 +10,7 @@ struct CashFlowCard: View {
 
     var body: some View {
         Card {
-            SectionHeader(title: "Cash flow", trailing: LedgerDates.monthTitle(model.selectedMonth))
+            SectionHeader(title: LedgerDates.monthTitle(model.selectedMonth))
             if let error = content.flowError {
                 Label("Couldn't load cash flow", systemImage: "exclamationmark.triangle")
                     .font(Typography.rowTitle).foregroundStyle(Palette.danger)
@@ -27,10 +27,12 @@ struct CashFlowCard: View {
                     HStack(alignment: .firstTextBaseline) {
                         Text("Net").font(Typography.rowTitle).foregroundStyle(Palette.ink)
                         Spacer()
+                        if month.isPartial { Chip(label: CashFlow.partialLabel) }
                         Text(net).font(Typography.amount).foregroundStyle(month.netTone.color).moneyLine()
                     }
                     .accessibilityElement(children: .combine)
-                    Text("Money in, less spending, commitments and unfiled money out.")
+                    // Before the first bank evidence a month has card spend and no income: not a loss.
+                    Text(month.isPartial ? CashFlow.partialNote : "Money in, less spending, commitments and unfiled money out.")
                         .font(Typography.caption).foregroundStyle(Palette.muted)
                 }
             }
@@ -86,8 +88,9 @@ private struct MonthRow: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(month.title).font(Typography.rowTitle).foregroundStyle(Palette.ink)
                 Spacer()
-                Text(month.netText ?? "Nothing moved").font(month.netText == nil ? Typography.rowMeta : Typography.amount)
-                    .foregroundStyle(month.netText == nil ? Palette.muted : month.netTone.color)
+                Text(month.listText ?? "Nothing moved")
+                    .font(month.netText == nil || month.isPartial ? Typography.rowMeta : Typography.amount)
+                    .foregroundStyle(month.netText == nil || month.isPartial ? Palette.muted : month.netTone.color)
                     .moneyLine()
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(isSelected ? Palette.accent : Palette.borderStrong)

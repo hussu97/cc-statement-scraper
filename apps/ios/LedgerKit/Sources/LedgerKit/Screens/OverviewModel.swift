@@ -1,7 +1,8 @@
 import Foundation
 import Observation
 
-/// Overview tab: the month hero, the last card alert, category ring, accounts and insights.
+/// Spending's Overview tab: the month hero, the last card alert, category ring, cards and insights.
+/// Cash moved to Wealth mode (its Overview and Accounts tab); the title menu is the way across.
 @MainActor
 @Observable
 public final class OverviewModel {
@@ -11,11 +12,6 @@ public final class OverviewModel {
         public let insights: [Insight]
         /// The empty-ledger checklist, shown instead of the hero; nil for a ledger with data.
         public let setup: SetupChecklist?
-        /// `cash_position`, for the cash tile; nil when it failed or the server predates it.
-        public var cash: CashPosition? = nil
-
-        /// The cash tile shows for a ledger with at least one bank account.
-        public var showsCashTile: Bool { cash?.hasAccounts == true }
     }
 
     public private(set) var state: LoadState<Content> = .idle
@@ -46,18 +42,16 @@ public final class OverviewModel {
         do {
             async let overview = api.overview(profileCode: profileCode, month: month)
             async let insights = api.insights(profileCode: profileCode)
-            // The cash tile is extra: a failure (or a server before Phase 2d) leaves it out.
-            async let cash = try? api.cashPosition(profileCode: profileCode)
-            let (o, i, c) = try await (overview, insights, cash)
+            let (o, i) = try await (overview, insights)
             let setup = await Self.setupChecklist(for: o, profileCode: profileCode, api: api)
             guard gate.isCurrent(ticket) else { return }
             gate.finish(key)
             state = .loaded(Content(
                 overview: o,
                 accounts: o.accounts.map { AccountSummary(account: $0) },
-                insights: i,
-                setup: setup,
-                cash: c))
+                // Bank-account insights are Wealth's (its Overview shows them).
+                insights: i.in(.spending),
+                setup: setup))
             onLoaded?(o, profileCode)
         } catch {
             guard gate.isCurrent(ticket) else { return }
