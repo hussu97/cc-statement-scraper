@@ -499,7 +499,11 @@ Suggestions below 0.5 confidence are dropped and never override a manual merchan
   `reestimate_pending_fx`) catch errors per profile (per transaction for FX) and log them to
   `private.job_errors` (30 days); `ops_health.job_errors_24h` counts them.
 - **Seeding.** Default categories and rules (from the legacy `category_rules.yaml`) are copied
-  into a profile once, by `create_profile` / `seed_profile_defaults`.
+  into a profile once, by `create_profile` / `seed_profile_defaults`, with their `priority`.
+- **Bank profit credits net off the charge.** SIB's WAKALA PROFIT and BONUS credits are Bank Fees
+  & Interest (a `fee` category), not Cashback (`income`), so as refunds they reduce the same-day
+  MURABAHA PROFIT charge in `v_spend`. The SIB BONUS rule is bank-scoped at priority 90; other
+  banks' BONUS credits stay Cashback.
 
 ---
 
@@ -673,14 +677,18 @@ Business dates stay `Asia/Dubai`: `profiles.timezone` and `base_currency` are re
 The nightly job `private.nightly()` (22:00 UTC = 02:00 Dubai) runs three steps (and, for the
 all-profiles run, purges `document_events` older than 90 days first):
 1. Voids released authorisations.
-2. Detects recurring charges: ≥ 3 charges (≥ 2 for yearly) at a weekly, monthly or yearly
-   cadence with amount CV below 10%.
+2. Detects recurring charges. A merchant's charges on one day are one billing event (their
+   sum). ≥ 3 events (≥ 4 weekly, ≥ 2 yearly) at a weekly, monthly or yearly median gap with
+   amount CV below 10%, or a monthly biller with steady gaps (≥ 4 events, 75% of gaps 26–35
+   days) at any CV, such as a utility bill that varies.
 3. Generates the deterministic, deduplicated insight feed: `category_spike`, `budget_risk`,
    `price_change`, `statement_due`, `uncategorized`, `spend_pace` (month-to-date total ≥ 25%
    and AED 500 above the 3-month same-day average, from day 5), `new_recurring` (a series
    detected in the last 7 days), `large_transaction` (`anomalies` over the last 3 days,
    `data.txn_code`, titled with the merchant name, or the cleaned description when the charge has
-   no merchant) and `review_backlog` (≥ 10 open reviews).
+   no merchant), `cash_advance` (every cash advance of the last 30 days, with the same-day
+   CASH ADVANCE FEE and its VAT, `data.txn_code`, kept 30 days from the withdrawal) and
+   `review_backlog` (≥ 10 open reviews).
 
 ---
 
