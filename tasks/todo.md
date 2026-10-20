@@ -71,7 +71,7 @@ Home & Furniture / Home Services / Hotels split dropped (too small). Al Jamea tu
 - [ ] Push to main (deploys both migrations + worker), then run the backfill, then verify
       `needed_now = 0` and the new category shares in prod.
 
-## 3. Phase 2: bank accounts, balances, debit cards and cash flow (2026-10-20) — approved; 2a built
+## 3. Phase 2: bank accounts, balances, debit cards and cash flow (2026-10-20) — shipped (main 603ad56, f1680e9)
 
 Goal: a ledger can hold current/savings accounts next to its cards, know each account's balance,
 capture debit-card and account SMS, and answer "where did the salary go" without letting transfers
@@ -203,3 +203,81 @@ user's go-ahead before code (CLAUDE.md §12.1).
 with "0% utilisation" or a statement cycle. The guard test catches new readers but not misreads, so
 2a ships alone and gets a full click-through. A second automation keyword double-fires on a message
 that contains both words; 2b's same-text dedupe must land with it.
+
+## 4. Backlog: from card tracker to complete money picture (2026-10-20)
+
+What is left of the plan from the 2026-10-20 audit ("Taking Bank Ledger from card tracker to money
+picture"). Phase 2 (bank accounts, balances, debit-card and account SMS, cash flow, screens) and
+the Wio/FAB salary formats are shipped. Each phase below changes the schema, so it gets a written
+plan and the user's go-ahead before code (CLAUDE.md §12.1), and ships on its own.
+
+### Phase 1: net worth (holdings, valuations, flows)
+Goal: one net-worth figure per ledger, over time, with returns that separate deposits from growth.
+- [ ] `holdings`: name, institution, asset class (cash, fixed_deposit, equity, bond, gold, silver,
+      insurance_wrapper, property, other), currency, quantity + unit (g, kg, units), optional
+      `account_code` (a fixed deposit or broker cash), maturity date and rate for deposits.
+- [ ] `holding_valuations`: dated value in its own currency plus AED (evidence, never edited;
+      source manual / price_feed / import). This is the series behind a net-worth chart.
+- [ ] `holding_flows`: contributions, withdrawals, income (dividends, profit). Return = value −
+      net contributions; a yearly money-weighted return (XIRR) per holding, computed in SQL.
+- [ ] Prices: gold and silver per gram from a daily pg_cron job (Edge Function, a metals price
+      API; new secret → PRODUCTION §2.5); USD at the 3.6725 peg; broker values by monthly CSV
+      import (IBKR flex query, Swissquote, Sarwa) or manual entry.
+- [ ] One-off import of the user's investment sheet (17 holdings: gold 1 kg and 200 g, silver
+      8 kg, Talabat IPO, Nexus Insurance, Swissquote, RL360, Sarwa, IBKR, ADCB / Wio / Mashreq Neo
+      fixed deposits, bank cash), with the sheet's USD cost/value columns as native currency.
+- [ ] Fixed deposits move here from Phase 2 (decision 3): a holding with maturity and rate,
+      linked to its bank account.
+- [ ] `net_worth(profile)` and a monthly series: holdings + bank balances (`v_bank_balances`) −
+      card outstanding (`v_account_balances`), with completeness and staleness like
+      `cash_position`.
+- [ ] Contributions link to cash flow: a `saving` transfer or card purchase (RL360 7,400 a month
+      on the Wio card) can be matched to a holding's contribution, so saving shows where it went.
+- [ ] Screens (web + iOS): Net worth page (total, allocation by class, each holding with value,
+      gain, yearly return, as-of), Update value / Add holding, a Net worth tile on Overview.
+- [ ] Tests: pgTAP for valuations, XIRR, net worth; LedgerKit/web pure-logic tests; RLS and
+      privileges matrix for the three new tables.
+
+### Phase 3: plan, goals and the monthly review
+Goal: say what the money should do each month, and show whether it did.
+- [ ] Monthly plan per ledger: income → commitments (family support, long-term fund) → lifestyle
+      cap → the rest to named goals. Plan adherence computed against `cash_flow` per month.
+- [ ] `goals`: emergency fund (N months of outflow), a gold target, a cash buffer before a deposit
+      matures, any amount by a date; each with progress and the monthly amount needed, in SQL.
+- [ ] Monthly review page (web) and push (iOS): the cash-flow statement, change in net worth
+      (saved vs market move), plan adherence, the three biggest changes. Numbers from the server;
+      an LLM writes only the summary sentence, never a figure.
+- [ ] Plan/goal editor screens on web and iOS; goal cards on Overview.
+
+### Insights still to add ("Worth a look")
+- [ ] Salary not received by its usual day (from the Salary category's history).
+- [ ] Bank balance stale (over 7 days) or drifting: the printed SMS balance disagrees with
+      checkpoint + activity (a missed alert).
+- [ ] Card annual fee against the rewards that card earned in the year.
+- [ ] Each card's FX markup against a reference rate; suggest the cheapest card abroad.
+- [ ] Subscription creep: a recurring biller's quarter-on-quarter rise (Apple billing).
+- [ ] Idle cash above the plan's buffer (needs Phase 3's plan).
+- [ ] Support or saving below the plan (needs Phase 3).
+
+### Phase 2 leftovers
+- [ ] Wio Credit statement anchor: its outstanding has no anchor (no statement PDF or summary
+      read), so `v_account_balances` shows it unanchored. Read the "credit payment is due today.
+      Statement amount" SMS (it arrives on the due date, after the close) or support Wio statement
+      PDFs in the parser.
+- [ ] Wio Credit autopay has one SMS for two legs: it pays Wio Credit, but the Wio debit account's
+      balance drifts by the autopay until a balance update. Model a known autopay source account.
+- [ ] Guides (web + iOS): a third optional automation on "Wio" for the autopay (only noted in
+      README so far); ship with the next app release.
+- [ ] Rent or bills paid by transfer: a transfer filed under a spend category is `spend_transfer`
+      in cash flow but not in `v_spend`, so spend charts miss it. Decide whether `v_spend` counts
+      user-filed transfers.
+- [ ] `cash_flow` per account (so "Unfiled" can link to the right account when there are several)
+      and group subtotals from the server (web/iOS show lines and the server's net only).
+- [ ] More bank formats as they arrive (Liv, Mashreq Neo, ENBD/SIB/EIB account alerts): the
+      unparsed → proposed format → Review flow handles new ones; add seeds when a real sample
+      exists. ATM withdrawals on debit cards (`atm_withdrawal` kind) when a sample exists.
+- [ ] Not yet checked by hand: the viewer role on the Cash flow / Cash & accounts screens, and the
+      Moves group with real repayments.
+- [ ] Months before account alerts were captured show negative net (card spend, no income):
+      either start cash flow at the first account alert or mark earlier months as partial.
+
