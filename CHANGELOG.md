@@ -1,5 +1,12 @@
 # Changelog
 
+## Wio Credit statement and autopay leg — 2026-10-20
+
+### Backend (Supabase)
+
+- **feat** Wio's "credit payment is due today. Statement amount: …" SMS makes Wio Credit's month-end statement (due the day it arrives: templates gain `due_on_receipt`), so what Wio Credit owes is anchored and net worth is complete. Wio credit accounts close at month end; due-today notices already stored are read again on deploy.
+- **feat** The Wio Credit autopay is also money out of the Wio debit account: a `transfer_out` leg there (`transactions.leg_of_txn_code`, templates gain `pays_from_current_account`), paired with the payment so cash flow shows one card repayment and the account's running balance no longer drifts each month. Existing autopays get their leg on deploy.
+
 ## Wealth mode — 2026-10-20
 
 ### Backend (Supabase)

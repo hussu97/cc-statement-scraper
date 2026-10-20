@@ -245,6 +245,10 @@ timeout applies.
    late SMS closes a gap without a re-run; `reconcile_statement` stores the same result and
    raises no `missing_from_statement` reviews for it. `statement_cycles` lists the pair as one
    row (`from_sms`), and `statement_detail` of the export opens the SMS statement.
+   Wio Credit's "credit payment is due today. Statement amount: …" prints no due date: its
+   template has `due_on_receipt`, so the due date is the day the SMS arrived, and Wio credit
+   accounts close at month end (`cycle_close_day = 31`): the 1st's SMS makes the statement of
+   the month that just ended, which anchors what Wio Credit owes.
 4. **Matching.** `match_statement_lines` runs (below).
 5. **Period overlap.** Overlap of more than 3 days with another active real statement of the
    same account opens a `period_overlap` review. Nothing is superseded automatically;
@@ -584,7 +588,13 @@ Credit" alert is an `account_credit` described SALARY CREDIT, which a seed rule 
 **Wio** has a debit account and Wio Credit, a credit line (a `credit_card` account with an
 `account_ref`): an alert's account digits may name it, so Wio Credit's "local transfer" paying
 another card is a `transfer_out` there, paired with that card's payment through `card_transfers`
-and outside cash flow (debt moving between cards). The monthly autopay is a payment on Wio Credit.
+and outside cash flow (debt moving between cards). The monthly autopay is a payment on Wio Credit
+drawn from the debit account: its template has `pays_from_current_account`, so
+`private.add_payment_leg` adds the other leg, a posted `transfer_out` on the bank's one active
+current account with `transactions.leg_of_txn_code` = the payment, paired with it in
+`card_transfers` (one `card_repayment` in cash flow). The SMS is the payment's evidence (one
+active evidence row per SMS), so `refresh_transaction` derives the leg's facts from the payment
+and refreshes it with the payment; the leg is void (`payment_gone`) while the payment is not live.
 A local transfer's recipient is its description, so it is filed once like a merchant.
 
 **Wealth mode** (`20261020162834`, `tasks/todo.md` §5). The apps have two modes: Spending
