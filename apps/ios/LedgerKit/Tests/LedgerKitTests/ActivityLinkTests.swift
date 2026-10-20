@@ -64,7 +64,8 @@ struct ActivityLinkTests {
         }
         let query = try #require(try merchant("mer_1", "  Carrefour ").activityQuery(from: day("2026-05-01"), to: day("2026-10-13")))
         #expect(query.search == "Carrefour" && query.from == day("2026-05-01") && query.to == day("2026-10-13"))
-        #expect(query.activityFilter == ["q": "Carrefour", "from": "2026-05-01", "to": "2026-10-13"])
+        #expect(query.activityFilter == ["q": "Carrefour", "from": "2026-05-01", "to": "2026-10-13",
+                                         "scope": "spending"])
         #expect(try merchant(nil, "Unknown merchant").activityQuery(from: day("2026-05-01"), to: day("2026-10-13")) == nil)
         #expect(ActivityQuery.merchant("   ", from: day("2026-05-01"), to: day("2026-10-13")) == nil)
         #expect(ActivityQuery.merchant(String(repeating: "x", count: 200), from: day("2026-05-01"), to: day("2026-10-13"))?

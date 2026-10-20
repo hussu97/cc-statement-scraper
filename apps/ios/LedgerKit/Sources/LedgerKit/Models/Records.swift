@@ -72,26 +72,31 @@ public struct Insight: Decodable, Sendable, Hashable, Identifiable {
 }
 
 /// The codes in `insights.data` a link needs (`private.generate_insights`): `category_code`
-/// (category_spike), `txn_code` (large_transaction), `stmt_code` (statement_due). Only a
+/// (category_spike), `txn_code` (large_transaction), `stmt_code` (statement_due), `account_code`
+/// (balance_stale, balance_drift, annual_fee). Only a
 /// well-formed code (`xxx_` + 26 characters) is kept, as the web's `insightTarget` does, so a
 /// malformed value never links somewhere wrong.
 public struct InsightData: Decodable, Sendable, Hashable {
     public let categoryCode: String?
     public let txnCode: String?
     public let stmtCode: String?
+    public let accountCode: String?
 
-    public init(categoryCode: String? = nil, txnCode: String? = nil, stmtCode: String? = nil) {
+    public init(categoryCode: String? = nil, txnCode: String? = nil, stmtCode: String? = nil,
+                accountCode: String? = nil) {
         self.categoryCode = Self.code(categoryCode)
         self.txnCode = Self.code(txnCode)
         self.stmtCode = Self.code(stmtCode)
+        self.accountCode = Self.code(accountCode)
     }
 
-    enum CodingKeys: String, CodingKey { case categoryCode, txnCode, stmtCode }
+    enum CodingKeys: String, CodingKey { case categoryCode, txnCode, stmtCode, accountCode }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         func text(_ key: CodingKeys) -> String? { (try? c.decodeIfPresent(String.self, forKey: key)) ?? nil }
-        self.init(categoryCode: text(.categoryCode), txnCode: text(.txnCode), stmtCode: text(.stmtCode))
+        self.init(categoryCode: text(.categoryCode), txnCode: text(.txnCode), stmtCode: text(.stmtCode),
+                  accountCode: text(.accountCode))
     }
 
     /// `^[a-z]{3}_[0-9a-z]{26}$`, else nil.

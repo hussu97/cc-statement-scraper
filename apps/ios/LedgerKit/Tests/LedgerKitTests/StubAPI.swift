@@ -239,6 +239,7 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
     var cashFlowRows: [CashFlowRow] = []
     var cashFlowError: LedgerAPIError?
     private(set) var cashFlowRanges: [(from: CalendarDay, to: CalendarDay)] = []
+    private(set) var cashFlowAccounts: [String?] = []
     /// Thrown by `recordBalance` / `createBankAccount` when set.
     var cashWriteError: LedgerAPIError?
     private(set) var recordedBalances: [(profile: String, account: String, balance: String)] = []
@@ -248,9 +249,12 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         guard let cashPositionFixture = lock.withLock({ cashPositionFixture }) else { throw LedgerAPIError.network("-1009") }
         return cashPositionFixture
     }
-    func cashFlow(profileCode: String, from: CalendarDay, to: CalendarDay) async throws -> [CashFlowRow] {
+    func cashFlow(profileCode: String, from: CalendarDay, to: CalendarDay, accountCode: String?) async throws -> [CashFlowRow] {
         count("cashFlow")
-        lock.withLock { cashFlowRanges.append((from, to)) }
+        lock.withLock {
+            cashFlowRanges.append((from, to))
+            cashFlowAccounts.append(accountCode)
+        }
         if let cashFlowError { throw cashFlowError }
         return cashFlowRows
     }
@@ -263,6 +267,37 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         if let cashWriteError { throw cashWriteError }
         lock.withLock { createdBankAccounts.append((bankCode, kind, accountRef, nickname)) }
         return "acc_new"
+    }
+    // MARK: Wealth mode: scripted answers, and each call's arguments
+    var accountLedgerFixture: AccountLedger?
+    var balanceSeriesFixture: [BalancePoint] = []
+    var netWorthFixture: NetWorth?
+    var netWorthSeriesFixture: [NetWorthPoint] = []
+    var netWorthSeriesError: LedgerAPIError?
+    private(set) var ledgerRanges: [(account: String, from: CalendarDay, to: CalendarDay)] = []
+    private(set) var balanceSeriesRanges: [(account: String, from: CalendarDay, to: CalendarDay)] = []
+    func accountLedger(profileCode: String, accountCode: String, from: CalendarDay, to: CalendarDay) async throws -> AccountLedger {
+        count("accountLedger")
+        lock.withLock { ledgerRanges.append((accountCode, from, to)) }
+        guard let fixture = lock.withLock({ accountLedgerFixture }) else {
+            throw LedgerAPIError.server(status: nil, code: "P0002", message: "bank account not found")
+        }
+        return fixture
+    }
+    func bankBalanceSeries(profileCode: String, accountCode: String, from: CalendarDay, to: CalendarDay) async throws -> [BalancePoint] {
+        count("bankBalanceSeries")
+        lock.withLock { balanceSeriesRanges.append((accountCode, from, to)) }
+        return balanceSeriesFixture
+    }
+    func netWorth(profileCode: String) async throws -> NetWorth {
+        count("netWorth")
+        guard let fixture = lock.withLock({ netWorthFixture }) else { throw LedgerAPIError.network("-1009") }
+        return fixture
+    }
+    func netWorthSeries(profileCode: String, months: Int) async throws -> [NetWorthPoint] {
+        count("netWorthSeries")
+        if let netWorthSeriesError { throw netWorthSeriesError }
+        return netWorthSeriesFixture
     }
     // MARK: Analysis (PAR-12): scripted answers, and each call's arguments
     var dailyRows: [DailySpend] = []

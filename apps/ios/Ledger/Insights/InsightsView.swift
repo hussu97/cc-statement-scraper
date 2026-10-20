@@ -39,7 +39,7 @@ struct InsightsView: View {
                 AnalysisLinksCard(range: AnalysisRange(from: range.from, to: range.to), profileCode: profileCode)
             }
         }
-        .ledgerNavigation("Insights")
+        .rootNavigation("Insights")
         .task(id: Key(period: model.period, month: month.requestMonth)) {
             await model.loadIfNeeded(profileCode: profileCode, month: month.requestMonth)
         }

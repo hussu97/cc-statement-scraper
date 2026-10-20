@@ -112,6 +112,7 @@ extension ActivityQuery {
     /// meaning (`applyActivityFilters` in `apps/web/src/data/transactions.ts`).
     public var restFilters: [RestFilter] {
         var out: [RestFilter] = []
+        if spendingOnly { out.append(.isTrue("in_spending")) }
         if let from { out.append(.gte("txn_date", from.iso)) }
         if let to { out.append(.lte("txn_date", to.iso)) }
         if let accountCode { out.append(.eq("account_code", accountCode)) }
@@ -134,9 +135,11 @@ extension ActivityQuery {
 
     /// The filters as the web's `activityFilter` object: the `p_filter` that
     /// `activity_day_totals` (and the bulk RPCs) read with
-    /// `private.activity_selection`. Only set keys; a blank search is dropped.
+    /// `private.activity_selection`. Only set keys; a blank search is dropped. `scope` keeps
+    /// day totals and bulk actions to the rows the list shows.
     public var activityFilter: [String: String] {
         var out: [String: String] = [:]
+        if spendingOnly { out["scope"] = "spending" }
         if let from { out["from"] = from.iso }
         if let to { out["to"] = to.iso }
         if let accountCode { out["account"] = accountCode }

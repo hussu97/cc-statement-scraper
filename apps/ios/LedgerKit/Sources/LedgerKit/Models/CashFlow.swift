@@ -7,12 +7,62 @@ public struct CashFlowRow: Decodable, Sendable, Hashable {
     public let flow: String
     public let amountAed: Decimal
     public let txnCount: Int
+    /// The month starts before the first bank evidence (Wealth mode): it holds card spend and no
+    /// captured income, so its net is not a loss. Absent from older servers: false.
+    public let isPartial: Bool
 
-    public init(month: CalendarDay, flow: String, amountAed: Decimal, txnCount: Int) {
+    public init(month: CalendarDay, flow: String, amountAed: Decimal, txnCount: Int, isPartial: Bool = false) {
         self.month = month
         self.flow = flow
         self.amountAed = amountAed
         self.txnCount = txnCount
+        self.isPartial = isPartial
+    }
+
+    enum CodingKeys: String, CodingKey { case month, flow, amountAed, txnCount, isPartial }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        month = try c.decode(CalendarDay.self, forKey: .month)
+        flow = try c.decode(String.self, forKey: .flow)
+        amountAed = try c.decode(Decimal.self, forKey: .amountAed)
+        txnCount = try c.decode(Int.self, forKey: .txnCount)
+        isPartial = try c.decodeIfPresent(Bool.self, forKey: .isPartial) ?? false
+    }
+}
+
+/// The cash-flow flows as one word or two, for a ledger row's chip, in the same vocabulary as the
+/// Cash flow screen's groups (`CashFlowGroupKind`) and lines (`CashFlowLine.label`).
+public enum CashFlowFlow {
+    public static func chipLabel(_ flow: String) -> String {
+        switch flow {
+        case "income": "Income"
+        case "money_in": "Unfiled in"
+        case "internal_in": "From own account"
+        case "internal_out": "To own account"
+        case "card_repayment": "Card repayment"
+        case "support": "Support"
+        case "saving": "Saving"
+        case "spend": "Spending"
+        case "spend_transfer": "Paid by transfer"
+        case "money_out": "Unfiled out"
+        default: flow.replacingOccurrences(of: "_", with: " ").capitalized
+        }
+    }
+
+    /// Income is good news; an unfiled row asks to be filed; the rest is information.
+    public static func tone(_ flow: String) -> Tone {
+        switch flow {
+        case "income": .positive
+        case "money_in", "money_out": .warn
+        case "support", "saving": .info
+        default: .neutral
+        }
+    }
+
+    /// The Cash flow group a flow is listed under; nil for one this build doesn't know.
+    public static func group(of flow: String) -> CashFlowGroupKind? {
+        CashFlowGroupKind.allCases.first { $0.flows.contains(flow) }
     }
 }
 
@@ -100,16 +150,29 @@ public struct CashFlowMonth: Sendable, Hashable, Identifiable {
     public let groups: [CashFlowGroup]
     /// The server's `net` row; nil when it sent none.
     public let net: Decimal?
+    /// Before the first bank evidence (`is_partial`): its net is shown as partial, never a loss.
+    public let isPartial: Bool
+
+    public init(month: CalendarDay, groups: [CashFlowGroup], net: Decimal?, isPartial: Bool = false) {
+        self.month = month
+        self.groups = groups
+        self.net = net
+        self.isPartial = isPartial
+    }
 
     public var title: String { LedgerDates.monthTitle(month) }
 
     /// `"+AED 16,298.90"`, `"−AED 5,341.48"`, `"AED 0.00"`.
     public var netText: String? { net.map(CashFlow.signed) }
 
+    /// A partial month's net is card spend with no income beside it: not a loss, so not red.
     public var netTone: Tone {
-        guard let net else { return .neutral }
+        guard let net, !isPartial else { return .neutral }
         return net > 0 ? .positive : net < 0 ? .warn : .neutral
     }
+
+    /// The month list's figure: `"Partial month"` for a partial one, else the net.
+    public var listText: String? { isPartial && net != nil ? CashFlow.partialLabel : netText }
 
     public var isEmpty: Bool { groups.isEmpty }
 }
@@ -129,9 +192,17 @@ public enum CashFlow {
                 }
                 return lines.isEmpty ? nil : CashFlowGroup(kind: kind, lines: lines)
             }
-            return CashFlowMonth(month: month, groups: groups, net: byFlow["net"]?.amountAed)
+            return CashFlowMonth(month: month, groups: groups, net: byFlow["net"]?.amountAed,
+                                 isPartial: monthRows.contains(where: \.isPartial))
         }
     }
+
+    /// A partial month's chip and list figure.
+    public static let partialLabel = "Partial month"
+
+    /// Under a partial month's net.
+    public static let partialNote =
+        "Your bank activity starts after this month began, so it has card spending but no income: its net isn't a loss."
 
     /// The month's flows, or an empty month when the server returned none for it.
     public static func month(_ month: CalendarDay, in months: [CashFlowMonth]) -> CashFlowMonth {

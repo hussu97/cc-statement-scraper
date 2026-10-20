@@ -71,7 +71,8 @@ struct ActivityFilterTests {
     @Test("v_transactions filters match the web's applyActivityFilters, source included")
     func restFilters() {
         var q = ActivityQuery()
-        #expect(q.restFilters.isEmpty)
+        // Spending's Activity (Wealth mode): always scoped, first.
+        #expect(q.restFilters == [.isTrue("in_spending")])
         q.setRange(from: day("2026-09-01"), to: day("2026-09-30"))
         q.accountCode = "acc_1"
         q.cardCode = "crd_1"
@@ -80,7 +81,7 @@ struct ActivityFilterTests {
         q.source = .sms
         q.search = "noon"
         #expect(q.restFilters == [
-            .gte("txn_date", "2026-09-01"), .lte("txn_date", "2026-09-30"), .eq("account_code", "acc_1"),
+            .isTrue("in_spending"), .gte("txn_date", "2026-09-01"), .lte("txn_date", "2026-09-30"), .eq("account_code", "acc_1"),
             .eq("card_code", "crd_1"), .eq("category_code", "cat_food"), .eq("status", "void"),
             .isTrue("has_sms"), .isFalse("has_statement"),
             .or("description.ilike.*noon*,merchant_name.ilike.*noon*"),
@@ -89,7 +90,8 @@ struct ActivityFilterTests {
         q.uncategorizedOnly = true
         q.categoryCode = "cat_food"
         q.source = .statement
-        #expect(q.restFilters == [.isNull("category_code"), .isTrue("has_statement"), .isFalse("has_sms")])
+        #expect(q.restFilters == [.isTrue("in_spending"), .isNull("category_code"), .isTrue("has_statement"),
+                                  .isFalse("has_sms")])
         q.source = .both
         #expect(q.restFilters.suffix(2) == [.isTrue("has_sms"), .isTrue("has_statement")])
     }
@@ -109,7 +111,7 @@ struct ActivityFilterTests {
     func activityFilter() {
         var q = ActivityQuery()
         q.search = "   "
-        #expect(q.activityFilter.isEmpty)
+        #expect(q.activityFilter == ["scope": "spending"])
         q.setRange(from: day("2026-09-01"), to: day("2026-09-30"))
         q.accountCode = "acc_1"
         q.cardCode = "crd_1"
@@ -119,7 +121,7 @@ struct ActivityFilterTests {
         q.source = .statement
         q.search = "  café  "
         #expect(q.activityFilter == [
-            "from": "2026-09-01", "to": "2026-09-30", "account": "acc_1", "card": "crd_1", "category": "none",
+            "scope": "spending", "from": "2026-09-01", "to": "2026-09-30", "account": "acc_1", "card": "crd_1", "category": "none",
             "status": "void", "source": "statement", "q": "café",
         ])
     }

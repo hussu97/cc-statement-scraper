@@ -17,6 +17,12 @@
 - **feat** Account page (`/wealth/accounts/:code`): balance and Update balance, a 90-day balance chart, the month's opening, money in and out and closing, and a statement-style ledger with flow, category (editable), amount and balance after.
 - **change** Cash flow moves to `/wealth/cash-flow` (the old path redirects), with an account filter and partial months marked. Activity shows spending only (debit-card purchases tagged Debit; salary and transfers live in the account ledger). Overview's Cash tile is gone.
 
+### iOS
+
+- **feat** A Spending ⌄ / Wealth ⌄ menu at the top of each root screen swaps the tab bar (remembered on the device): Spending is Overview, Activity, Insights, Budgets, Settings; Wealth is Overview, Accounts, Cash flow, Settings.
+- **feat** Wealth overview (net worth and what it's missing, net worth over time, bank accounts, owed on cards, this month's cash flow, wealth insights); Accounts; an account ledger with a 90-day balance chart, the month's opening, in, out and closing, and each row's flow and balance after (tap to file a transfer).
+- **change** Activity shows spending only, with debit-card purchases tagged Debit; Cash flow is its own Wealth tab with partial months marked; the Cash tile and Cash & accounts screen are gone.
+
 ## Wio debit and Wio Credit — 2026-10-20
 
 ### Backend (Supabase)

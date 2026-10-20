@@ -5,13 +5,13 @@ import Testing
 
 @Suite("Activity summary header: params, decoding, wording")
 struct ActivitySummaryTests {
-    @Test("no filters: every argument but the profile is null")
+    @Test("no filters: every argument but the profile and the spending scope is null")
     func paramsDefault() {
         let p = ActivityQuery().summaryParams(profileCode: "prf_a")
         #expect(p == [
             "p_profile_code": .string("prf_a"), "p_from": .null, "p_to": .null, "p_account_code": .null,
             "p_card_code": .null, "p_category_code": .null, "p_uncategorized": .bool(false),
-            "p_status": .null, "p_source": .null, "p_q": .null,
+            "p_status": .null, "p_source": .null, "p_q": .null, "p_scope": .string("spending"),
         ])
     }
 

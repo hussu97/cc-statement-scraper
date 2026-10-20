@@ -50,6 +50,9 @@ struct RootView: View {
     }
 }
 
+/// The tab bar of the mode on screen (`AppMode.tabs`), switched from the title menu in each root
+/// screen. Overview and Settings are in both modes; Settings (cards, statements) is shared, so its
+/// stack stays as it was across a switch.
 struct MainTabs: View {
     let model: AppModel
     let profileCode: String
@@ -57,45 +60,11 @@ struct MainTabs: View {
     var body: some View {
         @Bindable var tabs = model.tabs
         TabView(selection: $tabs.tab) {
-            Tab(LedgerTab.overview.title, systemImage: LedgerTab.overview.systemImage, value: .overview) {
-                NavigationStack {
-                    OverviewView(model: model.overview, month: model.month, review: model.review,
-                                 profileCode: profileCode, canResolve: model.profiles.canWrite,
-                                 outboxAlert: model.settings.outboxStatus.staleAlert,
-                                 openSettings: { model.tabs.show(.settings) },
-                                 settings: model.settings, statements: model.statements,
-                                 cash: model.screens.cash)
-                    // ledger://review (a Shortcut result) pushes Review here.
-                    .navigationDestination(isPresented: $tabs.showingReview) {
-                        ReviewView(model: model.review, profileCode: profileCode, canResolve: model.profiles.canWrite)
-                    }
-                }
+            ForEach(tabs.mode.tabs, id: \.self) { tab in
+                Tab(tab.title, systemImage: tab.systemImage, value: tab) { screen(tab) }
+                    // SMS that haven't reached the server for an hour (BACKLOG IOS-12r).
+                    .badge(tab == .settings ? model.settings.outboxStatus.badgeCount : 0)
             }
-            Tab(LedgerTab.activity.title, systemImage: LedgerTab.activity.systemImage, value: .activity) {
-                NavigationStack {
-                    ActivityView(model: model.activity, months: model.month.range, profileCode: profileCode,
-                                 canEdit: model.profiles.canWrite, tabs: model.tabs)
-                }
-            }
-            Tab(LedgerTab.insights.title, systemImage: LedgerTab.insights.systemImage, value: .insights) {
-                NavigationStack {
-                    InsightsView(model: model.insights, month: model.month, profileCode: profileCode,
-                                 showBudgets: { model.tabs.show(.budgets) })
-                }
-            }
-            Tab(LedgerTab.budgets.title, systemImage: LedgerTab.budgets.systemImage, value: .budgets) {
-                NavigationStack {
-                    BudgetsView(model: model.budgets, month: model.month, profileCode: profileCode,
-                                canEdit: model.profiles.canWrite)
-                }
-            }
-            // Statements (cycles, uploads, share-sheet queue, processing logs) live under Settings.
-            Tab(LedgerTab.settings.title, systemImage: LedgerTab.settings.systemImage, value: .settings) {
-                // ledger://add-statement pushes Statements here (TabRouter).
-                NavigationStack(path: $tabs.settingsPath) { SettingsView(model: model, profileCode: profileCode) }
-            }
-            // SMS that haven't reached the server for an hour (BACKLOG IOS-12r).
-            .badge(model.settings.outboxStatus.badgeCount)
         }
         // Screens link into Activity through it (`TabRouter.openActivity`, PAR-4).
         .environment(model.tabs)
@@ -108,6 +77,59 @@ struct MainTabs: View {
         .environment(model.screens.feed)
         .environment(model.screens.anomalies)
         .environment(model.profiles)
+        // Wealth mode: the bank accounts' balances and writes, and each account's ledger.
+        .environment(model.screens.cash)
+        .environment(model.screens.accountLedgers)
+    }
+
+    @ViewBuilder private func screen(_ tab: LedgerTab) -> some View {
+        @Bindable var tabs = model.tabs
+        switch tab {
+        case .overview where tabs.mode == .wealth:
+            NavigationStack {
+                WealthOverviewView(model: model.screens.wealthOverview, profileCode: profileCode,
+                                   canEdit: model.profiles.canWrite)
+            }
+        case .overview:
+            NavigationStack {
+                OverviewView(model: model.overview, month: model.month, review: model.review,
+                             profileCode: profileCode, canResolve: model.profiles.canWrite,
+                             outboxAlert: model.settings.outboxStatus.staleAlert,
+                             openSettings: { model.tabs.show(.settings) },
+                             settings: model.settings, statements: model.statements)
+                // ledger://review (a Shortcut result) pushes Review here.
+                .navigationDestination(isPresented: $tabs.showingReview) {
+                    ReviewView(model: model.review, profileCode: profileCode, canResolve: model.profiles.canWrite)
+                }
+            }
+        case .activity:
+            NavigationStack {
+                ActivityView(model: model.activity, months: model.month.range, profileCode: profileCode,
+                             canEdit: model.profiles.canWrite, tabs: model.tabs)
+            }
+        case .insights:
+            NavigationStack {
+                InsightsView(model: model.insights, month: model.month, profileCode: profileCode,
+                             showBudgets: { model.tabs.show(.budgets) })
+            }
+        case .budgets:
+            NavigationStack {
+                BudgetsView(model: model.budgets, month: model.month, profileCode: profileCode,
+                            canEdit: model.profiles.canWrite)
+            }
+        case .accounts:
+            NavigationStack {
+                AccountsView(model: model.screens.cash, profileCode: profileCode, canEdit: model.profiles.canWrite)
+            }
+        case .cashFlow:
+            NavigationStack {
+                CashFlowView(model: model.screens.cash, profileCode: profileCode)
+            }
+        case .settings:
+            // Statements (cycles, uploads, share-sheet queue, processing logs) live under Settings;
+            // ledger://add-statement pushes Statements here (TabRouter).
+            NavigationStack(path: $tabs.settingsPath) { SettingsView(model: model, profileCode: profileCode) }
+        }
     }
 }
 

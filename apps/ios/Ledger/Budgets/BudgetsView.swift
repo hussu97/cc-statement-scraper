@@ -48,7 +48,7 @@ struct BudgetsView: View {
                 }
             }
         }
-        .ledgerNavigation("Budgets")
+        .rootNavigation("Budgets")
         .toolbar {
             if canEdit {
                 ToolbarItem(placement: .topBarTrailing) {

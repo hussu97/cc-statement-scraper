@@ -1,10 +1,11 @@
 import Foundation
 import Observation
 
-/// The tab bar, in order. Statements moved under Settings when Budgets took
-/// its place (2026-10-09); `SettingsRoute.statements` is how to reach it.
+/// Every tab of both modes; `AppMode.tabs` says which show, in order. Statements moved under
+/// Settings when Budgets took its place (2026-10-09); `SettingsRoute.statements` is how to reach
+/// it. Overview and Settings are in both modes (each mode draws its own Overview).
 public enum LedgerTab: String, CaseIterable, Hashable, Sendable {
-    case overview, activity, insights, budgets, settings
+    case overview, activity, insights, budgets, accounts, cashFlow, settings
 
     public var title: String {
         switch self {
@@ -12,6 +13,8 @@ public enum LedgerTab: String, CaseIterable, Hashable, Sendable {
         case .activity: "Activity"
         case .insights: "Insights"
         case .budgets: "Budgets"
+        case .accounts: "Accounts"
+        case .cashFlow: "Cash flow"
         case .settings: "Settings"
         }
     }
@@ -22,6 +25,8 @@ public enum LedgerTab: String, CaseIterable, Hashable, Sendable {
         case .activity: "list.bullet.rectangle"
         case .insights: "chart.bar.xaxis"
         case .budgets: "target"
+        case .accounts: "building.columns"
+        case .cashFlow: "arrow.left.arrow.right"
         case .settings: "gearshape"
         }
     }
@@ -37,12 +42,15 @@ public enum SettingsRoute: Hashable, Sendable {
     case statement(StatementCycle)
 }
 
-/// Which tab is showing, so a screen can send the reader to another tab
-/// (Insights' "See all" budgets), and where a deep link (`AppLink`) lands.
+/// Which mode and tab are showing, so a screen can send the reader to another tab
+/// (Insights' "See all" budgets), and where a deep link (`AppLink`) lands. A tab the current
+/// mode doesn't show switches to the mode that does (`AppMode.home`).
 @MainActor
 @Observable
 public final class TabRouter {
     public var tab: LedgerTab = .overview
+    /// Spending or Wealth; kept between launches when the router has defaults.
+    public private(set) var mode: AppMode
     /// Overview's Review screen is pushed (bound to its navigation destination).
     public var showingReview = false
     /// The Settings tab's navigation stack (`ledger://add-statement` pushes Statements).
@@ -64,12 +72,30 @@ public final class TabRouter {
     /// sign-in screen, the profile picker). It opens once one is.
     public private(set) var pendingLink: AppLink?
     private let today: @Sendable () -> CalendarDay
+    /// Where the mode is kept (`AppMode.defaultsKey`); nil keeps it in memory (tests).
+    private let defaults: UserDefaults?
 
-    public init(today: @escaping @Sendable () -> CalendarDay = { LedgerDates.today() }) {
+    public init(defaults: UserDefaults? = nil,
+                today: @escaping @Sendable () -> CalendarDay = { LedgerDates.today() }) {
+        self.defaults = defaults
         self.today = today
+        mode = AppMode.restored(defaults?.string(forKey: AppMode.defaultsKey))
     }
 
-    public func show(_ tab: LedgerTab) { self.tab = tab }
+    /// The title menu: shows the mode's tabs, staying on the tab when the new mode has it
+    /// (Settings, Overview) and otherwise opening its Overview.
+    public func switchMode(_ newMode: AppMode) {
+        guard newMode != mode else { return }
+        mode = newMode
+        defaults?.set(newMode.rawValue, forKey: AppMode.defaultsKey)
+        if !newMode.tabs.contains(tab) { tab = .overview }
+    }
+
+    /// Shows `tab`, in the mode that has it.
+    public func show(_ tab: LedgerTab) {
+        if !mode.tabs.contains(tab) { switchMode(AppMode.home(of: tab)) }
+        self.tab = tab
+    }
 
     /// Switches to Activity showing `query`'s filters (and search), replacing
     /// the ones it had: Overview's counts and strips, Insights' merchants and
@@ -78,7 +104,7 @@ public final class TabRouter {
         activityPreset = query
         activityTransaction = nil
         activityPresetRequest += 1
-        tab = .activity
+        show(.activity)
     }
 
     /// Switches to Activity with one transaction's sheet open over its current
@@ -87,13 +113,13 @@ public final class TabRouter {
         activityPreset = nil
         activityTransaction = txnCode
         activityPresetRequest += 1
-        tab = .activity
+        show(.activity)
     }
 
     /// Switches to Settings with Statements pushed (a "payment due" insight, PAR-9).
     public func openStatements() {
         settingsPath = [.statements]
-        tab = .settings
+        show(.settings)
     }
 
     /// Opens `link` now when a ledger is on screen, else keeps it for `ledgerShown`.
@@ -105,7 +131,9 @@ public final class TabRouter {
         pendingLink = nil
         switch link {
         case .review:
-            tab = .overview
+            // Review is pushed on Spending's Overview.
+            switchMode(.spending)
+            show(.overview)
             showingReview = true
         case .uncategorised:
             openActivity(.uncategorised(month: today().startOfMonth))
@@ -113,9 +141,9 @@ public final class TabRouter {
             settingsPath = [.statements]
             addStatementRequested = true
             addStatementRequest += 1
-            tab = .settings
+            show(.settings)
         case .settings:
-            tab = .settings
+            show(.settings)
         }
     }
 
@@ -143,8 +171,8 @@ public final class TabRouter {
         if let pendingLink { open(pendingLink, ledgerOnScreen: true) }
     }
 
-    /// A new ledger starts on Overview with nothing pushed. A waiting link is
-    /// kept: it opens in the ledger now being shown.
+    /// A new ledger starts on Overview with nothing pushed, in the mode the reader chose. A
+    /// waiting link is kept: it opens in the ledger now being shown.
     public func reset() {
         tab = .overview
         showingReview = false

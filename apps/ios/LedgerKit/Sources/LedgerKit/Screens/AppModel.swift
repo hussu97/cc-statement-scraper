@@ -37,7 +37,7 @@ public final class AppModel {
     public let services: LedgerServices
     public let session: SessionStore
     public let profiles: ProfileStore
-    /// Overview, Activity, Insights, Budgets, Statements and Review for the selected ledger.
+    /// Every screen of both modes (Spending and Wealth) for the selected ledger.
     public let screens: LedgerScreens
     public let settings: SettingsModel
     /// Bank names and logos for every screen (environment object).
@@ -46,8 +46,8 @@ public final class AppModel {
     public let spendSplit: SpendSplitModel
     /// Settings → Notifications and the SMS guide's permission (environment object).
     public let notifications: NotificationSettingsModel
-    /// The selected tab.
-    public let tabs = TabRouter()
+    /// The selected mode (Spending or Wealth, kept between launches) and tab.
+    public let tabs = TabRouter(defaults: .standard)
     /// The app-switcher cover and the optional Face ID lock (this device only).
     /// The widgets mirror its setting to hide Lock Screen amounts (N-2).
     public let lock: AppLock

@@ -122,6 +122,7 @@ public enum InsightFeed {
         ("budgets", "Budgets", ["budget_risk"]),
         ("subscriptions", "Subscriptions", ["price_change", "new_recurring"]),
         ("statements", "Statements", ["statement_due"]),
+        ("cards", "Cards", ["annual_fee"]),
         ("tidy", "To tidy up", ["uncategorized", "review_backlog"]),
     ]
 
@@ -175,12 +176,14 @@ public final class InsightFeedModel {
 
     public var hasLoaded: Bool { gate.requested != nil }
 
-    /// The feed's sections; nil until loaded.
-    public var groups: [InsightFeedGroup]? { state.value.map(InsightFeed.group) }
+    /// The feed's sections (Spending's insights; Wealth's are on its Overview); nil until loaded.
+    public var groups: [InsightFeedGroup]? { spending.map(InsightFeed.group) }
+
+    private var spending: [Insight]? { state.value?.in(.spending) }
 
     /// The way in from Insights: "4 to look at" / "All quiet" once read, else what the feed is.
     public var summary: String {
-        guard let count = state.value?.count else { return "What the nightly check noticed" }
+        guard let count = spending?.count else { return "What the nightly check noticed" }
         return count == 0 ? "All quiet" : "\(count) to look at"
     }
 

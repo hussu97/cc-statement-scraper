@@ -8,9 +8,14 @@ extension SupabaseLedgerAPI {
         try await rpc("cash_position", CashPosition.self, ["p_profile_code": .string(profileCode)])
     }
 
-    public func cashFlow(profileCode: String, from: CalendarDay, to: CalendarDay) async throws -> [CashFlowRow] {
-        try await rpc("cash_flow", [CashFlowRow].self,
-                      ["p_profile_code": .string(profileCode), "p_from": .string(from.iso), "p_to": .string(to.iso)])
+    public func cashFlow(profileCode: String, from: CalendarDay, to: CalendarDay,
+                         accountCode: String?) async throws -> [CashFlowRow] {
+        var params: [String: AnyJSON] = [
+            "p_profile_code": .string(profileCode), "p_from": .string(from.iso), "p_to": .string(to.iso),
+        ]
+        // Only sent when set, so the ledger-wide call also reaches a server before Wealth mode.
+        if let accountCode { params["p_account_code"] = .string(accountCode) }
+        return try await rpc("cash_flow", [CashFlowRow].self, params)
     }
 
     public func recordBalance(profileCode: String, accountCode: String, balance: String) async throws {
