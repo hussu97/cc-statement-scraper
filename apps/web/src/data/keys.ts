@@ -30,7 +30,12 @@ export const keys = {
 
   /** Bank balances and cash flow (Phase 2d). */
   cashPosition: (p: string) => ["p", p, "cash", "position"] as const,
-  cashFlow: (p: string, from: string, to: string) => ["p", p, "cash", "flow", from, to] as const,
+  cashFlow: (p: string, from: string, to: string, account?: string) => ["p", p, "cash", "flow", from, to, account ?? "all"] as const,
+  /** Wealth mode: net worth, an account's ledger and balance series. Under "cash", so a balance or category change refreshes them. */
+  netWorth: (p: string) => ["p", p, "cash", "net-worth"] as const,
+  netWorthSeries: (p: string, months: number) => ["p", p, "cash", "net-worth-series", months] as const,
+  accountLedger: (p: string, account: string, from: string, to: string) => ["p", p, "cash", "ledger", account, from, to] as const,
+  balanceSeries: (p: string, account: string, from: string, to: string) => ["p", p, "cash", "balance-series", account, from, to] as const,
 
   accounts: (p: string) => ["p", p, "accounts"] as const,
   cycles: (p: string) => ["p", p, "statements", "cycles"] as const,

@@ -27,6 +27,7 @@ describe("activity query filters", () => {
       from: "2026-10-01", to: "2026-10-31", account: "acc_x", card: "crd_x", category: "none", status: "void", source: "sms", q: "cafe",
     });
     expect(b.calls).toEqual([
+      "eq in_spending true",
       "gte txn_date 2026-10-01",
       "lte txn_date 2026-10-31",
       "eq account_code acc_x",
@@ -40,11 +41,11 @@ describe("activity query filters", () => {
   });
 
   it("source=both requires both kinds of evidence", () => {
-    expect(applyActivityFilters(new FakeBuilder(), { source: "both", category: "cat_1" }).calls).toEqual(["eq category_code cat_1", "eq has_sms true", "eq has_statement true"]);
+    expect(applyActivityFilters(new FakeBuilder(), { source: "both", category: "cat_1" }).calls).toEqual(["eq in_spending true", "eq category_code cat_1", "eq has_sms true", "eq has_statement true"]);
   });
 
-  it("a blank search adds no filter", () => {
-    expect(applyActivityFilters(new FakeBuilder(), { q: "   " }).calls).toEqual([]);
+  it("a blank search adds no filter; the spending scope is always there", () => {
+    expect(applyActivityFilters(new FakeBuilder(), { q: "   " }).calls).toEqual(["eq in_spending true"]);
   });
 });
 
@@ -55,17 +56,17 @@ describe("activity summary args", () => {
         from: "2026-10-01", to: "2026-10-31", account: "acc_x", card: "crd_x", category: "cat_1", status: "void", source: "both", q: "cafe", page: 3, size: 200, txn: "txn_x",
       }),
     ).toEqual({
-      p_profile_code: "prf_1", p_from: "2026-10-01", p_to: "2026-10-31", p_account_code: "acc_x", p_card_code: "crd_x", p_category_code: "cat_1", p_status: "void", p_source: "both", p_q: "cafe",
+      p_profile_code: "prf_1", p_scope: "spending", p_from: "2026-10-01", p_to: "2026-10-31", p_account_code: "acc_x", p_card_code: "crd_x", p_category_code: "cat_1", p_status: "void", p_source: "both", p_q: "cafe",
     });
   });
 
   it("uncategorized becomes p_uncategorized, not a category code", () => {
-    expect(activitySummaryArgs("prf_1", { category: "none" })).toEqual({ p_profile_code: "prf_1", p_uncategorized: true });
+    expect(activitySummaryArgs("prf_1", { category: "none" })).toEqual({ p_profile_code: "prf_1", p_scope: "spending", p_uncategorized: true });
   });
 
-  it("no filters is just the profile; a blank search is dropped", () => {
-    expect(activitySummaryArgs("prf_1", {})).toEqual({ p_profile_code: "prf_1" });
-    expect(activitySummaryArgs("prf_1", { q: "  " })).toEqual({ p_profile_code: "prf_1" });
+  it("no filters is the profile and the spending scope; a blank search is dropped", () => {
+    expect(activitySummaryArgs("prf_1", {})).toEqual({ p_profile_code: "prf_1", p_scope: "spending" });
+    expect(activitySummaryArgs("prf_1", { q: "  " })).toEqual({ p_profile_code: "prf_1", p_scope: "spending" });
   });
 });
 

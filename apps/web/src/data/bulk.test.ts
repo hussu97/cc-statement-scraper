@@ -8,15 +8,16 @@ const CAT = "cat_01k00000000000000000000000";
 describe("activityFilter (the bulk RPCs' p_filter)", () => {
   it("keeps the filter keys and drops paging and the drawer", () => {
     const s: ActivitySearch = { from: "2026-08-01", to: "2026-08-31", category: CAT, status: "void", source: "sms", q: "cafe", page: 3, size: 200, txn: "txn_x" };
-    expect(activityFilter(s)).toEqual({ from: "2026-08-01", to: "2026-08-31", category: CAT, status: "void", source: "sms", q: "cafe" });
+    expect(activityFilter(s)).toEqual({ scope: "spending", from: "2026-08-01", to: "2026-08-31", category: CAT, status: "void", source: "sms", q: "cafe" });
   });
 
   it("passes 'none' through for uncategorised and drops a blank search", () => {
-    expect(activityFilter({ category: "none", q: "   " })).toEqual({ category: "none" });
+    expect(activityFilter({ category: "none", q: "   " })).toEqual({ scope: "spending", category: "none" });
   });
 
-  it("is an empty object (every transaction) with no filters", () => {
-    expect(activityFilter({ page: 2 })).toEqual({});
+  it("is the spending scope alone (every Spending transaction) with no filters", () => {
+    // Wealth mode: salary and transfers live in the account ledger, never in Activity's bulk actions.
+    expect(activityFilter({ page: 2 })).toEqual({ scope: "spending" });
   });
 });
 
@@ -26,7 +27,7 @@ describe("selectionArgs", () => {
   });
 
   it("sends 'all matching' as p_filter only", () => {
-    expect(selectionArgs({ kind: "filter", search: { q: "cafe", page: 2 } })).toEqual({ p_filter: { q: "cafe" } });
+    expect(selectionArgs({ kind: "filter", search: { q: "cafe", page: 2 } })).toEqual({ p_filter: { scope: "spending", q: "cafe" } });
   });
 });
 

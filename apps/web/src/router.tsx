@@ -1,9 +1,10 @@
-import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Outlet } from "@tanstack/react-router";
+import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Outlet, redirect } from "@tanstack/react-router";
 import { activityRouteSearch } from "@/lib/activity-filters";
 import { insightsRouteSearch, parseRangeSearch, parseTabSearch } from "@/lib/search";
 import { parsePageSearch } from "@/lib/infinite";
 import { parseSignInSearch } from "@/lib/redirect";
 import { parseCashFlowSearch } from "@/lib/cash-flow";
+import { parseAccountSearch } from "@/lib/wealth";
 
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
@@ -73,12 +74,45 @@ export const categoryRoute = createRoute({
   component: lazyRouteComponent(() => import("@/routes/category"), "CategoryPage"),
 });
 
-/** Bank accounts and cash flow (Phase 2d). `?month=` is a first-of-month, this month when absent. */
-const cashFlowRoute = createRoute({
+/** The old Cash flow address (Phase 2d): Cash flow moved under Wealth; the month comes along. */
+const cashFlowRedirectRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/cash-flow",
   validateSearch: (s: Record<string, unknown>) => parseCashFlowSearch(s),
-  component: lazyRouteComponent(() => import("@/routes/cash-flow"), "CashFlowPage"),
+  beforeLoad: ({ search }) => {
+    throw redirect({ to: "/wealth/cash-flow", search: { month: search.month, account: search.account }, replace: true });
+  },
+});
+
+// ── Wealth mode (tasks/todo.md §5): bank accounts, their ledgers, cash flow and net worth ──
+
+/** Net worth, bank accounts, what the cards owe, this month's cash flow and wealth insights. */
+const wealthRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/wealth",
+  component: lazyRouteComponent(() => import("@/routes/wealth"), "WealthOverviewPage"),
+});
+
+const wealthAccountsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/wealth/accounts",
+  component: lazyRouteComponent(() => import("@/routes/wealth-accounts"), "AccountsPage"),
+});
+
+/** One bank account: balance, balance chart and the month's ledger. `?month=YYYY-MM`, this month when absent. */
+export const wealthAccountRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/wealth/accounts/$accountCode",
+  validateSearch: (s: Record<string, unknown>) => parseAccountSearch(s),
+  component: lazyRouteComponent(() => import("@/routes/wealth-account"), "AccountPage"),
+});
+
+/** Each month's money in and out. `?month=` is a first-of-month (this month when absent); `?account=` narrows to one bank account. */
+export const wealthCashFlowRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/wealth/cash-flow",
+  validateSearch: (s: Record<string, unknown>) => parseCashFlowSearch(s),
+  component: lazyRouteComponent(() => import("@/routes/wealth-cash-flow"), "CashFlowPage"),
 });
 
 const budgetsRoute = createRoute({
@@ -128,7 +162,7 @@ const routeTree = rootRoute.addChildren([
   signInRoute,
   welcomeRoute,
   privacyRoute,
-  appRoute.addChildren([overviewRoute, activityRoute, insightsRoute, categoryRoute, cashFlowRoute, budgetsRoute, cardsRoute, statementRoute, reviewRoute, rulesRoute, settingsRoute]),
+  appRoute.addChildren([overviewRoute, activityRoute, insightsRoute, categoryRoute, cashFlowRedirectRoute, wealthRoute, wealthAccountsRoute, wealthAccountRoute, wealthCashFlowRoute, budgetsRoute, cardsRoute, statementRoute, reviewRoute, rulesRoute, settingsRoute]),
 ]);
 
 export const router = createRouter({ routeTree, defaultPreload: "intent", scrollRestoration: true });

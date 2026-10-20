@@ -10,6 +10,13 @@
 - **feat** `cash_flow()` takes an account and marks partial months (before any bank evidence).
 - **feat** Insights: a stale or missing bank balance, a balance that disagrees with the alerts (a missed SMS), salary not in by its usual day, and a card's annual fee above the cashback it earned.
 
+### Web
+
+- **feat** A Spending / Wealth switcher at the top of the sidebar (and the phone header). Spending is Overview, Activity, Insights, Budgets and Cards; Wealth is Overview, Accounts and Cash flow; Review, Rules and Settings are in both.
+- **feat** Wealth overview: net worth (bank cash − what the cards owe) with what it's missing, net worth over time, bank accounts, owed on cards, this month's cash flow and the wealth insights.
+- **feat** Account page (`/wealth/accounts/:code`): balance and Update balance, a 90-day balance chart, the month's opening, money in and out and closing, and a statement-style ledger with flow, category (editable), amount and balance after.
+- **change** Cash flow moves to `/wealth/cash-flow` (the old path redirects), with an account filter and partial months marked. Activity shows spending only (debit-card purchases tagged Debit; salary and transfers live in the account ledger). Overview's Cash tile is gone.
+
 ## Wio debit and Wio Credit — 2026-10-20
 
 ### Backend (Supabase)

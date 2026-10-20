@@ -1,7 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, type Views, type RpcArgs, type RpcReturn } from "@/lib/supabase";
 import { formatCount, formatTotal, toAmount } from "@/lib/money";
-import { activityFilter, searchOrFilter, UNCATEGORIZED, type ActivityFilter, type ActivitySearch } from "@/lib/activity-filters";
+import { ACTIVITY_SCOPE, activityFilter, searchOrFilter, UNCATEGORIZED, type ActivityFilter, type ActivitySearch } from "@/lib/activity-filters";
 import type { ExportRow } from "@/lib/csv";
 import { formatDate, type ISODate } from "@/lib/dates";
 import { DEFAULT_PAGE_SIZE, pageRange } from "@/lib/pagination";
@@ -20,9 +20,10 @@ export interface FilterBuilder<B> {
   or(filters: string): B;
 }
 
-/** Apply URL filters to a v_transactions query. Pure: unit-tested with a fake builder. */
+/** Apply the spending scope and the URL filters to a v_transactions query. Pure: unit-tested with a fake builder. */
 export function applyActivityFilters<B extends FilterBuilder<B>>(query: B, s: ActivitySearch): B {
-  let q = query;
+  // Spending's rows only (ACTIVITY_SCOPE), as activity_summary and activity_selection read them.
+  let q = query.eq("in_spending", true);
   if (s.from) q = q.gte("txn_date", s.from);
   if (s.to) q = q.lte("txn_date", s.to);
   if (s.account) q = q.eq("account_code", s.account);
@@ -54,7 +55,7 @@ export interface ActivitySummary {
 
 /** ActivitySearch -> activity_summary args (paging and the drawer are ignored). Pure. */
 export function activitySummaryArgs(profileCode: string, s: ActivitySearch): RpcArgs<"activity_summary"> {
-  const args: RpcArgs<"activity_summary"> = { p_profile_code: profileCode };
+  const args: RpcArgs<"activity_summary"> = { p_profile_code: profileCode, p_scope: ACTIVITY_SCOPE };
   if (s.from) args.p_from = s.from;
   if (s.to) args.p_to = s.to;
   if (s.account) args.p_account_code = s.account;

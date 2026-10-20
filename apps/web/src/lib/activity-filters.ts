@@ -134,14 +134,22 @@ export function searchOrFilter(q: string | undefined): string | null {
   return term ? `description.ilike.*${term}*,merchant_name.ilike.*${term}*` : null;
 }
 
-export type ActivityFilter = Partial<Record<(typeof FILTER_KEYS)[number], string>>;
+/**
+ * Activity is Spending's screen (Wealth mode): card rows, and purchases, refunds, fees, interest
+ * and cash advances on any account (v_transactions.in_spending). Salary, transfers and the other
+ * bank movements live in the account's ledger. The list, its totals, the day totals and every
+ * bulk action use this one scope, so their numbers agree.
+ */
+export const ACTIVITY_SCOPE = "spending" as const;
+
+export type ActivityFilter = Partial<Record<(typeof FILTER_KEYS)[number], string>> & { scope: typeof ACTIVITY_SCOPE };
 
 /**
- * The Activity filters as the bulk RPCs' `p_filter` ("select all matching"): the URL's
- * filter keys only (no paging, no drawer), blank search dropped. Pure.
+ * The Activity filters as the bulk RPCs' `p_filter` ("select all matching"): the spending scope and
+ * the URL's filter keys only (no paging, no drawer), blank search dropped. Pure.
  */
 export function activityFilter(s: ActivitySearch): ActivityFilter {
-  const out: ActivityFilter = {};
+  const out: ActivityFilter = { scope: ACTIVITY_SCOPE };
   for (const k of FILTER_KEYS) {
     const v = s[k];
     if (v === undefined) continue;
