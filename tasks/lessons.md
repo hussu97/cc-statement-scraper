@@ -97,7 +97,8 @@
 - **Rule**: a `validateSearch` that may drop a key returns it explicitly as `undefined`
   (`activityRouteSearch`). Check a codec change by loading the old URL in the browser, not only
   with the codec's unit test.
-- **Enforced by**: `activity-filters.test.ts` ("the route search overrides a dropped raw key").
+- **Enforced by**: `activity-filters.test.ts` ("the route search overrides a dropped raw key") and, since
+  2026-10-20 (`?range=junk` crashed Insights), `trend-filters.test.ts` for `insightsRouteSearch`.
 
 ### Build `supabase.rpc` arguments as a typed variable: a spread union hangs `tsc`
 - **What went wrong**: during WEB-24 (2026-10-13), `tsc -b` ran for 15+ minutes without finishing

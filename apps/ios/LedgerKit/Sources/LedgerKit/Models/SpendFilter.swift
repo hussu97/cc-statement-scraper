@@ -90,13 +90,13 @@ public struct SpendFilterOptions: Sendable, Hashable {
     public static let uncategorizedOption = Option(code: SpendFilter.uncategorized, label: "Uncategorised",
                                                    detail: nil, colorToken: nil)
     /// Category kinds `v_spend` never counts, so filtering by them would always be empty.
-    static let nonSpendKinds: Set<String> = ["transfer", "ignore", "income"]
+    static let nonSpendKinds: Set<String> = ["transfer", "ignore", "income", "saving", "support"]
 
     public let categories: [Option]
     public let banks: [Option]
     public let cards: [Option]
 
-    /// Categories spend can carry (not archived, not transfer/ignore/income), in the server's order, then
+    /// Categories spend can carry (not archived, not transfer/ignore/income/saving/support), in the server's order, then
     /// Uncategorised; banks by code; cards as `"•2777"` with their bank.
     public init(meta: FilterMeta) {
         categories = meta.categories.filter { !$0.archived && !Self.nonSpendKinds.contains($0.kind) }.map {

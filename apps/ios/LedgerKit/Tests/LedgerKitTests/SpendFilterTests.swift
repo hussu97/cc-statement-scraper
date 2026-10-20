@@ -16,6 +16,8 @@ struct SpendFilterTests {
             .init(categoryCode: "cat_groceries", name: "Groceries", kind: "spend", colorToken: "cat-2", parentCode: nil, archived: false),
             .init(categoryCode: "cat_old", name: "Old", kind: "spend", colorToken: nil, parentCode: nil, archived: true),
             .init(categoryCode: "cat_transfer", name: "Transfers", kind: "transfer", colorToken: nil, parentCode: nil, archived: false),
+            .init(categoryCode: "cat_family", name: "Family support", kind: "support", colorToken: nil, parentCode: nil, archived: false),
+            .init(categoryCode: "cat_savings", name: "Savings & investing", kind: "saving", colorToken: nil, parentCode: nil, archived: false),
         ],
         banks: [.init(bankCode: "FAB", name: "First Abu Dhabi Bank"), .init(bankCode: "ADCB", name: "ADCB")],
         dateRange: nil)
@@ -42,7 +44,7 @@ struct SpendFilterTests {
         ])
     }
 
-    @Test("options: spend categories then Uncategorised; banks and cards by code")
+    @Test("options: spend categories then Uncategorised (no transfer, support or saving); banks and cards by code")
     func options() {
         let o = SpendFilterOptions(meta: Self.meta)
         #expect(o.categories.map(\.code) == ["cat_dining", "cat_groceries", "__uncategorized__"])

@@ -64,8 +64,8 @@ set local role authenticated;
 insert into ids select 'pb', public.create_profile('bob', 'Bob');
 reset role;
 
-select is((select count(*)::int from public.categories where profile_code = (select v from ids where k = 'pa')), 28,
-          'create_profile seeds 28 default categories');
+select is((select count(*)::int from public.categories where profile_code = (select v from ids where k = 'pa')), 32,
+          'create_profile seeds 32 default categories');
 select is((select count(*)::int from public.category_rules where profile_code = (select v from ids where k = 'pa')), 244,
           'create_profile seeds 244 default rules');
 

@@ -1,5 +1,23 @@
 # Changelog
 
+## Cash flow, saving and support, card type filter (Phase 2c) — 2026-10-20
+
+### Backend (Supabase)
+
+- **feat** Category kinds `saving` and `support`: money to family and to savings or investments is its own flow, never spend. Every ledger gets Salary, Transfers, Family support and Savings & investing (added only where a category of that name is missing).
+- **feat** `v_spend` carries `instrument` (credit or debit card); `spend_series` and `spend_breakdown` take `p_instruments`.
+- **feat** Paying a card from a bank account counts once: a bank transfer out pairs with the card payment of the same amount within 3 days (`card_transfers`).
+- **feat** `v_cash_flow` and `cash_flow()`: each month's money in and out by flow (income, spend, support, saving, card repayments, internal moves, unfiled money in and out) and the net. Payees are category rules on kind, amount and bank.
+
+### Web
+
+- **feat** Insights → Trends: an All cards / Credit / Debit switch (`?inst=`). Category editor offers Family support and Saving & investing.
+- **fix** Insights no longer crashes on an invalid `?range=` (or any dropped search key): the route returns dropped keys as undefined.
+
+### iOS
+
+- **fix** Spend filters leave support and saving categories out, as they do transfers.
+
 ## Debit-card and bank-account SMS (Phase 2b) — 2026-10-20
 
 ### Backend (Supabase)

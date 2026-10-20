@@ -2457,6 +2457,18 @@ export type Database = {
           },
         ]
       }
+      v_cash_flow: {
+        Row: {
+          account_code: string | null
+          amount_aed: number | null
+          flow: string | null
+          instrument: string | null
+          profile_code: string | null
+          txn_code: string | null
+          txn_date: string | null
+        }
+        Relationships: []
+      }
       v_sms_statements: {
         Row: {
           account_code: string | null
@@ -2512,6 +2524,7 @@ export type Database = {
           category_code: string | null
           currency_original: string | null
           description: string | null
+          instrument: string | null
           kind: string | null
           merchant_code: string | null
           profile_code: string | null
@@ -2892,6 +2905,15 @@ export type Database = {
         Args: { p_email: string; p_profile_code: string }
         Returns: undefined
       }
+      cash_flow: {
+        Args: { p_from: string; p_profile_code: string; p_to: string }
+        Returns: {
+          amount_aed: number
+          flow: string
+          month: string
+          txn_count: number
+        }[]
+      }
       category_breakdown: {
         Args: { p_from: string; p_profile_code: string; p_to: string }
         Returns: {
@@ -3222,6 +3244,7 @@ export type Database = {
           p_category_codes?: string[]
           p_from: string
           p_group_by: string
+          p_instruments?: string[]
           p_profile_code: string
           p_q?: string
           p_to: string
@@ -3241,6 +3264,7 @@ export type Database = {
           p_from: string
           p_grain?: string
           p_group?: string
+          p_instruments?: string[]
           p_profile_code: string
           p_q?: string
           p_to: string

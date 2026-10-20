@@ -154,17 +154,26 @@ user's go-ahead before code (CLAUDE.md §12.1).
       unchanged. Not merged or deployed.
 
 ### 2c. Classification and cash flow
-- [ ] `categories.kind` adds `saving` and `support`. `v_spend` excludes them (as it does transfer,
+- [x] `categories.kind` adds `saving` and `support`. `v_spend` excludes them (as it does transfer,
       ignore and income) and gains an `instrument` column: `credit_card` / `debit_card`.
-- [ ] `payees`: a `counterparty_ref` mapped to a name and a category ("…4301 → Parents → Family
+- [x] `payees`: a `counterparty_ref` mapped to a name and a category ("…4301 → Parents → Family
       support"). Set from a transfer row in Activity, then applied by categorisation like a merchant.
-- [ ] Repayments: a `transfer_out` whose `counterparty_ref` is one of the ledger's own card last4s, or
+- [x] Repayments: a `transfer_out` whose `counterparty_ref` is one of the ledger's own card last4s, or
       whose amount and date match a card payment, is linked through `card_transfers` and counts once,
       as a move. `link_card_transfer` learns the bank side.
-- [ ] `v_cash_flow` and `cash_flow(profile, month)`: income, spend (by instrument), support,
+- [x] `v_cash_flow` and `cash_flow(profile, month)`: income, spend (by instrument), support,
       saving, card repayments, cash withdrawals, internal moves, net. Computed in SQL (§2.2).
-- [ ] Analytics RPCs take an optional `p_instruments`; defaults keep today's numbers until the web
+- [x] Analytics RPCs take an optional `p_instruments`; defaults keep today's numbers until the web
       and iOS filters ship, so nothing shifts silently.
+- [x] Review (2026-10-20): payees are category rules (kind, amount, bank conditions already exist),
+      not a new table: most bank alerts name no counterparty, so a description-keyed payee table
+      would sit empty. A transfer filed under a spend category is `spend_transfer` in cash flow
+      but not in `v_spend` (rent by transfer is not on the spend charts yet). Instrument filter
+      ships on web Trends; iOS gets it with the 2d screens. pgTAP 1,667 twice on an isolated stack
+      (`62_cash_flow`, updated `01`, `11`, `25`; `31`'s same-millisecond ordering race fixed),
+      web 518, LedgerKit 557. Click-through: Trends → Debit shows only the debit purchase; an
+      invalid `?range=` no longer crashes Insights (pre-existing; fixed as the TanStack lesson
+      says). Not merged or deployed.
 
 ### 2d. Screens and insights
 - [ ] Web and iOS: an Accounts section (balance, "as of", update balance), a Cash flow screen for the
