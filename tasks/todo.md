@@ -71,7 +71,7 @@ Home & Furniture / Home Services / Hotels split dropped (too small). Al Jamea tu
 - [ ] Push to main (deploys both migrations + worker), then run the backfill, then verify
       `needed_now = 0` and the new category shares in prod.
 
-## 3. Phase 2: bank accounts, balances, debit cards and cash flow (2026-10-20) — awaiting go-ahead
+## 3. Phase 2: bank accounts, balances, debit cards and cash flow (2026-10-20) — approved; 2a built
 
 Goal: a ledger can hold current/savings accounts next to its cards, know each account's balance,
 capture debit-card and account SMS, and answer "where did the salary go" without letting transfers
@@ -92,7 +92,7 @@ user's go-ahead before code (CLAUDE.md §12.1).
 - Status is derived from evidence: SMS-only is `pending` until a statement line posts it. Bank
   accounts have no statements yet, so that rule has to change for them.
 
-### Decisions for the user (recommendation first)
+### Decisions (approved 2026-10-20: 1–3 as recommended; 4 still open)
 1. **Debit-card purchases count as spend**, tagged by instrument, with credit/debit/both filters.
    They're real purchases; leaving them out undercounts lifestyle spend. The alternative is a separate
    "debit spend" figure outside `v_spend`, which breaks "one definition of spend" (§1.12).
@@ -104,21 +104,27 @@ user's go-ahead before code (CLAUDE.md §12.1).
    and the first automation.
 
 ### 2a. Accounts and balances
-- [ ] Migration: `accounts.kind` check adds `current`, `savings`. New `accounts.account_ref` (the
+- [x] Migration: `accounts.kind` check adds `current`, `savings`. New `accounts.account_ref` (the
       masked suffix banks print, e.g. `810001`), unique per (profile, bank, ref). The card-only columns
       stay null for these, with a check that `credit_limit`/`cycle_close_day` are null unless
       `kind = 'credit_card'`.
-- [ ] **Audit every `accounts` reader** (the 37 migrations' current definitions, web `src/data/`,
+- [x] **Audit every `accounts` reader** (the 37 migrations' current definitions, web `src/data/`,
       LedgerKit). Card-only readers (utilisation, statements, `v_account_balances`, card budgets,
       `statement_cycles`, card names) filter `kind = 'credit_card'`. A pgTAP guard fails if a new
       bank account appears in any card-only RPC.
-- [ ] `balance_checkpoints` (account, `as_of timestamptz`, `balance numeric(14,2)`, source
+- [x] `balance_checkpoints` (account, `as_of timestamptz`, `balance numeric(14,2)`, source
       `sms`/`manual`, `sms_code` nullable). Immutable evidence, RLS like every table.
-- [ ] `v_bank_balances` (security_invoker): latest checkpoint plus account transactions after
+- [x] `v_bank_balances` (security_invoker): latest checkpoint plus account transactions after
       `as_of`; returns `balance_aed`, `as_of` and `is_stale` (older than 7 days).
-- [ ] RPCs: `create_bank_account(profile, bank, kind, ref, nickname)` and
+- [x] RPCs: `create_bank_account(profile, bank, kind, ref, nickname)` and
       `record_balance(account, balance, as_of)`, both owner-only via `private.assert_member`.
       Update `11_privileges.test.sql`.
+- [x] Review (2026-10-20, commit 34ce2f9): pgTAP 1,624 pass from a fresh reset on an isolated stack
+      (`60_bank_accounts`, new cases in `08`/`11`); the 26 functions reading `accounts` are listed
+      and classified; web 516 tests, tsc and build; LedgerKit 556; iOS app builds. Web click-through
+      with an ADCB current and a FAB savings account beside the ADCB and FAB cards: Overview, Cards,
+      the comparison, Activity filters and card names show the cards only. No screens for bank
+      accounts yet (2d). Not merged or deployed.
 
 ### 2b. Capture debit-card and account SMS
 - [ ] `process_sms`: `debit_card` alerts stop being ignored once they resolve to a bank account, by
