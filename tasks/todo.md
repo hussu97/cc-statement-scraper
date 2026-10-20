@@ -127,22 +127,31 @@ user's go-ahead before code (CLAUDE.md §12.1).
       accounts yet (2d). Not merged or deployed.
 
 ### 2b. Capture debit-card and account SMS
-- [ ] `process_sms`: `debit_card` alerts stop being ignored once they resolve to a bank account, by
+- [x] `process_sms`: `debit_card` alerts stop being ignored once they resolve to a bank account, by
       debit-card last4 (cards on a bank account) or by `account_ref`. Unresolved ones stay ignored
       with a `match_reviews` row, the same as an unknown credit card today.
-- [ ] Split `msg_kind` `debit_card` into `debit_purchase`, `account_credit`, `account_debit` and
+- [x] Split `msg_kind` `debit_card` into `debit_purchase`, `account_credit`, `account_debit` and
       `transfer_out` so each maps to a transaction kind. Transaction kinds add `transfer_in`,
       `transfer_out`, `atm_withdrawal`. Content migration re-points the ADCB/FAB templates only
       while they still hold their seeded `msg_kind` (§1.9).
-- [ ] Templates capture `balance` (into a checkpoint) and `counterparty_ref` (the masked IBAN, account
+- [x] Templates capture `balance` (into a checkpoint) and `counterparty_ref` (the masked IBAN, account
       or card a transfer went to). Add the field to the parse contract and the template tests.
-- [ ] `refresh_transaction`: on a non-card account, SMS evidence is final, so `posted`.
-- [ ] iOS: a second automation keyword ("account") with the same action, plus a guide step. A
+- [x] `refresh_transaction`: on a non-card account, SMS evidence is final, so `posted`.
+- [x] iOS: a second automation keyword ("account") with the same action, plus a guide step. A
       message holding both words fires both automations, with two `client_msg_id`s; only the card
       matcher treats a same-`body_hash` twin as a duplicate today, so ingest must drop it for every
       kind (pgTAP). New banks' formats come through the existing
       unparsed → proposed-format → Review flow (PAR-14).
-- [ ] pgTAP for each template example and for account resolution; LedgerKit test for the guide text.
+- [x] pgTAP for each template example and for account resolution; LedgerKit test for the guide text.
+- [x] Review (2026-10-20): built with three kinds, not four: `account_debit` covers transfers and
+      remittances, and `atm_withdrawal` waits for a real ATM alert to template. Counterparty
+      capture moves to 2c with payees (FAB's funds-transfer notice, which names the payee, stays
+      ignored for now). Also added: FAB inward remittance (the likely salary format at FAB), and
+      `create_bank_account` re-runs waiting alerts. pgTAP 1,658 on an isolated stack (`61_bank_sms`,
+      updated `04`, `38`, `60`), deno 156, web 516, LedgerKit 557. Web click-through on the demo
+      ledger: a salary credit, a transfer and a FAB debit purchase show in Activity (transfers
+      Uncategorised until 2c); Overview spend rose by the debit purchase only; Uncategorised count
+      unchanged. Not merged or deployed.
 
 ### 2c. Classification and cash flow
 - [ ] `categories.kind` adds `saving` and `support`. `v_spend` excludes them (as it does transfer,

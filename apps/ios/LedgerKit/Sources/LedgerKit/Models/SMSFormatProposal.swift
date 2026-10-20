@@ -15,7 +15,8 @@ public struct SMSFormatProposal: Decodable, Sendable, Hashable {
     public let fieldGroups: [String: Int]
     /// `to_date()` format of the date group.
     public let dateFormat: String?
-    /// purchase | preauth | refund | reversal | payment | declined | debit_card | other
+    /// purchase | preauth | refund | reversal | payment | declined | debit_purchase |
+    /// account_credit | account_debit | debit_card | other
     public let msgKind: String
     /// seed | manual | llm
     public let source: String

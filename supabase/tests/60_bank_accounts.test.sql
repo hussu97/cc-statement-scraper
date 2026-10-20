@@ -170,9 +170,9 @@ select set_eq(
     'private.merge_accounts',
     -- bank accounts (Phase 2a)
     'public.create_bank_account', 'public.record_balance', 'private.balance_checkpoint_bank_only',
-    -- reach an account through its statements or transactions, which bank accounts don't have
-    -- until Phase 2b, or read a single known account
-    'private.account_bank', 'private.apply_sms_statement', 'private.estimate_fx', 'private.filtered_spend',
+    -- reach an account through its statements or transactions, or read a single known account
+    -- (refresh_transaction: bank-account SMS is final, Phase 2b)
+    'private.account_bank', 'private.apply_sms_statement', 'private.refresh_transaction', 'private.estimate_fx', 'private.filtered_spend',
     'private.generate_insights', 'private.ingest_one_statement', 'private.recategorize',
     'public.budget_status', 'public.preview_rule', 'public.spend_breakdown', 'public.spend_series',
     'public.statement_cycles', 'public.statement_detail',

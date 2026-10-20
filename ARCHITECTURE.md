@@ -307,8 +307,18 @@ or `failed` with `reason = error:<sqlstate>` when processing raised (the message
    apply; it never raises.
    - **No template matches:** the message is `unparsed` and an `sms_fallback` job is enqueued.
    - **`other` / `debit_card`:** the message is `ignored`. Approval prompts, due reminders,
-     logins and debit-card or account alerts are seeded at priority 900+ so they never reach
-     the LLM.
+     logins and the debit-card and account alerts no template reads yet are seeded at priority
+     900+ so they never reach the LLM.
+   - **`debit_purchase` / `account_credit` / `account_debit`** (Phase 2b): bank-account alerts.
+     They resolve to a bank account, never a card account: the debit card on it, else the
+     account the alert names (`account_ref` digits matched from the right), else, when the alert
+     names none, the bank's one active bank account. A debit card seen for the first time is
+     registered on that account (unless a card of that bank already has its digits). No account:
+     `ignored` with `ignore_reason = 'no_bank_account'`, re-run when `create_bank_account` adds
+     one (`private.reprocess_bank_sms`). The balance an alert prints becomes a
+     `balance_checkpoints` row (`source = 'sms'`). They become `purchase`, `transfer_in` and
+     `transfer_out` transactions, `posted` straight away (a bank account has no statement to
+     wait for). A debit purchase counts as spend; transfers don't (`v_spend`'s kind list).
    - **`declined`:** stored and ignored.
 2. The template's date and time give `event_at`, otherwise `received_at`; a template date more
    than 7 days from `received_at` is a DD/MM misread and falls back to `received_at`
@@ -317,7 +327,8 @@ or `failed` with `reason = error:<sqlstate>` when processing raised (the message
    - **Unknown card:** an `unknown_card` review opens. Resolving it registers the card and
      re-processes every message waiting on it. A statement that registers the card does the
      same at the end of `ingest_parsed_document` (`private.reprocess_waiting_sms`).
-3. `match_sms` runs for purchase, preauth, refund, reversal and payment messages.
+3. `match_sms` runs for purchase, preauth, refund, reversal and payment messages, and for the
+   three bank-account kinds; its step 1 drops a repeat of the same alert for all of them.
 
 Adding a live template, activating one, or changing an active one's pattern, priority or scope
 re-runs the unparsed/failed messages its sender pattern (and scope) reaches, newest first, 500 at
@@ -809,7 +820,10 @@ iOS gives apps no access to SMS. The supported route is **one** Shortcuts person
 *Message → Message contains "Card" → Run Immediately, Notify When Run **on** → Log Bank SMS*
 (Message = Shortcut Input's Content, Sender = Shortcut Input's Sender). "Card" appears in every
 ADCB, FAB, ENBD, SIB and EIB credit-card purchase, refund and decline format in the template
-seed, and Wio's says "card" in lower case; a single keyword means each alert fires once. Settings → *Set up SMS capture* walks through it
+seed, and Wio's says "card" in lower case; a single keyword means each alert fires once.
+Bank-account alerts (ADCB "Cr./Dr. transaction … account number", FAB remittances) never say
+"Card", so an optional second automation on "Account" catches them (Phase 2b); a message saying
+both is sent twice and the server drops the repeat (`match_sms` step 1). Settings → *Set up SMS capture* walks through it
 and shows "Last captured" and a "Send test" button. Whether Shortcuts' "contains" is
 case-insensitive (the ENBD refund and every Wio payment say "card") still needs a real-device check.
 

@@ -167,6 +167,22 @@ struct SMSGuideTests {
         }
     }
 
+    static let realAccountAlerts = [
+        "A Cr. transaction of AED 1100.00 on your account number XXX810001 was successful.Available balance is 1105.04.",
+        "Outward Remittance Debit\nAccount XXXX9001\nAED 2100.00\nDate 02/10/2026\nBalance AED 3644.98",
+        "Inward Remittance Credit\nAccount XXXX9001\nAED 500.00\nDate 03/10/2026\nBalance AED 4144.98",
+    ]
+
+    @Test("bank-account alerts lack the card keyword and carry the account one (Phase 2b)")
+    func accountKeyword() throws {
+        for body in Self.realAccountAlerts {
+            #expect(!body.localizedCaseInsensitiveContains(SMSAutomationGuide.keywords[0]), "\(body.prefix(30))")
+            #expect(body.localizedCaseInsensitiveContains(SMSAutomationGuide.accountKeyword), "\(body.prefix(30))")
+        }
+        let step7 = try #require(SMSAutomationGuide.steps.last)
+        #expect(step7.title.hasPrefix("Optional") && step7.detail.contains(SMSAutomationGuide.accountKeyword))
+    }
+
     @Test("the guide keeps Notify When Run on and has no 'repeat for other keywords' step")
     func guide() {
         let text = SMSAutomationGuide.steps.map { $0.title + " " + $0.detail }.joined(separator: "\n")

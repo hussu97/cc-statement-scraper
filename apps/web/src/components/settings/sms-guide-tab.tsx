@@ -7,6 +7,7 @@ import { BRAND_NAME } from "@/lib/brand";
 import { cn } from "@/lib/cn";
 import { qrPath } from "@/lib/qr";
 import {
+  ACCOUNT_AUTOMATION,
   AUTOMATION_STEPS,
   BANNERS,
   PREREQUISITES,
@@ -258,6 +259,12 @@ export function SmsGuideTab() {
               </li>
             ))}
           </ol>
+          <div className="mx-5 mb-5 rounded-md border border-border bg-surface-2 px-4 py-3">
+            <p className="text-sm font-medium text-ink">{ACCOUNT_AUTOMATION.title}</p>
+            <p className="mt-0.5 text-[13px] text-muted">
+              <Rich text={ACCOUNT_AUTOMATION.detail} />
+            </p>
+          </div>
         </Card>
 
         <Card>

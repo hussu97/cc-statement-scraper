@@ -1,5 +1,22 @@
 # Changelog
 
+## Debit-card and bank-account SMS (Phase 2b) — 2026-10-20
+
+### Backend (Supabase)
+
+- **feat** Debit-card purchases and bank-account alerts become transactions on the ledger's bank accounts. New SMS kinds `debit_purchase`, `account_credit` and `account_debit` map to `purchase`, `transfer_in` and `transfer_out`, posted straight away. New templates: ADCB account credit and debit, ADCB and FAB debit-card purchases, FAB outward and inward remittances. They read the account digits (`account_ref`) and the printed balance, which becomes a balance checkpoint. The seeded "(ignored)" versions are switched off while they still hold their seeded pattern.
+- **feat** An alert resolves to the debit card's account, else the account it names, else the bank's only bank account. A new debit card is registered on its account. An alert for an account the ledger doesn't have waits (`no_bank_account`) and is re-run when the account is added.
+- **feat** A debit-card purchase counts as spend; transfers in and out don't. The same alert sent twice (two automations) is dropped as a repeat.
+- **feat** The LLM format proposer knows the new kinds and the `account_ref` field.
+
+### Web
+
+- **feat** SMS guide: an optional second automation on "Account" for bank-account alerts. Rules can test the transfer kinds.
+
+### iOS
+
+- **feat** SMS guide step 7: an optional second automation on "Account" for bank-account alerts.
+
 ## Bank accounts and balances (Phase 2a) — 2026-10-20
 
 ### Backend (Supabase)

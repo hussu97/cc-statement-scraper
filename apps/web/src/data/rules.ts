@@ -448,6 +448,8 @@ export const TXN_KINDS = [
   { value: "interest", label: "Interest" },
   { value: "cash_advance", label: "Cash advance" },
   { value: "adjustment", label: "Adjustment" },
+  { value: "transfer_in", label: "Transfer in" },
+  { value: "transfer_out", label: "Transfer out" },
 ] as const;
 
 export const DIRECTIONS = [

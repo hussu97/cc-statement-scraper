@@ -119,7 +119,8 @@ Deno.test("smsTemplateSchema requires every field (nullable) for structured outp
   // deno-lint-ignore no-explicit-any
   const s: any = smsTemplateSchema(BANKS);
   assertEquals(s.properties.bank_code.enum, BANKS);
-  assertEquals(s.properties.field_groups.required.length, 7);
+  assertEquals(s.properties.field_groups.required.length, 8); // … available, account_ref (Phase 2b)
+  assertEquals(s.properties.msg_kind.enum.includes("account_credit"), true);
   assertEquals(s.additionalProperties, false);
 });
 
