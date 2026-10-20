@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -21,7 +22,29 @@ from ccs_parser.kinds import map_kind
 from ccs_parser.places import separate_glued_place
 from ccs_parser.service import money, money_or_none, parse_document
 
-GOLDEN_DIR = Path(__file__).parent / "golden"
+
+def _golden_dir() -> Path:
+    """This checkout's snapshots, or, in a linked worktree (which has none: they are gitignored),
+    the main checkout's. A parser change made in a worktree skipped this test twice and failed
+    the next push from the main checkout (lessons: "Golden parity is local-only")."""
+    here = Path(__file__).parent / "golden"
+    if here.exists():
+        return here
+    try:
+        common = subprocess.run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            cwd=Path(__file__).parent,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return here
+    main = Path(common).parent / "services" / "parser" / "tests" / "golden"
+    return main if main.exists() else here
+
+
+GOLDEN_DIR = _golden_dir()
 GOLDEN_FILES = sorted(GOLDEN_DIR.glob("*.json")) if GOLDEN_DIR.exists() else []
 
 # Lines where legacy said "fee" and the whole-word classifier says "purchase"
@@ -48,6 +71,8 @@ ALLOWED_DELTAS: dict[str, set[str]] = {
     "glued place separated (2026.10.4)": set(),
     "FAB VAT row is AED (2026.10.7)": set(),
     "ENBD foreign row and bank charges (2026.10.10)": set(),
+    "cash withdrawal is a cash advance (2026.10.20)": set(),
+    "SIB history closes on the 14th (2026.10.15.1)": set(),
 }
 RECOVERED_LINES: dict[str, int] = {}
 
@@ -130,6 +155,25 @@ def _assert_recovered_lines(st_new: dict, st_old: dict, extras: list[dict]) -> N
     assert all(ln["direction"] == "debit" for ln in extras)
 
 
+def _assert_sib_history_rebucketed(new_statements: list[dict], old_statements: list[dict]) -> None:
+    """Allowed delta: SIB history exports close on the 14th, not the 12th (parser 2026.10.15.1).
+    Rows dated the 13th and 14th move to the next cycle, so statements no longer pair one to
+    one: every row must still be there, unchanged, and every cycle must end on the 14th."""
+
+    new_rows = sorted(
+        (ln["txn_date"], ln["direction"], ln["amount_aed"]) for st in new_statements for ln in st["lines"]
+    )
+    old_rows = sorted(
+        (ln["txn_date"], ln["direction"], money_or_none(ln["amount_aed"]))
+        for st in old_statements
+        for ln in st["lines"]
+    )
+    assert new_rows == old_rows, "SIB history rows changed beyond re-bucketing"
+    for st in new_statements:
+        assert st["kind"] == "history_extract"
+        assert st["period_end"] is None or st["period_end"][8:] == "14", st["period_end"]
+
+
 @pytest.mark.parametrize("golden_path", _ok_golden(), ids=_id)
 def test_golden_parity(golden_path: Path) -> None:
     golden = _load(golden_path)
@@ -141,6 +185,10 @@ def test_golden_parity(golden_path: Path) -> None:
 
     assert result["bank_code"] == golden["bank_code"]
     expected_statements = golden["statements"]
+    if golden["bank_code"] == "SIB" and all(st["pdf_type"] == "transaction_history" for st in expected_statements):
+        _assert_sib_history_rebucketed(result["statements"], expected_statements)
+        ALLOWED_DELTAS["SIB history closes on the 14th (2026.10.15.1)"].add(golden_path.stem)
+        return
     assert len(result["statements"]) == len(expected_statements), "statement count"
 
     for st_new, st_old in zip(result["statements"], expected_statements, strict=True):
@@ -173,8 +221,8 @@ def test_golden_parity(golden_path: Path) -> None:
             enbd_foreign = (
                 golden["bank_code"] == "ENBD"
                 and ln_new["currency_original"] != "AED"
-                and ln_old["merchant_raw"] == f"{ln_new['description_raw']} {_printed(ln_new['amount_original'])} "
-                f"{ln_new['currency_original']}"
+                and ln_old["merchant_raw"]
+                == f"{ln_new['description_raw']} {_printed(ln_new['amount_original'])} {ln_new['currency_original']}"
             )
             if enbd_foreign:
                 assert ln_old["currency_original"] == "AED", ctx
@@ -199,6 +247,16 @@ def test_golden_parity(golden_path: Path) -> None:
                 assert expected_kind == "purchase", ctx
                 assert re.match(r"^(?:CREDIT SHIELD\b|VAT ON\b)", ln_old["merchant_raw"]), ctx
                 ALLOWED_DELTAS["ENBD foreign row and bank charges (2026.10.10)"].add(golden_path.stem)
+            elif (ln_old["kind"], ln_new["kind"]) == ("purchase", "cash_advance"):
+                # 2026.10.20: an ATM / cash withdrawal, or the purchase a CASH ADVANCE FEE follows.
+                fee_follows = any(
+                    re.match(r"^CASH ADV(?:ANCE)? FEE\b", (x["merchant_normalized"] or "").upper())
+                    for x in st_new["lines"]
+                    if x["txn_date"] == ln_new["txn_date"]
+                )
+                atm = re.search(r"\bATM\b|\bCASH\s+(?:WITHDRAWAL|WDL)\b", (ln_new["merchant_normalized"] or "").upper())
+                assert fee_follows or atm, ctx
+                ALLOWED_DELTAS["cash withdrawal is a cash advance (2026.10.20)"].add(golden_path.stem)
             elif ln_new["kind"] != expected_kind:
                 assert (ln_old["kind"], ln_new["kind"]) == ("fee", "purchase"), ctx
                 KIND_FEE_TO_PURCHASE[golden_path.stem] = KIND_FEE_TO_PURCHASE.get(golden_path.stem, 0) + 1
