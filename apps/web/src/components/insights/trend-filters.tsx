@@ -1,12 +1,13 @@
 import { useMemo, useState } from "react";
 import { ChevronDown, X } from "lucide-react";
 import type { FilterMeta } from "@/data/overview";
-import { toggleCode, type TrendFilters } from "@/lib/trend-filters";
+import { toggleCode, type Instrument, type TrendFilters } from "@/lib/trend-filters";
 import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dot } from "@/components/ui/display";
 import { Checkbox, Popover, PopoverContent, PopoverTrigger } from "@/components/ui/primitives";
+import { Segmented } from "@/components/ui/segmented";
 import { BankLogo } from "@/components/bank-logo";
 import { SearchBox } from "@/components/activity/filters";
 import { trendFilterChips, trendFilterOptions, withoutChip, type TrendFilterKind, type TrendFilterOption } from "./trend-filter-options";
@@ -47,6 +48,16 @@ export function TrendFilterBar({ filters, meta, onChange }: { filters: TrendFilt
             />
           ))}
         </div>
+        <Segmented<"both" | Instrument>
+          ariaLabel="Card type"
+          value={filters.instrument ?? "both"}
+          onChange={(v) => onChange({ ...filters, instrument: v === "both" ? undefined : v })}
+          options={[
+            { value: "both", label: "All cards" },
+            { value: "credit_card", label: "Credit" },
+            { value: "debit_card", label: "Debit" },
+          ]}
+        />
       </div>
       {chips.length > 0 && (
         <ul className="flex flex-wrap items-center gap-1.5" aria-label="Active filters">

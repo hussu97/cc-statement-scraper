@@ -92,7 +92,7 @@ select set_eq(
     'accounts.credit_limit:authenticated:UPDATE', 'accounts.cycle_close_day:authenticated:UPDATE', 'accounts.nickname:authenticated:UPDATE',
     'accounts.product_name:authenticated:UPDATE', 'accounts.status:authenticated:UPDATE', 'accounts:authenticated:SELECT',
     'anomaly_dismissals:authenticated:SELECT',
-    'audit_events:authenticated:SELECT', 'banks:authenticated:SELECT', 'budgets:authenticated:DELETE',
+    'audit_events:authenticated:SELECT', 'balance_checkpoints:authenticated:SELECT', 'banks:authenticated:SELECT', 'budgets:authenticated:DELETE',
     'budgets:authenticated:INSERT', 'budgets:authenticated:SELECT', 'budgets:authenticated:UPDATE',
     'cards.holder_name:authenticated:UPDATE', 'cards.is_supplementary:authenticated:UPDATE', 'cards.status:authenticated:UPDATE',
     'cards.wallet_name:authenticated:UPDATE',
@@ -122,7 +122,7 @@ select set_eq(
     'statement_lines:authenticated:SELECT', 'statement_recon:authenticated:SELECT', 'statements:authenticated:SELECT',
     'transaction_evidence:authenticated:SELECT', 'transactions.exclude_from_spend:authenticated:UPDATE', 'transactions.manual_category_code:authenticated:UPDATE',
     'transactions.notes:authenticated:UPDATE', 'transactions:authenticated:SELECT', 'v_account_balances:authenticated:SELECT',
-    'v_sms_statements:authenticated:SELECT', 'v_spend:authenticated:SELECT', 'v_statement_payments:authenticated:SELECT',
+    'v_bank_balances:authenticated:SELECT', 'v_cash_flow:authenticated:SELECT', 'v_sms_statements:authenticated:SELECT', 'v_spend:authenticated:SELECT', 'v_statement_payments:authenticated:SELECT',
     'v_transactions:authenticated:SELECT'
   ]::text[],
   'client privileges on public tables match the intended matrix exactly'

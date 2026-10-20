@@ -30,6 +30,7 @@ extension SupabaseLedgerAPI {
             try await client.from("accounts")
                 .select("account_code,bank_code,nickname,product_name,status")
                 .eq("profile_code", value: profileCode)
+                .eq("kind", value: "credit_card")   // card budgets; bank accounts are Phase 2
                 .order("bank_code")
                 .execute()
         }

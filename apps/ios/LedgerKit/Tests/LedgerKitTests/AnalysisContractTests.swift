@@ -55,7 +55,7 @@ struct AnalysisContractTests {
     }
 
     @Test("fixture keys are the SQL's returned columns", arguments: [
-        "daily_spend", "hour_weekday_pattern", "yoy_compare", "fx_spend", "recurring_list",
+        "daily_spend", "hour_weekday_pattern", "yoy_compare", "fx_spend", "recurring_list", "cash_flow",
     ])
     func fixturesMatchSQL(rpc: String) throws {
         let columns = try Self.returnedColumns(of: rpc)

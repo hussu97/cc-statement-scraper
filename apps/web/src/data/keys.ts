@@ -28,6 +28,10 @@ export const keys = {
 
   budgetStatus: (p: string, month: string) => ["p", p, "budgets", "status", month] as const,
 
+  /** Bank balances and cash flow (Phase 2d). */
+  cashPosition: (p: string) => ["p", p, "cash", "position"] as const,
+  cashFlow: (p: string, from: string, to: string) => ["p", p, "cash", "flow", from, to] as const,
+
   accounts: (p: string) => ["p", p, "accounts"] as const,
   cycles: (p: string) => ["p", p, "statements", "cycles"] as const,
   documents: (p: string) => ["p", p, "documents"] as const,
@@ -57,6 +61,7 @@ export type Domain =
   | "sms"
   | "analytics"
   | "budgets"
+  | "cash"
   | "accounts"
   | "statements"
   | "documents"
@@ -76,6 +81,7 @@ export const LEDGER_DOMAINS: Domain[] = [
   "transactions",
   "analytics",
   "budgets",
+  "cash",
   "accounts",
   "statements",
   "reviews",

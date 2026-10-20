@@ -175,6 +175,10 @@ select is((select status || '/' || void_reason from public.transactions where tx
 -- As a re-parse leaves them: an orphaned copy of a statement row, beside the live row.
 select pg_temp.set('dup', pg_temp.loose('2026-09-03', 'CINEMA CITY', 900.00, 'debit', 'orphaned', 'purchase', true, pg_temp.v('sep')));
 select pg_temp.set('dup2', pg_temp.loose('2026-09-03', 'CINEMA CITY', 900.00, 'debit', 'orphaned', 'purchase', true, pg_temp.v('sep')));
+-- Two codes made in the same millisecond can sort either way: 'dup' is the lower one.
+select pg_temp.set('lo', least(pg_temp.v('dup'), pg_temp.v('dup2')));
+select pg_temp.set('dup2', greatest(pg_temp.v('dup'), pg_temp.v('dup2')));
+select pg_temp.set('dup', pg_temp.v('lo'));
 select pg_temp.set('noted', pg_temp.loose('2026-09-15', 'CARD PAYMENT', 400.00, 'credit', 'orphaned', 'payment', true, pg_temp.v('sep')));
 update public.transactions set notes = 'keep me' where txn_code = pg_temp.v('noted');
 select pg_temp.set('alone', pg_temp.loose('2026-09-04', 'NO TWIN', 12.00, 'debit', 'orphaned', 'purchase', true, pg_temp.v('sep')));

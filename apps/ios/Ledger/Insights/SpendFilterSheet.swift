@@ -1,8 +1,8 @@
 import LedgerKit
 import SwiftUI
 
-/// Which spend Monthly spend counts: a merchant search and multi-select
-/// categories, banks and cards. Edits a copy; Done applies it, Clear empties
+/// Which spend Monthly spend counts: a merchant search, the card type (credit,
+/// debit or both) and multi-select categories, banks and cards. Edits a copy; Done applies it, Clear empties
 /// it, a swipe-down drops the edits.
 struct SpendFilterSheet: View {
     let options: SpendFilterOptions?
@@ -26,6 +26,18 @@ struct SpendFilterSheet: View {
                         .submitLabel(.done)
                 } header: {
                     Text("Search")
+                }
+                Section {
+                    Picker("Card type", selection: $draft.instrument) {
+                        ForEach(SpendInstrument.choices, id: \.label) { choice in
+                            Text(choice.label).tag(choice.instrument)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("Card type")
+                } footer: {
+                    Text("Debit-card purchases come from your bank accounts' SMS.")
                 }
                 if let options {
                     OptionSection(title: "Categories", options: options.categories, selected: $draft.categoryCodes,

@@ -63,7 +63,8 @@ struct MainTabs: View {
                                  profileCode: profileCode, canResolve: model.profiles.canWrite,
                                  outboxAlert: model.settings.outboxStatus.staleAlert,
                                  openSettings: { model.tabs.show(.settings) },
-                                 settings: model.settings, statements: model.statements)
+                                 settings: model.settings, statements: model.statements,
+                                 cash: model.screens.cash)
                     // ledger://review (a Shortcut result) pushes Review here.
                     .navigationDestination(isPresented: $tabs.showingReview) {
                         ReviewView(model: model.review, profileCode: profileCode, canResolve: model.profiles.canWrite)

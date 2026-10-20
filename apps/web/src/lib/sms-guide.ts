@@ -12,6 +12,11 @@ import { BRAND_NAME } from "./brand";
 
 /** The single "Message Contains" keyword (LedgerKit `SMSAutomationGuide.keywords`). */
 export const SMS_KEYWORD = "Card";
+/**
+ * The optional second automation's keyword, for bank-account alerts (LedgerKit
+ * `SMSAutomationGuide.accountKeyword`, Phase 2b). ADCB and FAB account alerts never say "Card".
+ */
+export const SMS_ACCOUNT_KEYWORD = "Account";
 /** The App Intent's title (`LogBankSMSIntent.title`). */
 export const SMS_ACTION = "Log Bank SMS";
 /** Opens the Shortcuts app. Only meaningful on iPhone/iPad. */
@@ -166,6 +171,14 @@ export const AUTOMATION_STEPS: GuideStep[] = [
     detail: `Tap *Done* in the top-right corner. The Automation tab now lists “When I get a message containing ${SMS_KEYWORD}”.`,
   },
 ];
+
+/** The optional second automation, shown after the steps above (Phase 2b). */
+export const ACCOUNT_AUTOMATION = {
+  title: "Optional: bank account alerts",
+  detail:
+    `To track a bank account's balance and transfers, create a second automation the same way with *Message Contains* set to *${SMS_ACCOUNT_KEYWORD}*, ` +
+    `then add that account in ${BRAND_NAME}. An alert that says both words is logged once.`,
+};
 
 export const TEST_STEPS: { id: string; detail: string }[] = [
   {

@@ -14,6 +14,7 @@ import {
   Shapes,
   Target,
   Check,
+  Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { formatBadgeCount } from "@/lib/money";
@@ -43,6 +44,7 @@ function useNav(profileCode: string | null): NavItem[] {
     { to: "/", label: "Overview", icon: <LayoutGrid /> },
     { to: "/activity", label: "Activity", icon: <ReceiptText /> },
     { to: "/insights", label: "Insights", icon: <ChartColumnBig /> },
+    { to: "/cash-flow", label: "Cash flow", icon: <Wallet /> },
     { to: "/budgets", label: "Budgets", icon: <Target /> },
     { to: "/cards", label: "Cards & statements", icon: <CreditCard /> },
     { to: "/review", label: "Review", icon: <Inbox />, badge: open || undefined },
