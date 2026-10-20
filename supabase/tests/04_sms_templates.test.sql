@@ -43,10 +43,10 @@ insert into cases values
   'other', 'ADCB card approval prompt (ignored)',
   '{"amount":"46.00","currency":"AED","last4":"9208","merchant":"VOX CINEMAS"}'),
  ('ADCB e', 'ADCBAlert', 'A Cr. transaction of AED 1100.00 on your account number XXX310001 was successful.Available balance is 1105.04.',
-  'debit_card', 'ADCB account credit/debit (ignored)', '{"amount":"1100.00","currency":"AED"}'),
+  'account_credit', 'ADCB account credit', '{"amount":"1100.00","currency":"AED","account_ref":"310001","available":"1105.04"}'),
  ('ADCB f', 'ADCBAlert', 'Debit card XXX9211 linked to acc. XXX320001 used for AED3.50 (+2.49% foreign txn fee) on Sep 11 2026  4:33PM at GOOGLEYOUTUBE M,US. Avl.Bal AED 51.54.',
-  'debit_card', 'ADCB debit card purchase (ignored)',
-  '{"amount":"3.50","currency":"AED","last4":"9211","merchant":"GOOGLEYOUTUBE M,US","date":"2026-09-11","time":"4:33PM"}'),
+  'debit_purchase', 'ADCB debit card purchase',
+  '{"amount":"3.50","currency":"AED","last4":"9211","account_ref":"320001","merchant":"GOOGLEYOUTUBE M,US","date":"2026-09-11","time":"4:33PM","available":"51.54"}'),
  ('ADCB g', 'ADCBAlert', 'Cr.Card XXX9208 Billing alert: Total due to avoid fin. charges: AED172.09. Due date Sep 18 2026; Pay min. AED100.00 by due date to avoid AED241.50 late fee',
   'other', 'ADCB credit card billing alert (ignored)', '{"last4":"9208"}'),
  ('ADCB h', 'ADCBAlert', 'Your request to redeem TPs 5500 at Noon Food was successful on 22/09/2026 18:10:01. TPs balance: 265. Earn more with the TouchPoints app: adcb.com/tpapp',
@@ -60,12 +60,12 @@ insert into cases values
   'purchase', 'FAB credit card purchase (multi-line)',
   '{"amount":"6.00","currency":"USD","last4":"9203","merchant":"INDIGO AIRLINES NEW YORK USA","date":"2026-10-04","time":"10:38"}'),
  ('FAB c', 'FAB', E'Debit Card Purchase\nCard No XXXX1234\nAED 20.00\nCARREFOUR DUBAI\n05/10/26 10:40\nAvl Bal AED 100.00',
-  'debit_card', 'FAB debit card purchase (ignored)',
-  '{"amount":"20.00","currency":"AED","last4":"1234","merchant":"CARREFOUR DUBAI","date":"2026-10-05"}'),
+  'debit_purchase', 'FAB debit card purchase',
+  '{"amount":"20.00","currency":"AED","last4":"1234","merchant":"CARREFOUR DUBAI","date":"2026-10-05","available":"100.00"}'),
  ('FAB d', 'FAB', E'Outward Remittance Debit\nAccount XXXX9221\nAED 2100.00\nDate 02/10/2026\nBalance AED 3644.98',
-  'debit_card', 'FAB outward remittance (ignored)', '{"amount":"2100.00","currency":"AED","date":"2026-10-02"}'),
+  'account_debit', 'FAB outward remittance', '{"amount":"2100.00","currency":"AED","date":"2026-10-02","account_ref":"9221","available":"3644.98"}'),
  ('FAB d2', 'FAB', E'Inward Remittance Credit\nAccount XXXX9221\nAED 500.00\nDate 03/10/2026\nBalance AED 4144.98',
-  'debit_card', 'FAB account alert (ignored, catch-all)', '{}'),
+  'account_credit', 'FAB inward remittance', '{"amount":"500.00","account_ref":"9221","available":"4144.98"}'),
  ('FAB e', 'FAB', 'Dear Customer, your funds transfer request of  AED 2,100.00 to IBAN/Account/Card XXXX9209  has been processed successfully from your account/ card XXXX9221 on 02/10/2026 14:19',
   'other', 'FAB funds transfer (ignored)', '{"amount":"2100.00","currency":"AED","date":"2026-10-02","time":"14:19"}'),
  ('FAB f', 'FAB', 'Your statement of the card ending with 9206 dated 01Oct26 has been sent to you and can also be viewed in the new FAB mobile banking app. Download it from the App Store https://apple.co/FB7qEZ or Google Play https://goo.gl/7dXnNc. The total amount due is AED 515.26. Minimum due is AED 100.00. Due date is 26Oct26',
@@ -191,8 +191,8 @@ select is((select count(*)::int from public.sms_messages where profile_code = pg
           'nothing is left unparsed');
 select is((select ignore_reason from public.sms_messages where sms_code = pg_temp.v('d')::jsonb->>'sms_code'), 'other',
           'approval prompt ignore_reason = other');
-select is((select ignore_reason from public.sms_messages where sms_code = pg_temp.v('e')::jsonb->>'sms_code'), 'debit_card',
-          'account credit ignore_reason = debit_card');
+select is((select ignore_reason from public.sms_messages where sms_code = pg_temp.v('e')::jsonb->>'sms_code'), 'no_bank_account',
+          'an account credit for an account the ledger lacks waits as no_bank_account (Phase 2b)');
 select ok((select amount is null from public.sms_messages where sms_code = pg_temp.v('g')::jsonb->>'sms_code'),
           'an amountless alert is stored without an amount');
 

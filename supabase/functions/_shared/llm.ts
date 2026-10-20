@@ -189,8 +189,29 @@ export function validateSuggestions(raw: unknown, merchantCodes: string[], categ
 
 // ── SMS template fallback ───────────────────────────────────────────────────
 
-export const MSG_KINDS = ["purchase", "preauth", "refund", "reversal", "payment", "declined", "debit_card", "other"];
-export const FIELD_NAMES = ["amount", "currency", "merchant", "last4", "date", "time", "available"] as const;
+export const MSG_KINDS = [
+  "purchase",
+  "preauth",
+  "refund",
+  "reversal",
+  "payment",
+  "declined",
+  "debit_purchase",
+  "account_credit",
+  "account_debit",
+  "debit_card",
+  "other",
+];
+export const FIELD_NAMES = [
+  "amount",
+  "currency",
+  "merchant",
+  "last4",
+  "date",
+  "time",
+  "available",
+  "account_ref",
+] as const;
 
 export const SMS_SYSTEM = [
   "You write parsing templates for bank card SMS alerts. Given one SMS that no existing template matched,",
@@ -202,8 +223,11 @@ export const SMS_SYSTEM = [
   "- Replace variable parts (amounts, merchant, card digits, dates, balances) with captures; keep fixed wording literal.",
   "- amount: digits with optional thousands separators and decimals, e.g. ([0-9,]+(?:\\.[0-9]+)?).",
   "- last4: the card digits shown; date_format is a PostgreSQL to_date format for the date group (e.g. DD/MM/YYYY, DD-MON-YY).",
+  "- account_ref: the bank-account digits shown after the mask (XXX310001 -> 310001); available: the balance or available limit shown.",
   "msg_kind: purchase (completed card spend), preauth (authorisation/hold), refund, reversal, payment (card bill payment),",
-  "declined, debit_card (debit/current account, not a credit card), other (not a card transaction).",
+  "declined, debit_purchase (a debit-card purchase from a bank account), account_credit (money into a bank account:",
+  "salary, transfer in, remittance), account_debit (money out of a bank account: transfer, remittance, standing order),",
+  "debit_card (any other debit-card or account notice), other (not a transaction).",
   "If the SMS is not a card transaction at all (OTP, promotion, balance or service notice), set msg_kind to other",
   "and field_groups.amount and expect.amount to null; the other fields can then be null or a best effort.",
   "expect: the values your template extracts from THIS message (amount as written without separators, currency code,",
