@@ -70,3 +70,105 @@ Home & Furniture / Home Services / Hotels split dropped (too small). Al Jamea tu
   `enqueue_llm_categorize` finds nothing. Script kept out of git (merchant codes).
 - [ ] Push to main (deploys both migrations + worker), then run the backfill, then verify
       `needed_now = 0` and the new category shares in prod.
+
+## 3. Phase 2: bank accounts, balances, debit cards and cash flow (2026-10-20) — awaiting go-ahead
+
+Goal: a ledger can hold current/savings accounts next to its cards, know each account's balance,
+capture debit-card and account SMS, and answer "where did the salary go" without letting transfers
+pollute spend. Touches the schema, the SMS contract and every account reader, so this plan needs the
+user's go-ahead before code (CLAUDE.md §12.1).
+
+**What exists today** (read-only checks on prod, 20 Oct):
+- `accounts.kind` allows only `credit_card`. 37 migrations read `accounts`, and none filters by kind:
+  every reader assumes an account is a card (limit, cycle close day, statements, utilisation).
+- ADCB and FAB templates already parse debit-card purchases, account Cr./Dr. alerts, outward
+  remittances and funds transfers (amount, merchant, available balance), then mark them `ignored`
+  (`process_sms`, DB-34). ENBD, SIB, EIB and Wio have none; Liv and Mashreq have no templates at all.
+- No debit or account SMS has ever reached production: the iOS automation fires only on messages
+  containing "Card", and account alerts don't say "Card". Nothing to backfill; capture starts fresh.
+- `sms_messages.available_limit` already stores an alert's balance figure.
+- `card_transfers` links any debit transaction to any credit transaction (matched by
+  `private.link_card_transfer`), so it can match bank→card repayments too.
+- Status is derived from evidence: SMS-only is `pending` until a statement line posts it. Bank
+  accounts have no statements yet, so that rule has to change for them.
+
+### Decisions for the user (recommendation first)
+1. **Debit-card purchases count as spend**, tagged by instrument, with credit/debit/both filters.
+   They're real purchases; leaving them out undercounts lifestyle spend. The alternative is a separate
+   "debit spend" figure outside `v_spend`, which breaks "one definition of spend" (§1.12).
+2. **Money to family is a flow of its own** (category kind `support`), shown in cash flow and never
+   in spend. Same for investing (kind `saving`).
+3. **Fixed deposits wait for Phase 1 (holdings).** Phase 2 covers current and savings accounts only;
+   a deposit is a holding with a maturity date, not a transacting account.
+4. **Which bank receives the salary?** That account goes first: its debit and account templates,
+   and the first automation.
+
+### 2a. Accounts and balances
+- [ ] Migration: `accounts.kind` check adds `current`, `savings`. New `accounts.account_ref` (the
+      masked suffix banks print, e.g. `810001`), unique per (profile, bank, ref). The card-only columns
+      stay null for these, with a check that `credit_limit`/`cycle_close_day` are null unless
+      `kind = 'credit_card'`.
+- [ ] **Audit every `accounts` reader** (the 37 migrations' current definitions, web `src/data/`,
+      LedgerKit). Card-only readers (utilisation, statements, `v_account_balances`, card budgets,
+      `statement_cycles`, card names) filter `kind = 'credit_card'`. A pgTAP guard fails if a new
+      bank account appears in any card-only RPC.
+- [ ] `balance_checkpoints` (account, `as_of timestamptz`, `balance numeric(14,2)`, source
+      `sms`/`manual`, `sms_code` nullable). Immutable evidence, RLS like every table.
+- [ ] `v_bank_balances` (security_invoker): latest checkpoint plus account transactions after
+      `as_of`; returns `balance_aed`, `as_of` and `is_stale` (older than 7 days).
+- [ ] RPCs: `create_bank_account(profile, bank, kind, ref, nickname)` and
+      `record_balance(account, balance, as_of)`, both owner-only via `private.assert_member`.
+      Update `11_privileges.test.sql`.
+
+### 2b. Capture debit-card and account SMS
+- [ ] `process_sms`: `debit_card` alerts stop being ignored once they resolve to a bank account, by
+      debit-card last4 (cards on a bank account) or by `account_ref`. Unresolved ones stay ignored
+      with a `match_reviews` row, the same as an unknown credit card today.
+- [ ] Split `msg_kind` `debit_card` into `debit_purchase`, `account_credit`, `account_debit` and
+      `transfer_out` so each maps to a transaction kind. Transaction kinds add `transfer_in`,
+      `transfer_out`, `atm_withdrawal`. Content migration re-points the ADCB/FAB templates only
+      while they still hold their seeded `msg_kind` (§1.9).
+- [ ] Templates capture `balance` (into a checkpoint) and `counterparty_ref` (the masked IBAN, account
+      or card a transfer went to). Add the field to the parse contract and the template tests.
+- [ ] `refresh_transaction`: on a non-card account, SMS evidence is final, so `posted`.
+- [ ] iOS: a second automation keyword ("account") with the same action, plus a guide step. A
+      message holding both words fires both automations, with two `client_msg_id`s; only the card
+      matcher treats a same-`body_hash` twin as a duplicate today, so ingest must drop it for every
+      kind (pgTAP). New banks' formats come through the existing
+      unparsed → proposed-format → Review flow (PAR-14).
+- [ ] pgTAP for each template example and for account resolution; LedgerKit test for the guide text.
+
+### 2c. Classification and cash flow
+- [ ] `categories.kind` adds `saving` and `support`. `v_spend` excludes them (as it does transfer,
+      ignore and income) and gains an `instrument` column: `credit_card` / `debit_card`.
+- [ ] `payees`: a `counterparty_ref` mapped to a name and a category ("…4301 → Parents → Family
+      support"). Set from a transfer row in Activity, then applied by categorisation like a merchant.
+- [ ] Repayments: a `transfer_out` whose `counterparty_ref` is one of the ledger's own card last4s, or
+      whose amount and date match a card payment, is linked through `card_transfers` and counts once,
+      as a move. `link_card_transfer` learns the bank side.
+- [ ] `v_cash_flow` and `cash_flow(profile, month)`: income, spend (by instrument), support,
+      saving, card repayments, cash withdrawals, internal moves, net. Computed in SQL (§2.2).
+- [ ] Analytics RPCs take an optional `p_instruments`; defaults keep today's numbers until the web
+      and iOS filters ship, so nothing shifts silently.
+
+### 2d. Screens and insights
+- [ ] Web and iOS: an Accounts section (balance, "as of", update balance), a Cash flow screen for the
+      month, an instrument filter on spend, and Overview's cash tile. Loading, empty and failed
+      states for each (§4.3).
+- [ ] Insights: salary not received by the usual day, a stale balance, a balance that disagrees with
+      the computed one (missed SMS), cash withdrawals, and support/saving below the plan (once
+      Phase 3 adds plans).
+
+### Verify and ship
+- [ ] `supabase db reset && supabase test db`, `pnpm db:types`, `deno test`, web tests, `swift test`,
+      `pnpm check`. Run it: local stack, a fixture ADCB account SMS through `ingest-sms`, then look at
+      Accounts and Cash flow in the browser and the simulator.
+- [ ] Docs: ARCHITECTURE (accounts, balances, SMS kinds, cash flow), README (screens, automation),
+      `docs/contracts` if the SMS fields change, CHANGELOG.
+- [ ] One PR per sub-phase (2a, then 2b and 2c, then 2d). Each merge to main deploys
+      migrations and functions, so ask before each one.
+
+**Risks.** The account-reader audit is the big one: a missed card-only reader shows a bank account
+with "0% utilisation" or a statement cycle. The guard test catches new readers but not misreads, so
+2a ships alone and gets a full click-through. A second automation keyword double-fires on a message
+that contains both words; 2b's same-text dedupe must land with it.
