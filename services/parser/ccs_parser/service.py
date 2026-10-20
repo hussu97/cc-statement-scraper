@@ -19,7 +19,7 @@ from ccs_parser.detection import detect_bank_code
 from ccs_parser.domain.parsing.models import ParserError
 from ccs_parser.domain.statements.identity import resolve_statement_identity
 from ccs_parser.domain.statements.types import ParsedLine, ParsedStatement
-from ccs_parser.kinds import map_kind
+from ccs_parser.kinds import map_kind, pair_cash_advances
 from ccs_parser.limits import check_document_limits
 from ccs_parser.parser_adapter import parse_statement_pdf
 from ccs_parser.places import separate_glued_place
@@ -134,7 +134,7 @@ def _is_pdf_library_error(exc: BaseException) -> bool:
 # ---------------------------------------------------------------- building
 
 
-def _line_out(line: ParsedLine) -> dict[str, Any]:
+def _line_out(line: ParsedLine, kind: str) -> dict[str, Any]:
     if line.fingerprint is None:
         raise ValueError("legacy parser produced a line without a fingerprint")
     return {
@@ -149,12 +149,19 @@ def _line_out(line: ParsedLine) -> dict[str, Any]:
         "amount_aed": money_or_none(line.amount_aed),
         "fx_rate": fx_rate(line.fx_rate_to_aed, line.currency_original),
         "direction": line.direction,
-        "kind": map_kind(line.transaction_kind, line.merchant_normalized, line.direction),
+        "kind": kind,
         "country_code": normalize_country_code(line.country_code),
         "card_last4": _card(line.card_last4),
         "card_holder": line.card_holder,
         "legacy_fingerprint": line.fingerprint,
     }
+
+
+def _lines_out(lines: list[ParsedLine]) -> list[dict[str, Any]]:
+    """Lines in statement order (``line_no`` is the row index), kinds paired across rows."""
+    kinds = [map_kind(line.transaction_kind, line.merchant_normalized, line.direction) for line in lines]
+    kinds = pair_cash_advances(lines, kinds)
+    return [_line_out(line, kind) for line, kind in zip(lines, kinds, strict=True)]
 
 
 def _statement_out(
@@ -197,7 +204,7 @@ def _statement_out(
         "totals": totals_out,
         "warnings": warnings,
         "metadata": metadata,
-        "lines": [_line_out(line) for line in st.lines],
+        "lines": _lines_out(st.lines),
     }
 
 

@@ -117,6 +117,10 @@ Field rules:
 - `totals.opening_balance` and `totals.closing_balance` are **signed** decimal strings: positive = amount owed, negative = card in credit (e.g. `"-1579.06"`). All other totals (`total_debits`, `total_credits`, `min_due`, `credit_limit`) are absolute.
 - `lines[].direction` is `debit` or `credit`. Sign normalisation happens in the parser; SIB history is inverted at source.
 - `lines[].kind` is one of `purchase | refund | payment | fee | interest | cash_advance | adjustment`.
+  A cash withdrawal is `cash_advance` (since 2026.10.20): a descriptor with `CASH ADV`, `ATM`,
+  `CASH WITHDRAWAL` or `CASH WDL`, and the debit purchase that a `CASH ADVANCE FEE` line follows on
+  the same card and date with only fee/interest lines between (an ATM abroad prints as its bank's
+  name, e.g. FAB `DTBKEN NAIROBI KEN`).
 - `amount_aed` is null when the bank does not print the AED amount (e.g. SIB history foreign rows).
 - MASHREQ foreign rows (`<merchant> <ref> MYR 500.00 @0.9400 470.00`) are split into
   `currency_original`, `amount_original` and `fx_rate` (the printed rate); `description_raw` is the
