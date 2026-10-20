@@ -8,6 +8,8 @@ import {
   PRIVACY_NOTE,
   SMS_ACTION,
   SMS_KEYWORD,
+  SMS_ACCOUNT_KEYWORD,
+  ACCOUNT_AUTOMATION,
   TEST_STEPS,
   TROUBLESHOOTING,
   WHY_MANUAL,
@@ -152,6 +154,8 @@ describe("matches the iOS app", () => {
   it("uses LedgerKit's keyword and the intent's title", () => {
     const guide = readFileSync(`${IOS}/LedgerKit/Sources/LedgerKit/Screens/SettingsModel.swift`, "utf8");
     expect(guide).toContain(`public static let keywords = ["${SMS_KEYWORD}"]`);
+    expect(guide).toContain(`public static let accountKeyword = "${SMS_ACCOUNT_KEYWORD}"`);
+    expect(ACCOUNT_AUTOMATION.detail).toContain(`*${SMS_ACCOUNT_KEYWORD}*`);
     const intent = readFileSync(`${IOS}/Ledger/Intents/LogBankSMSIntent.swift`, "utf8");
     expect(intent).toContain(`static let title: LocalizedStringResource = "${SMS_ACTION}"`);
     expect(intent).toMatch(/@Parameter\(title: "Message"/);

@@ -19,6 +19,7 @@ export interface SpendFilterArgs {
   p_bank_codes?: string[];
   p_card_codes?: string[];
   p_q?: string;
+  p_instruments?: string[];
 }
 
 /**
@@ -35,6 +36,7 @@ export function spendFilterArgs(f: TrendFilters | undefined): SpendFilterArgs {
   if (f.cards.length) out.p_card_codes = [...f.cards].sort();
   const q = f.q?.trim();
   if (q) out.p_q = q;
+  if (f.instrument) out.p_instruments = [f.instrument];
   return out;
 }
 

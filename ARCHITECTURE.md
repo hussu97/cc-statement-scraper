@@ -102,6 +102,7 @@ Conventions (enforced by pgTAP guards; see CLAUDE.md §1):
 auth.users ─< profile_members >─ profiles ─┬─ profile_state (rules_version)
                                            ├─ service_tokens (sha256 only, scopes)
                                            ├─ accounts ─< cards           (banks: global)
+                                           │      └─< balance_checkpoints (bank accounts)
                                            ├─ documents ─< statements ─< statement_lines
                                            ├─ sms_messages ──> sms_templates (global, per bank)
                                            ├─ transactions ─< transaction_evidence >─ statement_lines | sms_messages
@@ -306,8 +307,18 @@ or `failed` with `reason = error:<sqlstate>` when processing raised (the message
    apply; it never raises.
    - **No template matches:** the message is `unparsed` and an `sms_fallback` job is enqueued.
    - **`other` / `debit_card`:** the message is `ignored`. Approval prompts, due reminders,
-     logins and debit-card or account alerts are seeded at priority 900+ so they never reach
-     the LLM.
+     logins and the debit-card and account alerts no template reads yet are seeded at priority
+     900+ so they never reach the LLM.
+   - **`debit_purchase` / `account_credit` / `account_debit`** (Phase 2b): bank-account alerts.
+     They resolve to a bank account, never a card account: the debit card on it, else the
+     account the alert names (`account_ref` digits matched from the right), else, when the alert
+     names none, the bank's one active bank account. A debit card seen for the first time is
+     registered on that account (unless a card of that bank already has its digits). No account:
+     `ignored` with `ignore_reason = 'no_bank_account'`, re-run when `create_bank_account` adds
+     one (`private.reprocess_bank_sms`). The balance an alert prints becomes a
+     `balance_checkpoints` row (`source = 'sms'`). They become `purchase`, `transfer_in` and
+     `transfer_out` transactions, `posted` straight away (a bank account has no statement to
+     wait for). A debit purchase counts as spend; transfers don't (`v_spend`'s kind list).
    - **`declined`:** stored and ignored.
 2. The template's date and time give `event_at`, otherwise `received_at`; a template date more
    than 7 days from `received_at` is a DD/MM misread and falls back to `received_at`
@@ -316,7 +327,8 @@ or `failed` with `reason = error:<sqlstate>` when processing raised (the message
    - **Unknown card:** an `unknown_card` review opens. Resolving it registers the card and
      re-processes every message waiting on it. A statement that registers the card does the
      same at the end of `ingest_parsed_document` (`private.reprocess_waiting_sms`).
-3. `match_sms` runs for purchase, preauth, refund, reversal and payment messages.
+3. `match_sms` runs for purchase, preauth, refund, reversal and payment messages, and for the
+   three bank-account kinds; its step 1 drops a repeat of the same alert for all of them.
 
 Adding a live template, activating one, or changing an active one's pattern, priority or scope
 re-runs the unparsed/failed messages its sender pattern (and scope) reaches, newest first, 500 at
@@ -546,10 +558,29 @@ repository holds no real pattern (tests use a fake token).
 ## 6. Analytics and insights
 
 There is **one definition of spend**: `public.v_spend` (`security_invoker`). It counts debit
-purchases, fees, interest and cash advances, minus refunds. It excludes payments, transfer,
-ignore and income categories, void and orphaned transactions, and anything marked
-`exclude_from_spend`. Buckets use `txn_date`, a Dubai date. Every analytics RPC builds on it.
-Clients render results and never re-derive money.
+purchases, fees, interest and cash advances, minus refunds. It excludes payments, transfers
+in and out, transfer, ignore, income, saving and support categories, void and orphaned
+transactions, and anything marked `exclude_from_spend`. Each row carries `instrument`
+(`credit_card` / `debit_card`, from its account); `spend_series` and `spend_breakdown` take
+`p_instruments` (null = both). Buckets use `txn_date`, a Dubai date. Every analytics RPC builds
+on it. Clients render results and never re-derive money.
+
+**Cash position** (Phase 2d) is `cash_position(profile)`: every active bank account with its `v_bank_balances` balance, as-of, source and staleness, the AED total and whether it is complete; Overview's Cash tile and the Accounts lists render it. `filter_meta` lists bank accounts too (cards first, with `kind` and `account_ref`).
+
+**Cash flow** (Phase 2c) is `public.v_cash_flow`: every row of `v_spend` as `spend`, plus each
+bank-account transfer by flow: `income` (filed under an income category such as Salary),
+`money_in`, `internal_in`/`internal_out` (a Transfers category), `card_repayment` (paired with a
+card payment through `card_transfers`: same AED amount within 3 days, so paying a card from the
+bank counts once), `support`, `saving`, `spend_transfer` (a transfer filed under a spend or fee
+category, such as rent) and `money_out`. `cash_flow(profile, from, to)` sums them per month and
+adds `net` = money in − spend − spend by transfer − support − saving − unfiled out; card
+repayments and internal moves are settlement and never change it. Payees are category rules: a
+rule on kind, amount and bank ("ADCB transfer out of 23,700 → Family support") files a transfer
+that names no counterparty. An unfiled transfer is a move between the ledger's own accounts
+(`internal_in`/`internal_out`) when another of its bank accounts has the opposite transfer of the
+same AED amount within 3 days, or when a `transfer_notice` SMS (FAB's funds-transfer confirmation)
+for it names one of its bank accounts' digits (`parsed_fields.counterparty_ref`). FAB's "Salary
+Credit" alert is an `account_credit` described SALARY CREDIT, which a seed rule files under Salary.
 
 There is likewise **one definition of what a card owes**: `public.v_account_balances`
 (`security_invoker`). A sum of transactions cannot know the balance carried in before the first
@@ -565,6 +596,18 @@ document, so each account is anchored on a balance the bank printed, the latest 
 
 An SMS statement anchor has no lines to say what it covers, so the activity added to it is by
 date (after the statement date, plus charges dated on it that are still pending), not by `stmt_code`.
+
+**Bank accounts** (Phase 2a, `20261020110310`). `accounts.kind` is `credit_card`, `current` or
+`savings`. A bank account has an `account_ref` (the digits a bank prints after the mask,
+`XXX310001` → `310001`, unique per profile and bank) and never a credit limit or cycle close day
+(check constraint). Its balance is `public.v_bank_balances`: the latest `balance_checkpoints` row
+(manual through `record_balance` now, read from SMS in 2b) plus the account's live transactions
+dated after it, in the account's currency, with `is_stale` after 7 days and null with no
+checkpoint. Checkpoints are evidence: never updated, a newer one supersedes. Card-only readers
+(`v_account_balances`, `overview`, `filter_meta`, `resolve_review`, the "the bank has one active
+account" fallbacks in SMS and statement resolution, and `merge_accounts`) filter
+`kind = 'credit_card'`, and `60_bank_accounts.test.sql` lists every function that reads
+`accounts`, so a new reader fails until it is classified. Plan: `tasks/todo.md` §3.
 
 `overview` carries each account's `outstanding_aed` and anchor, and the profile's
 `outstanding` (active accounts), `outstanding_complete` (every account anchored, every AED
@@ -804,7 +847,10 @@ iOS gives apps no access to SMS. The supported route is **one** Shortcuts person
 *Message → Message contains "Card" → Run Immediately, Notify When Run **on** → Log Bank SMS*
 (Message = Shortcut Input's Content, Sender = Shortcut Input's Sender). "Card" appears in every
 ADCB, FAB, ENBD, SIB and EIB credit-card purchase, refund and decline format in the template
-seed, and Wio's says "card" in lower case; a single keyword means each alert fires once. Settings → *Set up SMS capture* walks through it
+seed, and Wio's says "card" in lower case; a single keyword means each alert fires once.
+Bank-account alerts (ADCB "Cr./Dr. transaction … account number", FAB remittances) never say
+"Card", so an optional second automation on "Account" catches them (Phase 2b); a message saying
+both is sent twice and the server drops the repeat (`match_sms` step 1). Settings → *Set up SMS capture* walks through it
 and shows "Last captured" and a "Send test" button. Whether Shortcuts' "contains" is
 case-insensitive (the ENBD refund and every Wio payment say "card") still needs a real-device check.
 

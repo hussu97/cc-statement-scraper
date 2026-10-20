@@ -15,6 +15,8 @@ export const CATEGORY_KINDS = [
   { value: "transfer", label: "Transfer" },
   { value: "fee", label: "Fee" },
   { value: "ignore", label: "Ignore" },
+  { value: "support", label: "Family support" },
+  { value: "saving", label: "Saving & investing" },
 ] as const;
 
 export const MATCH_TYPES = [
@@ -448,6 +450,8 @@ export const TXN_KINDS = [
   { value: "interest", label: "Interest" },
   { value: "cash_advance", label: "Cash advance" },
   { value: "adjustment", label: "Adjustment" },
+  { value: "transfer_in", label: "Transfer in" },
+  { value: "transfer_out", label: "Transfer out" },
 ] as const;
 
 export const DIRECTIONS = [

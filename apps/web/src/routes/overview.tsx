@@ -4,7 +4,7 @@ import { ArrowRight, ChevronLeft, ChevronRight, Inbox, Lightbulb } from "lucide-
 import { useActiveProfile } from "@/data/profile";
 import { accountLabel, lastCardAlertLabel, sortInsights, useDismissInsight, useInsights, useOverview, type Overview, type OverviewAccount } from "@/data/overview";
 import { evidenceBadge } from "@/data/transactions";
-import { addMonths, daysBetween, formatDate, formatDateTime, formatMonth, monthEnd, monthStart, todayDubai } from "@/lib/dates";
+import { addMonths, daysBetween, formatDate, formatDateTime, formatMonth, formatRelative, monthEnd, monthStart, todayDubai } from "@/lib/dates";
 import { formatChange, formatPercent, formatTotal, toAmount } from "@/lib/money";
 import { balanceAnchorNote, formatOutstanding, outstandingCaveat } from "@/lib/balances";
 import { dueBadge, paidNote } from "@/lib/dues";
@@ -21,6 +21,8 @@ import { MonthlySpendCard } from "@/components/overview/monthly-spend";
 import { SetupChecklistCard } from "@/components/overview/setup-checklist";
 import { isEmptyLedger } from "@/lib/setup-checklist";
 import { BankLogo } from "@/components/bank-logo";
+import { useCashPosition } from "@/data/cash";
+import { cashCaveat } from "@/lib/cash-flow";
 
 export function OverviewPage() {
   const { profile_code } = useActiveProfile();
@@ -95,7 +97,7 @@ export function OverviewPage() {
 
       <MonthlySpendCard profileCode={profile_code} month={month} />
 
-      <AccountsPanel overview={q.data} loading={q.isLoading} error={q.isError ? q.error : null} retry={() => void q.refetch()} />
+      <AccountsPanel profileCode={profile_code} overview={q.data} loading={q.isLoading} error={q.isError ? q.error : null} retry={() => void q.refetch()} />
 
       <Card>
         <CardHeader title="Recent activity" action={<Link to="/activity" className="tap inline-flex items-center gap-1 text-[13px] text-accent hover:underline">All activity <ArrowRight className="size-3.5" /></Link>} />
@@ -250,14 +252,17 @@ function InsightsPanel({ profileCode }: { profileCode: string }) {
   );
 }
 
-function AccountsPanel({ overview, loading, error, retry }: { overview: Overview | undefined; loading: boolean; error: unknown; retry: () => void }) {
+function AccountsPanel({ profileCode, overview, loading, error, retry }: { profileCode: string; overview: Overview | undefined; loading: boolean; error: unknown; retry: () => void }) {
   return (
     <section aria-labelledby="cards-title">
       <div className="mb-3 flex items-center justify-between">
         <h2 id="cards-title" className="text-[15px] font-semibold text-ink">Cards</h2>
         <Link to="/cards" className="tap text-[13px] text-accent hover:underline">Cards & statements</Link>
       </div>
-      {overview && overview.accounts.length > 0 && <OwedNow overview={overview} />}
+      <div className="mb-3 flex flex-wrap items-baseline gap-x-8 gap-y-2 empty:hidden">
+        {overview && overview.accounts.length > 0 && <OwedNow overview={overview} />}
+        <CashTile profileCode={profileCode} />
+      </div>
       {loading ? (
         <div className="grid gap-4 md:grid-cols-2"><Skeleton className="h-40 rounded-lg" /><Skeleton className="h-40 rounded-lg" /></div>
       ) : error || !overview ? (
@@ -282,10 +287,37 @@ function AccountsPanel({ overview, loading, error, retry }: { overview: Overview
 function OwedNow({ overview: o }: { overview: Overview }) {
   const caveat = outstandingCaveat(o.outstanding_complete, o.accounts.reduce((n, a) => n + a.balance_unpriced_count, 0));
   return (
-    <p className="mb-3 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm text-muted">
+    <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm text-muted">
       <span>Owed now</span>
       <span className="tabular font-medium text-ink">{formatOutstanding(o.outstanding, o.outstanding_has_estimate)}</span>
       {caveat && <span className="text-[12px] text-subtle">{caveat}</span>}
+    </p>
+  );
+}
+
+/**
+ * Cash in the ledger's bank accounts (public.cash_position), beside Owed now; nothing when the
+ * ledger has no bank account, so a card-only ledger looks as it did.
+ */
+function CashTile({ profileCode }: { profileCode: string }) {
+  const q = useCashPosition(profileCode);
+  if (q.isLoading) return <Skeleton className="h-5 w-40" />;
+  if (q.isError) {
+    return (
+      <p className="text-sm text-muted">
+        Cash <span className="text-[12px] text-subtle">couldn't load.</span>{" "}
+        <button type="button" className="tap text-[12px] text-accent hover:underline" onClick={() => void q.refetch()}>Try again</button>
+      </p>
+    );
+  }
+  if (!q.data || q.data.accounts.length === 0) return null;
+  const caveat = cashCaveat(q.data);
+  return (
+    <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm text-muted">
+      <Link to="/cash-flow" className="tap hover:text-accent hover:underline">Cash</Link>
+      <span className="tabular font-medium text-ink">{formatTotal(q.data.total_aed)}</span>
+      {q.data.as_of && <span className="text-[12px] text-subtle">as of {formatRelative(q.data.as_of)}</span>}
+      {caveat && <span className="text-[12px] text-warn">{caveat}</span>}
     </p>
   );
 }

@@ -1,5 +1,80 @@
 # Changelog
 
+## FAB salary and moves between your own accounts — 2026-10-20
+
+### Backend (Supabase)
+
+- **feat** FAB's "Salary Credit" alert is captured (with its balance) and a seed rule files it under Salary.
+- **feat** FAB's funds-transfer confirmation becomes a `transfer_notice`: it names where the money went (`counterparty_ref`) and never becomes a transaction. A transfer to one of the ledger's own bank accounts (named by the notice, or matched by the other account's same-amount transfer within 3 days) shows in cash flow as a move, not as money out or new money in.
+- **fix** A bank alert waiting for its account is reported as such, not as "not a card purchase". Rules can test the transfer kinds.
+
+## Cash flow and bank account screens (Phase 2d) — 2026-10-20
+
+### Backend (Supabase)
+
+- **feat** `cash_position()`: each bank account's balance, as-of and staleness, and the AED total. `filter_meta` lists bank accounts again, with their kind and digits.
+
+### Web
+
+- **feat** Cash flow page (`/cash-flow`): bank accounts with balances, Update balance and Add bank account; the month's money in, committed, spent, unfiled out and moves, the net, and six months of net. Overview gets a Cash tile when the ledger has a bank account. Activity's account filter names bank accounts ("ADCB · Current ··· 310001").
+
+### iOS
+
+- **feat** Cash & accounts screen from a new Overview Cash tile: balances, Update balance, Add bank account, the month's cash flow and six months of net. The spend filter sheet gains All cards / Credit / Debit.
+
+## Cash flow, saving and support, card type filter (Phase 2c) — 2026-10-20
+
+### Backend (Supabase)
+
+- **feat** Category kinds `saving` and `support`: money to family and to savings or investments is its own flow, never spend. Every ledger gets Salary, Transfers, Family support and Savings & investing (added only where a category of that name is missing).
+- **feat** `v_spend` carries `instrument` (credit or debit card); `spend_series` and `spend_breakdown` take `p_instruments`.
+- **feat** Paying a card from a bank account counts once: a bank transfer out pairs with the card payment of the same amount within 3 days (`card_transfers`).
+- **feat** `v_cash_flow` and `cash_flow()`: each month's money in and out by flow (income, spend, support, saving, card repayments, internal moves, unfiled money in and out) and the net. Payees are category rules on kind, amount and bank.
+
+### Web
+
+- **feat** Insights → Trends: an All cards / Credit / Debit switch (`?inst=`). Category editor offers Family support and Saving & investing.
+- **fix** Insights no longer crashes on an invalid `?range=` (or any dropped search key): the route returns dropped keys as undefined.
+
+### iOS
+
+- **fix** Spend filters leave support and saving categories out, as they do transfers.
+
+## Debit-card and bank-account SMS (Phase 2b) — 2026-10-20
+
+### Backend (Supabase)
+
+- **feat** Debit-card purchases and bank-account alerts become transactions on the ledger's bank accounts. New SMS kinds `debit_purchase`, `account_credit` and `account_debit` map to `purchase`, `transfer_in` and `transfer_out`, posted straight away. New templates: ADCB account credit and debit, ADCB and FAB debit-card purchases, FAB outward and inward remittances. They read the account digits (`account_ref`) and the printed balance, which becomes a balance checkpoint. The seeded "(ignored)" versions are switched off while they still hold their seeded pattern.
+- **feat** An alert resolves to the debit card's account, else the account it names, else the bank's only bank account. A new debit card is registered on its account. An alert for an account the ledger doesn't have waits (`no_bank_account`) and is re-run when the account is added.
+- **feat** A debit-card purchase counts as spend; transfers in and out don't. The same alert sent twice (two automations) is dropped as a repeat.
+- **feat** The LLM format proposer knows the new kinds and the `account_ref` field.
+
+### Web
+
+- **feat** SMS guide: an optional second automation on "Account" for bank-account alerts. Rules can test the transfer kinds.
+
+### iOS
+
+- **feat** SMS guide step 7: an optional second automation on "Account" for bank-account alerts.
+
+## Bank accounts and balances (Phase 2a) — 2026-10-20
+
+### Backend (Supabase)
+
+- **feat** A ledger can hold current and savings accounts beside its cards (`accounts.kind`, `account_ref`), added with the owner-only `create_bank_account`. `record_balance` records a balance (a decimal string, now or dated earlier) as a `balance_checkpoints` row, and `v_bank_balances` gives each bank account's balance: the latest checkpoint plus its transactions after it, marked stale after 7 days. No screens yet (Phase 2d) and no SMS capture yet (2b).
+- **fix** Every reader that assumes an account is a card now says so: card outstanding, Overview's card list, the filter options, review resolution and the "bank has one account" fallbacks in SMS and statement matching skip bank accounts, and `merge_accounts` refuses to merge a bank account with a card. `60_bank_accounts.test.sql` lists every function that reads `accounts`, so a new one fails the build until it is classified.
+
+### Web
+
+- **fix** Card screens (card names, budgets, account comparison, review) list card accounts only.
+
+### iOS
+
+- **fix** Budgets, account comparison and the review picker list card accounts only.
+
+### Docs
+
+- **docs** ARCHITECTURE.md: bank accounts and `v_bank_balances`; `tasks/todo.md` §3: the Phase 2 plan.
 ## Financial audit data-quality fixes — 2026-10-20
 
 ### Parser

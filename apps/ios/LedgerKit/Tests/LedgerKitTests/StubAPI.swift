@@ -233,6 +233,37 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         return accountRows
     }
     func recurringList(profileCode: String) async throws -> [RecurringCharge] { [] }
+    // MARK: Cash (Phase 2d): scripted answers and each write
+    /// `cash_position`'s answer; nil throws (a server before Phase 2d, offline).
+    var cashPositionFixture: CashPosition?
+    var cashFlowRows: [CashFlowRow] = []
+    var cashFlowError: LedgerAPIError?
+    private(set) var cashFlowRanges: [(from: CalendarDay, to: CalendarDay)] = []
+    /// Thrown by `recordBalance` / `createBankAccount` when set.
+    var cashWriteError: LedgerAPIError?
+    private(set) var recordedBalances: [(profile: String, account: String, balance: String)] = []
+    private(set) var createdBankAccounts: [(bank: String, kind: BankAccountKind, ref: String, nickname: String?)] = []
+    func cashPosition(profileCode: String) async throws -> CashPosition {
+        count("cashPosition")
+        guard let cashPositionFixture = lock.withLock({ cashPositionFixture }) else { throw LedgerAPIError.network("-1009") }
+        return cashPositionFixture
+    }
+    func cashFlow(profileCode: String, from: CalendarDay, to: CalendarDay) async throws -> [CashFlowRow] {
+        count("cashFlow")
+        lock.withLock { cashFlowRanges.append((from, to)) }
+        if let cashFlowError { throw cashFlowError }
+        return cashFlowRows
+    }
+    func recordBalance(profileCode: String, accountCode: String, balance: String) async throws {
+        if let cashWriteError { throw cashWriteError }
+        lock.withLock { recordedBalances.append((profileCode, accountCode, balance)) }
+    }
+    func createBankAccount(profileCode: String, bankCode: String, kind: BankAccountKind, accountRef: String,
+                           nickname: String?) async throws -> String {
+        if let cashWriteError { throw cashWriteError }
+        lock.withLock { createdBankAccounts.append((bankCode, kind, accountRef, nickname)) }
+        return "acc_new"
+    }
     // MARK: Analysis (PAR-12): scripted answers, and each call's arguments
     var dailyRows: [DailySpend] = []
     var hourRows: [HourWeekdaySpend] = []

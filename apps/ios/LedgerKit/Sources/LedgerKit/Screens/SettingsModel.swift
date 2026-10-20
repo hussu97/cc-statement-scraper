@@ -142,6 +142,11 @@ public enum SMSAutomationGuide {
     /// action two or three times for the same message.
     public static let keywords = ["Card"]
 
+    /// The keyword of the optional second automation, for bank-account alerts (Phase 2b): ADCB's
+    /// "Cr./Dr. transaction … on your account number" and FAB's "Remittance … Account" never say
+    /// "Card". A message saying both fires both automations; the server drops the repeat.
+    public static let accountKeyword = "Account"
+
     public static let steps: [Step] = [
         Step(number: 1, title: "Open Shortcuts → Automation",
              detail: "Tap + (New Automation) and choose Message."),
@@ -155,6 +160,8 @@ public enum SMSAutomationGuide {
              detail: "Tap Message and choose Shortcut Input, then Content. Set Sender to Shortcut Input's Sender."),
         Step(number: 6, title: "Check it",
              detail: "Tap Send test below to check the action and your sign-in. After your next card purchase, “Last captured” shows what happened, and Recent captures shows the sender and length the Shortcut passed."),
+        Step(number: 7, title: "Optional: bank account alerts",
+             detail: "To track a bank account's balance and transfers, add a second automation the same way with Message Contains set to Account, then add that account in Ledger. Alerts that say both words are logged once."),
     ]
 
     /// One picture of the Shortcuts editor, under step 5 (IOS-06g).

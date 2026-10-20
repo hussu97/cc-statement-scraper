@@ -5,6 +5,7 @@ import { must, mustList } from "./api";
 import { formatRelative, todayDubai } from "@/lib/dates";
 import type { BalanceAnchor } from "@/lib/balances";
 import type { PaymentStatus } from "@/lib/dues";
+import { bankAccountLabel } from "@/lib/cash-flow";
 
 export interface OverviewCategory {
   category_code: string | null;
@@ -230,7 +231,15 @@ export function useDismissInsight(profileCode: string) {
 }
 
 export interface FilterMeta {
-  accounts: { account_code: string; bank_code: string; nickname: string | null; product_name: string | null }[];
+  /** Cards first, then bank accounts (Phase 2d). `kind` and `account_ref` are absent from an older server. */
+  accounts: {
+    account_code: string;
+    bank_code: string;
+    nickname: string | null;
+    product_name: string | null;
+    kind?: string;
+    account_ref?: string | null;
+  }[];
   cards: { card_code: string; account_code: string; bank_code: string; last4: string; is_supplementary: boolean }[];
   categories: {
     category_code: string;
@@ -252,7 +261,9 @@ export function useFilterMeta(profileCode: string) {
   });
 }
 
-/** Display label for an account: nickname, else "BANK product". */
-export function accountLabel(a: { bank_code: string; nickname?: string | null; product_name?: string | null }): string {
-  return a.nickname?.trim() || [a.bank_code, a.product_name].filter(Boolean).join(" · ");
+/** Display label for an account: nickname, else "BANK product" (a bank account: "BANK · Current ··· 310001"). */
+export function accountLabel(a: { bank_code: string; nickname?: string | null; product_name?: string | null; kind?: string | null; account_ref?: string | null }): string {
+  if (a.nickname?.trim()) return a.nickname.trim();
+  if (a.kind === "current" || a.kind === "savings") return `${a.bank_code} · ${bankAccountLabel(a)}`;
+  return [a.bank_code, a.product_name].filter(Boolean).join(" · ");
 }

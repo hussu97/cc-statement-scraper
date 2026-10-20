@@ -47,6 +47,7 @@ create temp table fx as select $sms_otp_fixture${
  "not_otp": [
   "تم تحصيل رسوم بقيمة 50.00 درهم لمرة واحدة على بطاقتك المنتهية بـ 1234",
   "A Cr. transaction of AED 1100.00 on your account number XXX310001 was successful.Available balance is 1105.04.",
+  "A Dr. transaction of AED 250.00 on your account number XXX310001 was successful.Available balance is 855.04.",
   "A new login to Mobile/Online Banking has been authorised on your device.",
   "A payment on your card needs confirmation. Please check your Emirates NBD app.",
   "A txn on your Covered Card XXXX9213 at EMIRATES for INR 28,400.00 on 02-10-2026 09:36 is approved. Your available balance is AED 7,512.13",
@@ -75,6 +76,9 @@ create temp table fx as select $sms_otp_fixture${
   "Login detected on FAB Mobile",
   "October statement due on 26/10/2026\nCredit Card Purchase\nCard No XXXX9203\nUSD 6.00\nINDIGO AIRLINES NEW YORK USA\n04/10/26 10:38",
   "Outward Remittance Debit\nAccount XXXX9221\nAED 2100.00\nDate 02/10/2026\nBalance AED 3644.98",
+  "Inward Remittance Credit\nAccount XXXX9221\nAED 500.00\nDate 03/10/2026\nBalance AED 4144.98",
+  "Salary Credit\nAccount XXXX9221\nAED 41250.00\n28/09/2026\nBalance AED 44481.07",
+  "Dear Customer, your funds transfer request of  AED 50,000.00 to IBAN/Account/Card XXXX9204  has been processed successfully from your account/ card XXXX9221 on 28/09/2026 13:58",
   "Payment for Credit Card ending 9219 is due on 22/09/26. Total Amt - AED 48.77; Min Amt - AED 48.77. Please pay by due date to avoid charges.",
   "Payment of AED 12.50 to noon one with Credit Card ending 9219. Avl Cr. Limit is AED 19,938.73.",
   "Payment of AED 42.00 to Noon with Credit Card ending 9219. Avl Cr. Limit is AED 19,951.23.",

@@ -59,6 +59,7 @@ describe("spendFilterArgs", () => {
       p_q: "noon",
     });
     expect(spendFilterArgs({ categories: [], banks: ["FAB"], cards: [] })).toEqual({ p_bank_codes: ["FAB"] });
+    expect(spendFilterArgs({ categories: [], banks: [], cards: [], instrument: "debit_card" })).toEqual({ p_instruments: ["debit_card"] });
   });
 
   it("does not mutate the selection order", () => {

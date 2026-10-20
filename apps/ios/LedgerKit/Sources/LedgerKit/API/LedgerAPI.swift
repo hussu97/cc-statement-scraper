@@ -132,6 +132,19 @@ public protocol LedgerAPI: SMSIngestAPI, AnalysisAPI {
     /// another card of the ledger already has the name (case-insensitive).
     func updateCardWalletName(cardCode: String, name: String?) async throws
 
+    // Cash: bank accounts, balances and cash flow (SupabaseLedgerAPI+Cash.swift, Phase 2d)
+    /// `rpc('cash_position')`: every active bank account's balance and the AED total (members).
+    func cashPosition(profileCode: String) async throws -> CashPosition
+    /// `rpc('cash_flow')`: each month's total per flow plus its `net` row, between the dates (members).
+    func cashFlow(profileCode: String, from: CalendarDay, to: CalendarDay) async throws -> [CashFlowRow]
+    /// `rpc('record_balance')`: the account's balance as of now, as a decimal string (owners; 42501
+    /// otherwise, 22023 for a malformed amount, P0002 for an account not in the ledger).
+    func recordBalance(profileCode: String, accountCode: String, balance: String) async throws
+    /// `rpc('create_bank_account')`: returns the new `account_code` (owners; 23505 when the bank
+    /// and ref exist, 22023 for a bad kind or ref, P0002 for an unknown bank).
+    func createBankAccount(profileCode: String, bankCode: String, kind: BankAccountKind, accountRef: String,
+                           nickname: String?) async throws -> String
+
     /// Fires whenever a row the screens show changes (transactions, SMS,
     /// documents, insights) for the profile. Ends when the caller stops iterating.
     func changes(profileCode: String) -> AsyncStream<LedgerChange>

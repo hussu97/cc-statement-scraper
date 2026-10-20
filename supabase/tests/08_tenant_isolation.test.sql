@@ -268,6 +268,32 @@ reset role;
 select ok((select count(*) from public.document_events where doc_code = pg_temp.v('doc_b')) > 0,
           'B''s document has events (the isolation above is not vacuous)');
 
+-- ═══ bank accounts and balances (Phase 2a) ═════════════════════════════════
+select pg_temp.as_user('ub');
+set local role authenticated;
+select pg_temp.set('bank_b', public.create_bank_account(pg_temp.v('pb'), 'FAB', 'current', '90017', 'B current'));
+select pg_temp.set('bal_b', public.record_balance(pg_temp.v('pb'), pg_temp.v('bank_b'), '2500.00'));
+reset role;
+select pg_temp.as_user('ua');
+set local role authenticated;
+select throws_ok($$ select public.create_bank_account(pg_temp.v('pb'), 'FAB', 'savings', '90018') $$,
+                 '42501', null, 'A cannot add a bank account to B''s ledger');
+select throws_ok($$ select public.record_balance(pg_temp.v('pb'), pg_temp.v('bank_b'), '1.00') $$,
+                 '42501', null, 'A cannot record a balance in B''s ledger');
+select throws_ok($$ select public.record_balance(pg_temp.v('pa'), pg_temp.v('bank_b'), '1.00') $$,
+                 'P0002', null, 'A cannot record a balance on B''s account through A''s ledger');
+select is((select count(*)::int from public.balance_checkpoints where account_code = pg_temp.v('bank_b')), 0,
+          'A sees none of B''s balance checkpoints');
+select is((select count(*)::int from public.v_bank_balances where account_code = pg_temp.v('bank_b')), 0,
+          'A sees none of B''s bank balances');
+reset role;
+select pg_temp.as_system();
+select throws_ok($$ insert into public.balance_checkpoints (profile_code, account_code, as_of, balance, source)
+                    values (pg_temp.v('pa'), pg_temp.v('bank_b'), now(), 1, 'manual') $$,
+                 '23503', null, 'a checkpoint in A''s ledger cannot point at B''s account (composite FK)');
+select is((select balance from public.v_bank_balances where account_code = pg_temp.v('bank_b')), 2500.00::numeric,
+          'B''s balance is there (the isolation above is not vacuous)');
+
 -- ═══ profile deletion still cascades through the composite FKs ═══════════
 select pg_temp.as_system();
 select lives_ok($$ delete from public.profiles where profile_code = pg_temp.v('pb') $$,

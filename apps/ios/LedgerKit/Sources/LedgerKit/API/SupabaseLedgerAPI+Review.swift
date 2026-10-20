@@ -48,6 +48,7 @@ extension SupabaseLedgerAPI {
                 .select("account_code,bank_code,nickname,product_name")
                 .eq("profile_code", value: profileCode)
                 .eq("status", value: "active")
+                .eq("kind", value: "credit_card")   // a card SMS goes to a card account (resolve_review)
                 .order("bank_code")
                 .execute()
         }
