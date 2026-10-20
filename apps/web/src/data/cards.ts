@@ -16,6 +16,8 @@ export function useAccounts(profileCode: string) {
           .from("accounts")
           .select("*, cards(card_code, last4, holder_name, is_supplementary, status, wallet_name)")
           .eq("profile_code", profileCode)
+          // Cards only: bank accounts (Phase 2a) have no card names, limits or statements.
+          .eq("kind", "credit_card")
           .order("bank_code"),
       ),
   });

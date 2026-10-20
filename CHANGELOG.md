@@ -1,5 +1,24 @@
 # Changelog
 
+## Bank accounts and balances (Phase 2a) — 2026-10-20
+
+### Backend (Supabase)
+
+- **feat** A ledger can hold current and savings accounts beside its cards (`accounts.kind`, `account_ref`), added with the owner-only `create_bank_account`. `record_balance` records a balance (a decimal string, now or dated earlier) as a `balance_checkpoints` row, and `v_bank_balances` gives each bank account's balance: the latest checkpoint plus its transactions after it, marked stale after 7 days. No screens yet (Phase 2d) and no SMS capture yet (2b).
+- **fix** Every reader that assumes an account is a card now says so: card outstanding, Overview's card list, the filter options, review resolution and the "bank has one account" fallbacks in SMS and statement matching skip bank accounts, and `merge_accounts` refuses to merge a bank account with a card. `60_bank_accounts.test.sql` lists every function that reads `accounts`, so a new one fails the build until it is classified.
+
+### Web
+
+- **fix** Card screens (card names, budgets, account comparison, review) list card accounts only.
+
+### iOS
+
+- **fix** Budgets, account comparison and the review picker list card accounts only.
+
+### Docs
+
+- **docs** ARCHITECTURE.md: bank accounts and `v_bank_balances`; `tasks/todo.md` §3: the Phase 2 plan.
+
 ## Capture intents are actions, not App Shortcuts — 2026-10-18
 
 ### iOS
