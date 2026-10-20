@@ -1,5 +1,12 @@
 # Changelog
 
+## Wio debit and Wio Credit — 2026-10-20
+
+### Backend (Supabase)
+
+- **feat** Wio alerts: local transfers from the debit account or Wio Credit (the recipient becomes the description), international transfers (the AED debited), the Wio Credit autopay (a payment on Wio Credit), cashback, and card purchases that print their AED amount. Due, estimate and new-beneficiary notices are ignored.
+- **feat** An alert's account digits can name a credit line (Wio Credit …9214), so its transfers to pay other cards pair with those cards' payments and count once. A transfer is final from its SMS on any account.
+
 ## FAB salary and moves between your own accounts — 2026-10-20
 
 ### Backend (Supabase)

@@ -581,6 +581,11 @@ that names no counterparty. An unfiled transfer is a move between the ledger's o
 same AED amount within 3 days, or when a `transfer_notice` SMS (FAB's funds-transfer confirmation)
 for it names one of its bank accounts' digits (`parsed_fields.counterparty_ref`). FAB's "Salary
 Credit" alert is an `account_credit` described SALARY CREDIT, which a seed rule files under Salary.
+**Wio** has a debit account and Wio Credit, a credit line (a `credit_card` account with an
+`account_ref`): an alert's account digits may name it, so Wio Credit's "local transfer" paying
+another card is a `transfer_out` there, paired with that card's payment through `card_transfers`
+and outside cash flow (debt moving between cards). The monthly autopay is a payment on Wio Credit.
+A local transfer's recipient is its description, so it is filed once like a merchant.
 
 There is likewise **one definition of what a card owes**: `public.v_account_balances`
 (`security_invoker`). A sum of transactions cannot know the balance carried in before the first
