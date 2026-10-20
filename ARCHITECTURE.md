@@ -102,6 +102,7 @@ Conventions (enforced by pgTAP guards; see CLAUDE.md §1):
 auth.users ─< profile_members >─ profiles ─┬─ profile_state (rules_version)
                                            ├─ service_tokens (sha256 only, scopes)
                                            ├─ accounts ─< cards           (banks: global)
+                                           │      └─< balance_checkpoints (bank accounts)
                                            ├─ documents ─< statements ─< statement_lines
                                            ├─ sms_messages ──> sms_templates (global, per bank)
                                            ├─ transactions ─< transaction_evidence >─ statement_lines | sms_messages
@@ -561,6 +562,18 @@ document, so each account is anchored on a balance the bank printed, the latest 
 
 An SMS statement anchor has no lines to say what it covers, so the activity added to it is by
 date (after the statement date, plus charges dated on it that are still pending), not by `stmt_code`.
+
+**Bank accounts** (Phase 2a, `20261020110310`). `accounts.kind` is `credit_card`, `current` or
+`savings`. A bank account has an `account_ref` (the digits a bank prints after the mask,
+`XXX810001` → `810001`, unique per profile and bank) and never a credit limit or cycle close day
+(check constraint). Its balance is `public.v_bank_balances`: the latest `balance_checkpoints` row
+(manual through `record_balance` now, read from SMS in 2b) plus the account's live transactions
+dated after it, in the account's currency, with `is_stale` after 7 days and null with no
+checkpoint. Checkpoints are evidence: never updated, a newer one supersedes. Card-only readers
+(`v_account_balances`, `overview`, `filter_meta`, `resolve_review`, the "the bank has one active
+account" fallbacks in SMS and statement resolution, and `merge_accounts`) filter
+`kind = 'credit_card'`, and `60_bank_accounts.test.sql` lists every function that reads
+`accounts`, so a new reader fails until it is classified. Plan: `tasks/todo.md` §3.
 
 `overview` carries each account's `outstanding_aed` and anchor, and the profile's
 `outstanding` (active accounts), `outstanding_complete` (every account anchored, every AED

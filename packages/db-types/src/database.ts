@@ -37,6 +37,7 @@ export type Database = {
       accounts: {
         Row: {
           account_code: string
+          account_ref: string | null
           bank_code: string
           created_at: string
           credit_limit: number | null
@@ -51,6 +52,7 @@ export type Database = {
         }
         Insert: {
           account_code?: string
+          account_ref?: string | null
           bank_code: string
           created_at?: string
           credit_limit?: number | null
@@ -65,6 +67,7 @@ export type Database = {
         }
         Update: {
           account_code?: string
+          account_ref?: string | null
           bank_code?: string
           created_at?: string
           credit_limit?: number | null
@@ -195,6 +198,78 @@ export type Database = {
           },
         ]
       }
+      balance_checkpoints: {
+        Row: {
+          account_code: string
+          as_of: string
+          balance: number
+          checkpoint_code: string
+          created_at: string
+          created_by: string | null
+          profile_code: string
+          sms_code: string | null
+          source: string
+        }
+        Insert: {
+          account_code: string
+          as_of: string
+          balance: number
+          checkpoint_code?: string
+          created_at?: string
+          created_by?: string | null
+          profile_code: string
+          sms_code?: string | null
+          source: string
+        }
+        Update: {
+          account_code?: string
+          as_of?: string
+          balance?: number
+          checkpoint_code?: string
+          created_at?: string
+          created_by?: string | null
+          profile_code?: string
+          sms_code?: string | null
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "balance_checkpoints_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "balance_checkpoints_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "v_account_balances"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "balance_checkpoints_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "v_bank_balances"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "balance_checkpoints_profile_code_fkey"
+            columns: ["profile_code"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["profile_code"]
+          },
+          {
+            foreignKeyName: "balance_checkpoints_sms_code_fkey"
+            columns: ["sms_code"]
+            isOneToOne: false
+            referencedRelation: "sms_messages"
+            referencedColumns: ["sms_code"]
+          },
+        ]
+      }
       banks: {
         Row: {
           bank_code: string
@@ -266,6 +341,13 @@ export type Database = {
             columns: ["profile_code", "account_code"]
             isOneToOne: false
             referencedRelation: "v_account_balances"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "budgets_account_fk"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "v_bank_balances"
             referencedColumns: ["profile_code", "account_code"]
           },
           {
@@ -425,6 +507,13 @@ export type Database = {
             columns: ["profile_code", "account_code"]
             isOneToOne: false
             referencedRelation: "v_account_balances"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "cards_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "v_bank_balances"
             referencedColumns: ["profile_code", "account_code"]
           },
           {
@@ -993,6 +1082,13 @@ export type Database = {
             referencedColumns: ["profile_code", "account_code"]
           },
           {
+            foreignKeyName: "match_reviews_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "v_bank_balances"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
             foreignKeyName: "match_reviews_profile_code_fkey"
             columns: ["profile_code"]
             isOneToOne: false
@@ -1465,6 +1561,13 @@ export type Database = {
             referencedColumns: ["profile_code", "account_code"]
           },
           {
+            foreignKeyName: "sms_messages_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "v_bank_balances"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
             foreignKeyName: "sms_messages_bank_code_fkey"
             columns: ["bank_code"]
             isOneToOne: false
@@ -1670,6 +1773,13 @@ export type Database = {
             columns: ["profile_code", "account_code"]
             isOneToOne: false
             referencedRelation: "v_account_balances"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "statement_lines_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "v_bank_balances"
             referencedColumns: ["profile_code", "account_code"]
           },
           {
@@ -1880,6 +1990,13 @@ export type Database = {
             columns: ["profile_code", "account_code"]
             isOneToOne: false
             referencedRelation: "v_account_balances"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "statements_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "v_bank_balances"
             referencedColumns: ["profile_code", "account_code"]
           },
           {
@@ -2162,6 +2279,13 @@ export type Database = {
             referencedColumns: ["profile_code", "account_code"]
           },
           {
+            foreignKeyName: "transactions_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "v_bank_balances"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
             foreignKeyName: "transactions_card_fkey"
             columns: ["profile_code", "card_code"]
             isOneToOne: false
@@ -2300,6 +2424,39 @@ export type Database = {
           },
         ]
       }
+      v_bank_balances: {
+        Row: {
+          account_code: string | null
+          anchor_balance: number | null
+          anchor_source: string | null
+          as_of: string | null
+          balance: number | null
+          balance_aed: number | null
+          bank_code: string | null
+          checkpoint_code: string | null
+          currency: string | null
+          is_stale: boolean | null
+          kind: string | null
+          profile_code: string | null
+          unpriced_count: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounts_bank_code_fkey"
+            columns: ["bank_code"]
+            isOneToOne: false
+            referencedRelation: "banks"
+            referencedColumns: ["bank_code"]
+          },
+          {
+            foreignKeyName: "accounts_profile_code_fkey"
+            columns: ["profile_code"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["profile_code"]
+          },
+        ]
+      }
       v_sms_statements: {
         Row: {
           account_code: string | null
@@ -2328,6 +2485,13 @@ export type Database = {
             columns: ["profile_code", "account_code"]
             isOneToOne: false
             referencedRelation: "v_account_balances"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "statements_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "v_bank_balances"
             referencedColumns: ["profile_code", "account_code"]
           },
           {
@@ -2370,6 +2534,13 @@ export type Database = {
             columns: ["profile_code", "account_code"]
             isOneToOne: false
             referencedRelation: "v_account_balances"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "transactions_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "v_bank_balances"
             referencedColumns: ["profile_code", "account_code"]
           },
           {
@@ -2416,6 +2587,13 @@ export type Database = {
             columns: ["profile_code", "account_code"]
             isOneToOne: false
             referencedRelation: "v_account_balances"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "statements_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "v_bank_balances"
             referencedColumns: ["profile_code", "account_code"]
           },
           {
@@ -2496,6 +2674,13 @@ export type Database = {
             columns: ["profile_code", "account_code"]
             isOneToOne: false
             referencedRelation: "v_account_balances"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "transactions_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "v_bank_balances"
             referencedColumns: ["profile_code", "account_code"]
           },
           {
@@ -2720,6 +2905,17 @@ export type Database = {
           txn_count: number
         }[]
       }
+      create_bank_account: {
+        Args: {
+          p_account_ref: string
+          p_bank_code: string
+          p_currency?: string
+          p_kind: string
+          p_nickname?: string
+          p_profile_code: string
+        }
+        Returns: string
+      }
       create_profile: {
         Args: { p_key: string; p_name: string }
         Returns: string
@@ -2913,6 +3109,15 @@ export type Database = {
           p_reason: string
         }
         Returns: undefined
+      }
+      record_balance: {
+        Args: {
+          p_account_code: string
+          p_as_of?: string
+          p_balance: string
+          p_profile_code: string
+        }
+        Returns: string
       }
       recurring_list: {
         Args: { p_profile_code: string }
