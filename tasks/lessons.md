@@ -256,8 +256,9 @@
   before it is pushed: from the main checkout, or in a worktree with a temporary symlink
   (`ln -s <main>/services/parser/tests/golden services/parser/tests/golden`, removed after).
   An intended output change becomes a documented `ALLOWED_DELTAS` entry, never a loosened assert.
-- **Enforced by**: nothing yet. Candidate guard: pre-push warns when the parser area changed
-  and `tests/golden/` is missing but the main checkout has it.
+- **Enforced by**: since 2026-10-20 (it bit again: parser 2026.10.15.1 and 2026.10.20 reached a
+  push from worktrees), `test_golden_parity.py` reads the main checkout's snapshots when its own
+  checkout has none, so a worktree runs it too. CI still has no snapshots.
 
 ### `supabase config push` has no dry run and pushes the whole file
 - **What went wrong**: `supabase config push` sends the **whole** `supabase/config.toml` to the
