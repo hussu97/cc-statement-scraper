@@ -96,6 +96,15 @@ select results_eq(
   $$ values (pg_temp.v('credit'), 'purchase'::text, 7400.00::numeric, 'AED'::text, '3424'::text) $$,
   'a purchase that prints its AED amount keeps it exactly, on card 3424');
 
+update public.transactions set manual_category_code = (select category_code from public.categories
+                                                      where profile_code = pg_temp.v('p') and name = 'Savings & investing')
+where txn_code = (pg_temp.txn(pg_temp.v('rl360'))).txn_code;
+select results_eq(
+  $$ select flow, instrument, amount_aed from public.v_cash_flow where txn_code = (pg_temp.txn(pg_temp.v('rl360'))).txn_code $$,
+  $$ values ('saving'::text, 'credit_card'::text, 7400.00::numeric) $$,
+  'filed under Savings & investing, the card purchase is saving in cash flow (and not spend)');
+select ok(not exists (select 1 from public.v_spend where txn_code = (pg_temp.txn(pg_temp.v('rl360'))).txn_code), 'not spend');
+
 -- ── notices ─────────────────────────────────────────────────────────────────
 select is(pg_temp.sms('Your credit payment is due today. Statement amount: AED 19,082. Auto-pay will be processed at 9:00 PM tonight. You can adjust the repayment amount in the app before then.',
                       pg_temp.v('t0')::timestamptz + interval '6 hours')->>'status', 'ignored', 'the due-today notice is ignored');
