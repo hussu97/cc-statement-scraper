@@ -1,5 +1,11 @@
 # Changelog
 
+## Financial audit data-quality fixes — 2026-10-20
+
+### Backend (Supabase)
+
+- **fix** SIB's WAKALA PROFIT and BONUS credits are Bank Fees & Interest credits, not Cashback, so they net off the same-day MURABAHA PROFIT charge in `v_spend` (May 2026: 348.90 − 341.57 − 7.33 = 0). As Cashback (`kind = 'income'`) they were left out of spend while the charge counted in full: AED 1,669.03 of overstated fees on one profile for Apr–Jul 2026. The WAKALA seed rule moves category (credits only); BONUS gets an SIB-only credit rule at priority 90 (`private.seed_rules.priority` is new), so other banks' BONUS credits stay Cashback. Guarded content migration; existing profiles recategorise through the rule triggers.
+
 ## Capture intents are actions, not App Shortcuts — 2026-10-18
 
 ### iOS
