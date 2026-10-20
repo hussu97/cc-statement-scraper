@@ -2,9 +2,14 @@
 
 ## Financial audit data-quality fixes — 2026-10-20
 
+### Parser
+
+- **fix** Parser 2026.10.20: a credit-card cash withdrawal is kind `cash_advance`, not `purchase`. An ATM abroad is printed as its bank's name (FAB "DTBKEN NAIROBI KEN", KES 5,000), so the purchase line that a CASH ADVANCE FEE follows (same card, same date, only fee/VAT lines between) is marked `cash_advance` (`ccs_parser.kinds.pair_cash_advances`), and descriptors with `ATM`, `CASH WITHDRAWAL` or `CASH WDL` are cash advances on their own.
+
 ### Backend (Supabase)
 
 - **fix** SIB's WAKALA PROFIT and BONUS credits are Bank Fees & Interest credits, not Cashback, so they net off the same-day MURABAHA PROFIT charge in `v_spend` (May 2026: 348.90 − 341.57 − 7.33 = 0). As Cashback (`kind = 'income'`) they were left out of spend while the charge counted in full: AED 1,669.03 of overstated fees on one profile for Apr–Jul 2026. The WAKALA seed rule moves category (credits only); BONUS gets an SIB-only credit rule at priority 90 (`private.seed_rules.priority` is new), so other banks' BONUS credits stay Cashback. Guarded content migration; existing profiles recategorise through the rule triggers.
+- **fix** Cash withdrawals already ingested as purchases are corrected once, with the parser's pairing rule (`private.mark_paired_cash_advances`, run by the migration): in production the FAB Nairobi (2026-09-24), ADCB Phuket (2025-08-29) and ENBD Meydan (2025-01-05) withdrawals. A re-parse can't do it: a revived line keeps its stored kind.
 
 ## Capture intents are actions, not App Shortcuts — 2026-10-18
 

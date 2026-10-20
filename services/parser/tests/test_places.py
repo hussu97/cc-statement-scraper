@@ -6,7 +6,7 @@ import pytest
 
 from ccs_parser.domain.statements.types import ParsedLine
 from ccs_parser.places import separate_glued_place
-from ccs_parser.service import _line_out
+from ccs_parser.service import _lines_out
 
 
 @pytest.mark.parametrize(
@@ -55,7 +55,7 @@ def test_only_merchant_normalized_changes() -> None:
         card_holder=None,
         fingerprint="a" * 64,
     )
-    out = _line_out(line)
+    out = _lines_out([line])[0]
     assert out["description_raw"] == "careem hala ridedubai"
     assert out["merchant_normalized"] == "CAREEM HALA RIDE DUBAI"
     assert out["legacy_fingerprint"] == "a" * 64
