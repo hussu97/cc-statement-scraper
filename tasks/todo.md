@@ -413,25 +413,29 @@ class on the net worth page.
    linked or unlinked by hand (an unlinked row is never re-linked by the rule).
 
 ### Plan
-- [ ] Migration: `holdings.kind` (metal | plan | broker | security | deposit), currency,
+- [x] Migration: `holdings.kind` (metal | plan | broker | security | deposit), currency,
       institution, units, symbol, principal / rate / maturity, link_pattern; metal-only fields
       only for metals. `holding_valuations` (evidence: a value, or a unit price for securities,
       as of a date). `holding_flows` (contribution | withdrawal | income, dated, holding currency
       and AED, optional `txn_code`, unique per transaction; removed_at instead of delete). A
       metal's cost and purchase date become its first contribution (kept in sync by
       `save_holding`).
-- [ ] Valuation at any instant for every kind (metals: feed; plan/broker: latest valuation;
+- [x] Valuation at any instant for every kind (metals: feed; plan/broker: latest valuation;
       security: units × latest price; deposit: principal + simple profit to maturity); AED via
       the peg / `fx_rates`.
-- [ ] `holding_returns(profile, period)`: per holding and total for all time / this year / last
+- [x] `holding_returns(profile, period)`: per holding and total for all time / this year / last
       12 months: start value, added (contributions − withdrawals), income, growth, simple % and a
       money-weighted yearly return (XIRR, from 90 days of history), computed in SQL.
-- [ ] Links: rule on insert/update of transactions and when a holding's rule is saved;
+- [x] Links: rule on insert/update of transactions and when a holding's rule is saved;
       `link_transaction(profile, txn, holding | null)`; `v_spend` excludes linked payments;
       `v_cash_flow` files them as saving with the holding; `cash_flow_savings` breaks saving down
       by holding; `v_transactions` and `account_ledger` show the link.
-- [ ] `net_worth` returns `allocation` by class (cash, gold, silver, plans, brokers, shares/funds,
+- [x] `net_worth` returns `allocation` by class (cash, gold, silver, plans, brokers, shares/funds,
       deposits; owed as negative).
-- [ ] Web + iOS: holding types in the form, Update value, flows list with linked rows, link /
+- [x] Web + iOS: holding types in the form, Update value, flows list with linked rows, link /
       unlink from the ledger and Activity, returns (period switch), allocation chart, saving by
       holding in cash flow.
+- [x] Later (21 Oct): exact-match rules (`link_exact`; Wio prints RL360 as "RI"), a deposit's
+      principal is its first contribution, all-time returns leave out holdings with no money in.
+- [ ] Ship, then create the RL360 plans in production: Tejasvie (ENBD, rule contains "RL360") and
+      Hussain (Wio Credit, rule exactly "RI"); their current values when the user has them.
