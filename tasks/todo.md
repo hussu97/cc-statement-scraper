@@ -385,5 +385,13 @@ the metals are worth and the gain on them.
       995 bars; silver at Dubai retail (Khaleej Times, per kilo); each holding has a form (bar,
       coin, jewellery) with a public-domain / CC0 photo (`assets/investments/`, bucket
       `investment-images`).
-- [ ] Ship: push to main (migration, `metal-prices` function and cron, web, TestFlight), then
-      upload the photos to production (`scripts/brand/upload-investment-images.sh`). Ask first.
+- [x] Shipped 21 Oct (main 2acc2f9, iOS build 37); photos uploaded; first prices fetched; the
+      user's five holdings added with cost and purchase date.
+- [ ] Deferred (user, 21 Oct: "not now"): backfill price history so charts reach back to each
+      purchase. Source found: the currency-api archive on jsDelivr
+      (`@fawazahmed0/currency-api@<date>/v1/currencies/xau.json`, also `xag`) has daily spot back
+      past Dec 2024; past Dubai retail would be spot × today's retail/spot gap (24K ≈ 1.019,
+      silver ≈ 1.166), stored as estimates; `holdings_value_series` caps at 400 days. Khaleej
+      Times' history API returns noise outside a browser; Stooq is behind a bot check.
+- [ ] Check with the user: the 1 kg bar's cost (AED 253,000 on 7 Dec 2024) is AED 253/g against
+      ~311/g spot that day.
