@@ -23,14 +23,22 @@ def parse_statement_for_bank(
         return parse_fab_statement(pdf_path, pdf_password)
 
     if code == "ADCB":
-        pdf_password = _s.get("ADCB_PDF_PASSWORD") or _s.get("ADCB_CID")
-        if not pdf_password:
+        # Card statements use ADCB_PDF_PASSWORD; the consolidated statement (read before this,
+        # in service._adcb_consolidated) uses the customer ID. Try each: a profile may hold both.
+        passwords = [p for p in dict.fromkeys([_s.get("ADCB_PDF_PASSWORD"), _s.get("ADCB_CID")]) if p]
+        if not passwords:
             raise ParserError(
                 "PDF_DECRYPT_FAILED",
                 "ADCB statement requires ADCB_PDF_PASSWORD (or ADCB_CID fallback).",
             )
         from ccs_parser.banks.adcb import parse_adcb_statement  # noqa: PLC0415
-        return parse_adcb_statement(pdf_path, pdf_password)
+        for password in passwords[:-1]:
+            try:
+                return parse_adcb_statement(pdf_path, password)
+            except ParserError as exc:
+                if exc.code != "PDF_DECRYPT_FAILED":
+                    raise
+        return parse_adcb_statement(pdf_path, passwords[-1])
 
     if code == "ENBD":
         from ccs_parser.banks.enbd import parse_enbd_statement  # noqa: PLC0415

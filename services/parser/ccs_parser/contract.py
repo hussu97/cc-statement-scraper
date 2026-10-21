@@ -49,10 +49,13 @@ IsoTime = Annotated[str, StringConstraints(pattern=r"^\d{2}:\d{2}(:\d{2}(\.\d+)?
 Last4 = Annotated[str, StringConstraints(pattern=r"^[0-9]{4}$")]
 CountryCode = Annotated[str, StringConstraints(pattern=r"^[A-Z]{2}$")]  # ISO 3166-1 alpha-2 (X-25r)
 
-DocumentKind = Literal["statement_pdf", "history_pdf"]
+DocumentKind = Literal["statement_pdf", "history_pdf", "account_statement_pdf"]
 StatementKind = Literal["statement", "history_extract"]
 Direction = Literal["debit", "credit"]
-LineKind = Literal["purchase", "refund", "payment", "fee", "interest", "cash_advance", "adjustment"]
+LineKind = Literal[
+    "purchase", "refund", "payment", "fee", "interest", "cash_advance", "adjustment", "transfer_in", "transfer_out"
+]
+BankAccountKind = Literal["current", "savings"]
 ReferenceSource = Literal["explicit", "fallback"]
 
 ErrorCode = Literal[
@@ -109,6 +112,46 @@ class Line(_Strict):
     legacy_fingerprint: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 
 
+class BankAccount(_Strict):
+    """The bank account an ``account_statement_pdf`` statement is for (null on card statements)."""
+
+    kind: BankAccountKind
+    number: Annotated[str, StringConstraints(pattern=r"^[0-9]{6,34}$")]
+    ref: Annotated[str, StringConstraints(pattern=r"^[0-9]{3,12}$")]  # accounts.account_ref
+    iban: Annotated[str, StringConstraints(pattern=r"^[A-Z]{2}[0-9]{2}[A-Z0-9]{10,30}$")] | None
+    product: Annotated[str, StringConstraints(min_length=1, max_length=120)]
+    currency: Annotated[str, StringConstraints(pattern=r"^[A-Z]{3}$")]
+
+
+# numeric(6,3) percentage, 0-100.
+RatePct = Annotated[str, StringConstraints(pattern=r"^\d{1,3}(\.\d{1,3})?$")]
+
+
+class Deposit(_Strict):
+    """A fixed deposit listed in a consolidated statement: its value as of ``as_of``."""
+
+    number: Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9-]{3,40}$")]  # holdings.external_ref
+    product: Annotated[str, StringConstraints(min_length=1, max_length=80)]
+    currency: Annotated[str, StringConstraints(pattern=r"^[A-Z]{3}$")]
+    rate_pct: RatePct
+    maturity_on: IsoDate
+    amount: Money
+    as_of: IsoDate
+
+
+class CardSummary(_Strict):
+    """A credit card's row in a consolidated statement (a cross-check, not a statement)."""
+
+    last4: Last4
+    credit_limit: Money
+    current_balance: SignedMoney
+    min_due: Money
+    last_statement_balance: SignedMoney
+    last_statement_date: IsoDate
+    due_date: IsoDate
+    as_of: IsoDate
+
+
 class Statement(_Strict):
     kind: StatementKind
     bank_code: str
@@ -125,6 +168,7 @@ class Statement(_Strict):
     warnings: list[str]
     metadata: dict[str, Any]
     lines: list[Line]
+    account: BankAccount | None = None
 
     @model_validator(mode="after")
     def _dates_are_consistent(self) -> Statement:
@@ -151,6 +195,17 @@ class ParseResponse(_Strict):
     bank_code: str
     document_kind: DocumentKind
     statements: list[Statement] = Field(min_length=1)
+    deposits: list[Deposit] = Field(default_factory=list)
+    card_summaries: list[CardSummary] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _accounts_match_kind(self) -> ParseResponse:
+        bank_statement = self.document_kind == "account_statement_pdf"
+        if any((st.account is not None) != bank_statement for st in self.statements):
+            raise ValueError("account is set exactly on the statements of an account_statement_pdf")
+        if not bank_statement and (self.deposits or self.card_summaries):
+            raise ValueError("deposits and card_summaries come only with an account_statement_pdf")
+        return self
 
 
 class ErrorBody(_Strict):

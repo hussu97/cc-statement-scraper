@@ -240,6 +240,10 @@ def _parse_as(
     extra_warnings: list[str],
 ) -> dict[str, Any]:
     """Parse ``pdf_path`` as ``bank_code`` and return the validated contract response."""
+    if bank_code == "ADCB":
+        consolidated = _adcb_consolidated(pdf_path, runtime_settings, pdf_sha256)
+        if consolidated is not None:
+            return _validated(bank_code, consolidated, extra_warnings)
     try:
         parsed = parse_statement_pdf(
             bank_code,
@@ -273,12 +277,38 @@ def _parse_as(
         "document_kind": "history_pdf" if is_history else "statement_pdf",
         "statements": [_statement_out(st, pdf_sha256=pdf_sha256, totals=totals) for st in statements],
     }
+    return _validated(bank_code, response, extra_warnings)
+
+
+def _adcb_consolidated(pdf_path: Path, settings: dict[str, str], pdf_sha256: str) -> dict[str, Any] | None:
+    """ADCB's consolidated statement of accounts (bank accounts and deposits), or None for any other PDF."""
+    from ccs_parser.banks import adcb_consolidated as ac  # noqa: PLC0415
+
+    read = ac.read_pdf(pdf_path, [settings.get("ADCB_CID"), settings.get("ADCB_PDF_PASSWORD")])
+    if read is None or not ac.is_consolidated(read[0]):
+        return None
+    c = ac.parse_consolidated(*read)
+    if not c.accounts:
+        raise ParserError("UNSUPPORTED_LAYOUT", "ADCB consolidated: no account tables found.")
+    return {
+        "contract_version": CONTRACT_VERSION,
+        "parser_version": PARSER_VERSION,
+        "bank_code": "ADCB",
+        "document_kind": "account_statement_pdf",
+        "statements": ac.statements_out(c, pdf_sha256),
+        "deposits": ac.deposits_out(c),
+        "card_summaries": ac.card_summaries_out(c),
+    }
+
+
+def _validated(bank_code: str, response: dict[str, Any], extra_warnings: list[str]) -> dict[str, Any]:
     for st in response["statements"]:
         st["warnings"] = [*extra_warnings, *st["warnings"]]
     # Validate against the contract (which mirrors the DB constraints). The same PDF
     # always produces the same output, so a violation is permanent, not a retryable 5xx.
+    # Optional keys a card statement doesn't set (account, deposits) stay out of its output.
     try:
-        return ParseResponse.model_validate(response).model_dump(mode="json")
+        return ParseResponse.model_validate(response).model_dump(mode="json", exclude_unset=True)
     except ValidationError as exc:
         summary = _validation_summary(exc)
         logger.warning("parser output failed contract validation | bank=%s | %s", bank_code, summary)

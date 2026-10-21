@@ -150,6 +150,9 @@ def _layout_scores(text: str) -> dict[str, int]:
         vote("MASHREQ", 1)
     if "PREVIOUS BALANCE OUTSTANDING" in text or "NEW BALANCE OUTSTANDING" in text:
         vote("ADCB", 3)
+    # The consolidated statement of accounts names ADCB only in its logo; TouchPoints is its rewards.
+    if "CONSOLIDATED STATEMENT OF ACCOUNTS" in text and "TOUCHPOINTS" in text:
+        vote("ADCB", 3)
     if "SUPPLEMENTARY CARD" in text or "MAIN CARD PRODUCT" in text:
         vote("FAB", 3)
     if "CARD E-STATEMENT" in text and "AED" in text:

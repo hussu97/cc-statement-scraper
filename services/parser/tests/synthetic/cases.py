@@ -325,6 +325,86 @@ _WIO_PAGES: list[list[Line]] = [
 ]
 
 
+# ---------------------------------------------------------------- ADCB consolidated
+# The monthly "Consolidated Statement of Accounts" (bank accounts, deposits, card summary).
+# Columns sit at the real statement's x positions; a description wraps over the lines above
+# and below its row's date, and a spacer line separates rows as the real row spacing does.
+# Page 3 continues the current account without repeating the column header.
+
+_ACCOUNT_HEADER: Line = [(41, "Date"), (134, "Description"), (245, "Chq/Ref"), (274, "No."), (305, "Value"),
+                         (326, "Date"), (375, "Debit"), (448, "Credit"), (534, "Balance")]
+
+
+def _account_details(number: str, product: str) -> list[Line]:
+    return [
+        [(24, f"Account Details: {number} - {product}"), (424, "Currency: AED")],
+        [(24, f"IBAN: AE0000300{number}"), (424, "Branch: IBD - SAMPLE BRANCH")],
+        [(24, "Account Title: JANE Q SAMPLE")],
+        _ACCOUNT_HEADER,
+    ]
+
+
+_ADCB_CONSOLIDATED_PAGES: list[list[Line]] = [
+    [
+        "Consolidated Statement of Accounts",
+        "JANE Q SAMPLE",
+        "Customer ID: 99990001 Branch: SAMPLE BRANCH",
+        "Summary of Accounts as on 30/09/2026",
+        "Savings/Current/Call Accounts",
+        "Account Number Account Description Currency Balance Balance (AED)",
+        "99990001310001 Islamic Active Saver Account AED 1,012.40 1,012.40",
+        "99990001320001 Islamic Current Account Personal AED 4,161.92 4,161.92",
+        "Total 5,174.32",
+        "Fixed Deposits/Market Linked Accounts",
+        "Account Number Account Description Currency *Interest rate (%) p.a. Maturity Date Amount Amount (AED)",
+        "99990001340001 ADCB Online Century Deposit AED 2.00 01/04/2027 52,301.10 52,301.10",
+        "Total 52,301.10",
+        "* Fixed interest rate (%) per.annum.",
+        "Credit Cards",
+        "Card Number Credit Limit Current Balance Payment Due Date",
+        "xxxxxxxxxxxx1234 10,000 250.00 25.00 250.00 24/09/2026 19/10/2026",
+        "TouchPoints Rewards Summary as on 30/09/2026",
+        [(520, "Page 1 of 3")],
+    ],
+    [
+        "Consolidated Statement of Accounts",
+        "Transactions Details for the period from 01/09/2026 to 30/09/2026",
+        *_account_details("99990001310001", "Islamic Active Saver Account"),
+        [(26, "01/09/2026"), (76, "B/F ..."), (545, "1,000.00")],
+        [],
+        [(26, "30/09/2026"), (76, "PROFIT CREDIT"), (255, "100001"), (306, "30/09/2026"), (455, "12.40"),
+         (545, "1,012.40")],
+        [(76, "Total"), (380, "0.00"), (455, "12.40")],
+        [],
+        *_account_details("99990001320001", "Islamic Current Account Personal"),
+        [(26, "01/09/2026"), (76, "B/F ..."), (545, "5,000.00")],
+        [],
+        [(76, "PUR 10/09 SAMPLE MART DUBAI")],
+        [(26, "12/09/2026"), (255, "200001"), (306, "10/09/2026"), (380, "85.50"), (545, "4,914.50")],
+        [(76, "5678")],
+        [],
+        [(76, "FOREIGN TRANSACTION FEE 11/09 0 784")],
+        [(26, "14/09/2026"), (255, "200002"), (306, "11/09/2026"), (380, "2.08"), (545, "4,912.42")],
+        [(76, "SAMPLE.COM5678")],
+        [],
+        [(26, "15/09/2026"), (76, "IPP TRANSFER TO J SAMPLE 4401"), (255, "200003"), (306, "15/09/2026"),
+         (380, "1,250.00"), (545, "3,662.42")],
+        [(520, "Page 2 of 3")],
+    ],
+    [
+        "Consolidated Statement of Accounts",
+        [(26, "28/09/2026"), (76, "INWARD REMITTANCE SAMPLE CO"), (255, "200004"), (306, "28/09/2026"),
+         (455, "500.00"), (545, "4,162.42")],
+        [],
+        [(26, "29/09/2026"), (76, "SERVICE CHARGES"), (255, "200005"), (306, "29/09/2026"), (380, "0.50"),
+         (545, "4,161.92")],
+        [(76, "Total"), (380, "1,338.08"), (455, "500.00")],
+        [(254, "End Of Statement")],
+        [(520, "Page 3 of 3")],
+    ],
+]
+
+
 CASES: dict[str, Case] = {
     "mashreq_statement": Case(_MASHREQ_PAGES),
     # X-17: Mashreq and EIB passwords reach their parsers.
@@ -366,6 +446,13 @@ CASES: dict[str, Case] = {
     ),
     "fab_statement": Case(_FAB_PAGES),
     "adcb_encrypted": Case(_ADCB_PAGES, password=PASSWORD, settings={"ADCB_PDF_PASSWORD": PASSWORD}),
+    # The consolidated statement opens with the customer ID even when a card password is also set.
+    "adcb_consolidated": Case(
+        _ADCB_CONSOLIDATED_PAGES,
+        password=PASSWORD,
+        settings={"ADCB_CID": PASSWORD, "ADCB_PDF_PASSWORD": "another-card-password"},
+        bank_code_hint="ADCB",
+    ),
     "sib_history": Case(_SIB_HISTORY_PAGES),
     "sib_history_new_card": Case(_SIB_HISTORY_NEW_CARD_PAGES),
     # SRV-17: a wrong hint (an ADCB hint on a FAB PDF) is detected and retried once.
