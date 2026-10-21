@@ -38,6 +38,10 @@ struct CashPositionTests {
         #expect(adcb.asOfText(now: now) == "As of 6 Oct · from SMS")
         #expect(fab.kind == "savings" && fab.subtitle == "Savings ··· 9221" && fab.staleLabel == nil)
         #expect(fab.asOfText(now: now) == "As of today, 16:19 · from SMS")
+        let fromStatement = BankAccountBalance(accountCode: "s", bankCode: "ADCB", kind: "current", nickname: nil,
+                                               accountRef: "320001", balance: 51.46, balanceAed: 51.46,
+                                               asOf: fab.asOf, anchorSource: "statement")
+        #expect(fromStatement.asOfText(now: now) == "As of today, 16:19 · from statement")
         #expect(fab.balanceDraftText == "79735.5")
     }
 

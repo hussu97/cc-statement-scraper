@@ -86,7 +86,7 @@ public struct BankAccountBalance: Decodable, Sendable, Hashable, Identifiable {
     public let balance: Decimal?
     public let balanceAed: Decimal?
     public let asOf: Date?
-    /// `manual` or `sms`: where the latest checkpoint came from.
+    /// `manual`, `sms` or `statement`: where the latest checkpoint came from.
     public let anchorSource: String?
     public let isStale: Bool
     public let unpricedCount: Int
@@ -133,6 +133,7 @@ public struct BankAccountBalance: Decodable, Sendable, Hashable, Identifiable {
         let when = CashText.asOf(asOf, now: now)
         switch anchorSource {
         case "sms": return "\(when) · from SMS"
+        case "statement": return "\(when) · from statement"
         case "manual": return "\(when) · entered"
         default: return when
         }

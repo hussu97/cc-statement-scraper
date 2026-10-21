@@ -94,7 +94,7 @@ struct HoldingDetailView: View {
             } header: {
                 Text("Returns")
             }
-            if holding.canRecordValue { valuesSection(holding) }
+            if model.showsValueHistory(for: holding) { valuesSection(holding) }
             if holding.kind.takesFlows || !model.flows.isEmpty { flowsSection(holding) }
         }
         .scrollContentBackground(.hidden)
@@ -136,7 +136,7 @@ struct HoldingDetailView: View {
 
     private func valuesSection(_ holding: Holding) -> some View {
         Section {
-            if canEdit {
+            if canEdit, holding.canRecordValue {
                 Button {
                     updating = model.newValue(for: holding)
                 } label: {
@@ -152,8 +152,8 @@ struct HoldingDetailView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(LedgerDates.fullDayLabel(v.asOf)).font(Typography.rowMeta).foregroundStyle(Palette.ink)
-                        if v.isSynced {
-                            Text("Synced").font(Typography.rowMeta).foregroundStyle(Palette.muted)
+                        if let source = v.sourceLabel(for: holding.kind) {
+                            Text(source).font(Typography.rowMeta).foregroundStyle(Palette.muted)
                         }
                     }
                     Spacer()

@@ -233,6 +233,8 @@ struct HoldingFlowsTests {
             HoldingValuationRecord(valuationCode: "v\(i)", asOf: today, value: Decimal(i), source: i == 0 ? "import" : "manual")
         }
         #expect(values[0].isSynced && !values[1].isSynced)
+        #expect(values[0].sourceLabel(for: .plan) == "Synced" && values[0].sourceLabel(for: .deposit) == "From statement")
+        #expect(values[1].sourceLabel(for: .deposit) == nil)
         let some = HoldingValuationRecord.visible(values, showAll: false)
         #expect(some.shown.count == 12 && some.hidden == 18 && some.shown.first == values.first)
         #expect(HoldingValuationRecord.visible(values, showAll: true).hidden == 0)
