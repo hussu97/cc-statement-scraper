@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  depositValueNote,
+  valuationSourceLabel,
   aedEquivalent,
   allocationSlices,
   canRemoveFlow,
@@ -263,5 +265,23 @@ describe("synced values and flows", () => {
     expect(visibleValues(values, false)).toEqual({ shown: values.slice(0, VALUE_LIST_LIMIT), hidden: 30 - VALUE_LIST_LIMIT });
     expect(visibleValues(values, true)).toEqual({ shown: values, hidden: 0 });
     expect(visibleValues([1, 2], false)).toEqual({ shown: [1, 2], hidden: 0 });
+  });
+});
+
+describe("statement-valued deposits", () => {
+  it("labels a stored value by where it came from", () => {
+    expect(valuationSourceLabel("deposit", "import")).toBe("From statement");
+    expect(valuationSourceLabel("plan", "import")).toBe("Synced");
+    expect(valuationSourceLabel("deposit", "manual")).toBeNull();
+  });
+  it("says how a deposit is valued", () => {
+    const h = { rate_pct: "2.000", maturity_on: "2027-04-01" };
+    expect(depositValueNote(h, true)).toBe(
+      "From the bank's statements: the latest value, plus simple profit at 2% a year since, to maturity on 1 Apr 2027.",
+    );
+    expect(depositValueNote(h, false)).toBe(
+      "An estimate: the principal plus simple profit at 2% a year, accrued day by day to maturity on 1 Apr 2027.",
+    );
+    expect(depositValueNote({}, false)).toBe("An estimate: the principal plus simple profit at its rate a year, accrued day by day to maturity.");
   });
 });

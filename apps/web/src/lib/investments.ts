@@ -145,8 +145,20 @@ export const FLOW_SOURCE_LABEL: Record<string, string> = {
   import: "Synced from the provider",
 };
 
-/** Recorded values: those the provider sync stored say so. */
-export const VALUATION_SOURCE_LABEL: Record<string, string> = { manual: "Entered by you", import: "Synced" };
+/** The note beside a stored value: a deposit's comes from its bank's statement, a plan's from the provider sync; null when entered by hand. */
+export function valuationSourceLabel(kind: HoldingKind | null, source: string): string | null {
+  if (source !== "import") return null;
+  return kind === "deposit" ? "From statement" : "Synced";
+}
+
+/** How a deposit is valued: from its bank's latest statement when one gave a value, else from its principal. */
+export function depositValueNote(h: { rate_pct?: string | null; maturity_on?: string | null }, fromStatement: boolean): string {
+  const rate = h.rate_pct ? formatRate(h.rate_pct) : "its rate";
+  const maturity = h.maturity_on ? ` on ${formatDate(h.maturity_on.slice(0, 10))}` : "";
+  return fromStatement
+    ? `From the bank's statements: the latest value, plus simple profit at ${rate} a year since, to maturity${maturity}.`
+    : `An estimate: the principal plus simple profit at ${rate} a year, accrued day by day to maturity${maturity}.`;
+}
 
 /** A synced plan records a value a day: the value list shows the latest few until asked for all. */
 export const VALUE_LIST_LIMIT = 12;

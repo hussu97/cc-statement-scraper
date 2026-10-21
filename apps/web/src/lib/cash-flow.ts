@@ -225,6 +225,7 @@ export function bankAccountLabel(a: { kind?: string | null; nickname?: string | 
 export function balanceSourceLabel(source: string | null | undefined): string | null {
   if (source === "sms") return "from SMS";
   if (source === "manual") return "entered";
+  if (source === "statement") return "from statement";
   return null;
 }
 
