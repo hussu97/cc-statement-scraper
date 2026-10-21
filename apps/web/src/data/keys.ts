@@ -39,6 +39,9 @@ export const keys = {
   /** Investments (gold and silver): under "cash" with net worth, so a holding change refreshes both. */
   holdings: (p: string) => ["p", p, "cash", "holdings"] as const,
   holdingsSeries: (p: string, from: string, to: string) => ["p", p, "cash", "holdings-series", from, to] as const,
+  holdingDetail: (p: string, holding: string) => ["p", p, "cash", "holding", holding] as const,
+  holdingReturns: (p: string, period: string) => ["p", p, "cash", "holding-returns", period] as const,
+  cashFlowSavings: (p: string, from: string, to: string, account?: string) => ["p", p, "cash", "savings", from, to, account ?? "all"] as const,
   /** Metal prices are global reference data, not per ledger. */
   metalPriceSeries: (quote: string, from: string, to: string) => ["metal-prices", quote, from, to] as const,
 

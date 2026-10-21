@@ -30,23 +30,78 @@ import { Segmented } from "@/components/ui/segmented";
 import { useToast } from "@/components/ui/toast";
 import { FormError, FormFooter } from "@/components/cash/bank-account-dialogs";
 import { ConfirmDialog } from "@/components/rules/shared";
-import { HoldingImage } from "./holding-image";
+import { HOLDING_KINDS, kindLabel, kindOf, type HoldingKind } from "@/lib/investments";
+import { HoldingImage, KindIcon } from "./holding-image";
+import { InvestmentFormBody } from "./investment-form";
 
-/** Add (holding = null) or edit a gold or silver holding. Owner only; the caller decides. */
+const KIND_HINT: Record<HoldingKind, string> = {
+  metal: "Bars, coins or jewellery by weight, valued at Dubai's retail rates.",
+  plan: "A savings or insurance plan you pay into, like RL360. You enter its value from the statement.",
+  broker: "An account valued as a whole: IBKR, Swissquote, Sarwa. You enter its value.",
+  security: "Shares or a fund: the units you hold times a price you enter.",
+  deposit: "A fixed deposit: principal, profit rate and maturity. Its value accrues day by day.",
+};
+
+/**
+ * Add (holding = null) or edit a holding. Adding starts with the kind; editing keeps it (values
+ * and flows belong to that kind). Owner only; the caller decides.
+ */
 export function HoldingDialog({ profileCode, open, holding, onClose }: { profileCode: string; open: boolean; holding: Holding | null; onClose: () => void }) {
+  const [picked, setPicked] = useState<HoldingKind | null>(null);
+  const kind = holding ? kindOf(holding) : picked;
+  const close = () => {
+    setPicked(null);
+    onClose();
+  };
   return (
     <Dialog
       open={open}
-      onOpenChange={(o) => !o && onClose()}
-      title={holding ? "Edit holding" : "Add holding"}
-      description="Gold is valued at Dubai's retail rate for its karat, silver at Dubai's retail silver rate."
+      onOpenChange={(o) => !o && close()}
+      title={holding ? `Edit ${holding.name}` : kind ? `Add ${kindLabel(kind).toLowerCase()}` : "Add holding"}
+      description={kind ? KIND_HINT[kind] : "What kind of investment is it?"}
     >
-      {open && <HoldingFormBody key={holding?.holding_code ?? "new"} profileCode={profileCode} holding={holding} onDone={onClose} />}
+      {open &&
+        (kind === null ? (
+          <KindPicker onPick={setPicked} />
+        ) : kind === "metal" ? (
+          <HoldingFormBody key={holding?.holding_code ?? "new"} profileCode={profileCode} holding={holding} onDone={close} onBack={holding ? undefined : () => setPicked(null)} />
+        ) : (
+          <InvestmentFormBody
+            key={holding?.holding_code ?? `new-${kind}`}
+            profileCode={profileCode}
+            kind={kind}
+            holding={holding}
+            onDone={close}
+            onBack={holding ? undefined : () => setPicked(null)}
+          />
+        ))}
     </Dialog>
   );
 }
 
-function HoldingFormBody({ profileCode, holding, onDone }: { profileCode: string; holding: Holding | null; onDone: () => void }) {
+function KindPicker({ onPick }: { onPick: (k: HoldingKind) => void }) {
+  return (
+    <ul className="flex flex-col gap-2" aria-label="Kind of investment">
+      {HOLDING_KINDS.map((k) => (
+        <li key={k.value}>
+          <button
+            type="button"
+            onClick={() => onPick(k.value)}
+            className="tap flex w-full items-start gap-3 rounded-md border border-border bg-surface px-3 py-2.5 text-left transition-colors hover:border-border-strong hover:bg-surface-2"
+          >
+            <KindIcon kind={k.value} className="mt-0.5 size-5 shrink-0 text-ink-2" />
+            <span className="min-w-0">
+              <span className="block text-sm font-medium text-ink">{k.label}</span>
+              <span className="block text-[12px] text-muted">{KIND_HINT[k.value]}</span>
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function HoldingFormBody({ profileCode, holding, onDone, onBack }: { profileCode: string; holding: Holding | null; onDone: () => void; onBack?: () => void }) {
   const save = useSaveHolding(profileCode);
   const toast = useToast();
   const today = todayDubai();
@@ -163,7 +218,7 @@ function HoldingFormBody({ profileCode, holding, onDone }: { profileCode: string
         {(id) => <Textarea id={id} maxLength={NOTES_MAX} value={form.notes} onChange={(e) => set("notes", e.target.value)} />}
       </Field>
       <FormError error={error} />
-      <FormFooter onCancel={onDone} pending={save.isPending} submit={holding ? "Save holding" : "Add holding"} />
+      <FormFooter onCancel={onBack ?? onDone} cancel={onBack ? "Back" : undefined} pending={save.isPending} submit={holding ? "Save holding" : "Add holding"} />
     </form>
   );
 }

@@ -7,8 +7,9 @@ import { AXIS_TICK, GRID_STROKE, axisMoney } from "@/components/charts/chart-too
 const TIP = "min-w-40 rounded-md border border-border bg-surface px-3 py-2 text-[12px] shadow-[0_8px_24px_-12px_var(--color-border-strong)]";
 
 /**
- * What today's holdings were worth each day (holdings_value_series) against what was paid for
- * them. A null day is a gap (no price yet), never a zero. Values are the server's, converted for
+ * What the holdings were worth each day (holdings_value_series) against what had been put in. A
+ * day missing some holding's value still plots (complete = false, noted under the chart); a null
+ * day is a gap, never a zero. Values are the server's, converted for
  * drawing only.
  */
 export function HoldingsValueChart({ points, className = "h-56" }: { points: HoldingsPoint[]; className?: string }) {
@@ -30,7 +31,8 @@ export function HoldingsValueChart({ points, className = "h-56" }: { points: Hol
                   <p className="font-medium text-ink">{formatDate(p.date)}</p>
                   <dl className="mt-1 grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5">
                     <dt className="text-ink-2">Value</dt>
-                    <dd className="tabular text-right text-ink">{p.value === null ? "No price yet" : formatTotal(p.value)}</dd>
+                    <dd className="tabular text-right text-ink">{p.value === null ? "No value yet" : formatTotal(p.value)}</dd>
+                    {!p.complete && p.value !== null && <dd className="col-span-2 text-[11px] text-muted">Part of the total: some holdings had no value</dd>}
                     {p.cost !== null && (
                       <>
                         <dt className="text-muted">Paid</dt>

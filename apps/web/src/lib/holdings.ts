@@ -240,8 +240,9 @@ export interface ValuationCompleteness {
 export function investmentNotes(v: ValuationCompleteness): string[] {
   const out: string[] = [];
   const unpriced = v.holdings.filter((h) => h.value_aed === null).length;
-  if (!v.complete && unpriced > 0) out.push(`${unpriced} ${unpriced === 1 ? "holding has" : "holdings have"} no price yet`);
-  if (v.stale_count > 0) out.push(`${v.stale_count} ${v.stale_count === 1 ? "price is" : "prices are"} over 3 days old`);
+  if (!v.complete && unpriced > 0) out.push(`${unpriced} ${unpriced === 1 ? "holding has" : "holdings have"} no value yet`);
+  // Stale: a metal price over 3 days old, or a plan's, account's or share's value over 45 days old.
+  if (v.stale_count > 0) out.push(`${v.stale_count} ${v.stale_count === 1 ? "value is" : "values are"} out of date`);
   return out.map(capitalise);
 }
 
@@ -271,10 +272,17 @@ export interface HoldingsPoint {
   /** For plotting only (display): null is a gap. */
   value: number | null;
   cost: number | null;
+  /** False when some holding had no value that day: the value is part of the total. */
+  complete: boolean;
 }
 
-export function holdingsPoints(series: readonly { date: string; value_aed: MoneyInput; cost_aed: MoneyInput }[]): HoldingsPoint[] {
-  return series.map((p) => ({ date: p.date.slice(0, 10), value: toAmount(p.value_aed), cost: toAmount(p.cost_aed) }));
+export function holdingsPoints(series: readonly { date: string; value_aed: MoneyInput; cost_aed: MoneyInput; complete?: boolean }[]): HoldingsPoint[] {
+  return series.map((p) => ({ date: p.date.slice(0, 10), value: toAmount(p.value_aed), cost: toAmount(p.cost_aed), complete: p.complete !== false }));
+}
+
+/** The note under the value chart when some day in range counts only part of the holdings; null when every day is whole. */
+export function partialDaysNote(points: readonly { complete: boolean }[]): string | null {
+  return points.some((p) => !p.complete) ? "Some holdings had no value on some days, so those days show part of the total." : null;
 }
 
 export interface PricePoint {
@@ -309,6 +317,7 @@ export interface HoldingForm {
 /** What save_holding needs: decimal strings, gold's karat and fineness or silver's purity. */
 export interface HoldingInput {
   holding_code?: string;
+  kind?: "metal";
   name: string;
   metal: Metal;
   grams: string;
@@ -339,8 +348,8 @@ export const EMPTY_HOLDING_FORM: HoldingForm = {
 /** A holding from holdings_valuation as the form's starting point (weight in grams). */
 export function holdingToForm(h: {
   name: string;
-  metal: string;
-  grams: string;
+  metal: string | null;
+  grams: string | null;
   karat: number | null;
   fineness: number | null;
   purity: string | null;

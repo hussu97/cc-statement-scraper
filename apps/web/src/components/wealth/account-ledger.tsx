@@ -10,6 +10,7 @@ import { cn } from "@/lib/cn";
 import { Badge } from "@/components/ui/display";
 import { CategoryPicker, StatusBadge } from "@/components/ledger";
 import { CardRef } from "@/components/bank-logo";
+import { HoldingChip } from "./link-holding";
 
 const GRID = "xl:grid-cols-[76px_minmax(0,1fr)_180px_120px_110px]";
 
@@ -90,7 +91,7 @@ function LedgerLine({
           </span>
           <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-muted">
             <span className="xl:hidden">{formatDate(r.txn_date, "short")}</span>
-            {chip && <Badge tone={chip.tone}>{chip.label}</Badge>}
+            {r.holding_name ? <HoldingChip name={r.holding_name} /> : chip && <Badge tone={chip.tone}>{chip.label}</Badge>}
             {peer && (
               <span className="inline-flex min-w-0 items-center gap-1">
                 {peer.prefix} <CardRef bankCode={peer.bankCode} last4={peer.last4} />

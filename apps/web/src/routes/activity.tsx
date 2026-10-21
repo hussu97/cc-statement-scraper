@@ -31,6 +31,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
 import { useToast } from "@/components/ui/toast";
 import { CategoryPicker, EvidenceBadge, StatusBadge, TxnAmount } from "@/components/ledger";
+import { HoldingChip } from "@/components/wealth/link-holding";
 import { Pagination } from "@/components/pagination";
 import { InfiniteFooter } from "@/components/infinite-footer";
 import { ActivityFilters } from "@/components/activity/filters";
@@ -298,6 +299,7 @@ function TxnLine({
             <TransferRef t={t} />
             <StatusBadge status={t.status} />
             {t.exclude_from_spend && <span>excluded</span>}
+            <HoldingChip name={t.holding_name} />
           </span>
         </button>
       </span>

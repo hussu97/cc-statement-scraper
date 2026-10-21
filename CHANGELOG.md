@@ -5,9 +5,17 @@
 ### Backend (Supabase)
 
 - **feat** Holdings beyond metals: savings plans, broker accounts, shares and funds (units × price), fixed deposits (accrue to maturity), each in its own currency. `record_holding_value` for plans, brokers and unit prices.
-- **feat** `holding_flows`: contributions, withdrawals and income per holding, optionally the ledger payment; a metal's cost is its first contribution. `add_holding_flow`, `remove_holding_flow`, `holding_detail`.
-- **feat** Linking: a holding's description rule links matching payments as they arrive (and existing ones when saved); `link_transaction` links or unlinks by hand. A linked payment is saving, not spend: it leaves spend and budgets and shows as saving in cash flow; `cash_flow_savings` breaks saving down by holding.
+- **feat** `holding_flows`: contributions, withdrawals and income per holding, optionally the ledger payment; a metal's cost and a deposit's principal are its first contribution. `add_holding_flow`, `remove_holding_flow`, `holding_detail`.
+- **feat** Linking: a holding's description rule (contains, or the whole description for short names such as Wio's "RI" for RL360) links matching payments as they arrive (and existing ones when saved); `link_transaction` links or unlinks by hand. A linked payment is saving, not spend: it leaves spend and budgets and shows as saving in cash flow; `cash_flow_savings` breaks saving down by holding.
 - **feat** `holding_returns` (all time, this year, last 12 months): added vs growth, simple % and a money-weighted yearly return. `net_worth` adds allocation by asset class.
+
+### Web
+
+- **feat** Investments covers plans, broker accounts, shares and funds, and deposits: grouped holdings, kind-specific forms with a link rule (contains, or the whole description), Update value, a holding page with returns, money in and out and value history, a returns card (all time / this year / 12 months), allocation on the Wealth overview, Link to investment from Activity and account ledgers, and saving by holding in Cash flow.
+
+### iOS
+
+- **feat** The same in the Investments tab: grouped holdings, kind-specific sheets with the link rule, a holding screen (returns, flows, values), the returns card, an allocation chart on the Wealth overview, Link to investment from a transaction, and saving by holding in Cash flow.
 
 ## Gold and silver in Wealth — 2026-10-21
 

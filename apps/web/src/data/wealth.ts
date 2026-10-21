@@ -4,6 +4,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { supabase, type RpcArgs } from "@/lib/supabase";
 import type { BalanceAnchor } from "@/lib/balances";
+import type { AllocationRow } from "@/lib/investments";
 import { keys } from "./keys";
 import { ApiError, must } from "./api";
 
@@ -18,7 +19,7 @@ export interface NetWorthCard {
   has_estimate: boolean;
 }
 
-/** public.net_worth: bank cash + investments (gold and silver) − what the cards owe, with completeness. */
+/** public.net_worth: bank cash + investments − what the cards owe, with completeness and allocation. */
 export interface NetWorth {
   cash_aed: string;
   cash_complete: boolean;
@@ -26,7 +27,7 @@ export interface NetWorth {
   cash_stale_count: number;
   /** The oldest bank balance's as-of; null when none is recorded. */
   cash_as_of: string | null;
-  /** Gold and silver at today's prices (holdings_valuation's total). */
+  /** Every holding at today's prices and values (holdings_valuation's total). */
   holdings_aed: string;
   /** False when a holding has no price or its price is over 3 days old. */
   holdings_complete: boolean;
@@ -38,6 +39,8 @@ export interface NetWorth {
   complete: boolean;
   has_bank_accounts: boolean;
   cards: NetWorthCard[];
+  /** Assets by class (cash, gold, silver, plan, broker, security, deposit), largest first, then `owed` as a negative row with no share. */
+  allocation?: AllocationRow[];
 }
 
 export function useNetWorth(profileCode: string) {
@@ -114,6 +117,9 @@ export interface LedgerRow {
   transfer_txn_code: string | null;
   transfer_bank_code: string | null;
   transfer_card_last4: string | null;
+  /** The holding this payment is linked to (it counts as saving); absent from an older server. */
+  holding_code?: string | null;
+  holding_name?: string | null;
 }
 
 /** public.account_ledger for [from, to]: rows newest first, opening/closing balance and money in/out. */

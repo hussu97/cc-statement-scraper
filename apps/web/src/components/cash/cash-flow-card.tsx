@@ -2,8 +2,10 @@ import { useMemo, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeftRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { useCashFlow } from "@/data/cash";
+import { useCashFlowSavings } from "@/data/holdings";
+import { savingLines, type SavingLine } from "@/lib/investments";
 import { cashFlowRange, formatFlow, formatNet, monthFlows, netByMonth, netTone, type FlowGroup, type FlowLine } from "@/lib/cash-flow";
-import { addMonths, formatMonth } from "@/lib/dates";
+import { addMonths, formatMonth, monthEnd } from "@/lib/dates";
 import { formatCount } from "@/lib/money";
 import { cn } from "@/lib/cn";
 import { Badge, Card, CardHeader, Skeleton } from "@/components/ui/display";
@@ -42,6 +44,8 @@ export function CashFlowCard({
   const flows = useMemo(() => monthFlows(q.data ?? [], month), [q.data, month]);
   const nets = useMemo(() => netByMonth(q.data ?? [], month), [q.data, month]);
   const isCurrent = month === thisMonth;
+  const savingsQ = useCashFlowSavings(profileCode, { from: month, to: monthEnd(month) }, account);
+  const savings = useMemo(() => savingLines(savingsQ.data ?? [], month), [savingsQ.data, month]);
 
   return (
     <Card>
@@ -82,7 +86,7 @@ export function CashFlowCard({
               <>
                 <div className="flex flex-col gap-4">
                   {flows.groups.map((g) => (
-                    <GroupBlock key={g.key} group={g} month={month} unfiledAccount={unfiledAccount} />
+                    <GroupBlock key={g.key} group={g} month={month} unfiledAccount={unfiledAccount} savings={savings} />
                   ))}
                 </div>
                 <div className="mt-4 flex items-baseline justify-between gap-3 border-t border-border pt-3">
@@ -131,7 +135,7 @@ export function CashFlowCard({
   );
 }
 
-function GroupBlock({ group: g, month, unfiledAccount }: { group: FlowGroup; month: string; unfiledAccount?: string }) {
+function GroupBlock({ group: g, month, unfiledAccount, savings }: { group: FlowGroup; month: string; unfiledAccount?: string; savings: SavingLine[] }) {
   return (
     <section aria-label={g.label} className={cn(g.muted && "text-muted")}>
       <div className="mb-1 flex items-baseline justify-between gap-2">
@@ -140,41 +144,71 @@ function GroupBlock({ group: g, month, unfiledAccount }: { group: FlowGroup; mon
       </div>
       <ul className="flex flex-col">
         {g.lines.map((l) => (
-          <LineRow key={l.flow} line={l} muted={g.muted} month={month} unfiledAccount={unfiledAccount} />
+          <LineRow key={l.flow} line={l} muted={g.muted} month={month} unfiledAccount={unfiledAccount} breakdown={l.flow === "saving" ? savings : undefined} />
         ))}
       </ul>
     </section>
   );
 }
 
-function LineRow({ line: l, muted, month, unfiledAccount }: { line: FlowLine; muted: boolean; month: string; unfiledAccount?: string }) {
+function LineRow({ line: l, muted, month, unfiledAccount, breakdown }: { line: FlowLine; muted: boolean; month: string; unfiledAccount?: string; breakdown?: SavingLine[] }) {
   const amount = formatFlow(l.amount, l.direction);
   const count = `${formatCount(l.count)} ${l.count === 1 ? "transaction" : "transactions"}`;
   return (
-    <li className="flex items-baseline justify-between gap-3 py-1">
-      <span className="min-w-0 truncate text-sm">
-        {l.unfiled ? (
-          unfiledAccount ? (
-            <Link
-              to="/wealth/accounts/$accountCode"
-              params={{ accountCode: unfiledAccount }}
-              search={{ month: month.slice(0, 7) }}
-              className="text-accent hover:underline"
-              title="File them from the account's ledger"
-            >
-              {l.label}
-            </Link>
+    <li className="py-1">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="min-w-0 truncate text-sm">
+          {l.unfiled ? (
+            unfiledAccount ? (
+              <Link
+                to="/wealth/accounts/$accountCode"
+                params={{ accountCode: unfiledAccount }}
+                search={{ month: month.slice(0, 7) }}
+                className="text-accent hover:underline"
+                title="File them from the account's ledger"
+              >
+                {l.label}
+              </Link>
+            ) : (
+              <Link to="/wealth/accounts" className="text-accent hover:underline" title="File them from each account's ledger">
+                {l.label}
+              </Link>
+            )
           ) : (
-            <Link to="/wealth/accounts" className="text-accent hover:underline" title="File them from each account's ledger">
-              {l.label}
-            </Link>
-          )
-        ) : (
-          <span className={muted ? "text-muted" : "text-ink"}>{l.label}</span>
-        )}
-        <span className="ml-2 text-[11px] text-subtle">{count}</span>
-      </span>
-      <span className={cn("tabular shrink-0 text-sm", muted ? "text-muted" : l.direction === "in" ? "text-positive" : "text-ink")}>{amount}</span>
+            <span className={muted ? "text-muted" : "text-ink"}>{l.label}</span>
+          )}
+          <span className="ml-2 text-[11px] text-subtle">{count}</span>
+        </span>
+        <span className={cn("tabular shrink-0 text-sm", muted ? "text-muted" : l.direction === "in" ? "text-positive" : "text-ink")}>{amount}</span>
+      </div>
+      {breakdown && breakdown.length > 0 && <SavingBreakdown lines={breakdown} />}
     </li>
+  );
+}
+
+/** Saving by holding (cash_flow_savings): each holding's linked payments, and "Unassigned" for saving filed by category only. */
+function SavingBreakdown({ lines }: { lines: SavingLine[] }) {
+  return (
+    <ul aria-label="Saving by investment" className="mt-1 ml-1 flex flex-col border-l border-border pl-3">
+      {lines.map((s) => (
+        <li key={s.key} className="flex items-baseline justify-between gap-3 py-0.5 text-[13px]">
+          <span className="min-w-0 truncate">
+            {s.holdingCode ? (
+              <Link to="/wealth/investments/$holdingCode" params={{ holdingCode: s.holdingCode }} className="text-ink-2 hover:text-accent hover:underline">
+                {s.label}
+              </Link>
+            ) : (
+              <span className="text-muted" title="Filed under a saving category, not linked to an investment">
+                {s.label}
+              </span>
+            )}
+            <span className="ml-2 text-[11px] text-subtle">
+              {formatCount(s.count)} {s.count === 1 ? "transaction" : "transactions"}
+            </span>
+          </span>
+          <span className="tabular shrink-0 text-ink-2">{formatFlow(s.amount, "out")}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
