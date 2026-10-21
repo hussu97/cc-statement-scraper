@@ -1132,6 +1132,7 @@ export type Database = {
           institution: string | null
           karat: number | null
           kind: string
+          link_exact: boolean
           link_pattern: string | null
           maturity_on: string | null
           metal: string | null
@@ -1159,6 +1160,7 @@ export type Database = {
           institution?: string | null
           karat?: number | null
           kind?: string
+          link_exact?: boolean
           link_pattern?: string | null
           maturity_on?: string | null
           metal?: string | null
@@ -1186,6 +1188,7 @@ export type Database = {
           institution?: string | null
           karat?: number | null
           kind?: string
+          link_exact?: boolean
           link_pattern?: string | null
           maturity_on?: string | null
           metal?: string | null
@@ -3308,7 +3311,12 @@ export type Database = {
         }[]
       }
       cash_flow_savings: {
-        Args: { p_from: string; p_profile_code: string; p_to: string }
+        Args: {
+          p_account_code?: string
+          p_from: string
+          p_profile_code: string
+          p_to: string
+        }
         Returns: Json
       }
       cash_position: { Args: { p_profile_code: string }; Returns: Json }
@@ -3664,6 +3672,7 @@ export type Database = {
           p_institution?: string
           p_karat?: number
           p_kind?: string
+          p_link_exact?: boolean
           p_link_pattern?: string
           p_maturity_on?: string
           p_metal?: string

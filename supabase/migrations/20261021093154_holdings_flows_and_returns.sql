@@ -5,14 +5,15 @@
 --    plan), broker (a broker account valued as a whole), security (a share or fund: units × a
 --    price you enter), deposit (principal, profit rate, maturity; value accrues). Each holding
 --    has a currency (USD → AED at the 3.6725 peg, others at fx_rates), an institution, and an
---    optional link_pattern: a payment whose description contains it is linked automatically.
+--    optional link_pattern: a payment whose description contains it (or, with link_exact, is
+--    exactly it: Wio prints RL360 as "RI") is linked automatically.
 -- 2. holding_valuations: evidence, never edited. A value (plan, broker) or a unit price
 --    (security) as of a date; the latest on or before a day is the holding's value that day.
 -- 3. holding_flows: contribution | withdrawal | income, dated, in the holding's currency and in
 --    AED, optionally the ledger transaction that paid it (one flow per transaction). A removed
 --    flow keeps its row (removed_at), so the rule never re-links a payment the user unlinked.
---    A metal's cost and purchase date are its first contribution (source holding_cost), kept in
---    sync by save_holding. What a holding cost = contributions − withdrawals.
+--    A metal's cost and purchase date, or a deposit's principal and start date, are its first
+--    contribution (source holding_cost), kept in sync by save_holding. What a holding cost = contributions − withdrawals.
 -- 4. Linking: an AFTER trigger on transactions links new payments by rule and keeps a linked
 --    flow's amounts current; link_transaction links or unlinks by hand. A linked payment is
 --    saving (decision 1): v_spend leaves it out, v_cash_flow files it as `saving` with its
@@ -38,7 +39,11 @@ alter table public.holdings add column symbol text check (length(symbol) <= 20);
 alter table public.holdings add column principal numeric(14,2) check (principal > 0);
 alter table public.holdings add column rate_pct numeric(6,3) check (rate_pct >= 0 and rate_pct <= 100);
 alter table public.holdings add column maturity_on date;
-alter table public.holdings add column link_pattern text check (length(btrim(link_pattern)) between 3 and 60);
+alter table public.holdings add column link_pattern text;
+-- link_exact: the whole description must equal the pattern (Wio prints RL360 as just "RI").
+alter table public.holdings add column link_exact boolean not null default false;
+alter table public.holdings add constraint holdings_link_pattern_check check (
+  link_pattern is null or length(btrim(link_pattern)) between case when link_exact then 2 else 3 end and 60);
 alter table public.holdings alter column metal drop not null;
 alter table public.holdings alter column grams drop not null;
 alter table public.holdings alter column form drop not null;
@@ -146,7 +151,8 @@ as $$
                                         where t.txn_code = p_txn_code and t.status in ('pending', 'posted')))
 $$;
 
--- A metal's cost and purchase date as its first contribution.
+-- A metal's cost and purchase date, or a deposit's principal and start date, as its first
+-- contribution.
 create function private.sync_holding_cost_flow(p_holding_code text)
 returns void
 language plpgsql
@@ -156,10 +162,11 @@ declare
   h public.holdings;
 begin
   select * into h from public.holdings where holding_code = p_holding_code;
-  if h.kind = 'metal' and h.cost_aed is not null and h.cost_aed > 0 then
+  if (h.kind = 'metal' and h.cost_aed is not null and h.cost_aed > 0) or h.kind = 'deposit' then
     insert into public.holding_flows (profile_code, holding_code, flow_date, kind, amount, amount_aed, source, created_by)
     values (h.profile_code, h.holding_code, coalesce(h.acquired_on, public.dubai_date(h.created_at)), 'contribution',
-            h.cost_aed, h.cost_aed, 'holding_cost', h.created_by)
+            coalesce(h.cost_aed, h.principal), coalesce(h.cost_aed, private.to_aed(h.principal, h.currency)),
+            'holding_cost', h.created_by)
     on conflict (holding_code) where source = 'holding_cost' do update
       set flow_date = excluded.flow_date, amount = excluded.amount, amount_aed = excluded.amount_aed, removed_at = null;
   else
@@ -197,7 +204,9 @@ as $$
   select h.holding_code from public.holdings h
   where h.profile_code = t.profile_code and h.status = 'active' and h.link_pattern is not null
     and t.kind in ('purchase', 'fee', 'transfer_out', 'transfer_in', 'refund')
-    and t.description ilike '%' || replace(replace(replace(btrim(h.link_pattern), '\', '\\'), '%', '\%'), '_', '\_') || '%'
+    and case when h.link_exact then upper(btrim(t.description)) = upper(btrim(h.link_pattern))
+             else t.description ilike '%' || replace(replace(replace(btrim(h.link_pattern), '\', '\\'), '%', '\%'), '_', '\_') || '%'
+        end
     and (h.acquired_on is null or t.txn_date >= h.acquired_on - 7)
   order by h.created_at, h.holding_code
   limit 1
@@ -482,7 +491,8 @@ create function public.save_holding(
   p_fineness int default null, p_form text default null,
   p_kind text default null, p_currency text default null, p_institution text default null,
   p_units text default null, p_symbol text default null, p_principal text default null,
-  p_rate_pct text default null, p_maturity_on date default null, p_link_pattern text default null
+  p_rate_pct text default null, p_maturity_on date default null, p_link_pattern text default null,
+  p_link_exact boolean default null
 )
 returns text
 language plpgsql
@@ -554,7 +564,7 @@ begin
   if p_holding_code is null then
     insert into public.holdings (profile_code, name, kind, metal, grams, karat, fineness, purity, form, cost_aed,
                                  currency, institution, units, symbol, principal, rate_pct, maturity_on, link_pattern,
-                                 acquired_on, notes, created_by)
+                                 link_exact, acquired_on, notes, created_by)
     values (p_profile_code, btrim(p_name), v_kind,
             case when v_kind = 'metal' then p_metal end,
             case when v_kind = 'metal' then v_grams end,
@@ -569,7 +579,7 @@ begin
             case when v_kind = 'deposit' then v_principal end,
             case when v_kind = 'deposit' then v_rate end,
             case when v_kind = 'deposit' then p_maturity_on end,
-            v_link, p_acquired_on, nullif(btrim(coalesce(p_notes, '')), ''), auth.uid())
+            v_link, coalesce(p_link_exact, false), p_acquired_on, nullif(btrim(coalesce(p_notes, '')), ''), auth.uid())
     returning holding_code into v_code;
   else
     update public.holdings
@@ -587,7 +597,7 @@ begin
         principal = case when v_kind = 'deposit' then v_principal end,
         rate_pct = case when v_kind = 'deposit' then v_rate end,
         maturity_on = case when v_kind = 'deposit' then p_maturity_on end,
-        link_pattern = v_link, acquired_on = p_acquired_on, notes = nullif(btrim(coalesce(p_notes, '')), '')
+        link_pattern = v_link, link_exact = coalesce(p_link_exact, false), acquired_on = p_acquired_on, notes = nullif(btrim(coalesce(p_notes, '')), '')
     where holding_code = p_holding_code and profile_code = p_profile_code and status = 'active'
     returning holding_code into v_code;
     if v_code is null then
@@ -600,10 +610,10 @@ begin
 end;
 $$;
 comment on function public.save_holding(text, text, text, text, int, text, text, date, text, text, int, text,
-                                        text, text, text, text, text, text, text, date, text) is
+                                        text, text, text, text, text, text, text, date, text, boolean) is
   'Owner: adds or edits a holding of any kind (decimal strings). A metal''s cost is its first contribution; a link_pattern links matching payments.';
 grant execute on function public.save_holding(text, text, text, text, int, text, text, date, text, text, int, text,
-                                              text, text, text, text, text, text, text, date, text)
+                                              text, text, text, text, text, text, text, date, text, boolean)
   to authenticated, service_role;
 
 -- ── 5. Values ────────────────────────────────────────────────────────────────
@@ -738,6 +748,7 @@ begin
                'form', r.form, 'image_path', case when r.kind = 'metal' then r.metal || '-' || r.form || '.jpg' end,
                'units', r.units::text, 'symbol', r.symbol, 'principal', r.principal::text,
                'rate_pct', r.rate_pct::text, 'maturity_on', r.maturity_on, 'link_pattern', r.link_pattern,
+               'link_exact', r.link_exact,
                'cost_aed', r.net_added::numeric(14,2)::text, 'income_aed', r.income::numeric(14,2)::text,
                'acquired_on', r.acquired_on, 'notes', r.notes,
                'quote', r.quote, 'aed_per_gram', r.aed_per_gram::text, 'price_as_of', r.price_as_of,
@@ -811,10 +822,13 @@ begin
   end if;
   return (
     select coalesce(jsonb_agg(jsonb_build_object(
-             'date', s.d, 'value_aed', s.value::text, 'cost_aed', s.cost::text) order by s.d), '[]'::jsonb)
+             'date', s.d, 'value_aed', s.value::text, 'cost_aed', s.cost::text, 'complete', s.complete)
+             order by s.d), '[]'::jsonb)
     from (
+      -- The holdings with a value that day; complete says whether that is all of them.
       select d::date as d,
-             case when bool_and(v.value_aed is not null) then sum(v.value_aed)::numeric(14,2) end as value,
+             sum(v.value_aed)::numeric(14,2) as value,
+             bool_and(v.value_aed is not null) as complete,
              sum(ft.contributions - ft.withdrawals)::numeric(14,2) as cost
       from generate_series(p_from, least(p_to, public.dubai_date(now())), interval '1 day') d
       join lateral private.holding_values(p_profile_code,
@@ -828,7 +842,7 @@ begin
 end;
 $$;
 comment on function public.holdings_value_series(text, date, date) is
-  'Member: per Dubai day, the value of the active holdings held then (at that day''s prices and values) and what they had cost to date.';
+  'Member: per Dubai day, the value of the active holdings held then that have a value (complete = all of them), and what they had cost to date.';
 grant execute on function public.holdings_value_series(text, date, date) to authenticated, service_role;
 
 -- ── Returns ──────────────────────────────────────────────────────────────────
@@ -964,7 +978,10 @@ begin
     from public.holding_flows f
     where f.holding_code = h.holding_code and private.flow_is_active(f.removed_at, f.txn_code)
       and f.flow_date >= v_start and f.flow_date <= v_today;
-    v_complete := v0 is not null and v1 is not null;
+    -- All time needs to know what went in: a holding with no contribution has an unknown cost,
+    -- and its whole value would read as growth.
+    v_complete := v0 is not null and v1 is not null
+                  and (v_from is null and v_in > 0 or v_from is not null);
     v_growth := case when v_complete then v1 - v0 - (v_in - v_out) + v_income end;
     if v0 > 0 then
       v_dates := array[v_start] || v_dates;
@@ -1113,7 +1130,7 @@ where t.status in ('pending', 'posted') and not t.exclude_from_spend and t.amoun
        or (t.direction = 'credit' and t.kind = 'refund'));
 
 -- Member: the month's saving by holding (null holding = saving filed by category only).
-create function public.cash_flow_savings(p_profile_code text, p_from date, p_to date)
+create function public.cash_flow_savings(p_profile_code text, p_from date, p_to date, p_account_code text default null)
 returns jsonb
 language plpgsql
 stable
@@ -1134,14 +1151,15 @@ begin
              count(*)::int as n
       from public.v_cash_flow v
       where v.profile_code = p_profile_code and v.flow = 'saving' and v.txn_date between p_from and p_to
+        and (p_account_code is null or v.account_code = p_account_code)
       group by 1, 2
     ) x
     left join public.holdings h on h.holding_code = x.holding_code), '[]'::jsonb);
 end;
 $$;
-comment on function public.cash_flow_savings(text, date, date) is
-  'Member: saving per month by holding (linked payments), and saving filed by category with no holding (holding_code null).';
-grant execute on function public.cash_flow_savings(text, date, date) to authenticated, service_role;
+comment on function public.cash_flow_savings(text, date, date, text) is
+  'Member: saving per month by holding (linked payments), and saving filed by category with no holding (holding_code null); optionally one account.';
+grant execute on function public.cash_flow_savings(text, date, date, text) to authenticated, service_role;
 
 -- ── 6. Net worth with every holding, and allocation ─────────────────────────
 create or replace function private.net_worth(p_profile_code text)
