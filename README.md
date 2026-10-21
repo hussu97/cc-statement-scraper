@@ -236,7 +236,7 @@ JWTs. The service client logs which source it used (never the value).
 
 | Variable | Used by | Default | Purpose |
 |---|---|---|---|
-| `CRON_SECRET` | worker, gmail-watch-renew, outlook-poll, ops-monitor, fx-rates | required | Must equal Vault `edge_cron_secret` (`x-cron-secret` header) |
+| `CRON_SECRET` | worker, gmail-watch-renew, outlook-poll, ops-monitor, fx-rates, metal-prices | required | Must equal Vault `edge_cron_secret` (`x-cron-secret` header) |
 | `PARSER_URL` | worker | required | Cloud Run parser base URL |
 | `PARSER_SECRET` | worker | required | Sent as `X-Parser-Secret` |
 | `PARSER_DOCUMENT_BASE_URL` | worker | — | Rewrites the signed Storage URL origin (local only) |
@@ -374,7 +374,7 @@ Used for the production Edge Function secrets and Vault entries, and for secret 
 | `sms-ingest` | POST JSON `{profile_code?, messages[≤200]}` | User JWT or service token `sms:ingest` | Batch SMS ingest (idempotent on `client_msg_id`) |
 | `gmail-push` | POST (Pub/Sub envelope) | Google OIDC token | Gmail notifications → documents (200 done or permanent failure acked, 503 budget used up, 500 transient: Pub/Sub redelivers) |
 | `member-invite` | POST JSON `{profile_code, email, role?, action?, redirect_to?}` (`action`: `invite` or `resend`) | User JWT (owner) | Add a member and send the Auth invite email (sign-ups are off), or resend it. `redirect_to` must be on the caller's own origin |
-| `worker`, `gmail-watch-renew`, `outlook-poll`, `ops-monitor`, `fx-rates` | POST | `x-cron-secret` | pg_cron-driven jobs |
+| `worker`, `gmail-watch-renew`, `outlook-poll`, `ops-monitor`, `fx-rates`, `metal-prices` | POST | `x-cron-secret` | pg_cron-driven jobs |
 
 ### RPCs (`supabase.rpc(...)`, PostgREST)
 

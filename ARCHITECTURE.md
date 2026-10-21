@@ -71,6 +71,7 @@ a `deno test` guard enforces this.
 | `outlook-poll` | pg_cron hourly | Microsoft Graph delta over Inbox, DeletedItems and Archive. Resumable within `OUTLOOK_BUDGET_MS`. Replaces the legacy GitHub Actions cron. |
 | `ops-monitor` | pg_cron every 15 min | Reads `ops_health()` and raises one Sentry issue per problem type, then sends the `ops-heartbeat` cron check-in. |
 | `member-invite` | User JWT (owner) | Adds a member (`add_profile_member` as the caller) and, for an email with no Auth user (sign-ups are off), sends the Auth invite with the service client; `resend` re-sends to a never-confirmed member. Rate-limited per caller and per address; the invite redirects only to the caller's own origin. |
+| `metal-prices` | pg_cron every 6 hours (`7 */6 * * *`) | Gold at the Dubai Jewellery Group's retail rates by karat (dubaicityofgold.com, else Khaleej Times' 24K), Dubai retail silver per kilo (Khaleej Times JSON-LD), spot gold and silver for reference (gold-api.com, else Swissquote); `record_metal_prices` converts to AED per gram and refuses a jump over 50%. |
 | `fx-rates` | pg_cron daily 21:00 UTC | Fetches open.er-api.com, inverts quotes to AED per unit with exact decimals, calls `upsert_fx_rates` (which re-estimates pending SMS). |
 
 Shared code in `_shared/`: `auth.ts` (JWT, service token and cron secret), `sentry.ts`
@@ -616,6 +617,18 @@ last nightly `net_worth_snapshots` row plus today's live figure (holdings join i
 ledger's (or account's) first bank evidence, so a month of card spend with no captured income
 is not read as a loss.
 
+**Gold and silver** (`20261021070429`, `tasks/todo.md` §6). `metal_prices` keeps every fetch
+(global reference data): `gold_24k|22k|21k|18k` (Dubai retail, AED/g), `silver_retail` (Dubai
+retail, stored per gram from the per-kilo rate), `gold_spot` / `silver_spot` (USD/oz at the
+peg, reference only). `holdings` are a ledger's metals (grams; karat and 24K fineness for gold,
+purity for silver; cost in AED, optional), written through `save_holding` / `close_holding`
+(owner). `private.holding_values(profile, at)` prices each at an instant: gold is grams × its
+karat's rate, a 24K bar of 999.5, 999 or 995 times `private.gold_fineness_factor` (pro rata to
+999.9, hardcoded); silver is grams × the retail rate × purity / 0.999. `holdings_valuation`
+adds gain vs cost and the 24-hour change; `holdings_value_series` / `metal_price_series` feed
+the charts. Net worth is cash + metals − owed, and snapshots carry `holdings_aed`. A price older
+than 3 days is stale and makes the metals incomplete.
+
 There is likewise **one definition of what a card owes**: `public.v_account_balances`
 (`security_invoker`). A sum of transactions cannot know the balance carried in before the first
 document, so each account is anchored on a balance the bank printed, the latest of:
@@ -785,6 +798,7 @@ all-profiles run, purges `document_events` older than 90 days first):
 | `ledger-worker-kick` | `* * * * *` | `private.kick_worker()` calls the `worker` function, only when a queue has visible messages |
 | `ledger-recategorize-sweep` | `17 */3 * * *` | `private.recategorize_stale()` |
 | `ledger-fx-rates` | `0 21 * * *` | `fx-rates` function |
+| `ledger-metal-prices` | `7 */6 * * *` | `metal-prices` function |
 | `ledger-nightly` | `0 22 * * *` | `private.nightly()` |
 | `ledger-llm-enqueue` | `0 18 * * *` | `private.enqueue_llm_categorize()` |
 | `ledger-legacy-choices` | `45 22 * * *` | `private.legacy_choices_cron()`: applies staged legacy category choices once per transaction (never over a later user edit), then unschedules itself when nothing is pending or 30 days after staging. Leftovers: `private.legacy_unmatched_choices()` |

@@ -1,5 +1,12 @@
 # Changelog
 
+## Gold and silver in Wealth — 2026-10-21
+
+### Backend (Supabase)
+
+- **feat** `metal-prices` Edge Function every 6 hours (pg_cron `ledger-metal-prices`): Dubai retail gold by karat (Dubai Jewellery Group, Khaleej Times as fallback), Dubai retail silver (Khaleej Times), and spot for reference (gold-api.com, Swissquote). Stored in `metal_prices`; a price more than 50% from the last one is refused.
+- **feat** `holdings` (gold by karat, 24K bars by fineness 999.9/999.5/999/995; silver by purity; cost optional) with `save_holding` / `close_holding`, `holdings_valuation` (value, gain vs cost, 24-hour change), `holdings_value_series`, `metal_price_series`. Net worth now counts the metals.
+
 ## Wio Credit statement and autopay leg — 2026-10-20
 
 ### Backend (Supabase)

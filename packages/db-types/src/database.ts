@@ -973,6 +973,68 @@ export type Database = {
         }
         Relationships: []
       }
+      holdings: {
+        Row: {
+          acquired_on: string | null
+          cost_aed: number | null
+          created_at: string
+          created_by: string | null
+          fineness: number | null
+          grams: number
+          holding_code: string
+          karat: number | null
+          metal: string
+          name: string
+          notes: string | null
+          profile_code: string
+          purity: number | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          acquired_on?: string | null
+          cost_aed?: number | null
+          created_at?: string
+          created_by?: string | null
+          fineness?: number | null
+          grams: number
+          holding_code?: string
+          karat?: number | null
+          metal: string
+          name: string
+          notes?: string | null
+          profile_code: string
+          purity?: number | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          acquired_on?: string | null
+          cost_aed?: number | null
+          created_at?: string
+          created_by?: string | null
+          fineness?: number | null
+          grams?: number
+          holding_code?: string
+          karat?: number | null
+          metal?: string
+          name?: string
+          notes?: string | null
+          profile_code?: string
+          purity?: number | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "holdings_profile_code_fkey"
+            columns: ["profile_code"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["profile_code"]
+          },
+        ]
+      }
       insights: {
         Row: {
           body: string
@@ -1250,11 +1312,42 @@ export type Database = {
         }
         Relationships: []
       }
+      metal_prices: {
+        Row: {
+          aed_per_gram: number
+          as_of: string
+          created_at: string
+          price_code: string
+          quote: string
+          source: string
+          usd_per_oz: number | null
+        }
+        Insert: {
+          aed_per_gram: number
+          as_of: string
+          created_at?: string
+          price_code?: string
+          quote: string
+          source: string
+          usd_per_oz?: number | null
+        }
+        Update: {
+          aed_per_gram?: number
+          as_of?: string
+          created_at?: string
+          price_code?: string
+          quote?: string
+          source?: string
+          usd_per_oz?: number | null
+        }
+        Relationships: []
+      }
       net_worth_snapshots: {
         Row: {
           cash_aed: number
           complete: boolean
           created_at: string
+          holdings_aed: number
           net_aed: number
           owed_aed: number
           profile_code: string
@@ -1266,6 +1359,7 @@ export type Database = {
           cash_aed: number
           complete: boolean
           created_at?: string
+          holdings_aed?: number
           net_aed: number
           owed_aed: number
           profile_code: string
@@ -1277,6 +1371,7 @@ export type Database = {
           cash_aed?: number
           complete?: boolean
           created_at?: string
+          holdings_aed?: number
           net_aed?: number
           owed_aed?: number
           profile_code?: string
@@ -3036,6 +3131,10 @@ export type Database = {
           txn_count: number
         }[]
       }
+      close_holding: {
+        Args: { p_holding_code: string; p_profile_code: string }
+        Returns: undefined
+      }
       create_bank_account: {
         Args: {
           p_account_ref: string
@@ -3095,6 +3194,11 @@ export type Database = {
         }[]
       }
       gen_code: { Args: { prefix: string }; Returns: string }
+      holdings_valuation: { Args: { p_profile_code: string }; Returns: Json }
+      holdings_value_series: {
+        Args: { p_from: string; p_profile_code: string; p_to: string }
+        Returns: Json
+      }
       hour_weekday_pattern: {
         Args: { p_from: string; p_profile_code: string; p_to: string }
         Returns: {
@@ -3183,6 +3287,10 @@ export type Database = {
           txn_count: number
         }[]
       }
+      metal_price_series: {
+        Args: { p_from: string; p_quote: string; p_to: string }
+        Returns: Json
+      }
       month_to_date_end: {
         Args: { p_month: string; p_today: string; p_viewed_month: string }
         Returns: string
@@ -3255,6 +3363,7 @@ export type Database = {
         }
         Returns: string
       }
+      record_metal_prices: { Args: { p_quotes: Json }; Returns: Json }
       recurring_list: {
         Args: { p_profile_code: string }
         Returns: {
@@ -3317,6 +3426,22 @@ export type Database = {
       revoke_service_token: {
         Args: { p_token_code: string }
         Returns: undefined
+      }
+      save_holding: {
+        Args: {
+          p_acquired_on?: string
+          p_cost_aed?: string
+          p_fineness?: number
+          p_grams: string
+          p_holding_code?: string
+          p_karat?: number
+          p_metal: string
+          p_name: string
+          p_notes?: string
+          p_profile_code: string
+          p_purity?: string
+        }
+        Returns: string
       }
       save_mailbox_sync_state: {
         Args: {
