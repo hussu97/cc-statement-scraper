@@ -5,7 +5,7 @@ import { wealthHoldingRoute } from "@/router";
 import { useActiveProfile } from "@/data/profile";
 import { useHoldingDetail, useHoldingsValuation, type Holding, type HoldingDetail, type HoldingFlow } from "@/data/holdings";
 import { formatPct, formatPurity, signTone } from "@/lib/holdings";
-import { FLOW_KIND_LABEL, FLOW_SOURCE_LABEL, aedEquivalent, canRemoveFlow, flowSign, formatOwnValue, formatRate, formatUnitPrice, kindOf, noValueText, valueInput } from "@/lib/investments";
+import { FLOW_KIND_LABEL, FLOW_SOURCE_LABEL, VALUATION_SOURCE_LABEL, aedEquivalent, canRemoveFlow, flowSign, formatOwnValue, formatRate, formatUnitPrice, kindOf, noValueText, valueInput, visibleValues } from "@/lib/investments";
 import { formatDate } from "@/lib/dates";
 import { formatMoney, formatTotal } from "@/lib/money";
 import { cn } from "@/lib/cn";
@@ -303,6 +303,7 @@ function ValuesCard({ h, detail, onUpdate }: { h: Holding | null; detail: Return
 }
 
 function ValueList({ detail, currency, isPrice }: { detail: HoldingDetail; currency: string; isPrice: boolean }) {
+  const [showAll, setShowAll] = useState(false);
   if (detail.valuations.length === 0) {
     return (
       <EmptyState icon={<History />} title="No values recorded yet">
@@ -310,16 +311,27 @@ function ValueList({ detail, currency, isPrice }: { detail: HoldingDetail; curre
       </EmptyState>
     );
   }
+  const { shown, hidden } = visibleValues(detail.valuations, showAll);
   return (
     <ul className="divide-y divide-border border-t border-border">
-      {detail.valuations.map((v) => (
+      {shown.map((v) => (
         <li key={v.valuation_code} className="flex items-baseline justify-between gap-3 px-5 py-2.5 text-sm">
-          <span className="text-ink-2">{formatDate(v.as_of)}</span>
+          <span className="text-ink-2">
+            {formatDate(v.as_of)}
+            {v.source === "import" && <span className="ml-2 text-[11px] text-subtle">{VALUATION_SOURCE_LABEL.import}</span>}
+          </span>
           <span className="tabular text-ink">
             {isPrice ? `${formatUnitPrice(v.unit_price, currency)} a unit` : formatTotal(v.value, { currency })}
           </span>
         </li>
       ))}
+      {hidden > 0 && (
+        <li className="px-5 py-2">
+          <Button variant="ghost" size="sm" onClick={() => setShowAll(true)}>
+            Show all {detail.valuations.length} values
+          </Button>
+        </li>
+      )}
     </ul>
   );
 }

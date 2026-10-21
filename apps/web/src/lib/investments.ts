@@ -142,7 +142,19 @@ export const FLOW_SOURCE_LABEL: Record<string, string> = {
   rule: "Linked by the rule",
   link: "Linked by you",
   holding_cost: "Purchase cost",
+  import: "Synced from the provider",
 };
+
+/** Recorded values: those the provider sync stored say so. */
+export const VALUATION_SOURCE_LABEL: Record<string, string> = { manual: "Entered by you", import: "Synced" };
+
+/** A synced plan records a value a day: the value list shows the latest few until asked for all. */
+export const VALUE_LIST_LIMIT = 12;
+
+export function visibleValues<T>(values: T[], showAll: boolean): { shown: T[]; hidden: number } {
+  const shown = showAll ? values : values.slice(0, VALUE_LIST_LIMIT);
+  return { shown, hidden: values.length - shown.length };
+}
 
 /** A metal's purchase cost is edited on the holding; every other flow can be removed. */
 export function canRemoveFlow(source: string): boolean {
