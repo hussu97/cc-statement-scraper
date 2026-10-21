@@ -222,6 +222,21 @@ struct HoldingFlowsTests {
         #expect(!cost.canRemove && cost.title == "What you paid")
         let income = HoldingFlow(flowCode: "i", flowDate: today, kind: .income, amount: 120, amountAed: 120)
         #expect(income.amountText(currency: "AED") == "AED 120.00" && income.amountTone == .positive)
+        let synced = HoldingFlow(flowCode: "s", flowDate: today, kind: .contribution, amount: 2000, amountAed: 7345,
+                                 source: "import", notes: "RL360 premium")
+        #expect(synced.title == "RL360 premium" && synced.caption == "Money in · synced from the provider" && synced.canRemove)
+    }
+
+    @Test("synced values say so; the list shows the latest twelve until asked for all")
+    func syncedValues() {
+        let values = (0..<30).map { i in
+            HoldingValuationRecord(valuationCode: "v\(i)", asOf: today, value: Decimal(i), source: i == 0 ? "import" : "manual")
+        }
+        #expect(values[0].isSynced && !values[1].isSynced)
+        let some = HoldingValuationRecord.visible(values, showAll: false)
+        #expect(some.shown.count == 12 && some.hidden == 18 && some.shown.first == values.first)
+        #expect(HoldingValuationRecord.visible(values, showAll: true).hidden == 0)
+        #expect(HoldingValuationRecord.visible(Array(values.prefix(3)), showAll: false).hidden == 0)
     }
 
     @Test("a flow: amount in the holding's currency, AED optional for a foreign one, not in the future")
