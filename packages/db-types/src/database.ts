@@ -980,6 +980,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           fineness: number | null
+          form: string
           grams: number
           holding_code: string
           karat: number | null
@@ -997,6 +998,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           fineness?: number | null
+          form?: string
           grams: number
           holding_code?: string
           karat?: number | null
@@ -1014,6 +1016,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           fineness?: number | null
+          form?: string
           grams?: number
           holding_code?: string
           karat?: number | null
@@ -3432,6 +3435,7 @@ export type Database = {
           p_acquired_on?: string
           p_cost_aed?: string
           p_fineness?: number
+          p_form?: string
           p_grams: string
           p_holding_code?: string
           p_karat?: number

@@ -78,6 +78,14 @@ select results_eq(
   'gold defaults to 24K 999.9, silver to 999');
 select throws_ok($$ select public.save_holding(pg_temp.v('p'), 'Bad', 'gold', '1', p_karat => 22, p_fineness => 9950) $$,
                  '22023', null, 'fineness is for 24K only');
+select results_eq(
+  $$ select name, form from public.holdings where profile_code = pg_temp.v('p') order by name $$,
+  $$ values ('1 kg bar'::text, 'bar'::text), ('Coins', 'jewellery'), ('Silver bars', 'bar'), ('TT bar', 'bar') $$,
+  'form defaults: a 24K or silver holding is a bar, gold below 24K is jewellery');
+select throws_ok($$ select public.save_holding(pg_temp.v('p'), 'Bad', 'silver', '1', p_form => 'jewellery') $$,
+                 '22023', null, 'no silver jewellery');
+select public.save_holding(pg_temp.v('p'), 'Coins', 'gold', '200', p_karat => 22, p_form => 'coin',
+                           p_holding_code => pg_temp.v('coins'));
 select throws_ok($$ select public.save_holding(pg_temp.v('p'), 'Bad', 'gold', '0') $$, '22023', null, 'grams must be above 0');
 select throws_ok($$ select public.save_holding(pg_temp.v('p'), 'Bad', 'platinum', '1') $$, '22023', null, 'gold or silver only');
 reset role;
@@ -105,6 +113,12 @@ select results_eq(
              (pg_temp.v('silver_value')::numeric - pg_temp.v('silver_prev')::numeric)::numeric(14,2)::text, 'silver_retail'),
             ('TT bar', pg_temp.v('tt_value'), null, null, round(116.64 * 0.9951 * 4, 2)::text, 'gold_24k') $$,
   'each holding: value at its rate, gain vs cost, 24-hour change');
+select results_eq(
+  $$ select h->>'name', h->>'form', h->>'image_path'
+     from jsonb_array_elements(public.holdings_valuation(pg_temp.v('p'))->'holdings') h order by h->>'name' $$,
+  $$ values ('1 kg bar'::text, 'bar'::text, 'gold-bar.jpg'::text), ('Coins', 'coin', 'gold-coin.jpg'),
+            ('Silver bars', 'bar', 'silver-bar.jpg'), ('TT bar', 'bar', 'gold-bar.jpg') $$,
+  'each holding names its image in the investment-images bucket');
 select results_eq(
   $$ select v->>'value_aed', v->>'cost_aed', (v->>'complete')::boolean, (v->>'costs_complete')::boolean,
             (v->'prices'->'gold_24k'->>'change_24h_pct')
@@ -138,6 +152,8 @@ set local role authenticated;
 select throws_ok($$ select public.holdings_valuation(pg_temp.v('p')) $$, '42501', null, 'a stranger cannot value the holdings');
 select is((select count(*)::int from public.holdings where profile_code = pg_temp.v('p')), 0, 'nor read them');
 reset role;
+
+select is((select public from storage.buckets where id = 'investment-images'), true, 'the image bucket is public');
 
 select * from finish();
 rollback;
