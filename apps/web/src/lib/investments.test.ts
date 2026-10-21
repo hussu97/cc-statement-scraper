@@ -3,6 +3,9 @@ import {
   aedEquivalent,
   allocationSlices,
   canRemoveFlow,
+  visibleValues,
+  VALUE_LIST_LIMIT,
+  FLOW_SOURCE_LABEL,
   emptyInvestmentForm,
   flowSign,
   formatOwnValue,
@@ -247,5 +250,18 @@ describe("allocation and saving", () => {
       ["RL360 plan", "7345.00", 1],
       ["Unassigned", "500.00", 2],
     ]);
+  });
+});
+
+describe("synced values and flows", () => {
+  it("labels provider imports", () => {
+    expect(FLOW_SOURCE_LABEL.import).toBe("Synced from the provider");
+    expect(canRemoveFlow("import")).toBe(true);
+  });
+  it("shows the latest values until asked for all", () => {
+    const values = Array.from({ length: 30 }, (_, i) => i);
+    expect(visibleValues(values, false)).toEqual({ shown: values.slice(0, VALUE_LIST_LIMIT), hidden: 30 - VALUE_LIST_LIMIT });
+    expect(visibleValues(values, true)).toEqual({ shown: values, hidden: 0 });
+    expect(visibleValues([1, 2], false)).toEqual({ shown: [1, 2], hidden: 0 });
   });
 });
