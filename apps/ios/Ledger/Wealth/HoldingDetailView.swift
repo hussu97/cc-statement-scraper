@@ -17,6 +17,7 @@ struct HoldingDetailView: View {
     @State private var updating: ValueDraft?
     @State private var error: String?
     @State private var period: ReturnsPeriod = .all
+    @State private var showAllValues = false
     @Environment(\.dismiss) private var dismiss
     @Environment(BankCatalog.self) private var catalog: BankCatalog?
 
@@ -146,13 +147,23 @@ struct HoldingDetailView: View {
             if let empty = model.noValuesMessage(for: holding) {
                 Text(empty).font(Typography.rowMeta).foregroundStyle(Palette.muted)
             }
-            ForEach(model.valuations) { v in
+            let values = HoldingValuationRecord.visible(model.valuations, showAll: showAllValues)
+            ForEach(values.shown) { v in
                 HStack {
-                    Text(LedgerDates.fullDayLabel(v.asOf)).font(Typography.rowMeta).foregroundStyle(Palette.ink)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(LedgerDates.fullDayLabel(v.asOf)).font(Typography.rowMeta).foregroundStyle(Palette.ink)
+                        if v.isSynced {
+                            Text("Synced").font(Typography.rowMeta).foregroundStyle(Palette.muted)
+                        }
+                    }
                     Spacer()
                     Text(v.text(currency: holding.currency)).font(Typography.amount).foregroundStyle(Palette.ink).moneyLine()
                 }
                 .accessibilityElement(children: .combine)
+            }
+            if values.hidden > 0 {
+                Button("Show all \(model.valuations.count) values") { showAllValues = true }
+                    .tint(Palette.accent)
             }
         } header: {
             Text(holding.kind == .security ? "Price history" : "Value history")

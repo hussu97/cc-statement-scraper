@@ -91,6 +91,7 @@ public struct HoldingFlow: Decodable, Sendable, Hashable, Identifiable {
         case "rule": parts.append("linked by its rule")
         case "link": parts.append("linked by hand")
         case "holding_cost": parts.append("the holding's cost")
+        case "import": parts.append("synced from the provider")
         default: parts.append("added by hand")
         }
         return parts.joined(separator: " · ")
@@ -138,6 +139,18 @@ public struct HoldingValuationRecord: Decodable, Sendable, Hashable, Identifiabl
         self.value = value
         self.unitPrice = unitPrice
         self.source = source
+    }
+
+    /// Stored by a provider sync (RL360), not entered by hand.
+    public var isSynced: Bool { source == "import" }
+
+    /// A synced plan records a value a day: the list shows the latest few until asked for all.
+    public static let listLimit = 12
+
+    /// The values to show, newest first, and how many are left out.
+    public static func visible(_ values: [HoldingValuationRecord], showAll: Bool) -> (shown: [HoldingValuationRecord], hidden: Int) {
+        let shown = showAll ? values : Array(values.prefix(listLimit))
+        return (shown, values.count - shown.count)
     }
 
     /// `"USD 53,800.00"`, or `"USD 4.10 a unit"`.
