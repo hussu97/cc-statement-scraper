@@ -395,3 +395,43 @@ the metals are worth and the gain on them.
       Times' history API returns noise outside a browser; Stooq is behind a bot check.
 - [ ] Check with the user: the 1 kg bar's cost (AED 253,000 on 7 Dec 2024) is AED 253/g against
       ~311/g spot that day.
+
+## 7. Investments: more holding types, flows, returns, links, allocation (2026-10-21)
+
+Ask (21 Oct): valuations and flows per holding with a yearly return that separates new money
+from growth; link saving transfers and card payments to holdings (RL360's USD 2,000 a month on
+Tejasvie's ENBD card, today filed under "Investment", a spend category); allocation by asset
+class on the net worth page.
+
+### Decisions (user, 21 Oct)
+1. A payment linked to a holding is **saving**: it leaves spend, budgets and the spend charts and
+   shows in cash flow as Saving → <holding>.
+2. Holding types now: metals (priced by the feed), **plans** (RL360-style), **broker accounts**
+   (IBKR, Swissquote, Sarwa), **shares / funds** (units × a price you enter), **fixed deposits**
+   (principal, rate, maturity; value accrues).
+3. Linking: a description rule on the holding links new payments automatically; any row can be
+   linked or unlinked by hand (an unlinked row is never re-linked by the rule).
+
+### Plan
+- [ ] Migration: `holdings.kind` (metal | plan | broker | security | deposit), currency,
+      institution, units, symbol, principal / rate / maturity, link_pattern; metal-only fields
+      only for metals. `holding_valuations` (evidence: a value, or a unit price for securities,
+      as of a date). `holding_flows` (contribution | withdrawal | income, dated, holding currency
+      and AED, optional `txn_code`, unique per transaction; removed_at instead of delete). A
+      metal's cost and purchase date become its first contribution (kept in sync by
+      `save_holding`).
+- [ ] Valuation at any instant for every kind (metals: feed; plan/broker: latest valuation;
+      security: units × latest price; deposit: principal + simple profit to maturity); AED via
+      the peg / `fx_rates`.
+- [ ] `holding_returns(profile, period)`: per holding and total for all time / this year / last
+      12 months: start value, added (contributions − withdrawals), income, growth, simple % and a
+      money-weighted yearly return (XIRR, from 90 days of history), computed in SQL.
+- [ ] Links: rule on insert/update of transactions and when a holding's rule is saved;
+      `link_transaction(profile, txn, holding | null)`; `v_spend` excludes linked payments;
+      `v_cash_flow` files them as saving with the holding; `cash_flow_savings` breaks saving down
+      by holding; `v_transactions` and `account_ledger` show the link.
+- [ ] `net_worth` returns `allocation` by class (cash, gold, silver, plans, brokers, shares/funds,
+      deposits; owed as negative).
+- [ ] Web + iOS: holding types in the form, Update value, flows list with linked rows, link /
+      unlink from the ledger and Activity, returns (period switch), allocation chart, saving by
+      holding in cash flow.
