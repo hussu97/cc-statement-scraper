@@ -4,7 +4,7 @@ import { isAppMode, MODE_INFO, modeOfPath, readRememberedMode, rememberMode, res
 
 describe("modeOfPath", () => {
   it("files Wealth's screens under Wealth, the old cash flow address too", () => {
-    for (const p of ["/wealth", "/wealth/accounts", "/wealth/accounts/acc_x", "/wealth/cash-flow", "/cash-flow"]) expect(modeOfPath(p)).toBe("wealth");
+    for (const p of ["/wealth", "/wealth/accounts", "/wealth/accounts/acc_x", "/wealth/investments", "/wealth/cash-flow", "/cash-flow"]) expect(modeOfPath(p)).toBe("wealth");
   });
 
   it("files the spending screens under Spending", () => {

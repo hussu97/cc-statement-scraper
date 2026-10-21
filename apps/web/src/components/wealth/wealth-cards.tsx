@@ -21,7 +21,7 @@ const NetWorthChart = lazy(() => import("./net-worth-chart").then((m) => ({ defa
 
 const TONE_TEXT = { positive: "text-positive", danger: "text-danger", neutral: "text-ink" } as const;
 
-/** Net worth now (public.net_worth): bank cash − what the cards owe, with honest completeness. */
+/** Net worth now (public.net_worth): bank cash + investments − what the cards owe, with honest completeness. */
 export function NetWorthHero({ profileCode }: { profileCode: string }) {
   const q = useNetWorth(profileCode);
   return (
@@ -61,7 +61,15 @@ function HeroBody({ n }: { n: NetWorth }) {
           </dd>
         </div>
         <div className="relative">
-          <dt className="text-[12px] text-subtle">Owed on cards</dt>
+          <dt className="text-[12px] text-subtle">+ Investments</dt>
+          <dd className="tabular mt-0.5">
+            <Link to="/wealth/investments" className={cn("after:absolute after:inset-0 hover:text-accent", n.holdings_count > 0 ? "text-ink" : "text-muted")}>
+              {n.holdings_count > 0 ? formatTotal(n.holdings_aed) : "None yet"}
+            </Link>
+          </dd>
+        </div>
+        <div className="relative">
+          <dt className="text-[12px] text-subtle">− Owed on cards</dt>
           <dd className="tabular mt-0.5">
             <Link to="/cards" className="text-ink after:absolute after:inset-0 hover:text-accent">
               {formatOutstanding(n.owed_aed, n.owed_has_estimate)}

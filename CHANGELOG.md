@@ -5,7 +5,17 @@
 ### Backend (Supabase)
 
 - **feat** `metal-prices` Edge Function every 6 hours (pg_cron `ledger-metal-prices`): Dubai retail gold by karat (Dubai Jewellery Group, Khaleej Times as fallback), Dubai retail silver (Khaleej Times), and spot for reference (gold-api.com, Swissquote). Stored in `metal_prices`; a price more than 50% from the last one is refused.
-- **feat** `holdings` (gold by karat, 24K bars by fineness 999.9/999.5/999/995; silver by purity; cost optional) with `save_holding` / `close_holding`, `holdings_valuation` (value, gain vs cost, 24-hour change), `holdings_value_series`, `metal_price_series`. Net worth now counts the metals.
+### Web
+
+- **feat** Investments (`/wealth/investments`): gold and silver at Dubai retail rates with value, gain on what you paid and the 24-hour change, a per-gram price strip, a 90-day value vs paid chart (or the 24K / silver price), holdings with a photo per form, Add / Edit / Close; weights in g, kg or tola. Wealth overview's net worth shows cash + investments − owed.
+
+### iOS
+
+- **feat** An Investments tab in Wealth with the same: value, gain, prices, chart, holdings with photos, Add / Edit / Close; Wealth overview's split and Investments card.
+
+### Backend (Supabase), continued
+
+- **feat** `holdings` (gold by karat, 24K bars by fineness 999.9/999.5/999/995; silver by purity; a form — bar, coin or jewellery — with a photo from the public `investment-images` bucket; cost optional) with `save_holding` / `close_holding`, `holdings_valuation` (value, gain vs cost, 24-hour change), `holdings_value_series`, `metal_price_series`. Net worth now counts the metals.
 
 ## Wio Credit statement and autopay leg — 2026-10-20
 

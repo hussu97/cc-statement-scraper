@@ -110,20 +110,24 @@ export interface NetWorthCompleteness {
   owed_complete: boolean;
   owed_has_estimate: boolean;
   has_bank_accounts: boolean;
+  holdings_complete: boolean;
+  holdings_count: number;
 }
 
 /**
  * Why the net worth may not be the whole story, as short honest phrases (empty when it is):
- * "1 account has no balance", "1 is over a week old", "card balance includes an estimate".
+ * "1 account has no balance", "1 is over a week old", "a gold or silver price is missing or over
+ * 3 days old", "card balance includes an estimate".
  */
 export function netWorthNotes(n: NetWorthCompleteness): string[] {
   const out: string[] = [];
-  if (!n.has_bank_accounts) out.push("No bank accounts yet: this is only what the cards owe");
+  if (!n.has_bank_accounts) out.push(n.holdings_count > 0 ? "No bank accounts yet: cash isn't counted" : "No bank accounts yet: this is only what the cards owe");
   const missing = n.cash_missing_count;
   const stale = n.cash_stale_count;
   if (missing > 0) out.push(`${missing} ${missing === 1 ? "account has" : "accounts have"} no balance`);
   if (stale > 0) out.push(missing > 0 ? `${stale} ${stale === 1 ? "is" : "are"} over a week old` : `${stale} ${stale === 1 ? "balance is" : "balances are"} over a week old`);
   if (n.has_bank_accounts && !n.cash_complete && missing === 0 && stale === 0) out.push("some bank amounts have no AED value yet");
+  if (!n.holdings_complete) out.push("a gold or silver price is missing or over 3 days old");
   if (!n.owed_complete) out.push("a card has no balance yet");
   if (n.owed_has_estimate) out.push("card balance includes an estimate");
   return out.map((s, i) => (i === 0 ? s.charAt(0).toUpperCase() + s.slice(1) : s));
@@ -142,19 +146,30 @@ export interface NetWorthPoint {
   /** For plotting only (display). */
   net: number | null;
   cash: number | null;
+  holdings: number | null;
   owed: number | null;
   complete: boolean;
   is_live: boolean;
 }
 
 export function netWorthPoints(
-  series: readonly { month: string; as_of: string; net_aed: MoneyInput; cash_aed: MoneyInput; owed_aed: MoneyInput; complete: boolean; is_live: boolean }[],
+  series: readonly {
+    month: string;
+    as_of: string;
+    net_aed: MoneyInput;
+    cash_aed: MoneyInput;
+    holdings_aed?: MoneyInput;
+    owed_aed: MoneyInput;
+    complete: boolean;
+    is_live: boolean;
+  }[],
 ): NetWorthPoint[] {
   return series.map((p) => ({
     month: p.month.slice(0, 10),
     as_of: p.as_of.slice(0, 10),
     net: toAmount(p.net_aed),
     cash: toAmount(p.cash_aed),
+    holdings: toAmount(p.holdings_aed),
     owed: toAmount(p.owed_aed),
     complete: p.complete,
     is_live: p.is_live,

@@ -4,6 +4,7 @@ import {
   ArrowLeftRight,
   ChartColumnBig,
   ChevronsUpDown,
+  Coins,
   CreditCard,
   Inbox,
   Landmark,
@@ -40,7 +41,7 @@ interface NavItem {
   badge?: number;
 }
 
-/** Each mode's own screens, in sidebar order. Investments and goals join Wealth later. */
+/** Each mode's own screens, in sidebar order. Goals join Wealth later. */
 const MODE_NAV: Record<AppMode, NavItem[]> = {
   spending: [
     { to: "/", label: "Overview", icon: <LayoutGrid /> },
@@ -52,6 +53,7 @@ const MODE_NAV: Record<AppMode, NavItem[]> = {
   wealth: [
     { to: "/wealth", label: "Overview", icon: <LayoutGrid /> },
     { to: "/wealth/accounts", label: "Accounts", icon: <Landmark /> },
+    { to: "/wealth/investments", label: "Investments", icon: <Coins /> },
     { to: "/wealth/cash-flow", label: "Cash flow", icon: <ArrowLeftRight /> },
   ],
 };
@@ -59,7 +61,7 @@ const MODE_NAV: Record<AppMode, NavItem[]> = {
 /** Each mode's phone tabs (the rest go in More). Review, the daily action surface, is always one. */
 const MOBILE_TABS: Record<AppMode, string[]> = {
   spending: ["/", "/activity", "/insights", "/review"],
-  wealth: ["/wealth", "/wealth/accounts", "/wealth/cash-flow", "/review"],
+  wealth: ["/wealth", "/wealth/accounts", "/wealth/investments", "/review"],
 };
 
 interface Nav {

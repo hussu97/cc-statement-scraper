@@ -29,6 +29,12 @@ export function NetWorthChart({ points, className = "h-52" }: { points: NetWorth
                     <dd className="tabular text-right text-ink">{formatTotal(p.net)}</dd>
                     <dt className="text-muted">Cash</dt>
                     <dd className="tabular text-right text-muted">{formatTotal(p.cash)}</dd>
+                    {p.holdings !== null && p.holdings !== 0 && (
+                      <>
+                        <dt className="text-muted">Investments</dt>
+                        <dd className="tabular text-right text-muted">{formatTotal(p.holdings)}</dd>
+                      </>
+                    )}
                     <dt className="text-muted">Owed on cards</dt>
                     <dd className="tabular text-right text-muted">{formatTotal(p.owed)}</dd>
                   </dl>

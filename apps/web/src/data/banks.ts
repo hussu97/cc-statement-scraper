@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { publicObjectUrl } from "@/lib/public-object";
 import { useAuth } from "./auth";
 import { keys } from "./keys";
 import { mustList } from "./api";
@@ -20,9 +21,7 @@ export const BANK_LOGO_BUCKET = "bank-logos";
  * row can never point the <img> somewhere unexpected. Pure, unit-tested.
  */
 export function bankLogoUrl(logoPath: string | null | undefined, supabaseUrl: string | null | undefined): string | null {
-  if (!logoPath || !supabaseUrl) return null;
-  if (!/^[A-Za-z0-9_-]{1,40}\.(png|webp|svg)$/.test(logoPath)) return null;
-  return `${supabaseUrl.replace(/\/+$/, "")}/storage/v1/object/public/${BANK_LOGO_BUCKET}/${logoPath}`;
+  return publicObjectUrl(BANK_LOGO_BUCKET, logoPath, supabaseUrl, /^[A-Za-z0-9_-]{1,40}\.(png|webp|svg)$/);
 }
 
 /** Text shown when there is no logo (or it failed to load): the short code. */
