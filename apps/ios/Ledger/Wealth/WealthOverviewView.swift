@@ -2,7 +2,7 @@ import LedgerKit
 import SwiftUI
 
 /// Wealth's Overview: net worth (bank cash + investments − what the cards owe) with how complete it
-/// is, net worth over time, the bank accounts (each opening its ledger), the gold and silver, what
+/// is, net worth over time, allocation by class, the bank accounts (each opening its ledger), the investments, what
 /// each card owes, this month's cash flow and the bank-account insights. Every figure is the server's.
 struct WealthOverviewView: View {
     let model: WealthOverviewModel
@@ -20,6 +20,7 @@ struct WealthOverviewView: View {
                     }
                 }
                 NetWorthChartCard(points: content.series)
+                AllocationCard(slices: content.netWorth.allocation)
                 Card {
                     SectionHeader(title: "Bank accounts", trailing: content.position.map { $0.totalText })
                     if let position = content.position {
@@ -103,7 +104,7 @@ private struct NetWorthHero: View {
     }
 }
 
-/// The gold and silver: the server's value, gain and 24-hour change; opens the Investments tab.
+/// The investments: the server's value, gain and 24-hour change; opens the Investments tab.
 private struct InvestmentsSummaryCard: View {
     let valuation: HoldingsValuation?
     let canEdit: Bool
@@ -117,7 +118,7 @@ private struct InvestmentsSummaryCard: View {
                     Text(HoldingsValuation.emptyMessage(canEdit: canEdit))
                         .font(Typography.rowMeta).foregroundStyle(Palette.muted)
                 } else {
-                    row("Gold and silver", valuation.countText, Palette.ink)
+                    row("Holdings", valuation.countText, Palette.ink)
                     row("Gain", valuation.gainText ?? "Add what you paid",
                         valuation.gainText == nil ? Palette.muted : valuation.gainTone.color)
                     if let change = valuation.changeText { row("Last 24 hours", change, valuation.changeTone.color) }

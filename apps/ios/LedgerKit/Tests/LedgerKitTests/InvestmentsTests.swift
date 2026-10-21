@@ -65,7 +65,7 @@ struct InvestmentsDecodingTests {
         #expect(whole.completenessText == "Every bank account, card and holding is counted." && whole.caveats.isEmpty)
         let stale = NetWorth(cashAed: 10, holdingsAed: 5, holdingsComplete: false, holdingsCount: 1, owedAed: 2,
                              netAed: 13, complete: false)
-        #expect(stale.caveats == ["Some gold or silver prices are missing or over 3 days old, so investments may be off."])
+        #expect(stale.caveats == ["Some investment prices or values are missing or out of date, so investments may be off."])
         #expect(NetWorth(cashAed: 1, owedAed: 0, netAed: 1).completenessText == "Every bank account and card is counted.")
     }
 }
@@ -243,8 +243,8 @@ struct InvestmentsPresentationTests {
             Holding(holdingCode: "a", name: "A", metal: .gold, grams: 1, karat: 24, costAed: 1),
             Holding(holdingCode: "b", name: "B", metal: .gold, grams: 1, karat: 24, costAed: 1, valueAed: 10),
         ])
-        #expect(rough.caveats == ["1 holding has no price yet, so the value leaves it out.",
-                                  "2 holdings are valued at prices over 3 days old."])
+        #expect(rough.caveats == ["1 holding has no price or value yet, so the total leaves it out.",
+                                  "2 holdings are valued at out-of-date prices or values."])
         #expect(HoldingsValuation(valueAed: 0).pricesNote().hasPrefix("No gold or silver prices yet"))
         #expect(HoldingsValuation.emptyMessage(canEdit: false).contains("Owners can add"))
     }

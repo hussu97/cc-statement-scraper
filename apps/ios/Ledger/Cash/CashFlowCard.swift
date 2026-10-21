@@ -20,7 +20,7 @@ struct CashFlowCard: View {
                 if month.isEmpty {
                     Text(model.emptyMessage(for: month.month)).font(Typography.rowMeta).foregroundStyle(Palette.muted)
                 } else {
-                    ForEach(month.groups) { group in GroupBlock(group: group) }
+                    ForEach(month.groups) { group in GroupBlock(group: group, savings: model.selectedSavings) }
                 }
                 if let net = month.netText {
                     Divider().overlay(Palette.border)
@@ -53,6 +53,8 @@ struct CashFlowCard: View {
 
 private struct GroupBlock: View {
     let group: CashFlowGroup
+    /// Saving by holding, shown under the Saving line (empty: no split).
+    let savings: [SavingLine]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -70,11 +72,37 @@ private struct GroupBlock: View {
                         .moneyLine()
                 }
                 .accessibilityElement(children: .combine)
+                if line.flow == "saving", !savings.isEmpty { SavingBreakdown(lines: savings) }
             }
             if let note = group.kind.note {
                 Text(note).font(Typography.caption).foregroundStyle(Palette.muted)
             }
         }
+    }
+}
+
+/// Saving by investment, indented under the Saving line, Unassigned last.
+private struct SavingBreakdown: View {
+    let lines: [SavingLine]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(lines) { line in
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Image(systemName: line.systemImage).font(.caption).foregroundStyle(Palette.muted).frame(width: 18)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(line.label).font(Typography.rowMeta).foregroundStyle(Palette.ink)
+                        Text(line.countText).font(Typography.caption).foregroundStyle(Palette.muted)
+                    }
+                    Spacer(minLength: 8)
+                    Text(line.amountText).font(Typography.amount).foregroundStyle(Palette.ink).moneyLine()
+                }
+                .accessibilityElement(children: .combine)
+            }
+            Text(CashFlowSavings.note).font(Typography.caption).foregroundStyle(Palette.muted)
+        }
+        .padding(.leading, 12)
+        .overlay(alignment: .leading) { Rectangle().fill(Palette.border).frame(width: 2) }
     }
 }
 

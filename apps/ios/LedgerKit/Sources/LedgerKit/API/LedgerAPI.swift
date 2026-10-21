@@ -13,7 +13,7 @@ public protocol SMSIngestAPI: Sendable {
 
 /// Everything the app reads and writes. Every money figure comes from the
 /// server; screens render it and never re-derive it.
-public protocol LedgerAPI: SMSIngestAPI, AnalysisAPI {
+public protocol LedgerAPI: SMSIngestAPI, AnalysisAPI, InvestmentsAPI {
     // Identity
     func profiles() async throws -> [LedgerProfile]
     func memberships() async throws -> [ProfileMembership]
@@ -156,21 +156,6 @@ public protocol LedgerAPI: SMSIngestAPI, AnalysisAPI {
     func netWorth(profileCode: String) async throws -> NetWorth
     /// `rpc('net_worth_series')`: each month's last nightly snapshot, then today's live figure (members).
     func netWorthSeries(profileCode: String, months: Int) async throws -> [NetWorthPoint]
-
-    // Investments: gold and silver (SupabaseLedgerAPI+Investments.swift)
-    /// `rpc('holdings_valuation')`: each active holding valued at Dubai retail rates, gains vs cost,
-    /// the 24-hour change, the latest prices and totals (members).
-    func holdingsValuation(profileCode: String) async throws -> HoldingsValuation
-    /// `rpc('holdings_value_series')`: per Dubai day, today's holdings at that day's prices, and
-    /// their cost (members; at most 400 days).
-    func holdingsValueSeries(profileCode: String, from: CalendarDay, to: CalendarDay) async throws -> [HoldingValuePoint]
-    /// `rpc('metal_price_series')`: a quote's last AED/gram price per Dubai day (signed in; at most 400 days).
-    func metalPriceSeries(quote: MetalQuote, from: CalendarDay, to: CalendarDay) async throws -> [MetalPricePoint]
-    /// `rpc('save_holding')`: adds (no `holdingCode`) or edits a holding; returns its code (owners;
-    /// 42501 otherwise, 22023 with a readable message for bad input, P0002 for an unknown holding).
-    func saveHolding(profileCode: String, holding: HoldingSubmission) async throws -> String
-    /// `rpc('close_holding')`: the holding stops counting; the row is kept (owners; P0002 when unknown).
-    func closeHolding(profileCode: String, holdingCode: String) async throws
 
     /// Fires whenever a row the screens show changes (transactions, SMS,
     /// documents, insights) for the profile. Ends when the caller stops iterating.

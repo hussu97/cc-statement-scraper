@@ -1,6 +1,6 @@
 import Foundation
 
-/// `rpc('net_worth')` (Wealth mode): bank cash + investments (gold and silver) − what the cards owe
+/// `rpc('net_worth')` (Wealth mode): bank cash + investments − what the cards owe
 /// now, in AED, with how complete each side is. Every figure is the server's decimal string; nothing is re-derived here.
 public struct NetWorth: Decodable, Sendable, Hashable {
     public let cashAed: Decimal
@@ -9,9 +9,9 @@ public struct NetWorth: Decodable, Sendable, Hashable {
     public let cashStaleCount: Int
     /// The oldest balance the cash includes; nil before the first balance.
     public let cashAsOf: Date?
-    /// Gold and silver at Dubai retail rates (0 without holdings).
+    /// Every holding's value in AED (0 without holdings).
     public let holdingsAed: Decimal
-    /// Every holding has a price no older than 3 days.
+    /// Every holding has a value, none of it out of date.
     public let holdingsComplete: Bool
     public let holdingsCount: Int
     public let owedAed: Decimal
@@ -22,11 +22,15 @@ public struct NetWorth: Decodable, Sendable, Hashable {
     public let hasBankAccounts: Bool
     /// Each active card account's outstanding, most owed first.
     public let cards: [NetWorthCard]
+    /// Assets by class, largest first, then owed as a negative row (`AllocationSlice`); empty from
+    /// a server before investments.
+    public let allocation: [AllocationSlice]
 
     public init(cashAed: Decimal, cashComplete: Bool = true, cashMissingCount: Int = 0, cashStaleCount: Int = 0,
                 cashAsOf: Date? = nil, holdingsAed: Decimal = 0, holdingsComplete: Bool = true, holdingsCount: Int = 0,
                 owedAed: Decimal, owedComplete: Bool = true, owedHasEstimate: Bool = false,
-                netAed: Decimal, complete: Bool = true, hasBankAccounts: Bool = true, cards: [NetWorthCard] = []) {
+                netAed: Decimal, complete: Bool = true, hasBankAccounts: Bool = true, cards: [NetWorthCard] = [],
+                allocation: [AllocationSlice] = []) {
         self.cashAed = cashAed
         self.cashComplete = cashComplete
         self.cashMissingCount = cashMissingCount
@@ -42,12 +46,13 @@ public struct NetWorth: Decodable, Sendable, Hashable {
         self.complete = complete
         self.hasBankAccounts = hasBankAccounts
         self.cards = cards
+        self.allocation = allocation
     }
 
     enum CodingKeys: String, CodingKey {
         case cashAed, cashComplete, cashMissingCount, cashStaleCount, cashAsOf, owedAed, owedComplete
         case holdingsAed, holdingsComplete, holdingsCount
-        case owedHasEstimate, netAed, complete, hasBankAccounts, cards
+        case owedHasEstimate, netAed, complete, hasBankAccounts, cards, allocation
     }
 
     public init(from decoder: any Decoder) throws {
@@ -68,6 +73,7 @@ public struct NetWorth: Decodable, Sendable, Hashable {
         complete = try c.decodeIfPresent(Bool.self, forKey: .complete) ?? false
         hasBankAccounts = try c.decodeIfPresent(Bool.self, forKey: .hasBankAccounts) ?? false
         cards = try c.decodeIfPresent([NetWorthCard].self, forKey: .cards) ?? []
+        allocation = try c.decodeIfPresent([AllocationSlice].self, forKey: .allocation) ?? []
     }
 
     /// The hero number without its unit: `"144,701"`, `"−2,050"` (a true minus sign).
@@ -110,7 +116,7 @@ public struct NetWorth: Decodable, Sendable, Hashable {
             out.append(cashStaleCount == 1 ? "1 balance is over a week old." : "\(cashStaleCount) balances are over a week old.")
         }
         if !holdingsComplete {
-            out.append("Some gold or silver prices are missing or over 3 days old, so investments may be off.")
+            out.append("Some investment prices or values are missing or out of date, so investments may be off.")
         }
         if !owedComplete {
             out.append("A card has no statement or balance yet, so what's owed may be short.")

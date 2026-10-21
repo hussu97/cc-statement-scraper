@@ -1,67 +1,10 @@
 import Foundation
 import Observation
 
-/// What the Investments chart draws: the holdings' value against their cost, or a price.
-public enum InvestmentsChart: String, CaseIterable, Identifiable, Hashable, Sendable {
-    case value, gold24k, silver
-
-    public var id: String { rawValue }
-
-    /// The segmented control: `"Value"`, `"24K gold"`, `"Silver"`.
-    public var title: String {
-        switch self {
-        case .value: "Value"
-        case .gold24k: "24K gold"
-        case .silver: "Silver"
-        }
-    }
-
-    /// The price series behind a price chart; nil for the value chart.
-    public var quote: MetalQuote? {
-        switch self {
-        case .value: nil
-        case .gold24k: .gold24k
-        case .silver: .silverRetail
-        }
-    }
-
-    /// Under the chart.
-    public var note: String {
-        switch self {
-        case .value:
-            "Today's holdings at each day's Dubai retail prices, against what you paid for them (holdings with a cost)."
-        case .gold24k: "Dubai retail 24K gold (999.9), AED per gram, each day's last price."
-        case .silver: "Dubai retail silver, AED per gram, each day's last price."
-        }
-    }
-
-    /// How many days every chart covers.
-    public static let days = 90
-
-    /// The value chart's known days, oldest first.
-    public static func known(_ points: [HoldingValuePoint]) -> [HoldingValuePoint] {
-        points.filter { $0.valueAed != nil }.sorted { $0.date < $1.date }
-    }
-
-    /// A price chart's known days, oldest first.
-    public static func known(_ points: [MetalPricePoint]) -> [MetalPricePoint] {
-        points.filter { $0.aedPerGram != nil }.sorted { $0.date < $1.date }
-    }
-
-    /// A y-axis tick (a chart position, not money): compact AED (`"650k"`, `"496"`), or two
-    /// decimals under 100, where silver's price per gram moves in fils (`"7.96"`).
-    public static func axisLabel(_ tick: Double) -> String {
-        if abs(tick) < 100 { return MoneyFormat.grouped(Decimal(Int((tick * 100).rounded())) / 100, fractionDigits: 2) }
-        return MoneyFormat.compact(Decimal(Int(tick.rounded())))
-    }
-
-    /// Instead of a chart: two known days make a line.
-    public static let tooFewMessage = "Not enough price history yet: a line shows from the second day of prices."
-}
-
-/// Wealth mode's Investments tab: gold and silver valued by the server (`holdings_valuation`), the
-/// 90-day value against cost (`holdings_value_series`) or a price (`metal_price_series`), and Add,
-/// Edit and Close for owners. Every figure is the server's; the model only loads and words them.
+/// Wealth mode's Investments tab: every holding valued by the server (`holdings_valuation`), the
+/// 90-day value against cost (`holdings_value_series`) or a metal price (`metal_price_series`),
+/// returns for a period (`holding_returns`), and Add, Edit and Close for owners. A holding's own
+/// screen is a `HoldingDetailModel`. Every figure is the server's; the model only loads and words them.
 @MainActor
 @Observable
 public final class InvestmentsModel {
@@ -88,6 +31,10 @@ public final class InvestmentsModel {
     public private(set) var chart: InvestmentsChart = .value
     /// Each price chart's days, loaded when first shown.
     public private(set) var priceSeries: [MetalQuote: LoadState<[MetalPricePoint]>] = [:]
+    /// The returns card's period.
+    public private(set) var returnsPeriod: ReturnsPeriod = .all
+    /// Each period's returns, loaded when first shown (and again after a write).
+    public private(set) var returns: [ReturnsPeriod: LoadState<HoldingReturns>] = [:]
     public private(set) var isSaving = false
     /// The last write's outcome, shown above the holdings.
     public var notice: Notice?
@@ -110,13 +57,25 @@ public final class InvestmentsModel {
     }
 
     /// A new holding's form.
-    public func newDraft() -> HoldingDraft { HoldingDraft(today: today()) }
+    public func newDraft(kind: HoldingKind = .metal) -> HoldingDraft { HoldingDraft(today: today(), kind: kind) }
     public func draft(for holding: Holding) -> HoldingDraft { HoldingDraft(holding: holding, today: today()) }
+
+    /// A holding's own screen: its flows, values and returns. Its writes refresh this tab too.
+    public func detailModel(for holdingCode: String) -> HoldingDetailModel {
+        HoldingDetailModel(holdingCode: holdingCode, api: api, today: today) { [weak self] code in
+            await self?.afterWrite(profileCode: code)
+        }
+    }
+
+    /// The holding as the tab last loaded it (the detail screen's summary).
+    public func holding(_ code: String) -> Holding? { state.value?.valuation.holding(code) }
 
     public func load(profileCode: String) async {
         let (ticket, sameKey) = gate.begin(profileCode)
         state = sameKey ? state.startLoading() : .loading(previous: nil)
         if !sameKey { priceSeries = [:] }
+        // Other periods re-read when next shown; the one on screen keeps its figures while it reloads.
+        returns = sameKey ? returns.filter { $0.key == returnsPeriod } : [:]
         let (from, to) = range
         let api = self.api
         do {
@@ -142,6 +101,7 @@ public final class InvestmentsModel {
             state = state.fail(error)
         }
         if let quote = chart.quote, gate.isCurrent(ticket) { await loadPrices(quote) }
+        if gate.isCurrent(ticket), state.value != nil { await loadReturns(returnsPeriod, profileCode: profileCode) }
     }
 
     /// Loads unless this ledger is already on screen or loading.
@@ -161,6 +121,8 @@ public final class InvestmentsModel {
         state = .idle
         chart = .value
         priceSeries = [:]
+        returnsPeriod = .all
+        returns = [:]
         notice = nil
         isSaving = false
     }
@@ -176,6 +138,29 @@ public final class InvestmentsModel {
     /// The price chart's state; nil for the value chart.
     public var selectedPrices: LoadState<[MetalPricePoint]>? {
         chart.quote.map { priceSeries[$0] ?? .loading(previous: nil) }
+    }
+
+    // MARK: Returns
+
+    /// Shows `period`'s returns, loading them the first time (or after they failed).
+    public func selectReturns(_ period: ReturnsPeriod, profileCode: String) async {
+        returnsPeriod = period
+        if let loaded = returns[period], loaded.value != nil || loaded.isLoading { return }
+        await loadReturns(period, profileCode: profileCode)
+    }
+
+    /// The returns card's state for the period on screen.
+    public var selectedReturns: LoadState<HoldingReturns> { returns[returnsPeriod] ?? .loading(previous: nil) }
+
+    private func loadReturns(_ period: ReturnsPeriod, profileCode: String) async {
+        returns[period] = .loading(previous: returns[period]?.value)
+        do {
+            let r = try await api.holdingReturns(profileCode: profileCode, period: period)
+            guard gate.requested == profileCode else { return }
+            returns[period] = .loaded(r)
+        } catch {
+            returns[period] = .failed(LoadState<HoldingReturns>.message(for: error), previous: returns[period]?.value)
+        }
     }
 
     private func loadPrices(_ quote: MetalQuote) async {
@@ -226,8 +211,14 @@ public final class InvestmentsModel {
             return HoldingDraft.message(for: error)
         }
         notice = Notice(text: saved, isError: false)
+        await afterWrite(profileCode: profileCode)
+        return nil
+    }
+
+    /// A holding, its flows or its value changed (here or on its screen): reload, and tell the
+    /// screens that show it (net worth, cash flow, Activity).
+    func afterWrite(profileCode: String) async {
         await refresh(profileCode: profileCode)
         await onChange?(profileCode)
-        return nil
     }
 }

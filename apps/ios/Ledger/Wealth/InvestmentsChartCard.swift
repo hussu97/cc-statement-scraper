@@ -21,6 +21,9 @@ struct InvestmentsChartCard: View {
                 valueBody
             }
             Text(model.chart.note).font(Typography.caption).foregroundStyle(Palette.muted)
+            if model.chart == .value, let partial = InvestmentsChart.partialNote(content.series) {
+                Text(partial).font(Typography.caption).foregroundStyle(Palette.warn)
+            }
         }
     }
 

@@ -49,6 +49,9 @@ public struct LedgerTransaction: Decodable, Identifiable, Hashable, Sendable {
     public let accountKind: String?
     /// Whether Spending's Activity lists it (`v_transactions.in_spending`); true when absent.
     public let inSpending: Bool
+    /// The investment the payment is linked to (saving, not spend); nil when it isn't.
+    public let holdingCode: String?
+    public let holdingName: String?
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -91,6 +94,8 @@ public struct LedgerTransaction: Decodable, Identifiable, Hashable, Sendable {
         transferCardLast4 = try c.decodeIfPresent(String.self, forKey: .transferCardLast4)
         accountKind = try c.decodeIfPresent(String.self, forKey: .accountKind)
         inSpending = try c.decodeIfPresent(Bool.self, forKey: .inSpending) ?? true
+        holdingCode = try c.decodeIfPresent(String.self, forKey: .holdingCode)
+        holdingName = try c.decodeIfPresent(String.self, forKey: .holdingName)
     }
 
     enum CodingKeys: String, CodingKey {
@@ -99,7 +104,7 @@ public struct LedgerTransaction: Decodable, Identifiable, Hashable, Sendable {
         case currencyOriginal, amountAed, amountAedIsEstimate, fxRate, authAmount, amountSource
         case relatedTxnCode, excludeFromSpend, notes, categoryCode, categoryName, categoryColor
         case categoryKind, categorySource, bankCode, cardLast4, accountNickname, hasSms, hasStatement
-        case transferTxnCode, transferBankCode, transferCardLast4, accountKind, inSpending
+        case transferTxnCode, transferBankCode, transferCardLast4, accountKind, inSpending, holdingCode, holdingName
     }
 }
 
@@ -165,6 +170,9 @@ extension LedgerTransaction {
     public var categoryCaption: String {
         (categoryName ?? "Uncategorised") + (excludeFromSpend ? " · Excluded" : "")
     }
+
+    /// The row's investment chip: `"Saving · RL360 plan"`; nil when not linked.
+    public var holdingChipLabel: String? { holdingName.map { "Saving · \($0)" } }
 
     /// `"FAB •1234"`.
     public var cardLabel: String {

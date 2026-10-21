@@ -175,6 +175,7 @@ struct TransactionRow: View {
                         .lineLimit(typeSize.prefersStackedRows ? 3 : 1)
                     meta
                     if let peer = txn.transferPeer { TransferPeerLabel(peer: peer) }
+                    if let saving = txn.holdingChipLabel { Chip(label: saving, tone: .info) }
                 }
             } trailing: {
                 if typeSize.prefersStackedRows {

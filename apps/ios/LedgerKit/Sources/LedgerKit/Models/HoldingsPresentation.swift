@@ -35,32 +35,75 @@ public enum HoldingsText {
 
     /// `"1 holding"`, `"3 holdings"`.
     static func holdings(_ n: Int) -> String { n == 1 ? "1 holding" : "\(n) holdings" }
+
+    /// `"2,000 units"`, `"12.5 units"`, `"1 unit"`: up to six decimals, trailing zeros dropped.
+    public static func units(_ units: Decimal) -> String {
+        let text = HoldingDraft.trimmed(units, places: 6)
+        let grouped = MoneyFormat.grouped(LedgerDecimal.parse(text) ?? units,
+                                          fractionDigits: text.split(separator: ".").dropFirst().first?.count ?? 0)
+        return grouped + (units == 1 ? " unit" : " units")
+    }
 }
 
 extension Holding {
-    /// `"24K · 999.9 · 1,000 g"`, `"22K gold · 85 g"`, `"Silver 999 · 8,000 g"`.
-    public var detail: String {
-        let weight = HoldingsText.weight(grams)
-        switch metal {
-        case .gold:
-            let k = karat.map { "\($0)K" } ?? "Gold"
-            if let f = fineness.flatMap(GoldFineness.init(rawValue:)) { return "\(k) · \(f.label) · \(weight)" }
-            return "\(k) gold · \(weight)"
-        case .silver:
-            return (purity.map { "Silver \(SilverPurity($0).millesimal)" } ?? "Silver") + " · \(weight)"
+    /// The row's second line, by kind: `"24K · 999.9 · 1,000 g"`, `"22K gold · 85 g"`,
+    /// `"Silver 999 · 8,000 g"`, `"RL360 · USD"`, `"EXCO · 2,000 units"`,
+    /// `"Wio · 4.25% · matures 23 Jun 2027"`.
+    public func detail(today: CalendarDay = LedgerDates.today()) -> String {
+        switch kind {
+        case .metal:
+            let weight = grams.map(HoldingsText.weight) ?? ""
+            switch metal {
+            case .gold?:
+                let k = karat.map { "\($0)K" } ?? "Gold"
+                if let f = fineness.flatMap(GoldFineness.init(rawValue:)) { return "\(k) · \(f.label) · \(weight)" }
+                return "\(k) gold · \(weight)"
+            case .silver?:
+                return (purity.map { "Silver \(SilverPurity($0).millesimal)" } ?? "Silver") + " · \(weight)"
+            case nil:
+                return weight
+            }
+        case .plan, .broker:
+            return [institution ?? kind.label, currency == "AED" ? nil : currency].compactMap { $0 }.joined(separator: " · ")
+        case .security:
+            let u = units.map { HoldingsText.units($0) }
+            return [symbol ?? institution, u, currency == "AED" ? nil : currency].compactMap { $0 }.joined(separator: " · ")
+        case .deposit:
+            let rate = ratePct.map { MoneyFormat.grouped($0, fractionDigits: 2) + "%" }
+            let matures = maturityOn.map { day in
+                (day <= today ? "matured " : "matures ") + LedgerDates.dayLabel(day, today: today)
+            }
+            return [institution, rate, matures].compactMap { $0 }.joined(separator: " · ")
         }
     }
 
-    /// The row's photo; nil without the project URL.
-    public func imageURL(supabaseURL: URL?) -> URL? { HoldingImage.url(imagePath: imagePath, supabaseURL: supabaseURL) }
-    /// VoiceOver for the photo: `"Gold bar"`.
-    public var imageLabel: String { form.imageLabel(metal: metal) }
+    /// `"24K · 999.9 · 1,000 g"`: the detail as of today.
+    public var detail: String { detail() }
 
-    /// `"AED 496,000.00"`, or `"No price yet"`.
-    public var valueText: String { valueAed.map { MoneyFormat.aed($0) } ?? "No price yet" }
+    /// The row's photo (metals only); nil without the project URL.
+    public func imageURL(supabaseURL: URL?) -> URL? { HoldingImage.url(imagePath: imagePath, supabaseURL: supabaseURL) }
+    /// VoiceOver for the photo: `"Gold bar"`; the kind for the others.
+    public var imageLabel: String {
+        if let metal, let form { return form.imageLabel(metal: metal) }
+        return kind.label
+    }
+    /// Metals show their photo; the other kinds the kind's symbol.
+    public var hasPhoto: Bool { kind == .metal && imagePath != nil }
+
+    /// `"AED 496,000.00"`, or `"No price yet"` (a metal) / `"No value yet"`.
+    public var valueText: String {
+        if let valueAed { return MoneyFormat.aed(valueAed) }
+        return kind == .metal ? "No price yet" : "No value yet"
+    }
     public var hasValue: Bool { valueAed != nil }
 
-    /// `"+AED 76,000.00 (+18.10%)"`; nil without a cost (or a price).
+    /// The value in the holding's own currency beside the AED: `"USD 53,800.00"`; nil for AED.
+    public var ownValueText: String? {
+        guard currency != "AED", let value else { return nil }
+        return MoneyFormat.amount(value, currency: currency)
+    }
+
+    /// `"+AED 76,000.00 (+18.10%)"`; nil without a cost (or a value).
     public var gainText: String? {
         guard let gainAed else { return nil }
         return HoldingsText.signedAed(gainAed) + (gainPct.map { " (\(HoldingsText.signedPercent($0)))" } ?? "")
@@ -69,22 +112,87 @@ extension Holding {
     public var gainTone: Tone { HoldingsText.tone(gainAed) }
 
     /// What the row says instead of a gain.
-    public var noGainText: String { costAed == nil ? "No cost entered" : "No price yet" }
+    public var noGainText: String {
+        if valueAed == nil { return kind == .metal ? "No price yet" : "No value yet" }
+        if costAed == nil { return kind == .metal ? "No cost entered" : "No money in recorded" }
+        return "No gain yet"
+    }
 
-    /// `"−AED 640.00 in 24h"`; nil without yesterday's price.
-    public var changeText: String? { change24hAed.map { HoldingsText.signedAed($0) + " in 24h" } }
+    /// `"−AED 640.00 in 24h"`; nil without yesterday's figure, and when nothing moved (a plan's
+    /// value changes only when one is recorded; prices may not have updated).
+    public var changeText: String? {
+        guard let change24hAed, MoneyFormat.rounded(change24hAed, scale: 2) != 0 else { return nil }
+        return HoldingsText.signedAed(change24hAed) + " in 24h"
+    }
     public var changeTone: Tone { HoldingsText.tone(change24hAed) }
 
-    /// `"Price AED 496.00/g, 3 days old"` for a stale price; nil while fresh.
-    public func staleText(now: Date = .now) -> String? {
-        guard priceIsStale, let priceAsOf else { return nil }
-        return "Price " + CashText.asOf(priceAsOf, now: now).lowercasedFirst + ": it hasn't updated for over 3 days."
+    /// `"Income AED 440.70"`; nil without any.
+    public var incomeText: String? {
+        guard let incomeAed, incomeAed != 0 else { return nil }
+        return "Income " + MoneyFormat.aed(incomeAed)
     }
+
+    /// When the value is from, for kinds you value yourself: `"Value as of 1 Oct"`, a deposit's
+    /// `"Profit accrued to 21 Oct"`; nil for metals (their price says) and before any value.
+    public func asOfText(today: CalendarDay = LedgerDates.today()) -> String? {
+        guard kind != .metal, let valueAsOf else { return nil }
+        if isEstimate { return "Profit accrued to " + LedgerDates.dayLabel(valueAsOf, today: today) }
+        let what = kind == .security ? "Price" : "Value"
+        return "\(what) as of " + LedgerDates.dayLabel(valueAsOf, today: today)
+    }
+
+    /// `"Estimated"`: a deposit's accrued value; nil otherwise.
+    public var estimateLabel: String? { isEstimate ? "Estimated" : nil }
+
+    /// A stale figure in words: a metal price over 3 days old, or a value over 45 days old. Nil while fresh.
+    public func staleText(now: Date = .now) -> String? {
+        guard priceIsStale else { return nil }
+        if kind == .metal {
+            guard let priceAsOf else { return nil }
+            return "Price " + CashText.asOf(priceAsOf, now: now).lowercasedFirst + ": it hasn't updated for over 3 days."
+        }
+        let what = kind == .security ? "price" : "value"
+        guard let valueAsOf else { return "No recent \(what): record one." }
+        return "The \(what) is from " + LedgerDates.dayLabel(valueAsOf, today: LedgerDates.today(now: now))
+            + ", over 45 days ago. Record a newer one."
+    }
+
+    /// How the payment rule matches: `"containing “RL360”"`, `"described exactly “RI”"`; nil without one.
+    public var linkRuleMatch: String? {
+        linkPattern.map { linkExact ? "described exactly “\($0)”" : "containing “\($0)”" }
+    }
+
+    /// The holding screen's rule line: `"Links payments containing “RL360”"`.
+    public var linkRuleText: String? { linkRuleMatch.map { "Links payments " + $0 } }
+
+    /// Whether the owner's Update value applies (plans, broker accounts, shares and funds).
+    public var canRecordValue: Bool { kind.recordsValue }
 
     /// VoiceOver: `"1 kg bar, 24K · 999.9 · 1,000 g, AED 496,000.00, gain +AED 76,000.00 (+18.10%)"`.
     public var accessibilityLabel: String {
-        "\(name), \(detail), \(valueText), " + (gainText.map { "gain \($0)" } ?? noGainText)
-            + (changeText.map { ", \($0)" } ?? "")
+        "\(name), \(detail), \(valueText)" + (ownValueText.map { ", \($0)" } ?? "") + ", "
+            + (gainText.map { "gain \($0)" } ?? noGainText)
+            + (changeText.map { ", \($0)" } ?? "") + (estimateLabel.map { ", \($0.lowercased())" } ?? "")
+    }
+}
+
+/// The holdings of one kind, in the server's order (most valuable first). A group carries no
+/// subtotal: totals are the server's (CLAUDE.md §2.2).
+public struct HoldingGroup: Sendable, Hashable, Identifiable {
+    public var id: HoldingKind { kind }
+    public let kind: HoldingKind
+    public let holdings: [Holding]
+
+    public var title: String { kind.groupTitle }
+    /// `"2 holdings"`.
+    public var countText: String { HoldingsText.holdings(holdings.count) }
+
+    /// `holdings` by kind in `HoldingKind` order, each kind keeping their order; empty kinds left out.
+    public static func groups(_ holdings: [Holding]) -> [HoldingGroup] {
+        HoldingKind.allCases.compactMap { kind in
+            let inKind = holdings.filter { $0.kind == kind }
+            return inKind.isEmpty ? nil : HoldingGroup(kind: kind, holdings: inKind)
+        }
     }
 }
 
@@ -127,18 +235,21 @@ extension HoldingsValuation {
         var out: [String] = []
         if !complete, withoutPriceCount > 0 {
             out.append(withoutPriceCount == 1
-                ? "1 holding has no price yet, so the value leaves it out."
-                : "\(withoutPriceCount) holdings have no price yet, so the value leaves them out.")
+                ? "1 holding has no price or value yet, so the total leaves it out."
+                : "\(withoutPriceCount) holdings have no price or value yet, so the total leaves them out.")
         }
         if staleCount > 0 {
             out.append(staleCount == 1
-                ? "1 holding is valued at a price over 3 days old."
-                : "\(staleCount) holdings are valued at prices over 3 days old.")
+                ? "1 holding is valued at an out-of-date price or value."
+                : "\(staleCount) holdings are valued at out-of-date prices or values.")
         }
         if !costsComplete, withoutCostCount > 0 {
             out.append(withoutCostCount == 1
                 ? "1 holding has no cost, so the gain leaves it out. Add what you paid to count it."
                 : "\(withoutCostCount) holdings have no cost, so the gain leaves them out. Add what you paid to count them.")
+        }
+        if holdings.contains(where: \.isEstimate) {
+            out.append("Fixed deposits are estimated: profit accrues each day to maturity.")
         }
         return out
     }
@@ -160,10 +271,20 @@ extension HoldingsValuation {
     /// `"4 holdings"`.
     public var countText: String { HoldingsText.holdings(holdingsCount) }
 
+    /// The holdings by kind (gold and silver, plans, broker accounts, shares and funds, deposits),
+    /// each in the server's order; a kind with none is left out.
+    public var groups: [HoldingGroup] { HoldingGroup.groups(holdings) }
+
+    /// The price strip shows while there is gold or silver to price (or before any holding).
+    public var showsMetalPrices: Bool { isEmpty || holdings.contains { $0.kind == .metal } }
+
+    /// The holding with this code, if still active.
+    public func holding(_ code: String) -> Holding? { holdings.first { $0.holdingCode == code } }
+
     /// No holdings yet, in words for who is reading.
     public static func emptyMessage(canEdit: Bool) -> String {
         canEdit
-            ? "No gold or silver yet. Add a holding with its weight, and what you paid to see the gain."
-            : "No gold or silver in this ledger yet. Owners can add holdings."
+            ? "No investments yet. Add gold or silver, a plan, a broker account, shares or a fixed deposit."
+            : "No investments in this ledger yet. Owners can add holdings."
     }
 }

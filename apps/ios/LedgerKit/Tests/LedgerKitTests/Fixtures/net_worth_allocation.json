@@ -1,0 +1,78 @@
+{
+    "cards": [
+        {
+            "nickname": "Everyday",
+            "bank_code": "ADCB",
+            "anchor_kind": "statement",
+            "account_code": "acc_01k5exek4mm7vjrhbbdsrwv02f",
+            "has_estimate": false,
+            "product_name": "Platinum Rewards",
+            "outstanding_aed": "46844.85"
+        },
+        {
+            "nickname": "Bills & travel",
+            "bank_code": "FAB",
+            "anchor_kind": "statement",
+            "account_code": "acc_01k5exek4m6edwmtaaf7f4w9k2",
+            "has_estimate": true,
+            "product_name": "Cashback Signature",
+            "outstanding_aed": "5203.27"
+        }
+    ],
+    "net_aed": "1155300.26",
+    "cash_aed": "158870.15",
+    "complete": false,
+    "owed_aed": "52048.12",
+    "allocation": [
+        {
+            "class": "gold",
+            "share_pct": "49.15",
+            "value_aed": "593370.64"
+        },
+        {
+            "class": "plan",
+            "share_pct": "16.36",
+            "value_aed": "197580.50"
+        },
+        {
+            "class": "cash",
+            "share_pct": "13.16",
+            "value_aed": "158870.15"
+        },
+        {
+            "class": "deposit",
+            "share_pct": "8.40",
+            "value_aed": "101397.26"
+        },
+        {
+            "class": "silver",
+            "share_pct": "5.33",
+            "value_aed": "64379.20"
+        },
+        {
+            "class": "broker",
+            "share_pct": "5.25",
+            "value_aed": "63350.63"
+        },
+        {
+            "class": "security",
+            "share_pct": "2.35",
+            "value_aed": "28400.00"
+        },
+        {
+            "class": "owed",
+            "share_pct": null,
+            "value_aed": "-52048.12"
+        }
+    ],
+    "cash_as_of": "2026-10-09T09:44:04.770698+00:00",
+    "holdings_aed": "1048478.23",
+    "cash_complete": false,
+    "owed_complete": true,
+    "holdings_count": 8,
+    "cash_stale_count": 1,
+    "has_bank_accounts": true,
+    "holdings_complete": true,
+    "owed_has_estimate": true,
+    "cash_missing_count": 1
+}

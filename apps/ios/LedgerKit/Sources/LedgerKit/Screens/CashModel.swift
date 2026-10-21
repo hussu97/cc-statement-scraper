@@ -14,11 +14,15 @@ public final class CashModel {
         public let months: [CashFlowMonth]
         /// Cash flow failed to load: the accounts still show.
         public let flowError: String?
+        /// Saving by holding (`cash_flow_savings`), for the same accounts; empty when it failed.
+        public let savings: [SavingByHolding]
 
-        public init(position: CashPosition, months: [CashFlowMonth], flowError: String? = nil) {
+        public init(position: CashPosition, months: [CashFlowMonth], flowError: String? = nil,
+                    savings: [SavingByHolding] = []) {
             self.position = position
             self.months = months
             self.flowError = flowError
+            self.savings = savings
         }
     }
 
@@ -64,6 +68,13 @@ public final class CashModel {
 
     public func emptyMessage(for month: CalendarDay) -> String { CashFlow.emptyMessage(month, today: today()) }
 
+    /// The selected month's saving by holding, Unassigned last; empty when there is no split to show
+    /// (nothing linked, or it failed).
+    public var selectedSavings: [SavingLine] {
+        let lines = CashFlowSavings.lines(state.value?.savings ?? [], month: selectedMonth)
+        return CashFlowSavings.showsBreakdown(lines) ? lines : []
+    }
+
     /// The account filter's choices: the bank accounts (cards' flows are their spend, under every account).
     public var accountChoices: [BankAccountBalance] { state.value?.position.accounts ?? [] }
 
@@ -90,6 +101,8 @@ public final class CashModel {
         let account = accountFilter
         do {
             async let position = api.cashPosition(profileCode: profileCode)
+            // Saving by holding is extra: failing, it leaves the split out.
+            async let savings = try? api.cashFlowSavings(profileCode: profileCode, from: from, to: to, accountCode: account)
             async let flow: Result<[CashFlowRow], any Error> = {
                 do {
                     return .success(try await api.cashFlow(profileCode: profileCode, from: from, to: to, accountCode: account))
@@ -97,12 +110,12 @@ public final class CashModel {
                     return .failure(error)
                 }
             }()
-            let (p, f) = try await (position, flow)
+            let (p, f, sv) = try await (position, flow, savings)
             guard gate.isCurrent(ticket) else { return }
             gate.finish(profileCode)
             switch f {
             case .success(let rows):
-                state = .loaded(Content(position: p, months: CashFlow.months(rows)))
+                state = .loaded(Content(position: p, months: CashFlow.months(rows), savings: sv ?? []))
             case .failure(let error):
                 state = .loaded(Content(position: p, months: [], flowError: LoadState<Content>.message(for: error)))
             }
