@@ -1,5 +1,20 @@
 # Changelog
 
+## RL360 sync — 2026-10-21
+
+### Backend (Supabase)
+
+- **feat** `rl360-sync` Edge Function, daily (pg_cron `ledger-rl360-sync`, 06:20 Dubai): signs in to RL360's Online Service Centre with each ledger's login (`RL360_LOGINS`), reads each plan's value and premium history, and backfills month-end values from the plan's start (30 a run). Requests are spaced a second apart; it signs out after each login.
+- **feat** `import_holding_data` (service role): claims the profile's RL360 plan by its plan number (`holdings.external_ref`), stores values as imports (never over a manual value of the same day), and reconciles premiums with linked card payments: a premium with a linked payment within ±7 days and 5% is that payment, any other is an imported contribution (`holding_flows.source = 'import'`). Re-checked every run, so linking or unlinking a payment later moves the premium; a premium you removed stays removed.
+
+### Web
+
+- **feat** A holding's value history marks synced values and shows the latest 12 until you ask for all; imported premiums read "Synced from the provider".
+
+### iOS
+
+- **feat** The same on the holding screen: "Synced" under synced values, the latest 12 values with Show all, and "synced from the provider" on imported premiums.
+
 ## Investments: holding types, flows, returns, links, allocation — 2026-10-21
 
 ### Backend (Supabase)

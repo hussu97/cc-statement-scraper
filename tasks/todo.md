@@ -437,5 +437,63 @@ class on the net worth page.
       holding in cash flow.
 - [x] Later (21 Oct): exact-match rules (`link_exact`; Wio prints RL360 as "RI"), a deposit's
       principal is its first contribution, all-time returns leave out holdings with no money in.
-- [ ] Ship, then create the RL360 plans in production: Tejasvie (ENBD, rule contains "RL360") and
-      Hussain (Wio Credit, rule exactly "RI"); their current values when the user has them.
+- [x] Ship, then create the RL360 plans in production: Tejasvie (ENBD, rule contains "RL360") and
+      Hussain (Wio Credit, rule exactly "RI"). Their values come from the RL360 sync (§8).
+
+## 8. RL360 sync: plan values, value history and premiums from RL360's Online Service Centre (2026-10-21)
+
+Ask (21 Oct): get RL360 plan data into the ledger instead of typing values in. The user signed in
+to the Online Service Centre in the browser pane and the pages were mapped read-only.
+
+### What the site offers (mapped 21 Oct)
+- Sign-in: `POST /scripts/customer.cgi?option=login` with `USERNAME`, `PASSWORD`, `option=login`;
+  plain HTML, no JavaScript needed, no second factor seen. Session is a cookie; sign out is
+  `customer.cgi?option=logout`. Pages live under `/scripts/customer.cgi/SC/`.
+- Dashboard `SC/` lists the plans as links to `servicing/summary.php?PolNumber=<plan>`.
+- Per plan (all GET, all take `PolNumber`):
+  - `summary.php`: product, status, start date, currency, current value, premium amount and
+    frequency, premiums invested, last 6 premiums.
+  - `valuation.php?day=&month=&year=&continue=Continue`: the value **on any past date**
+    (holdings table, `Total` row, policy-value cell `td#t2header7`; fund price date per row).
+    Today's view also has premiums invested, withdrawals and the estimated surrender value.
+    So the plan's value history can be backfilled monthly from its start (Jan 2022).
+  - `history.php?subtab=premiums&day=&month=&year=&eday=&emonth=&eyear=`: every premium (due
+    date, amount due, date received, amount received, bonus); `subtab=wdls` withdrawals; totals
+    (premiums, incentives, enhanced allocation, withdrawals).
+  - `transactions.php` (date range): unit-level statement (premium allocations incl. the 2%
+    bonus, administration / establishment / servicing charges).
+  - `PDF.php?Tab=<summary|valuation|transactions|history>&…`: printable PDFs of each tab.
+- Each person signs in with their own login, so Tejasvie's plan needs her credentials.
+
+### Decisions (user, 21 Oct)
+1. **Runs in Supabase on pg_cron**, not the local scraper: an Edge Function `rl360-sync`, daily
+   (`'20 2 * * *'` UTC, 06:20 Dubai, after RL360's overnight fund prices). Logins live in one
+   Edge secret `RL360_LOGINS` (JSON `[{profile_code, username, password}]`) that the user
+   writes into `supabase/functions/.env.production` and pushes with
+   `scripts/cutover/set-edge-secrets.sh`; never in chat, git or logs (Sentry scrubs the form).
+   Plain `fetch` (the site needs no browser), a polite delay between requests, sign out at the
+   end. Risk: RL360 may refuse cloud IPs; the first production run tells (fallback: the same
+   parser from the local scraper).
+2. **Premiums reconcile with linked card payments:** each RL360 premium (date received, USD
+   amount) matches a linked card payment for that holding within ±7 days; unmatched ones become
+   imported contributions (USD, AED at the peg), so years before the ledger's SMS history count
+   and a missed SMS leaves no gap. The 2% premium bonus is growth, not new money.
+
+### Design
+- Holding ↔ plan: a new `holdings.external_ref` (the plan number), set once on the holding; a
+  plan found on RL360 with no holding is reported, not created.
+- Valuations: `source = 'import'`, one per holding and date; a re-run replaces an import, never
+  a manual value. First run backfills month-end values from the plan start; then today's value.
+- `import_holding_data(...)` (service role) does the matching and writing in SQL; the function
+  only fetches and parses. `cron_runs` records each run like the other jobs.
+
+### Plan
+- [ ] Migration: `holdings.external_ref`, `holding_flows.source`/`external_ref` (unique per
+      holding), `import_holding_data(...)` (service role, reconciliation), cron job, pgTAP.
+- [ ] Edge Function `rl360-sync` (`withSentry`, `requireCron`, `runCronJob`): login, plan list,
+      valuation by date, premium history; parsers tested on saved, anonymised HTML; the login
+      form scrubbed from Sentry; `config.toml` `verify_jwt = false`.
+- [ ] Web + iOS: external ref on the plan form; "Synced from RL360" on imported values/flows.
+- [ ] Production (ask each time): ship; user adds `RL360_LOGINS` and pushes the secret; set each
+      plan's `external_ref`; run the job once and check the backfill.
+- [ ] Docs: CHANGELOG, ARCHITECTURE, PRODUCTION (function, secret, cron), README.
