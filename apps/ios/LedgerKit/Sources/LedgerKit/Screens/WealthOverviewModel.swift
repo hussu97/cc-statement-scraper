@@ -2,7 +2,8 @@ import Foundation
 import Observation
 
 /// Wealth mode's Overview: net worth now (`net_worth`) and over time (`net_worth_series`), the bank
-/// accounts (`cash_position`), this month's cash flow and the bank-account insights. Net worth is
+/// accounts (`cash_position`), the gold and silver (`holdings_valuation`), this month's cash flow and
+/// the bank-account insights. Net worth is
 /// the screen; the rest are extras, so one of them failing leaves its card out (or says so)
 /// rather than failing the screen.
 @MainActor
@@ -18,14 +19,17 @@ public final class WealthOverviewModel {
         public let thisMonth: CashFlowMonth?
         /// The Wealth insights (`InsightArea.wealth`), alerts first.
         public let insights: [Insight]
+        /// Gold and silver; nil when `holdings_valuation` failed.
+        public let investments: HoldingsValuation?
 
         public init(netWorth: NetWorth, series: [NetWorthPoint] = [], position: CashPosition? = nil,
-                    thisMonth: CashFlowMonth? = nil, insights: [Insight] = []) {
+                    thisMonth: CashFlowMonth? = nil, insights: [Insight] = [], investments: HoldingsValuation? = nil) {
             self.netWorth = netWorth
             self.series = series
             self.position = position
             self.thisMonth = thisMonth
             self.insights = insights
+            self.investments = investments
         }
 
         /// The chart, with its footnote, once there are two points to join.
@@ -62,7 +66,8 @@ public final class WealthOverviewModel {
             async let position = try? api.cashPosition(profileCode: profileCode)
             async let flow = try? api.cashFlow(profileCode: profileCode, from: month, to: month.endOfMonth)
             async let insights = try? api.insights(profileCode: profileCode)
-            let (w, s, p, f, i) = try await (worth, series, position, flow, insights)
+            async let holdings = try? api.holdingsValuation(profileCode: profileCode)
+            let (w, s, p, f, i, h) = try await (worth, series, position, flow, insights, holdings)
             guard gate.isCurrent(ticket) else { return }
             gate.finish(profileCode)
             state = .loaded(Content(
@@ -70,7 +75,8 @@ public final class WealthOverviewModel {
                 series: (s ?? []).sorted { $0.month < $1.month },
                 position: p,
                 thisMonth: f.map { CashFlow.month(month, in: CashFlow.months($0)) },
-                insights: InsightFeed.sorted((i ?? []).in(.wealth))))
+                insights: InsightFeed.sorted((i ?? []).in(.wealth)),
+                investments: h))
         } catch {
             guard gate.isCurrent(ticket) else { return }
             state = state.fail(error)

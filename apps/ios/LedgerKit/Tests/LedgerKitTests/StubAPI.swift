@@ -299,6 +299,43 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         if let netWorthSeriesError { throw netWorthSeriesError }
         return netWorthSeriesFixture
     }
+    // MARK: Investments: scripted answers, and each call's arguments
+    /// `holdings_valuation`'s answer; nil throws (offline).
+    var valuationFixture: HoldingsValuation?
+    var valueSeriesFixture: [HoldingValuePoint] = []
+    var valueSeriesError: LedgerAPIError?
+    var priceSeriesFixture: [MetalPricePoint] = []
+    /// Thrown by `saveHolding` / `closeHolding` when set.
+    var holdingWriteError: LedgerAPIError?
+    private(set) var valueSeriesRanges: [(from: CalendarDay, to: CalendarDay)] = []
+    private(set) var priceSeriesCalls: [(quote: MetalQuote, from: CalendarDay, to: CalendarDay)] = []
+    private(set) var savedHoldings: [HoldingSubmission] = []
+    private(set) var closedHoldings: [String] = []
+    func holdingsValuation(profileCode: String) async throws -> HoldingsValuation {
+        count("holdingsValuation")
+        guard let fixture = lock.withLock({ valuationFixture }) else { throw LedgerAPIError.network("-1009") }
+        return fixture
+    }
+    func holdingsValueSeries(profileCode: String, from: CalendarDay, to: CalendarDay) async throws -> [HoldingValuePoint] {
+        count("holdingsValueSeries")
+        lock.withLock { valueSeriesRanges.append((from, to)) }
+        if let valueSeriesError { throw valueSeriesError }
+        return valueSeriesFixture
+    }
+    func metalPriceSeries(quote: MetalQuote, from: CalendarDay, to: CalendarDay) async throws -> [MetalPricePoint] {
+        count("metalPriceSeries")
+        lock.withLock { priceSeriesCalls.append((quote, from, to)) }
+        return priceSeriesFixture
+    }
+    func saveHolding(profileCode: String, holding: HoldingSubmission) async throws -> String {
+        if let holdingWriteError { throw holdingWriteError }
+        lock.withLock { savedHoldings.append(holding) }
+        return holding.holdingCode ?? "hld_new"
+    }
+    func closeHolding(profileCode: String, holdingCode: String) async throws {
+        if let holdingWriteError { throw holdingWriteError }
+        lock.withLock { closedHoldings.append(holdingCode) }
+    }
     // MARK: Analysis (PAR-12): scripted answers, and each call's arguments
     var dailyRows: [DailySpend] = []
     var hourRows: [HourWeekdaySpend] = []

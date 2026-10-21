@@ -62,9 +62,7 @@ public enum BankDirectory {
 
     /// `{supabaseURL}/storage/v1/object/public/bank-logos/{logo_path}`.
     public static func logoURL(supabaseURL: URL, logoPath: String) -> URL? {
-        guard !logoPath.isEmpty, !logoPath.contains("/"), !logoPath.contains("..") else { return nil }
-        return supabaseURL.appendingPathComponent("storage/v1/object/public/bank-logos")
-            .appendingPathComponent(logoPath)
+        PublicStorage.url(supabaseURL: supabaseURL, bucket: "bank-logos", path: logoPath)
     }
 
     /// The bundled asset first, then the bucket, then a monogram.

@@ -121,6 +121,11 @@ struct MainTabs: View {
             NavigationStack {
                 AccountsView(model: model.screens.cash, profileCode: profileCode, canEdit: model.profiles.canWrite)
             }
+        case .investments:
+            NavigationStack {
+                InvestmentsView(model: model.screens.investments, profileCode: profileCode,
+                                canEdit: model.profiles.canWrite)
+            }
         case .cashFlow:
             NavigationStack {
                 CashFlowView(model: model.screens.cash, profileCode: profileCode)

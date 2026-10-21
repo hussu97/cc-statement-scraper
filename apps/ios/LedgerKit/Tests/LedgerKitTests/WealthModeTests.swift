@@ -16,7 +16,8 @@ struct AppModeTests {
     @Test("each mode's tabs, in order; Settings and Overview are in both")
     func tabs() {
         #expect(AppMode.spending.tabs == [.overview, .activity, .insights, .budgets, .settings])
-        #expect(AppMode.wealth.tabs == [.overview, .accounts, .cashFlow, .settings])
+        #expect(AppMode.wealth.tabs == [.overview, .accounts, .investments, .cashFlow, .settings])
+        #expect(AppMode.home(of: .investments) == .wealth && LedgerTab.investments.title == "Investments")
         #expect(AppMode.home(of: .activity) == .spending && AppMode.home(of: .cashFlow) == .wealth)
         #expect(AppMode.home(of: .accounts) == .wealth && AppMode.home(of: .budgets) == .spending)
         #expect(LedgerTab.accounts.title == "Accounts" && LedgerTab.cashFlow.title == "Cash flow")

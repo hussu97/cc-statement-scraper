@@ -1,9 +1,9 @@
 import LedgerKit
 import SwiftUI
 
-/// Wealth's Overview: net worth (bank cash − what the cards owe) with how complete it is, net
-/// worth over time, the bank accounts (each opening its ledger), what each card owes, this month's
-/// cash flow and the bank-account insights. Every figure is the server's.
+/// Wealth's Overview: net worth (bank cash + investments − what the cards owe) with how complete it
+/// is, net worth over time, the bank accounts (each opening its ledger), the gold and silver, what
+/// each card owes, this month's cash flow and the bank-account insights. Every figure is the server's.
 struct WealthOverviewView: View {
     let model: WealthOverviewModel
     let profileCode: String
@@ -37,6 +37,7 @@ struct WealthOverviewView: View {
                     }
                     LinkRow(title: "Manage accounts") { tabs?.show(.accounts) }
                 }
+                InvestmentsSummaryCard(valuation: content.investments, canEdit: canEdit) { tabs?.show(.investments) }
                 OwedCard(netWorth: content.netWorth, cards: content.owingCards)
                 if let month = content.thisMonth {
                     ThisMonthCard(month: month, title: model.monthTitle) { tabs?.show(.cashFlow) }
@@ -70,6 +71,7 @@ private struct NetWorthHero: View {
             Chip(label: netWorth.completenessText, tone: netWorth.completenessTone)
             VStack(alignment: .leading, spacing: 4) {
                 line("Cash in bank accounts", netWorth.cashText)
+                if netWorth.showsHoldings { line("Investments", netWorth.holdingsAdditionText) }
                 line("Owed on cards", netWorth.owedDeductionText)
             }
             if let asOf = netWorth.asOfText() {
@@ -98,6 +100,46 @@ private struct NetWorthHero: View {
     private var amount: some View {
         Text(netWorth.heroAmount).font(Typography.hero(size: heroSize)).foregroundStyle(Palette.ink)
             .lineLimit(1).minimumScaleFactor(0.4)
+    }
+}
+
+/// The gold and silver: the server's value, gain and 24-hour change; opens the Investments tab.
+private struct InvestmentsSummaryCard: View {
+    let valuation: HoldingsValuation?
+    let canEdit: Bool
+    let open: () -> Void
+
+    var body: some View {
+        Card {
+            SectionHeader(title: "Investments", trailing: valuation.flatMap { $0.isEmpty ? nil : $0.valueText })
+            if let valuation {
+                if valuation.isEmpty {
+                    Text(HoldingsValuation.emptyMessage(canEdit: canEdit))
+                        .font(Typography.rowMeta).foregroundStyle(Palette.muted)
+                } else {
+                    row("Gold and silver", valuation.countText, Palette.ink)
+                    row("Gain", valuation.gainText ?? "Add what you paid",
+                        valuation.gainText == nil ? Palette.muted : valuation.gainTone.color)
+                    if let change = valuation.changeText { row("Last 24 hours", change, valuation.changeTone.color) }
+                    ForEach(valuation.caveats, id: \.self) { caveat in
+                        Text(caveat).font(Typography.caption).foregroundStyle(Palette.warn)
+                    }
+                }
+            } else {
+                Text("Couldn't load the investments. Pull to refresh.")
+                    .font(Typography.rowMeta).foregroundStyle(Palette.muted)
+            }
+            LinkRow(title: "See investments", action: open)
+        }
+    }
+
+    private func row(_ label: String, _ value: String, _ color: Color) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(label).font(Typography.rowMeta).foregroundStyle(Palette.ink)
+            Spacer()
+            Text(value).font(Typography.amount).foregroundStyle(color).moneyLine()
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 
