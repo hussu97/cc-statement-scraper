@@ -5,7 +5,8 @@ import { wealthHoldingRoute } from "@/router";
 import { useActiveProfile } from "@/data/profile";
 import { useHoldingDetail, useHoldingsValuation, type Holding, type HoldingDetail, type HoldingFlow } from "@/data/holdings";
 import { formatPct, formatPurity, signTone } from "@/lib/holdings";
-import { FLOW_KIND_LABEL, FLOW_SOURCE_LABEL, VALUATION_SOURCE_LABEL, aedEquivalent, canRemoveFlow, flowSign, formatOwnValue, formatRate, formatUnitPrice, kindOf, noValueText, valueInput, visibleValues } from "@/lib/investments";
+import { FLOW_KIND_LABEL, FLOW_SOURCE_LABEL, aedEquivalent, canRemoveFlow, depositValueNote, flowSign, formatOwnValue, formatUnitPrice, kindOf, noValueText, valuationSourceLabel, valueInput, visibleValues } from "@/lib/investments";
+import type { HoldingKind } from "@/lib/investments";
 import { formatDate } from "@/lib/dates";
 import { formatMoney, formatTotal } from "@/lib/money";
 import { cn } from "@/lib/cn";
@@ -286,24 +287,25 @@ function ValuesCard({ h, detail, onUpdate }: { h: Holding | null; detail: Return
       />
       {kind === "metal" ? (
         <p className="px-5 pb-5 text-[13px] text-muted">Valued at Dubai's retail rate for its metal and karat, refreshed every 6 hours. The price chart is on the Investments page.</p>
-      ) : kind === "deposit" ? (
-        <p className="px-5 pb-5 text-[13px] text-muted">
-          An estimate: the principal plus simple profit at {h?.rate_pct ? formatRate(h.rate_pct) : "its rate"} a year, accrued day by day to maturity
-          {h?.maturity_on ? ` on ${formatDate(h.maturity_on.slice(0, 10))}` : ""}.
-        </p>
+      ) : kind === "deposit" && h ? (
+        <>
+          <p className="px-5 pb-5 text-[13px] text-muted">{depositValueNote(h, (detail.data?.valuations.length ?? 0) > 0)}</p>
+          {detail.data && detail.data.valuations.length > 0 && <ValueList detail={detail.data} currency={h.currency ?? "AED"} kind={kind} />}
+        </>
       ) : detail.isLoading || !h ? (
         <LoadingRows rows={3} />
       ) : detail.isError || !detail.data ? (
         <ErrorState error={detail.error} onRetry={() => void detail.refetch()} />
       ) : (
-        <ValueList detail={detail.data} currency={h.currency ?? "AED"} isPrice={kind === "security"} />
+        <ValueList detail={detail.data} currency={h.currency ?? "AED"} kind={kind} />
       )}
     </Card>
   );
 }
 
-function ValueList({ detail, currency, isPrice }: { detail: HoldingDetail; currency: string; isPrice: boolean }) {
+function ValueList({ detail, currency, kind }: { detail: HoldingDetail; currency: string; kind: HoldingKind | null }) {
   const [showAll, setShowAll] = useState(false);
+  const isPrice = kind === "security";
   if (detail.valuations.length === 0) {
     return (
       <EmptyState icon={<History />} title="No values recorded yet">
@@ -318,7 +320,7 @@ function ValueList({ detail, currency, isPrice }: { detail: HoldingDetail; curre
         <li key={v.valuation_code} className="flex items-baseline justify-between gap-3 px-5 py-2.5 text-sm">
           <span className="text-ink-2">
             {formatDate(v.as_of)}
-            {v.source === "import" && <span className="ml-2 text-[11px] text-subtle">{VALUATION_SOURCE_LABEL.import}</span>}
+            {valuationSourceLabel(kind, v.source) && <span className="ml-2 text-[11px] text-subtle">{valuationSourceLabel(kind, v.source)}</span>}
           </span>
           <span className="tabular text-ink">
             {isPrice ? `${formatUnitPrice(v.unit_price, currency)} a unit` : formatTotal(v.value, { currency })}

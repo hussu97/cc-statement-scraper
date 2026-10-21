@@ -169,6 +169,7 @@ describe("bank accounts", () => {
   it("labels the balance source", () => {
     expect(balanceSourceLabel("sms")).toBe("from SMS");
     expect(balanceSourceLabel("manual")).toBe("entered");
+    expect(balanceSourceLabel("statement")).toBe("from statement");
     expect(balanceSourceLabel(null)).toBeNull();
   });
 
