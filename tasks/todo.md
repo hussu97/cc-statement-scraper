@@ -575,10 +575,20 @@ Schema + contract change: needs the user's go-ahead before code (CLAUDE.md §12.
 - [x] Verify: parse the real PDF locally (not committed), ingest into a local profile, check
       balances 0.00 / 51.46, the deposit at 109,718.87, and no doubled SMS lines; `pnpm check`.
 - [x] Docs: contract, CHANGELOG, ARCHITECTURE.
-- [ ] Production (ask each time): ship; add `estatement@adcb.com` to the ADCB route; requeue
-      the Sep statement and check it.
-- [ ] After the first production ingest (ask first): set the deposit's principal to 100,000 and
-      its start to 22 Nov 2021 (Wealth → the deposit → Edit, or `save_holding`).
+- [x] Production (approved 21 Oct): shipped (main 3864127; Supabase, parser, web, TestFlight 39
+      green). The ADCB route already allowed `estatement@adcb.com` but only the card e-statement's
+      subject and file name, so the consolidated email had never matched: it now also takes
+      subject "ADCB e-Statement" and files `ADCB(CreditCard|Stmt).*\.pdf`, and the mailbox's
+      Outlook cursors were cleared so the 13:05 UTC poll rescanned 90 days.
+- [x] After the first production ingest: the deposit's principal set to 100,000 and its start to
+      22 Nov 2021 (worth AED 109,845.12 on 21 Oct).
+
+### Production check (21 Oct)
+- The Sep statement (the only one in 90 days) parsed as `account_statement_pdf` 2026.10.21:
+  accounts …810001 (0.00) and …820001 (51.46) with statement balances, both statements `ok`, the
+  fee and the purchase as new transactions (no SMS for card 4467 or …820001 had ever reached
+  production), debit card 4467 registered, the deposit added and valued, card 3687's limit
+  27,000. Warning: card 6617 is not in the ledger.
 
 ### Review (21 Oct)
 - Built on `wio-accounts` (`20261021115816`, parser 2026.10.21). One change from the design: a
