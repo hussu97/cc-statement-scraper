@@ -3,7 +3,7 @@
 
 import { assert, assertEquals } from "jsr:@std/assert@1.0.13";
 import { formatBytes, logDocumentEvent, prepareDocument, storeDocument, uploadEvents } from "../_shared/documents.ts";
-import { parsedEvent } from "../worker/parse_document.ts";
+import { parsedEvent, unrecognisedLines } from "../worker/parse_document.ts";
 import { FakeDb, PDF_BYTES, type RpcHandler } from "./fake_db.ts";
 
 Deno.env.delete("SENTRY_DSN");
@@ -109,4 +109,36 @@ Deno.test("parsedEvent counts statements, lines and warnings, never line text", 
   assertEquals(plain.level, "info");
   assertEquals(plain.message, "Read the statement: 1 statement, 0 lines.");
   assertEquals(plain.detail.bank_code, null);
+});
+
+Deno.test("unrecognisedLines passes masked shapes only, never statement text", () => {
+  const payload = {
+    document_kind: "account_statement_pdf",
+    statements: [
+      { metadata: { unrecognised_lines: [{ line_no: 3, direction: "debit", shape: "IPP w w w #" }] } },
+      {
+        metadata: {
+          unrecognised_lines: [
+            { line_no: 1, direction: "credit", shape: "INWARD REMITTANCE JOHN SMITH" },
+            { line_no: 2, direction: "sideways", shape: "w #" },
+            { line_no: 4, shape: 42 },
+          ],
+        },
+      },
+      { metadata: {} },
+      { lines: [] },
+    ],
+  };
+  assertEquals(unrecognisedLines(payload), [
+    { shape: "IPP w w w #", direction: "debit" },
+    { shape: "?", direction: "credit" },
+    { shape: "w #", direction: "?" },
+    { shape: "?", direction: "?" },
+  ]);
+  assertEquals(unrecognisedLines({ statements: "nope" }), []);
+});
+
+Deno.test("parsedEvent names a statement of accounts", () => {
+  const e = parsedEvent({ bank_code: "ADCB", document_kind: "account_statement_pdf", statements: [{ lines: [] }] });
+  assert(e.message.startsWith("Read the ADCB statement of accounts: 1 statement"));
 });

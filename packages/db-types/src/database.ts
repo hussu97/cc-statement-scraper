@@ -37,12 +37,14 @@ export type Database = {
       accounts: {
         Row: {
           account_code: string
+          account_number: string | null
           account_ref: string | null
           bank_code: string
           created_at: string
           credit_limit: number | null
           currency: string
           cycle_close_day: number | null
+          iban: string | null
           kind: string
           nickname: string | null
           product_name: string | null
@@ -52,12 +54,14 @@ export type Database = {
         }
         Insert: {
           account_code?: string
+          account_number?: string | null
           account_ref?: string | null
           bank_code: string
           created_at?: string
           credit_limit?: number | null
           currency?: string
           cycle_close_day?: number | null
+          iban?: string | null
           kind?: string
           nickname?: string | null
           product_name?: string | null
@@ -67,12 +71,14 @@ export type Database = {
         }
         Update: {
           account_code?: string
+          account_number?: string | null
           account_ref?: string | null
           bank_code?: string
           created_at?: string
           credit_limit?: number | null
           currency?: string
           cycle_close_day?: number | null
+          iban?: string | null
           kind?: string
           nickname?: string | null
           product_name?: string | null
@@ -209,6 +215,7 @@ export type Database = {
           profile_code: string
           sms_code: string | null
           source: string
+          stmt_code: string | null
         }
         Insert: {
           account_code: string
@@ -220,6 +227,7 @@ export type Database = {
           profile_code: string
           sms_code?: string | null
           source: string
+          stmt_code?: string | null
         }
         Update: {
           account_code?: string
@@ -231,6 +239,7 @@ export type Database = {
           profile_code?: string
           sms_code?: string | null
           source?: string
+          stmt_code?: string | null
         }
         Relationships: [
           {
@@ -267,6 +276,34 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "sms_messages"
             referencedColumns: ["sms_code"]
+          },
+          {
+            foreignKeyName: "balance_checkpoints_stmt_code_fkey"
+            columns: ["stmt_code"]
+            isOneToOne: false
+            referencedRelation: "statements"
+            referencedColumns: ["stmt_code"]
+          },
+          {
+            foreignKeyName: "balance_checkpoints_stmt_code_fkey"
+            columns: ["stmt_code"]
+            isOneToOne: false
+            referencedRelation: "v_sms_statements"
+            referencedColumns: ["history_stmt_code"]
+          },
+          {
+            foreignKeyName: "balance_checkpoints_stmt_code_fkey"
+            columns: ["stmt_code"]
+            isOneToOne: false
+            referencedRelation: "v_sms_statements"
+            referencedColumns: ["stmt_code"]
+          },
+          {
+            foreignKeyName: "balance_checkpoints_stmt_code_fkey"
+            columns: ["stmt_code"]
+            isOneToOne: false
+            referencedRelation: "v_statement_payments"
+            referencedColumns: ["stmt_code"]
           },
         ]
       }

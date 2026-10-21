@@ -191,6 +191,9 @@ select set_eq(
     'public.holding_detail',
     -- a card payment's leg on the same bank's current account (20261020170933)
     'private.add_payment_leg',
+    -- consolidated statements (20261021115816): a bank statement's account (bank accounts only),
+    -- a card summary's account (cards only), the balance equation's direction (either)
+    'private.resolve_bank_statement_account', 'private.apply_card_summaries', 'private.reconcile_statement',
     -- reach an account through its statements or transactions, or read a single known account
     -- (refresh_transaction: bank-account SMS is final, Phase 2b)
     'private.account_bank', 'private.apply_sms_statement', 'private.refresh_transaction', 'private.estimate_fx', 'private.filtered_spend',
