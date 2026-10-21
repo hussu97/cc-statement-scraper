@@ -973,23 +973,177 @@ export type Database = {
         }
         Relationships: []
       }
+      holding_flows: {
+        Row: {
+          amount: number
+          amount_aed: number
+          created_at: string
+          created_by: string | null
+          flow_code: string
+          flow_date: string
+          holding_code: string
+          kind: string
+          notes: string | null
+          profile_code: string
+          removed_at: string | null
+          source: string
+          txn_code: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          amount_aed: number
+          created_at?: string
+          created_by?: string | null
+          flow_code?: string
+          flow_date: string
+          holding_code: string
+          kind: string
+          notes?: string | null
+          profile_code: string
+          removed_at?: string | null
+          source: string
+          txn_code?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          amount_aed?: number
+          created_at?: string
+          created_by?: string | null
+          flow_code?: string
+          flow_date?: string
+          holding_code?: string
+          kind?: string
+          notes?: string | null
+          profile_code?: string
+          removed_at?: string | null
+          source?: string
+          txn_code?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "holding_flows_holding_fkey"
+            columns: ["profile_code", "holding_code"]
+            isOneToOne: false
+            referencedRelation: "holdings"
+            referencedColumns: ["profile_code", "holding_code"]
+          },
+          {
+            foreignKeyName: "holding_flows_profile_code_fkey"
+            columns: ["profile_code"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["profile_code"]
+          },
+          {
+            foreignKeyName: "holding_flows_txn_code_fkey"
+            columns: ["txn_code"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["txn_code"]
+          },
+          {
+            foreignKeyName: "holding_flows_txn_code_fkey"
+            columns: ["txn_code"]
+            isOneToOne: false
+            referencedRelation: "v_spend"
+            referencedColumns: ["txn_code"]
+          },
+          {
+            foreignKeyName: "holding_flows_txn_code_fkey"
+            columns: ["txn_code"]
+            isOneToOne: false
+            referencedRelation: "v_transactions"
+            referencedColumns: ["transfer_txn_code"]
+          },
+          {
+            foreignKeyName: "holding_flows_txn_code_fkey"
+            columns: ["txn_code"]
+            isOneToOne: false
+            referencedRelation: "v_transactions"
+            referencedColumns: ["txn_code"]
+          },
+        ]
+      }
+      holding_valuations: {
+        Row: {
+          as_of: string
+          created_at: string
+          created_by: string | null
+          holding_code: string
+          profile_code: string
+          source: string
+          unit_price: number | null
+          valuation_code: string
+          value: number | null
+        }
+        Insert: {
+          as_of: string
+          created_at?: string
+          created_by?: string | null
+          holding_code: string
+          profile_code: string
+          source?: string
+          unit_price?: number | null
+          valuation_code?: string
+          value?: number | null
+        }
+        Update: {
+          as_of?: string
+          created_at?: string
+          created_by?: string | null
+          holding_code?: string
+          profile_code?: string
+          source?: string
+          unit_price?: number | null
+          valuation_code?: string
+          value?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "holding_valuations_holding_fkey"
+            columns: ["profile_code", "holding_code"]
+            isOneToOne: false
+            referencedRelation: "holdings"
+            referencedColumns: ["profile_code", "holding_code"]
+          },
+          {
+            foreignKeyName: "holding_valuations_profile_code_fkey"
+            columns: ["profile_code"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["profile_code"]
+          },
+        ]
+      }
       holdings: {
         Row: {
           acquired_on: string | null
           cost_aed: number | null
           created_at: string
           created_by: string | null
+          currency: string
           fineness: number | null
-          form: string
-          grams: number
+          form: string | null
+          grams: number | null
           holding_code: string
+          institution: string | null
           karat: number | null
-          metal: string
+          kind: string
+          link_pattern: string | null
+          maturity_on: string | null
+          metal: string | null
           name: string
           notes: string | null
+          principal: number | null
           profile_code: string
           purity: number | null
+          rate_pct: number | null
           status: string
+          symbol: string | null
+          units: number | null
           updated_at: string
         }
         Insert: {
@@ -997,17 +1151,26 @@ export type Database = {
           cost_aed?: number | null
           created_at?: string
           created_by?: string | null
+          currency?: string
           fineness?: number | null
-          form?: string
-          grams: number
+          form?: string | null
+          grams?: number | null
           holding_code?: string
+          institution?: string | null
           karat?: number | null
-          metal: string
+          kind?: string
+          link_pattern?: string | null
+          maturity_on?: string | null
+          metal?: string | null
           name: string
           notes?: string | null
+          principal?: number | null
           profile_code: string
           purity?: number | null
+          rate_pct?: number | null
           status?: string
+          symbol?: string | null
+          units?: number | null
           updated_at?: string
         }
         Update: {
@@ -1015,17 +1178,26 @@ export type Database = {
           cost_aed?: number | null
           created_at?: string
           created_by?: string | null
+          currency?: string
           fineness?: number | null
-          form?: string
-          grams?: number
+          form?: string | null
+          grams?: number | null
           holding_code?: string
+          institution?: string | null
           karat?: number | null
-          metal?: string
+          kind?: string
+          link_pattern?: string | null
+          maturity_on?: string | null
+          metal?: string | null
           name?: string
           notes?: string | null
+          principal?: number | null
           profile_code?: string
           purity?: number | null
+          rate_pct?: number | null
           status?: string
+          symbol?: string | null
+          units?: number | null
           updated_at?: string
         }
         Relationships: [
@@ -2641,6 +2813,7 @@ export type Database = {
           account_code: string | null
           amount_aed: number | null
           flow: string | null
+          holding_code: string | null
           instrument: string | null
           profile_code: string | null
           txn_code: string | null
@@ -2823,6 +2996,8 @@ export type Database = {
           fx_rate: number | null
           has_sms: boolean | null
           has_statement: boolean | null
+          holding_code: string | null
+          holding_name: string | null
           in_spending: boolean | null
           kind: string | null
           merchant_code: string | null
@@ -3009,6 +3184,18 @@ export type Database = {
         }
         Returns: Json
       }
+      add_holding_flow: {
+        Args: {
+          p_amount: string
+          p_amount_aed?: string
+          p_flow_date: string
+          p_holding_code: string
+          p_kind: string
+          p_notes?: string
+          p_profile_code: string
+        }
+        Returns: string
+      }
       add_profile_member: {
         Args: { p_email: string; p_profile_code: string; p_role?: string }
         Returns: string
@@ -3120,6 +3307,10 @@ export type Database = {
           txn_count: number
         }[]
       }
+      cash_flow_savings: {
+        Args: { p_from: string; p_profile_code: string; p_to: string }
+        Returns: Json
+      }
       cash_position: { Args: { p_profile_code: string }; Returns: Json }
       category_breakdown: {
         Args: { p_from: string; p_profile_code: string; p_to: string }
@@ -3197,6 +3388,14 @@ export type Database = {
         }[]
       }
       gen_code: { Args: { prefix: string }; Returns: string }
+      holding_detail: {
+        Args: { p_holding_code: string; p_profile_code: string }
+        Returns: Json
+      }
+      holding_returns: {
+        Args: { p_period?: string; p_profile_code: string }
+        Returns: Json
+      }
       holdings_valuation: { Args: { p_profile_code: string }; Returns: Json }
       holdings_value_series: {
         Args: { p_from: string; p_profile_code: string; p_to: string }
@@ -3222,6 +3421,15 @@ export type Database = {
       ingest_wallet_transactions: {
         Args: { p_items: Json; p_profile_code: string }
         Returns: Json
+      }
+      link_transaction: {
+        Args: {
+          p_holding_code: string
+          p_kind?: string
+          p_profile_code: string
+          p_txn_code: string
+        }
+        Returns: string
       }
       list_profile_members: {
         Args: { p_profile_code: string }
@@ -3366,6 +3574,16 @@ export type Database = {
         }
         Returns: string
       }
+      record_holding_value: {
+        Args: {
+          p_as_of?: string
+          p_holding_code: string
+          p_profile_code: string
+          p_unit_price?: string
+          p_value?: string
+        }
+        Returns: string
+      }
       record_metal_prices: { Args: { p_quotes: Json }; Returns: Json }
       recurring_list: {
         Args: { p_profile_code: string }
@@ -3387,6 +3605,10 @@ export type Database = {
       }
       reject_merchant_suggestion: {
         Args: { p_merchant_code: string; p_profile_code: string }
+        Returns: undefined
+      }
+      remove_holding_flow: {
+        Args: { p_flow_code: string; p_profile_code: string }
         Returns: undefined
       }
       remove_profile_member: {
@@ -3434,16 +3656,25 @@ export type Database = {
         Args: {
           p_acquired_on?: string
           p_cost_aed?: string
+          p_currency?: string
           p_fineness?: number
           p_form?: string
-          p_grams: string
+          p_grams?: string
           p_holding_code?: string
+          p_institution?: string
           p_karat?: number
-          p_metal: string
+          p_kind?: string
+          p_link_pattern?: string
+          p_maturity_on?: string
+          p_metal?: string
           p_name: string
           p_notes?: string
+          p_principal?: string
           p_profile_code: string
           p_purity?: string
+          p_rate_pct?: string
+          p_symbol?: string
+          p_units?: string
         }
         Returns: string
       }

@@ -1,5 +1,14 @@
 # Changelog
 
+## Investments: holding types, flows, returns, links, allocation — 2026-10-21
+
+### Backend (Supabase)
+
+- **feat** Holdings beyond metals: savings plans, broker accounts, shares and funds (units × price), fixed deposits (accrue to maturity), each in its own currency. `record_holding_value` for plans, brokers and unit prices.
+- **feat** `holding_flows`: contributions, withdrawals and income per holding, optionally the ledger payment; a metal's cost is its first contribution. `add_holding_flow`, `remove_holding_flow`, `holding_detail`.
+- **feat** Linking: a holding's description rule links matching payments as they arrive (and existing ones when saved); `link_transaction` links or unlinks by hand. A linked payment is saving, not spend: it leaves spend and budgets and shows as saving in cash flow; `cash_flow_savings` breaks saving down by holding.
+- **feat** `holding_returns` (all time, this year, last 12 months): added vs growth, simple % and a money-weighted yearly return. `net_worth` adds allocation by asset class.
+
 ## Gold and silver in Wealth — 2026-10-21
 
 ### Backend (Supabase)
