@@ -979,6 +979,7 @@ export type Database = {
           amount_aed: number
           created_at: string
           created_by: string | null
+          external_ref: string | null
           flow_code: string
           flow_date: string
           holding_code: string
@@ -987,6 +988,7 @@ export type Database = {
           profile_code: string
           removed_at: string | null
           source: string
+          superseded_by: string | null
           txn_code: string | null
           updated_at: string
         }
@@ -995,6 +997,7 @@ export type Database = {
           amount_aed: number
           created_at?: string
           created_by?: string | null
+          external_ref?: string | null
           flow_code?: string
           flow_date: string
           holding_code: string
@@ -1003,6 +1006,7 @@ export type Database = {
           profile_code: string
           removed_at?: string | null
           source: string
+          superseded_by?: string | null
           txn_code?: string | null
           updated_at?: string
         }
@@ -1011,6 +1015,7 @@ export type Database = {
           amount_aed?: number
           created_at?: string
           created_by?: string | null
+          external_ref?: string | null
           flow_code?: string
           flow_date?: string
           holding_code?: string
@@ -1019,6 +1024,7 @@ export type Database = {
           profile_code?: string
           removed_at?: string | null
           source?: string
+          superseded_by?: string | null
           txn_code?: string | null
           updated_at?: string
         }
@@ -1125,6 +1131,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           currency: string
+          external_ref: string | null
           fineness: number | null
           form: string | null
           grams: number | null
@@ -1153,6 +1160,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           currency?: string
+          external_ref?: string | null
           fineness?: number | null
           form?: string | null
           grams?: number | null
@@ -1181,6 +1189,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           currency?: string
+          external_ref?: string | null
           fineness?: number | null
           form?: string | null
           grams?: number | null
@@ -3417,6 +3426,18 @@ export type Database = {
           hour: number
           txn_count: number
         }[]
+      }
+      import_holding_data: {
+        Args: {
+          p_currency: string
+          p_external_ref: string
+          p_institution: string
+          p_premiums?: Json
+          p_profile_code: string
+          p_started_on: string
+          p_valuations: Json
+        }
+        Returns: Json
       }
       ingest_parsed_document: {
         Args: { p_doc_code: string; p_payload: Json }

@@ -472,6 +472,9 @@ verify_jwt = false
 [functions.metal-prices]
 verify_jwt = false
 
+[functions.rl360-sync]
+verify_jwt = false
+
 [functions.member-invite]
 verify_jwt = false
 
