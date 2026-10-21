@@ -82,6 +82,12 @@ public final class HoldingDetailModel {
         return "No money in or out yet. Payments \(match) are linked as they arrive."
     }
 
+    /// Whether the screen lists values: the kinds you value yourself, and a deposit once its
+    /// bank's statement has valued it.
+    public func showsValueHistory(for holding: Holding) -> Bool {
+        holding.canRecordValue || (holding.kind == .deposit && !valuations.isEmpty)
+    }
+
     /// The value history's empty state.
     public func noValuesMessage(for holding: Holding) -> String? {
         guard holding.canRecordValue, detail.value != nil, valuations.isEmpty else { return nil }

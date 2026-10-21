@@ -141,8 +141,15 @@ public struct HoldingValuationRecord: Decodable, Sendable, Hashable, Identifiabl
         self.source = source
     }
 
-    /// Stored by a provider sync (RL360), not entered by hand.
+    /// Stored by a provider sync (RL360) or a bank statement (a deposit), not entered by hand.
     public var isSynced: Bool { source == "import" }
+
+    /// The note beside a stored value: a deposit's comes from its bank's statement, a plan's
+    /// from the provider sync; nil for a value entered by hand.
+    public func sourceLabel(for kind: HoldingKind) -> String? {
+        guard isSynced else { return nil }
+        return kind == .deposit ? "From statement" : "Synced"
+    }
 
     /// A synced plan records a value a day: the list shows the latest few until asked for all.
     public static let listLimit = 12
