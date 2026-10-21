@@ -509,3 +509,68 @@ to the Online Service Centre in the browser pane and the pages were mapped read-
 - Not yet run: a real sign-in from the function (needs the owner's login in
   `supabase/functions/.env`), and from Supabase's cloud IPs (production's first run tells).
 
+
+## 9. ADCB consolidated statement: bank accounts, their lines and the fixed deposit (2026-10-21)
+
+Source: the monthly "Consolidated Statement of Accounts" from `estatement@adcb.com` (PDF, password
+= customer ID, already the profile secret `ADCB_CID`). One PDF holds: savings/current accounts
+(full number, IBAN, balance), each account's lines (B/F opening, date, description wrapped over
+lines, ref, value date, debit, credit, **running balance**, Total), fixed deposits (number, product,
+rate, maturity, amount = principal + accrued profit), credit-card summaries and TouchPoints.
+Sample: Sep 2026, accounts 810001 (Active Saver) and 820001 (Current, debit card 4467), deposit
+940001 (Online Century Deposit, AED 100,000 in, 109,718.87 on 30/09, 2.00%, matures 01/04/2027).
+Schema + contract change: needs the user's go-ahead before code (CLAUDE.md §12.1).
+
+### Decisions (user, 21 Oct)
+- The deposit's statement amount includes accrued profit; the original investment was AED 100,000.
+  It does not exist in the app yet: the first statement creates it (Hussain's ledger).
+- TouchPoints: dropped. Card summaries: cross-check only (the card PDFs own card statements).
+- No older statements: lines the parser cannot classify are kept and reported to Sentry
+  (shape only), so new layouts are learnt from production.
+
+### Design
+- **Order matters**: the sender joins the ADCB email route only after this ships. Today the card
+  parser would read account rows as card lines and `resolve_statement_account` would invent a
+  credit-card account.
+- **Parser** (`adcb.py`): detect "Consolidated Statement of Accounts" and dispatch, as SIB does;
+  try `ADCB_CID` then `ADCB_PDF_PASSWORD` (today only one is tried, `dispatcher.py:26`). Per
+  account: opening (B/F), lines, closing; every line's running balance must follow from the last
+  (a break is a parse failure, not a warning). Kinds from description prefixes (`PUR`, `FOREIGN
+  TRANSACTION FEE`, …); anything else gets a direction-only kind and a warning. Fixtures are
+  synthetic text, never the real PDF.
+- **Contract** (parse-v1, additive): `document_kind = "account_statement_pdf"` with `accounts[]`
+  (number, IBAN, product, currency, period, opening, closing, lines), `deposits[]` (number,
+  product, currency, rate, maturity, amount, as-of) and `card_summaries[]`. Doc, pydantic, SQL
+  together (§2.3).
+- **Unknown lines → Sentry**: the statement carries warnings; the worker sends one Sentry event
+  per document (tags: `document_code`, `bank`; extra: count and each description's *shape*, digits
+  → `#`, capped length). No amounts, IBANs or names (§6); a scrubber test covers it.
+- **Accounts**: `private.ingest_account_statement` resolves current/savings by bank + last 6
+  digits (the SMS key), never through the card resolver; creates a missing one (Saver → savings,
+  Current → current); stores IBAN and full number; lines are evidence (§1.10); closing balance
+  becomes `balance_checkpoints.source = 'statement'` at period end.
+- **SMS overlap**: ADCB debit SMS already capture most lines. A statement line matches the SMS
+  transaction (same account, amount, direction, ±3 days; running balance breaks ties), so the
+  transaction is refreshed from the statement, never doubled. Transfers and card payments then
+  pair through the existing `link_card_transfer` / `v_cash_flow`.
+- **Deposit**: `holdings.external_ref` = deposit number (from §8, which must land first). First
+  sighting creates a `deposit` holding (institution ADCB, principal 100,000, rate and maturity
+  from the statement, start date from the user). Each statement adds an `'import'` valuation;
+  `holding_values` for a deposit becomes *latest import + simple accrual since it, capped at
+  maturity* (the formula alone stays as the fallback). A changed maturity starts a new term
+  (value carries over); a deposit missing from a later statement is flagged as matured or broken,
+  not silently closed.
+
+### Plan
+- [ ] Parser: layout, extraction, reconciliation, passwords, kinds, warnings; pytest + golden
+      parity (from the main checkout).
+- [ ] Contract doc + pydantic + migration: account-statement ingest, `statement` checkpoint
+      source, SMS matching, deposit import and valuation rule; pgTAP; `pnpm db:types`;
+      account-reader guard (`60_bank_accounts`).
+- [ ] Worker: route the new document kind; the Sentry event and its scrubber test.
+- [ ] Web + iOS: account lines and "From statement" balances; the deposit's statement values.
+- [ ] Verify: parse the real PDF locally (not committed), ingest into a local profile, check
+      balances 0.00 / 51.46, the deposit at 109,718.87, and no doubled SMS lines; `pnpm check`.
+- [ ] Docs: contract, CHANGELOG, ARCHITECTURE.
+- [ ] Production (ask each time): ship; add `estatement@adcb.com` to the ADCB route; requeue
+      the Sep statement and check it.
