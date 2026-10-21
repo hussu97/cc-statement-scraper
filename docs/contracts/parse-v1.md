@@ -106,7 +106,9 @@ All money values are **decimal strings, absolute (non-negative)**, except `total
 
 Field rules:
 - `parser_version` changes whenever the output for the same PDF changes (see [Versioning](#versioning)).
-- `document_kind` is `statement_pdf` or `history_pdf`. SIB "transaction history" exports are `history_pdf`.
+- `document_kind` is `statement_pdf`, `history_pdf` or `account_statement_pdf`. SIB "transaction history"
+  exports are `history_pdf`; ADCB's consolidated statement of accounts is `account_statement_pdf`
+  (see [Bank-account statements](#bank-account-statements-account_statement_pdf)).
 - `statements[].kind` is `statement` or `history_extract`. A `history_pdf` produces only `history_extract` statements.
 - `reference_source` is `explicit`, `fallback` or null.
 - `totals` contains every key. A value is null when that parser doesn't extract it. FAB, ENBD/EIB,
@@ -116,7 +118,8 @@ Field rules:
   (rewards redemptions, dispute credits): it is what the row's own Total Payment Due implies.
 - `totals.opening_balance` and `totals.closing_balance` are **signed** decimal strings: positive = amount owed, negative = card in credit (e.g. `"-1579.06"`). All other totals (`total_debits`, `total_credits`, `min_due`, `credit_limit`) are absolute.
 - `lines[].direction` is `debit` or `credit`. Sign normalisation happens in the parser; SIB history is inverted at source.
-- `lines[].kind` is one of `purchase | refund | payment | fee | interest | cash_advance | adjustment`.
+- `lines[].kind` is one of `purchase | refund | payment | fee | interest | cash_advance | adjustment`;
+  bank-account lines may also be `transfer_in | transfer_out`.
   A cash withdrawal is `cash_advance` (since 2026.10.20): a descriptor with `CASH ADV`, `ATM`,
   `CASH WITHDRAWAL` or `CASH WDL`, and the debit purchase that a `CASH ADVANCE FEE` line follows on
   the same card and date with only fee/interest lines between (an ATM abroad prints as its bank's
@@ -150,6 +153,55 @@ Field rules:
   codes that are also common words (`VAT`, `CAN`, `AND`, …). Best effort: the token is read from
   free text.
 - A `history_extract` is a **window**, not a complete record of its cycle. Ingest unions the lines of every document of a statement by `(line_key, occurrence)`, so a later, shorter export never removes lines an earlier one contributed (ARCHITECTURE §4).
+
+### Bank-account statements (`account_statement_pdf`)
+
+Since parser 2026.10.21. ADCB e-mails one "Consolidated Statement of Accounts" a month (from
+`estatement@adcb.com`, opened with `ADCB_CID`; the parser tries `ADCB_CID` then
+`ADCB_PDF_PASSWORD`, and an ADCB card statement tries them the other way round). It produces:
+
+- one `statements[]` entry per savings/current account, `kind = "statement"`, with an `account`
+  object (card statements have no `account` key):
+
+  ```json
+  "account": {"kind": "current", "number": "13058089820001", "ref": "820001",
+              "iban": "AE450030013058089820001", "product": "Islamic Current Account Personal",
+              "currency": "AED"}
+  ```
+
+  `ref` is the suffix the bank prints in its alerts (ADCB: the last six digits), i.e.
+  `accounts.account_ref`. `statement_date` and `period_end` are the period's last day,
+  `statement_reference` is `<number>-<yyyymmdd>` (`fallback`), `due_date`, `primary_card_last4`
+  and `card_type` are null and `card_holder` is the account title.
+- `totals.opening_balance` / `closing_balance` are the account's balance (**positive = money in
+  the account**, the opposite of a card), `total_debits` / `total_credits` the table's Total row;
+  `min_due` and `credit_limit` are null.
+- each line: `txn_date` is the value date, `posting_date` the booking date, `description_raw` the
+  wrapped description joined in reading order. Every row's running balance must follow from the
+  previous one, or the parse fails with `UNSUPPORTED_LAYOUT`. Kinds: `PUR dd/mm <merchant> <card>`
+  is a `purchase` (`refund` when a credit) with `card_last4` and `merchant_normalized` = the
+  merchant; `FOREIGN TRANSACTION FEE …` and descriptions with FEE/CHARGES/COMMISSION/VAT are `fee`;
+  a credit naming PROFIT is `interest`. **Anything else keeps its direction as `transfer_out` /
+  `transfer_in`** and is listed in `metadata.unrecognised_lines` as
+  `{"line_no", "direction", "shape"}`, where `shape` keeps only a short leading transaction code
+  (`IPP w w #`): words become `w`, numbers `#`. The worker reports these shapes to Sentry.
+- top-level `deposits[]` (fixed deposits) and `card_summaries[]`, empty or absent on other kinds:
+
+  ```json
+  "deposits": [{"number": "13058089940001", "product": "ADCB Online Century Deposit", "currency": "AED",
+                "rate_pct": "2.00", "maturity_on": "2027-04-01", "amount": "109718.87", "as_of": "2026-09-30"}],
+  "card_summaries": [{"last4": "3687", "credit_limit": "27000.00", "current_balance": "-0.84", "min_due": "0.00",
+                      "last_statement_balance": "-0.84", "last_statement_date": "2026-09-24",
+                      "due_date": "2026-10-19", "as_of": "2026-09-30"}]
+  ```
+
+  A deposit's `amount` is principal plus profit accrued to `as_of`. A card summary is a
+  cross-check (ingest only refreshes a known card's credit limit); TouchPoints are not read.
+
+Ingest (`public.ingest_parsed_document`) resolves each statement to a bank account by `account.ref`
+(creating it when absent), records the closing balance as a `balance_checkpoints` row
+(`source = 'statement'`), matches lines to the account's SMS transactions like any statement,
+and imports each deposit as a `deposit` holding keyed by `holdings.external_ref` = `number`.
 
 ### Versioning
 

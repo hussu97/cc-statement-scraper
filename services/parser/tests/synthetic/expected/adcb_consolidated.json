@@ -1,0 +1,225 @@
+{
+  "bank_code": "ADCB",
+  "card_summaries": [
+    {
+      "as_of": "2026-09-30",
+      "credit_limit": "10000.00",
+      "current_balance": "250.00",
+      "due_date": "2026-10-19",
+      "last4": "1234",
+      "last_statement_balance": "250.00",
+      "last_statement_date": "2026-09-24",
+      "min_due": "25.00"
+    }
+  ],
+  "contract_version": 1,
+  "deposits": [
+    {
+      "amount": "52301.10",
+      "as_of": "2026-09-30",
+      "currency": "AED",
+      "maturity_on": "2027-04-01",
+      "number": "99990001940001",
+      "product": "ADCB Online Century Deposit",
+      "rate_pct": "2.00"
+    }
+  ],
+  "document_kind": "account_statement_pdf",
+  "statements": [
+    {
+      "account": {
+        "currency": "AED",
+        "iban": "AE000030099990001810001",
+        "kind": "savings",
+        "number": "99990001810001",
+        "product": "Islamic Active Saver Account",
+        "ref": "810001"
+      },
+      "bank_code": "ADCB",
+      "card_holder": "JANE Q SAMPLE",
+      "card_type": null,
+      "due_date": null,
+      "kind": "statement",
+      "lines": [
+        {
+          "amount_aed": "12.40",
+          "amount_original": "12.40",
+          "card_holder": null,
+          "card_last4": null,
+          "country_code": null,
+          "currency_original": "AED",
+          "description_raw": "PROFIT CREDIT",
+          "direction": "credit",
+          "fx_rate": "1",
+          "kind": "interest",
+          "legacy_fingerprint": "ca798d3861fb299bedfe4c1cbf42491e6f9960e6bdeb237f0890a21d0acfd768",
+          "line_no": 1,
+          "merchant_normalized": "PROFIT CREDIT",
+          "posting_date": "2026-09-30",
+          "txn_date": "2026-09-30",
+          "txn_time": null
+        }
+      ],
+      "metadata": {
+        "layout": "adcb_consolidated",
+        "pdf_sha256": "<pdf_sha256>",
+        "unrecognised_lines": []
+      },
+      "period_end": "2026-09-30",
+      "period_start": "2026-09-01",
+      "primary_card_last4": null,
+      "reference_source": "fallback",
+      "statement_date": "2026-09-30",
+      "statement_reference": "99990001810001-20260930",
+      "totals": {
+        "closing_balance": "1012.40",
+        "credit_limit": null,
+        "min_due": null,
+        "opening_balance": "1000.00",
+        "total_credits": "12.40",
+        "total_debits": "0.00"
+      },
+      "warnings": []
+    },
+    {
+      "account": {
+        "currency": "AED",
+        "iban": "AE000030099990001820001",
+        "kind": "current",
+        "number": "99990001820001",
+        "product": "Islamic Current Account Personal",
+        "ref": "820001"
+      },
+      "bank_code": "ADCB",
+      "card_holder": "JANE Q SAMPLE",
+      "card_type": null,
+      "due_date": null,
+      "kind": "statement",
+      "lines": [
+        {
+          "amount_aed": "85.50",
+          "amount_original": "85.50",
+          "card_holder": null,
+          "card_last4": "5678",
+          "country_code": null,
+          "currency_original": "AED",
+          "description_raw": "PUR 10/09 SAMPLE MART DUBAI 5678",
+          "direction": "debit",
+          "fx_rate": "1",
+          "kind": "purchase",
+          "legacy_fingerprint": "7f40c470075b383ffa7d8596468e365658c2feedc95876051a4d53e3e4f610b0",
+          "line_no": 1,
+          "merchant_normalized": "SAMPLE MART DUBAI",
+          "posting_date": "2026-09-12",
+          "txn_date": "2026-09-10",
+          "txn_time": null
+        },
+        {
+          "amount_aed": "2.08",
+          "amount_original": "2.08",
+          "card_holder": null,
+          "card_last4": "5678",
+          "country_code": null,
+          "currency_original": "AED",
+          "description_raw": "FOREIGN TRANSACTION FEE 11/09 0 784 SAMPLE.COM5678",
+          "direction": "debit",
+          "fx_rate": "1",
+          "kind": "fee",
+          "legacy_fingerprint": "8c4de55a22a3acec744114e40b7862047be97bf103b24733cdcef2fd3919dbd3",
+          "line_no": 2,
+          "merchant_normalized": "FOREIGN TRANSACTION FEE",
+          "posting_date": "2026-09-14",
+          "txn_date": "2026-09-11",
+          "txn_time": null
+        },
+        {
+          "amount_aed": "1250.00",
+          "amount_original": "1250.00",
+          "card_holder": null,
+          "card_last4": null,
+          "country_code": null,
+          "currency_original": "AED",
+          "description_raw": "IPP TRANSFER TO J SAMPLE 4401",
+          "direction": "debit",
+          "fx_rate": "1",
+          "kind": "transfer_out",
+          "legacy_fingerprint": "d1187a378d29ba0a10626bb471668bebacbe056818c1c4df0334280f00d82fa9",
+          "line_no": 3,
+          "merchant_normalized": "IPP TRANSFER TO J SAMPLE 4401",
+          "posting_date": "2026-09-15",
+          "txn_date": "2026-09-15",
+          "txn_time": null
+        },
+        {
+          "amount_aed": "500.00",
+          "amount_original": "500.00",
+          "card_holder": null,
+          "card_last4": null,
+          "country_code": null,
+          "currency_original": "AED",
+          "description_raw": "INWARD REMITTANCE SAMPLE CO",
+          "direction": "credit",
+          "fx_rate": "1",
+          "kind": "transfer_in",
+          "legacy_fingerprint": "954aae68e93b07bf9db21d1ebc213d5df60f3b8e26393fc64cf7d5738731fa18",
+          "line_no": 4,
+          "merchant_normalized": "INWARD REMITTANCE SAMPLE CO",
+          "posting_date": "2026-09-28",
+          "txn_date": "2026-09-28",
+          "txn_time": null
+        },
+        {
+          "amount_aed": "0.50",
+          "amount_original": "0.50",
+          "card_holder": null,
+          "card_last4": null,
+          "country_code": null,
+          "currency_original": "AED",
+          "description_raw": "SERVICE CHARGES",
+          "direction": "debit",
+          "fx_rate": "1",
+          "kind": "fee",
+          "legacy_fingerprint": "950b46ba9e445e64b6247c0a4c7532903a3141d2df981a22fef1acf0f2b003bf",
+          "line_no": 5,
+          "merchant_normalized": "SERVICE CHARGES",
+          "posting_date": "2026-09-29",
+          "txn_date": "2026-09-29",
+          "txn_time": null
+        }
+      ],
+      "metadata": {
+        "layout": "adcb_consolidated",
+        "pdf_sha256": "<pdf_sha256>",
+        "unrecognised_lines": [
+          {
+            "direction": "debit",
+            "line_no": 3,
+            "shape": "IPP w w w w #"
+          },
+          {
+            "direction": "credit",
+            "line_no": 4,
+            "shape": "INWARD w w w"
+          }
+        ]
+      },
+      "period_end": "2026-09-30",
+      "period_start": "2026-09-01",
+      "primary_card_last4": null,
+      "reference_source": "fallback",
+      "statement_date": "2026-09-30",
+      "statement_reference": "99990001820001-20260930",
+      "totals": {
+        "closing_balance": "4161.92",
+        "credit_limit": null,
+        "min_due": null,
+        "opening_balance": "5000.00",
+        "total_credits": "500.00",
+        "total_debits": "1338.08"
+      },
+      "warnings": [
+        "2 line(s) have a description this parser does not know; kept as transfers by direction"
+      ]
+    }
+  ]
+}
