@@ -1,5 +1,32 @@
 # Changelog
 
+## ADCB consolidated statement: bank accounts, their lines, the fixed deposit — 2026-10-21
+
+### Parser
+
+- **feat** ADCB's monthly "Consolidated Statement of Accounts" (`estatement@adcb.com`, opened with the customer ID) is read as parse-v1 `account_statement_pdf` (parser 2026.10.21): one statement per savings/current account with its number, IBAN, opening and closing balance and lines (value date as the transaction date, wrapped descriptions joined), plus `deposits[]` and `card_summaries[]`. The table is read by column position, and every row's running balance must follow from the last or the parse fails. `PUR` lines are purchases with their debit card, fees and profit are named; any other description keeps its direction (`transfer_in` / `transfer_out`) and is listed by its masked shape in `metadata.unrecognised_lines`.
+- **fix** ADCB statements try both `ADCB_PDF_PASSWORD` and `ADCB_CID` (only one was tried), and detection recognises the consolidated statement, which names ADCB only in its logo.
+
+### Backend (Supabase)
+
+- **feat** Bank-account statements: an `account_statement_pdf` finds its account by number or the alert suffix (creating it, with `accounts.account_number` and `iban`), re-runs the bank's alerts that waited for that account, then matches its lines to the account's SMS transactions like a card statement. The closing balance is a `balance_checkpoints` row (`source = 'statement'`) as of the period's last moment in Dubai; a bank statement reconciles opening − debits + credits = closing.
+- **feat** Statement deposits become `deposit` holdings keyed by `holdings.external_ref` (or claim the ledger's one unnumbered deposit at that bank), with an imported value per statement; the newest statement sets rate and maturity, and a deposit missing from a later statement is flagged. A deposit is worth its latest imported value plus simple profit since, to maturity (the principal formula before the first import).
+- **feat** Card summaries refresh a known card's credit limit; an unknown card is a warning, never a new card.
+- **fix** `statement_cycles` and `v_statement_payments` are card-only: a bank statement is not a card cycle and is never "unpaid".
+- **feat** The worker reports a document's unrecognised line shapes to Sentry (one warning per document; shapes only, re-checked before sending).
+
+### Web
+
+- **feat** Balances from a statement read "from statement"; a deposit valued by its bank's statements lists those values ("From statement") and says it accrues from the latest one.
+
+### iOS
+
+- **feat** The same on the phone: "from statement" balances, and a deposit's statement values in its value history (no Update value for deposits).
+
+### Docs
+
+- **docs** parse-v1 documents `account_statement_pdf`; ARCHITECTURE covers bank-account statements and statement-valued deposits; plan `tasks/todo.md` §9.
+
 ## RL360 sync — 2026-10-21
 
 ### Backend (Supabase)
