@@ -126,7 +126,7 @@ struct AddBankAccountSheet: View {
 }
 
 /// The form's error, first so the keyboard never hides it.
-private struct ErrorSection: View {
+struct ErrorSection: View {
     let text: String
 
     var body: some View {
@@ -137,7 +137,7 @@ private struct ErrorSection: View {
     }
 }
 
-private struct SheetToolbar: ToolbarContent {
+struct SheetToolbar: ToolbarContent {
     let isSaving: Bool
     let saveLabel: String
     let save: () -> Void

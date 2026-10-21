@@ -2,7 +2,7 @@ import Foundation
 
 /// The app's two halves (Wealth mode, tasks/todo.md §5), switched from the menu in each root
 /// screen's title. Spending is the card tracker with budgets; Wealth is the bank accounts, their
-/// ledgers, cash flow and net worth (investments and goals join it later as more tabs). Settings
+/// ledgers, investments (gold and silver for now, §6), cash flow and net worth (goals join later). Settings
 /// (cards, statements) is shared, so it is in both tab sets.
 public enum AppMode: String, CaseIterable, Identifiable, Hashable, Sendable {
     case spending, wealth
@@ -21,7 +21,7 @@ public enum AppMode: String, CaseIterable, Identifiable, Hashable, Sendable {
     public var subtitle: String {
         switch self {
         case .spending: "Card spend and budgets"
-        case .wealth: "Accounts, cash flow and net worth"
+        case .wealth: "Accounts, investments and net worth"
         }
     }
 
@@ -36,7 +36,7 @@ public enum AppMode: String, CaseIterable, Identifiable, Hashable, Sendable {
     public var tabs: [LedgerTab] {
         switch self {
         case .spending: [.overview, .activity, .insights, .budgets, .settings]
-        case .wealth: [.overview, .accounts, .cashFlow, .settings]
+        case .wealth: [.overview, .accounts, .investments, .cashFlow, .settings]
         }
     }
 
@@ -44,7 +44,7 @@ public enum AppMode: String, CaseIterable, Identifiable, Hashable, Sendable {
     /// from Wealth switches to Spending.
     public static func home(of tab: LedgerTab) -> AppMode {
         switch tab {
-        case .accounts, .cashFlow: .wealth
+        case .accounts, .investments, .cashFlow: .wealth
         default: .spending
         }
     }

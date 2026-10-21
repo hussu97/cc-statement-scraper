@@ -1,7 +1,7 @@
 import Foundation
 
-/// `rpc('net_worth')` (Wealth mode): bank cash − what the cards owe now, in AED, with how complete
-/// each side is. Every figure is the server's decimal string; nothing is re-derived here.
+/// `rpc('net_worth')` (Wealth mode): bank cash + investments (gold and silver) − what the cards owe
+/// now, in AED, with how complete each side is. Every figure is the server's decimal string; nothing is re-derived here.
 public struct NetWorth: Decodable, Sendable, Hashable {
     public let cashAed: Decimal
     public let cashComplete: Bool
@@ -9,6 +9,11 @@ public struct NetWorth: Decodable, Sendable, Hashable {
     public let cashStaleCount: Int
     /// The oldest balance the cash includes; nil before the first balance.
     public let cashAsOf: Date?
+    /// Gold and silver at Dubai retail rates (0 without holdings).
+    public let holdingsAed: Decimal
+    /// Every holding has a price no older than 3 days.
+    public let holdingsComplete: Bool
+    public let holdingsCount: Int
     public let owedAed: Decimal
     public let owedComplete: Bool
     public let owedHasEstimate: Bool
@@ -19,13 +24,17 @@ public struct NetWorth: Decodable, Sendable, Hashable {
     public let cards: [NetWorthCard]
 
     public init(cashAed: Decimal, cashComplete: Bool = true, cashMissingCount: Int = 0, cashStaleCount: Int = 0,
-                cashAsOf: Date? = nil, owedAed: Decimal, owedComplete: Bool = true, owedHasEstimate: Bool = false,
+                cashAsOf: Date? = nil, holdingsAed: Decimal = 0, holdingsComplete: Bool = true, holdingsCount: Int = 0,
+                owedAed: Decimal, owedComplete: Bool = true, owedHasEstimate: Bool = false,
                 netAed: Decimal, complete: Bool = true, hasBankAccounts: Bool = true, cards: [NetWorthCard] = []) {
         self.cashAed = cashAed
         self.cashComplete = cashComplete
         self.cashMissingCount = cashMissingCount
         self.cashStaleCount = cashStaleCount
         self.cashAsOf = cashAsOf
+        self.holdingsAed = holdingsAed
+        self.holdingsComplete = holdingsComplete
+        self.holdingsCount = holdingsCount
         self.owedAed = owedAed
         self.owedComplete = owedComplete
         self.owedHasEstimate = owedHasEstimate
@@ -37,6 +46,7 @@ public struct NetWorth: Decodable, Sendable, Hashable {
 
     enum CodingKeys: String, CodingKey {
         case cashAed, cashComplete, cashMissingCount, cashStaleCount, cashAsOf, owedAed, owedComplete
+        case holdingsAed, holdingsComplete, holdingsCount
         case owedHasEstimate, netAed, complete, hasBankAccounts, cards
     }
 
@@ -47,6 +57,10 @@ public struct NetWorth: Decodable, Sendable, Hashable {
         cashMissingCount = try c.decodeIfPresent(Int.self, forKey: .cashMissingCount) ?? 0
         cashStaleCount = try c.decodeIfPresent(Int.self, forKey: .cashStaleCount) ?? 0
         cashAsOf = try c.decodeIfPresent(Date.self, forKey: .cashAsOf)
+        // A server before investments sends none: nothing held.
+        holdingsAed = try c.decodeIfPresent(Decimal.self, forKey: .holdingsAed) ?? 0
+        holdingsComplete = try c.decodeIfPresent(Bool.self, forKey: .holdingsComplete) ?? true
+        holdingsCount = try c.decodeIfPresent(Int.self, forKey: .holdingsCount) ?? 0
         owedAed = try c.decode(Decimal.self, forKey: .owedAed)
         owedComplete = try c.decodeIfPresent(Bool.self, forKey: .owedComplete) ?? true
         owedHasEstimate = try c.decodeIfPresent(Bool.self, forKey: .owedHasEstimate) ?? false
@@ -65,6 +79,10 @@ public struct NetWorth: Decodable, Sendable, Hashable {
     public var heroAccessibilityLabel: String { "Net worth, \(MoneyFormat.spokenDirhams(netAed))" }
 
     public var cashText: String { MoneyFormat.aed(cashAed) }
+    /// The hero's investments line shows once there is a holding: `"+AED 656,286.21"`.
+    public var showsHoldings: Bool { holdingsCount > 0 }
+    public var holdingsText: String { MoneyFormat.aed(holdingsAed) }
+    public var holdingsAdditionText: String { "+" + MoneyFormat.aed(holdingsAed) }
     /// `"≈ AED 14,169.62"` when an FX estimate is in it.
     public var owedText: String { (owedHasEstimate ? "≈ " : "") + MoneyFormat.aed(owedAed) }
     /// The hero's second line, taken off the cash: `"−AED 8,966.35"`, `"≈ −AED 14,169.62"`.
@@ -91,6 +109,9 @@ public struct NetWorth: Decodable, Sendable, Hashable {
         if cashStaleCount > 0 {
             out.append(cashStaleCount == 1 ? "1 balance is over a week old." : "\(cashStaleCount) balances are over a week old.")
         }
+        if !holdingsComplete {
+            out.append("Some gold or silver prices are missing or over 3 days old, so investments may be off.")
+        }
         if !owedComplete {
             out.append("A card has no statement or balance yet, so what's owed may be short.")
         }
@@ -105,7 +126,8 @@ public struct NetWorth: Decodable, Sendable, Hashable {
 
     /// The line under the hero: whole, or pointing at the caveats.
     public var completenessText: String {
-        complete ? "Every bank account and card is counted." : "Not complete yet: see below."
+        guard complete else { return "Not complete yet: see below." }
+        return showsHoldings ? "Every bank account, card and holding is counted." : "Every bank account and card is counted."
     }
 }
 
@@ -177,20 +199,37 @@ public struct NetWorthPoint: Decodable, Sendable, Hashable, Identifiable {
     public let month: CalendarDay
     public let asOf: CalendarDay
     public let cashAed: Decimal
+    /// Gold and silver that day (0 before investments, or in a snapshot taken before them).
+    public let holdingsAed: Decimal
     public let owedAed: Decimal
     public let netAed: Decimal
     public let complete: Bool
     public let isLive: Bool
 
-    public init(month: CalendarDay, asOf: CalendarDay, cashAed: Decimal, owedAed: Decimal, netAed: Decimal,
-                complete: Bool = true, isLive: Bool = false) {
+    public init(month: CalendarDay, asOf: CalendarDay, cashAed: Decimal, holdingsAed: Decimal = 0, owedAed: Decimal,
+                netAed: Decimal, complete: Bool = true, isLive: Bool = false) {
         self.month = month
         self.asOf = asOf
         self.cashAed = cashAed
+        self.holdingsAed = holdingsAed
         self.owedAed = owedAed
         self.netAed = netAed
         self.complete = complete
         self.isLive = isLive
+    }
+
+    enum CodingKeys: String, CodingKey { case month, asOf, cashAed, holdingsAed, owedAed, netAed, complete, isLive }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        month = try c.decode(CalendarDay.self, forKey: .month)
+        asOf = try c.decode(CalendarDay.self, forKey: .asOf)
+        cashAed = try c.decode(Decimal.self, forKey: .cashAed)
+        holdingsAed = try c.decodeIfPresent(Decimal.self, forKey: .holdingsAed) ?? 0
+        owedAed = try c.decode(Decimal.self, forKey: .owedAed)
+        netAed = try c.decode(Decimal.self, forKey: .netAed)
+        complete = try c.decode(Bool.self, forKey: .complete)
+        isLive = try c.decode(Bool.self, forKey: .isLive)
     }
 
     /// The axis label: `"Oct"`.

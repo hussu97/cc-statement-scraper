@@ -29,6 +29,8 @@ public final class LedgerScreens {
     public let wealthOverview: WealthOverviewModel
     /// Each bank account's ledger, pushed from Accounts and Wealth's Overview.
     public let accountLedgers: AccountLedgers
+    /// Wealth mode's Investments tab: gold and silver, their prices and gains.
+    public let investments: InvestmentsModel
 
     /// The ledger the tabs hold. The UI shows the tabs only when this equals
     /// the selected ledger, so the previous ledger's numbers never flash.
@@ -56,6 +58,7 @@ public final class LedgerScreens {
         wealthOverview = WealthOverviewModel(api: api, today: today)
         accountLedgers = AccountLedgers(api: api, today: today,
                                         categories: { activity.meta?.assignableCategories ?? [] })
+        investments = InvestmentsModel(api: api, today: today)
         self.live = live ?? LiveUpdates(api: api)
         // A budget written on the Budgets tab changes Insights' budgets card.
         budgets.onChange = { [insights] code in await insights.refresh(profileCode: code) }
@@ -66,6 +69,8 @@ public final class LedgerScreens {
             await wealthOverview.refresh(profileCode: code)
             await accountLedgers.refresh(profileCode: code)
         }
+        // A holding added, edited or closed changes net worth.
+        investments.onChange = { [wealthOverview] code in await wealthOverview.refresh(profileCode: code) }
         // A transfer filed in a ledger moves cash flow (and Activity, when it became a purchase).
         accountLedgers.onChange = { [wealthOverview, cash, activity] code in
             await wealthOverview.refresh(profileCode: code)
@@ -133,6 +138,8 @@ public final class LedgerScreens {
     /// Back in the foreground: every opened tab, Insights included.
     public func refreshAll() async {
         await refresh(after: LiveUpdates.tables)
+        // Prices move every 6 hours, not with Realtime: the foreground re-reads them.
+        if let code = activeProfile { await investments.refresh(profileCode: code) }
     }
 
     private func clear() {
@@ -147,6 +154,7 @@ public final class LedgerScreens {
         cash.reset()
         wealthOverview.reset()
         accountLedgers.reset()
+        investments.reset()
         month.reset()
     }
 }

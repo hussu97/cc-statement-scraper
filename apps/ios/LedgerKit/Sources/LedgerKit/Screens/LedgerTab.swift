@@ -5,7 +5,7 @@ import Observation
 /// Settings when Budgets took its place (2026-10-09); `SettingsRoute.statements` is how to reach
 /// it. Overview and Settings are in both modes (each mode draws its own Overview).
 public enum LedgerTab: String, CaseIterable, Hashable, Sendable {
-    case overview, activity, insights, budgets, accounts, cashFlow, settings
+    case overview, activity, insights, budgets, accounts, investments, cashFlow, settings
 
     public var title: String {
         switch self {
@@ -14,6 +14,7 @@ public enum LedgerTab: String, CaseIterable, Hashable, Sendable {
         case .insights: "Insights"
         case .budgets: "Budgets"
         case .accounts: "Accounts"
+        case .investments: "Investments"
         case .cashFlow: "Cash flow"
         case .settings: "Settings"
         }
@@ -26,6 +27,7 @@ public enum LedgerTab: String, CaseIterable, Hashable, Sendable {
         case .insights: "chart.bar.xaxis"
         case .budgets: "target"
         case .accounts: "building.columns"
+        case .investments: "chart.line.uptrend.xyaxis"
         case .cashFlow: "arrow.left.arrow.right"
         case .settings: "gearshape"
         }
