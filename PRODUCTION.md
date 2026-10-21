@@ -237,7 +237,7 @@ Deploy every function. Each one's `verify_jwt = false` comes from `supabase/conf
 
 ```bash
 supabase functions deploy --project-ref <project-ref>
-# statements-upload sms-ingest worker gmail-push gmail-watch-renew outlook-poll ops-monitor fx-rates member-invite
+# statements-upload sms-ingest worker gmail-push gmail-watch-renew outlook-poll ops-monitor fx-rates metal-prices member-invite
 ```
 
 Smoke test (`CRON_SECRET` exported from the same file as in §2.4):
@@ -256,6 +256,7 @@ curl -s -X POST https://<project-ref>.supabase.co/functions/v1/worker \
 | `ledger-worker-kick` | every minute | `worker`, only when a queue has visible messages |
 | `ledger-recategorize-sweep` | `17 */3 * * *` | stale `rules_version` sweep |
 | `ledger-fx-rates` | `0 21 * * *` | `fx-rates` function |
+| `ledger-metal-prices` | `7 */6 * * *` | `metal-prices` function (gold/silver prices; no secret beyond `CRON_SECRET`) |
 | `ledger-nightly` | `0 22 * * *` (02:00 Dubai) | purge `document_events` older than 90 days, void released authorisations, recurring detection, insights, net worth snapshot |
 | `ledger-llm-enqueue` | `0 18 * * *` | queue uncategorised merchants for the LLM |
 | `ledger-legacy-choices` | `45 22 * * *` | apply staged legacy category choices once per transaction (cutover helper); unschedules itself when nothing is pending or 30 days after staging |
