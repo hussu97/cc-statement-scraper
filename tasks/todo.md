@@ -348,3 +348,36 @@ spend that budgets track, because the accounts are the user's real financial val
 
 Left in §4: holdings (Phase 1 proper), goals (Phase 3), FX markup and subscription-creep
 insights, Wio Credit SMS statement anchor, Wio autopay's debit leg, rent-by-transfer in spend.
+
+## 6. Gold and silver: prices, holdings and gains in Wealth (2026-10-21)
+
+Ask (21 Oct): fetch the AED price of gold and silver on a Supabase cron so Wealth shows what
+the metals are worth and the gain on them.
+
+### Decisions (user, 21 Oct)
+1. **Gold at the Dubai retail rate**: the Dubai Jewellery Group's "suggested retail" per-gram
+   rates (24K/22K/21K/18K) from dubaicityofgold.com (its `admin-ajax.php?action=sortd_gold_price`
+   returns today's rates only, so history is ours). There is no Dubai retail silver rate: silver
+   uses spot (gold-api.com, Swissquote as fallback, both free and keyless) at the 3.6725 peg.
+2. **Gains vs what was paid**: each holding has an optional total cost in AED; gain = value − cost,
+   plus the change since the price 24 hours earlier.
+3. **Every 6 hours** (pg_cron `ledger-metal-prices`, `7 */6 * * *`).
+
+### Plan
+- [ ] `metal_prices` (global reference, like `fx_rates`): quote (`gold_24k|22k|21k|18k`,
+      `gold_spot`, `silver_spot`), AED per gram, USD per oz for spot, source, as_of. Every fetch
+      is kept (the history behind the charts). `record_metal_prices` (service role) converts
+      spot USD/oz to AED/g in SQL at the peg.
+- [ ] Edge Function `metal-prices` (x-cron-secret, `verify_jwt = false`): DJG retail gold,
+      gold-api.com spot with Swissquote fallback; pure parsers with deno tests. A failed source
+      is reported to Sentry after the others are stored.
+- [ ] `holdings` per ledger: name, metal, grams, karat (gold) or purity (silver), cost AED,
+      acquired on, notes, status. Owner RPCs `save_holding` / `close_holding`.
+- [ ] `holdings_valuation(profile)`: each holding's value (grams × the karat's retail rate, or
+      grams × purity × silver spot), cost, gain and %, 24-hour change, the price used and its
+      age; totals and completeness. `holdings_value_series` and `metal_price_series` for charts.
+- [ ] Net worth = cash + metals − owed; snapshots gain `holdings_aed`.
+- [ ] Web + iOS: a Metals section in Wealth (value, gain, today's change, price as-of, a
+      90-day chart), Add/Edit holding (owner).
+- [ ] pgTAP, deno tests, privileges matrix, types; ARCHITECTURE, PRODUCTION (cron, function),
+      README, CHANGELOG. Shipping deploys a new function and cron: ask first.
