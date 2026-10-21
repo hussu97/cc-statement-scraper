@@ -20,7 +20,7 @@ import { Select } from "@/components/ui/select";
 import { Segmented } from "@/components/ui/segmented";
 import { useToast } from "@/components/ui/toast";
 
-function FormError({ error }: { error: string | null }) {
+export function FormError({ error }: { error: string | null }) {
   if (!error) return null;
   return (
     <p role="alert" className="rounded-md bg-danger-soft px-3 py-2 text-[13px] text-danger">
@@ -29,7 +29,7 @@ function FormError({ error }: { error: string | null }) {
   );
 }
 
-function FormFooter({ onCancel, pending, submit }: { onCancel: () => void; pending: boolean; submit: string }) {
+export function FormFooter({ onCancel, pending, submit }: { onCancel: () => void; pending: boolean; submit: string }) {
   return (
     <div className="-mx-5 -mb-4 flex justify-end gap-2 border-t border-border px-5 py-3">
       <Button variant="ghost" onClick={onCancel}>

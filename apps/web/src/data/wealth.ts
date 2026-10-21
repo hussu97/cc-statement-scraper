@@ -1,6 +1,6 @@
 // Wealth mode reads: net_worth, net_worth_series, account_ledger and bank_balance_series. Each
-// returns jsonb (Json in the generated types), so the shapes are declared here from the migration
-// (20261020162834_wealth_mode.sql). Money is a decimal string; the server computes every figure (§2.2).
+// returns jsonb (Json in the generated types), so the shapes are declared here from the migrations
+// (20261020162834_wealth_mode.sql; holdings from 20261021070429_metal_prices_and_holdings.sql). Money is a decimal string; the server computes every figure (§2.2).
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { supabase, type RpcArgs } from "@/lib/supabase";
 import type { BalanceAnchor } from "@/lib/balances";
@@ -18,7 +18,7 @@ export interface NetWorthCard {
   has_estimate: boolean;
 }
 
-/** public.net_worth: bank cash − what the cards owe, with completeness. */
+/** public.net_worth: bank cash + investments (gold and silver) − what the cards owe, with completeness. */
 export interface NetWorth {
   cash_aed: string;
   cash_complete: boolean;
@@ -26,6 +26,11 @@ export interface NetWorth {
   cash_stale_count: number;
   /** The oldest bank balance's as-of; null when none is recorded. */
   cash_as_of: string | null;
+  /** Gold and silver at today's prices (holdings_valuation's total). */
+  holdings_aed: string;
+  /** False when a holding has no price or its price is over 3 days old. */
+  holdings_complete: boolean;
+  holdings_count: number;
   owed_aed: string;
   owed_complete: boolean;
   owed_has_estimate: boolean;
@@ -50,6 +55,7 @@ export interface NetWorthMonth {
   month: string;
   as_of: string;
   cash_aed: string;
+  holdings_aed: string;
   owed_aed: string;
   net_aed: string;
   complete: boolean;

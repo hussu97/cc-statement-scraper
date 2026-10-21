@@ -1,5 +1,5 @@
 // The app's two modes (Wealth mode, tasks/todo.md §5): Spending (card spend, budgets) and Wealth
-// (bank accounts, cash flow, net worth). The mode is the path's: /wealth/* is Wealth, the
+// (bank accounts, investments, cash flow, net worth). The mode is the path's: /wealth/* is Wealth, the
 // spending screens are Spending, and the shared screens (Review, Rules, Settings) keep the last
 // mode. Pure, unit-tested; the shell reads and writes the remembered mode.
 import { readStorage, writeStorage } from "./storage";
@@ -9,7 +9,7 @@ export type AppMode = (typeof APP_MODES)[number];
 
 export const MODE_INFO: Record<AppMode, { label: string; hint: string; home: "/" | "/wealth" }> = {
   spending: { label: "Spending", hint: "Cards and budgets", home: "/" },
-  wealth: { label: "Wealth", hint: "Accounts and net worth", home: "/wealth" },
+  wealth: { label: "Wealth", hint: "Accounts, investments, net worth", home: "/wealth" },
 };
 
 /** Screens that belong to both modes: the sidebar keeps whichever mode you came from. */

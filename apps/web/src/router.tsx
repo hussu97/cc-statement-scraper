@@ -84,7 +84,7 @@ const cashFlowRedirectRoute = createRoute({
   },
 });
 
-// ── Wealth mode (tasks/todo.md §5): bank accounts, their ledgers, cash flow and net worth ──
+// ── Wealth mode (tasks/todo.md §5, §6): bank accounts, their ledgers, investments, cash flow and net worth ──
 
 /** Net worth, bank accounts, what the cards owe, this month's cash flow and wealth insights. */
 const wealthRoute = createRoute({
@@ -105,6 +105,13 @@ export const wealthAccountRoute = createRoute({
   path: "/wealth/accounts/$accountCode",
   validateSearch: (s: Record<string, unknown>) => parseAccountSearch(s),
   component: lazyRouteComponent(() => import("@/routes/wealth-account"), "AccountPage"),
+});
+
+/** Investments: gold and silver for now (holdings, prices, value and gains). */
+const wealthInvestmentsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/wealth/investments",
+  component: lazyRouteComponent(() => import("@/routes/wealth-investments"), "InvestmentsPage"),
 });
 
 /** Each month's money in and out. `?month=` is a first-of-month (this month when absent); `?account=` narrows to one bank account. */
@@ -162,7 +169,7 @@ const routeTree = rootRoute.addChildren([
   signInRoute,
   welcomeRoute,
   privacyRoute,
-  appRoute.addChildren([overviewRoute, activityRoute, insightsRoute, categoryRoute, cashFlowRedirectRoute, wealthRoute, wealthAccountsRoute, wealthAccountRoute, wealthCashFlowRoute, budgetsRoute, cardsRoute, statementRoute, reviewRoute, rulesRoute, settingsRoute]),
+  appRoute.addChildren([overviewRoute, activityRoute, insightsRoute, categoryRoute, cashFlowRedirectRoute, wealthRoute, wealthAccountsRoute, wealthAccountRoute, wealthInvestmentsRoute, wealthCashFlowRoute, budgetsRoute, cardsRoute, statementRoute, reviewRoute, rulesRoute, settingsRoute]),
 ]);
 
 export const router = createRouter({ routeTree, defaultPreload: "intent", scrollRestoration: true });
