@@ -105,7 +105,7 @@ select set_eq(
     'email_mailboxes:authenticated:INSERT', 'email_mailboxes:authenticated:SELECT', 'email_routes.attachment_filename_regex:authenticated:UPDATE',
     'email_routes.enabled:authenticated:UPDATE', 'email_routes.gmail_label_filter:authenticated:UPDATE', 'email_routes.mailbox_code:authenticated:UPDATE',
     'email_routes.sender_allowlist:authenticated:UPDATE', 'email_routes.subject_keywords:authenticated:UPDATE', 'email_routes:authenticated:DELETE',
-    'email_routes:authenticated:INSERT', 'email_routes:authenticated:SELECT', 'fx_rates:authenticated:SELECT', 'holdings:authenticated:SELECT',
+    'email_routes:authenticated:INSERT', 'email_routes:authenticated:SELECT', 'fx_rates:authenticated:SELECT', 'holding_flows:authenticated:SELECT', 'holding_valuations:authenticated:SELECT', 'holdings:authenticated:SELECT',
     'insights.dismissed_at:authenticated:UPDATE', 'insights:authenticated:SELECT', 'match_reviews:authenticated:SELECT',
     'net_worth_snapshots:authenticated:SELECT',
     'merchant_aliases:authenticated:SELECT', 'metal_prices:authenticated:SELECT', 'merchant_category_skips:authenticated:SELECT', 'merchant_profile_category:authenticated:DELETE', 'merchant_profile_category:authenticated:INSERT',

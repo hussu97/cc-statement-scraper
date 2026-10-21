@@ -187,6 +187,8 @@ select set_eq(
     -- cash flow's coverage, wealth insights
     'private.bank_amounts', 'public.account_ledger', 'public.bank_balance_series', 'private.net_worth',
     'public.net_worth', 'public.cash_flow', 'private.generate_wealth_insights',
+    -- Investments (20261021093154): a flow's paying transaction and its account
+    'public.holding_detail',
     -- a card payment's leg on the same bank's current account (20261020170933)
     'private.add_payment_leg',
     -- reach an account through its statements or transactions, or read a single known account

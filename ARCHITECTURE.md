@@ -631,6 +631,26 @@ than 3 days is stale and makes the metals incomplete. Each holding has a `form` 
 jewellery; silver has no jewellery), and the valuation returns `image_path` (`<metal>-<form>.jpg`)
 in the public `investment-images` bucket, served like the bank logos (`assets/investments/`).
 
+**Holdings beyond metals, flows, returns** (`20261021093154`, `tasks/todo.md` §7). `holdings.kind`
+is `metal`, `plan` (an RL360-style plan), `broker` (an account valued as a whole), `security`
+(units × a unit price) or `deposit` (principal, rate, maturity: value = principal × (1 + rate ×
+days held / 365), capped at maturity, an estimate). Each has a currency (AED via the peg or
+`fx_rates`, `private.to_aed`). `holding_valuations` are evidence (a value or a unit price as of a
+date; the latest on or before a day wins). `holding_flows` are contributions, withdrawals and
+income, in the holding's currency and AED, optionally the paying transaction (one flow per
+transaction; `removed_at` instead of delete, so an unlinked payment is never re-linked). A
+metal's cost and purchase date are its `holding_cost` contribution. A holding's `link_pattern`
+links matching purchases, fees and bank transfers on insert (trigger `transactions_holding_link`)
+and when the rule is saved; `link_transaction` links or unlinks by hand. **A linked payment is
+saving**: `v_spend` leaves it out and `v_cash_flow` files it as `saving` with `holding_code` (a
+linked credit is negative saving); `cash_flow_savings` breaks saving down by holding.
+`holding_returns(profile, all|ytd|12m)` gives, per holding and in total, start and end value,
+added (contributions − withdrawals), income, growth = end − start − added + income, simple % and
+a money-weighted yearly return (`private.xirr`, bisection, from 90 days of history); a holding
+with no value at the period's start is incomplete and stays out of the total. `net_worth`
+returns `allocation` by class (cash, gold, silver, plan, broker, security, deposit; owed as a
+negative row).
+
 There is likewise **one definition of what a card owes**: `public.v_account_balances`
 (`security_invoker`). A sum of transactions cannot know the balance carried in before the first
 document, so each account is anchored on a balance the bank printed, the latest of:

@@ -132,11 +132,10 @@ select is((public.net_worth(pg_temp.v('p'))->>'net_aed'),
           (591850.00 + pg_temp.v('silver_value')::numeric + pg_temp.v('tt_value')::numeric)::numeric(14,2)::text, 'net = cash 0 + metals − owed 0');
 select results_eq(
   $$ select x->>'date', x->>'value_aed' from jsonb_array_elements(public.holdings_value_series(pg_temp.v('p'),
-       public.dubai_date(now()) - 4, public.dubai_date(now()))) x where x->>'date' in
-       ((public.dubai_date(now()) - 4)::text, public.dubai_date(now())::text) order by 1 $$,
-  $$ values ((public.dubai_date(now()) - 4)::text, null::text),
-            (public.dubai_date(now())::text, (591850.00 + pg_temp.v('silver_value')::numeric + pg_temp.v('tt_value')::numeric)::numeric(14,2)::text) $$,
-  'value series: unknown before the first price, today''s value at the end');
+       public.dubai_date(now()) - 4, public.dubai_date(now()))) x order by 1 $$,
+  $$ values (public.dubai_date(now())::text,
+             (591850.00 + pg_temp.v('silver_value')::numeric + pg_temp.v('tt_value')::numeric)::numeric(14,2)::text) $$,
+  'value series: a holding counts from its purchase or first contribution (here, added today); today''s value at the end');
 select public.close_holding(pg_temp.v('p'), pg_temp.v('coins'));
 select is((public.holdings_valuation(pg_temp.v('p'))->>'holdings_count')::int, 3, 'a closed holding stops counting');
 select throws_ok($$ select public.close_holding(pg_temp.v('p'), pg_temp.v('coins')) $$, 'P0002', null, 'and cannot be closed twice');
