@@ -639,15 +639,18 @@ days held / 365), capped at maturity, an estimate). Each has a currency (AED via
 date; the latest on or before a day wins). `holding_flows` are contributions, withdrawals and
 income, in the holding's currency and AED, optionally the paying transaction (one flow per
 transaction; `removed_at` instead of delete, so an unlinked payment is never re-linked). A
-metal's cost and purchase date are its `holding_cost` contribution. A holding's `link_pattern`
-links matching purchases, fees and bank transfers on insert (trigger `transactions_holding_link`)
+metal's cost and purchase date, or a deposit's principal and start date, are its `holding_cost`
+contribution. A holding's `link_pattern` (contains, min 3 characters; or, with `link_exact`, the
+whole description, min 2: Wio prints RL360 as "RI") links matching purchases, fees and bank transfers on insert (trigger `transactions_holding_link`)
 and when the rule is saved; `link_transaction` links or unlinks by hand. **A linked payment is
 saving**: `v_spend` leaves it out and `v_cash_flow` files it as `saving` with `holding_code` (a
 linked credit is negative saving); `cash_flow_savings` breaks saving down by holding.
 `holding_returns(profile, all|ytd|12m)` gives, per holding and in total, start and end value,
 added (contributions − withdrawals), income, growth = end − start − added + income, simple % and
 a money-weighted yearly return (`private.xirr`, bisection, from 90 days of history); a holding
-with no value at the period's start is incomplete and stays out of the total. `net_worth`
+with no value at the period's start (this year, 12 months) or with no contribution at all (all
+time) is incomplete and stays out of the total. `holdings_value_series` sums the holdings with a
+value each day and says whether that is all of them (`complete`). `net_worth`
 returns `allocation` by class (cash, gold, silver, plan, broker, security, deposit; owed as a
 negative row).
 

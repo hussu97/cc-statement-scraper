@@ -100,6 +100,21 @@ select results_eq(
   'and are saving in cash flow, with their holding');
 select is((select holding_name from public.v_transactions where txn_code = pg_temp.v('rl1')), 'RL360 plan',
           'v_transactions names the holding');
+-- An exact rule: Wio prints RL360 as just "RI".
+select pg_temp.set('ri', pg_temp.txn('card', 'purchase', 'debit', 7400.00, pg_temp.v('today')::date - 3, 'RI', 2000, 'USD'));
+select pg_temp.set('pride', pg_temp.txn('card', 'purchase', 'debit', 50.00, pg_temp.v('today')::date - 3, 'PRIDE CAFE'));
+select pg_temp.as_user('uid');
+set local role authenticated;
+select throws_ok($$ select public.save_holding(pg_temp.v('p'), 'Bad', p_kind => 'plan', p_link_pattern => 'RI') $$, '23514', null,
+                 'a two-letter rule must match the whole description');
+select pg_temp.set('rl360w', public.save_holding(pg_temp.v('p'), 'RL360 (Wio)', p_kind => 'plan', p_currency => 'USD',
+                                                 p_link_pattern => 'ri', p_link_exact => true));
+reset role;
+select results_eq(
+  $$ select txn_code from public.holding_flows where holding_code = pg_temp.v('rl360w') $$,
+  $$ values (pg_temp.v('ri')) $$,
+  'the exact rule links "RI" and not "PRIDE CAFE"');
+delete from public.holdings where holding_code = pg_temp.v('rl360w');  -- keeps the totals below to the four holdings
 
 -- ── links: by hand ──────────────────────────────────────────────────────────
 select pg_temp.set('xfer', pg_temp.txn('bank', 'transfer_out', 'debit', 5000.00, pg_temp.v('today')::date - 5, 'TO SARWA'));
@@ -133,7 +148,7 @@ select results_eq(
   $$ select h->>'name', h->>'value', h->>'value_aed', h->>'cost_aed', h->>'income_aed', h->>'gain_aed', (h->>'is_estimate')::boolean
      from jsonb_array_elements(public.holdings_valuation(pg_temp.v('p'))->'holdings') h order by h->>'name' $$,
   $$ values ('100 g bar'::text, '50000.00'::text, '50000.00'::text, '40000.00'::text, '0.00'::text, '10000.00'::text, false),
-            ('ADCB deposit', '100800.00', '100800.00', null, null, null, true),
+            ('ADCB deposit', '100800.00', '100800.00', '100000.00', '0.00', '800.00', true),
             ('RL360 plan', '6500.00', '23871.25', '15151.60', '0.00', '8719.65', false),
             ('World fund', '1305.00', '4792.61', '5000.00', '73.45', '-133.94', false) $$,
   'value in each currency and AED; cost = contributions − withdrawals; gain adds income; a deposit accrues');
@@ -152,6 +167,8 @@ select is((select (h->>'complete')::boolean from jsonb_array_elements(public.hol
           'this year: no gold price on 1 January, so the start value is unknown');
 select is((select h->>'annual_pct' from jsonb_array_elements(public.holding_returns(pg_temp.v('p'), 'all')->'holdings') h
            where h->>'name' = 'World fund'), null, 'under 90 days of history: no yearly rate');
+select is((select (h->>'complete')::boolean from jsonb_array_elements(public.holding_returns(pg_temp.v('p'), 'all')->'holdings') h
+           where h->>'name' = 'RL360 plan'), true, 'a plan with linked payments is complete');
 select throws_ok($$ select public.holding_returns(pg_temp.v('p'), 'week') $$, '22023', null, 'periods are all, ytd and 12m');
 
 -- ── cash flow by holding, allocation ────────────────────────────────────────
