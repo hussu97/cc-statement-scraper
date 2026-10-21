@@ -364,20 +364,26 @@ the metals are worth and the gain on them.
 3. **Every 6 hours** (pg_cron `ledger-metal-prices`, `7 */6 * * *`).
 
 ### Plan
-- [ ] `metal_prices` (global reference, like `fx_rates`): quote (`gold_24k|22k|21k|18k`,
+- [x] `metal_prices` (global reference, like `fx_rates`): quote (`gold_24k|22k|21k|18k`,
       `gold_spot`, `silver_spot`), AED per gram, USD per oz for spot, source, as_of. Every fetch
       is kept (the history behind the charts). `record_metal_prices` (service role) converts
       spot USD/oz to AED/g in SQL at the peg.
-- [ ] Edge Function `metal-prices` (x-cron-secret, `verify_jwt = false`): DJG retail gold,
+- [x] Edge Function `metal-prices` (x-cron-secret, `verify_jwt = false`): DJG retail gold,
       gold-api.com spot with Swissquote fallback; pure parsers with deno tests. A failed source
       is reported to Sentry after the others are stored.
-- [ ] `holdings` per ledger: name, metal, grams, karat (gold) or purity (silver), cost AED,
+- [x] `holdings` per ledger: name, metal, grams, karat (gold) or purity (silver), cost AED,
       acquired on, notes, status. Owner RPCs `save_holding` / `close_holding`.
-- [ ] `holdings_valuation(profile)`: each holding's value (grams × the karat's retail rate, or
+- [x] `holdings_valuation(profile)`: each holding's value (grams × the karat's retail rate, or
       grams × purity × silver spot), cost, gain and %, 24-hour change, the price used and its
       age; totals and completeness. `holdings_value_series` and `metal_price_series` for charts.
-- [ ] Net worth = cash + metals − owed; snapshots gain `holdings_aed`.
-- [ ] Web + iOS: a Metals section in Wealth (value, gain, today's change, price as-of, a
+- [x] Net worth = cash + metals − owed; snapshots gain `holdings_aed`.
+- [x] Web + iOS: a Metals section in Wealth (value, gain, today's change, price as-of, a
       90-day chart), Add/Edit holding (owner).
-- [ ] pgTAP, deno tests, privileges matrix, types; ARCHITECTURE, PRODUCTION (cron, function),
-      README, CHANGELOG. Shipping deploys a new function and cron: ask first.
+- [x] pgTAP, deno tests, privileges matrix, types; ARCHITECTURE, PRODUCTION (cron, function),
+      README, CHANGELOG.
+- [x] Later decisions (21 Oct): gold 24K = 999.9 with a hardcoded fineness factor for 999.5 / 999 /
+      995 bars; silver at Dubai retail (Khaleej Times, per kilo); each holding has a form (bar,
+      coin, jewellery) with a public-domain / CC0 photo (`assets/investments/`, bucket
+      `investment-images`).
+- [ ] Ship: push to main (migration, `metal-prices` function and cron, web, TestFlight), then
+      upload the photos to production (`scripts/brand/upload-investment-images.sh`). Ask first.
