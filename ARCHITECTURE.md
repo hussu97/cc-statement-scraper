@@ -635,7 +635,8 @@ in the public `investment-images` bucket, served like the bank logos (`assets/in
 **Holdings beyond metals, flows, returns** (`20261021093154`, `tasks/todo.md` §7). `holdings.kind`
 is `metal`, `plan` (an RL360-style plan), `broker` (an account valued as a whole), `security`
 (units × a unit price) or `deposit` (principal, rate, maturity: value = principal × (1 + rate ×
-days held / 365), capped at maturity, an estimate). Each has a currency (AED via the peg or
+days held / 365), capped at maturity, an estimate; once a bank statement has valued it, its latest
+imported value × (1 + rate × days since / 365), to maturity). Each has a currency (AED via the peg or
 `fx_rates`, `private.to_aed`). `holding_valuations` are evidence (a value or a unit price as of a
 date; the latest on or before a day wins). `holding_flows` are contributions, withdrawals and
 income, in the holding's currency and AED, optionally the paying transaction (one flow per
@@ -681,6 +682,21 @@ checkpoint. Checkpoints are evidence: never updated, a newer one supersedes. Car
 account" fallbacks in SMS and statement resolution, and `merge_accounts`) filter
 `kind = 'credit_card'`, and `60_bank_accounts.test.sql` lists every function that reads
 `accounts`, so a new reader fails until it is classified. Plan: `tasks/todo.md` §3.
+
+**Bank-account statements** (`20261021115816`, `tasks/todo.md` §9). ADCB's consolidated statement
+of accounts is parse-v1 `account_statement_pdf`: each statement names its account (`account`:
+kind, full number, alert suffix `ref`, IBAN, product). `ingest_parsed_document` resolves it with
+`private.resolve_bank_statement_account` (full number, else an `account_ref` the number ends
+with, else a new current/savings account; never the card resolver), registers the debit cards
+its lines name on it, re-runs the bank's alerts waiting as `no_bank_account`, and then ingests the
+statement like any other: lines are evidence, `match_statement_lines` pairs them with the
+account's SMS transactions (the statement line becomes the posting evidence), and the rest become
+transactions. The closing balance is a `statement` checkpoint as of the end of the period's last
+day in Dubai, so `v_bank_balances` anchors on it until a newer SMS balance. `reconcile_statement`
+balances a bank account as opening − debits + credits. `statement_cycles` and
+`v_statement_payments` are card-only. The payload's `deposits[]` go to
+`private.import_statement_deposits` and its `card_summaries[]` to `private.apply_card_summaries`
+(credit limit of a known card only).
 
 `overview` carries each account's `outstanding_aed` and anchor, and the profile's
 `outstanding` (active accounts), `outstanding_complete` (every account anchored, every AED

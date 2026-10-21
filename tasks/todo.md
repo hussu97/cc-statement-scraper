@@ -522,6 +522,9 @@ Sample: Sep 2026, accounts 810001 (Active Saver) and 820001 (Current, debit card
 Schema + contract change: needs the user's go-ahead before code (CLAUDE.md §12.1).
 
 ### Decisions (user, 21 Oct)
+- Build it all (go-ahead 21 Oct). The deposit's start date and early rate may be assumed so the
+  numbers fit: 100,000 at 2% from 22 Nov 2021 reaches 109,715 on 30 Sep 2026, AED 4 short of the
+  statement, so the value runs on into the first statement value.
 - The deposit's statement amount includes accrued profit; the original investment was AED 100,000.
   It does not exist in the app yet: the first statement creates it (Hussain's ledger).
 - TouchPoints: dropped. Card summaries: cross-check only (the card PDFs own card statements).
@@ -562,15 +565,36 @@ Schema + contract change: needs the user's go-ahead before code (CLAUDE.md §12.
   not silently closed.
 
 ### Plan
-- [ ] Parser: layout, extraction, reconciliation, passwords, kinds, warnings; pytest + golden
+- [x] Parser: layout, extraction, reconciliation, passwords, kinds, warnings; pytest + golden
       parity (from the main checkout).
-- [ ] Contract doc + pydantic + migration: account-statement ingest, `statement` checkpoint
+- [x] Contract doc + pydantic + migration: account-statement ingest, `statement` checkpoint
       source, SMS matching, deposit import and valuation rule; pgTAP; `pnpm db:types`;
       account-reader guard (`60_bank_accounts`).
-- [ ] Worker: route the new document kind; the Sentry event and its scrubber test.
-- [ ] Web + iOS: account lines and "From statement" balances; the deposit's statement values.
-- [ ] Verify: parse the real PDF locally (not committed), ingest into a local profile, check
+- [x] Worker: route the new document kind; the Sentry event and its scrubber test.
+- [x] Web + iOS: account lines and "From statement" balances; the deposit's statement values.
+- [x] Verify: parse the real PDF locally (not committed), ingest into a local profile, check
       balances 0.00 / 51.46, the deposit at 109,718.87, and no doubled SMS lines; `pnpm check`.
-- [ ] Docs: contract, CHANGELOG, ARCHITECTURE.
+- [x] Docs: contract, CHANGELOG, ARCHITECTURE.
 - [ ] Production (ask each time): ship; add `estatement@adcb.com` to the ADCB route; requeue
       the Sep statement and check it.
+- [ ] After the first production ingest (ask first): set the deposit's principal to 100,000 and
+      its start to 22 Nov 2021 (Wealth → the deposit → Edit, or `save_holding`).
+
+### Review (21 Oct)
+- Built on `wio-accounts` (`20261021115816`, parser 2026.10.21). One change from the design: a
+  deposit is created from its first statement with the statement's amount and date as principal
+  and start (the importer can't know the original deposit); the owner corrects them once.
+- The real September PDF (kept out of git) parses to both accounts (0.00 and 51.46, both
+  reconciled against the running balance and Total rows), the two lines (FX fee and Google
+  purchase on debit card 4467), the deposit and both card summaries. Loaded into a local ledger
+  after the real debit-card SMS: the SMS waited for account …820001, became the purchase when
+  the statement created the account, and the statement line matched it (sms + statement_line); the
+  fee is new; both statements `ok`; the deposit was added and valued.
+- Checked in the web app (Accounts "from statement", the deposit's value history "From
+  statement", AED 109,845 on 21 Oct, +1.93% a year) and the iOS simulator (Wealth overview,
+  Investments, the deposit screen).
+- Tests (`pnpm check:all`, all 24 pass): parser 409 (golden parity included), pgTAP all (new
+  `69_adcb_consolidated`), deno 179, web 623,
+  LedgerKit 654, app build.
+- Found on the way: bank statements would have shown as unpaid card cycles; `statement_cycles` and
+  `v_statement_payments` are now card-only.
