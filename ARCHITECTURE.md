@@ -72,6 +72,7 @@ a `deno test` guard enforces this.
 | `ops-monitor` | pg_cron every 15 min | Reads `ops_health()` and raises one Sentry issue per problem type, then sends the `ops-heartbeat` cron check-in. |
 | `member-invite` | User JWT (owner) | Adds a member (`add_profile_member` as the caller) and, for an email with no Auth user (sign-ups are off), sends the Auth invite with the service client; `resend` re-sends to a never-confirmed member. Rate-limited per caller and per address; the invite redirects only to the caller's own origin. |
 | `metal-prices` | pg_cron every 6 hours (`7 */6 * * *`) | Gold at the Dubai Jewellery Group's retail rates by karat (dubaicityofgold.com, else Khaleej Times' 24K), Dubai retail silver per kilo (Khaleej Times JSON-LD), spot gold and silver for reference (gold-api.com, else Swissquote); `record_metal_prices` converts to AED per gram and refuses a jump over 50%. |
+| `rl360-sync` | pg_cron daily (`20 2 * * *`, 06:20 Dubai) | Signs in to RL360's Online Service Centre with each login in `RL360_LOGINS`, reads every plan's value and premium history (plain HTML, no browser), and calls `import_holding_data`: it claims the profile's RL360 plan by plan number, stores the value (source `import`, never over a manual one), reconciles premiums with linked card payments (±7 days, 5%; unmatched premiums become imported contributions) and returns the month-ends still without a value, which the function backfills (30 a run). |
 | `fx-rates` | pg_cron daily 21:00 UTC | Fetches open.er-api.com, inverts quotes to AED per unit with exact decimals, calls `upsert_fx_rates` (which re-estimates pending SMS). |
 
 Shared code in `_shared/`: `auth.ts` (JWT, service token and cron secret), `sentry.ts`
@@ -824,6 +825,7 @@ all-profiles run, purges `document_events` older than 90 days first):
 | `ledger-recategorize-sweep` | `17 */3 * * *` | `private.recategorize_stale()` |
 | `ledger-fx-rates` | `0 21 * * *` | `fx-rates` function |
 | `ledger-metal-prices` | `7 */6 * * *` | `metal-prices` function |
+| `ledger-rl360-sync` | `20 2 * * *` | `rl360-sync` function |
 | `ledger-nightly` | `0 22 * * *` | `private.nightly()` |
 | `ledger-llm-enqueue` | `0 18 * * *` | `private.enqueue_llm_categorize()` |
 | `ledger-legacy-choices` | `45 22 * * *` | `private.legacy_choices_cron()`: applies staged legacy category choices once per transaction (never over a later user edit), then unschedules itself when nothing is pending or 30 days after staging. Leftovers: `private.legacy_unmatched_choices()` |

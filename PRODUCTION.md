@@ -225,6 +225,15 @@ supabase secrets list --project-ref <project-ref>      # names and digests only
   `OUTLOOK_BUDGET_MS`, `GMAIL_PUSH_BUDGET_MS`, `WORKER_BUDGET_MS`, `PARSER_TIMEOUT_MS`, `EDGE_WALL_CLOCK_MS`,
   `OPS_SMS_UNPARSED_THRESHOLD`, `OPS_OPEN_REVIEWS_THRESHOLD`, `OPS_QUEUED_DOCUMENT_AGE_S` and `SENTRY_TRACES_SAMPLE_RATE`
   (see README). Add them to the same file.
+- **`RL360_LOGINS`** (rl360-sync): a one-line JSON array
+  `[{"profile_code":"prf_…","username":"…","password":"…"}]`, one entry per ledger whose
+  owner has an RL360 Online Service Centre login. The owner types it into
+  `supabase/functions/.env.production` themselves (never in chat, git or a terminal command);
+  push it with the script above. Unset, the sync does nothing. After the first push, run the job
+  once (`curl … /functions/v1/rl360-sync -H "x-cron-secret: $CRON_SECRET" -d '{"sync":true}'`): it
+  claims each profile's RL360 plan and backfills month-end values 30 at a time (the daily runs
+  finish the rest). A refused sign-in or a changed page layout reaches Sentry; messages never
+  carry the login or page text.
 - **Worker timing.** Leave `PARSER_TIMEOUT_MS` at its default **75000** (set it explicitly only
   to document it): it must stay above the parser's own 60 s kill (§3) and below Cloud Run's
   120 s request timeout. `EDGE_WALL_CLOCK_MS` is 150000 on the free plan (400000 on paid); the
@@ -237,7 +246,7 @@ Deploy every function. Each one's `verify_jwt = false` comes from `supabase/conf
 
 ```bash
 supabase functions deploy --project-ref <project-ref>
-# statements-upload sms-ingest worker gmail-push gmail-watch-renew outlook-poll ops-monitor fx-rates metal-prices member-invite
+# statements-upload sms-ingest worker gmail-push gmail-watch-renew outlook-poll ops-monitor fx-rates metal-prices rl360-sync member-invite
 ```
 
 Smoke test (`CRON_SECRET` exported from the same file as in §2.4):
@@ -257,6 +266,7 @@ curl -s -X POST https://<project-ref>.supabase.co/functions/v1/worker \
 | `ledger-recategorize-sweep` | `17 */3 * * *` | stale `rules_version` sweep |
 | `ledger-fx-rates` | `0 21 * * *` | `fx-rates` function |
 | `ledger-metal-prices` | `7 */6 * * *` | `metal-prices` function (gold/silver prices; no secret beyond `CRON_SECRET`) |
+| `ledger-rl360-sync` | `20 2 * * *` (06:20 Dubai) | `rl360-sync` function (RL360 plan values and premiums; needs `RL360_LOGINS`, skips when unset) |
 | `ledger-nightly` | `0 22 * * *` (02:00 Dubai) | purge `document_events` older than 90 days, void released authorisations, recurring detection, insights, net worth snapshot |
 | `ledger-llm-enqueue` | `0 18 * * *` | queue uncategorised merchants for the LLM |
 | `ledger-legacy-choices` | `45 22 * * *` | apply staged legacy category choices once per transaction (cutover helper); unschedules itself when nothing is pending or 30 days after staging |
