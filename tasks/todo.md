@@ -488,12 +488,24 @@ to the Online Service Centre in the browser pane and the pages were mapped read-
   only fetches and parses. `cron_runs` records each run like the other jobs.
 
 ### Plan
-- [ ] Migration: `holdings.external_ref`, `holding_flows.source`/`external_ref` (unique per
+- [x] Migration: `holdings.external_ref`, `holding_flows.source`/`external_ref` (unique per
       holding), `import_holding_data(...)` (service role, reconciliation), cron job, pgTAP.
-- [ ] Edge Function `rl360-sync` (`withSentry`, `requireCron`, `runCronJob`): login, plan list,
+- [x] Edge Function `rl360-sync` (`withSentry`, `requireCron`, `runCronJob`): login, plan list,
       valuation by date, premium history; parsers tested on saved, anonymised HTML; the login
       form scrubbed from Sentry; `config.toml` `verify_jwt = false`.
-- [ ] Web + iOS: external ref on the plan form; "Synced from RL360" on imported values/flows.
+- [x] Web + iOS: "Synced" on imported values and premiums; the value list shows the latest 12
+      (a value a day). The plan number is claimed by the sync, so the form needs no field.
 - [ ] Production (ask each time): ship; user adds `RL360_LOGINS` and pushes the secret; set each
       plan's `external_ref`; run the job once and check the backfill.
-- [ ] Docs: CHANGELOG, ARCHITECTURE, PRODUCTION (function, secret, cron), README.
+- [x] Docs: CHANGELOG, ARCHITECTURE, PRODUCTION (function, secret, cron), README.
+
+### Review (21 Oct)
+- Built locally on `wio-accounts` (not pushed). pgTAP `68_rl360_sync` (31 checks), deno parser
+  and session tests, LedgerKit and web tests; the CI mirror passes (15 checks).
+- The parsers were run against the live, signed-in pages (read-only): 58 premiums totalling
+  USD 116,000 (RL360's "premiums invested"), backdated values for any month-end.
+- Locally: 401 without the cron secret, a clean skip without `RL360_LOGINS`; a seeded plan shows
+  synced values and premiums, and +25.4% matches RL360's own figure.
+- Not yet run: a real sign-in from the function (needs the owner's login in
+  `supabase/functions/.env`), and from Supabase's cloud IPs (production's first run tells).
+
