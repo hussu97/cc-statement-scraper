@@ -1,0 +1,42 @@
+[
+    {
+        "month": "2026-06-01",
+        "txn_count": 1,
+        "amount_aed": "7575.90",
+        "holding_code": "hld_01m5exhvq8k52tcna0y76gqrp2",
+        "holding_kind": "plan",
+        "holding_name": "RL360 plan"
+    },
+    {
+        "month": "2026-07-01",
+        "txn_count": 1,
+        "amount_aed": "7575.80",
+        "holding_code": "hld_01m5exhvq8k52tcna0y76gqrp2",
+        "holding_kind": "plan",
+        "holding_name": "RL360 plan"
+    },
+    {
+        "month": "2026-08-01",
+        "txn_count": 2,
+        "amount_aed": "12575.70",
+        "holding_code": "hld_01m5exhvq8k52tcna0y76gqrp2",
+        "holding_kind": "plan",
+        "holding_name": "RL360 plan"
+    },
+    {
+        "month": "2026-09-01",
+        "txn_count": 2,
+        "amount_aed": "12575.60",
+        "holding_code": "hld_01m5exhvq8k52tcna0y76gqrp2",
+        "holding_kind": "plan",
+        "holding_name": "RL360 plan"
+    },
+    {
+        "month": "2026-10-01",
+        "txn_count": 2,
+        "amount_aed": "12575.50",
+        "holding_code": "hld_01m5exhvq8k52tcna0y76gqrp2",
+        "holding_kind": "plan",
+        "holding_name": "RL360 plan"
+    }
+]

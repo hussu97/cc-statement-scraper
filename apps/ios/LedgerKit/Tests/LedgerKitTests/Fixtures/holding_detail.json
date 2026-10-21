@@ -1,0 +1,137 @@
+{
+    "flows": [
+        {
+            "kind": "contribution",
+            "notes": null,
+            "amount": "1362.40",
+            "source": "rule",
+            "txn_code": "txn_01m5exhcdf551ceveqw3kcts59",
+            "flow_code": "hfl_01m5exhvqd9wnwt67hs24dn6th",
+            "flow_date": "2026-10-04",
+            "amount_aed": "5000.00",
+            "txn_bank_code": "ADCB",
+            "txn_description": "RL360 PLAN",
+            "txn_account_kind": "current"
+        },
+        {
+            "kind": "contribution",
+            "notes": null,
+            "amount": "2000.00",
+            "source": "rule",
+            "txn_code": "txn_01m5exhvpyt7yjh71f2p2qgek8",
+            "flow_code": "hfl_01m5exhvqe99zba00f00vxmn16",
+            "flow_date": "2026-10-03",
+            "amount_aed": "7575.50",
+            "txn_bank_code": "ADCB",
+            "txn_description": "*RL360 DOUGLAS GBR",
+            "txn_account_kind": "credit_card"
+        },
+        {
+            "kind": "contribution",
+            "notes": null,
+            "amount": "1362.40",
+            "source": "rule",
+            "txn_code": "txn_01m5exhcdw1jqtt6780jewpn98",
+            "flow_code": "hfl_01m5exhvqd1pmwxscwg4nf9363",
+            "flow_date": "2026-09-04",
+            "amount_aed": "5000.00",
+            "txn_bank_code": "ADCB",
+            "txn_description": "RL360 PLAN",
+            "txn_account_kind": "current"
+        },
+        {
+            "kind": "contribution",
+            "notes": null,
+            "amount": "2000.00",
+            "source": "rule",
+            "txn_code": "txn_01m5exhvq57v7d4teky2h6m124",
+            "flow_code": "hfl_01m5exhvqebewdtq5b1ndda38p",
+            "flow_date": "2026-09-03",
+            "amount_aed": "7575.60",
+            "txn_bank_code": "ADCB",
+            "txn_description": "*RL360 DOUGLAS GBR",
+            "txn_account_kind": "credit_card"
+        },
+        {
+            "kind": "contribution",
+            "notes": null,
+            "amount": "1362.40",
+            "source": "rule",
+            "txn_code": "txn_01m5exhce0pvag8sa14zp4g8n6",
+            "flow_code": "hfl_01m5exhvqdmzr21046v68xypgr",
+            "flow_date": "2026-08-04",
+            "amount_aed": "5000.00",
+            "txn_bank_code": "ADCB",
+            "txn_description": "RL360 PLAN",
+            "txn_account_kind": "current"
+        },
+        {
+            "kind": "contribution",
+            "notes": null,
+            "amount": "2000.00",
+            "source": "rule",
+            "txn_code": "txn_01m5exhvq6g06zh22c26m61jhv",
+            "flow_code": "hfl_01m5exhvqeqgwzvb5cx4gqv7fm",
+            "flow_date": "2026-08-03",
+            "amount_aed": "7575.70",
+            "txn_bank_code": "ADCB",
+            "txn_description": "*RL360 DOUGLAS GBR",
+            "txn_account_kind": "credit_card"
+        },
+        {
+            "kind": "contribution",
+            "notes": null,
+            "amount": "2000.00",
+            "source": "rule",
+            "txn_code": "txn_01m5exhvq6d9h5yder17m29k0d",
+            "flow_code": "hfl_01m5exhvqesw5czhaa63f80779",
+            "flow_date": "2026-07-03",
+            "amount_aed": "7575.80",
+            "txn_bank_code": "ADCB",
+            "txn_description": "*RL360 DOUGLAS GBR",
+            "txn_account_kind": "credit_card"
+        },
+        {
+            "kind": "contribution",
+            "notes": null,
+            "amount": "2000.00",
+            "source": "rule",
+            "txn_code": "txn_01m5exhvq7fw9tky6trb02qbkb",
+            "flow_code": "hfl_01m5exhvqe6g1j2s04yc4ew3ws",
+            "flow_date": "2026-06-03",
+            "amount_aed": "7575.90",
+            "txn_bank_code": "ADCB",
+            "txn_description": "*RL360 DOUGLAS GBR",
+            "txn_account_kind": "credit_card"
+        },
+        {
+            "kind": "contribution",
+            "notes": null,
+            "amount": "40000.00",
+            "source": "manual",
+            "txn_code": null,
+            "flow_code": "hfl_01m5exhvqegcbnvx13skfzkry9",
+            "flow_date": "2025-09-16",
+            "amount_aed": "146900.00",
+            "txn_bank_code": null,
+            "txn_description": null,
+            "txn_account_kind": null
+        }
+    ],
+    "valuations": [
+        {
+            "as_of": "2026-10-01",
+            "value": "53800.00",
+            "source": "manual",
+            "unit_price": null,
+            "valuation_code": "hvl_01m5exhvqes9ymh1fjgmhe70vh"
+        },
+        {
+            "as_of": "2026-04-04",
+            "value": "44100.00",
+            "source": "manual",
+            "unit_price": null,
+            "valuation_code": "hvl_01m5exhvqew8b52k4yhkw22xnj"
+        }
+    ]
+}

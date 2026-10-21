@@ -74,6 +74,11 @@ public final class TransactionDetailModel {
         TransactionDetailModel(transaction: txn, profileCode: profileCode, api: api)
     }
 
+    /// The owner's "Link to investment", saved through the screen that opened the sheet.
+    public func linker(target: any TransactionEditing) -> TransactionLinkModel {
+        TransactionLinkModel(transaction: transaction, profileCode: profileCode, api: api, target: target)
+    }
+
     /// Hides every SMS text (the sheet closing).
     public func closeAllSMS() { openSMS = [:] }
 

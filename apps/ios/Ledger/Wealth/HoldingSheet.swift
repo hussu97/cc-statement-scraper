@@ -1,9 +1,11 @@
 import LedgerKit
 import SwiftUI
 
-/// Add or edit a gold or silver holding (owners). The photo follows metal and form; weights and the
-/// cost stay as typed and go up as decimal strings. Validation, unit conversion, defaults and the
-/// server's refusals are `HoldingDraft`'s; Close (with a confirmation) is offered when editing.
+/// Add or edit a holding of any kind (owners). Adding starts with the kind; gold and silver then
+/// take metal, weight and cost (the photo follows metal and form), the other kinds their own
+/// fields and a payment rule (`HoldingKindFields`). Numbers stay as typed and go up as decimal
+/// strings. Validation, conversion, defaults and the server's refusals are `HoldingDraft`'s;
+/// Close (with a confirmation) is offered when editing.
 struct HoldingSheet: View {
     let model: InvestmentsModel
     let profileCode: String
@@ -26,37 +28,37 @@ struct HoldingSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    HoldingPhoto(url: draft.imageURL(supabaseURL: catalog?.supabaseURL), label: draft.imageLabel,
-                                 width: nil, height: 160, cornerRadius: Metrics.radiusLg)
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
+                if draft.kind == .metal {
+                    Section {
+                        HoldingPhoto(url: draft.imageURL(supabaseURL: catalog?.supabaseURL), label: draft.imageLabel,
+                                     width: nil, height: 160, cornerRadius: Metrics.radiusLg)
+                            .listRowInsets(EdgeInsets())
+                            .listRowBackground(Color.clear)
+                    }
                 }
                 if let error { ErrorSection(text: error) }
+                if draft.canChangeKind {
+                    Section {
+                        Picker("Kind", selection: $draft.kind.animation()) {
+                            ForEach(HoldingKind.allCases) { Label($0.label, systemImage: $0.systemImage).tag($0) }
+                        }
+                    } header: {
+                        Text("What it is")
+                    } footer: {
+                        Text(draft.kind.explanation)
+                    }
+                }
                 Section {
-                    TextField("e.g. Ten tola bar", text: $draft.name)
+                    TextField(draft.namePlaceholder, text: $draft.name)
                         .textInputAutocapitalization(.sentences)
                         .accessibilityLabel("Name")
                 } header: { Text("Name") }
-                metalSection
-                weightSection
-                Section {
-                    HStack {
-                        Text("AED").foregroundStyle(Palette.muted)
-                        TextField("Optional", text: $draft.cost)
-                            .keyboardType(.decimalPad)
-                            .monospacedDigit()
-                            .accessibilityLabel("What you paid, in AED")
-                    }
-                    Toggle("Date bought", isOn: $draft.hasAcquiredOn.animation())
-                    if draft.hasAcquiredOn {
-                        DatePicker("Bought on", selection: acquiredOn, in: ...Date.now, displayedComponents: .date)
-                            .environment(\.timeZone, LedgerDates.timeZone)
-                    }
-                } header: {
-                    Text("What you paid")
-                } footer: {
-                    Text("The total you paid, in AED. Gains are counted against it; leave it empty if you don't know.")
+                if draft.kind == .metal {
+                    metalSection
+                    weightSection
+                    costSection
+                } else {
+                    HoldingKindFields(draft: $draft)
                 }
                 Section {
                     TextField("Optional", text: $draft.notes, axis: .vertical).lineLimit(1...4)
@@ -85,6 +87,27 @@ struct HoldingSheet: View {
         }
         .presentationDetents([.large])
         .interactiveDismissDisabled(model.isSaving)
+    }
+
+    private var costSection: some View {
+        Section {
+            HStack {
+                Text("AED").foregroundStyle(Palette.muted)
+                TextField("Optional", text: $draft.cost)
+                    .keyboardType(.decimalPad)
+                    .monospacedDigit()
+                    .accessibilityLabel("What you paid, in AED")
+            }
+            Toggle("Date bought", isOn: $draft.hasAcquiredOn.animation())
+            if draft.hasAcquiredOn {
+                DatePicker("Bought on", selection: acquiredOn, in: ...Date.now, displayedComponents: .date)
+                    .environment(\.timeZone, LedgerDates.timeZone)
+            }
+        } header: {
+            Text("What you paid")
+        } footer: {
+            Text("The total you paid, in AED. Gains are counted against it; leave it empty if you don't know.")
+        }
     }
 
     private var metalSection: some View {

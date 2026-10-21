@@ -36,6 +36,13 @@ struct TransactionDetailList: View {
                         .compactMap { $0 }.joined(separator: " · "))
                 }
             }
+            if let holding = txn.holdingName {
+                Section {
+                    DetailRow(label: "Investment") { Text(holding) }
+                } footer: {
+                    Text("Linked: it counts as saving, not spending.")
+                }
+            }
             if let notes = txn.notes {
                 Section("Notes") { Text(notes).textSelection(.enabled) }
             }

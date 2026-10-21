@@ -336,6 +336,51 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         if let holdingWriteError { throw holdingWriteError }
         lock.withLock { closedHoldings.append(holdingCode) }
     }
+    /// `holding_detail`'s answer; nil throws (offline).
+    var holdingDetailFixture: HoldingDetail?
+    /// Each period's `holding_returns`; a missing period throws (offline).
+    var returnsFixtures: [ReturnsPeriod: HoldingReturns] = [:]
+    var savingsFixture: [SavingByHolding] = []
+    var savingsError: LedgerAPIError?
+    private(set) var returnsCalls: [ReturnsPeriod] = []
+    private(set) var recordedValues: [ValueSubmission] = []
+    private(set) var addedFlows: [FlowSubmission] = []
+    private(set) var removedFlows: [String] = []
+    private(set) var links: [(txn: String, holding: String?)] = []
+    private(set) var savingsRanges: [(from: CalendarDay, to: CalendarDay, account: String?)] = []
+    func holdingDetail(profileCode: String, holdingCode: String) async throws -> HoldingDetail {
+        count("holdingDetail")
+        guard let fixture = lock.withLock({ holdingDetailFixture }) else { throw LedgerAPIError.network("-1009") }
+        return fixture
+    }
+    func holdingReturns(profileCode: String, period: ReturnsPeriod) async throws -> HoldingReturns {
+        lock.withLock { returnsCalls.append(period) }
+        guard let fixture = lock.withLock({ returnsFixtures[period] }) else { throw LedgerAPIError.network("-1009") }
+        return fixture
+    }
+    func recordHoldingValue(profileCode: String, value: ValueSubmission) async throws {
+        if let holdingWriteError { throw holdingWriteError }
+        lock.withLock { recordedValues.append(value) }
+    }
+    func addHoldingFlow(profileCode: String, flow: FlowSubmission) async throws {
+        if let holdingWriteError { throw holdingWriteError }
+        lock.withLock { addedFlows.append(flow) }
+    }
+    func removeHoldingFlow(profileCode: String, flowCode: String) async throws {
+        if let holdingWriteError { throw holdingWriteError }
+        lock.withLock { removedFlows.append(flowCode) }
+    }
+    func linkTransaction(profileCode: String, txnCode: String, holdingCode: String?) async throws {
+        if let holdingWriteError { throw holdingWriteError }
+        lock.withLock { links.append((txnCode, holdingCode)) }
+    }
+    func cashFlowSavings(profileCode: String, from: CalendarDay, to: CalendarDay,
+                         accountCode: String?) async throws -> [SavingByHolding] {
+        count("cashFlowSavings")
+        lock.withLock { savingsRanges.append((from, to, accountCode)) }
+        if let savingsError { throw savingsError }
+        return savingsFixture
+    }
     // MARK: Analysis (PAR-12): scripted answers, and each call's arguments
     var dailyRows: [DailySpend] = []
     var hourRows: [HourWeekdaySpend] = []

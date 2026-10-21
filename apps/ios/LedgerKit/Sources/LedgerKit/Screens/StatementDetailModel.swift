@@ -92,6 +92,12 @@ public final class StatementDetailModel: TransactionEditing {
         await load(profileCode: profileCode)
     }
 
+    /// Links or unlinks the payment and reloads the statement.
+    public func saveLink(_ txn: LedgerTransaction, holdingCode: String?, profileCode: String) async throws {
+        try await api.linkTransaction(profileCode: profileCode, txnCode: txn.txnCode, holdingCode: holdingCode)
+        await load(profileCode: profileCode)
+    }
+
     /// P0002: the statement was superseded or removed since the list loaded.
     nonisolated static func message(for error: any Error) -> String {
         if case .server(_, "P0002", _)? = error as? LedgerAPIError {

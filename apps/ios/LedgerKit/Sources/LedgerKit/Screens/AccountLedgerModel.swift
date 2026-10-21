@@ -119,6 +119,12 @@ public final class AccountLedgerModel: TransactionEditing {
         await written(profileCode: profileCode)
     }
 
+    /// Links or unlinks the payment; the month re-reads (its flow becomes or stops being saving).
+    public func saveLink(_ txn: LedgerTransaction, holdingCode: String?, profileCode: String) async throws {
+        try await api.linkTransaction(profileCode: profileCode, txnCode: txn.txnCode, holdingCode: holdingCode)
+        await written(profileCode: profileCode)
+    }
+
     /// A category (and so a flow) or balance changed: the month and the chart re-read.
     private func written(profileCode: String) async {
         await load(profileCode: profileCode)

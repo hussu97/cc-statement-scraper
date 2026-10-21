@@ -26,6 +26,8 @@ public final class ActivityModel: TransactionEditing {
     /// Bulk select (PAR-11): owners tick rows, then Categorise or Exclude / Include them.
     public let selection: ActivitySelection
     public var errorMessage: String?
+    /// Runs after a payment is linked or unlinked, with the ledger: Investments and cash flow reload.
+    @ObservationIgnored public var onLinkChange: (@MainActor (String) async -> Void)?
 
     private let api: any LedgerAPI
     /// The ledger and filters the rows on screen were loaded for.
@@ -195,6 +197,14 @@ public final class ActivityModel: TransactionEditing {
         try await api.setTransactionCategory(txnCode: txn.txnCode, categoryCode: categoryCode,
                                              applyToMerchant: wholeMerchant)
         await reread(Self.affectedCodes(of: txn, wholeMerchant: wholeMerchant, in: rows), profileCode: profileCode)
+    }
+
+    /// Links or unlinks the payment, patches the row (it leaves or rejoins spend) and tells the
+    /// screens that show investments and cash flow.
+    public func saveLink(_ txn: LedgerTransaction, holdingCode: String?, profileCode: String) async throws {
+        try await api.linkTransaction(profileCode: profileCode, txnCode: txn.txnCode, holdingCode: holdingCode)
+        await reread([txn.txnCode], profileCode: profileCode)
+        await onLinkChange?(profileCode)
     }
 
     /// Saves a note or the exclude flag, then patches the row in place.

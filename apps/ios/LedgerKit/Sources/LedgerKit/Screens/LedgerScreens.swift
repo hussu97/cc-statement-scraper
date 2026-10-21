@@ -69,13 +69,26 @@ public final class LedgerScreens {
             await wealthOverview.refresh(profileCode: code)
             await accountLedgers.refresh(profileCode: code)
         }
-        // A holding added, edited or closed changes net worth.
-        investments.onChange = { [wealthOverview] code in await wealthOverview.refresh(profileCode: code) }
-        // A transfer filed in a ledger moves cash flow (and Activity, when it became a purchase).
-        accountLedgers.onChange = { [wealthOverview, cash, activity] code in
+        // A holding added, edited or closed, a flow or a value changes net worth; a flow paid by a
+        // transaction (unlinked there) moves cash flow, Activity's spend and the ledgers.
+        investments.onChange = { [wealthOverview, cash, activity, accountLedgers] code in
             await wealthOverview.refresh(profileCode: code)
             await cash.refresh(profileCode: code)
             await activity.refresh(profileCode: code)
+            await accountLedgers.refresh(profileCode: code)
+        }
+        // A payment linked from Activity is saving: investments, cash flow and net worth move.
+        activity.onLinkChange = { [investments, cash, wealthOverview] code in
+            await investments.refresh(profileCode: code)
+            await cash.refresh(profileCode: code)
+            await wealthOverview.refresh(profileCode: code)
+        }
+        // A transfer filed in a ledger moves cash flow (and Activity, when it became a purchase).
+        accountLedgers.onChange = { [wealthOverview, cash, activity, investments] code in
+            await wealthOverview.refresh(profileCode: code)
+            await cash.refresh(profileCode: code)
+            await activity.refresh(profileCode: code)
+            await investments.refresh(profileCode: code)
         }
         anomalies.onChange = { [overview, feed] code in
             await overview.refresh(profileCode: code)
@@ -116,7 +129,7 @@ public final class LedgerScreens {
         let reviews = !tables.isDisjoint(with: ["transactions", "sms_messages", "documents"])
         let (overview, activity, insights, budgets, statements, review) = (overview, activity, insights, budgets, statements, review)
         let (feed, anomalies, cash) = (feed, anomalies, cash)
-        let (wealthOverview, accountLedgers) = (wealthOverview, accountLedgers)
+        let (wealthOverview, accountLedgers, investments) = (wealthOverview, accountLedgers, investments)
         await withDiscardingTaskGroup { group in
             if money { group.addTask { await overview.refresh(profileCode: code) } }
             if money { group.addTask { await feed.refresh(profileCode: code) } }
@@ -125,6 +138,8 @@ public final class LedgerScreens {
             if money { group.addTask { await wealthOverview.refresh(profileCode: code) } }
             if money { group.addTask { await accountLedgers.refresh(profileCode: code) } }
             if txns { group.addTask { await anomalies.refresh(profileCode: code) } }
+            // A new payment may be linked to a holding by its rule.
+            if txns { group.addTask { await investments.refresh(profileCode: code) } }
             if txns {
                 group.addTask { await activity.refresh(profileCode: code) }
                 group.addTask { await insights.refresh(profileCode: code) }
@@ -137,9 +152,9 @@ public final class LedgerScreens {
 
     /// Back in the foreground: every opened tab, Insights included.
     public func refreshAll() async {
+        // Prices move every 6 hours, not with Realtime: the foreground re-reads them, with the
+        // transactions (a payment linked by a holding's rule).
         await refresh(after: LiveUpdates.tables)
-        // Prices move every 6 hours, not with Realtime: the foreground re-reads them.
-        if let code = activeProfile { await investments.refresh(profileCode: code) }
     }
 
     private func clear() {

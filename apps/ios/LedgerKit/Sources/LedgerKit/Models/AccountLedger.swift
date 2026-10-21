@@ -164,6 +164,9 @@ public struct AccountLedgerRow: Decodable, Sendable, Hashable, Identifiable {
     public let hasSms: Bool
     public let transferBankCode: String?
     public let transferCardLast4: String?
+    /// The investment the row is linked to; nil when it isn't.
+    public let holdingCode: String?
+    public let holdingName: String?
 
     public init(txnCode: String, txnDate: CalendarDay, txnAt: Date? = nil, status: String = "posted",
                 kind: String = "transfer_out", direction: String = "debit", description: String = "",
@@ -171,7 +174,7 @@ public struct AccountLedgerRow: Decodable, Sendable, Hashable, Identifiable {
                 amountOriginal: Decimal? = nil, currencyOriginal: String? = nil, categoryCode: String? = nil,
                 categoryName: String? = nil, categoryColor: String? = nil, flow: String?, balanceAfter: Decimal?,
                 notes: String? = nil, hasSms: Bool = false, transferBankCode: String? = nil,
-                transferCardLast4: String? = nil) {
+                transferCardLast4: String? = nil, holdingCode: String? = nil, holdingName: String? = nil) {
         self.txnCode = txnCode
         self.txnDate = txnDate
         self.txnAt = txnAt
@@ -193,12 +196,14 @@ public struct AccountLedgerRow: Decodable, Sendable, Hashable, Identifiable {
         self.hasSms = hasSms
         self.transferBankCode = transferBankCode
         self.transferCardLast4 = transferCardLast4
+        self.holdingCode = holdingCode
+        self.holdingName = holdingName
     }
 
     enum CodingKeys: String, CodingKey {
         case txnCode, txnDate, txnAt, status, kind, direction, description, merchantCode, merchantName, amount
         case amountOriginal, currencyOriginal, categoryCode, categoryName, categoryColor, flow, balanceAfter
-        case notes, hasSms, transferBankCode, transferCardLast4
+        case notes, hasSms, transferBankCode, transferCardLast4, holdingCode, holdingName
     }
 
     public init(from decoder: any Decoder) throws {
@@ -224,6 +229,8 @@ public struct AccountLedgerRow: Decodable, Sendable, Hashable, Identifiable {
         hasSms = try c.decodeIfPresent(Bool.self, forKey: .hasSms) ?? false
         transferBankCode = try c.decodeIfPresent(String.self, forKey: .transferBankCode)
         transferCardLast4 = try c.decodeIfPresent(String.self, forKey: .transferCardLast4)
+        holdingCode = try c.decodeIfPresent(String.self, forKey: .holdingCode)
+        holdingName = try c.decodeIfPresent(String.self, forKey: .holdingName)
     }
 
     public var isCredit: Bool { direction == "credit" }
@@ -260,8 +267,13 @@ public struct AccountLedgerRow: Decodable, Sendable, Hashable, Identifiable {
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
-    /// The flow chip (`CashFlowFlow`); nil for a row with no flow.
-    public var flowLabel: String? { flow.map(CashFlowFlow.chipLabel) }
+    /// The flow chip (`CashFlowFlow`), naming the investment a linked row went to:
+    /// `"Saving · RL360 plan"`; nil for a row with no flow.
+    public var flowLabel: String? {
+        guard let flow else { return holdingName.map { "Saving · \($0)" } }
+        let label = CashFlowFlow.chipLabel(flow)
+        return holdingName.map { "\(label) · \($0)" } ?? label
+    }
     public var flowTone: Tone { flow.map(CashFlowFlow.tone) ?? .neutral }
 }
 

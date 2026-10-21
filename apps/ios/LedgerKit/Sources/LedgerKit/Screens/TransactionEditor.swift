@@ -18,6 +18,8 @@ public protocol TransactionEditing: AnyObject {
     func saveCategory(_ txn: LedgerTransaction, to categoryCode: String?, applyToMerchant: Bool,
                       profileCode: String) async throws
     func saveEdit(_ txn: LedgerTransaction, _ edit: TransactionEdit, profileCode: String) async throws
+    /// Links the payment to a holding, or unlinks it (nil) for good (`link_transaction`).
+    func saveLink(_ txn: LedgerTransaction, holdingCode: String?, profileCode: String) async throws
 }
 
 /// The transaction sheet (IOS-18): category with search and "None", the

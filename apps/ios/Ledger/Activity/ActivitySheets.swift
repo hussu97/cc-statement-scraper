@@ -3,7 +3,7 @@ import SwiftUI
 
 /// The owner's transaction sheet (IOS-18): the category, searchable, with
 /// "None" to clear a manual choice and merchant-wide by default; exclude from
-/// spend; notes; then the details a viewer's sheet shows too (PAR-2).
+/// spend; link to an investment; notes; then the details a viewer's sheet shows too (PAR-2).
 /// `TransactionEditor` and `TransactionDetailModel` decide; viewers get
 /// `TransactionDetailSheet` instead.
 struct CategorySheet: View {
@@ -11,6 +11,8 @@ struct CategorySheet: View {
     /// Held as @State: the parent rebuilds this view whenever Activity re-renders (day totals,
     /// an edit, Realtime); a fresh model there would lose its loaded evidence and SMS (batch 7 audit).
     @State private var detail: TransactionDetailModel
+    /// Link to investment, saved through the screen that opened the sheet.
+    @State private var link: TransactionLinkModel
     @Environment(\.dismiss) private var dismiss
 
     init(transaction: LedgerTransaction, categories: [FilterMeta.CategoryOption], profileCode: String,
@@ -18,6 +20,7 @@ struct CategorySheet: View {
         _editor = State(initialValue: TransactionEditor(transaction: transaction, categories: categories,
                                                         profileCode: profileCode, target: target))
         _detail = State(initialValue: detail)
+        _link = State(initialValue: detail.linker(target: target))
     }
 
     var body: some View {
@@ -26,6 +29,8 @@ struct CategorySheet: View {
                 if editor.showsDetails {
                     Section { TransactionDetailHeader(txn: transaction) }
                     TransactionDetailSections(model: detail) { EmptyView() }
+                    // Above the long category list, so a payment to an investment is found at once.
+                    InvestmentLinkSection(model: link)
                 }
                 categorySection
                 if editor.showsDetails {
