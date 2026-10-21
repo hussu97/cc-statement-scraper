@@ -361,6 +361,18 @@ export async function processParseMessage(svc: Db, msg: QueueMessage): Promise<P
     });
   }
   await queueDelete(svc, PARSE_QUEUE, msg.msg_id);
+  // Lines kept only by direction: one event per document, shapes only, so new layouts can be
+  // taught to the parser from production (tasks/todo.md §9).
+  const unknown = unrecognisedLines(outcome.payload);
+  if (unknown.length) {
+    const bank = typeof outcome.payload.bank_code === "string" ? outcome.payload.bank_code : doc.bank_code;
+    captureMessage("statement lines with a description the parser does not know", {
+      level: "warning",
+      tags: { ...tags, bank_code: bank ?? undefined, unrecognised_lines: unknown.length },
+      extra: { parser_version: outcome.payload.parser_version, lines: unknown.slice(0, 50) },
+      fingerprint: ["worker", "unrecognised_lines", bank ?? ""],
+    });
+  }
   // Ingest warnings are statement kind/date notes (e.g. "statement 2026-01-28 skipped: no card
   // number and no transaction rows"), never amounts or descriptions.
   const warnings = ingestWarnings(ing.data);
@@ -387,7 +399,11 @@ export function parsedEvent(payload: Record<string, unknown>): DocumentEvent {
   const bank = typeof payload.bank_code === "string" && /^[A-Z]{2,10}$/.test(payload.bank_code)
     ? payload.bank_code
     : null;
-  const kind = payload.document_kind === "history_pdf" ? "transaction history" : "statement";
+  const kind = payload.document_kind === "history_pdf"
+    ? "transaction history"
+    : payload.document_kind === "account_statement_pdf"
+    ? "statement of accounts"
+    : "statement";
   let message = `Read the ${bank ? `${bank} ` : ""}${kind}: ${plural(statements.length, "statement", "statements")}, ${
     plural(lines, "line", "lines")
   }.`;
@@ -405,6 +421,29 @@ export function parsedEvent(payload: Record<string, unknown>): DocumentEvent {
       parser_version: typeof payload.parser_version === "string" ? payload.parser_version.slice(0, 40) : null,
     },
   };
+}
+
+// A masked description (parse-v1 `metadata.unrecognised_lines[].shape`): a short leading
+// transaction code, then `w` per word and `#` per number. Anything else is replaced, so no
+// statement text can reach Sentry even if a parser sends more than it should (CLAUDE.md §6).
+const SHAPE_RE = /^(?:[A-Z*&/-]{1,12}|[w#])(?: [w#]){0,11}$/;
+
+export interface UnrecognisedLine {
+  shape: string;
+  direction: "debit" | "credit" | "?";
+}
+
+/** The lines a parser kept by direction only because their description had no known shape. */
+export function unrecognisedLines(payload: Record<string, unknown>): UnrecognisedLine[] {
+  const statements = Array.isArray(payload.statements) ? payload.statements as Record<string, unknown>[] : [];
+  return statements.flatMap((s) => {
+    const meta = s?.metadata && typeof s.metadata === "object" ? s.metadata as Record<string, unknown> : {};
+    const rows = Array.isArray(meta.unrecognised_lines) ? meta.unrecognised_lines as Record<string, unknown>[] : [];
+    return rows.map((r) => ({
+      shape: typeof r?.shape === "string" && SHAPE_RE.test(r.shape) ? r.shape : "?",
+      direction: r?.direction === "debit" || r?.direction === "credit" ? r.direction : "?",
+    }));
+  });
 }
 
 /** The `warnings` array of ingest_parsed_document's result (strings only, capped). */
