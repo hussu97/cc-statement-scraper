@@ -107,11 +107,18 @@ export const wealthAccountRoute = createRoute({
   component: lazyRouteComponent(() => import("@/routes/wealth-account"), "AccountPage"),
 });
 
-/** Investments: gold and silver for now (holdings, prices, value and gains). */
+/** Investments: metals, plans, broker accounts, shares and funds, deposits (values, gains, returns). */
 const wealthInvestmentsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/wealth/investments",
   component: lazyRouteComponent(() => import("@/routes/wealth-investments"), "InvestmentsPage"),
+});
+
+/** One holding: value, cost, income, gain, returns, flows (with linked payments) and value history. */
+export const wealthHoldingRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/wealth/investments/$holdingCode",
+  component: lazyRouteComponent(() => import("@/routes/wealth-holding"), "HoldingPage"),
 });
 
 /** Each month's money in and out. `?month=` is a first-of-month (this month when absent); `?account=` narrows to one bank account. */
@@ -169,7 +176,7 @@ const routeTree = rootRoute.addChildren([
   signInRoute,
   welcomeRoute,
   privacyRoute,
-  appRoute.addChildren([overviewRoute, activityRoute, insightsRoute, categoryRoute, cashFlowRedirectRoute, wealthRoute, wealthAccountsRoute, wealthAccountRoute, wealthInvestmentsRoute, wealthCashFlowRoute, budgetsRoute, cardsRoute, statementRoute, reviewRoute, rulesRoute, settingsRoute]),
+  appRoute.addChildren([overviewRoute, activityRoute, insightsRoute, categoryRoute, cashFlowRedirectRoute, wealthRoute, wealthAccountsRoute, wealthAccountRoute, wealthInvestmentsRoute, wealthHoldingRoute, wealthCashFlowRoute, budgetsRoute, cardsRoute, statementRoute, reviewRoute, rulesRoute, settingsRoute]),
 ]);
 
 export const router = createRouter({ routeTree, defaultPreload: "intent", scrollRestoration: true });

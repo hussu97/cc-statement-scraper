@@ -38,6 +38,7 @@ import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
 import { useToast } from "@/components/ui/toast";
 import { CategoryPicker, EvidenceBadge, Money, StatusBadge, TxnAmount } from "@/components/ledger";
 import { CardRef } from "@/components/bank-logo";
+import { HoldingChip, HoldingLinkControl } from "@/components/wealth/link-holding";
 
 const SOURCE_LABEL: Record<string, string> = {
   manual: "Your choice",
@@ -174,6 +175,7 @@ function DrawerBody({ t, meta }: { t: TxnRow; meta: FilterMeta | undefined }) {
           {amount.awaitingFx && <Badge tone="warn">Awaiting FX rate</Badge>}
           {t.amount_aed_is_estimate && <Badge tone="warn">AED estimated</Badge>}
           {t.exclude_from_spend && <Badge tone="info">excluded from spend</Badge>}
+          <HoldingChip name={t.holding_name} />
         </div>
       </div>
 
@@ -208,6 +210,9 @@ function DrawerBody({ t, meta }: { t: TxnRow; meta: FilterMeta | undefined }) {
             />
             {t.category_source && <span className="text-[11px] text-subtle">{SOURCE_LABEL[t.category_source] ?? t.category_source}</span>}
           </div>
+        </Row>
+        <Row label="Investment">
+          <HoldingLinkControl profileCode={profile_code} isOwner={isOwner} txn={{ ...t, txn_code: t.txn_code! }} />
         </Row>
         {t.merchant_code && <MerchantContextRow merchantCode={t.merchant_code} />}
         {fx && (

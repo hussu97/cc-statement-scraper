@@ -29,11 +29,11 @@ export function FormError({ error }: { error: string | null }) {
   );
 }
 
-export function FormFooter({ onCancel, pending, submit }: { onCancel: () => void; pending: boolean; submit: string }) {
+export function FormFooter({ onCancel, pending, submit, cancel = "Cancel" }: { onCancel: () => void; pending: boolean; submit: string; cancel?: string }) {
   return (
     <div className="-mx-5 -mb-4 flex justify-end gap-2 border-t border-border px-5 py-3">
       <Button variant="ghost" onClick={onCancel}>
-        Cancel
+        {cancel}
       </Button>
       <Button type="submit" variant="primary" loading={pending}>
         {submit}

@@ -17,6 +17,7 @@ import {
   holdingsPoints,
   investmentNotes,
   investmentRange,
+  partialDaysNote,
   normalizeCost,
   parseDecimal,
   pricePoints,
@@ -131,8 +132,20 @@ describe("summary notes", () => {
 
   it("names missing and stale prices, and holdings with no cost", () => {
     const v = { complete: false, costs_complete: false, stale_count: 2, holdings: [h(null, null), h("10", null), h("10", "5")] };
-    expect(investmentNotes(v)).toEqual(["1 holding has no price yet", "2 prices are over 3 days old"]);
+    expect(investmentNotes(v)).toEqual(["1 holding has no value yet", "2 values are out of date"]);
     expect(gainNote(v)).toBe("2 holdings have no cost: the gain counts the rest");
+  });
+});
+
+describe("chart: partial days", () => {
+  it("keeps a partial day's value and notes it under the chart", () => {
+    const pts = holdingsPoints([
+      { date: "2026-10-20", value_aed: "100.00", cost_aed: "90.00", complete: false },
+      { date: "2026-10-21", value_aed: "120.00", cost_aed: "90.00", complete: true },
+    ]);
+    expect(pts.map((p) => [p.value, p.complete])).toEqual([[100, false], [120, true]]);
+    expect(partialDaysNote(pts)).toMatch(/^Some holdings had no value on some days/);
+    expect(partialDaysNote(holdingsPoints([{ date: "2026-10-21", value_aed: "1", cost_aed: null }]))).toBeNull();
   });
 });
 
@@ -143,8 +156,8 @@ describe("chart", () => {
 
   it("keeps a null day a gap, never a zero", () => {
     expect(holdingsPoints([{ date: "2026-10-01", value_aed: null, cost_aed: "100.00" }, { date: "2026-10-02", value_aed: "120.50", cost_aed: "100.00" }])).toEqual([
-      { date: "2026-10-01", value: null, cost: 100 },
-      { date: "2026-10-02", value: 120.5, cost: 100 },
+      { date: "2026-10-01", value: null, cost: 100, complete: true },
+      { date: "2026-10-02", value: 120.5, cost: 100, complete: true },
     ]);
     expect(pricePoints([{ date: "2026-10-01", aed_per_gram: null }, { date: "2026-10-02", aed_per_gram: "489.500000" }])).toEqual([
       { date: "2026-10-01", price: null },

@@ -3,13 +3,15 @@ import { useActiveProfile } from "@/data/profile";
 import { BankAccountsCard } from "@/components/cash/bank-accounts";
 import { MonthCashCard, NetWorthHero, NetWorthHistoryCard, OwedCardsCard, WealthInsightsCard } from "@/components/wealth/wealth-cards";
 import { InvestmentsCard } from "@/components/wealth/investments";
+import { AllocationCard } from "@/components/wealth/allocation";
 
-/** Wealth mode's home: net worth, its history, accounts and cards, investments, this month's cash flow, wealth insights. */
+/** Wealth mode's home: net worth and its allocation, its history, accounts and cards, investments, this month's cash flow, wealth insights. */
 export function WealthOverviewPage() {
   const { profile_code: profileCode, isOwner } = useActiveProfile();
   return (
     <div className="flex flex-col gap-6">
       <NetWorthHero profileCode={profileCode} />
+      <AllocationCard profileCode={profileCode} />
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
         <NetWorthHistoryCard profileCode={profileCode} />
         <WealthInsightsCard profileCode={profileCode} />
