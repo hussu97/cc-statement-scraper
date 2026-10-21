@@ -886,6 +886,10 @@ Deploy Supabase job failed at `supabase migration fetch --linked` (investigate; 
   select public.resolve_review('<rev_one_of_them>', jsonb_build_object('supersede', '<stm_stale>'));
   select public.resolve_review('<rev_each_other>', '{"dismiss": true}'::jsonb);
   ```
+- **Investment images:** migration `20261021070429` creates the public `investment-images`
+  bucket; the five photos in `assets/investments/` are uploaded by hand with
+  `scripts/brand/upload-investment-images.sh` (`SUPABASE_URL` + `SUPABASE_SECRET_KEY` from
+  `.env.cutover`; a production action). Without them the apps show a plain placeholder.
 - **Bank logos:** migration `20261010000100` creates the public `bank-logos` bucket and sets
   `banks.logo_path = '<bank_code>.png'`; the images themselves are uploaded by hand (no client
   can write the bucket). From the repo root, after a yes in chat (it writes to production):

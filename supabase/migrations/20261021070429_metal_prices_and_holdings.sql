@@ -18,6 +18,9 @@
 --    holdings_valuation(profile): value, cost, gain and %, the change since the price 24 hours
 --    earlier, each price's age, totals. holdings_value_series and metal_price_series for charts.
 -- 4. Net worth = cash + metals − owed; net_worth_snapshots gains holdings_aed.
+-- 5. Each holding has a form (bar, coin, jewellery); holdings_valuation returns image_path,
+--    `<metal>-<form>.jpg` in the public `investment-images` bucket (assets/investments/,
+--    uploaded with scripts/brand/upload-investment-images.sh, like the bank logos).
 -- Money and rates cross the wire as decimal strings (§1.3); every figure is computed here (§2.2).
 
 -- ── 1. metal_prices ──────────────────────────────────────────────────────────
@@ -156,6 +159,7 @@ create table public.holdings (
   karat int check (karat in (24, 22, 21, 18)),
   fineness int check (fineness in (9999, 9995, 9990, 9950)),   -- 24K bars, parts per 10,000
   purity numeric(5,4) check (purity > 0 and purity <= 1),
+  form text not null default 'bar' check (form in ('bar', 'coin', 'jewellery')),
   cost_aed numeric(14,2) check (cost_aed >= 0),
   acquired_on date,
   notes text check (length(notes) <= 500),
@@ -165,7 +169,7 @@ create table public.holdings (
   updated_at timestamptz not null default now(),
   constraint holdings_metal_fields_check check (
     (metal = 'gold' and karat is not null and purity is null and (fineness is null or karat = 24))
-    or (metal = 'silver' and karat is null and fineness is null and purity is not null))
+    or (metal = 'silver' and karat is null and fineness is null and purity is not null and form <> 'jewellery'))
 );
 create index holdings_profile_idx on public.holdings(profile_code, status);
 comment on table public.holdings is
@@ -179,12 +183,13 @@ grant select on public.holdings to authenticated;
 grant all on public.holdings to service_role;
 
 -- Owner: add (p_holding_code null) or edit a holding. Gold defaults to 24K (999.9 when 24K),
--- silver to 999. Amounts are decimal strings. Returns the holding_code.
+-- silver to 999; the form to a bar (gold below 24K: jewellery). Amounts are decimal strings.
+-- Returns the holding_code.
 create function public.save_holding(
   p_profile_code text, p_name text, p_metal text, p_grams text,
   p_karat int default null, p_purity text default null, p_cost_aed text default null,
   p_acquired_on date default null, p_notes text default null, p_holding_code text default null,
-  p_fineness int default null
+  p_fineness int default null, p_form text default null
 )
 returns text
 language plpgsql
@@ -196,8 +201,12 @@ declare
   v_grams numeric;
   v_purity numeric;
   v_cost numeric;
+  v_form text := coalesce(p_form, case when p_metal = 'gold' and coalesce(p_karat, 24) <> 24 then 'jewellery' else 'bar' end);
 begin
   perform private.assert_member(p_profile_code, true);
+  if v_form not in ('bar', 'coin', 'jewellery') or (p_metal = 'silver' and v_form = 'jewellery') then
+    raise exception 'form must be bar, coin or (gold only) jewellery' using errcode = '22023';
+  end if;
   if p_metal is null or p_metal not in ('gold', 'silver') then
     raise exception 'metal must be gold or silver' using errcode = '22023';
   end if;
@@ -218,12 +227,12 @@ begin
     raise exception 'acquired_on cannot be in the future' using errcode = '22023';
   end if;
   if p_holding_code is null then
-    insert into public.holdings (profile_code, name, metal, grams, karat, fineness, purity, cost_aed, acquired_on, notes, created_by)
+    insert into public.holdings (profile_code, name, metal, grams, karat, fineness, purity, form, cost_aed, acquired_on, notes, created_by)
     values (p_profile_code, btrim(p_name), p_metal, v_grams,
             case when p_metal = 'gold' then coalesce(p_karat, 24) end,
             case when p_metal = 'gold' and coalesce(p_karat, 24) = 24 then coalesce(p_fineness, 9999) end,
             case when p_metal = 'silver' then coalesce(v_purity, 0.999) end,
-            v_cost, p_acquired_on, nullif(btrim(coalesce(p_notes, '')), ''), auth.uid())
+            v_form, v_cost, p_acquired_on, nullif(btrim(coalesce(p_notes, '')), ''), auth.uid())
     returning holding_code into v_code;
   else
     update public.holdings
@@ -231,7 +240,7 @@ begin
         karat = case when p_metal = 'gold' then coalesce(p_karat, 24) end,
         fineness = case when p_metal = 'gold' and coalesce(p_karat, 24) = 24 then coalesce(p_fineness, 9999) end,
         purity = case when p_metal = 'silver' then coalesce(v_purity, 0.999) end,
-        cost_aed = v_cost, acquired_on = p_acquired_on, notes = nullif(btrim(coalesce(p_notes, '')), '')
+        form = v_form, cost_aed = v_cost, acquired_on = p_acquired_on, notes = nullif(btrim(coalesce(p_notes, '')), '')
     where holding_code = p_holding_code and profile_code = p_profile_code and status = 'active'
     returning holding_code into v_code;
     if v_code is null then
@@ -241,9 +250,9 @@ begin
   return v_code;
 end;
 $$;
-comment on function public.save_holding(text, text, text, text, int, text, text, date, text, text, int) is
+comment on function public.save_holding(text, text, text, text, int, text, text, date, text, text, int, text) is
   'Owner: adds or edits a gold/silver holding (grams; karat and 24K fineness, or silver purity; cost in AED as decimal strings).';
-grant execute on function public.save_holding(text, text, text, text, int, text, text, date, text, text, int)
+grant execute on function public.save_holding(text, text, text, text, int, text, text, date, text, text, int, text)
   to authenticated, service_role;
 
 -- Owner: a holding that was sold or given away leaves the valuation (kept, never deleted).
@@ -364,6 +373,7 @@ begin
       select jsonb_agg(jsonb_build_object(
                'holding_code', r.holding_code, 'name', r.name, 'metal', r.metal,
                'grams', r.grams::text, 'karat', r.karat, 'fineness', r.fineness, 'purity', r.purity::text,
+               'form', r.form, 'image_path', r.metal || '-' || r.form || '.jpg',
                'cost_aed', r.cost_aed::text, 'acquired_on', r.acquired_on, 'notes', r.notes,
                'quote', r.quote, 'aed_per_gram', r.aed_per_gram::text, 'price_as_of', r.price_as_of,
                'price_is_stale', coalesce(r.price_is_stale, false),
@@ -517,5 +527,13 @@ begin
 end;
 $$;
 
--- ── 5. Schedule ──────────────────────────────────────────────────────────────
+-- ── 5. Images ────────────────────────────────────────────────────────────────
+-- Public read (the public object endpoint, no RLS); no client policy writes it, so only the
+-- service role (the upload script) does. Clients build
+--   <SUPABASE_URL>/storage/v1/object/public/investment-images/<image_path>
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('investment-images', 'investment-images', true, 1048576, array['image/jpeg', 'image/png', 'image/webp'])
+on conflict (id) do nothing;
+
+-- ── 6. Schedule ──────────────────────────────────────────────────────────────
 select cron.schedule('ledger-metal-prices', '7 */6 * * *', $$select private.invoke_edge('metal-prices')$$);

@@ -627,7 +627,9 @@ karat's rate, a 24K bar of 999.5, 999 or 995 times `private.gold_fineness_factor
 999.9, hardcoded); silver is grams × the retail rate × purity / 0.999. `holdings_valuation`
 adds gain vs cost and the 24-hour change; `holdings_value_series` / `metal_price_series` feed
 the charts. Net worth is cash + metals − owed, and snapshots carry `holdings_aed`. A price older
-than 3 days is stale and makes the metals incomplete.
+than 3 days is stale and makes the metals incomplete. Each holding has a `form` (bar, coin,
+jewellery; silver has no jewellery), and the valuation returns `image_path` (`<metal>-<form>.jpg`)
+in the public `investment-images` bucket, served like the bank logos (`assets/investments/`).
 
 There is likewise **one definition of what a card owes**: `public.v_account_balances`
 (`security_invoker`). A sum of transactions cannot know the balance carried in before the first
