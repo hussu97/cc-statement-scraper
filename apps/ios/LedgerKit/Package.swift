@@ -15,7 +15,9 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/supabase/supabase-swift", from: "2.55.3"),
-        .package(url: "https://github.com/getsentry/sentry-cocoa", from: "9.30.1"),
+        // 9.31.0 at least: older SDKs started from `LedgerApp.init` took a background launch (an SMS
+        // intent) for an active app, and reported the suspension as an hours-long app hang.
+        .package(url: "https://github.com/getsentry/sentry-cocoa", from: "9.31.0"),
     ],
     targets: [
         .target(

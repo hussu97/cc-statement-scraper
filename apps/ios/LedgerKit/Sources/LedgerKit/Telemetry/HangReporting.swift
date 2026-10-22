@@ -11,6 +11,10 @@ import Foundation
 ///   26 sent one from a double-tap in a text field on an iOS beta (UIKit text selection,
 ///   `NSClassFromString`, InputAnalytics): system work we can neither see nor fix.
 /// * The App Intent, the Share Extension and the widgets run headless or briefly: no hang tracking.
+/// * A background launch is not a foreground hang. Sentry starts in `LedgerApp.init`, before
+///   UIApplication exists; before sentry-cocoa 9.31.0 an SMS intent waking the app made the SDK
+///   treat the process as active, and the next resume reported the suspension as a hang
+///   ("between 22882.6 and 22883.4 seconds", 2026-10-20). `Package.swift` pins 9.31.0 as the floor.
 public struct HangReporting: Equatable, Sendable {
     /// App-hang tracking is on.
     public let enabled: Bool

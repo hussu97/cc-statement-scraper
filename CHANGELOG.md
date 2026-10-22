@@ -1,12 +1,16 @@
 # Changelog
 
-## Gmail sync: a glued secret line (Sentry) — 2026-10-22
+## Gmail sync and a false iOS app hang (Sentry) — 2026-10-22
 
 ### Backend (Supabase)
 
 - **fix** Gmail sync failed from the 2026-10-21 14:09 UTC secrets push on (Sentry 7791531695, `TOKEN_REFRESH_FAILED:invalid_client`): `supabase/functions/.env.production` had `GMAIL_SENTRY_ALERTS=on` glued to the end of `GMAIL_OAUTH_CLIENT_SECRET`, so production got a 57-character secret Google rejects. The file is split again; the fix reaches production with a re-push of the secrets.
 - **fix** `scripts/cutover/set-edge-secrets.sh` refuses a value that contains another `KEY=` (two lines glued by a missing newline), tested by `scripts/cutover/set-edge-secrets_test.sh` (pre-push and CI `tooling`; `shellcheck` now covers `scripts/cutover/`).
 - **change** ops-monitor's `mailbox_errors` title names each mailbox's provider and code and the fix: a refused client (`invalid_client`, `unauthorized_client`) says to check the OAuth client secret, `invalid_grant` to reconnect the mailbox.
+
+### iOS
+
+- **fix** sentry-cocoa 9.31.0 (from 9.30.1). Sentry starts in `LedgerApp.init`, before UIApplication exists, and older SDKs took a process launched in the background by an SMS intent for an active app, so the next resume reported the suspension as a 6-hour "App Hang Fully Blocked" (2026-10-20). 9.31.0 reads the real state at launch; `Package.swift` pins it as the floor.
 
 ### Docs
 
