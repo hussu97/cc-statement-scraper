@@ -13,7 +13,8 @@
 #   - PARSER_URL is not an https:// URL (local Docker/localhost URLs are rejected),
 #   - CRON_SECRET is shorter than 32 characters,
 #   - a local-only key (PARSER_DOCUMENT_BASE_URL, LEDGER_E2E) or a reserved
-#     SUPABASE_* key is present, or a key appears twice.
+#     SUPABASE_* key is present, or a key appears twice,
+#   - a value contains another KEY= (two lines glued by a missing newline).
 # API keys are not needed here: the runtime injects SUPABASE_SECRET_KEYS /
 # SUPABASE_PUBLISHABLE_KEYS. SB_SECRET_KEY / SB_PUBLISHABLE_KEY are optional
 # overrides read by _shared/supabase.ts (custom names cannot start with SUPABASE_).
@@ -119,6 +120,13 @@ while IFS= read -r line || [ -n "$line" ]; do
   fi
   if [[ "$value" == *"<"*">"* ]]; then
     err "$key: placeholder value (<...>)"
+    continue
+  fi
+  # A line appended without a newline before it ends up inside the previous value. On
+  # 2026-10-21 GMAIL_OAUTH_CLIENT_SECRET was pushed with GMAIL_SENTRY_ALERTS=on stuck to its end,
+  # and every Gmail token refresh failed with invalid_client.
+  if [[ "$value" =~ [A-Z][A-Z0-9]+(_[A-Z0-9]+)+= ]]; then
+    err "$key: value contains a KEY= (two lines glued together? put each KEY=value on its own line)"
     continue
   fi
   case "$key" in

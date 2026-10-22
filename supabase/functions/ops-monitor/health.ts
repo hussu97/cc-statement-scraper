@@ -81,6 +81,25 @@ function rows(v: MailboxRow[] | null | undefined): MailboxRow[] {
  * younger than the check interval), then a daily warning while it still holds messages,
  * instead of an error every 15 minutes until someone runs drain_dlq / requeue_dlq.
  */
+/**
+ * The failing mailboxes' provider codes and what fixes them, for the issue title. A refused
+ * client (`invalid_client`, `unauthorized_client`) is the OAuth app's own credentials: fix the
+ * `*_OAUTH_CLIENT_SECRET` function secret, since reconnecting can't help (tasks/lessons.md).
+ * Only `invalid_grant` means re-authorise the mailbox.
+ */
+export function mailboxErrorSummary(errors: MailboxRow[]): string {
+  const labels = [...new Set(errors.map((r) => `${r.provider ?? "mailbox"} ${r.code ?? "unknown"}`))];
+  const codes = errors.map((r) => r.code ?? "");
+  const advice: string[] = [];
+  if (codes.some((c) => /\b(invalid_client|unauthorized_client)\b/.test(c))) {
+    advice.push("check the OAuth client secret (reconnecting won't help)");
+  }
+  if (codes.some((c) => /\binvalid_grant\b/.test(c))) advice.push("reconnect the mailbox");
+  if (advice.length === 0) advice.push("reconnect or check OAuth");
+  const shown = labels.slice(0, 3).join(", ") + (labels.length > 3 ? ", …" : "");
+  return `${shown} (${advice.join("; ")})`;
+}
+
 export function dlqIssue(queue: string, m: QueueMetrics, t: Thresholds): Issue | null {
   const depth = Number(m?.depth ?? 0);
   if (!(depth > 0)) return null;
@@ -194,7 +213,7 @@ export function evaluateHealth(h: OpsHealth, t: Thresholds = DEFAULT_THRESHOLDS)
     issues.push({
       issue: "mailbox_errors",
       level: "error",
-      message: `${errors.length} mailbox(es) failing to sync (reconnect or check OAuth)`,
+      message: `${errors.length} mailbox(es) failing to sync: ${mailboxErrorSummary(errors)}`,
       extra: {
         count: errors.length,
         mailboxes: errors.slice(0, MAX_CODES).map((r) => ({

@@ -120,13 +120,16 @@ jobs:
       - name: shellcheck
         run: |
           shellcheck --version | head -2
-          shellcheck -x scripts/hooks/* scripts/ci/*.sh scripts/install-hooks.sh apps/ios/scripts/*.sh
+          shellcheck -x scripts/hooks/* scripts/ci/*.sh scripts/cutover/*.sh scripts/install-hooks.sh apps/ios/scripts/*.sh
 
       - name: Destructive migration guard tests
         run: python3 scripts/ci/sql_executed_text_test.py
 
       - name: Claude Code guard tests
         run: python3 .claude/hooks/guard_test.py
+
+      - name: Edge secrets push script tests
+        run: bash scripts/cutover/set-edge-secrets_test.sh
 
   # ------------------------------------------------------------------
   # Supabase: append-only migrations, migrations from scratch, pgTAP,
