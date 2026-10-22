@@ -63,9 +63,12 @@ select pg_temp.spend(pg_temp.v('enbd'), pg_temp.v('dining'), 500);
 -- ── the owner creates budgets through RLS ───────────────────────────────────
 select pg_temp.as_user('uid');
 set local role authenticated;
+-- The FAB card budget (100) is below what the card has already spent (140), so it is over pace
+-- on every day of the month: a budget above 140 stops projecting over it late in the month
+-- (200 failed from the 22nd: 140 × 31 / 22 < 200).
 insert into public.budgets (profile_code, account_code, category_code, amount_aed, effective_from) values
   (pg_temp.v('p'), null, null, 1000, pg_temp.v('month')::date),
-  (pg_temp.v('p'), pg_temp.v('fab'), null, 200, pg_temp.v('month')::date),
+  (pg_temp.v('p'), pg_temp.v('fab'), null, 100, pg_temp.v('month')::date),
   (pg_temp.v('p'), pg_temp.v('fab'), pg_temp.v('dining'), 50, pg_temp.v('month')::date),
   (pg_temp.v('p'), null, pg_temp.v('dining'), 800, pg_temp.v('month')::date);
 
