@@ -2,7 +2,14 @@
 // 20261009000400 (SRV-10, SRV-22, DB-25, DB-38).
 
 import { assertEquals } from "jsr:@std/assert@1.0.13";
-import { DEFAULT_THRESHOLDS, dlqIssue, evaluateHealth, type OpsHealth } from "../ops-monitor/health.ts";
+import {
+  DEFAULT_THRESHOLDS,
+  dlqIssue,
+  evaluateHealth,
+  mailboxErrorSummary,
+  type MailboxRow,
+  type OpsHealth,
+} from "../ops-monitor/health.ts";
 
 const q = (depth: number, newest: number | null, total = depth) => ({
   depth,
@@ -109,6 +116,36 @@ Deno.test("dlqIssue alerts when the DLQ grew, then once a day (SRV-22)", () => {
     if (i) fired.push([age, i.level]);
   }
   assertEquals(fired, [[86_400, "warning"]]);
+});
+
+Deno.test("mailbox_errors names the codes and the fix: a refused client is the secret, not the mailbox", () => {
+  const title = (mailbox_errors: MailboxRow[]) =>
+    evaluateHealth({ ...healthy(), mailbox_errors }).find((i) => i.issue === "mailbox_errors")?.message;
+  // 2026-10-21: a glued line in the pushed env file broke GMAIL_OAUTH_CLIENT_SECRET.
+  assertEquals(
+    title([{ mailbox_code: "mbx_g", provider: "gmail", code: "TOKEN_REFRESH_FAILED:invalid_client" }]),
+    "1 mailbox(es) failing to sync: gmail TOKEN_REFRESH_FAILED:invalid_client " +
+      "(check the OAuth client secret (reconnecting won't help))",
+  );
+  assertEquals(
+    title([{ mailbox_code: "mbx_g", provider: "gmail", code: "TOKEN_REFRESH_FAILED:invalid_grant" }]),
+    "1 mailbox(es) failing to sync: gmail TOKEN_REFRESH_FAILED:invalid_grant (reconnect the mailbox)",
+  );
+  assertEquals(
+    title([
+      { mailbox_code: "mbx_o", provider: "outlook", code: "HTTP_401" },
+      { mailbox_code: "mbx_x", code: null },
+    ]),
+    "2 mailbox(es) failing to sync: outlook HTTP_401, mailbox unknown (reconnect or check OAuth)",
+  );
+  assertEquals(
+    mailboxErrorSummary([
+      { mailbox_code: "a", provider: "gmail", code: "TOKEN_REFRESH_FAILED:invalid_client" },
+      { mailbox_code: "b", provider: "outlook", code: "TOKEN_REFRESH_FAILED:invalid_grant" },
+    ]),
+    "gmail TOKEN_REFRESH_FAILED:invalid_client, outlook TOKEN_REFRESH_FAILED:invalid_grant " +
+      "(check the OAuth client secret (reconnecting won't help); reconnect the mailbox)",
+  );
 });
 
 Deno.test("Gmail mailbox and watch issues are skipped while Gmail alerts are off", () => {

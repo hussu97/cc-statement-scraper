@@ -152,5 +152,6 @@ The production project is Supabase `cc-statement-scraper` (ref `<project-ref>`);
 | One SMS OTP pattern on the phone and the server (§5.5) | `supabase/tests/38_sms_otp_filter.test.sql` + LedgerKit `SMSOTPParityTests` (shared fixture) |
 | Background capture intents take only optional parameters and are not App Shortcuts (§5.5) | LedgerKit `BackgroundIntentParameterGuardTests` |
 | No secret files committed (§11.4) | pre-commit secrets guard |
+| Pushed Edge secrets: no placeholder, local-only key or glued `KEY=` in a value (§11.4) | `scripts/cutover/set-edge-secrets.sh`, tested by `set-edge-secrets_test.sh` |
 | Commit author, no co-author trailer (§9) | `prepare-commit-msg`, `commit-msg`, `.claude/hooks/guard.py` |
 | Explicit staging, production confirmation, no secret printing, `legacy`/`backend/` kept (§9, §11) | `.claude/hooks/guard.py` (Claude Code PreToolUse), tested by `guard_test.py` |

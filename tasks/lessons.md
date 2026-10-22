@@ -9,6 +9,7 @@
 
 | When | Lesson |
 |---|---|
+| 2026-10-22 | [A line appended to an env file without a newline glues two secrets: the push script refuses `KEY=` inside a value](#a-line-appended-to-an-env-file-without-a-newline-glues-two-secrets-the-push-script-refuses-key-inside-a-value) |
 | 2026-10-18 | [An automation can't feed an App Shortcut: capture intents are actions only](#an-automation-cant-feed-an-app-shortcut-capture-intents-are-actions-only) |
 | 2026-10-16 | [A background intent's parameters are optional: an empty required one makes iOS ask, and nobody answers](#a-background-intents-parameters-are-optional-an-empty-required-one-makes-ios-ask-and-nobody-answers) |
 | 2026-10-14 | [`invalid_client` is the app's secret, not the mailbox: rotate it, don't reconnect](#invalid_client-is-the-apps-secret-not-the-mailbox-rotate-it-dont-reconnect) |
@@ -44,6 +45,21 @@
 | 2026-10-08 | [Tooling defaults that don't work here: `gh` account, Supabase MCP, `localhost`, pip](#tooling-defaults-that-dont-work-here-gh-account-supabase-mcp-localhost-pip) |
 
 ## Lessons
+
+### A line appended to an env file without a newline glues two secrets: the push script refuses `KEY=` inside a value
+- **What went wrong**: on 2026-10-21 the RL360 work re-pushed every Edge secret from
+  `supabase/functions/.env.production` (14:09 UTC). Its `GMAIL_OAUTH_CLIENT_SECRET` line read
+  `<secret>GMAIL_SENTRY_ALERTS=on`: a line added earlier without a newline before it. The
+  push was the first to carry that line, Google answered `invalid_client` to every Gmail token
+  refresh, and ops-monitor raised "1 mailbox(es) failing to sync (reconnect or check OAuth)"
+  (Sentry 7791531695), a title that pointed at the mailbox, not the secret.
+- **Rule**: a pushed value never contains another `KEY=`; edit env files in an editor. When a
+  provider refuses the client, compare the deployed digest (`supabase secrets list`) with the
+  file and probe the token endpoint with a dummy refresh token: `invalid_grant` means the
+  client is good, `invalid_client` means the secret is wrong. Never reconnect for it.
+- **Enforced by**: `scripts/cutover/set-edge-secrets.sh` (refuses it),
+  `scripts/cutover/set-edge-secrets_test.sh`; ops-monitor's title names the code and the fix
+  (`ops_monitor_test.ts`).
 
 ### An automation can't feed an App Shortcut: capture intents are actions only
 - **What went wrong**: on iOS 26 a Transaction automation's "Do" picker offered the

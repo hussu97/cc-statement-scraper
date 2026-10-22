@@ -198,7 +198,7 @@ reads a key it doesn't list.
 | `ANTHROPIC_API_KEY`, `LLM_MODEL` | Anthropic console | yes |
 | `SENTRY_DSN`, `SENTRY_ENVIRONMENT` | Sentry `credit-card-ledger-backend` DSN; `production` | yes |
 | `SENTRY_RELEASE` | the commit being deployed: pass `--sentry-release "$(git rev-parse --short HEAD)"` (the Deploy Supabase workflow also sets it) | placeholder |
-| `GMAIL_OAUTH_CLIENT_ID`, `GMAIL_OAUTH_CLIENT_SECRET` | the Google OAuth client `ledger-gmail` in `<gcp-project>` (§5) | set (2026-10-12) |
+| `GMAIL_OAUTH_CLIENT_ID`, `GMAIL_OAUTH_CLIENT_SECRET` | the Google OAuth client `ledger-gmail` in `<gcp-project>` (§5) | set (2026-10-12; secret broken by a glued line 2026-10-21, see below) |
 | `MS_OAUTH_CLIENT_ID`, `MS_OAUTH_CLIENT_SECRET` | the Azure app registration (§6); moved from the legacy DB at cutover. The secret expires: rotate it per §6.5 | set (secret failed 2026-10-14) |
 | `GMAIL_PUSH_AUDIENCE` | `https://<project-ref>.supabase.co/functions/v1/gmail-push` | set |
 | `GMAIL_PUSH_SA_EMAIL`, `GMAIL_PUBSUB_TOPIC` | §5: `gmail-push-invoker@<gcp-project>.iam.gserviceaccount.com`, `projects/<gcp-project>/topics/gmail-statements` | set |
@@ -206,7 +206,10 @@ reads a key it doesn't list.
 
 ```bash
 # 1. Fill in the missing lines with an editor (not `echo`, which lands in shell history).
-# 2. Check without pushing — prints key names only, refuses empty/<placeholder> values:
+# 2. Check without pushing — prints key names only, refuses empty/<placeholder> values and a
+#    value with another KEY= glued on (a line added without a newline before it: on
+#    2026-10-21 GMAIL_OAUTH_CLIENT_SECRET went out as <secret>GMAIL_SENTRY_ALERTS=on and every
+#    Gmail refresh failed invalid_client):
 scripts/cutover/set-edge-secrets.sh --dry-run --sentry-release "$(git rev-parse --short HEAD)"
 # 3. Push (asks you to type the project ref):
 scripts/cutover/set-edge-secrets.sh --sentry-release "$(git rev-parse --short HEAD)"
