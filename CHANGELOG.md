@@ -6,6 +6,7 @@
 
 - **fix** Gmail sync failed from the 2026-10-21 14:09 UTC secrets push on (Sentry 7791531695, `TOKEN_REFRESH_FAILED:invalid_client`): `supabase/functions/.env.production` had `GMAIL_SENTRY_ALERTS=on` glued to the end of `GMAIL_OAUTH_CLIENT_SECRET`, so production got a 57-character secret Google rejects. The file is split again; the fix reaches production with a re-push of the secrets.
 - **fix** `scripts/cutover/set-edge-secrets.sh` refuses a value that contains another `KEY=` (two lines glued by a missing newline), tested by `scripts/cutover/set-edge-secrets_test.sh` (pre-push and CI `tooling`; `shellcheck` now covers `scripts/cutover/`).
+- **fix** pgTAP `34_card_budgets`: the card budget is below what the card already spent, so its "budget at risk" insight is expected on every day of the month (with 200 the projection fell under budget from the 22nd and the test failed).
 - **change** ops-monitor's `mailbox_errors` title names each mailbox's provider and code and the fix: a refused client (`invalid_client`, `unauthorized_client`) says to check the OAuth client secret, `invalid_grant` to reconnect the mailbox.
 
 ### iOS
