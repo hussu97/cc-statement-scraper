@@ -497,6 +497,7 @@ export type Database = {
           bank_code: string
           card_code: string
           created_at: string
+          first6: string | null
           holder_name: string | null
           is_supplementary: boolean
           last4: string
@@ -510,6 +511,7 @@ export type Database = {
           bank_code: string
           card_code?: string
           created_at?: string
+          first6?: string | null
           holder_name?: string | null
           is_supplementary?: boolean
           last4: string
@@ -523,6 +525,7 @@ export type Database = {
           bank_code?: string
           card_code?: string
           created_at?: string
+          first6?: string | null
           holder_name?: string | null
           is_supplementary?: boolean
           last4?: string

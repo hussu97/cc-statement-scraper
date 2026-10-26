@@ -98,6 +98,20 @@ Deno.test("validateTemplateProposal normalises a good proposal", () => {
   assertEquals(t.date_format, null);
 });
 
+Deno.test("validateTemplateProposal keeps a card's first six digits as first6", () => {
+  // EIB: "… towards your Credit Card starting with 529205  on 24/10/2026 …" (the BIN, not last4).
+  const t = validateTemplateProposal({
+    ...good,
+    bank_code: "FAB",
+    body_pattern: "payment of ([A-Z]{3}) ([0-9,.]+) towards your Credit Card starting with ([0-9]{6})",
+    field_groups: { currency: 1, amount: 2, last4: null, first6: 3 },
+    msg_kind: "payment",
+    expect: { amount: "62.00", currency: "AED", last4: null, first6: "529205", merchant: null },
+  }, BANKS);
+  assertEquals(t.field_groups, { currency: 1, amount: 2, first6: 3 });
+  assertEquals(t.expect, { amount: "62.00", currency: "AED", first6: "529205" });
+});
+
 Deno.test("validateTemplateProposal rejects unsafe or inconsistent proposals", () => {
   const bad = (over: Record<string, unknown>) =>
     assertThrows(() => validateTemplateProposal({ ...good, ...over }, BANKS), LlmOutputError);
@@ -119,7 +133,8 @@ Deno.test("smsTemplateSchema requires every field (nullable) for structured outp
   // deno-lint-ignore no-explicit-any
   const s: any = smsTemplateSchema(BANKS);
   assertEquals(s.properties.bank_code.enum, BANKS);
-  assertEquals(s.properties.field_groups.required.length, 9); // … available, account_ref, counterparty_ref (Phase 2)
+  assertEquals(s.properties.field_groups.required.length, 10); // … account_ref, counterparty_ref (Phase 2), first6
+  assertEquals(s.properties.expect.required.includes("first6"), true);
   assertEquals(s.properties.msg_kind.enum.includes("account_credit"), true);
   assertEquals(s.additionalProperties, false);
 });

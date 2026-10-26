@@ -208,6 +208,7 @@ export const FIELD_NAMES = [
   "currency",
   "merchant",
   "last4",
+  "first6",
   "date",
   "time",
   "available",
@@ -224,7 +225,9 @@ export const SMS_SYSTEM = [
   "- Capture groups are numbered left to right; field_groups maps each field to its group number (null if absent).",
   "- Replace variable parts (amounts, merchant, card digits, dates, balances) with captures; keep fixed wording literal.",
   "- amount: digits with optional thousands separators and decimals, e.g. ([0-9,]+(?:\\.[0-9]+)?).",
-  "- last4: the card digits shown; date_format is a PostgreSQL to_date format for the date group (e.g. DD/MM/YYYY, DD-MON-YY).",
+  "- last4: the card's last digits shown (ending 1234, XXX1234); date_format is a PostgreSQL to_date format for the date group (e.g. DD/MM/YYYY, DD-MON-YY).",
+  "- first6: the card's first six digits, when the SMS names the card by them (starting with 529205, Card Starting: 529205).",
+  "  A card's first digits are never last4: leave last4 null then.",
   "- account_ref: the bank-account digits shown after the mask (XXX310001 -> 310001); available: the balance or available limit shown.",
   "msg_kind: purchase (completed card spend), preauth (authorisation/hold), refund, reversal, payment (card bill payment),",
   "declined, debit_purchase (a debit-card purchase from a bank account), account_credit (money into a bank account:",
@@ -235,7 +238,7 @@ export const SMS_SYSTEM = [
   "If the SMS is not a card transaction at all (OTP, promotion, balance or service notice), set msg_kind to other",
   "and field_groups.amount and expect.amount to null; the other fields can then be null or a best effort.",
   "expect: the values your template extracts from THIS message (amount as written without separators, currency code,",
-  "last4, merchant as written).",
+  "last4, first6, merchant as written).",
 ].join("\n");
 
 export function smsTemplateSchema(bankCodes: string[]): Record<string, unknown> {
@@ -258,8 +261,14 @@ export function smsTemplateSchema(bankCodes: string[]): Record<string, unknown> 
       msg_kind: { type: "string", enum: MSG_KINDS },
       expect: {
         type: "object",
-        properties: { amount: nullableStr, currency: nullableStr, last4: nullableStr, merchant: nullableStr },
-        required: ["amount", "currency", "last4", "merchant"],
+        properties: {
+          amount: nullableStr,
+          currency: nullableStr,
+          last4: nullableStr,
+          first6: nullableStr,
+          merchant: nullableStr,
+        },
+        required: ["amount", "currency", "last4", "first6", "merchant"],
         additionalProperties: false,
       },
     },
@@ -409,6 +418,10 @@ export function validateTemplateProposal(raw: unknown, bankCodes: string[]): Tem
   if (fieldGroups.last4 && typeof ex.last4 === "string") {
     const d = ex.last4.replace(/[^0-9]/g, "").slice(-4);
     if (d.length === 4) expect.last4 = d;
+  }
+  if (fieldGroups.first6 && typeof ex.first6 === "string") {
+    const d = ex.first6.replace(/[^0-9]/g, "").slice(0, 6);
+    if (d.length === 6) expect.first6 = d;
   }
   if (fieldGroups.merchant) {
     const m = normalizeText(ex.merchant);

@@ -1,5 +1,24 @@
 # Changelog
 
+## SMS clean-up, card BINs and the DFM iVESTOR card — 2026-10-26
+
+### Backend (Supabase)
+
+- **feat** Cards gain `first6` (the BIN) and SMS templates a `first6` field. EIB's payment confirmation names the card only as "starting with 529205": it now finds the account by the card carrying those digits, else by the account an earlier message with them was put on in an `unknown_card` review, and never registers a card. The two LLM templates that read the BIN as last4 are switched off for a seeded "EIB credit card payment received".
+- **fix** Production: the two cards those templates made (Bob's "•9205" and "•9220") are merged into EIB Amazon •9216 and EIB RTA •9212 (`private.merge_cards`, which closes the emptied card); their payments and messages move over.
+- **feat** Adverts (sender `AD-…`, the TDRA prefix) are stored `ignored` as `promotion`; new "(ignored)" notices for FAB's Key Facts Statement and payment-due reminder and EIB's payment reminder.
+- **feat** DFM iVESTOR card: bank `DFM` (sender `DFM`, DFM's own logo), its credit alert as an `account_credit`, and a "Dividends" income category with a rule filing DFM's "IVESTOR CARD" money-in under it. Production: Alice's DFM iVESTOR current account, which turns the 16 Oct dividend (AED 113.92, balance AED 517.78) into a transaction and a balance checkpoint.
+- **fix** Production: the Wallet pass "RTA Platinum Card" is named on Bob's EIB RTA •9212, so the 22 Oct AED 8.00 tap links to its SMS; e& money's and IndusInd's notices and two blank-sender Shortcut tests are marked not a transaction.
+- **feat** The SMS LLM fallback knows `first6` and is told a card's first digits are never last4.
+
+### Web
+
+- **fix** An `unknown_card` review for a card named by its BIN reads "EIB card starting 529205" (was "EIB •????") and its button "Use this account".
+
+### Docs
+
+- **docs** ARCHITECTURE (SMS path: adverts, `first6`), `assets/banks/README.md` (DFM), lesson in `tasks/lessons.md`.
+
 ## Gmail sync and a false iOS app hang (Sentry) — 2026-10-22
 
 ### Backend (Supabase)

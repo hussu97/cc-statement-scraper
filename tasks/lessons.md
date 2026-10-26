@@ -9,6 +9,7 @@
 
 | When | Lesson |
 |---|---|
+| 2026-10-26 | [A card's first six digits are its BIN, never its last four: map them to `first6`](#a-cards-first-six-digits-are-its-bin-never-its-last-four-map-them-to-first6) |
 | 2026-10-22 | [A line appended to an env file without a newline glues two secrets: the push script refuses `KEY=` inside a value](#a-line-appended-to-an-env-file-without-a-newline-glues-two-secrets-the-push-script-refuses-key-inside-a-value) |
 | 2026-10-18 | [An automation can't feed an App Shortcut: capture intents are actions only](#an-automation-cant-feed-an-app-shortcut-capture-intents-are-actions-only) |
 | 2026-10-16 | [A background intent's parameters are optional: an empty required one makes iOS ask, and nobody answers](#a-background-intents-parameters-are-optional-an-empty-required-one-makes-ios-ask-and-nobody-answers) |
@@ -45,6 +46,17 @@
 | 2026-10-08 | [Tooling defaults that don't work here: `gh` account, Supabase MCP, `localhost`, pip](#tooling-defaults-that-dont-work-here-gh-account-supabase-mcp-localhost-pip) |
 
 ## Lessons
+
+### A card's first six digits are its BIN, never its last four: map them to `first6`
+- **What went wrong**: EIB's payment confirmation names the card as "starting with 529205". The
+  LLM fallback mapped that group to `last4`, `apply_sms_template` kept its last four digits
+  ("9205"), and the `unknown_card` reviews on 25 Oct registered two cards that do not exist
+  (Bob's •9205 and •9220), shown beside the real •9216 and •9212.
+- **Rule**: digits a bank prints at the start of a card number go in the template field
+  `first6`; resolving them never registers a card. A card made by mistake is folded into the
+  real one with `private.merge_cards`.
+- **Enforced by**: the LLM schema and prompt (`first6`, "a card's first digits are never last4",
+  `llm_test.ts`); `process_sms`'s `first6` path, pgTAP `70_sms_cleanup`.
 
 ### A line appended to an env file without a newline glues two secrets: the push script refuses `KEY=` inside a value
 - **What went wrong**: on 2026-10-21 the RL360 work re-pushed every Edge secret from
