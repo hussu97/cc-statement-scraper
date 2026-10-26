@@ -37,8 +37,8 @@ insert into public.accounts (profile_code, bank_code) values (pg_temp.v('p'), 'F
 select pg_temp.set('acc', (select account_code from public.accounts where profile_code = pg_temp.v('p')));
 
 -- ═══ categories ═══════════════════════════════════════════════════════════
-select is((select count(*)::int from public.categories where profile_code = pg_temp.v('p')), 32,
-          'a new profile gets the 18 original, 10 taxonomy-v2 and 4 cash-flow categories');
+select is((select count(*)::int from public.categories where profile_code = pg_temp.v('p')), 33,
+          'a new profile gets the 18 original, 10 taxonomy-v2, 4 cash-flow categories and Dividends');
 select set_eq($$ select name from public.categories where profile_code = pg_temp.v('p') $$,
               $$ select name from private.seed_categories $$, 'every seed category, by name');
 select is((select kind from public.categories where profile_code = pg_temp.v('p') and name = 'Bank Fees & Interest'),
