@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Ban, Check, ChevronDown, Inbox, Link2, Plus, Sparkles, Wallet, X } from "lucide-react";
 import { useActiveProfile } from "@/data/profile";
-import { NOT_A_TRANSACTION, REVIEW_REASONS, candidatesOf, groupReviews, reviewActionError, reviewFooterActions, useDecideTemplate, useInfiniteOpenReviews, useOpenReviews, useResolveReview, useRetrySmsFallback, walletPassNameOf, type ResolveAction, type Review, type ReviewContext, type ReviewItem } from "@/data/reviews";
+import { NOT_A_TRANSACTION, REVIEW_REASONS, candidatesOf, groupReviews, reviewActionError, reviewFooterActions, useDecideTemplate, useInfiniteOpenReviews, useOpenReviews, useResolveReview, useRetrySmsFallback, unknownCardLabel, walletPassNameOf, type ResolveAction, type Review, type ReviewContext, type ReviewItem } from "@/data/reviews";
 import { useAccounts } from "@/data/cards";
 import { accountLabel } from "@/data/overview";
 import { useSmsBody, type TxnRow } from "@/data/transactions";
@@ -174,7 +174,7 @@ function ReviewCard({ review }: { review: ReviewItem }) {
         )}
 
         {review.reason === "unknown_card" && walletPass !== null && <WalletCardHint passName={walletPass} canEdit={isOwner} />}
-        {review.reason === "unknown_card" && walletPass === null && isOwner && <UnknownCardAction review={review} bank={ctx.sms?.bank_code ?? candidatesOf(review)[0]?.bank_code} last4={ctx.sms?.card_last4 ?? candidatesOf(review)[0]?.last4} onRegister={(account) => act({ card: { account_code: account } }, "Card added")} busy={busy} />}
+        {review.reason === "unknown_card" && walletPass === null && isOwner && <UnknownCardAction review={review} bank={ctx.sms?.bank_code ?? candidatesOf(review)[0]?.bank_code} last4={ctx.sms?.card_last4 ?? candidatesOf(review)[0]?.last4} first6={candidatesOf(review)[0]?.first6} onRegister={(account) => act({ card: { account_code: account } }, "Card added")} busy={busy} />}
 
         {review.reason === "unparsed_sms" && ctx.template && <TemplateProposal review={review} template={ctx.template} />}
         {review.reason === "unparsed_sms" && !ctx.template && (
@@ -292,7 +292,7 @@ function WalletCardHint({ passName, canEdit }: { passName: string; canEdit: bool
   );
 }
 
-function UnknownCardAction({ review, bank, last4, onRegister, busy }: { review: Review; bank: string | null | undefined; last4: string | null | undefined; onRegister: (account: string) => void; busy: boolean }) {
+function UnknownCardAction({ review, bank, last4, first6, onRegister, busy }: { review: Review; bank: string | null | undefined; last4: string | null | undefined; first6: string | undefined; onRegister: (account: string) => void; busy: boolean }) {
   const { profile_code } = useActiveProfile();
   const accounts = useAccounts(profile_code);
   const options = (accounts.data ?? []).filter((a) => !bank || a.bank_code === bank);
@@ -300,7 +300,7 @@ function UnknownCardAction({ review, bank, last4, onRegister, busy }: { review: 
   return (
     <div className="flex flex-col gap-2 rounded-md border border-border bg-bg p-3">
       <p className="text-[13px] text-ink">
-        Which account does <span className="tabular font-medium">{bank} •{last4 ?? "????"}</span> belong to?
+        Which account does <span className="tabular font-medium">{unknownCardLabel(bank, last4, first6)}</span> belong to?
       </p>
       {accounts.isLoading ? (
         <p className="text-[12px] text-muted">Loading accounts…</p>
@@ -319,7 +319,7 @@ function UnknownCardAction({ review, bank, last4, onRegister, busy }: { review: 
             className="min-w-56"
           />
           <Button size="sm" variant="primary" disabled={!account || busy} onClick={() => account && onRegister(account)}>
-            Add card as supplementary
+            {last4 ? "Add card as supplementary" : "Use this account"}
           </Button>
         </div>
       )}

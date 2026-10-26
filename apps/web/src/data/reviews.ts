@@ -169,6 +169,8 @@ export interface ReviewCandidate {
   score?: number;
   bank_code?: string;
   last4?: string;
+  /** unknown_card on an SMS that names the card by its first six digits (EIB: "starting with 542459"). */
+  first6?: string;
   template_code?: string;
   stmt_code?: string;
   statement_date?: string;
@@ -198,6 +200,18 @@ export function walletPassNameOf(
   if (fromCandidates) return fromCandidates.trim();
   if (sms?.source === "wallet") return sms.wallet_pass_name?.trim() || "";
   return null;
+}
+
+/**
+ * How an unknown_card review names the card: "EIB •4557" by its last four digits, "EIB card
+ * starting 542459" when the SMS shows only the first six (the BIN), "EIB •????" when neither.
+ * A BIN-only message is put on the chosen account without registering a card. Pure, unit-tested.
+ */
+export function unknownCardLabel(bank: string | null | undefined, last4: string | null | undefined, first6?: string | null): string {
+  const b = bank ?? "";
+  if (last4) return `${b} •${last4}`.trim();
+  if (first6) return `${b} card starting ${first6}`.trim();
+  return `${b} •????`.trim();
 }
 
 export interface ReviewContext {

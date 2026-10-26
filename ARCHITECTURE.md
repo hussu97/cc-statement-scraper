@@ -123,7 +123,7 @@ fx_rates (global)
 | `profile_members` | `(profile_code, user_id)`, role `owner` or `viewer`. Pending invites live in `private.pending_members` and are claimed by `auth.users` triggers once the user's email is **confirmed** (on insert when already confirmed, or on the confirmation / email change); `add_profile_member` also treats an unconfirmed account as not signed up. Self sign-up is disabled (§8), so that user is created by an Auth invite. An owner removes a whole profile with `delete_profile(p_profile_code, p_confirm_key)`, which **archives** it: `profiles.archived_at` is set, nothing is deleted (data, PDFs and Vault secrets stay), its active service tokens are revoked and its mailboxes disabled (recorded in `archive_state`). Archived profiles drop out of every membership check, so no client sees them; `restore_profile` (service role) undoes exactly that. |
 | `service_tokens` | `ccs_<hex>` tokens. Only the sha256 is stored. Scopes are `statements:upload` and `sms:ingest`, each tied to one profile. |
 | `banks` | FAB, ADCB, ENBD, EIB, SIB, MASHREQ, WIO (Wio Bank, no SMS sender: its alerts are app notifications), plus their SMS sender ids. `logo_path` names the bank's image in the public `bank-logos` bucket (`<bank_code>.png`); clients build `<SUPABASE_URL>/storage/v1/object/public/bank-logos/<logo_path>`. |
-| `accounts`, `cards` | Credit-card accounts (kind `credit_card` only) and their cards by `last4`. `cards.wallet_name` is the name the phone's wallet shows for the card (owner-editable, unique per profile ignoring case); Wallet payments find their card by it. A replacement card is a new card on the same account: the old card becomes `replaced` and keeps its transactions. It joins the account either by the owner (`add_replacement_card(profile, old card_code, new last4)`) or automatically for a history extract (§4, statement path step 1). |
+| `accounts`, `cards` | Credit-card accounts (kind `credit_card` only) and their cards by `last4` (and, for SMS that name a card by its BIN, `first6`). `cards.wallet_name` is the name the phone's wallet shows for the card (owner-editable, unique per profile ignoring case); Wallet payments find their card by it. A replacement card is a new card on the same account: the old card becomes `replaced` and keeps its transactions. It joins the account either by the owner (`add_replacement_card(profile, old card_code, new last4)`) or automatically for a history extract (§4, statement path step 1). |
 | `documents` | One PDF as received: `sha256` unique per profile, `source` scraper/upload/ios/gmail/outlook/legacy, `parse_status` queued/parsing/parsed/failed. Stored at `statements/<profile_code>/<doc_code>.pdf`. |
 | `statements` | `kind` is `statement` or `history_extract` (SIB history exports). Identity is `(account, statement_date)` per kind among active rows. Holds totals, due date, min due and credit limit. `doc_code` is the document that currently evidences it; several documents can evidence one statement (§4). |
 | `statement_lines` | **Immutable evidence.** `line_key` is a sha256 of the account and the raw facts (`private.statement_line_key`; the description with whitespace collapsed and letter case ignored, since SIB's two exports print one row in different cases) and `occurrence` is the ordinal among identical keys, so two identical coffees are two lines. Only `is_current`, `superseded_at` and `source_doc_codes` change (and `account_code` with `line_key` when `private.merge_accounts` moves a line, so a re-parse still finds it) (and the text, when a private merchant mask applies: §5). `source_doc_codes` lists the documents whose parse contains the line; it stays current while any of them does. Carries `fx_rate` and `legacy_fingerprint`. |
@@ -308,6 +308,8 @@ when the shape is wrong (missing `client_msg_id`, empty or over-long body, bad `
 or `failed` with `reason = error:<sqlstate>` when processing raised (the message is kept with
 `parse_status = failed`). Clients (the iOS outbox) park only that message. `process_sms`:
 
+0. A sender starting `AD-` (the TDRA prefix UAE senders must put on adverts; no alert uses it)
+   is stored `ignored` with `ignore_reason = 'promotion'`, before any template or LLM call.
 1. `match_sms_template` takes the first active template by `priority` whose sender and body
    regex match. A template whose date fields don't form a real date (`31/02/26`) does not
    apply; it never raises.
@@ -328,8 +330,12 @@ or `failed` with `reason = error:<sqlstate>` when processing raised (the message
    - **`declined`:** stored and ignored.
 2. The template's date and time give `event_at`, otherwise `received_at`; a template date more
    than 7 days from `received_at` is a DD/MM misread and falls back to `received_at`
-   (`parsed_fields.event_at_rejected`). The card is resolved by bank + last4. When there is no
-   last4, the bank's single active account is used.
+   (`parsed_fields.event_at_rejected`). The card is resolved by bank + last4. A message that
+   names the card only by its first six digits (template field `first6`, the BIN: EIB's
+   "starting with 542459") goes to the account of the cards whose `cards.first6` match, else
+   to the one account earlier messages with those digits were bound to by an `unknown_card`
+   review; it never registers a card. When there is neither, the bank's single active account
+   is used.
    - **Unknown card:** an `unknown_card` review opens. Resolving it registers the card and
      re-processes every message waiting on it. A statement that registers the card does the
      same at the end of `ingest_parsed_document` (`private.reprocess_waiting_sms`).

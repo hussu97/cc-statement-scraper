@@ -3,7 +3,7 @@
 // 5000, documents.parse_warnings), and of 8834f76 (cards.wallet_name, Wallet
 // rows in unknown_card reviews).
 import { describe, expect, it } from "vitest";
-import { NOT_A_TRANSACTION, reviewActionError, reviewFooterActions, walletPassNameOf } from "@/data/reviews";
+import { NOT_A_TRANSACTION, reviewActionError, reviewFooterActions, unknownCardLabel, walletPassNameOf } from "@/data/reviews";
 import { reconBadge, reconChecks, reconNote } from "@/lib/recon";
 import { docWarnings, normalizeWalletName, STATEMENT_CYCLES_MAX, WALLET_NAME_MAX, walletNameError } from "@/data/cards";
 import { MERCHANT_SEARCH_MAX, mergeSearchRows, merchantSearchArgs, merchantSearchPage, type MerchantRow, type MerchantSearchRow } from "@/data/rules";
@@ -176,5 +176,15 @@ describe("unknown_card reviews for Wallet payments", () => {
 
   it("keeps dismiss and not-a-card-transaction (the card action is refused server-side)", () => {
     expect(reviewFooterActions({ reason: "unknown_card", subject_type: "sms" }, false)).toEqual(["not_a_transaction", "dismiss"]);
+  });
+});
+
+describe("unknown_card reviews for a card named by its first six digits", () => {
+  it("names the card by last4, else by its BIN, else unknown", () => {
+    expect(unknownCardLabel("EIB", "4557", null)).toBe("EIB •4557");
+    expect(unknownCardLabel("EIB", null, "542459")).toBe("EIB card starting 542459");
+    expect(unknownCardLabel("EIB", "4557", "457828")).toBe("EIB •4557");
+    expect(unknownCardLabel("FAB", undefined)).toBe("FAB •????");
+    expect(unknownCardLabel(null, null, null)).toBe("•????");
   });
 });

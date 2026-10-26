@@ -608,3 +608,34 @@ Schema + contract change: needs the user's go-ahead before code (CLAUDE.md §12.
   LedgerKit 654, app build.
 - Found on the way: bank statements would have shown as unpaid card cycles; `statement_cycles` and
   `v_statement_payments` are now card-only.
+
+## 10. SMS clean-up: ignored notices, card BINs, the RTA Wallet pass, and the DFM iVESTOR card (2026-10-26)
+
+From the 26 Oct review of production SMS (Hussain 9 unparsed, Tejasvie 2; every parsed message
+had a card and an account).
+
+### Decisions (user, 26 Oct)
+1. Bank notices and promotions become "(ignored)" templates; the non-bank senders (e& money,
+   IndusInd) and the two blank-sender tests are marked not-a-transaction (`user_not_txn`).
+2. EIB's payment confirmation names the card by its first six digits ("starting with 542459"):
+   cards gain `first6`; the two cards made from those digits (•2459, •7828) merge into the real
+   cards (EIB Amazon •6177, EIB RTA •4557, where the reviews put them) and are deleted.
+3. The Wallet pass "RTA Platinum Card" is EIB RTA •4557.
+4. DFM iVESTOR card: a bank (DFM, sender `DFM`) with a current account for Hussain. Credits are
+   dividends: a seeded income category "Dividends" and a rule (DFM money-in → Dividends).
+   Debit-card formats are unknown until one arrives (the LLM fallback proposes them).
+5. Logo: DFM's own published file (dfm.ae apple-touch-icon), unmodified; uploaded to
+   `bank-logos` with `scripts/brand/upload-bank-logos.sh` (production action).
+
+### Plan
+- [ ] Migration: `first6` (cards; template field; process_sms card resolution; resolve_review
+      records it), the EIB LLM template moved from last4 to first6 (guarded), `private.merge_cards`.
+- [ ] Migration content: ignored templates (FAB promos via AD-FAB, FAB Key Facts, FAB and EIB
+      due reminders), DFM bank + iVESTOR credit template, Dividends category + rule.
+- [ ] Migration production data (guarded DO blocks, no-op elsewhere): first6 on •6177/•4557 and
+      the merge; wallet_name on •4557; the four non-bank messages ignored; Hussain's DFM account,
+      then re-run its SMS.
+- [ ] LLM fallback: `first6` field and prompt rule (a card's first digits are never last4).
+- [ ] pgTAP (`70_sms_cleanup`), deno tests, `pnpm db:types` drift (no local Docker: CI).
+- [ ] assets/banks/DFM.png + README row.
+- [ ] Docs: CHANGELOG, ARCHITECTURE (SMS fields), lessons.
