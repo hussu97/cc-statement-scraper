@@ -15,8 +15,8 @@
 -- 4. Content, guarded (CLAUDE.md §1.9): "(ignored)" notices for FAB (Key Facts Statement, the
 --    payment-due reminder) and EIB (payment reminder); EIB's payment confirmation read by first6
 --    (the two LLM templates that read it as last4 are switched off while they still hold their
---    proposed fields); the DFM iVESTOR card: bank DFM (sender "DFM", DFM's own logo file) and its
---    credit alert, an account credit; a "Dividends" income category with a rule that files DFM's
+--    proposed fields); the DFM iVESTOR card: bank DFM (sender "DFM", DFM's own logo file, the
+--    scheme-only FX markup of a card with no purchase fee) and its credit alert, an account credit; a "Dividends" income category with a rule that files DFM's
 --    "iVESTOR card" money-in under it.
 -- 5. Production data, guarded so it is a no-op on any other database and on a second run:
 --    Tejasvie's EIB BINs on •6177 and •4557, the two payments moved onto them and the two cards
@@ -409,6 +409,13 @@ $$;
 -- icon (assets/banks/DFM.png, from dfm.ae), uploaded with scripts/brand/upload-bank-logos.sh.
 insert into public.banks (bank_code, name, sms_senders, logo_path)
 values ('DFM', 'Dubai Financial Market', array['DFM'], 'DFM.png')
+on conflict (bank_code) do nothing;
+
+-- iVESTOR is an Emirates NBD-issued Visa prepaid card: no fee on purchases in the UAE or overseas
+-- (iVESTOR user guide, Schedule of Fees), converted at Emirates NBD's rate, so the scheme part alone.
+insert into private.bank_fx_fees (bank_code, markup, note)
+values ('DFM', 0.011500,
+        'iVESTOR (Emirates NBD Visa prepaid): no purchase fee UAE or overseas (user guide, Schedule of Fees 2022); scheme ~1.15%')
 on conflict (bank_code) do nothing;
 
 -- Templates. Inserting them re-runs the unparsed messages their senders match (DB-22).

@@ -64,10 +64,10 @@ set local role authenticated;
 insert into ids select 'pb', public.create_profile('bob', 'Bob');
 reset role;
 
-select is((select count(*)::int from public.categories where profile_code = (select v from ids where k = 'pa')), 32,
-          'create_profile seeds 32 default categories');
-select is((select count(*)::int from public.category_rules where profile_code = (select v from ids where k = 'pa')), 246,
-          'create_profile seeds 246 default rules');
+select is((select count(*)::int from public.categories where profile_code = (select v from ids where k = 'pa')), 33,
+          'create_profile seeds 33 default categories');
+select is((select count(*)::int from public.category_rules where profile_code = (select v from ids where k = 'pa')), 247,
+          'create_profile seeds 247 default rules');
 
 -- Data for bob's profile, written by the system.
 insert into public.accounts (profile_code, bank_code) select v, 'FAB' from ids where k = 'pb';

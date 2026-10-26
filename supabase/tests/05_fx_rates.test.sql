@@ -139,7 +139,7 @@ select is((select amount_aed from pg_temp.txn('inr')), 42.05::numeric(14,2), 're
 -- ── bank-aware estimates: SIB's markup, never another bank's rate ───────────
 -- Real case: SIB billed INR 28,400.00 as AED 1,123.72 on 2026-10-03 (mid ≈ 0.03816247).
 select results_eq($$ select bank_code, markup from private.bank_fx_fees order by bank_code $$,
-  $$ values ('ADCB'::text, 0.041744::numeric(8,6)), ('EIB', 0.037192), ('ENBD', 0.031629), ('FAB', 0.037900),
+  $$ values ('ADCB'::text, 0.041744::numeric(8,6)), ('DFM', 0.011500), ('EIB', 0.037192), ('ENBD', 0.031629), ('FAB', 0.037900),
             ('MASHREQ', 0.040732), ('SIB', 0.036788), ('WIO', 0.007500) $$,
   'each bank carries its all-in FX markup');
 select is((select count(*)::int from public.banks b
