@@ -661,6 +661,40 @@ begin
 end;
 $$;
 
+-- Every number in a note's JSON as a decimal string (§1.3), extra zeros beyond 2 places trimmed
+-- ("98.00000" → "98", money keeps "52001.00"); counts (seq, days) stay numbers.
+create function private.jsonb_decimal_strings(j jsonb)
+returns jsonb
+language plpgsql
+immutable
+set search_path = ''
+as $$
+declare
+  n numeric;
+begin
+  case jsonb_typeof(j)
+    when 'object' then
+      return coalesce((select jsonb_object_agg(e.key, case when e.key in ('seq', 'days') then e.value
+                                                            else private.jsonb_decimal_strings(e.value) end)
+                       from jsonb_each(j) e), '{}'::jsonb);
+    when 'array' then
+      return coalesce((select jsonb_agg(private.jsonb_decimal_strings(a.value) order by a.ord)
+                       from jsonb_array_elements(j) with ordinality a(value, ord)), '[]'::jsonb);
+    when 'number' then
+      n := (j #>> '{}')::numeric;
+      return to_jsonb((case when scale(n) > 2 then trim_scale(n) else n end)::text);
+    when 'string' then
+      if (j #>> '{}') ~ '^-?[0-9]+\.[0-9]{3,}$' then
+        n := (j #>> '{}')::numeric;
+        return to_jsonb(trim_scale(n)::text);
+      end if;
+      return j;
+    else
+      return j;
+  end case;
+end;
+$$;
+
 -- Everything about a note as of a day. Outcomes come from the closes on the observation dates
 -- (an observation without every close stops the walk: awaiting_prices); the rest from the
 -- latest closes. Distances are the % move of a share from its latest close to a level
@@ -951,7 +985,7 @@ begin
                   'profit', round(n.nominal * p0.payout_pct / 100 + v_coupons_paid + v_coupons_due - n.invested_amount, 2)::text)
                 from private.note_payout(n.note_code, 0) p0)) end,
     'events', v_events);
-  return v_result;
+  return private.jsonb_decimal_strings(v_result);
 end;
 $$;
 
@@ -1311,7 +1345,7 @@ declare
 begin
   perform private.assert_member(p_profile_code, false);
   return coalesce((
-    select jsonb_agg(private.note_summary(n, private.note_evaluate(n.note_code, v_today))
+    select jsonb_agg(private.jsonb_decimal_strings(private.note_summary(n, private.note_evaluate(n.note_code, v_today)))
                      order by (n.status = 'live') desc, n.trade_date desc, n.created_at desc)
     from public.structured_notes n
     where n.profile_code = p_profile_code and n.status <> 'cancelled'), '[]'::jsonb);
@@ -1341,7 +1375,7 @@ begin
     raise exception 'note not found' using errcode = 'P0002';
   end if;
   e := private.note_evaluate(n.note_code, public.dubai_date(now()));
-  return private.note_summary(n, e) || jsonb_build_object(
+  return private.jsonb_decimal_strings(private.note_summary(n, e) || jsonb_build_object(
     'terms', jsonb_build_object(
       'guarantor', n.guarantor, 'denomination', n.denomination::text, 'issue_price_pct', n.issue_price_pct::text,
       'strike_date', n.strike_date, 'issue_date', n.issue_date, 'final_valuation_date', n.final_valuation_date,
@@ -1375,7 +1409,7 @@ begin
              and sp.price_date <= coalesce(n.ended_on, public.dubai_date(now()))
         where u.note_code = n.note_code
         group by u.symbol
-      ) s), '{}'::jsonb));
+      ) s), '{}'::jsonb)));
 end;
 $$;
 comment on function public.structured_note_detail(text, text) is

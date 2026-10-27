@@ -127,7 +127,7 @@ select is(pg_temp.v('ea')::jsonb->>'status', 'live', 'still live');
 select is(pg_temp.v('ea')::jsonb->'worst_now'->>'symbol', 'AAA', 'AAA is the worst share now');
 select is(pg_temp.v('ea')::jsonb->'if_ended_today'->>'amount', '6550.00', 'ended today: 90% − 24.5% = 65.5% of 10,000');
 select is(pg_temp.v('ea')::jsonb->'if_ended_today'->>'settlement', 'physical', 'in shares');
-select is(pg_temp.v('ea')::jsonb->>'break_even_pct', '99.0000', 'break-even at 99% (99 − 24.5 = 74.5, the price paid)');
+select is(pg_temp.v('ea')::jsonb->>'break_even_pct', '99', 'break-even at 99% (99 − 24.5 = 74.5, the price paid)');
 select is((pg_temp.v('ea')::jsonb->'next'->>'obs_date')::date, pg_temp.d(30), 'the next observation');
 select is(pg_temp.v('ea')::jsonb->'next'->'coupon'->>'would_pay', 'false', 'its coupon would not pay at 90%');
 select is(pg_temp.v('ea')::jsonb->'next'->'autocall'->>'amount', '10000.00', 'an autocall would repay 100%');
