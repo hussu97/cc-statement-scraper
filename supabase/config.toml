@@ -472,6 +472,12 @@ verify_jwt = false
 [functions.metal-prices]
 verify_jwt = false
 
+[functions.stock-prices]
+verify_jwt = false
+
+[functions.termsheet-extract]
+verify_jwt = false
+
 [functions.rl360-sync]
 verify_jwt = false
 

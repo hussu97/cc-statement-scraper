@@ -1,5 +1,33 @@
 # Changelog
 
+## Swissquote: USD cash and structured notes — 2026-10-27
+
+### Backend (Supabase)
+
+- **feat** Swissquote (`SWQ`, its own logo) as a bank; its USD cash is a current account, and any non-AED bank account now counts in cash and net worth (at the USD peg or `fx_rates`).
+- **feat** Typed deposits and withdrawals on a bank account (`account_entries`, `add_account_entry` / `remove_account_entry`), for an account no SMS or statement reaches.
+- **feat** Structured notes: a holding of kind `structured_note` with its terms (underlyings and initial levels, observation schedule with memory coupons and autocalls, final payout branches on the worst performance, cash or physical). `private.note_evaluate` gives status, coupons and redemptions, each share's distance to the next autocall, coupon barrier and break-even, the next observation, the payout if it ended today and the autocall / maturity scenarios. Outcomes are recorded as events and posted to the funding account on their payment dates (coupons as "Investment income", redemptions as money back out of the holding, delivered shares as a security holding); a live note counts at what was invested. `security_prices` stores daily closes; a security with a symbol is valued from them.
+- **feat** A new "Investment income" category (income) and rule for every ledger.
+- **feat** `stock-prices` Edge Function and pg_cron job `ledger-stock-prices` (Mon–Sat 22:30 UTC): daily closes from Yahoo Finance for the shares notes follow, then settlement. An owner can run it for their ledger right after adding a note (backfill).
+- **feat** `termsheet-extract` Edge Function: a term-sheet PDF → draft note terms (Claude, `TERMSHEET_LLM_MODEL`, default `claude-sonnet-5-5`) with warnings for the review; PDFs kept in the private `term-sheets` bucket. Contract `docs/contracts/termsheet-v1.md`.
+
+- **fix** `stock-prices` fetches a share back to a new note's strike when its stored closes start later (a note on a share another note already follows), so the new note's past observations are evaluated.
+
+### Web
+
+- **feat** Structured notes: Add from term sheet (upload → review and correct every extracted term, with the model's warnings → amount invested, price, nominal, trade date, paying account), then the note's page: status, invested and received, the result or the payout if it ended today, break-even, the next observation with whether its coupon or autocall would happen at today's prices, each share against the autocall, coupon and break-even levels, a price chart since the strike, scenarios (called on each date, payoff by the worst share's final level, best and worst case), the schedule with outcomes, Update prices and Remove.
+- **feat** Investments lists structured notes in their own card (live and ended, not again among the holdings) and counts live ones at what was invested; a bank account page lists the notes paid from it and takes typed deposits and withdrawals; Add bank account takes a currency (Swissquote defaults to USD).
+
+### iOS
+
+- **feat** Structured notes: a "Structured notes" card on Investments (live, then ended: status, shares, the worst one and its level, the next date with "would call" / "coupon on track" / "coupon at risk", invested and the result), and a note screen opened from it or from the note's holding row: invested, received, the result or what it would pay if it ended today, break-even; the next observation at today's prices; each share against the autocall, coupon and break-even levels, the worst share against each level and a chart of the closes since the strike; scenarios (best and worst case, called on each date, the payoff by where the worst share ends); the schedule with outcomes; the terms; Update prices (`stock-prices`) and Remove (owners). Wording ported from the web's `lib/notes.ts` into LedgerKit (`NoteText`, `NoteDetail` presentation), with tests on JSON captured from the local stack.
+- **feat** Add from term sheet (owners): pick the PDF, `termsheet-extract` reads it, then a review of the name, the shares' price symbols, the schedule and payout in one line each and the model's warnings, with amount invested, price paid, trade date and the paying account (bank accounts in the note's currency); Save calls `create_structured_note`, fetches prices and opens the note. Per-date corrections stay on the web.
+- **feat** A bank account's screen takes a deposit or withdrawal (`add_account_entry`) and lists the notes paid from it (on a Swissquote account, with Add from term sheet).
+
+### Docs
+
+- **docs** ARCHITECTURE (structured notes and broker cash, the two functions and the cron job), PRODUCTION (functions, cron, `TERMSHEET_LLM_MODEL`), README (endpoints, env), `docs/contracts/termsheet-v1.md`, `assets/banks/README.md` (SWQ).
+
 ## SMS clean-up, card BINs and the DFM iVESTOR card — 2026-10-26
 
 ### Backend (Supabase)

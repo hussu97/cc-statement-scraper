@@ -20,6 +20,8 @@ import { HoldingDialog } from "@/components/wealth/holding-dialogs";
 import { AddFlowDialog, RemoveFlowDialog, UpdateValueDialog } from "@/components/wealth/holding-value-dialogs";
 import { ReturnsCard } from "@/components/wealth/returns";
 import { TONE_TEXT } from "@/components/wealth/investments";
+import { NoteView } from "@/components/notes/note-view";
+import { useNotesSummary } from "@/data/notes";
 
 const HLD_RE = /^hld_[0-9a-z]{26}$/;
 
@@ -27,7 +29,22 @@ const HLD_RE = /^hld_[0-9a-z]{26}$/;
 export function HoldingPage() {
   const { holdingCode } = wealthHoldingRoute.useParams();
   if (!HLD_RE.test(holdingCode)) return <HoldingNotFound />;
-  return <HoldingView key={holdingCode} holdingCode={holdingCode} />;
+  return <HoldingOrNote key={holdingCode} holdingCode={holdingCode} />;
+}
+
+/** A structured note has its own page (live or ended); every other holding the holding page. */
+function HoldingOrNote({ holdingCode }: { holdingCode: string }) {
+  const { profile_code: profileCode, isOwner } = useActiveProfile();
+  const notes = useNotesSummary(profileCode);
+  if (notes.isLoading) {
+    return (
+      <Card>
+        <LoadingRows rows={3} />
+      </Card>
+    );
+  }
+  if (notes.data?.some((n) => n.holding_code === holdingCode)) return <NoteView profileCode={profileCode} holdingCode={holdingCode} isOwner={isOwner} />;
+  return <HoldingView holdingCode={holdingCode} />;
 }
 
 function HoldingNotFound() {

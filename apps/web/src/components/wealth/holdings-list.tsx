@@ -50,10 +50,10 @@ export function HoldingsListCard({
         <LoadingRows rows={3} />
       ) : q.isError || !q.data ? (
         <ErrorState error={q.error} onRetry={() => void q.refetch()} />
-      ) : q.data.holdings.length === 0 ? (
+      ) : groupHoldings(q.data.holdings).length === 0 ? (
         <EmptyState
           icon={<Coins />}
-          title="No investments yet"
+          title={q.data.holdings.length > 0 ? "No other holdings" : "No investments yet"}
           action={
             isOwner ? (
               <Button size="sm" variant="primary" icon={<Plus className="size-3.5" />} onClick={onAdd}>
@@ -62,9 +62,11 @@ export function HoldingsListCard({
             ) : undefined
           }
         >
-          {isOwner
-            ? "Add gold or silver, a savings plan, a broker account, shares or a fixed deposit. Bank Ledger values them and counts them in your net worth."
-            : "The ledger's owner can add investments here."}
+          {q.data.holdings.length > 0
+            ? "Your structured notes are listed below, with their status."
+            : isOwner
+              ? "Add gold or silver, a savings plan, a broker account, shares or a fixed deposit. Bank Ledger values them and counts them in your net worth."
+              : "The ledger's owner can add investments here."}
         </EmptyState>
       ) : (
         <div className="border-t border-border">
@@ -124,7 +126,8 @@ function HoldingRow({ h, actions }: { h: Holding; actions: HoldingActions }) {
   const kind = kindOf(h);
   const own = h.currency && h.currency !== "AED" ? formatOwnValue(h.value, h.currency) : null;
   const aed = aedEquivalent(h.value_aed, h.currency);
-  const { onEdit, onClose, onUpdateValue } = actions;
+  // A structured note is changed from its own page (cancel_structured_note), never the holding form.
+  const { onEdit, onClose, onUpdateValue } = kind === "structured_note" ? ({} as HoldingActions) : actions;
   return (
     <li className="flex flex-col gap-2 px-5 py-3.5 sm:flex-row sm:items-start sm:gap-4">
       <div className="flex min-w-0 flex-1 items-start gap-3">
