@@ -16,7 +16,7 @@
 ### Web
 
 - **feat** Structured notes: Add from term sheet (upload → review and correct every extracted term, with the model's warnings → amount invested, price, nominal, trade date, paying account), then the note's page: status, invested and received, the result or the payout if it ended today, break-even, the next observation with whether its coupon or autocall would happen at today's prices, each share against the autocall, coupon and break-even levels, a price chart since the strike, scenarios (called on each date, payoff by the worst share's final level, best and worst case), the schedule with outcomes, Update prices and Remove.
-- **feat** Investments lists structured notes (live and ended) and counts live ones at what was invested; a bank account page lists the notes paid from it and takes typed deposits and withdrawals; Add bank account takes a currency (Swissquote defaults to USD).
+- **feat** Investments lists structured notes in their own card (live and ended, not again among the holdings) and counts live ones at what was invested; a bank account page lists the notes paid from it and takes typed deposits and withdrawals; Add bank account takes a currency (Swissquote defaults to USD).
 
 ### iOS
 

@@ -40,9 +40,13 @@ export interface HoldingGroup<T> {
   holdings: T[];
 }
 
-/** Holdings in the page's groups (Metals, Plans, Broker accounts, Shares & funds, Deposits), keeping the server's order inside each; empty groups are left out. */
+/**
+ * Holdings in the page's groups (Metals, Plans, Broker accounts, Shares & funds, Deposits), keeping
+ * the server's order inside each; empty groups are left out. Structured notes are left out too:
+ * the notes card lists them with their status.
+ */
 export function groupHoldings<T extends { kind?: string | null }>(holdings: readonly T[]): HoldingGroup<T>[] {
-  return HOLDING_KINDS.map((k) => ({ kind: k.value, label: k.group, holdings: holdings.filter((h) => kindOf(h) === k.value) })).filter((g) => g.holdings.length > 0);
+  return HOLDING_KINDS.filter((k) => k.value !== "structured_note").map((k) => ({ kind: k.value, label: k.group, holdings: holdings.filter((h) => kindOf(h) === k.value) })).filter((g) => g.holdings.length > 0);
 }
 
 /** The link picker's order: plans, broker accounts, shares and funds, deposits, then metals; the server's order within each kind. */

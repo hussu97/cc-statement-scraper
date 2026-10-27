@@ -68,10 +68,10 @@ struct InvestmentsView: View {
     }
 
     @ViewBuilder private func holdings(_ valuation: HoldingsValuation) -> some View {
-        if valuation.isEmpty {
+        if valuation.groups.isEmpty {
             Card {
                 SectionHeader(title: "Holdings")
-                Text(HoldingsValuation.emptyMessage(canEdit: canEdit))
+                Text(HoldingsValuation.emptyMessage(canEdit: canEdit, onlyNotes: valuation.onlyNotes))
                     .font(Typography.rowMeta).foregroundStyle(Palette.muted)
                 if canEdit {
                     Button("Add holding") { editing = model.newDraft() }

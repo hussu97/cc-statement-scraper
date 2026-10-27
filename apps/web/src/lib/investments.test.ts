@@ -53,6 +53,8 @@ describe("kinds and groups", () => {
     const g = groupHoldings(hs);
     expect(g.map((x) => x.label)).toEqual(["Metals", "Plans", "Deposits"]);
     expect(g[1]!.holdings.map((h) => h.id)).toEqual([2, 4]);
+    // Structured notes have their own card.
+    expect(groupHoldings([...hs, { id: 5, kind: "structured_note" }]).map((x) => x.label)).toEqual(["Metals", "Plans", "Deposits"]);
   });
 
   it("lists plans, brokers, shares and deposits before metals for linking", () => {

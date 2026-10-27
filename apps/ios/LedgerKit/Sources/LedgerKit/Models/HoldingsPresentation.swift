@@ -188,8 +188,9 @@ public struct HoldingGroup: Sendable, Hashable, Identifiable {
     public var countText: String { HoldingsText.holdings(holdings.count) }
 
     /// `holdings` by kind in `HoldingKind` order, each kind keeping their order; empty kinds left out.
+    /// Structured notes are left out too: their own card lists them, with their status.
     public static func groups(_ holdings: [Holding]) -> [HoldingGroup] {
-        HoldingKind.allCases.compactMap { kind in
+        HoldingKind.addable.compactMap { kind in
             let inKind = holdings.filter { $0.kind == kind }
             return inKind.isEmpty ? nil : HoldingGroup(kind: kind, holdings: inKind)
         }
@@ -282,8 +283,12 @@ extension HoldingsValuation {
     public func holding(_ code: String) -> Holding? { holdings.first { $0.holdingCode == code } }
 
     /// No holdings yet, in words for who is reading.
-    public static func emptyMessage(canEdit: Bool) -> String {
-        canEdit
+    /// Nothing to list but structured notes (they have their own card).
+    public var onlyNotes: Bool { groups.isEmpty && !holdings.isEmpty }
+
+    public static func emptyMessage(canEdit: Bool, onlyNotes: Bool = false) -> String {
+        if onlyNotes { return "Only structured notes so far: they're listed with their status below." }
+        return canEdit
             ? "No investments yet. Add gold or silver, a plan, a broker account, shares or a fixed deposit."
             : "No investments in this ledger yet. Owners can add holdings."
     }
