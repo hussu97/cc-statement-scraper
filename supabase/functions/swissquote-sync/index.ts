@@ -62,7 +62,7 @@ async function readPortfolio(s: SwissquoteSession, login: SwissquoteLogin) {
   if (!overview.portfolioId) throw new Error("Swissquote: no portfolio");
   await pause();
   const config = await s.getJson<{ portfolioCreationDate?: string; portfolioPerformanceReferenceDate?: string }>(
-    "/eding_securities-retail-accountsummary-plugin/api/config?SQApplicationId=WLS",
+    "/sq-passive-income-plugin/api/config",
   );
   const opened = /^\d{4}-\d{2}-\d{2}$/.test(config.portfolioCreationDate ?? "")
     ? config.portfolioCreationDate!
@@ -145,7 +145,12 @@ async function readPortfolio(s: SwissquoteSession, login: SwissquoteLogin) {
     account_number: accountNumber,
     fetched_at: fetchedAt.toISOString(),
     cash,
-    opening: { as_of: `${opened}T00:00:00+04:00`, balance: String(openingBalance) },
+    // The cash before the first movement (a minute before it; the account's creation date is
+    // not always given).
+    opening: transactions.length === 0 ? null : {
+      as_of: new Date(Math.min(...transactions.map((t) => Date.parse(t.booked_at))) - 60_000).toISOString(),
+      balance: String(openingBalance),
+    },
     securities,
     transactions,
     positions,

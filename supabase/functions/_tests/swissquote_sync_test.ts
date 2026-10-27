@@ -190,7 +190,12 @@ Deno.test("rebuildValues: a trade-date jump in the index and its fall at settlem
     { date: "2026-01-03", twrPerf: 30 },
     { date: "2026-01-04", twrPerf: 2 }, // settled
   ];
-  const out = rebuildValues(entries, new Map([["2026-01-01", 1000]]), "2026-01-05", 1000);
+  const out = rebuildValues(
+    [{ date: "2025-12-31", twrPerf: 0 }, ...entries],
+    new Map([["2026-01-01", 1000]]),
+    "2026-01-05",
+    1000,
+  );
   assertEquals(out.map((s) => s.total_value), ["1000.00", "1000.00", "1000.00", "1000.00"]);
 });
 

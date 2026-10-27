@@ -62,11 +62,23 @@ struct NotesCard: View {
 }
 
 /// One note: name and status, its shares, the worst one and the next date with its outlook;
-/// what went in and what came back.
+/// what went in and what came back; with a broker mark, sold today next to if called.
 struct NoteRow: View {
     let note: NoteSummary
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            summary
+            let exits = note.exits()
+            if !exits.isEmpty { NoteExitsView(exits: exits) }
+        }
+        .padding(.vertical, 2)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(([note.accessibilityLabel] + note.exits().map(\.accessibilityLabel)).joined(separator: ", "))
+    }
+
+    private var summary: some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(note.name).font(Typography.rowTitle).foregroundStyle(Palette.ink).lineLimit(2)
@@ -84,9 +96,5 @@ struct NoteRow: View {
             }
             Image(systemName: "chevron.right").font(.caption).foregroundStyle(Palette.muted).padding(.top, 4)
         }
-        .padding(.vertical, 2)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(note.accessibilityLabel)
     }
 }

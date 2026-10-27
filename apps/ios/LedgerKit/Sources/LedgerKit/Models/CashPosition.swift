@@ -135,6 +135,7 @@ public struct BankAccountBalance: Decodable, Sendable, Hashable, Identifiable {
         case "sms": return "\(when) · from SMS"
         case "statement": return "\(when) · from statement"
         case "manual": return "\(when) · entered"
+        case "broker": return "\(when) · from the broker"
         default: return when
         }
     }
@@ -167,15 +168,18 @@ public enum BankAccountLabel {
 public enum CashText {
     /// `"As of today, 14:05"`, `"As of yesterday, 09:10"`, `"As of 3 days ago"` (up to 6),
     /// then `"As of 6 Oct"` (with the year outside this one).
-    public static func asOf(_ date: Date, now: Date = .now) -> String {
+    public static func asOf(_ date: Date, now: Date = .now) -> String { "As of \(relative(date, now: now))" }
+
+    /// `"today, 14:05"`, `"yesterday, 09:10"`, `"3 days ago"` (up to 6), then `"6 Oct"`.
+    public static func relative(_ date: Date, now: Date = .now) -> String {
         let today = LedgerDates.today(now: now)
         let day = CalendarDay(date: date)
         let days = day.days(until: today)
         switch days {
-        case ...0: return "As of today, \(LedgerDates.timeLabel(date))"
-        case 1: return "As of yesterday, \(LedgerDates.timeLabel(date))"
-        case 2...6: return "As of \(days) days ago"
-        default: return "As of \(LedgerDates.dayLabel(day, today: today))"
+        case ...0: return "today, \(LedgerDates.timeLabel(date))"
+        case 1: return "yesterday, \(LedgerDates.timeLabel(date))"
+        case 2...6: return "\(days) days ago"
+        default: return LedgerDates.dayLabel(day, today: today)
         }
     }
 }

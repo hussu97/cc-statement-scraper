@@ -31,6 +31,8 @@ struct NoteDetailView: View {
             StateContainer(state: model.state, retry: reload) { note in
                 NoteHeader(note: note)
                 StatGrid(stats: note.summaryStats)
+                let exits = note.exitStats()
+                if !exits.isEmpty { StatGrid(stats: exits) }
                 if !note.isEnded { NextCard(note: note) }
                 NoteSharesCard(note: note)
                 if note.scenarios != nil { NoteScenariosCard(note: note) }

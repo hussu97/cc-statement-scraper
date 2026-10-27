@@ -6,7 +6,8 @@ import SwiftUI
 /// the month's opening, in, out and closing. A row opens the transaction sheet, where an owner
 /// files a transfer under Support, Saving or a category. An owner adds a deposit or withdrawal no
 /// alert or statement brings in, and the structured notes paid from the account are listed (on a
-/// Swissquote account, with Add from term sheet). Every figure is the server's.
+/// Swissquote account, with Add from term sheet). A synced broker account shows its portfolio
+/// (`BrokerPortfolioSection`). Every figure is the server's.
 struct AccountLedgerView: View {
     let model: AccountLedgerModel
     let profileCode: String
@@ -42,6 +43,8 @@ struct AccountLedgerView: View {
                     .font(Typography.rowMeta)
                     .foregroundStyle(notice.isError ? Palette.danger : Palette.positive)
             }
+            BrokerPortfolioSection(section: model.brokerSection(bankCode: balance?.bankCode ?? model.state.value?.account.bankCode),
+                                   retry: reload) { openedNote = $0 }
             if notes.showsCard(fundingAccount: model.accountCode, bankCode: balance?.bankCode, canEdit: canEdit) {
                 NotesCard(model: notes, profileCode: profileCode, canEdit: canEdit, fundingAccount: model.accountCode) {
                     addingNote = notes.addModel(fundingAccount: model.accountCode)
