@@ -37,5 +37,7 @@ struct HoldingKindDecodingTests {
         rows["holdings"] = holdings
         let v = try LedgerJSON.decode(HoldingsValuation.self, from: try JSONSerialization.data(withJSONObject: rows))
         #expect(v.holdings.contains { $0.kind == .structuredNote })
+        // Listed in their own card, not among the holdings.
+        #expect(!v.groups.contains { $0.kind == .structuredNote })
     }
 }
