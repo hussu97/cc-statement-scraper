@@ -170,7 +170,10 @@ describe("bank accounts", () => {
     expect(balanceSourceLabel("sms")).toBe("from SMS");
     expect(balanceSourceLabel("manual")).toBe("entered");
     expect(balanceSourceLabel("statement")).toBe("from statement");
+    expect(balanceSourceLabel("broker")).toBe("from broker sync");
     expect(balanceSourceLabel(null)).toBeNull();
+    // A source this build doesn't know yet says nothing rather than breaking the page.
+    expect(balanceSourceLabel("something_new")).toBeNull();
   });
 
   it("explains an incomplete total", () => {

@@ -19,6 +19,18 @@
   - Cancelling it leaves the position and the broker's rows.
 - **fix** A coupon paid before a note was bought (a purchase after issue) is the seller's (`coupon_before_purchase`): no longer counted as received or settled.
 - **refactor** `termsheet-extract/read.ts`: reading a term sheet is shared by the upload and the sync.
+- **fix** A synced note the broker redeemed before any close was stored reads as ended, with the result the broker paid. The rebuilt history reads a daily move over 12% in Swissquote's index as flat: the index jumps on a note's trade date and falls back at settlement.
+
+### Web
+
+- **feat** On a synced account's page:
+  - A portfolio card: total with AED, cash, positions, net deposits, profit, income, fees, and the sync status.
+  - A chart of value against net deposits, with estimated days dashed.
+  - A positions table: price or % of nominal, value and cost, *Sell today* against *If called <date>* with annualised %.
+  - Past positions with their return and annualised return.
+  - The account's notes list no longer repeats what these show.
+- **feat** A note's page has a "Sell or hold" card: sold today at the bid against if called on its next date. The notes list adds both figures.
+- **feat** The balance source `broker` reads "from broker sync"; a coupon paid before the purchase shows muted as "Before purchase".
 
 ### Docs
 

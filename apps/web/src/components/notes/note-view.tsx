@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { CalendarClock, ChevronLeft, RefreshCw, ScrollText } from "lucide-react";
 import { useCancelNote, useNoteDetail, useRefreshNotePrices, type NoteDetail, type NoteOutcome } from "@/data/notes";
 import { errorMessage } from "@/data/api";
-import { distanceMet, distanceText, isEnded, levelLabel, maturityTableRows, noteStatus, OUTCOME_LABEL, payoutRows, pct } from "@/lib/notes";
+import { calledNext, distanceMet, distanceText, isEnded, levelLabel, maturityTableRows, noteStatus, outcomeLabel, outcomeTone, payoutRows, pct, sellFromMarket } from "@/lib/notes";
 import { formatDate } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/cn";
@@ -13,6 +13,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { EmptyState, ErrorState, LoadingBlock, LoadingRows } from "@/components/ui/states";
 import { useToast } from "@/components/ui/toast";
 import { FormError } from "@/components/cash/bank-account-dialogs";
+import { SellOrWait } from "./sell-or-wait";
 
 // The chart library loads after the page renders (as on Overview, WEB-53).
 const NoteChart = lazy(() => import("./note-chart").then((m) => ({ default: m.NoteChart })));
@@ -71,6 +72,9 @@ export function NoteView({ profileCode, holdingCode, isOwner }: { profileCode: s
       ) : (
         <>
           <Summary n={n} />
+          {!isEnded(n.status) && (n.market || n.if_called_next) && (
+            <SellOrWait sell={sellFromMarket(n.market)} called={calledNext(n.if_called_next)} currency={n.currency} />
+          )}
           {!isEnded(n.status) && <NextCard n={n} />}
           <SharesCard n={n} />
           {n.scenarios && <ScenariosCard n={n} />}
@@ -395,8 +399,8 @@ function ScheduleCard({ n }: { n: NoteDetail }) {
                         <span className="text-subtle">{n.awaiting_prices && o.obs_date <= (n.next?.obs_date ?? o.obs_date) ? "awaiting prices" : "to come"}</span>
                       ) : (
                         outs.map((x) => (
-                          <span key={x.kind} className={cn("block", x.kind === "coupon" || x.kind === "autocall" ? "text-positive" : "text-muted")}>
-                            {OUTCOME_LABEL[x.kind]}
+                          <span key={x.kind} className={cn("block", outcomeTone(x.kind) === "positive" ? "text-positive" : "text-muted")}>
+                            {outcomeLabel(x.kind)}
                             {x.amount ? ` ${money(x.amount, c)}` : ""} · worst {x.worst_symbol} {pct(x.worst_pct)}
                           </span>
                         ))

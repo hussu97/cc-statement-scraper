@@ -4,7 +4,7 @@
 // (private.note_evaluate, CLAUDE.md §2.2); numbers are decimal strings, seq and days are counts.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, type RpcArgs } from "@/lib/supabase";
-import type { NoteDraft, PayoutBranch } from "@/lib/notes";
+import type { CallScenario, MarketQuote, NoteDraft, PayoutBranch } from "@/lib/notes";
 import { keys, LEDGER_DOMAINS } from "./keys";
 import { functionError, must } from "./api";
 
@@ -50,6 +50,10 @@ export interface NoteSummary {
   break_even_pct: string | null;
   next: NoteNext | null;
   if_ended_today: { payout_pct: string; settlement: string; amount: string; total: string; profit: string } | null;
+  /** What it fetches sold today at the broker's bid (20261027165732); null without a broker price. */
+  market?: MarketQuote | null;
+  /** The first autocall still ahead (20261027165732); null when none is left. */
+  if_called_next?: CallScenario | null;
   symbols: string[];
 }
 
@@ -79,18 +83,7 @@ export interface NoteLevel {
   settlement?: string;
 }
 
-export interface AutocallScenario {
-  obs_date: string;
-  pay_date: string;
-  trigger_pct: string;
-  redemption_pct: string;
-  redemption: string;
-  coupons: string;
-  total: string;
-  profit: string;
-  return_pct: string;
-  annualised_pct: string | null;
-}
+export type AutocallScenario = CallScenario;
 
 export interface MaturityPoint {
   worst_pct: string;
@@ -100,8 +93,11 @@ export interface MaturityPoint {
   profit: string;
 }
 
+/** Known kinds, plus any the server adds later (a new kind must never break the page: lib/notes outcomeLabel). */
+export type OutcomeKind = "coupon" | "coupon_missed" | "autocall" | "autocall_missed" | "maturity" | "coupon_before_purchase" | (string & {});
+
 export interface NoteOutcome {
-  kind: "coupon" | "coupon_missed" | "autocall" | "autocall_missed" | "maturity";
+  kind: OutcomeKind;
   seq: number | null;
   obs_date: string;
   pay_date: string;
@@ -131,7 +127,7 @@ export interface NoteObservation {
 
 export interface NoteEvent {
   event_code: string;
-  kind: "coupon" | "autocall" | "maturity";
+  kind: OutcomeKind;
   obs_date: string;
   pay_date: string;
   rate_pct: string;
