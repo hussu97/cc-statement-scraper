@@ -1247,14 +1247,22 @@ as $$
   select jsonb_build_object(
     'note_code', n.note_code, 'holding_code', n.holding_code, 'name', h.name, 'institution', h.institution,
     'product_name', n.product_name, 'isin', n.isin, 'issuer', n.issuer, 'currency', n.currency,
-    'status', case when n.status = 'cancelled' then 'cancelled' else e->>'status' end,
-    'awaiting_prices', (e->>'awaiting_prices')::boolean,
+    'status', case when n.status = 'cancelled' then 'cancelled' when b.by_broker then n.status else e->>'status' end,
+    'awaiting_prices', case when b.by_broker then false else (e->>'awaiting_prices')::boolean end,
     'trade_date', n.trade_date, 'maturity_date', n.maturity_date, 'ended_on', coalesce(n.ended_on, (e->>'ended_on')::date),
     'invested', n.invested_amount::text, 'nominal', n.nominal::text, 'purchase_price_pct', n.purchase_price_pct::text,
     'funding_account_code', n.funding_account_code,
-    'received', e->'received', 'due', e->'due', 'result', e->'result',
-    'worst_now', e->'worst_now', 'break_even_pct', e->>'break_even_pct', 'next', e->'next',
-    'if_ended_today', e->'if_ended_today',
+    'received', e->'received', 'due', e->'due',
+    -- Ended by the broker before its closes could tell (a synced note): the result is what the
+    -- broker paid back and paid out (20261027165732).
+    'result', case when b.by_broker then jsonb_build_object(
+                     'total', (f.returned + f.income)::numeric(14,2)::text,
+                     'profit', (f.returned + f.income - n.invested_amount)::numeric(14,2)::text,
+                     'return_pct', round((f.returned + f.income) / n.invested_amount * 100 - 100, 2)::text)
+                   else e->'result' end,
+    'worst_now', e->'worst_now', 'break_even_pct', e->>'break_even_pct',
+    'next', case when not b.by_broker then e->'next' end,
+    'if_ended_today', case when not b.by_broker then e->'if_ended_today' end,
     -- What it fetches sold today (the broker's bid on the latest mark) and what it pays if called
     -- at its next autocall date (20261027165732).
     'market', (select jsonb_build_object('price_pct', case when bp.price_in_pct then bp.price::numeric(12,4)::text end,
@@ -1262,12 +1270,81 @@ as $$
                                          'profit', (bp.market_value + coalesce((e->'received'->>'coupons')::numeric, 0)
                                                     - n.invested_amount)::numeric(14,2)::text)
                from public.broker_positions bp
-               where bp.holding_code = n.holding_code and bp.market_value is not null
+               where bp.holding_code = n.holding_code and bp.market_value is not null and n.status = 'live'
                order by bp.as_of desc limit 1),
-    'if_called_next', e->'scenarios'->'autocall'->0,
+    'if_called_next', case when not b.by_broker then e->'scenarios'->'autocall'->0 end,
     'symbols', (select jsonb_agg(u.symbol order by u.ordinal) from public.structured_note_underlyings u
                 where u.note_code = n.note_code))
-  from public.holdings h where h.holding_code = n.holding_code
+  from public.holdings h
+  cross join lateral (
+    select n.status in ('autocalled', 'matured') and coalesce(e->>'status', '') not in ('autocalled', 'matured') as by_broker
+  ) b
+  cross join lateral (
+    select coalesce(sum(hf.amount) filter (where hf.kind = 'withdrawal'), 0) as returned,
+           coalesce(sum(hf.amount) filter (where hf.kind = 'income'), 0) as income
+    from public.holding_flows hf where hf.holding_code = n.holding_code and hf.removed_at is null
+  ) f
+  where h.holding_code = n.holding_code
+$$;
+
+-- structured_note_detail (20261027124257): a note the broker ended shows no live figures.
+create or replace function public.structured_note_detail(p_profile_code text, p_holding_code text)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  n public.structured_notes;
+  e jsonb;
+begin
+  perform private.assert_member(p_profile_code, false);
+  select * into n from public.structured_notes where holding_code = p_holding_code and profile_code = p_profile_code;
+  if not found then
+    raise exception 'note not found' using errcode = 'P0002';
+  end if;
+  e := private.note_evaluate(n.note_code, public.dubai_date(now()));
+  -- Ended by the broker before its closes could tell (20261027165732): no live figures.
+  if n.status in ('autocalled', 'matured') and coalesce(e->>'status', '') not in ('autocalled', 'matured') then
+    e := e - 'levels' - 'scenarios' - 'next' - 'if_ended_today';
+  end if;
+  return private.jsonb_decimal_strings(private.note_summary(n, e) || jsonb_build_object(
+    'terms', jsonb_build_object(
+      'guarantor', n.guarantor, 'denomination', n.denomination::text, 'issue_price_pct', n.issue_price_pct::text,
+      'strike_date', n.strike_date, 'issue_date', n.issue_date, 'final_valuation_date', n.final_valuation_date,
+      'maturity_date', n.maturity_date, 'termsheet_path', n.termsheet_path, 'termsheet_filename', n.termsheet_filename),
+    'observations', coalesce((
+      select jsonb_agg(jsonb_build_object('seq', o.seq, 'obs_date', o.obs_date, 'pay_date', o.pay_date,
+               'coupon_rate_pct', o.coupon_rate_pct::text, 'coupon_barrier_pct', o.coupon_barrier_pct::text,
+               'coupon_memory', o.coupon_memory, 'autocall_trigger_pct', o.autocall_trigger_pct::text,
+               'autocall_amount_pct', o.autocall_amount_pct::text) order by o.obs_date)
+      from public.structured_note_observations o where o.note_code = n.note_code), '[]'::jsonb),
+    'payout', coalesce((
+      select jsonb_agg(jsonb_build_object('min_worst_pct', b.min_worst_pct::text, 'intercept_pct', b.intercept_pct::text,
+               'slope', b.slope::text, 'settlement', b.settlement) order by b.min_worst_pct desc)
+      from public.structured_note_payout_branches b where b.note_code = n.note_code), '[]'::jsonb),
+    'memory_unpaid_pct', e->>'memory_unpaid_pct',
+    'underlyings', e->'underlyings', 'levels', e->'levels', 'scenarios', e->'scenarios', 'outcomes', e->'events',
+    'events', coalesce((
+      select jsonb_agg(jsonb_build_object('event_code', x.event_code, 'kind', x.kind, 'obs_date', x.obs_date,
+               'pay_date', x.pay_date, 'rate_pct', x.rate_pct::text, 'amount', x.amount::text, 'settlement', x.settlement,
+               'shares', x.shares::text, 'share_symbol', case when x.shares is not null then x.worst_symbol end,
+               'txn_code', x.txn_code, 'delivered_holding_code', x.delivered_holding_code, 'settled', x.settled_at is not null)
+             order by x.pay_date desc)
+      from public.structured_note_events x where x.note_code = n.note_code), '[]'::jsonb),
+    'series', coalesce((
+      select jsonb_object_agg(s.symbol, s.points)
+      from (
+        select u.symbol, jsonb_agg(jsonb_build_array(sp.price_date, round(sp.close / u.initial_level * 100, 2)::text)
+                                   order by sp.price_date) as points
+        from public.structured_note_underlyings u
+        join public.security_prices sp on sp.symbol = u.symbol and sp.price_date >= n.strike_date
+             and sp.price_date <= coalesce(n.ended_on, public.dubai_date(now()))
+        where u.note_code = n.note_code
+        group by u.symbol
+      ) s), '{}'::jsonb)));
+end;
 $$;
 
 -- holding_values (20261027124257): a live note at its market value once it has one.

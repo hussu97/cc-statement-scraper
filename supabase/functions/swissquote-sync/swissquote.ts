@@ -325,6 +325,9 @@ export function cashIn(
   return a && typeof a.cashBalance === "number" ? dec(a.cashBalance, 2) : null;
 }
 
+/** A day's move beyond this is a valuation artifact of the platform's index, not a return. */
+export const MAX_DAILY_MOVE = 0.12;
+
 export interface Snapshot {
   as_of: string;
   total_value: string;
@@ -336,7 +339,9 @@ export interface Snapshot {
  * daily time-weighted return index (cumulative %, `twrPerf`) and the money paid in or out:
  * walking back from today's value, V(d-1) = (V(d) - F(d)) / (1 + r(d)), where r(d) is the day's
  * return and F(d) the net deposits booked that day. Days with no index point are skipped; the
- * walk stops at the first day the account held nothing.
+ * walk stops at the first day the account held nothing. The platform's index jumps around a note
+ * bought between its trade and settlement dates (+30% on the trade day, −21% when it settles):
+ * a daily move beyond MAX_DAILY_MOVE is taken as such an artifact and read as flat.
  */
 export function rebuildValues(
   entries: { date: string; twrPerf: number }[],
@@ -358,7 +363,8 @@ export function rebuildValues(
   for (let i = pts.length - 1; i >= 0; i--) {
     const index = 1 + pts[i].twrPerf / 100;
     if (i < pts.length - 1) {
-      const r = index > 0 ? nextIndex / index - 1 : 0;
+      const raw = index > 0 ? nextIndex / index - 1 : 0;
+      const r = Math.abs(raw) > MAX_DAILY_MOVE ? 0 : raw;
       value = value / (1 + r);
     }
     if (value <= 0.005) break;

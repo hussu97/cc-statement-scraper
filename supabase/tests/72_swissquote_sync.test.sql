@@ -280,6 +280,22 @@ select is(public.create_structured_note(pg_temp.v('p'), pg_temp.v('draft')::json
 reset role;
 select set_config('request.jwt.claims', '', true);
 
+-- ── terms for the redeemed position, entered after it ended (no closes stored) ──
+select pg_temp.set('draft72', jsonb_set(jsonb_set(jsonb_set(pg_temp.v('draft')::jsonb, '{terms,isin}', '"XS0000000072"'),
+  '{terms,underlyings}', '[{"name": "Ddd Inc", "symbol": "DDD", "initial_level": "10"}]'), '{name}', '"Redeemed note"')::text);
+select pg_temp.as_user('uid');
+set local role authenticated;
+select pg_temp.set('rh', public.create_structured_note(pg_temp.v('p'), pg_temp.v('draft72')::jsonb));
+select pg_temp.set('rsum', (select x::text from jsonb_array_elements(public.structured_notes_summary(pg_temp.v('p'))) x
+                            where x->>'holding_code' = pg_temp.v('rh')));
+reset role;
+select is((select status || ' ' || ended_on from public.structured_notes where holding_code = pg_temp.v('rh')),
+          'autocalled ' || pg_temp.d(-30), 'the broker''s redemption ends the note');
+select is((pg_temp.v('rsum')::jsonb)->>'status', 'autocalled', 'its summary says so, though no close was stored');
+select is((pg_temp.v('rsum')::jsonb)->'result'->>'profit', '550.00', 'with the result the broker paid: 10,000 + 100 − 9,550');
+select is((pg_temp.v('rsum')::jsonb)->'if_called_next', 'null'::jsonb, 'and no live figures');
+select set_config('request.jwt.claims', '', true);
+
 -- ── a failed sync is shown ──────────────────────────────────────────────────
 select public.record_broker_sync_error(pg_temp.v('p'), 'swissquote', 'Swissquote: card code refused');
 select is((select last_status || ' ' || last_error from public.broker_connections where account_code = pg_temp.v('acc')),
