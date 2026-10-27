@@ -7,6 +7,7 @@ import { useCashPosition, type CashAccount } from "@/data/cash";
 import { useFilterMeta } from "@/data/overview";
 import { isNotFound, useAccountLedger, useBankBalanceSeries, type AccountLedger, type LedgerRow } from "@/data/wealth";
 import { useSetCategory } from "@/data/transactions";
+import { useBrokerPortfolio } from "@/data/broker";
 import { errorMessage } from "@/data/api";
 import { balanceSourceLabel, bankAccountLabel } from "@/lib/cash-flow";
 import {
@@ -37,6 +38,7 @@ import { TransactionDrawer } from "@/components/activity/drawer";
 import { NotesCard } from "@/components/notes/notes-card";
 import { AddNoteDialog } from "@/components/notes/add-note-dialog";
 import { AccountEntryDialog } from "@/components/notes/account-entry-dialog";
+import { ClosedPositionsCard, PortfolioCard, PositionsCard } from "@/components/wealth/broker-portfolio";
 
 // The chart library loads after the page renders (as on Overview, WEB-53).
 const BalanceChart = lazy(() => import("@/components/wealth/balance-chart").then((m) => ({ default: m.BalanceChart })));
@@ -78,6 +80,10 @@ function AccountView({ accountCode }: { accountCode: string }) {
   const ledger = useAccountLedger(profileCode, accountCode, { from: start, to: monthEnd(start) });
   const cash = useCashPosition(profileCode);
   const position = cash.data?.accounts.find((a) => a.account_code === accountCode) ?? null;
+  // A broker account (Swissquote) has a synced portfolio; every other account returns null.
+  const broker = useBrokerPortfolio(profileCode, accountCode);
+  const portfolio = broker.data ?? null;
+  const shown = useMemo(() => new Set([...(portfolio?.positions ?? []), ...(portfolio?.closed ?? [])].map((x) => x.holding_code)), [portfolio]);
   const [updating, setUpdating] = useState<CashAccount | null>(null);
   const [entering, setEntering] = useState<CashAccount | null>(null);
   const [addingNote, setAddingNote] = useState(false);
@@ -107,6 +113,19 @@ function AccountView({ accountCode }: { accountCode: string }) {
         </header>
       </div>
 
+      {broker.isError && !isNotFound(broker.error) && (
+        <Card>
+          <ErrorState title="Couldn't load the portfolio" error={broker.error} onRetry={() => void broker.refetch()} />
+        </Card>
+      )}
+      {portfolio && (
+        <>
+          <PortfolioCard portfolio={portfolio} />
+          <PositionsCard portfolio={portfolio} onAdd={isOwner ? () => setAddingNote(true) : undefined} />
+          <ClosedPositionsCard closed={portfolio.closed} currency={portfolio.currency} />
+        </>
+      )}
+
       <BalanceCard
         profileCode={profileCode}
         accountCode={accountCode}
@@ -124,8 +143,18 @@ function AccountView({ accountCode }: { accountCode: string }) {
         </div>
       )}
 
-      {/* A broker's cash (Swissquote) pays for notes; any account that funds one lists it. */}
-      <NotesCard profileCode={profileCode} isOwner={isOwner} onAdd={() => setAddingNote(true)} fundingAccount={accountCode} hideWhenEmpty={account?.bank_code !== "SWQ"} />
+      {/* A broker's cash (Swissquote) pays for notes; any account that funds one lists it. With a synced
+          portfolio, the positions above already show its notes: only the others (not at the broker) list here. */}
+      {!broker.isLoading && (
+        <NotesCard
+          profileCode={profileCode}
+          isOwner={isOwner}
+          onAdd={() => setAddingNote(true)}
+          fundingAccount={accountCode}
+          hideWhenEmpty={!!portfolio || account?.bank_code !== "SWQ"}
+          exclude={portfolio ? shown : undefined}
+        />
+      )}
 
       <Card>
         <CardHeader

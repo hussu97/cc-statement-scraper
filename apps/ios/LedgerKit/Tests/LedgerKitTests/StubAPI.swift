@@ -289,6 +289,15 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         lock.withLock { balanceSeriesRanges.append((accountCode, from, to)) }
         return balanceSeriesFixture
     }
+    // MARK: Broker sync: scripted answer
+    /// `broker_portfolio`'s answer (nil: no sync); `brokerPortfolioError` is thrown when set.
+    var brokerPortfolioFixture: BrokerPortfolio?
+    var brokerPortfolioError: LedgerAPIError?
+    func brokerPortfolio(profileCode: String, accountCode: String) async throws -> BrokerPortfolio? {
+        count("brokerPortfolio")
+        if let error = lock.withLock({ brokerPortfolioError }) { throw error }
+        return lock.withLock { brokerPortfolioFixture }
+    }
     func netWorth(profileCode: String) async throws -> NetWorth {
         count("netWorth")
         guard let fixture = lock.withLock({ netWorthFixture }) else { throw LedgerAPIError.network("-1009") }
