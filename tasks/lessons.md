@@ -9,6 +9,7 @@
 
 | When | Lesson |
 |---|---|
+| 2026-10-27 | [A note bought after issue did not get the coupons paid before: evaluate income from the trade date](#a-note-bought-after-issue-did-not-get-the-coupons-paid-before-evaluate-income-from-the-trade-date) |
 | 2026-10-27 | [CI pulls Supabase's images anonymously: cache them, and never let a deploy depend on a pull](#ci-pulls-supabases-images-anonymously-cache-them-and-never-let-a-deploy-depend-on-a-pull) |
 | 2026-10-27 | [An app's enum decoded from the server must tolerate a value it doesn't know: a new kind breaks every installed build](#an-apps-enum-decoded-from-the-server-must-tolerate-a-value-it-doesnt-know-a-new-kind-breaks-every-installed-build) |
 | 2026-10-26 | [A card's first six digits are its BIN, never its last four: map them to `first6`](#a-cards-first-six-digits-are-its-bin-never-its-last-four-map-them-to-first6) |
@@ -48,6 +49,16 @@
 | 2026-10-08 | [Tooling defaults that don't work here: `gh` account, Supabase MCP, `localhost`, pip](#tooling-defaults-that-dont-work-here-gh-account-supabase-mcp-localhost-pip) |
 
 ## Lessons
+
+### A note bought after issue did not get the coupons paid before: evaluate income from the trade date
+- **What went wrong**: the Swissquote sync's first real data included a Phoenix note bought on
+  2 Oct 2026, three months after its strike. `note_evaluate` counted the July–September coupons as
+  received and settlement waited forever for broker rows that could never come: those coupons went
+  to the seller.
+- **Rule**: a coupon whose payment date is on or before the trade date belongs to the seller. It
+  still resets memory, but is never counted, settled or posted (`coupon_before_purchase`). The same
+  goes for anything a position earned before it was held.
+- **Enforced by**: pgTAP `72_swissquote_sync` (the coupon before the purchase is not an event).
 
 ### CI pulls Supabase's images anonymously: cache them, and never let a deploy depend on a pull
 - **What went wrong**: the structured-notes release (27 Oct 2026) merged with every check green, but

@@ -238,6 +238,15 @@ supabase secrets list --project-ref nkmylznisjcnmqbxosey      # names and digest
   claims each profile's RL360 plan and backfills month-end values 30 at a time (the daily runs
   finish the rest). A refused sign-in or a changed page layout reaches Sentry; messages never
   carry the login or page text.
+- **`SWISSQUOTE_LOGINS`** (swissquote-sync): a one-line JSON array
+  `[{"profile_code":"prf_…","username":"…","password":"…","card":{"a1":"…",…,"j10":"…"},"currency":"USD"}]`.
+  `card` is the Level-3 matrix card (cell → code); together with the password it is the whole
+  sign-in. Write it with `uv run --with pdfplumber scripts/cutover/swissquote-logins.py --card
+  <card PDF> --profile prf_… --credentials-env <file with SWISSQUOTE_USERNAME/PASSWORD>` (it
+  writes into `.env.production` and prints only a count), then push with the script above. Unset,
+  the sync does nothing. After the first push, run it once with `-d '{"sync":true,"terms":5}'`:
+  it builds the history and reads 5 term sheets (the nightly runs read one each). Each run signs
+  out any open Swissquote web session.
 - **Worker timing.** Leave `PARSER_TIMEOUT_MS` at its default **75000** (set it explicitly only
   to document it): it must stay above the parser's own 60 s kill (§3) and below Cloud Run's
   120 s request timeout. `EDGE_WALL_CLOCK_MS` is 150000 on the free plan (400000 on paid); the
@@ -250,7 +259,7 @@ Deploy every function. Each one's `verify_jwt = false` comes from `supabase/conf
 
 ```bash
 supabase functions deploy --project-ref nkmylznisjcnmqbxosey
-# statements-upload sms-ingest worker gmail-push gmail-watch-renew outlook-poll ops-monitor fx-rates metal-prices stock-prices termsheet-extract rl360-sync member-invite
+# statements-upload sms-ingest worker gmail-push gmail-watch-renew outlook-poll ops-monitor fx-rates metal-prices stock-prices termsheet-extract rl360-sync swissquote-sync member-invite
 ```
 
 Smoke test (`CRON_SECRET` exported from the same file as in §2.4):
@@ -272,6 +281,7 @@ curl -s -X POST https://nkmylznisjcnmqbxosey.supabase.co/functions/v1/worker \
 | `ledger-metal-prices` | `7 */6 * * *` | `metal-prices` function (gold/silver prices; no secret beyond `CRON_SECRET`) |
 | `ledger-stock-prices` | `30 22 * * 1-6` | `stock-prices` function (closes of the shares structured notes follow, from Yahoo Finance, no key; then settles the notes) |
 | `ledger-rl360-sync` | `20 2 * * *` (06:20 Dubai) | `rl360-sync` function (RL360 plan values and premiums; needs `RL360_LOGINS`, skips when unset) |
+| `ledger-swissquote-sync` | `30 21 * * *` (01:30 Dubai) | `swissquote-sync` function (the Swissquote cash account, positions, values and note terms; needs `SWISSQUOTE_LOGINS`, skips when unset) |
 | `ledger-nightly` | `0 22 * * *` (02:00 Dubai) | purge `document_events` older than 90 days, void released authorisations, recurring detection, insights, net worth snapshot |
 | `ledger-llm-enqueue` | `0 18 * * *` | queue uncategorised merchants for the LLM |
 | `ledger-legacy-choices` | `45 22 * * *` | apply staged legacy category choices once per transaction (cutover helper); unschedules itself when nothing is pending or 30 days after staging |

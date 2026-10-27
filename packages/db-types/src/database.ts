@@ -430,6 +430,380 @@ export type Database = {
         }
         Relationships: []
       }
+      broker_connections: {
+        Row: {
+          account_code: string
+          connection_code: string
+          created_at: string
+          last_attempt_at: string | null
+          last_error: string | null
+          last_status: string | null
+          last_synced_at: string | null
+          portfolio_ref: string
+          profile_code: string
+          provider: string
+          terms_tried: string[]
+        }
+        Insert: {
+          account_code: string
+          connection_code?: string
+          created_at?: string
+          last_attempt_at?: string | null
+          last_error?: string | null
+          last_status?: string | null
+          last_synced_at?: string | null
+          portfolio_ref: string
+          profile_code: string
+          provider: string
+          terms_tried?: string[]
+        }
+        Update: {
+          account_code?: string
+          connection_code?: string
+          created_at?: string
+          last_attempt_at?: string | null
+          last_error?: string | null
+          last_status?: string | null
+          last_synced_at?: string | null
+          portfolio_ref?: string
+          profile_code?: string
+          provider?: string
+          terms_tried?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broker_connections_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "broker_connections_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "v_account_balances"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "broker_connections_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "v_bank_balances"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "broker_connections_profile_code_fkey"
+            columns: ["profile_code"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["profile_code"]
+          },
+        ]
+      }
+      broker_positions: {
+        Row: {
+          account_code: string
+          as_of: string
+          cost_price: number | null
+          currency: string
+          fetched_at: string
+          holding_code: string
+          isin: string
+          market_value: number | null
+          name: string
+          position_code: string
+          price: number | null
+          price_in_pct: boolean
+          product_type: string
+          profile_code: string
+          profit: number | null
+          quantity: number
+          symbol: string | null
+        }
+        Insert: {
+          account_code: string
+          as_of: string
+          cost_price?: number | null
+          currency: string
+          fetched_at?: string
+          holding_code: string
+          isin: string
+          market_value?: number | null
+          name: string
+          position_code?: string
+          price?: number | null
+          price_in_pct: boolean
+          product_type: string
+          profile_code: string
+          profit?: number | null
+          quantity: number
+          symbol?: string | null
+        }
+        Update: {
+          account_code?: string
+          as_of?: string
+          cost_price?: number | null
+          currency?: string
+          fetched_at?: string
+          holding_code?: string
+          isin?: string
+          market_value?: number | null
+          name?: string
+          position_code?: string
+          price?: number | null
+          price_in_pct?: boolean
+          product_type?: string
+          profile_code?: string
+          profit?: number | null
+          quantity?: number
+          symbol?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broker_positions_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "broker_positions_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "v_account_balances"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "broker_positions_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "v_bank_balances"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "broker_positions_holding_fkey"
+            columns: ["profile_code", "holding_code"]
+            isOneToOne: false
+            referencedRelation: "holdings"
+            referencedColumns: ["profile_code", "holding_code"]
+          },
+          {
+            foreignKeyName: "broker_positions_profile_code_fkey"
+            columns: ["profile_code"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["profile_code"]
+          },
+        ]
+      }
+      broker_snapshots: {
+        Row: {
+          account_code: string
+          as_of: string
+          cash: number | null
+          created_at: string
+          currency: string
+          estimated: boolean
+          positions_value: number | null
+          profile_code: string
+          snapshot_code: string
+          total_value: number
+        }
+        Insert: {
+          account_code: string
+          as_of: string
+          cash?: number | null
+          created_at?: string
+          currency: string
+          estimated?: boolean
+          positions_value?: number | null
+          profile_code: string
+          snapshot_code?: string
+          total_value: number
+        }
+        Update: {
+          account_code?: string
+          as_of?: string
+          cash?: number | null
+          created_at?: string
+          currency?: string
+          estimated?: boolean
+          positions_value?: number | null
+          profile_code?: string
+          snapshot_code?: string
+          total_value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broker_snapshots_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "broker_snapshots_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "v_account_balances"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "broker_snapshots_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "v_bank_balances"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "broker_snapshots_profile_code_fkey"
+            columns: ["profile_code"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["profile_code"]
+          },
+        ]
+      }
+      broker_transactions: {
+        Row: {
+          account_code: string
+          action: string
+          balance_after: number | null
+          booked_at: string
+          btx_code: string
+          commission: number
+          contract_ref: string | null
+          created_at: string
+          currency: string
+          external_id: string
+          holding_code: string | null
+          is_reversal: boolean
+          isin: string | null
+          kind: string
+          label: string
+          net_amount: number
+          profile_code: string
+          quantity: number | null
+          security_name: string | null
+          symbol: string | null
+          txn_code: string | null
+          unit_price: number | null
+        }
+        Insert: {
+          account_code: string
+          action: string
+          balance_after?: number | null
+          booked_at: string
+          btx_code?: string
+          commission?: number
+          contract_ref?: string | null
+          created_at?: string
+          currency: string
+          external_id: string
+          holding_code?: string | null
+          is_reversal?: boolean
+          isin?: string | null
+          kind: string
+          label: string
+          net_amount: number
+          profile_code: string
+          quantity?: number | null
+          security_name?: string | null
+          symbol?: string | null
+          txn_code?: string | null
+          unit_price?: number | null
+        }
+        Update: {
+          account_code?: string
+          action?: string
+          balance_after?: number | null
+          booked_at?: string
+          btx_code?: string
+          commission?: number
+          contract_ref?: string | null
+          created_at?: string
+          currency?: string
+          external_id?: string
+          holding_code?: string | null
+          is_reversal?: boolean
+          isin?: string | null
+          kind?: string
+          label?: string
+          net_amount?: number
+          profile_code?: string
+          quantity?: number | null
+          security_name?: string | null
+          symbol?: string | null
+          txn_code?: string | null
+          unit_price?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broker_transactions_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "broker_transactions_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "v_account_balances"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "broker_transactions_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "v_bank_balances"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "broker_transactions_holding_fkey"
+            columns: ["profile_code", "holding_code"]
+            isOneToOne: false
+            referencedRelation: "holdings"
+            referencedColumns: ["profile_code", "holding_code"]
+          },
+          {
+            foreignKeyName: "broker_transactions_profile_code_fkey"
+            columns: ["profile_code"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["profile_code"]
+          },
+          {
+            foreignKeyName: "broker_transactions_txn_code_fkey"
+            columns: ["txn_code"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["txn_code"]
+          },
+          {
+            foreignKeyName: "broker_transactions_txn_code_fkey"
+            columns: ["txn_code"]
+            isOneToOne: false
+            referencedRelation: "v_spend"
+            referencedColumns: ["txn_code"]
+          },
+          {
+            foreignKeyName: "broker_transactions_txn_code_fkey"
+            columns: ["txn_code"]
+            isOneToOne: false
+            referencedRelation: "v_transactions"
+            referencedColumns: ["transfer_txn_code"]
+          },
+          {
+            foreignKeyName: "broker_transactions_txn_code_fkey"
+            columns: ["txn_code"]
+            isOneToOne: false
+            referencedRelation: "v_transactions"
+            referencedColumns: ["txn_code"]
+          },
+        ]
+      }
       budgets: {
         Row: {
           account_code: string | null
@@ -3864,6 +4238,10 @@ export type Database = {
         Args: { p_attempt?: number; p_doc_code: string }
         Returns: Json
       }
+      broker_portfolio: {
+        Args: { p_account_code: string; p_profile_code: string }
+        Returns: Json
+      }
       budget_status: {
         Args: {
           p_include_inactive?: boolean
@@ -4033,6 +4411,10 @@ export type Database = {
           hour: number
           txn_count: number
         }[]
+      }
+      import_broker_data: {
+        Args: { p_data: Json; p_profile_code: string; p_provider: string }
+        Returns: Json
       }
       import_holding_data: {
         Args: {
@@ -4218,6 +4600,14 @@ export type Database = {
           p_profile_code: string
         }
         Returns: string
+      }
+      record_broker_sync_error: {
+        Args: { p_error: string; p_profile_code: string; p_provider: string }
+        Returns: undefined
+      }
+      record_broker_terms_tried: {
+        Args: { p_account_code: string; p_isin: string }
+        Returns: undefined
       }
       record_holding_value: {
         Args: {

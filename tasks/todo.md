@@ -669,3 +669,71 @@ had a card and an account).
   fee, Emirates NBD conversion), so the scheme part only.
 - Local checks (no Docker here): deno lint/fmt/check/test (181), web lint, typecheck, test (624),
   build; pgTAP and types drift ran in CI and the deploy.
+
+## 11. Swissquote sync: the cash account, positions, note values and history (2026-10-27)
+
+Swissquote is read nightly by an Edge Function (`swissquote-sync`) through the web platform's
+own JSON APIs. Login is plain HTTPS: a form post, then the Level-3 matrix card challenge (JSON),
+with no browser and no phone push. Production had no SWQ data before this, so the sync owns the account.
+
+### Decisions (user, 27 Oct)
+- Monitor through Supabase functions (Edge secret, like RL360).
+- The SWQ account behaves like every other debit account: transactions (+/−), balances, list
+  and account screens.
+- Each investment shows its current value. A note shows what it would fetch sold today
+  (Swissquote's bid) next to what it pays if called at its next autocall date.
+- History: every cash movement since the account opened, the outcomes of past notes, and the
+  account's value over time.
+
+### Design
+- **Evidence: `broker_transactions`.** One row per Swissquote cash or position movement
+  (`rest-api/transactions`), keyed by Swissquote's transaction id. These rows are immutable.
+  A cash row derives one `transactions` row (`amount_source = 'broker'`, posted, `txn_at` = the
+  booking time). Kinds: deposit, buy, sell, coupon, redemption, dividend, interest, custody fee,
+  and reversal (opposite sign).
+  - Descriptions reuse the rules: `NOTE COUPON <ISIN>` is income; new seed rules file `DIVIDEND`
+    and `DEPOSIT INTEREST` the same way.
+  - Buys and sells are transfers linked to their holding (saving, not spend).
+- **Balance.** A `broker` balance checkpoint is written at each sync (Swissquote's own cash
+  figure), plus the opening balance once.
+- **Positions.** Each ISIN is a holding (`external_ref` = ISIN).
+  - Shares are `security`.
+  - Anything else is a `broker` holding until its term sheet makes it a `structured_note`;
+    `create_structured_note` adopts the holding.
+  - Flows come from the broker rows: buy is a contribution, coupon/dividend is income, redemption
+    or sell is a withdrawal.
+  - `broker_positions` keeps each day's mark: quantity, price, value, cost, P&L. It writes a
+    `holding_valuations` row.
+- **Note value.** A note's value is its latest market value, or what was invested when there is
+  no mark yet. This changes the 27 Oct decision, at the user's request for current values.
+  - `note_summary` gains `market` (bid %, value, as of, profit) and `if_called_next` (the first
+    autocall scenario).
+- **Notes funded from a synced account post nothing of their own.** Purchase, coupons and
+  redemptions link to the broker's rows; an event settles only once its broker row arrives.
+  Cancelling a note never voids a broker row.
+- **History.**
+  - `broker_snapshots`: one row per day with cash, positions and total. Days before the first
+    sync are rebuilt from Swissquote's daily performance index and the deposits, marked
+    `estimated`.
+  - `broker_portfolio(profile, account)` serves the account screen: totals, positions with
+    sell-now / if-called values, the series against net deposits, and sync status.
+- **Term sheets.** A buy whose ticket in Swissquote Messages carries a term sheet is read with
+  the termsheet-extract code and becomes a structured note automatically (reviewable; cancel
+  undoes it).
+
+### Plan
+- [x] Migration `swissquote_sync`: tables (`broker_connections`, `broker_transactions`,
+      `broker_positions`, `broker_snapshots`), `amount_source`/checkpoint `broker`,
+      refresh_transaction branch, `import_broker_data` (service), `broker_portfolio` (member),
+      note adoption/settlement/cancel changes, `holding_values` market value, seed rules.
+- [x] pgTAP `72_swissquote_sync` (ingest, idempotency, balances, flows, note linking, RLS);
+      privileges matrix; `pnpm db:types`.
+- [x] Edge `swissquote-sync`: session (login, card), fetchers, normalisers, performance
+      back-fill, term-sheet import, cron; tests with a fake fetch.
+- [ ] Web: SWQ account page portfolio card (positions, value chart), note market vs
+      if-called, `broker` balance label; tests.
+- [ ] iOS: same in LedgerKit + views; tolerant decoding; tests.
+- [ ] Run it: local sync against the live account into the local stack, then look at web and
+      iOS.
+- [ ] Docs: CHANGELOG, ARCHITECTURE, PRODUCTION (secret, cron), README, lessons.
+- [ ] Production (each needs a yes): secret `SWISSQUOTE_LOGINS`, deploy, first sync.

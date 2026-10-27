@@ -1,5 +1,29 @@
 # Changelog
 
+## Swissquote sync: the cash account, positions, note values and history — 2026-10-27
+
+### Backend (Supabase)
+
+- **feat** `swissquote-sync` Edge Function and pg_cron job `ledger-swissquote-sync` (01:30 Dubai). It signs in to Swissquote with the password and the Level-3 matrix card (plain HTTPS, no browser, never the phone push) and reads the portfolio, cash, positions, every transaction since the account opened and the daily performance index. It also reads the term sheet attached to each trade ticket in Messages into a structured note. Secret `SWISSQUOTE_LOGINS`, written by `scripts/cutover/swissquote-logins.py`.
+- **feat** `import_broker_data`: the Swissquote USD account behaves like any debit account.
+  - `broker_transactions` (evidence, keyed by Swissquote's id) derive posted transactions: deposits, buys, coupons and redemptions (`NOTE COUPON`, `NOTE REDEMPTION`), dividends, deposit interest, custody fees and reversals.
+  - Swissquote's cash figure becomes a `broker` balance checkpoint.
+  - Each ISIN is a holding with flows from the broker's rows: shares are `security`, anything else `broker` until its terms arrive.
+  - `broker_positions` keeps each day's marks; `broker_snapshots` keeps the value per day, rebuilt before the first sync from the performance index (estimated).
+  - New seed rules: `DIVIDEND ` (Dividends), `DEPOSIT INTEREST` (Investment income) and `SWISSQUOTE CUSTODY FEE` (Bank Fees & Interest).
+- **feat** `broker_portfolio`: the account screen's data. It covers cash, positions with cost, income, *sold today* and, for a note, *if called next*; past positions with their return and annualised return; the daily value against net deposits; and the sync status. `note_summary` gains `market` and `if_called_next`.
+- **change** A live structured note is worth its latest market value (Swissquote's bid) once it has one, else what was invested.
+- **change** A note funded from a synced account posts nothing of its own.
+  - It adopts the position's holding and takes what was bought from the broker's buys.
+  - Its coupons and redemption settle against the broker's rows; a redemption ends it.
+  - Cancelling it leaves the position and the broker's rows.
+- **fix** A coupon paid before a note was bought (a purchase after issue) is the seller's (`coupon_before_purchase`): no longer counted as received or settled.
+- **refactor** `termsheet-extract/read.ts`: reading a term sheet is shared by the upload and the sync.
+
+### Docs
+
+- **docs** ARCHITECTURE (Swissquote sync), PRODUCTION (`SWISSQUOTE_LOGINS`, the cron job, deploy list), README (env, endpoints), tasks/todo.md §11, lessons.
+
 ## Swissquote: USD cash and structured notes — 2026-10-27
 
 ### Backend (Supabase)
