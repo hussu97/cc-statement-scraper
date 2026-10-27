@@ -32,19 +32,44 @@ struct BrokerPortfolioTests {
         #expect(note.ifCalledNext?.total == dec("21500.00") && note.ifCalledNext?.annualisedPct == dec("12.00"))
         #expect(p.positions[3].value == nil && p.positions[3].sellNow == nil && p.positions[3].quantity == dec("1.5"))
         #expect(p.closed.map(\.noteStatus) == [nil, "autocalled"])
+        #expect(p.closedTotal?.count == 2 && p.closedTotal?.profit == dec("500.00"))
+        #expect(note.verdict == NoteVerdict(kind: .needs, symbol: "AAA", gapPct: dec("10.50"), date: day("2026-11-26")))
         #expect(p.series.map(\.estimated) == [true, true, false, false])
         #expect(p.series[0].cash == nil && p.series[3].positions == dec("59000.00"))
     }
 
-    @Test("a live note's shares on its position: worst first, now against initial, distance to the call")
-    func noteShares() throws {
+    @Test("a live note's stocks on bars: worst first, ticks at the call and the barrier, the dot coloured by where it is")
+    func bars() throws {
         let p = try Self.portfolio()
-        let row = BrokerPositionRow(p.positions[1], today: day("2026-10-27"))
-        #expect(row.shares.map(\.symbol) == ["AAA", "BBB"])        // CCC has no close yet
-        #expect(row.shares[0].levels == "90.5 vs 100" && row.shares[0].perf == "90.5%" && row.shares[0].isWorst)
-        #expect(row.shares[0].toCall == "needs +10.5% to call" && !row.shares[0].callMet)
-        #expect(row.shares[1].toCall == "4.55% above the call" && row.shares[1].callMet)
-        #expect(BrokerPositionRow(p.positions[0], today: day("2026-10-27")).shares.isEmpty)   // a share has none
+        let bars = NoteStockBar.bars(try #require(p.positions[1].note?.underlyings))
+        #expect(bars.map(\.symbol) == ["AAA", "BBB", "CCC"])
+        let aaa = bars[0]
+        #expect(aaa.isWorst && aaa.closeText == "90.50" && aaa.startText == "start 100.00")
+        #expect(aaa.statusText == "needs +10.5%" && aaa.statusTone == .warn)
+        #expect(aaa.barrierLabel == "barrier" && aaa.dotTone == .warn)
+        // 70 (barrier) to 100 (call and start), padded 8% of the span each side: 67.6 to 102.4.
+        #expect(abs(try #require(aaa.barrierAt) - 2.4 / 34.8) < 1e-9)
+        #expect(abs(try #require(aaa.closeAt) - 22.9 / 34.8) < 1e-9)
+        #expect(abs(try #require(aaa.callAt) - 32.4 / 34.8) < 1e-9)
+        let bbb = bars[1]
+        #expect(bbb.statusText == "at call level" && bbb.statusTone == .positive && bbb.dotTone == .positive)
+        #expect(bbb.barrierAt == nil && bbb.barrierLabel == nil)
+        let ccc = bars[2]
+        #expect(ccc.statusText == "No price yet" && ccc.closeAt == nil && ccc.closeText == "—")
+        #expect(aaa.accessibilityLabel == "AAA, 90.50, start 100.00, needs +10.5%")
+    }
+
+    @Test("no autocall left: the bar's words read break-even, the dot danger below it")
+    func breakEvenBar() throws {
+        let json = #"""
+        {"symbol":"JPM","name":"JPMorgan","initial":"300","close":"250","is_worst":true,"perf_pct":"83.33",
+         "to_autocall_pct":null,"to_coupon_pct":null,"to_break_even_pct":"4.2","autocall_level":null,
+         "coupon_level":null,"break_even_level":"260.5"}
+        """#
+        let u = try LedgerJSON.decode(NoteDetail.Underlying.self, from: Data(json.utf8))
+        let bar = NoteStockBar.bars([u])[0]
+        #expect(bar.statusText == "needs +4.2%" && bar.statusTone == .danger)
+        #expect(bar.barrierLabel == "break-even" && bar.dotTone == .danger && bar.callAt == nil)
     }
 
     @Test("null (an account with no sync) and an empty body read as no portfolio")
@@ -71,69 +96,110 @@ struct BrokerPortfolioTests {
         #expect(p.positions[1].note?.noteStatus == .live)
     }
 
-    @Test("the header: value in USD and AED, the prices' date, and the stat tiles")
+    @Test("the header: three numbers, whole units, AED under the total")
     func header() throws {
         let view = BrokerPortfolioPresentation(try Self.portfolio(), now: Self.now)
-        #expect(view.title == "Swissquote portfolio")
-        #expect(view.totalText == "USD 60,000.00")
-        #expect(view.totalAedText == "≈ AED 220,350.00")
-        #expect(view.asOfText == "Prices as of 27 Oct")
-        #expect(view.stats.map(\.label) == ["Net deposits", "Profit", "Income", "Fees", "Cash", "In positions"])
-        #expect(view.stats[1].value == "+USD 10,000.00" && view.stats[1].tone == .positive)
-        #expect(view.stats[5].sub == "4 positions")
+        #expect(view.providerName == "Swissquote")
+        #expect(view.figures.map(\.label) == ["Total value", "Profit", "Cash"])
+        #expect(view.figures.map(\.value) == ["USD 60,000", "+USD 10,000", "USD 1,000"])
+        #expect(view.figures[0].sub == "≈ AED 220,350")
+        #expect(view.figures[1].sub == "on USD 50,000 put in" && view.figures[1].tone == .positive)
     }
 
-    @Test("sync: fresh, late, failed with the last good sync, never")
+    @Test("sync: fresh, late, failed with the broker's error, never")
     func sync() throws {
         let p = try Self.portfolio()
         let fresh = BrokerPortfolioPresentation(p, now: Self.now).sync
-        #expect(fresh.text == "Synced with Swissquote today, 14:00" && fresh.tone == .neutral && fresh.detail == nil)
+        #expect(fresh.text == "Synced today, 14:00" && fresh.tone == .neutral && fresh.detail == nil)
 
         let late = BrokerPortfolioPresentation(p, now: at("2026-10-30T08:00:00+00:00")).sync
-        #expect(late.text == "Synced with Swissquote 3 days ago" && late.tone == .warn)
+        #expect(late.text == "Synced 3 days ago" && late.tone == .warn)
 
         var json = try #require(try JSONSerialization.jsonObject(with: fixture("broker_portfolio")) as? [String: Any])
         json["sync"] = ["status": "error", "error": "login refused", "last_synced_at": "2026-10-26T10:00:00+00:00",
                         "last_attempt_at": "2026-10-27T10:00:00+00:00"]
         let failed = BrokerPortfolioPresentation(
             try #require(try BrokerPortfolio.decode(JSONSerialization.data(withJSONObject: json))), now: Self.now).sync
-        #expect(failed.text == "Last sync failed" && failed.tone == .danger)
-        #expect(failed.detail == "login refused · Last good sync yesterday, 14:00")
+        #expect(failed.text == "Last sync failed: login refused" && failed.tone == .warn)
+        #expect(failed.detail == "Last good sync yesterday, 14:00")
     }
 
-    @Test("positions: largest first, unpriced last; a note sells today next to if called, and opens")
-    func positions() throws {
-        let rows = BrokerPortfolioPresentation(try Self.portfolio(), now: Self.now).positions
-        #expect(rows.map(\.title) == ["NOTE WITHOUT TERMS 2031", "Bank Phoenix AAA/BBB 2029", "EXAMPLE ORD", "Unpriced thing"])
-
-        let plain = rows[0]
-        #expect(plain.holdingText == "30,000 nominal at 100%")
-        #expect(plain.profitText == "+USD 2,000.00 (+6.67%)" && plain.profitTone == .positive)
-        #expect(plain.incomeText == "USD 2,000.00 paid so far")
-        #expect(plain.exits.isEmpty && !plain.opensNote)   // a note without terms has no scenarios
-
-        let note = rows[1]
-        #expect(note.opensNote && note.chips.isEmpty)
-        #expect(note.profitText == "−USD 1,000.00 (−5%)" && note.profitTone == .danger)
-        #expect(note.exits.map(\.title) == ["Sell today", "If called 26 Nov"])
-        #expect(note.exits[0].totalText == "USD 19,000.00" && note.exits[0].detail == "−5% · bid 90%")
-        #expect(note.exits[1].profitText == "+USD 1,500.00" && note.exits[1].detail == "+7.5% · 12% a year")
-
-        #expect(rows[2].holdingText == "40 × USD 250.00" && rows[2].caption == "EXMP · US0000000001")
-        #expect(rows[3].valueText == "No price" && rows[3].profitText == nil && rows[3].holdingText == "1.5 units")
+    @Test("tabs: Portfolio, Transactions, and Past notes with its count once something ended")
+    func tabs() throws {
+        let view = BrokerPortfolioPresentation(try Self.portfolio(), now: Self.now)
+        #expect(view.tabs.map(view.title) == ["Portfolio", "Transactions", "Past notes (2)"])
+        var json = try #require(try JSONSerialization.jsonObject(with: fixture("broker_portfolio")) as? [String: Any])
+        json["closed"] = []
+        let none = BrokerPortfolioPresentation(
+            try #require(try BrokerPortfolio.decode(JSONSerialization.data(withJSONObject: json))), now: Self.now)
+        #expect(none.tabs == [.portfolio, .transactions])
     }
 
-    @Test("ended positions: latest first, in, back and income, the result; a note opens")
-    func closed() throws {
-        let rows = BrokerPortfolioPresentation(try Self.portfolio(), now: Self.now).closed
+    @Test("Portfolio: a card per live note with its verdict and two numbers; everything else in one line")
+    func portfolioTab() throws {
+        let view = BrokerPortfolioPresentation(try Self.portfolio(), now: Self.now)
+        let cards = view.notes
+        #expect(cards.map(\.title) == ["Bank Phoenix AAA/BBB 2029"])
+        let card = cards[0]
+        #expect(card.verdict == "Called on 26 Nov if AAA rises 10.5%" && card.verdictTone == .warn)
+        #expect(card.figures.map(\.label) == ["Worth today", "If called on 26 Nov"])
+        #expect(card.figures.map(\.value) == ["USD 18,000", "USD 21,500"])
+        #expect(card.figures[1].sub == "+USD 1,500 · 12% a year" && card.figures[1].tone == .positive)
+        #expect(card.bars.map(\.symbol) == ["AAA", "BBB", "CCC"])
+
+        let others = view.otherHoldings
+        #expect(others.map(\.title) == ["NOTE WITHOUT TERMS 2031", "EXAMPLE ORD", "Unpriced thing"])
+        #expect(others[0].valueText == "USD 30,000" && others[0].profitText == "+USD 2,000 (+6.7%)")
+        #expect(others[1].profitText == "+USD 2,000 (+25%)" && others[1].profitTone == .positive)
+        #expect(others[2].valueText == "No price" && others[2].profitText == nil)
+        #expect(others.allSatisfy { !$0.opensNote })
+    }
+
+    @Test("a live note without a call date left shows what was paid; an ended one leaves Portfolio")
+    func noCallLeft() throws {
+        var json = try #require(try JSONSerialization.jsonObject(with: fixture("broker_portfolio")) as? [String: Any])
+        var positions = try #require(json["positions"] as? [[String: Any]])
+        var note = try #require(positions[1]["note"] as? [String: Any])
+        note["if_called_next"] = NSNull()
+        positions[1]["note"] = note
+        var ended = positions[1]
+        ended["holding_code"] = "hld_01hhhhhhhhhhhhhhhhhhhhhhhh"
+        var endedNote = note
+        endedNote["status"] = "autocalled"
+        ended["note"] = endedNote
+        json["positions"] = positions + [ended]
+        let view = BrokerPortfolioPresentation(
+            try #require(try BrokerPortfolio.decode(JSONSerialization.data(withJSONObject: json))), now: Self.now)
+        #expect(view.notes.count == 1)
+        #expect(view.notes[0].figures.map(\.label) == ["Worth today", "Paid"])
+        #expect(view.notes[0].figures[1].value == "USD 20,000")
+        #expect(view.otherHoldings.first { $0.holdingCode == "hld_01hhhhhhhhhhhhhhhhhhhhhhhh" }?.opensNote == true)
+    }
+
+    @Test("Past notes: the total in one line, then each one held, its profit and return")
+    func pastNotes() throws {
+        let view = BrokerPortfolioPresentation(try Self.portfolio(), now: Self.now)
+        #expect(view.pastSummary == "2 ended · +USD 500 earned on USD 15,000")
+        let rows = view.past
         #expect(rows.map(\.title) == ["Bank Athena CCC 2028", "SOLD ORD"])
-        #expect(rows[0].status == "Called early" && rows[0].statusTone == .positive && rows[0].opensNote)
-        #expect(rows[0].flows == "USD 10,000.00 in · USD 11,000.00 back · USD 500.00 income")
-        #expect(rows[0].returnText == "+15% · 20% a year" && rows[0].profitText == "+USD 1,500.00")
-        #expect(rows[0].dates == "1 Dec 2025 – 1 Sep 2026")
-        #expect(rows[1].status == "Sold" && !rows[1].opensNote)
-        #expect(rows[1].flows == "USD 5,000.00 in · USD 4,000.00 back")
-        #expect(rows[1].returnText == "−20%" && rows[1].profitTone == .danger)
+        #expect(rows[0].heldText == "held Dec 2025–Sep 2026" && rows[0].profitText == "+USD 1,500")
+        #expect(rows[0].returnText == "+15% · 20% a year" && rows[0].opensNote)
+        #expect(rows[1].heldText == "held Jan–Jun 2025" && rows[1].profitTone == .danger && !rows[1].opensNote)
+        #expect(BrokerPastRow.held(day("2026-03-01"), day("2026-03-20")) == "held Mar 2026")
+        #expect(BrokerPastRow.held(nil, day("2026-03-20")) == "ended Mar 2026")
+
+        // All called early: said so.
+        var json = try #require(try JSONSerialization.jsonObject(with: fixture("broker_portfolio")) as? [String: Any])
+        let closed = try #require(json["closed"] as? [[String: Any]])
+        json["closed"] = [closed[1]]
+        json["closed_total"] = ["count": "1", "invested": "10000.00", "received": "11500.00", "profit": "1500.00"]
+        let called = BrokerPortfolioPresentation(
+            try #require(try BrokerPortfolio.decode(JSONSerialization.data(withJSONObject: json))), now: Self.now)
+        #expect(called.pastSummary == "1 called early · +USD 1,500 earned on USD 10,000")
+        json["closed_total"] = NSNull()
+        let older = BrokerPortfolioPresentation(
+            try #require(try BrokerPortfolio.decode(JSONSerialization.data(withJSONObject: json))), now: Self.now)
+        #expect(older.pastSummary == nil)
     }
 
     @Test("the chart: rebuilt days apart from synced ones, joined at the switch, never two runs as one line")
@@ -154,12 +220,6 @@ struct BrokerPortfolioTests {
         #expect(Set(back.values.map(\.run)).count == 3)
         #expect(!BrokerValueChart([], currency: "USD").showsChart)
         #expect(BrokerValueChart.axisLabel(day("2025-10-01")) == "Oct ’25")
-    }
-
-    @Test("quantities: whole numbers grouped, fractions kept")
-    func quantity() {
-        #expect(BrokerText.quantity(dec("25000")) == "25,000")
-        #expect(BrokerText.quantity(dec("1.250")) == "1.25")
     }
 
     @Test("the section shows only for a broker account until a portfolio arrives")
@@ -191,43 +251,6 @@ struct BrokerPortfolioTests {
     }
 }
 
-@Suite("Structured notes: sold today next to if called")
-struct NoteExitTests {
-    static func notes(market: Bool) throws -> [NoteSummary] {
-        var json = try #require(try JSONSerialization.jsonObject(with: fixture("structured_notes_summary")) as? [[String: Any]])
-        let called: [String: Any] = [
-            "obs_date": "2027-04-22", "pay_date": "2027-04-29", "trigger_pct": "105", "redemption_pct": "100",
-            "redemption": "40000.00", "coupons": "2000.00", "total": "42000.00", "profit": "4750.00",
-            "return_pct": "12.75", "annualised_pct": "25.00",
-        ]
-        for i in json.indices {
-            json[i]["if_called_next"] = called
-            if market { json[i]["market"] = ["price_pct": "90", "value": "36000.00", "as_of": "2026-10-27", "profit": "-1250.00"] }
-        }
-        return try LedgerJSON.decode([NoteSummary].self, from: JSONSerialization.data(withJSONObject: json))
-    }
-
-    @Test("a live note with a mark shows both; without a mark, or once ended, neither")
-    func exits() throws {
-        let notes = try Self.notes(market: true)
-        let live = notes[1]
-        #expect(live.market?.value == dec("36000.00") && live.market?.pricePct == dec("90"))
-        let exits = live.exits(today: day("2026-10-27"))
-        #expect(exits.map(\.title) == ["Sell today", "If called 22 Apr 2027"])
-        #expect(exits[0].profitText == "−USD 1,250.00" && exits[0].tone == .danger && exits[0].detail == "bid 90%")
-        #expect(exits[1].detail == "+12.75% · 25% a year")
-        #expect(exits[1].stat.sub == "USD 42,000.00 back · +12.75% · 25% a year")
-        #expect(notes[2].isEnded && notes[2].exits().isEmpty)
-        #expect(try Self.notes(market: false)[1].exits().isEmpty)
-    }
-
-    @Test("an older server without market or if_called_next still decodes")
-    func older() throws {
-        let notes = try NoteFixtures.summary()
-        #expect(notes.allSatisfy { $0.market == nil && $0.ifCalledNext == nil })
-    }
-}
-
 @Suite("Broker portfolio on the account screen")
 @MainActor
 struct BrokerPortfolioScreenTests {
@@ -245,8 +268,9 @@ struct BrokerPortfolioScreenTests {
         model.month.goBack()
         await model.loadIfNeeded(profileCode: "prf_a")   // another month: the failed portfolio is read again
         #expect(api.calls("brokerPortfolio") == 2)
+        #expect(model.brokerHoldings.contains("hld_01cccccccccccccccccccccccc") && model.brokerHoldings.count == 6)
         if case .loaded(let p) = model.brokerSection(bankCode: "SWQ") {
-            #expect(p.totalText == "USD 60,000.00")
+            #expect(p.figures[0].value == "USD 60,000")
         } else {
             Issue.record("the portfolio should show")
         }

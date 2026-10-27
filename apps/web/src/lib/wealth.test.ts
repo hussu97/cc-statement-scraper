@@ -15,6 +15,7 @@ import {
   netWorthHistoryMonths,
   netWorthNotes,
   netWorthPoints,
+  accountTab,
   parseAccountSearch,
   shiftAccountMonth,
 } from "./wealth";
@@ -23,13 +24,22 @@ const TODAY = "2026-10-20";
 
 describe("account page month (?month=YYYY-MM)", () => {
   it("accepts a past or current month, and drops the rest as undefined", () => {
-    expect(parseAccountSearch({ month: "2026-09" }, TODAY)).toEqual({ month: "2026-09" });
-    expect(parseAccountSearch({ month: "2026-10" }, TODAY)).toEqual({ month: "2026-10" });
+    expect(parseAccountSearch({ month: "2026-09" }, TODAY)).toEqual({ month: "2026-09", tab: undefined });
+    expect(parseAccountSearch({ month: "2026-10" }, TODAY)).toEqual({ month: "2026-10", tab: undefined });
     // undefined, not absent: it must override the raw URL the root route passes through.
     expect(parseAccountSearch({ month: "2026-11" }, TODAY)).toHaveProperty("month", undefined);
     expect(parseAccountSearch({ month: "2026-13" }, TODAY)).toHaveProperty("month", undefined);
     expect(parseAccountSearch({ month: "2026-09-01" }, TODAY)).toHaveProperty("month", undefined);
     expect(parseAccountSearch({}, TODAY)).toHaveProperty("month", undefined);
+  });
+
+  it("keeps a known tab other than the default", () => {
+    expect(parseAccountSearch({ tab: "past" }, TODAY)).toEqual({ month: undefined, tab: "past" });
+    expect(parseAccountSearch({ tab: "transactions", month: "2026-09" }, TODAY)).toEqual({ month: "2026-09", tab: "transactions" });
+    expect(parseAccountSearch({ tab: "portfolio" }, TODAY)).toHaveProperty("tab", undefined);
+    expect(parseAccountSearch({ tab: "<x>" }, TODAY)).toHaveProperty("tab", undefined);
+    expect(accountTab(undefined)).toBe("portfolio");
+    expect(accountTab("past")).toBe("past");
   });
 
   it("turns the param into a first-of-month and back; this month is the default", () => {

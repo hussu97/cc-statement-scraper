@@ -16,12 +16,15 @@ public struct NoteStat: Sendable, Hashable, Identifiable {
     }
 }
 
-/// What the next observation would do at today's prices.
-public struct NoteOutlook: Sendable, Hashable, Identifiable {
-    public var id: String { title }
-    public let title: String
-    public let text: String
-    public let ok: Bool
+/// The note screen's detail, collapsed until opened.
+public enum NoteSection: String, Sendable, Hashable, CaseIterable, Identifiable {
+    case scenarios = "All scenarios"
+    case schedule = "Full schedule"
+    case priceHistory = "Price history"
+    case terms = "Terms"
+
+    public var id: String { rawValue }
+    public var title: String { rawValue }
 }
 
 /// One schedule row: the dates, the coupon and autocall terms, and what happened.
@@ -46,72 +49,85 @@ extension NoteDetail {
     private func money(_ v: Decimal) -> String { summary.money(v) }
     private func signed(_ v: Decimal) -> String { summary.signed(v) }
 
-    /// Invested, received, then the result (ended) or what it would pay ended today and break-even.
-    public var summaryStats: [NoteStat] {
-        let s = summary
-        var out = [
-            NoteStat("Invested", money(s.invested),
-                     sub: "\(money(s.nominal)) nominal at \(NoteText.pct(s.purchasePricePct)) · \(LedgerDates.fullDayLabel(s.tradeDate))"),
-            NoteStat("Received", money(s.received.total),
-                     sub: "Coupons \(money(s.received.coupons))" + (s.due.total > 0 ? " · \(money(s.due.total)) due" : "")),
-        ]
-        if let r = s.result {
-            out.append(NoteStat("Result", signed(r.profit), sub: "\(NoteText.pct(r.returnPct)) on what you put in",
-                                tone: NoteText.profitTone(r.profit)))
-            out.append(NoteStat("Ended", s.endedOn.map(LedgerDates.fullDayLabel) ?? "—", sub: s.noteStatus.label))
+    private func whole(_ v: Decimal) -> String { NoteText.whole(v, currency: currency) }
+
+    /// The verdict, big: `"Called on 15 Mar 2027 if GOOGL rises 9.3%"`; nil once ended (the status
+    /// badge says so and the money says how it went) or without one this build words.
+    public func verdictHeadline(today: CalendarDay = LedgerDates.today()) -> String? {
+        isEnded ? nil : summary.verdict?.headline(today: today)
+    }
+
+    public var verdictTone: Tone { summary.verdict?.tone ?? .neutral }
+
+    /// Under the verdict: when the next check is and what it takes; for a coupon at risk, what the
+    /// coupon pays and when the call comes. Empty once ended.
+    /// `"Next check 15 Mar 2027 · in 139 days · called if every stock is at or above 100% of its start"`.
+    public func countdown(today: CalendarDay = LedgerDates.today()) -> [String] {
+        guard !isEnded, let next = summary.next else { return [] }
+        let when = "\(LedgerDates.fullDayLabel(next.obsDate)) · \(NoteText.inDays(next.days))"
+        let atRisk = summary.verdict?.kind == .couponAtRisk
+        var lines: [String] = []
+        if next.isFinal {
+            lines.append("Final valuation \(when)")
+        } else if let call = next.autocall {
+            lines.append("Next check \(when) · called if every stock is at or above \(NoteText.pct(call.triggerPct)) of its start")
+        } else if let coupon = next.coupon, !atRisk {
+            lines.append("Next check \(when) · coupon paid if every stock is at or above \(NoteText.pct(coupon.barrierPct)) of its start")
         } else {
-            let t = s.ifEndedToday
-            out.append(NoteStat("If it ended today", t.map { signed($0.profit) } ?? "—",
-                                sub: t.map { "\(NoteText.pct($0.payoutPct)) of nominal\($0.settlement == "physical" ? " in shares" : ""), with coupons received" }
-                                    ?? "Needs today's prices",
-                                tone: NoteText.profitTone(t?.profit)))
-            out.append(NoteStat("Break-even at maturity", s.breakEvenPct.map { "worst ≥ \(NoteText.pct($0))" } ?? "—",
-                                sub: "Matures \(LedgerDates.fullDayLabel(s.maturityDate)); coupons aside"))
+            lines.append("Next check \(when)")
+        }
+        if atRisk, let coupon = next.coupon {
+            lines.append("Coupon of \(money(coupon.amount)) is paid only if every stock is at or above "
+                         + "\(NoteText.pct(coupon.barrierPct)) of its start")
+        }
+        if let call = summary.verdict?.callLine(today: today) { lines.append(call) }
+        return lines
+    }
+
+    /// The stocks on bars, the one holding it back first; none once ended.
+    public var bars: [NoteStockBar] { isEnded ? [] : NoteStockBar.bars(underlyings) }
+
+    /// The money in three numbers. Live: paid, worth today (and what selling would make), if called
+    /// at the next date. Ended: paid, got back, profit.
+    public func moneyStats(today: CalendarDay = LedgerDates.today()) -> [NoteStat] {
+        let s = summary
+        let paid = NoteStat("Paid", whole(s.invested))
+        if isEnded {
+            guard let r = s.result else { return [paid] }
+            return [paid, NoteStat("Got back", whole(r.total)),
+                    NoteStat("Profit", NoteText.signedWhole(r.profit, currency: currency),
+                             sub: NoteText.signedPct(r.returnPct, digits: 1), tone: NoteText.profitTone(r.profit))]
+        }
+        var out = [paid, NoteStat("Worth today", s.market.map { whole($0.value) } ?? "—",
+                                  sub: s.market.map { "\(NoteText.signedWhole($0.profit, currency: currency)) if sold today" }
+                                      ?? "No broker price yet",
+                                  tone: .neutral)]
+        if let c = s.ifCalledNext {
+            out.append(NoteStat("If called on \(LedgerDates.dayLabel(c.obsDate, today: today))", whole(c.total),
+                                sub: NoteText.profitLine(c.profit, annualisedPct: c.annualisedPct, currency: currency),
+                                tone: NoteText.profitTone(c.profit)))
         }
         return out
     }
 
-    /// `"26 Nov 2026 · in 30 days"`, or `"None left"`.
-    public var nextTitle: String {
-        guard let next = summary.next else { return "None left" }
-        return "\(LedgerDates.fullDayLabel(next.obsDate)) · \(NoteText.inDays(next.days))"
+    /// The collapsed sections this note has: scenarios only while the server has them, the price
+    /// history once there are closes.
+    public var sections: [NoteSection] {
+        NoteSection.allCases.filter { section in
+            switch section {
+            case .scenarios: scenarios != nil
+            case .priceHistory: !seriesLines.isEmpty
+            case .schedule, .terms: true
+            }
+        }
     }
 
-    /// The next date's coupon, autocall and (at the final valuation) repayment at today's prices.
-    public var outlooks: [NoteOutlook] {
-        guard let next = summary.next else { return [] }
-        var out: [NoteOutlook] = []
-        if let c = next.coupon {
-            let memory = (memoryUnpaidPct ?? 0) > 0 ? " (with missed ones)" : ""
-            out.append(NoteOutlook(
-                title: "Coupon \(NoteText.pct(c.ratePct))\(memory)",
-                text: c.wouldPay ? "Would pay \(money(c.amount)) on \(LedgerDates.fullDayLabel(next.payDate))"
-                                 : "Not at today's prices: the worst share must be at \(NoteText.pct(c.barrierPct)) or above",
-                ok: c.wouldPay))
-        }
-        if let a = next.autocall {
-            out.append(NoteOutlook(
-                title: "Autocall at \(NoteText.pct(a.triggerPct))",
-                text: a.wouldCall ? "Would repay \(money(a.amount)) (\(NoteText.pct(a.redemptionPct))) and end the note"
-                                  : "Not at today's prices: every share must be at \(NoteText.pct(a.triggerPct)) of its initial level",
-                ok: a.wouldCall))
-        }
-        if next.isFinal, let t = summary.ifEndedToday {
-            out.append(NoteOutlook(title: "Final valuation", text: "At today's prices it repays \(money(t.amount))",
-                                   ok: t.profit >= 0))
-        }
-        return out
-    }
-
-    /// `"AMZN at 87.05% of its initial level"`.
-    public var worstNowText: String? {
-        summary.worstNow.map { "\($0.symbol) at \(NoteText.pct($0.pct, digits: 2)) of its initial level" }
-    }
-
-    /// Above the levels list: `"The worst share (AMZN, 87.05%) against each level:"`; nil when it isn't shown.
-    public var levelsIntro: String? {
-        guard !isEnded, let levels, !levels.isEmpty, let w = summary.worstNow else { return nil }
-        return "The worst share (\(w.symbol), \(NoteText.pct(w.pct, digits: 2))) against each level:"
+    /// The schedule in one line, for its collapsed section.
+    public var scheduleSummary: String {
+        NoteText.scheduleSummary(observations.map {
+            NoteText.ScheduleEntry(obsDate: $0.obsDate, couponRatePct: $0.couponRatePct, couponBarrierPct: $0.couponBarrierPct,
+                                   couponMemory: $0.couponMemory, autocallTriggerPct: $0.autocallTriggerPct)
+        })
     }
 
     /// The scenarios' four tiles.
@@ -120,10 +136,10 @@ extension NoteDetail {
         let bestSub = s.best.date.map { "\(s.best.when == "autocall" ? "Called" : "Matures") \(LedgerDates.fullDayLabel($0)), every coupon paid" }
         return [
             NoteStat("Best case", signed(s.best.profit), sub: bestSub, tone: .positive),
-            NoteStat("Worst case", signed(s.worst.profit), sub: "The worst share falls to zero; coupons received kept", tone: .danger),
+            NoteStat("Worst case", signed(s.worst.profit), sub: "The stock holding it back falls to zero; coupons received kept", tone: .danger),
             NoteStat("Coupons still to come", money(s.remainingCoupons), sub: "If every remaining one is paid"),
             NoteStat("Break-even at maturity", NoteText.pct(summary.breakEvenPct),
-                     sub: "Worst share level that returns what you paid"),
+                     sub: "Where the lowest stock must end to return what you paid"),
         ]
     }
 
@@ -172,8 +188,8 @@ extension NoteDetail {
         ]
     }
 
-    /// The header's line under the name: `"XS000… · Example Bank M Financial · Swissquote"`.
+    /// The header's one muted line: `"Example Bank M Financial · XS0000000405"`.
     public var headerDetail: String {
-        [summary.isin, summary.issuer, summary.institution].compactMap { $0 }.joined(separator: " · ")
+        [summary.issuer, summary.isin].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
     }
 }

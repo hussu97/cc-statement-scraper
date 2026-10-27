@@ -42,6 +42,8 @@ public struct BrokerPortfolio: Decodable, Sendable, Hashable {
         public let awaitingPrices: Bool?
         /// Each share against its initial level and the next autocall (absent on an older server).
         public let underlyings: [NoteDetail.Underlying]?
+        /// The note in one line (20261027200000); nil from an older server.
+        public let verdict: NoteVerdict?
 
         public var noteStatus: NoteStatus { NoteStatus(raw: status) }
     }
@@ -146,6 +148,25 @@ public struct BrokerPortfolio: Decodable, Sendable, Hashable {
         }
     }
 
+    /// What the positions that ended came to, all together (20261027200000).
+    public struct ClosedTotal: Decodable, Sendable, Hashable {
+        public let count: Int
+        public let invested: Decimal
+        public let received: Decimal
+        public let profit: Decimal
+
+        enum CodingKeys: String, CodingKey { case count, invested, received, profit }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            // The count arrives as a decimal string, like every figure.
+            count = NSDecimalNumber(decimal: try c.decodeIfPresent(Decimal.self, forKey: .count) ?? 0).intValue
+            invested = try c.decodeIfPresent(Decimal.self, forKey: .invested) ?? 0
+            received = try c.decodeIfPresent(Decimal.self, forKey: .received) ?? 0
+            profit = try c.decodeIfPresent(Decimal.self, forKey: .profit) ?? 0
+        }
+    }
+
     /// One day's value against the money put in to date. `estimated` days were rebuilt from the
     /// broker's performance index (before daily syncs began) and carry no cash/positions split.
     public struct Point: Decodable, Sendable, Hashable, Identifiable {
@@ -198,11 +219,13 @@ public struct BrokerPortfolio: Decodable, Sendable, Hashable {
     public let fees: Decimal
     public let positions: [Position]
     public let closed: [ClosedPosition]
+    /// Nil from an older server.
+    public let closedTotal: ClosedTotal?
     public let series: [Point]
 
     enum CodingKeys: String, CodingKey {
         case accountCode, provider, portfolioRef, currency, sync, asOf, cash, positionsValue, total, totalAed
-        case netDeposits, profit, income, fees, positions, closed, series
+        case netDeposits, profit, income, fees, positions, closed, closedTotal, series
     }
 
     public init(from decoder: any Decoder) throws {
@@ -223,8 +246,12 @@ public struct BrokerPortfolio: Decodable, Sendable, Hashable {
         fees = try c.decodeIfPresent(Decimal.self, forKey: .fees) ?? 0
         positions = try c.decodeIfPresent([Position].self, forKey: .positions) ?? []
         closed = try c.decodeIfPresent([ClosedPosition].self, forKey: .closed) ?? []
+        closedTotal = try c.decodeIfPresent(ClosedTotal.self, forKey: .closedTotal)
         series = try c.decodeIfPresent([Point].self, forKey: .series) ?? []
     }
+
+    /// Every holding the account shows, live or ended: other lists leave them out.
+    public var holdingCodes: Set<String> { Set(positions.map(\.holdingCode) + closed.map(\.holdingCode)) }
 
     /// The RPC's body: the portfolio, or nil for `null` (an account with no sync) or an empty body.
     public static func decode(_ data: Data) throws -> BrokerPortfolio? {

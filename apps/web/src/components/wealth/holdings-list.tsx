@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
-import { Coins, Plus } from "lucide-react";
+import { ChevronRight, Coins, Plus } from "lucide-react";
 import type { Holding, useHoldingsValuation } from "@/data/holdings";
+import { brokerAccountLine, outsideBrokers, type BrokerAccountSummary } from "@/lib/broker-accounts";
 import { formatPct, formatWeight, holdingKind, quoteLabel, signTone } from "@/lib/holdings";
 import { aedEquivalent, formatOwnValue, groupHoldings, investmentFacts, kindOf, linkRuleText, noValueText, valueInput } from "@/lib/investments";
 import { formatDate, formatRelative } from "@/lib/dates";
@@ -10,6 +11,7 @@ import { Badge, Card, CardHeader } from "@/components/ui/display";
 import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
 import { ViewerNote } from "@/components/rules/shared";
+import { BankLogo } from "@/components/bank-logo";
 import { SignedTotal, TONE_TEXT } from "./investments";
 import { HoldingAvatar, KindIcon } from "./holding-image";
 
@@ -19,18 +21,32 @@ export interface HoldingActions {
   onUpdateValue?: (h: Holding) => void;
 }
 
-/** Every holding, grouped by kind, each with its value (own currency and AED), its date, cost and gain. */
+/** Synced broker accounts, listed whole: their holdings never list one by one (see HoldingsListCard). */
+export interface BrokerGroups {
+  accounts: BrokerAccountSummary[];
+  covered: ReadonlySet<string>;
+  loading: boolean;
+}
+
+/**
+ * Every holding, grouped by kind, each with its value (own currency and AED), its date, cost and
+ * gain. A synced broker account (Swissquote) is one row at the top, linking to its page; the
+ * holdings it covers aren't listed again.
+ */
 export function HoldingsListCard({
   q,
   isOwner,
   onAdd,
   actions,
+  brokers,
 }: {
   q: ReturnType<typeof useHoldingsValuation>;
   isOwner: boolean;
   onAdd: () => void;
   actions: HoldingActions;
+  brokers: BrokerGroups;
 }) {
+  const groups = q.data ? groupHoldings(outsideBrokers(q.data.holdings, brokers.covered)) : [];
   return (
     <Card>
       <CardHeader
@@ -46,11 +62,11 @@ export function HoldingsListCard({
         }
       />
       {!isOwner && <ViewerNote className="px-5 pb-3" />}
-      {q.isLoading ? (
+      {q.isLoading || brokers.loading ? (
         <LoadingRows rows={3} />
       ) : q.isError || !q.data ? (
         <ErrorState error={q.error} onRetry={() => void q.refetch()} />
-      ) : groupHoldings(q.data.holdings).length === 0 ? (
+      ) : groups.length === 0 && brokers.accounts.length === 0 ? (
         <EmptyState
           icon={<Coins />}
           title={q.data.holdings.length > 0 ? "No other holdings" : "No investments yet"}
@@ -63,14 +79,21 @@ export function HoldingsListCard({
           }
         >
           {q.data.holdings.length > 0
-            ? "Your structured notes are listed below, with their status."
+            ? "Your structured notes are listed below."
             : isOwner
               ? "Add gold or silver, a savings plan, a broker account, shares or a fixed deposit. Bank Ledger values them and counts them in your net worth."
               : "The ledger's owner can add investments here."}
         </EmptyState>
       ) : (
         <div className="border-t border-border">
-          {groupHoldings(q.data.holdings).map((g) => (
+          {brokers.accounts.length > 0 && (
+            <ul className={cn("divide-y divide-border", groups.length > 0 && "border-b border-border")}>
+              {brokers.accounts.map((a) => (
+                <BrokerRow key={a.account_code} a={a} />
+              ))}
+            </ul>
+          )}
+          {groups.map((g) => (
             <section key={g.kind} aria-labelledby={`holdings-${g.kind}`}>
               <h3 id={`holdings-${g.kind}`} className="flex items-center gap-1.5 border-b border-border bg-surface-2/50 px-5 py-1.5 text-[11px] font-medium tracking-[0.06em] text-subtle uppercase">
                 <KindIcon kind={g.kind} className="size-3.5" />
@@ -86,6 +109,26 @@ export function HoldingsListCard({
         </div>
       )}
     </Card>
+  );
+}
+
+function BrokerRow({ a }: { a: BrokerAccountSummary }) {
+  return (
+    <li>
+      <Link
+        to="/wealth/accounts/$accountCode"
+        params={{ accountCode: a.account_code }}
+        className="tap group flex items-center gap-3 px-5 py-3.5 hover:bg-surface-2/60 focus-visible:bg-surface-2/60"
+      >
+        <BankLogo bankCode={a.bank_code} decorative />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-ink group-hover:text-accent">{a.name}</p>
+          <p className="tabular mt-0.5 text-[12px] text-ink-2">{brokerAccountLine(a)}</p>
+          {a.sync_status === "error" && <p className="mt-0.5 text-[11px] text-warn">The last sync failed: open the account to see why.</p>}
+        </div>
+        <ChevronRight className="size-4 shrink-0 text-subtle group-hover:text-ink-2" />
+      </Link>
+    </li>
   );
 }
 

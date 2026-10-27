@@ -1,18 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
+  dateTickFormatter,
   estimateNote,
-  formatPositionPrice,
-  formatQuantity,
-  heldSpan,
+  heldMonths,
+  holdingResult,
+  isLiveNote,
   parseBrokerPortfolio,
+  pastHeadline,
   portfolioPoints,
   positionKind,
-  positionRef,
   providerLabel,
-  sellFromPosition,
-  shareLines,
+  splitPositions,
   syncStatus,
-  dateTickFormatter,
   type PortfolioDay,
 } from "./broker";
 
@@ -70,6 +69,7 @@ const RAW = {
     },
     { holding_code: "hld_00000000000000000000000002", kind: "security", name: "SHARE ORD", isin: "US0000000002", symbol: "SHR", quantity: "10", price: "200", price_in_pct: false, currency: "USD", value: "2000.00", sell_now: null },
   ],
+  closed_total: { count: "1", invested: "10000.00", received: "11000.00", profit: "1000.00" },
   closed: [{ holding_code: "hld_00000000000000000000000003", kind: "structured_note", name: "Old note", invested: "10000.00", returned: "11000.00", income: "0", profit: "1000.00", return_pct: "10.00", annualised_pct: "12.00", opened_on: "2025-01-01", closed_on: "2025-11-01", note_status: "autocalled" }],
   series: [
     { as_of: "2026-10-26", total: "99000.00", cash: null, positions: null, net_deposits: "90000.00", estimated: true },
@@ -123,30 +123,38 @@ describe("syncStatus", () => {
 
 describe("positions", () => {
   const p = parseBrokerPortfolio(RAW)!;
-  it("words a position", () => {
+  it("words a position's kind and provider", () => {
     expect(positionKind("structured_note")).toBe("structured_note");
     expect(positionKind("broker")).toBe("broker");
     expect(positionKind("something_new")).toBe("security");
-    expect(positionRef(p.positions[0]!)).toBe("XS0000000001 · BSKT 29");
-    expect(positionRef({ isin: null, symbol: "SHR" })).toBe("SHR");
     expect(providerLabel("swissquote")).toBe("Swissquote");
     expect(providerLabel(null)).toBe("Broker");
   });
-  it("formats quantity and price", () => {
-    expect(formatQuantity("20000")).toBe("20,000");
-    expect(formatQuantity("1234.50")).toBe("1,234.5");
-    expect(formatQuantity(null)).toBe("—");
-    expect(formatPositionPrice({ price: "95.5", price_in_pct: true })).toBe("95.5%");
-    expect(formatPositionPrice({ price: "200", price_in_pct: false })).toBe("200.00");
-    expect(formatPositionPrice({ price: null, price_in_pct: false })).toBe("—");
+  it("splits live notes from other holdings, in the server's order", () => {
+    const ended = { ...p.positions[0]!, holding_code: "hld_ended", note: { ...p.positions[0]!.note!, status: "autocalled" } };
+    const bare = { ...p.positions[0]!, holding_code: "hld_bare", note: null };
+    const { notes, others } = splitPositions([p.positions[0]!, p.positions[1]!, ended, bare]);
+    expect(notes.map((x) => x.holding_code)).toEqual(["hld_00000000000000000000000001"]);
+    expect(others.map((x) => x.holding_code)).toEqual(["hld_00000000000000000000000002", "hld_ended", "hld_bare"]);
+    expect(isLiveNote(p.positions[0]!)).toBe(true);
   });
-  it("takes sell-today from the server's sell_now", () => {
-    expect(sellFromPosition(p.positions[0]!)).toEqual({ total: "19100.00", profit: "-900.00", returnPct: "-4.50", pricePct: "95.5", asOf: "2026-10-27" });
-    expect(sellFromPosition(p.positions[1]!)).toBeNull();
+  it("takes a holding's result from sell_now, else its profit", () => {
+    expect(holdingResult(p.positions[0]!)).toEqual({ profit: "-900.00", returnPct: "-4.50" });
+    expect(holdingResult({ sell_now: null, profit: "12.00" })).toEqual({ profit: "12.00", returnPct: null });
   });
   it("words how long a closed position was held", () => {
-    expect(heldSpan(p.closed[0]!)).toBe("1 Jan 2025 – 1 Nov 2025");
-    expect(heldSpan({ opened_on: null, closed_on: null })).toBe("—");
+    expect(heldMonths(p.closed[0]!)).toBe("held Jan–Nov 2025");
+    expect(heldMonths({ opened_on: "2025-11-03", closed_on: "2026-03-09" })).toBe("held Nov 2025–Mar 2026");
+    expect(heldMonths({ opened_on: "2026-09-01", closed_on: "2026-09-20" })).toBe("held Sep 2026");
+    expect(heldMonths({ opened_on: null, closed_on: null })).toBe("—");
+  });
+  it("sums up the past notes in one line", () => {
+    expect(p.closed_total).toEqual({ count: "1", invested: "10000.00", received: "11000.00", profit: "1000.00" });
+    expect(pastHeadline(p.closed_total, p.closed, "USD")).toBe("1 called early · +USD 1,000 earned on USD 10,000");
+    expect(pastHeadline({ count: "2", invested: "100.00", received: "90.00", profit: "-10.00" }, [{ note_status: "autocalled" }, { note_status: null }], "USD")).toBe(
+      "2 ended · −USD 10 lost on USD 100",
+    );
+    expect(pastHeadline(null, [], "USD")).toBeNull();
   });
 });
 
@@ -172,38 +180,5 @@ describe("portfolio chart", () => {
     expect(estimateNote([day("2026-01-01", "1", true), day("2026-01-02", "1", false)])).toBe(
       "Dashed: estimated from the broker's performance index before 2 Jan 2026; daily marks since.",
     );
-  });
-});
-
-describe("shareLines", () => {
-  const note = {
-    status: "live",
-    next: null,
-    if_called_next: null,
-    if_ended_today: null,
-    worst_now: null,
-    awaiting_prices: false,
-    underlyings: [
-      { symbol: "BBB", initial: "200", close: "220", perf_pct: "110.0000", is_worst: false, to_autocall_pct: "-4.55" },
-      { symbol: "AAA", initial: "100", close: "90.5", perf_pct: "90.5000", is_worst: true, to_autocall_pct: "10.50" },
-      { symbol: "CCC", initial: "50", close: null, perf_pct: null, to_autocall_pct: null },
-    ],
-  };
-
-  it("lists a live note's priced shares, worst first, with the distance to the call", () => {
-    expect(shareLines(note)).toEqual([
-      { symbol: "AAA", levels: "90.5 vs 100", perf: "90.5%", toCall: "needs +10.5%", callMet: false, worst: true },
-      { symbol: "BBB", levels: "220 vs 200", perf: "110%", toCall: "4.55% above", callMet: true, worst: false },
-    ]);
-  });
-
-  it("shows nothing for an ended note, an older payload or no note", () => {
-    expect(shareLines({ ...note, status: "autocalled" })).toEqual([]);
-    expect(shareLines({ ...note, underlyings: undefined })).toEqual([]);
-    expect(shareLines(null)).toEqual([]);
-  });
-
-  it("leaves the distance out when the note has no autocall left", () => {
-    expect(shareLines({ ...note, underlyings: [{ symbol: "AAA", initial: "100", close: "95", perf_pct: "95", to_autocall_pct: null }] })[0]?.toCall).toBeNull();
   });
 });

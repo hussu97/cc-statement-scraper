@@ -513,7 +513,7 @@ set-based `UPDATE … WHERE … IS DISTINCT FROM` applies the results.
   `merchant_category_skips` are left out: `declined` until the category set changes,
   `rejected` for good.
 
-**LLM.** (Term sheets the user uploads for a structured note go to `TERMSHEET_LLM_MODEL` through `termsheet-extract`; nothing else of a document is ever sent.) Claude Haiku (`LLM_MODEL`, default `claude-haiku-5-5`) receives only merchant names, up to
+**LLM.** (Term sheets go to `TERMSHEET_LLM_MODEL`: the Swissquote sync's, from the trade tickets, and `termsheet-extract`, which no app calls since 27 Oct; nothing else of a document is ever sent.) Claude Haiku (`LLM_MODEL`, default `claude-haiku-5-5`) receives only merchant names, up to
 3 distinct example descriptions per merchant and the category list, keyed by short refs (`m1`, `c1`)
 that the worker maps back to codes. It never sees amounts or PDFs.
 Suggestions below 0.5 confidence are dropped and never override a manual merchant choice. When
@@ -742,6 +742,12 @@ matrix card's challenge as JSON; no browser and no phone push) and hands it to
   called next* = the first autocall scenario), ended positions with their return and annualised
   return, and the daily values against net deposits. `note_summary` gains `market` and
   `if_called_next`.
+- **Verdicts** (`20261027200000`). `private.note_verdict` turns a note's evaluation into one line the
+  apps word: `on_track` (every share at the next autocall trigger), `needs` (the worst share must
+  rise `gap_pct` by `date`), `coupon_at_risk`, `to_maturity` (no autocall left; distance to
+  break-even), `awaiting_prices`, `ended`. It is on `note_summary` and on each note position of
+  `broker_portfolio`, which also gives `closed_total`; `broker_accounts_summary` puts each synced
+  account in one line (and the holdings it holds) for Investments.
 
 There is likewise **one definition of what a card owes**: `public.v_account_balances`
 (`security_invoker`). A sum of transactions cannot know the balance carried in before the first

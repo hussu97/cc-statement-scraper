@@ -15,7 +15,7 @@ export const HOLDING_KINDS = [
   { value: "broker", label: "Broker account", group: "Broker accounts" },
   { value: "security", label: "Shares or fund", group: "Shares & funds" },
   { value: "deposit", label: "Fixed deposit", group: "Deposits" },
-  // Added from a term sheet (components/notes), never through the holding form.
+  // Created by the broker sync from its term sheet, never through the holding form.
   { value: "structured_note", label: "Structured note", group: "Structured notes" },
 ] as const;
 export type HoldingKind = (typeof HOLDING_KINDS)[number]["value"];

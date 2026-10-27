@@ -1,24 +1,24 @@
 import LedgerKit
 import SwiftUI
 
-/// One bank account like a bank statement (Wealth mode): its balance and Update balance, the last
-/// 90 days of balances, then a month of rows with their flow and the balance after each, under
-/// the month's opening, in, out and closing. A row opens the transaction sheet, where an owner
-/// files a transfer under Support, Saving or a category. An owner adds a deposit or withdrawal no
-/// alert or statement brings in, and the structured notes paid from the account are listed (on a
-/// Swissquote account, with Add from term sheet). A synced broker account shows its portfolio
-/// (`BrokerPortfolioSection`). Every figure is the server's.
+/// One bank account (Wealth mode). Any account reads like a bank statement
+/// (`AccountTransactions`): its balance, the last 90 days, a month of rows; a row opens the
+/// transaction sheet, where an owner files a transfer. A synced broker account (Swissquote) leads
+/// with its three numbers and the value over time, then offers Portfolio (its live notes and other
+/// holdings), Transactions (the statement) and Past notes. Every figure is the server's; what
+/// shows is LedgerKit's (`BrokerSection`, `BrokerPortfolioPresentation`).
 struct AccountLedgerView: View {
     let model: AccountLedgerModel
     let profileCode: String
     let canEdit: Bool
     @Environment(CashModel.self) private var cash
     @Environment(NotesModel.self) private var notes
+    @Environment(InvestmentsModel.self) private var investments
     @State private var opened: LedgerTransaction?
     @State private var updating: UpdateBalanceDraft?
     @State private var entering: AccountEntryDraft?
-    @State private var addingNote: AddNoteModel?
-    @State private var openedNote: String?
+    @State private var route: AccountRoute?
+    @State private var tab: BrokerTab = .portfolio
 
     /// The account's balance as Accounts lists it (`cash_position`).
     private var balance: BankAccountBalance? {
@@ -26,50 +26,29 @@ struct AccountLedgerView: View {
     }
 
     var body: some View {
+        let section = model.brokerSection(bankCode: balance?.bankCode ?? model.state.value?.account.bankCode)
         Page {
-            BalanceHeader(account: balance, ledger: model.state.value?.account, canEdit: canEdit) {
-                if let balance { updating = UpdateBalanceDraft(account: balance) }
-            }
-            .padding(.top, 8)
-            if canEdit, let balance {
-                Button { entering = notes.newEntry(for: balance) } label: {
-                    Label("Add a deposit or withdrawal", systemImage: "plus.circle")
-                }
-                .font(Typography.rowMeta).tint(Palette.accent)
-                .frame(minHeight: Metrics.tapMin)
-            }
             if let notice = notes.notice {
                 Label(notice.text, systemImage: notice.isError ? "exclamationmark.triangle" : "checkmark.circle")
                     .font(Typography.rowMeta)
                     .foregroundStyle(notice.isError ? Palette.danger : Palette.positive)
+                    .padding(.top, 8)
             }
-            BrokerPortfolioSection(section: model.brokerSection(bankCode: balance?.bankCode ?? model.state.value?.account.bankCode),
-                                   retry: reload) { openedNote = $0 }
-            if notes.showsCard(fundingAccount: model.accountCode, bankCode: balance?.bankCode, canEdit: canEdit) {
-                NotesCard(model: notes, profileCode: profileCode, canEdit: canEdit, fundingAccount: model.accountCode) {
-                    addingNote = notes.addModel(fundingAccount: model.accountCode)
+            if case .loaded(let p) = section {
+                BrokerSummaryCard(p: p).padding(.top, 8)
+                BrokerValueChartCard(chart: p.chart)
+                Picker("Show", selection: $tab) {
+                    ForEach(p.tabs) { Text(p.title($0)).tag($0) }
                 }
-            }
-            BalanceChartCard(series: model.series, currency: model.state.value?.account.currency ?? balance?.currency ?? "AED")
-            MonthSwitcher(month: model.month)
-            StateContainer(state: model.state, retry: reload) { ledger in
-                PeriodCard(ledger: ledger)
-                if ledger.rows.isEmpty {
-                    EmptyCard(systemImage: "tray", message: model.emptyMessage)
-                } else {
-                    Card {
-                        ForEach(model.sections) { section in
-                            Text(section.title.uppercased())
-                                .font(Typography.caption).tracking(1).foregroundStyle(Palette.muted)
-                            ForEach(section.rows) { row in
-                                Button { open(row) } label: { LedgerRowView(row: row, currency: ledger.account.currency) }
-                                    .buttonStyle(.plain)
-                                if row.id != section.rows.last?.id { Divider().overlay(Palette.border) }
-                            }
-                        }
-                    }
-                    Text(AccountLedger.fileHint).font(Typography.caption).foregroundStyle(Palette.muted)
+                .pickerStyle(.segmented)
+                switch p.tabs.contains(tab) ? tab : .portfolio {
+                case .portfolio: BrokerPortfolioTab(p: p) { route = $0 }
+                case .transactions: transactions
+                case .pastNotes: BrokerPastNotesTab(p: p) { route = $0 }
                 }
+            } else {
+                BrokerPortfolioStatus(section: section, retry: reload).padding(.top, 8)
+                transactions
             }
         }
         .ledgerNavigation(model.state.value?.account.title ?? balance?.title ?? "Account")
@@ -86,11 +65,13 @@ struct AccountLedgerView: View {
         .sheet(item: $entering) { draft in
             AccountEntrySheet(model: notes, draft: draft, profileCode: profileCode, canEdit: canEdit)
         }
-        .sheet(item: $addingNote) { add in
-            AddNoteSheet(model: add, profileCode: profileCode, canEdit: canEdit) { openedNote = $0 }
-        }
-        .navigationDestination(item: $openedNote) { code in
-            NoteDetailView(notes: notes, holdingCode: code, profileCode: profileCode, canEdit: canEdit)
+        .navigationDestination(item: $route) { route in
+            switch route {
+            case .note(let code):
+                NoteDetailView(notes: notes, holdingCode: code, profileCode: profileCode, canEdit: canEdit)
+            case .holding(let code):
+                HoldingDetailView(investments: investments, holdingCode: code, profileCode: profileCode, canEdit: canEdit)
+            }
         }
         .sheet(item: $opened) { txn in
             if canEdit {
@@ -111,103 +92,20 @@ struct AccountLedgerView: View {
         }
     }
 
+    private var transactions: some View {
+        AccountTransactions(
+            model: model, balance: balance, canEdit: canEdit,
+            notes: notes.liveRows(fundingAccount: model.accountCode, excluding: model.brokerHoldings) ?? [],
+            update: { if let balance { updating = UpdateBalanceDraft(account: balance) } },
+            addEntry: { if let balance { entering = notes.newEntry(for: balance) } },
+            openRow: open,
+            openNote: { route = .note($0) },
+            reload: reload)
+    }
+
     private func open(_ row: AccountLedgerRow) {
         Task { opened = await model.transaction(row.txnCode, profileCode: profileCode) }
     }
 
     private func reload() { Task { await model.load(profileCode: profileCode) } }
-}
-
-/// The account, its balance now and how fresh it is, and an owner's Update balance.
-private struct BalanceHeader: View {
-    let account: BankAccountBalance?
-    let ledger: AccountLedger.Account?
-    let canEdit: Bool
-    let update: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let bank = account?.bankCode ?? ledger?.bankCode {
-                HStack(spacing: 10) {
-                    BankLogo(bankCode: bank, size: 28)
-                    Text(account?.detail ?? ledger?.detail ?? bank).font(Typography.rowMeta).foregroundStyle(Palette.muted)
-                }
-            }
-            if let account {
-                Text(account.balanceText)
-                    .font(account.hasBalance ? Typography.display.monospacedDigit() : Typography.rowTitle)
-                    .foregroundStyle(account.hasBalance ? Palette.ink : Palette.muted)
-                    .lineLimit(1).minimumScaleFactor(0.5)
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    if let asOf = account.asOfText() {
-                        Text(asOf).font(Typography.caption).foregroundStyle(Palette.muted)
-                    }
-                    if let stale = account.staleLabel { Chip(label: stale, tone: .warn) }
-                    Spacer(minLength: 8)
-                    if canEdit {
-                        Button(account.updateLabel, action: update)
-                            .font(Typography.rowMeta).tint(Palette.accent)
-                            .frame(minHeight: Metrics.tapMin)
-                    }
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-/// The month's opening balance, money in and out, and closing balance.
-private struct PeriodCard: View {
-    let ledger: AccountLedger
-
-    var body: some View {
-        Card {
-            SectionHeader(title: "This period", trailing: LedgerDates.monthTitle(ledger.from))
-            ForEach(ledger.summaryLines) { line in
-                HStack(alignment: .firstTextBaseline) {
-                    Text(line.label).font(Typography.rowMeta).foregroundStyle(Palette.muted)
-                    Spacer()
-                    Text(line.text).font(Typography.amount)
-                        .foregroundStyle(line.tone == .positive ? Palette.positive : Palette.ink)
-                        .moneyLine()
-                }
-                .accessibilityElement(children: .combine)
-            }
-            if let note = ledger.unpricedNote {
-                Text(note).font(Typography.caption).foregroundStyle(Palette.warn)
-            }
-        }
-    }
-}
-
-/// A ledger row: category dot, title, caption and flow chip; the signed amount and the balance after.
-private struct LedgerRowView: View {
-    let row: AccountLedgerRow
-    let currency: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            CategoryDot(token: row.categoryColor, size: 10).padding(.top, 6)
-            AdaptiveRow {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(row.title).font(Typography.rowTitle).foregroundStyle(Palette.ink).lineLimit(2)
-                    if let caption = row.caption {
-                        Text(caption).font(Typography.caption).foregroundStyle(Palette.muted).lineLimit(1)
-                    }
-                    if let flow = row.flowLabel { Chip(label: flow, tone: row.flowTone) }
-                }
-            } trailing: {
-                VStack(alignment: .trailing, spacing: 3) {
-                    Text(row.amountText(currency: currency)).font(Typography.amount).moneyLine()
-                        .foregroundStyle(row.isCredit ? Palette.positive : Palette.ink)
-                    if let balance = row.balanceText(currency: currency) {
-                        Text(balance).font(Typography.caption).foregroundStyle(Palette.muted).moneyLine()
-                    }
-                }
-            }
-        }
-        .padding(.vertical, 4)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-    }
 }

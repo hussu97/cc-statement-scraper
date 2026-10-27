@@ -45,6 +45,8 @@ export const keys = {
   noteDetail: (p: string, holding: string) => ["p", p, "cash", "note", holding] as const,
   /** A broker account's portfolio (20261027165732): under "cash", so a note, an entry or a balance change refreshes it. */
   brokerPortfolio: (p: string, account: string) => ["p", p, "cash", "broker", account] as const,
+  /** Every synced broker account in one line each (Investments). */
+  brokerAccounts: (p: string) => ["p", p, "cash", "broker-accounts"] as const,
   holdingReturns: (p: string, period: string) => ["p", p, "cash", "holding-returns", period] as const,
   cashFlowSavings: (p: string, from: string, to: string, account?: string) => ["p", p, "cash", "savings", from, to, account ?? "all"] as const,
   /** Metal prices are global reference data, not per ledger. */

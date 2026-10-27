@@ -15,4 +15,8 @@ extension SupabaseLedgerAPI {
         }
         return try BrokerPortfolio.decode(data)
     }
+
+    public func brokerAccounts(profileCode: String) async throws -> [BrokerAccountSummary] {
+        try await rpc("broker_accounts_summary", [BrokerAccountSummary].self, ["p_profile_code": .string(profileCode)])
+    }
 }

@@ -13,12 +13,20 @@ public final class InvestmentsModel {
         /// Oldest first; empty when it failed (`seriesError`).
         public let series: [HoldingValuePoint]
         public let seriesError: String?
+        /// The synced broker accounts (`broker_accounts_summary`); empty when there are none or the
+        /// read failed, and then every holding is listed on its own.
+        public let brokerAccounts: [BrokerAccountSummary]
 
-        public init(valuation: HoldingsValuation, series: [HoldingValuePoint] = [], seriesError: String? = nil) {
+        public init(valuation: HoldingsValuation, series: [HoldingValuePoint] = [], seriesError: String? = nil,
+                    brokerAccounts: [BrokerAccountSummary] = []) {
             self.valuation = valuation
             self.series = series
             self.seriesError = seriesError
+            self.brokerAccounts = brokerAccounts
         }
+
+        /// The broker accounts' rows, then the holdings they don't show.
+        public var layout: InvestmentsLayout { InvestmentsLayout(valuation: valuation, brokerAccounts: brokerAccounts) }
     }
 
     public struct Notice: Equatable, Sendable {
@@ -87,14 +95,16 @@ public final class InvestmentsModel {
                     return .failure(error)
                 }
             }()
-            let (v, s) = try await (valuation, series)
+            // A failed read lists every holding on its own rather than hiding any.
+            async let brokers = (try? await api.brokerAccounts(profileCode: profileCode)) ?? []
+            let (v, s, b) = try await (valuation, series, brokers)
             guard gate.isCurrent(ticket) else { return }
             gate.finish(profileCode)
             switch s {
             case .success(let points):
-                state = .loaded(Content(valuation: v, series: points.sorted { $0.date < $1.date }))
+                state = .loaded(Content(valuation: v, series: points.sorted { $0.date < $1.date }, brokerAccounts: b))
             case .failure(let error):
-                state = .loaded(Content(valuation: v, seriesError: LoadState<Content>.message(for: error)))
+                state = .loaded(Content(valuation: v, seriesError: LoadState<Content>.message(for: error), brokerAccounts: b))
             }
         } catch {
             guard gate.isCurrent(ticket) else { return }

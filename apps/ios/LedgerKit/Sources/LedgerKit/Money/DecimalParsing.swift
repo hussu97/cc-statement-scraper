@@ -85,3 +85,15 @@ extension KeyedDecodingContainer {
         return try decode(DecimalValue.self, forKey: key).value
     }
 }
+
+extension LedgerDecimal {
+    /// A typed number as a decimal string (`"1,000.50"` → `"1000.50"`, `"98%"` → `"98"`,
+    /// `"−24.5"` → `"-24.5"`); nil when it isn't one.
+    public static func clean(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let s = raw.replacingOccurrences(of: "−", with: "-")
+            .filter { $0 != "," && $0 != "%" && !$0.isWhitespace }
+        guard !s.contains("e"), !s.contains("E"), !s.hasPrefix("+"), parse(s) != nil else { return nil }
+        return s
+    }
+}

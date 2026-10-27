@@ -4,7 +4,8 @@
 // (private.note_evaluate, CLAUDE.md §2.2); numbers are decimal strings, seq and days are counts.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, type RpcArgs } from "@/lib/supabase";
-import type { CallScenario, MarketQuote, NoteDraft, PayoutBranch } from "@/lib/notes";
+import type { CallScenario, MarketQuote, PayoutBranch } from "@/lib/notes";
+import type { NoteShare, NoteVerdict } from "@/lib/note-verdict";
 import { keys, LEDGER_DOMAINS } from "./keys";
 import { functionError, must } from "./api";
 
@@ -55,9 +56,11 @@ export interface NoteSummary {
   /** The first autocall still ahead (20261027165732); null when none is left. */
   if_called_next?: CallScenario | null;
   symbols: string[];
+  /** The note in one line (lib/note-verdict words it); absent on an older server. */
+  verdict?: NoteVerdict | null;
 }
 
-export interface NoteUnderlying {
+export interface NoteUnderlying extends NoteShare {
   symbol: string;
   name: string;
   bloomberg_code: string | null;
@@ -191,26 +194,6 @@ export function useNoteDetail(profileCode: string, holdingCode: string, enabled 
   });
 }
 
-export interface ExtractResult {
-  draft: NoteDraft;
-  warnings: string[];
-}
-
-/** termsheet-extract: a term-sheet PDF → the draft terms to review (20–60 s). */
-export function useExtractTermSheet(profileCode: string) {
-  return useMutation({
-    mutationFn: async (file: File): Promise<ExtractResult> => {
-      const form = new FormData();
-      form.append("profile_code", profileCode);
-      form.append("file", file, file.name);
-      const { data, error } = await supabase.functions.invoke<ExtractResult>("termsheet-extract", { body: form });
-      if (error) throw await functionError(error);
-      if (!data) throw new Error("The term sheet could not be read.");
-      return data;
-    },
-  });
-}
-
 /**
  * Every ledger domain that counts transactions refreshes: a note posts its purchase, coupons and
  * redemptions to the funding account, and an entry moves a balance.
@@ -226,21 +209,6 @@ export async function refreshNotePrices(profileCode: string): Promise<{ stored: 
   });
   if (error) throw await functionError(error);
   return data ?? { stored: 0, failed: [] };
-}
-
-/** create_structured_note, then the price backfill its past observations need. Returns the holding code. */
-export function useCreateNote(profileCode: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (draft: Record<string, unknown>) => {
-      const args = { p_profile_code: profileCode, p_draft: draft } as RpcArgs<"create_structured_note">;
-      const holdingCode = must(await supabase.rpc("create_structured_note", args)) as string;
-      // The note is saved; prices can follow on the nightly run if this call fails.
-      const prices = await refreshNotePrices(profileCode).catch(() => null);
-      return { holdingCode, prices };
-    },
-    onSettled: () => invalidateLedger(qc, profileCode),
-  });
 }
 
 export function useRefreshNotePrices(profileCode: string) {

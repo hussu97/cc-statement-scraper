@@ -1,5 +1,33 @@
 # Changelog
 
+## Notes and Swissquote, simpler: one answer per screen; ended notes and term-sheet upload out of the way — 2026-10-27
+
+### Backend (Supabase)
+
+- **feat** `private.note_verdict` gives each live note a one-line verdict, from the evaluator's levels: on track to be called, called on a date if a share rises x%, coupon at risk, runs to maturity, awaiting prices, or ended. It is on `structured_notes_summary`, `structured_note_detail` and each note position of `broker_portfolio`.
+- **feat** `broker_portfolio.closed_total` gives what ended positions came to. `broker_accounts_summary` puts each synced broker account in one line, with the holdings it holds, for Investments.
+
+### Web
+
+- **change** The Swissquote account page:
+  - Opens with three numbers (total value, profit on what was put in, cash) and the value chart.
+  - Then three tabs: **Portfolio** (a card per live note: verdict, worth today against if called next, a bar per stock; other holdings one line each), **Transactions** (cash balance and the statement) and **Past notes** (what ended notes came to, then each with its return).
+  - The 7-column positions table and the notes list are gone.
+- **change** A note's page:
+  - Verdict first, then the next check, a bar per stock (today against its start, the call level and the barrier), and Paid / Worth today / If called (or Paid / Got back / Profit when ended).
+  - Scenarios, the schedule, price history and terms are collapsed; Update prices and Remove are in a … menu.
+- **change** Investments shows a synced account as one row linking to it, instead of its positions one by one; notes held elsewhere are listed live only. "Worst share" now reads "the stock holding it back".
+- **remove** Add from term sheet: the upload dialog and every button. The Swissquote sync creates notes from the trade tickets' term sheets.
+
+### iOS
+
+- **change** Same redesign on the account screen (segments Portfolio | Transactions | Past notes), the note screen (verdict, bars, three figures, collapsed sections, … menu) and Investments (broker accounts row). Wording and decisions are in LedgerKit (`NoteVerdict`, `NoteStockBar`, `BrokerAccountSummary`, `BrokerPortfolioRows`).
+- **remove** The term-sheet upload sheet and its model.
+
+### Docs
+
+- **docs** README (screens, `termsheet-extract` no longer called by the apps), ARCHITECTURE (verdicts).
+
 ## Swissquote: each note's shares on the positions list — 2026-10-27
 
 ### Backend (Supabase)

@@ -3,18 +3,20 @@ import SwiftUI
 
 /// Wealth's Investments tab: the total the server values every holding at, the gain against what
 /// went in and the last 24 hours, today's Dubai retail metal prices (while there is gold or silver),
-/// 90 days of value or price, returns by period, and the holdings grouped by kind, each opening its
-/// own screen (a structured note its note screen), then the structured notes, live and ended.
-/// Owners add a holding of any kind, or a note from its term sheet. Every figure is the server's.
+/// 90 days of value or price, returns by period, then a row per synced broker account (standing in
+/// for every holding it shows, opening the account), the other holdings grouped by kind, each
+/// opening its own screen, and the live notes held anywhere else. Owners add a holding of any kind;
+/// notes come from the broker sync. Every figure is the server's; what is listed is LedgerKit's
+/// (`InvestmentsLayout`).
 struct InvestmentsView: View {
     let model: InvestmentsModel
     let notes: NotesModel
     let profileCode: String
     let canEdit: Bool
     @State private var editing: HoldingDraft?
-    @State private var addingNote: AddNoteModel?
-    /// A note just added: its screen opens.
+    /// A note opened from the notes card.
     @State private var openedNote: String?
+    @Environment(AccountLedgers.self) private var ledgers
 
     var body: some View {
         Page {
@@ -31,10 +33,11 @@ struct InvestmentsView: View {
                     InvestmentsChartCard(model: model, content: content)
                     ReturnsCard(model: model, profileCode: profileCode)
                 }
-                holdings(content.valuation)
+                let layout = content.layout
+                holdings(content.valuation, layout)
+                notesCard(layout)
             }
             .padding(.top, 8)
-            NotesCard(model: notes, profileCode: profileCode, canEdit: canEdit) { addingNote = notes.addModel() }
         }
         .rootNavigation("Investments")
         .toolbar {
@@ -47,9 +50,6 @@ struct InvestmentsView: View {
         }
         .sheet(item: $editing) { draft in
             HoldingSheet(model: model, draft: draft, profileCode: profileCode, canEdit: canEdit)
-        }
-        .sheet(item: $addingNote) { add in
-            AddNoteSheet(model: add, profileCode: profileCode, canEdit: canEdit) { openedNote = $0 }
         }
         .navigationDestination(item: $openedNote) { code in
             NoteDetailView(notes: notes, holdingCode: code, profileCode: profileCode, canEdit: canEdit)
@@ -67,8 +67,23 @@ struct InvestmentsView: View {
         }
     }
 
-    @ViewBuilder private func holdings(_ valuation: HoldingsValuation) -> some View {
-        if valuation.groups.isEmpty {
+    @ViewBuilder private func holdings(_ valuation: HoldingsValuation, _ layout: InvestmentsLayout) -> some View {
+        if !layout.brokerRows.isEmpty {
+            Card {
+                SectionHeader(title: "Broker accounts")
+                ForEach(layout.brokerRows) { row in
+                    if row.id != layout.brokerRows.first?.id { Divider().overlay(Palette.border) }
+                    NavigationLink {
+                        AccountLedgerView(model: ledgers.model(for: row.accountCode), profileCode: profileCode, canEdit: canEdit)
+                    } label: {
+                        BrokerAccountLine(row: row)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Opens the account's portfolio")
+                }
+            }
+        }
+        if layout.isEmpty {
             Card {
                 SectionHeader(title: "Holdings")
                 Text(HoldingsValuation.emptyMessage(canEdit: canEdit, onlyNotes: valuation.onlyNotes))
@@ -79,7 +94,7 @@ struct InvestmentsView: View {
                 }
             }
         }
-        ForEach(valuation.groups) { group in
+        ForEach(layout.groups) { group in
             Card {
                 SectionHeader(title: group.title, trailing: group.countText)
                 ForEach(group.holdings) { holding in
@@ -102,7 +117,47 @@ struct InvestmentsView: View {
         }
     }
 
+    /// The live notes no broker account shows; nothing while they load or when there are none.
+    @ViewBuilder private func notesCard(_ layout: InvestmentsLayout) -> some View {
+        if let rows = notes.liveRows(excluding: layout.brokerHoldings) {
+            if !rows.isEmpty { NotesCard(rows: rows) { openedNote = $0 } }
+        } else if let error = notes.state.errorMessage {
+            FailedCard(message: error) { Task { await notes.load(profileCode: profileCode) } }
+        }
+    }
+
     private func reload() { Task { await model.load(profileCode: profileCode) } }
+}
+
+/// A synced broker account standing in for its holdings: name, value (≈ AED), profit and live notes.
+private struct BrokerAccountLine: View {
+    let row: BrokerAccountRow
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 8) {
+            AdaptiveRow(alignment: .center) {
+                HStack(spacing: 10) {
+                    if let bank = row.bankCode { BankLogo(bankCode: bank, size: 28) }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(row.title).font(Typography.rowTitle).foregroundStyle(Palette.ink)
+                        Text(row.detail).font(Typography.caption)
+                            .foregroundStyle(row.syncFailed ? Palette.warn : row.profitTone.color)
+                    }
+                }
+            } trailing: {
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(row.valueText).font(Typography.amount).foregroundStyle(Palette.ink).moneyLine()
+                    if let aed = row.aedText {
+                        Text(aed).font(Typography.caption).foregroundStyle(Palette.muted).moneyLine()
+                    }
+                }
+            }
+            Image(systemName: "chevron.right").font(.caption).foregroundStyle(Palette.muted)
+        }
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(row.accessibilityLabel)
+    }
 }
 
 /// The total, the gain against cost and the last 24 hours, and what the figures leave out.

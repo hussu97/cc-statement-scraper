@@ -7,11 +7,23 @@ import type { Flow } from "./cash-flow";
 
 // ── the account page's month (?month=YYYY-MM) ──────────────────────────────
 
-/** `/wealth/accounts/$accountCode?month=YYYY-MM`: a month no later than this one; dropped keys are undefined. */
-export function parseAccountSearch(raw: Record<string, unknown>, today: ISODate = todayDubai()): { month?: string } {
+/** A synced broker account's tabs (?tab=); Portfolio is the default and stays out of the URL. */
+export const ACCOUNT_TABS = ["portfolio", "transactions", "past"] as const;
+export type AccountTab = (typeof ACCOUNT_TABS)[number];
+
+export function accountTab(raw: string | undefined): AccountTab {
+  return (ACCOUNT_TABS as readonly string[]).includes(raw ?? "") ? (raw as AccountTab) : "portfolio";
+}
+
+/**
+ * `/wealth/accounts/$accountCode?month=YYYY-MM&tab=…`: a month no later than this one, and a known
+ * tab other than the default; dropped keys are undefined.
+ */
+export function parseAccountSearch(raw: Record<string, unknown>, today: ISODate = todayDubai()): { month?: string; tab?: AccountTab } {
   const m = raw.month;
-  if (typeof m !== "string" || !/^\d{4}-\d{2}$/.test(m) || !isISODate(`${m}-01`)) return { month: undefined };
-  return { month: `${m}-01` <= today ? m : undefined };
+  const tab = typeof raw.tab === "string" && accountTab(raw.tab) !== "portfolio" ? accountTab(raw.tab) : undefined;
+  if (typeof m !== "string" || !/^\d{4}-\d{2}$/.test(m) || !isISODate(`${m}-01`)) return { month: undefined, tab };
+  return { month: `${m}-01` <= today ? m : undefined, tab };
 }
 
 /** The first of the month a `?month=` names, this month when absent. */

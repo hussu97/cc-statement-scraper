@@ -22,6 +22,29 @@ public enum NoteText {
         return (value < 0 ? "−" : "+") + text
     }
 
+    /// Whole units, for the figures a screen leads with: `"USD 23,350"`.
+    public static func whole(_ value: Decimal, currency: String) -> String {
+        MoneyFormat.amount(value, currency: currency, fractionDigits: 0)
+    }
+
+    /// Whole units with a sign: `"+USD 3,845"`, `"−USD 1,743"`, `"USD 0"`.
+    public static func signedWhole(_ value: Decimal, currency: String) -> String {
+        let rounded = MoneyFormat.rounded(value, scale: 0)
+        let text = whole(rounded < 0 ? -rounded : rounded, currency: currency)
+        return rounded == 0 ? text : (rounded < 0 ? "−" : "+") + text
+    }
+
+    /// A return with its sign: `"+15.32%"`, `"−6.92%"`, `"0%"`; with `digits`, rounded.
+    public static func signedPct(_ value: Decimal, digits: Int? = nil) -> String {
+        value > 0 ? "+" + pct(value, digits: digits) : pct(value, digits: digits)
+    }
+
+    /// `"+USD 3,845 · 28% a year"`: a profit and, when known, its yearly rate.
+    public static func profitLine(_ profit: Decimal, annualisedPct: Decimal?, currency: String) -> String {
+        ([signedWhole(profit, currency: currency)] + [annualisedPct.map { "\(pct($0, digits: 0)) a year" }].compactMap { $0 })
+            .joined(separator: " · ")
+    }
+
     /// A loss is danger, anything else positive (the web's colouring of a profit).
     public static func profitTone(_ value: Decimal?) -> Tone {
         guard let value else { return .neutral }

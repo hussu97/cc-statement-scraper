@@ -29,6 +29,7 @@ public enum LedgerDates {
     private static let dayMonth = formatter("d MMM")
     private static let dayMonthYear = formatter("d MMM yyyy")
     private static let monthYear = formatter("MMMM yyyy")
+    private static let shortMonthYearFormat = formatter("MMM yyyy")
     private static let shortMonth = formatter("MMM")
     private static let fullMonth = formatter("MMMM")
     private static let time = formatter("HH:mm")
@@ -56,6 +57,9 @@ public enum LedgerDates {
 
     /// `"October 2026"`.
     public static func monthTitle(_ day: CalendarDay) -> String { monthYear.string(from: day.startDate) }
+
+    /// `"Oct 2026"`.
+    public static func shortMonthYear(_ day: CalendarDay) -> String { shortMonthYearFormat.string(from: day.startDate) }
 
     /// `"October"`.
     public static func monthName(_ day: CalendarDay) -> String { fullMonth.string(from: day.startDate) }

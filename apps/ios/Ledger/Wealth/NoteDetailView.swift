@@ -1,10 +1,12 @@
 import LedgerKit
 import SwiftUI
 
-/// One structured note: where it stands (invested, received, if it ended today, break-even), the
-/// next observation at today's prices, the shares against the barriers, what it can pay, its
-/// schedule with outcomes and its terms. Owners update prices and remove a note added by mistake.
-/// Every figure is the server's; the words are LedgerKit's.
+/// One structured note, one question first: how is it doing? The name and status, the verdict in
+/// big words with when the next check is, its stocks on bars, then the money in three numbers
+/// (paid, worth today, if called; once ended: paid, got back, profit). The rest (every scenario,
+/// the full schedule, the price history, the terms) waits collapsed. Owners update prices or
+/// remove a note added by mistake from the "…" menu. Every figure is the server's; the words and
+/// what shows are LedgerKit's.
 struct NoteDetailView: View {
     let profileCode: String
     let canEdit: Bool
@@ -30,35 +32,41 @@ struct NoteDetailView: View {
             }
             StateContainer(state: model.state, retry: reload) { note in
                 NoteHeader(note: note)
-                StatGrid(stats: note.summaryStats)
-                let exits = note.exitStats()
-                if !exits.isEmpty { StatGrid(stats: exits) }
-                if !note.isEnded { NextCard(note: note) }
-                NoteSharesCard(note: note)
-                if note.scenarios != nil { NoteScenariosCard(note: note) }
-                NoteScheduleCard(note: note)
-                NoteTermsCard(note: note)
-                if model.canRemove(canEdit: canEdit) {
-                    Button("Remove this note…", role: .destructive) { confirmingRemove = true }
-                        .font(Typography.rowMeta)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                        .frame(minHeight: Metrics.tapMin)
+                VerdictBlock(note: note)
+                let bars = note.bars
+                if !bars.isEmpty {
+                    Card {
+                        SectionHeader(title: "The stocks")
+                        NoteStockBars(bars: bars)
+                    }
                 }
+                Card { StatTiles(stats: note.moneyStats(), columns: 3) }
+                NoteDetailSections(note: note)
             }
             .padding(.top, 8)
         }
         .ledgerNavigation(model.state.value?.summary.name ?? "Structured note")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if model.canRefreshPrices(canEdit: canEdit) {
+            if model.isSaving {
+                ToolbarItem(placement: .primaryAction) { ProgressView() }
+            } else if model.canRefreshPrices(canEdit: canEdit) || model.canRemove(canEdit: canEdit) {
                 ToolbarItem(placement: .primaryAction) {
-                    if model.isSaving {
-                        ProgressView()
-                    } else {
-                        Button {
-                            Task { await model.refreshPrices(profileCode: profileCode, canEdit: canEdit) }
-                        } label: { Label("Update prices", systemImage: "arrow.clockwise") }
+                    Menu {
+                        if model.canRefreshPrices(canEdit: canEdit) {
+                            Button {
+                                Task { await model.refreshPrices(profileCode: profileCode, canEdit: canEdit) }
+                            } label: { Label("Update prices", systemImage: "arrow.clockwise") }
+                        }
+                        if model.canRemove(canEdit: canEdit) {
+                            Button(role: .destructive) { confirmingRemove = true } label: {
+                                Label("Remove note…", systemImage: "trash")
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
                     }
+                    .accessibilityLabel("Note actions")
                 }
             }
         }
@@ -85,80 +93,76 @@ struct NoteDetailView: View {
     private func reload() { Task { await model.load(profileCode: profileCode) } }
 }
 
-/// The name, status and issuer line.
+/// The name, a small status badge and one muted line (issuer · ISIN).
 private struct NoteHeader: View {
     let note: NoteDetail
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(note.summary.name).font(Typography.display).foregroundStyle(Palette.ink)
-                .lineLimit(3).minimumScaleFactor(0.6)
+            Text(note.summary.name).font(Typography.sectionTitle).foregroundStyle(Palette.ink)
+                .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 6) {
                 Chip(label: note.summary.noteStatus.label, tone: note.summary.noteStatus.tone)
                 if note.summary.awaitingPrices { Chip(label: "Awaiting prices", tone: .warn) }
             }
             if !note.headerDetail.isEmpty {
-                Text(note.headerDetail).font(Typography.caption).foregroundStyle(Palette.muted)
+                Text(note.headerDetail).font(Typography.caption).foregroundStyle(Palette.muted).lineLimit(1)
             }
         }
     }
 }
 
-/// Stat tiles, two to a row.
-struct StatGrid: View {
-    let stats: [NoteStat]
-
-    var body: some View {
-        Card {
-            LazyVGrid(columns: [GridItem(.flexible(), alignment: .topLeading), GridItem(.flexible(), alignment: .topLeading)],
-                      alignment: .leading, spacing: 16) {
-                ForEach(stats) { stat in
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(stat.label.uppercased()).font(Typography.caption).tracking(0.8).foregroundStyle(Palette.muted)
-                        Text(stat.value).font(Typography.amount)
-                            .foregroundStyle(stat.tone == .neutral ? Palette.ink : stat.tone.color).moneyLine()
-                        if let sub = stat.sub {
-                            Text(sub).font(Typography.caption).foregroundStyle(Palette.muted)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    .accessibilityElement(children: .combine)
-                }
-            }
-        }
-    }
-}
-
-/// The next observation: the coupon and autocall at today's prices, and the worst share now.
-private struct NextCard: View {
+/// The verdict in big words, coloured by its tone, and the countdown under it.
+private struct VerdictBlock: View {
     let note: NoteDetail
 
     var body: some View {
-        Card {
-            Text("NEXT OBSERVATION").font(Typography.caption).tracking(1).foregroundStyle(Palette.muted)
-            Text(note.nextTitle).font(Typography.sectionTitle).foregroundStyle(Palette.ink)
-            ForEach(note.outlooks) { outlook in
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(outlook.title).font(Typography.rowTitle).foregroundStyle(Palette.ink)
-                    Text(outlook.text).font(Typography.rowMeta)
-                        .foregroundStyle(outlook.ok ? Palette.positive : Palette.warn)
+        let headline = note.verdictHeadline()
+        let lines = note.countdown()
+        if headline != nil || !lines.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                if let headline {
+                    Text(headline).font(Typography.amountLarge)
+                        .foregroundStyle(note.verdictTone == .neutral ? Palette.ink : note.verdictTone.color)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(outlook.ok ? Palette.positiveSoft : Palette.warnSoft, in: RoundedRectangle(cornerRadius: Metrics.radiusMd))
-                .accessibilityElement(children: .combine)
-            }
-            if let worst = note.worstNowText {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Worst share now").font(Typography.rowTitle).foregroundStyle(Palette.ink)
-                    Text(worst).font(Typography.rowMeta).foregroundStyle(Palette.ink2)
+                ForEach(lines, id: \.self) { line in
+                    Text(line).font(Typography.rowMeta).foregroundStyle(Palette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Palette.surface2, in: RoundedRectangle(cornerRadius: Metrics.radiusMd))
-                .accessibilityElement(children: .combine)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+        }
+    }
+}
+
+/// Every scenario, the full schedule, the price history and the terms, each collapsed.
+private struct NoteDetailSections: View {
+    let note: NoteDetail
+
+    var body: some View {
+        let sections = note.sections
+        Card {
+            ForEach(sections) { section in
+                if section != sections.first { Divider().overlay(Palette.border) }
+                DisclosureGroup {
+                    content(section).padding(.top, 8)
+                } label: {
+                    Text(section.title).font(Typography.rowTitle).foregroundStyle(Palette.ink)
+                        .frame(minHeight: Metrics.tapMin)
+                }
+                .tint(Palette.ink2)
+            }
+        }
+    }
+
+    @ViewBuilder private func content(_ section: NoteSection) -> some View {
+        switch section {
+        case .scenarios: NoteScenariosContent(note: note)
+        case .schedule: NoteScheduleContent(note: note)
+        case .priceHistory: NoteChart(lines: note.seriesLines, levels: note.isEnded ? [] : note.levels ?? [])
+        case .terms: NoteTermsContent(note: note)
         }
     }
 }

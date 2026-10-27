@@ -143,11 +143,11 @@
             "perf_pct": "90.5000",
             "is_worst": true,
             "to_autocall_pct": "10.50",
-            "to_coupon_pct": null,
-            "to_break_even_pct": null,
+            "to_coupon_pct": "-22.65",
+            "to_break_even_pct": "-28.18",
             "autocall_level": "100.0000",
-            "coupon_level": null,
-            "break_even_level": null
+            "coupon_level": "70.0000",
+            "break_even_level": "65.0000"
           },
           {
             "symbol": "CCC",
@@ -165,7 +165,13 @@
             "coupon_level": null,
             "break_even_level": null
           }
-        ]
+        ],
+        "verdict": {
+          "kind": "needs",
+          "symbol": "AAA",
+          "gap_pct": "10.50",
+          "date": "2026-11-26"
+        }
       }
     },
     {
@@ -249,6 +255,12 @@
       "note_status": "autocalled"
     }
   ],
+  "closed_total": {
+    "count": "2",
+    "invested": "15000.00",
+    "received": "15500.00",
+    "profit": "500.00"
+  },
   "series": [
     {
       "as_of": "2026-10-23",

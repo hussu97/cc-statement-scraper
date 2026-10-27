@@ -137,6 +137,8 @@ public struct NoteSummary: Decodable, Sendable, Hashable, Identifiable {
     /// What it pays if called at its next autocall date (the first autocall scenario); nil when no
     /// autocall date is left, or from an older server.
     public let ifCalledNext: NoteDetail.AutocallScenario?
+    /// The note in one line (20261027200000); nil from an older server.
+    public let verdict: NoteVerdict?
 
     public var noteStatus: NoteStatus { NoteStatus(raw: status) }
     public var isEnded: Bool { noteStatus.isEnded }
@@ -148,69 +150,47 @@ extension NoteSummary {
 
     /// `"+USD 100.00"`, `"−USD 5,975.22"`.
     public func signed(_ value: Decimal) -> String { NoteText.signed(value, currency: currency) }
-
-    /// The row's detail line: `"AMZN · MSFT · worst AMZN at 87.05% · next 26 Nov"`, or for an
-    /// ended note `"GOOGL · ended 14 Jun 2026"`.
-    public func rowDetail(today: CalendarDay = LedgerDates.today()) -> String {
-        var parts = [(symbols ?? []).joined(separator: " · ")].filter { !$0.isEmpty }
-        if isEnded {
-            if let endedOn { parts.append("ended \(LedgerDates.fullDayLabel(endedOn))") }
-        } else {
-            if let w = worstNow { parts.append("worst \(w.symbol) at \(NoteText.pct(w.pct, digits: 2))") }
-            if let next { parts.append("next \(LedgerDates.dayLabel(next.obsDate, today: today))") }
-        }
-        return parts.joined(separator: " · ")
-    }
-
-    /// The next date's outlook, as the web's row words it: `"would call"` (only when it would),
-    /// else the coupon `"on track"` / `"at risk"`. Nil for an ended note or without either.
-    public var nextOutlook: (text: String, tone: Tone)? {
-        guard !isEnded, let next else { return nil }
-        if let call = next.autocall { return call.wouldCall ? ("Would call", .positive) : nil }
-        if let coupon = next.coupon {
-            return coupon.wouldPay ? ("Coupon on track", .positive) : ("Coupon at risk", .warn)
-        }
-        return nil
-    }
-
-    /// Under the invested amount: the result of an ended note, else what it has paid so far.
-    public var rowResult: (text: String, tone: Tone) {
-        if isEnded, let result {
-            return ("\(signed(result.profit)) (\(NoteText.pct(result.returnPct)))", result.profit < 0 ? .danger : .positive)
-        }
-        if received.total > 0 { return ("\(money(received.total)) received", .neutral) }
-        return ("invested", .neutral)
-    }
-
-    /// `"Example Bank M Phoenix …, Live, invested USD 37,250.00, …"` for VoiceOver.
-    public var accessibilityLabel: String {
-        var parts = [name, noteStatus.label]
-        if awaitingPrices { parts.append("awaiting prices") }
-        parts.append("invested \(money(invested))")
-        parts.append(rowDetail())
-        if let outlook = nextOutlook { parts.append(outlook.text.lowercased()) }
-        parts.append(rowResult.text)
-        return parts.joined(separator: ", ")
-    }
 }
 
-/// Live notes first, then ended ones, in the server's order (live first, newest trade first).
-public struct NoteGroups: Sendable, Hashable {
-    public let live: [NoteSummary]
-    public let ended: [NoteSummary]
+/// A live note in a short list (Investments, the account that pays for it): its name, its verdict
+/// and what it is worth today (or, without a broker mark, what was paid). Opens the note.
+public struct NoteListRow: Sendable, Hashable, Identifiable {
+    public var id: String { holdingCode }
+    public let holdingCode: String
+    public let title: String
+    public let verdict: String?
+    public let verdictTone: Tone
+    /// `"Worth today"` or `"Paid"`.
+    public let valueLabel: String
+    /// `"USD 23,350"`.
+    public let valueText: String
 
-    public init(_ notes: [NoteSummary], fundingAccount: String? = nil) {
-        let mine = notes.filter { fundingAccount == nil || $0.fundingAccountCode == fundingAccount }
-        live = mine.filter { !$0.isEnded }
-        ended = mine.filter(\.isEnded)
+    public init(_ note: NoteSummary, today: CalendarDay = LedgerDates.today()) {
+        holdingCode = note.holdingCode
+        title = note.name
+        verdict = note.verdict?.headline(today: today)
+        verdictTone = note.verdict?.tone ?? .neutral
+        if let market = note.market {
+            valueLabel = "Worth today"
+            valueText = NoteText.whole(market.value, currency: note.currency)
+        } else {
+            valueLabel = "Paid"
+            valueText = NoteText.whole(note.invested, currency: note.currency)
+        }
     }
 
-    public var isEmpty: Bool { live.isEmpty && ended.isEmpty }
+    /// For VoiceOver.
+    public var accessibilityLabel: String {
+        ([title, verdict].compactMap { $0 } + ["\(valueLabel) \(valueText)"]).joined(separator: ", ")
+    }
 
-    /// The card's empty state, said only once loaded.
-    public static func emptyMessage(canEdit: Bool) -> String {
-        canEdit
-            ? "Upload a note's term sheet: Bank Ledger reads its coupons, autocalls and payout, follows the shares every day and shows how close each barrier is."
-            : "The ledger's owner can add structured notes here."
+    /// The live notes to list: those paid from `fundingAccount` (every one when nil), leaving out
+    /// the holdings a synced broker account already shows (`excluding`). Never an ended note.
+    public static func rows(_ notes: [NoteSummary], fundingAccount: String? = nil, excluding: Set<String> = [],
+                            today: CalendarDay = LedgerDates.today()) -> [NoteListRow] {
+        notes
+            .filter { !$0.isEnded && !excluding.contains($0.holdingCode) }
+            .filter { fundingAccount == nil || $0.fundingAccountCode == fundingAccount }
+            .map { NoteListRow($0, today: today) }
     }
 }

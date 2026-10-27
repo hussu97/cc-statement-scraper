@@ -2,10 +2,10 @@ import Foundation
 import Observation
 
 /// Structured notes on Investments and on the account that pays for them
-/// (`structured_notes_summary`), each note's screen (`NoteDetailModel`), the add-from-term-sheet
-/// flow (`AddNoteModel`) and an account's deposits and withdrawals (`add_account_entry`). A note
-/// posts its purchase, coupons and redemptions to its account, so every write tells the screens
-/// that show money (`onChange`). Every figure is the server's.
+/// (`structured_notes_summary`), each note's screen (`NoteDetailModel`) and an account's deposits
+/// and withdrawals (`add_account_entry`). The Swissquote sync adds notes from their term sheets;
+/// a note posts its purchase, coupons and redemptions to its account, so every write tells the
+/// screens that show money (`onChange`). Every figure is the server's.
 @MainActor
 @Observable
 public final class NotesModel {
@@ -59,18 +59,14 @@ public final class NotesModel {
 
     // MARK: What the screens show
 
-    /// Every note (`fundingAccount` nil) or those paid from one account: live, then ended.
-    public func groups(fundingAccount: String? = nil) -> NoteGroups { NoteGroups(state.value ?? [], fundingAccount: fundingAccount) }
+    /// The live notes to list (never an ended one): those paid from `fundingAccount` (all when
+    /// nil), leaving out the holdings a synced broker account shows (`excluding`). Nil until loaded.
+    public func liveRows(fundingAccount: String? = nil, excluding: Set<String> = []) -> [NoteListRow]? {
+        state.value.map { NoteListRow.rows($0, fundingAccount: fundingAccount, excluding: excluding, today: today()) }
+    }
 
     /// The note behind a holding, once loaded.
     public func note(holdingCode: String) -> NoteSummary? { state.value?.first { $0.holdingCode == holdingCode } }
-
-    /// On an account page the card shows once a note is paid from it, or (for owners) on a
-    /// Swissquote account, where notes are bought.
-    public func showsCard(fundingAccount: String, bankCode: String?, canEdit: Bool) -> Bool {
-        guard state.value != nil else { return false }
-        return !groups(fundingAccount: fundingAccount).isEmpty || canEdit && bankCode == "SWQ"
-    }
 
     // MARK: Screens
 
@@ -78,14 +74,6 @@ public final class NotesModel {
     public func detailModel(for holdingCode: String) -> NoteDetailModel {
         NoteDetailModel(holdingCode: holdingCode, api: api) { [weak self] code, notice in
             if let notice { self?.notice = notice }
-            await self?.afterWrite(profileCode: code)
-        }
-    }
-
-    /// The add-from-term-sheet flow; `fundingAccount` preselects the paying account.
-    public func addModel(fundingAccount: String? = nil) -> AddNoteModel {
-        AddNoteModel(api: api, today: today, fundingAccount: fundingAccount) { [weak self] code, message in
-            if let message { self?.notice = .init(text: message, isError: false) }
             await self?.afterWrite(profileCode: code)
         }
     }
@@ -129,8 +117,6 @@ public enum NoteFlowText {
         switch code {
         case "22023", "23514", "UNREADABLE": return "Check the note: \(message)."
         case "P0002": return "This note or account isn't in the ledger any more. Pull to refresh."
-        case "NOT_A_TERM_SHEET": return "That PDF doesn't look like a term sheet. Choose the issuer's final terms."
-        case "LLM_NOT_CONFIGURED": return "Reading term sheets isn't set up on this server."
         default: return LoadState<Bool>.message(for: error)
         }
     }

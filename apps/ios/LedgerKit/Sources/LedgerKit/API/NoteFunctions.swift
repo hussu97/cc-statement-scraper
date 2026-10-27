@@ -1,11 +1,8 @@
 import Foundation
 
-/// Calls the notes' Edge Functions with the user's JWT: `termsheet-extract` (multipart, one PDF)
-/// and `stock-prices` (JSON). Requests are built purely so their bytes are testable; errors are
-/// read like `statements-upload`'s.
+/// Calls the notes' price refresh (`stock-prices`, JSON) with the user's JWT. The request is built
+/// purely so its bytes are testable; errors are read like `statements-upload`'s.
 public struct NoteFunctions: Sendable {
-    public static let maxBytes = 25 * 1024 * 1024
-
     let functionsURL: URL
     let apiKey: String
     let session: URLSession
@@ -16,30 +13,11 @@ public struct NoteFunctions: Sendable {
         self.session = session
     }
 
-    public func extractRequest(file: UploadFile, profileCode: String, accessToken: String) -> URLRequest {
-        var form = MultipartForm()
-        form.addField("profile_code", profileCode)
-        form.addFile("file", filename: file.filename, mimeType: "application/pdf", data: file.data)
-        // The model reads the PDF for up to 140 s.
-        var request = request("termsheet-extract", accessToken: accessToken, timeout: 180)
-        request.setValue(form.contentType, forHTTPHeaderField: "Content-Type")
-        request.httpBody = form.finalized()
-        return request
-    }
-
     public func pricesRequest(profileCode: String, accessToken: String) -> URLRequest {
         var request = request("stock-prices", accessToken: accessToken, timeout: 120)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try? JSONSerialization.data(withJSONObject: ["profile_code": profileCode], options: [.sortedKeys])
         return request
-    }
-
-    public func extract(file: UploadFile, profileCode: String, accessToken: String) async throws -> TermSheetExtract {
-        if file.data.count > Self.maxBytes {
-            throw LedgerAPIError.server(status: 413, code: "FILE_TOO_LARGE", message: "\(file.filename) is larger than 25 MB.")
-        }
-        let data = try await send(extractRequest(file: file, profileCode: profileCode, accessToken: accessToken))
-        return try TermSheetExtract.decode(data)
     }
 
     public func refreshPrices(profileCode: String, accessToken: String) async throws -> NotePriceRefresh {

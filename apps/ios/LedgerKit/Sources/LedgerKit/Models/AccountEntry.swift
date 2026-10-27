@@ -41,7 +41,7 @@ public struct AccountEntryDraft: Identifiable, Sendable, Hashable {
 
     /// Nil when it can be saved, else the sentence the form shows.
     public func validate(today: CalendarDay) -> String? {
-        guard let value = NoteDraftForm.clean(amount),
+        guard let value = LedgerDecimal.clean(amount),
               value.range(of: #"^\d+(\.\d{1,2})?$"#, options: .regularExpression) != nil,
               let d = LedgerDecimal.parse(value), d > 0 else {
             return "Enter the amount, e.g. 25000 or 25,000.50."
@@ -53,7 +53,7 @@ public struct AccountEntryDraft: Identifiable, Sendable, Hashable {
 
     /// The RPC's arguments; nil while `validate` finds a problem.
     public func submission(today: CalendarDay) -> Submission? {
-        guard validate(today: today) == nil, let value = NoteDraftForm.clean(amount) else { return nil }
+        guard validate(today: today) == nil, let value = LedgerDecimal.clean(amount) else { return nil }
         let text = description.trimmingCharacters(in: .whitespacesAndNewlines)
         return Submission(accountCode: accountCode, direction: direction, amount: value, entryDate: date,
                           description: text.isEmpty ? nil : text)
@@ -61,7 +61,7 @@ public struct AccountEntryDraft: Identifiable, Sendable, Hashable {
 
     /// `"Deposit added: USD 25,000.00."`
     public var savedMessage: String {
-        let value = NoteDraftForm.clean(amount).flatMap(LedgerDecimal.parse).map { MoneyFormat.amount($0, currency: currency) } ?? amount
+        let value = LedgerDecimal.clean(amount).flatMap(LedgerDecimal.parse).map { MoneyFormat.amount($0, currency: currency) } ?? amount
         return "\(direction.label) added: \(value)."
     }
 }

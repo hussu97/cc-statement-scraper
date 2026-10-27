@@ -40,7 +40,7 @@ const KIND_HINT: Record<HoldingKind, string> = {
   broker: "An account valued as a whole: IBKR, Swissquote, Sarwa. You enter its value.",
   security: "Shares or a fund: the units you hold times a price you enter.",
   deposit: "A fixed deposit: principal, profit rate and maturity. Its value accrues day by day.",
-  structured_note: "An autocallable or other note, added from its term sheet.",
+  structured_note: "An autocallable or other note, added by the broker sync from its term sheet.",
 };
 
 /**

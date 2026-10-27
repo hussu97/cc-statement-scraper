@@ -3,9 +3,9 @@
 // sell-today and if-called scenarios, returns) is the server's (CLAUDE.md §2.2); money stays a
 // decimal string and is only converted to a number to draw the chart. Pure, unit-tested.
 import { daysBetween, formatDate, formatMonth, formatRelative } from "./dates";
-import { toAmount, type MoneyInput } from "./money";
-import { trimDecimal } from "./holdings";
-import { distanceMet, distanceText, isEnded, pct, type CallScenario, type SellToday } from "./notes";
+import { formatTotal, toAmount, type MoneyInput } from "./money";
+import { isEnded, type CallScenario } from "./notes";
+import type { NoteShare, NoteVerdict } from "./note-verdict";
 
 export interface BrokerSync {
   last_synced_at: string | null;
@@ -31,49 +31,10 @@ export interface BrokerPositionNote {
   if_ended_today: { total: string; profit: string } | null;
   worst_now: { pct: string; symbol: string; priced: boolean } | null;
   awaiting_prices: boolean;
-  /** Each share against its initial level and the next autocall (absent on an older payload). */
-  underlyings?: BrokerNoteShare[] | null;
-}
-
-/** A note's share as the evaluator sees it today (decimal strings). */
-export interface BrokerNoteShare {
-  symbol: string;
-  name?: string | null;
-  initial: string;
-  close: string | null;
-  close_date?: string | null;
-  perf_pct: string | null;
-  is_worst?: boolean;
-  to_autocall_pct: string | null;
-  autocall_level?: string | null;
-}
-
-/** One share's line on a position: "now 316.8 vs 346.36 initial", its % of initial, and the distance to the next call. */
-export interface ShareLine {
-  symbol: string;
-  levels: string;
-  perf: string;
-  toCall: string | null;
-  callMet: boolean;
-  worst: boolean;
-}
-
-/** The shares of a live note, worst first; empty when the note has ended or no share has a close. */
-export function shareLines(note: BrokerPositionNote | null | undefined): ShareLine[] {
-  if (!note || isEnded(note.status) || !Array.isArray(note.underlyings)) return [];
-  return note.underlyings
-    .filter((u) => u && u.close !== null && u.close !== undefined)
-    .map((u) => ({
-      symbol: u.symbol,
-      levels: `${trimDecimal(u.close!)} vs ${trimDecimal(u.initial)}`,
-      perf: pct(u.perf_pct, 1),
-      toCall: u.to_autocall_pct === null || u.to_autocall_pct === undefined ? null : distanceText(u.to_autocall_pct),
-      callMet: distanceMet(u.to_autocall_pct),
-      worst: !!u.is_worst,
-      sortKey: Number(u.perf_pct ?? Infinity),
-    }))
-    .sort((a, b) => a.sortKey - b.sortKey)
-    .map(({ sortKey: _k, ...line }) => line);
+  /** The note in one line (absent on an older payload): lib/note-verdict words it. */
+  verdict?: NoteVerdict | null;
+  /** Each share against its start, the call level and the barrier (absent on an older payload). */
+  underlyings?: NoteShare[] | null;
 }
 
 /** structured_note | broker | security; another kind reads as a security. */
@@ -145,7 +106,16 @@ export interface BrokerPortfolio {
   fees: string | null;
   positions: BrokerPosition[];
   closed: ClosedPosition[];
+  /** Every closed position together (decimal strings; count too); null on an older payload. */
+  closed_total: ClosedTotal | null;
   series: PortfolioDay[];
+}
+
+export interface ClosedTotal {
+  count: string;
+  invested: string | null;
+  received: string | null;
+  profit: string | null;
 }
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -167,6 +137,7 @@ export function parseBrokerPortfolio(raw: unknown): BrokerPortfolio | null {
     sync: { last_synced_at: str(sync.last_synced_at), last_attempt_at: str(sync.last_attempt_at), status: str(sync.status), error: str(sync.error) },
     positions: list<BrokerPosition>(raw.positions).map((p) => ({ ...p, note: isObject(p.note) ? p.note : null, sell_now: isObject(p.sell_now) ? p.sell_now : null })),
     closed: list<ClosedPosition>(raw.closed),
+    closed_total: isObject(raw.closed_total) ? (raw.closed_total as unknown as ClosedTotal) : null,
     series: list<PortfolioDay>(raw.series)
       .filter((d) => typeof d.as_of === "string")
       .map((d) => ({ ...d, estimated: d.estimated === true }))
@@ -193,40 +164,6 @@ export function syncStatus(sync: BrokerSync, now: Date = new Date()): { text: st
   }
   if (sync.last_synced_at) return { text: `Synced ${formatRelative(sync.last_synced_at, now)}`, tone: "muted" };
   return { text: "Not synced yet", tone: "muted" };
-}
-
-/** The position's sub-line: ISIN and ticker ("XS123 · AMZN"), whichever it has. */
-export function positionRef(p: Pick<BrokerPosition, "isin" | "symbol">): string {
-  return [p.isin, p.symbol && p.symbol !== p.isin ? p.symbol : null].filter(Boolean).join(" · ");
-}
-
-/** A quantity for display: "25,000", "32", "1.5". */
-export function formatQuantity(q: string | null | undefined): string {
-  const t = trimDecimal(q);
-  if (!t) return "—";
-  const [whole = "", frac] = t.replace(/^-/, "").split(".");
-  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  return `${t.startsWith("-") ? "−" : ""}${grouped}${frac ? `.${frac}` : ""}`;
-}
-
-/** A position's price: "93.42%" of nominal for a note or bond, "253.64" a share otherwise. */
-export function formatPositionPrice(p: Pick<BrokerPosition, "price" | "price_in_pct">): string {
-  if (!p.price) return "—";
-  if (p.price_in_pct) return pct(p.price, 2);
-  const n = toAmount(p.price);
-  return n === null ? "—" : new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(n);
-}
-
-/** What the position fetches sold today (with income received) and its profit on what was put in; null without a price. */
-export function sellFromPosition(p: Pick<BrokerPosition, "sell_now" | "price" | "price_in_pct" | "as_of">): SellToday | null {
-  if (!p.sell_now) return null;
-  return {
-    total: p.sell_now.total,
-    profit: p.sell_now.profit,
-    returnPct: p.sell_now.return_pct ?? null,
-    pricePct: p.price_in_pct ? p.price : null,
-    asOf: p.as_of,
-  };
 }
 
 // ── chart ──────────────────────────────────────────────────────────────────
@@ -277,8 +214,47 @@ export function estimateNote(series: readonly PortfolioDay[]): string | null {
   return `Dashed: estimated from the broker's performance index before ${formatDate(firstMark.as_of)}; daily marks since.`;
 }
 
-/** "3 Feb 2026 – 9 Sep 2026" for a closed position. */
-export function heldSpan(c: Pick<ClosedPosition, "opened_on" | "closed_on">): string {
-  if (!c.opened_on && !c.closed_on) return "—";
-  return `${c.opened_on ? formatDate(c.opened_on) : "?"} – ${c.closed_on ? formatDate(c.closed_on) : "?"}`;
+// ── the account page: notes, other holdings, past notes ────────────────────
+
+/** A live structured note with its terms: it gets a card with its verdict and its shares. */
+export function isLiveNote(p: Pick<BrokerPosition, "kind" | "note">): boolean {
+  return positionKind(p.kind) === "structured_note" && !!p.note && !isEnded(p.note.status);
+}
+
+/** The positions as "Your notes" (live notes with terms) and "Other holdings" (shares, notes without terms, CLNs), in the server's order. */
+export function splitPositions<T extends Pick<BrokerPosition, "kind" | "note">>(positions: readonly T[]): { notes: T[]; others: T[] } {
+  return { notes: positions.filter(isLiveNote), others: positions.filter((p) => !isLiveNote(p)) };
+}
+
+/** What a holding made: sold today with its return when the server priced that, else its profit alone. */
+export function holdingResult(p: Pick<BrokerPosition, "sell_now" | "profit">): { profit: string | null; returnPct: string | null } {
+  if (p.sell_now) return { profit: p.sell_now.profit ?? null, returnPct: p.sell_now.return_pct ?? null };
+  return { profit: p.profit ?? null, returnPct: null };
+}
+
+/** "6 called early · +USD 21,441 earned on USD 98,275"; null with nothing closed. */
+export function pastHeadline(total: ClosedTotal | null, closed: readonly Pick<ClosedPosition, "note_status">[], currency: string): string | null {
+  const count = total ? Number(total.count) : closed.length;
+  if (!Number.isFinite(count) || count <= 0) return null;
+  const allCalled = closed.length === count && closed.every((c) => c.note_status === "autocalled");
+  const what = allCalled ? `${count} called early` : `${count} ended`;
+  if (!total?.profit) return what;
+  const lost = (toAmount(total.profit) ?? 0) < 0;
+  const on = total.invested ? ` on ${formatTotal(total.invested, { currency })}` : "";
+  return `${what} · ${formatTotal(total.profit, { currency, signed: true })} ${lost ? "lost" : "earned"}${on}`;
+}
+
+const yearOf = (d: string) => d.slice(0, 4);
+// formatDate's month names ("Sep", never Intl's "Sept").
+const monthOf = (d: string) => formatDate(d).split(" ")[1] ?? "—";
+
+/** "held Feb–Sep 2026", "held Nov 2025–Mar 2026", "held Sep 2026"; "—" without dates. */
+export function heldMonths(c: Pick<ClosedPosition, "opened_on" | "closed_on">): string {
+  const a = c.opened_on;
+  const b = c.closed_on;
+  if (!a && !b) return "—";
+  if (!a || !b) return `held ${a ? `from ${monthOf(a)} ${yearOf(a)}` : `to ${monthOf(b!)} ${yearOf(b!)}`}`;
+  if (a.slice(0, 7) === b.slice(0, 7)) return `held ${monthOf(b)} ${yearOf(b)}`;
+  if (yearOf(a) === yearOf(b)) return `held ${monthOf(a)}–${monthOf(b)} ${yearOf(b)}`;
+  return `held ${monthOf(a)} ${yearOf(a)}–${monthOf(b)} ${yearOf(b)}`;
 }

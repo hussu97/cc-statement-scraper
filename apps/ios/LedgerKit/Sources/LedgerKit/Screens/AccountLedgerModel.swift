@@ -113,6 +113,9 @@ public final class AccountLedgerModel: TransactionEditing {
         }
     }
 
+    /// The holdings the broker portfolio shows (none without one): the notes card leaves them out.
+    public var brokerHoldings: Set<String> { (portfolio.value ?? nil)?.holdingCodes ?? [] }
+
     /// What the account screen shows of the broker portfolio, for an account of `bankCode`.
     public func brokerSection(bankCode: String?, now: Date = .now) -> BrokerSection {
         BrokerSection(portfolio, bankCode: bankCode, now: now)

@@ -1,0 +1,42 @@
+[
+  {
+    "account_code": "acc_01aaaaaaaaaaaaaaaaaaaaaaaa",
+    "provider": "swissquote",
+    "bank_code": "SWQ",
+    "name": "Swissquote",
+    "currency": "USD",
+    "cash": "1000.00",
+    "positions_value": "59000.00",
+    "total": "60000.00",
+    "total_aed": "220350.00",
+    "net_deposits": "50000.00",
+    "profit": "10000.00",
+    "live_notes": "1",
+    "positions": "4",
+    "last_synced_at": "2026-10-27T10:00:00+00:00",
+    "sync_status": "ok",
+    "holding_codes": [
+      "hld_01k5exhvqfmfbj3k849vha9hqb",
+      "hld_01k5exhvqftxmvwbd27persapa",
+      "hld_01cccccccccccccccccccccccc"
+    ]
+  },
+  {
+    "account_code": "acc_01zzzzzzzzzzzzzzzzzzzzzzzz",
+    "provider": "interactive_brokers",
+    "bank_code": null,
+    "name": "IBKR",
+    "currency": "AED",
+    "cash": null,
+    "positions_value": "0",
+    "total": "0.00",
+    "total_aed": "0.00",
+    "net_deposits": null,
+    "profit": "-120.00",
+    "live_notes": "0",
+    "positions": "0",
+    "last_synced_at": null,
+    "sync_status": "error",
+    "holding_codes": []
+  }
+]

@@ -14,7 +14,6 @@ enum NoteFixtures {
     static func detail(_ name: String = "structured_note_detail") throws -> NoteDetail {
         try LedgerJSON.decode(NoteDetail.self, from: fixture(name))
     }
-    static func extract() throws -> TermSheetExtract { try TermSheetExtract.decode(fixture("termsheet_extract")) }
 }
 
 @Suite("Structured notes: the wire and the words")
@@ -28,28 +27,26 @@ struct StructuredNotesTests {
         #expect(notem.worstNow?.pct == dec("87.0496"))
         #expect(notem.next?.days == 30)
         #expect(notem.next?.coupon?.wouldPay == false)
-        #expect(notem.rowDetail(today: day("2026-10-27")) == "AMZN · MSFT · GOOGL · worst AMZN at 87.05% · next 26 Nov")
-        // An autocall date that wouldn't call says nothing, as on the web.
-        #expect(notem.nextOutlook == nil)
-        #expect(notem.rowResult.text == "invested")
-        let ended = notes[2]
-        #expect(ended.rowDetail() == "GOOGL · ended 21 Jun 2026")
-        #expect(ended.rowResult.text == "+USD 100.00 (2%)")
-        #expect(ended.rowResult.tone == .positive)
-        let groups = NoteGroups(notes)
-        #expect(groups.live.count == 2 && groups.ended.count == 1)
-        #expect(NoteGroups(notes, fundingAccount: "acc_other").isEmpty)
+        #expect(notem.verdict == nil)   // captured before verdicts: an older server still decodes
+        // A short list shows live notes only; without a broker mark, what was paid.
+        let rows = NoteListRow.rows(notes, today: day("2026-10-27"))
+        #expect(rows.map(\.title) == ["Example Bank B Athena AMZN/META 2031", "Example Bank M Phoenix AMZN/MSFT/GOOGL"])
+        #expect(rows[1].valueLabel == "Paid" && rows[1].valueText == "USD 37,250" && rows[1].verdict == nil)
+        #expect(NoteListRow.rows(notes, fundingAccount: "acc_other").isEmpty)
     }
 
-    @Test("a coupon-only next date reads on track or at risk")
-    func couponOutlook() throws {
-        var json = try JSONSerialization.jsonObject(with: fixture("structured_notes_summary")) as! [[String: Any]]
-        var next = json[1]["next"] as! [String: Any]
-        next["autocall"] = NSNull()
-        json[1]["next"] = next
+    @Test("a row words the verdict and shows what the note is worth today")
+    func listRow() throws {
+        var json = try #require(try JSONSerialization.jsonObject(with: fixture("structured_notes_summary")) as? [[String: Any]])
+        json[1]["verdict"] = ["kind": "coupon_at_risk", "symbol": "AMZN", "gap_pct": "12.58", "date": "2026-11-26",
+                              "call_gap_pct": "20.62", "call_date": "2027-04-22"]
+        json[1]["market"] = ["price_pct": "60", "value": "30000.00", "as_of": "2026-10-27", "profit": "-7250.00"]
         let notes = try LedgerJSON.decode([NoteSummary].self, from: JSONSerialization.data(withJSONObject: json))
-        #expect(notes[1].nextOutlook?.text == "Coupon at risk")
-        #expect(notes[1].nextOutlook?.tone == .warn)
+        let row = NoteListRow(notes[1], today: day("2026-10-27"))
+        #expect(row.verdict == "Coupon at risk: AMZN is 12.6% below the barrier (check 26 Nov)")
+        #expect(row.verdictTone == .warn)
+        #expect(row.valueLabel == "Worth today" && row.valueText == "USD 30,000")
+        #expect(row.accessibilityLabel.hasSuffix("Worth today USD 30,000"))
     }
 
     @Test("the detail decodes in full: terms, schedule, payout, shares, levels, scenarios, outcomes, series")
@@ -109,7 +106,11 @@ struct StructuredNotesTests {
         ]
         #expect(NoteText.scheduleSummary(entries) == "2 coupons of 0.667% (98% barrier, memory) · 1 autocall date from 22 Apr 2027 at 105%")
         #expect(NoteText.scheduleSummary([]) == "No coupons or autocalls")
-        #expect(try NoteFixtures.extract().draft.scheduleSummary == "2 autocall dates from 27 May 2027 at 105% stepping to 100%")
+        let stepping = [105, 100].map {
+            NoteText.ScheduleEntry(obsDate: day("2027-05-27"), couponRatePct: nil, couponBarrierPct: nil, couponMemory: false,
+                                   autocallTriggerPct: Decimal($0))
+        }
+        #expect(NoteText.scheduleSummary(stepping) == "2 autocall dates from 27 May 2027 at 105% stepping to 100%")
     }
 
     @Test("the maturity table keeps every 10% and the branch levels")
@@ -126,20 +127,22 @@ struct StructuredNotesTests {
         #expect(rows == ["0", "10", "20", "30", "40", "45", "50", "60", "70", "80", "90", "100", "110", "120", "130", "140", "150"])
     }
 
-    @Test("the note screen's words: stats, outlooks, levels, scenarios, schedule and terms")
+    @Test("the note screen's words: header, countdown, bars, money, scenarios, schedule and terms")
     func presentation() throws {
+        let today = day("2026-10-27")
         let n = try NoteFixtures.detail()
-        #expect(n.summaryStats.map(\.label) == ["Invested", "Received", "If it ended today", "Break-even at maturity"])
-        #expect(n.summaryStats[0].sub == "USD 50,000.00 nominal at 74.5% · 5 May 2026")
-        #expect(n.summaryStats[2].value == "−USD 5,975.22")
-        #expect(n.summaryStats[2].tone == .danger)
-        #expect(n.summaryStats[3].value == "worst ≥ 99%")
-        #expect(n.nextTitle == "26 Nov 2026 · in 30 days")
-        #expect(n.outlooks.map(\.title) == ["Coupon 4.669% (with missed ones)", "Autocall at 105%"])
-        #expect(n.outlooks.allSatisfy { !$0.ok })
-        #expect(n.levelsIntro == "The worst share (AMZN, 87.05%) against each level:")
+        #expect(n.headerDetail == "Example Bank M Financial · XS0000000405")
+        #expect(n.verdictHeadline(today: today) == nil && n.verdictTone == .neutral)   // an older server
+        #expect(n.countdown(today: today)
+            == ["Next check 26 Nov 2026 · in 30 days · called if every stock is at or above 105% of its start"])
+        #expect(n.bars.map(\.symbol) == ["AMZN", "MSFT", "GOOGL"])
+        #expect(n.moneyStats(today: today).map(\.label) == ["Paid", "Worth today"])
+        #expect(n.moneyStats(today: today)[0].value == "USD 37,250")
+        #expect(n.moneyStats(today: today)[1].value == "—" && n.moneyStats(today: today)[1].sub == "No broker price yet")
         #expect(n.scenarioStats.map(\.value) == ["+USD 19,086.50", "−USD 37,250.00", "USD 6,336.50", "99%"])
         #expect(n.maturityRows.first.map { MoneyFormat.plain($0.worstPct) } == "150")
+        #expect(n.scheduleSummary.contains("autocall date"))
+        #expect(n.sections.map(\.title) == ["All scenarios", "Full schedule", "Price history", "Terms"])
         let rows = n.scheduleRows
         #expect(rows[0].coupon == "0.667% if ≥ 98% (memory)")
         #expect(rows[0].outcomes.map(\.text) == ["Coupon missed · worst AMZN 93.11%"])
@@ -149,9 +152,37 @@ struct StructuredNotesTests {
         #expect(n.termRows.first { $0.label == "Issuer" }?.value == "Example Bank M Financial")
 
         let ended = try NoteFixtures.detail("structured_note_detail_ended")
-        #expect(ended.summaryStats.map(\.label) == ["Invested", "Received", "Result", "Ended"])
-        #expect(ended.summaryStats[2].value == "+USD 100.00")
-        #expect(ended.levelsIntro == nil)
+        #expect(ended.moneyStats(today: today).map(\.label) == ["Paid", "Got back", "Profit"])
+        #expect(ended.moneyStats(today: today).map(\.value) == ["USD 5,000", "USD 5,100", "+USD 100"])
+        #expect(ended.moneyStats(today: today)[2].sub == "+2%" && ended.moneyStats(today: today)[2].tone == .positive)
+        #expect(!ended.sections.contains(.scenarios))
+        #expect(ended.bars.isEmpty && ended.countdown(today: today).isEmpty && ended.verdictHeadline(today: today) == nil)
         #expect(ended.scheduleRows.flatMap(\.outcomes).contains { $0.text == "Called early USD 5,000.00 · worst GOOGL 103.95%" })
+    }
+
+    @Test("a coupon at risk: the verdict, the coupon it pays and when the call comes; the money with if called")
+    func couponAtRisk() throws {
+        var json = try #require(try JSONSerialization.jsonObject(with: fixture("structured_note_detail")) as? [String: Any])
+        json["verdict"] = ["kind": "coupon_at_risk", "symbol": "AMZN", "gap_pct": "12.58", "date": "2026-11-26",
+                           "call_gap_pct": "20.62", "call_date": "2027-04-22"]
+        json["market"] = ["price_pct": "60", "value": "30000.00", "as_of": "2026-10-27", "profit": "-7250.00"]
+        json["if_called_next"] = [
+            "obs_date": "2027-04-22", "pay_date": "2027-04-29", "trigger_pct": "105", "redemption_pct": "100",
+            "redemption": "50000.00", "coupons": "2000.00", "total": "52000.00", "profit": "14750.00",
+            "return_pct": "39.6", "annualised_pct": "81.4",
+        ]
+        let n = try LedgerJSON.decode(NoteDetail.self, from: JSONSerialization.data(withJSONObject: json))
+        let today = day("2026-10-27")
+        #expect(n.verdictHeadline(today: today) == "Coupon at risk: AMZN is 12.6% below the barrier (check 26 Nov)")
+        #expect(n.verdictTone == .warn)
+        #expect(n.countdown(today: today) == [
+            "Next check 26 Nov 2026 · in 30 days · called if every stock is at or above 105% of its start",
+            "Coupon of USD 2,334.50 is paid only if every stock is at or above 98% of its start",
+            "Called on 22 Apr 2027 if AMZN rises 20.6%",
+        ])
+        let money = n.moneyStats(today: today)
+        #expect(money.map(\.label) == ["Paid", "Worth today", "If called on 22 Apr 2027"])
+        #expect(money[1].value == "USD 30,000" && money[1].sub == "−USD 7,250 if sold today")
+        #expect(money[2].value == "USD 52,000" && money[2].sub == "+USD 14,750 · 81% a year" && money[2].tone == .positive)
     }
 }

@@ -82,6 +82,8 @@ struct MainTabs: View {
         .environment(model.screens.accountLedgers)
         // Structured notes, listed on the account that pays for them.
         .environment(model.screens.notes)
+        // Holdings, opened from a broker account's Portfolio as well as from Investments.
+        .environment(model.screens.investments)
     }
 
     @ViewBuilder private func screen(_ tab: LedgerTab) -> some View {
