@@ -8,10 +8,12 @@
 - **feat** Typed deposits and withdrawals on a bank account (`account_entries`, `add_account_entry` / `remove_account_entry`), for an account no SMS or statement reaches.
 - **feat** Structured notes: a holding of kind `structured_note` with its terms (underlyings and initial levels, observation schedule with memory coupons and autocalls, final payout branches on the worst performance, cash or physical). `private.note_evaluate` gives status, coupons and redemptions, each share's distance to the next autocall, coupon barrier and break-even, the next observation, the payout if it ended today and the autocall / maturity scenarios. Outcomes are recorded as events and posted to the funding account on their payment dates (coupons as "Investment income", redemptions as money back out of the holding, delivered shares as a security holding); a live note counts at what was invested. `security_prices` stores daily closes; a security with a symbol is valued from them.
 - **feat** A new "Investment income" category (income) and rule for every ledger.
+- **feat** `stock-prices` Edge Function and pg_cron job `ledger-stock-prices` (Mon–Sat 22:30 UTC): daily closes from Yahoo Finance for the shares notes follow, then settlement. An owner can run it for their ledger right after adding a note (backfill).
+- **feat** `termsheet-extract` Edge Function: a term-sheet PDF → draft note terms (Claude, `TERMSHEET_LLM_MODEL`, default `claude-sonnet-5-5`) with warnings for the review; PDFs kept in the private `term-sheets` bucket. Contract `docs/contracts/termsheet-v1.md`.
 
 ### Docs
 
-- **docs** ARCHITECTURE (structured notes and broker cash), `assets/banks/README.md` (SWQ).
+- **docs** ARCHITECTURE (structured notes and broker cash, the two functions and the cron job), PRODUCTION (functions, cron, `TERMSHEET_LLM_MODEL`), README (endpoints, env), `docs/contracts/termsheet-v1.md`, `assets/banks/README.md` (SWQ).
 
 ## SMS clean-up, card BINs and the DFM iVESTOR card — 2026-10-26
 

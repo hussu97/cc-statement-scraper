@@ -1,8 +1,9 @@
-// Claude calls used by the worker: merchant categorisation and the SMS-template
-// fallback. Only merchant names / example descriptions, the category list, and the
-// text of an unparsed SMS are ever sent — never PDFs, amounts from statements, or
-// account data. Responses are constrained with structured outputs and then
-// re-validated here before they reach the database.
+// Claude calls: merchant categorisation and the SMS-template fallback (the worker), and
+// reading a structured note's term sheet (termsheet-extract). Only merchant names / example
+// descriptions, the category list, the text of an unparsed SMS and a term sheet the user
+// uploaded to be read are ever sent — never bank statements, amounts from them, or account
+// data. Responses are constrained with structured outputs and then re-validated before
+// they reach the database.
 
 import { Anthropic } from "./deps.ts";
 
@@ -67,22 +68,28 @@ export function isTransientLlmError(e: unknown): boolean {
   return true;
 }
 
-/** One structured-output request; returns the parsed JSON object. */
+/**
+ * One structured-output request; returns the parsed JSON object. `user` is text or content
+ * blocks (a document); `model`, `effort` and `timeoutMs` override the worker's defaults.
+ */
 export async function structuredCall(opts: {
   system: string;
-  user: string;
+  user: string | Record<string, unknown>[];
   schema: Record<string, unknown>;
   maxTokens?: number;
+  model?: string;
+  effort?: "low" | "medium" | "high";
+  timeoutMs?: number;
 }): Promise<unknown> {
   // deno-lint-ignore no-explicit-any
   const params: any = {
-    model: llmModel(),
+    model: opts.model ?? llmModel(),
     max_tokens: opts.maxTokens ?? 8000,
     system: opts.system,
     messages: [{ role: "user", content: opts.user }],
-    output_config: { effort: "low", format: { type: "json_schema", schema: opts.schema } },
+    output_config: { effort: opts.effort ?? "low", format: { type: "json_schema", schema: opts.schema } },
   };
-  const res = await client().messages.create(params);
+  const res = await client().messages.create(params, opts.timeoutMs ? { timeout: opts.timeoutMs } : undefined);
   if (res.stop_reason === "refusal") throw new LlmOutputError("model refused");
   if (res.stop_reason === "max_tokens") throw new LlmOutputError("output truncated (max_tokens)");
   const text = res.content
