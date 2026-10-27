@@ -80,6 +80,8 @@ struct MainTabs: View {
         // Wealth mode: the bank accounts' balances and writes, and each account's ledger.
         .environment(model.screens.cash)
         .environment(model.screens.accountLedgers)
+        // Structured notes, listed on the account that pays for them.
+        .environment(model.screens.notes)
     }
 
     @ViewBuilder private func screen(_ tab: LedgerTab) -> some View {
@@ -123,7 +125,7 @@ struct MainTabs: View {
             }
         case .investments:
             NavigationStack {
-                InvestmentsView(model: model.screens.investments, profileCode: profileCode,
+                InvestmentsView(model: model.screens.investments, notes: model.screens.notes, profileCode: profileCode,
                                 canEdit: model.profiles.canWrite)
             }
         case .cashFlow:

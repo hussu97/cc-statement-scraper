@@ -4,16 +4,21 @@ import SwiftUI
 /// Wealth's Investments tab: the total the server values every holding at, the gain against what
 /// went in and the last 24 hours, today's Dubai retail metal prices (while there is gold or silver),
 /// 90 days of value or price, returns by period, and the holdings grouped by kind, each opening its
-/// own screen. Owners add a holding of any kind. Every figure is the server's.
+/// own screen (a structured note its note screen), then the structured notes, live and ended.
+/// Owners add a holding of any kind, or a note from its term sheet. Every figure is the server's.
 struct InvestmentsView: View {
     let model: InvestmentsModel
+    let notes: NotesModel
     let profileCode: String
     let canEdit: Bool
     @State private var editing: HoldingDraft?
+    @State private var addingNote: AddNoteModel?
+    /// A note just added: its screen opens.
+    @State private var openedNote: String?
 
     var body: some View {
         Page {
-            if let notice = model.notice {
+            if let notice = model.notice ?? notes.notice {
                 Label(notice.text, systemImage: notice.isError ? "exclamationmark.triangle" : "checkmark.circle")
                     .font(Typography.rowMeta)
                     .foregroundStyle(notice.isError ? Palette.danger : Palette.positive)
@@ -29,6 +34,7 @@ struct InvestmentsView: View {
                 holdings(content.valuation)
             }
             .padding(.top, 8)
+            NotesCard(model: notes, profileCode: profileCode, canEdit: canEdit) { addingNote = notes.addModel() }
         }
         .rootNavigation("Investments")
         .toolbar {
@@ -42,9 +48,23 @@ struct InvestmentsView: View {
         .sheet(item: $editing) { draft in
             HoldingSheet(model: model, draft: draft, profileCode: profileCode, canEdit: canEdit)
         }
+        .sheet(item: $addingNote) { add in
+            AddNoteSheet(model: add, profileCode: profileCode, canEdit: canEdit) { openedNote = $0 }
+        }
+        .navigationDestination(item: $openedNote) { code in
+            NoteDetailView(notes: notes, holdingCode: code, profileCode: profileCode, canEdit: canEdit)
+        }
         .task { await model.loadIfNeeded(profileCode: profileCode) }
-        .refreshable { await model.load(profileCode: profileCode) }
-        .onDisappear { model.notice = nil }
+        .task { await notes.loadIfNeeded(profileCode: profileCode) }
+        .refreshable {
+            async let a: Void = model.load(profileCode: profileCode)
+            async let b: Void = notes.load(profileCode: profileCode)
+            _ = await (a, b)
+        }
+        .onDisappear {
+            model.notice = nil
+            notes.notice = nil
+        }
     }
 
     @ViewBuilder private func holdings(_ valuation: HoldingsValuation) -> some View {
@@ -65,8 +85,13 @@ struct InvestmentsView: View {
                 ForEach(group.holdings) { holding in
                     if holding.id != group.holdings.first?.id { Divider().overlay(Palette.border) }
                     NavigationLink {
-                        HoldingDetailView(investments: model, holdingCode: holding.holdingCode,
-                                          profileCode: profileCode, canEdit: canEdit)
+                        if holding.kind == .structuredNote {
+                            NoteDetailView(notes: notes, holdingCode: holding.holdingCode, profileCode: profileCode,
+                                           canEdit: canEdit)
+                        } else {
+                            HoldingDetailView(investments: model, holdingCode: holding.holdingCode,
+                                              profileCode: profileCode, canEdit: canEdit)
+                        }
                     } label: {
                         HoldingRow(holding: holding)
                     }
