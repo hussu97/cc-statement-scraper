@@ -1,5 +1,18 @@
 # Changelog
 
+## Swissquote: USD cash and structured notes — 2026-10-27
+
+### Backend (Supabase)
+
+- **feat** Swissquote (`SWQ`, its own logo) as a bank; its USD cash is a current account, and any non-AED bank account now counts in cash and net worth (at the USD peg or `fx_rates`).
+- **feat** Typed deposits and withdrawals on a bank account (`account_entries`, `add_account_entry` / `remove_account_entry`), for an account no SMS or statement reaches.
+- **feat** Structured notes: a holding of kind `structured_note` with its terms (underlyings and initial levels, observation schedule with memory coupons and autocalls, final payout branches on the worst performance, cash or physical). `private.note_evaluate` gives status, coupons and redemptions, each share's distance to the next autocall, coupon barrier and break-even, the next observation, the payout if it ended today and the autocall / maturity scenarios. Outcomes are recorded as events and posted to the funding account on their payment dates (coupons as "Investment income", redemptions as money back out of the holding, delivered shares as a security holding); a live note counts at what was invested. `security_prices` stores daily closes; a security with a symbol is valued from them.
+- **feat** A new "Investment income" category (income) and rule for every ledger.
+
+### Docs
+
+- **docs** ARCHITECTURE (structured notes and broker cash), `assets/banks/README.md` (SWQ).
+
 ## SMS clean-up, card BINs and the DFM iVESTOR card — 2026-10-26
 
 ### Backend (Supabase)
