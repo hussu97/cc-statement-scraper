@@ -12,7 +12,7 @@ TestFlight by a Linux runner).
                             pgTAP (if the local stack runs), swift test             (≈1–2 min)
                             + main push that changes the iOS app: build, sign, stage the IPA
  GitHub ──► ci.yml          same checks, path-filtered, one required check: ci-ok
-   main ──► deploy-supabase.yml   pgTAP → [production approval] → history check → db push → functions
+   main ──► deploy-supabase.yml   CI's pgTAP passed → [production approval] → history check → db push → functions
         ──► deploy-parser.yml     ruff/pytest → [production approval] → image → no-traffic revision
                                   → /health smoke → 100% traffic
         ──► Vercel (Git integration) builds apps/web ──► web-smoke.yml probes production
@@ -26,7 +26,7 @@ TestFlight by a Linux runner).
 | Workflow | Triggers | What it does |
 |---|---|---|
 | `ci.yml` | every PR, push to `main`, manual | Path-filtered jobs (below) + `ci-ok` aggregator. PRs cancel superseded runs; `main` runs always finish. |
-| `deploy-supabase.yml` | push to `main` touching `supabase/migrations/**`, `supabase/functions/**` (not `_tests/`), `supabase/config.toml`; manual (type the project ref) | pgTAP + deno → `production` env → migration history check → dry run → destructive guard → `db push` → `functions deploy`. |
+| `deploy-supabase.yml` | push to `main` touching `supabase/migrations/**`, `supabase/functions/**` (not `_tests/`), `supabase/config.toml`; manual (type the project ref) | waits for CI's pgTAP on the same commit (no Docker) + deno → `production` env → migration history check → dry run → destructive guard → `db push` → `functions deploy`. |
 | `deploy-parser.yml` | push to `main` touching `services/parser/**` (not tests/docs); manual (type `deploy`) | ruff + pytest → `production` env → build/push image → deploy a **no-traffic tagged revision** → smoke `/health` on the tag URL → promote to 100%. |
 | `web-smoke.yml` | push to `main` touching the web app (waits for that commit's Vercel Production deployment); daily 05:17 UTC; manual (any URL) | `scripts/ci/web-smoke.sh` against https://cc-statement-scraper.vercel.app. Does not deploy. |
 | `ios-testflight.yml` | push to `main` touching `apps/ios/**` except `build-number.json` / `*.md`; manual | Linux only: verify the staged IPA matches this source → upload to App Store Connect → `testflight-distribute.mjs` to "Friends & Family". |
@@ -42,7 +42,7 @@ Deleted with the legacy code: `deploy-backend.yml`, `deploy-frontend.yml`,
 | Job | Runs when these change | Steps | Runner |
 |---|---|---|---|
 | `tooling` | `.github/workflows/**`, `scripts/hooks/**`, `scripts/ci/**`, `scripts/install-hooks.sh`, `scripts/cutover/*.sh`, `apps/ios/scripts/*.sh`, `.claude/hooks/**` | actionlint (incl. shellcheck of `run:` blocks), shellcheck (incl. `apps/ios/scripts/*.sh`), `sql_executed_text_test.py`, `.claude/hooks/guard_test.py`; pre-push also runs `apps/ios/scripts/release_checks_test.sh` on macOS | Linux |
-| `supabase` | `supabase/migrations|tests/**`, `seed.sql`, `config.toml`, `packages/db-types/**`, `check-migrations.sh` | types normaliser tests → append-only check vs PR base / previous `main` (only if migrations changed) → `supabase start` → `db reset` → `test db` (pgTAP) → types drift vs `packages/db-types` (`gen-types.mjs --check`, normalised) | Linux |
+| `supabase` | `supabase/migrations|tests/**`, `seed.sql`, `config.toml`, `packages/db-types/**`, `check-migrations.sh` | types normaliser tests → append-only check vs PR base / previous `main` (only if migrations changed) → `supabase start` (`.github/actions/supabase-start`: cached images, pgTAP services only) → `db reset` → `test db` (pgTAP) → types drift vs `packages/db-types` (`gen-types.mjs --check`, normalised) | Linux |
 | `edge` | `supabase/functions/**`, `config.toml` | `deno lint` → `deno fmt --check` → `deno check --frozen` → `deno test --frozen -A` (the frozen `deno.lock` must match the sources) | Linux |
 | `parser` | `services/parser/**`, `docs/contracts/**` | uv venv → `ruff check` → `pytest` | Linux |
 | `web` | `apps/web/**`, `packages/**`, root `package.json`, lockfile, workspace | tokens check → lint → typecheck → test → build | Linux |
@@ -50,6 +50,8 @@ Deleted with the legacy code: `deploy-backend.yml`, `deploy-frontend.yml`,
 | `ci-ok` | always | fails if any job failed or was cancelled; skipped = passed; writes a results table to the job summary | Linux |
 
 Editing `ci.yml` itself re-runs every job. A manual run runs every job.
+
+**Supabase images:** `supabase start` pulls its images from `public.ecr.aws` without a login, and GitHub's shared runner IPs run out of Amazon's anonymous per-IP data allowance (`toomanyrequests: Data limit exceeded`; retrying doesn't help until it resets). `.github/actions/supabase-start` starts only what pgTAP and `gen types` use (postgres, gotrue, realtime, storage, postgres-meta) and loads the images from the Actions cache, keyed on `SUPABASE_CLI_VERSION` (which pins every tag); the first green run after a CLI bump pulls once and saves them (≈1.5 GB, zstd). Bumping the CLI is the only time CI pulls.
 
 **Caching:** pnpm store (`setup-node cache: pnpm`), uv (`setup-uv enable-cache`, keyed on the
 requirements/pyproject), Deno (`setup-deno cache: true`, keyed on `deno.lock`), Docker layers
@@ -79,7 +81,7 @@ still deploys.
 1. Merge/push to `main` with a change under `supabase/`.
 2. `plan` decides: migrations changed → `db push`; function sources/config changed →
    `functions deploy`. (A change to only the workflow file plans a migrations dry run.)
-3. `test`: fresh local stack, migrations from scratch, pgTAP; `deno lint` + `deno check --frozen` + `deno test --frozen` (a lock that no longer matches stops the deploy).
+3. `test`: waits (up to 40 min) for ci.yml's "Supabase (migrations, pgTAP, types)" job on the same commit, which runs the migrations from scratch and pgTAP, and refuses to deploy unless it passed; then `deno lint` + `deno check --frozen` + `deno test --frozen` (a lock that no longer matches stops the deploy). Nothing here pulls a Docker image, so a registry limit can't stall a deploy (27 Oct 2026); if CI's run failed on one, re-run that job, then this workflow.
 4. `deploy` waits for approval on `production`, then:
    - `supabase link`
    - **History check** (`scripts/ci/check-migrations.sh remote linked`): fails if a migration

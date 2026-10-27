@@ -1,0 +1,59 @@
+name: Start Supabase for pgTAP
+description: >
+  Installs the Supabase CLI and starts the local stack with only what pgTAP and the types
+  check use (postgres, gotrue, realtime, storage, postgres-meta). The images come from the
+  Actions cache, keyed on the CLI version (which pins every image tag); only a miss pulls
+  from public.ecr.aws, whose anonymous per-IP data limit GitHub's shared runners exhaust
+  ("toomanyrequests: Data limit exceeded", 27 Oct 2026). After a miss, save the images with
+  the supabase-images-save step once the job has also pulled pg_prove (supabase test db).
+
+inputs:
+  cli-version:
+    description: Supabase CLI version (pins the image tags, so it is the cache key)
+    required: true
+
+outputs:
+  cache-hit:
+    description: "'true' when the images came from the cache"
+    value: ${{ steps.cache.outputs.cache-hit }}
+  cache-key:
+    description: The images' cache key, for actions/cache/save after a miss
+    value: ${{ steps.key.outputs.key }}
+
+runs:
+  using: composite
+  steps:
+    - uses: supabase/setup-cli@v1
+      with:
+        version: ${{ inputs.cli-version }}
+
+    - id: key
+      shell: bash
+      run: echo "key=supabase-images-${{ runner.os }}-${{ inputs.cli-version }}-v1" >> "$GITHUB_OUTPUT"
+
+    - id: cache
+      uses: actions/cache/restore@v4
+      with:
+        path: /tmp/supabase-images.tar.zst
+        key: ${{ steps.key.outputs.key }}
+
+    - name: Load cached images
+      if: steps.cache.outputs.cache-hit == 'true'
+      shell: bash
+      run: zstd -dc /tmp/supabase-images.tar.zst | docker load
+
+    # Excluded: everything pgTAP and `gen types` don't touch. A throttled pull (per-minute
+    # limit) is retried; a spent data limit is not going to clear within the job.
+    - name: supabase start
+      shell: bash
+      run: |
+        for attempt in 1 2 3; do
+          if supabase start -x studio,imgproxy,mailpit,edge-runtime,logflare,vector,supavisor,kong,postgrest; then
+            exit 0
+          fi
+          supabase stop --no-backup || true
+          echo "::warning::supabase start failed (attempt $attempt of 3)"
+          [ "$attempt" -lt 3 ] && sleep $((attempt * 45))
+        done
+        echo "::error::supabase start failed: the image pulls were refused (see above). Re-run once the registry limit resets; the next successful run caches the images."
+        exit 1

@@ -69,6 +69,7 @@ jobs:
               - 'supabase/config.toml'
               - 'packages/db-types/**'
               - 'scripts/ci/check-migrations.sh'
+              - '.github/actions/supabase-start/**'
               - '.github/workflows/ci.yml'
             migrations:
               - 'supabase/migrations/**'
@@ -92,6 +93,7 @@ jobs:
               - '.github/workflows/ci.yml'
             tooling:
               - '.github/workflows/**'
+              - '.github/actions/**'
               - 'scripts/hooks/**'
               - 'scripts/ci/**'
               - 'scripts/install-hooks.sh'
@@ -161,12 +163,11 @@ jobs:
           BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
         run: bash scripts/ci/check-migrations.sh diff "$BASE" HEAD
 
-      - uses: supabase/setup-cli@v1
+      - name: Start Supabase (cached images, pgTAP services only)
+        id: supabase
+        uses: ./.github/actions/supabase-start
         with:
-          version: ${{ env.SUPABASE_CLI_VERSION }}
-
-      - name: Start Supabase (without heavy services)
-        run: supabase start -x studio,imgproxy,inbucket,edge-runtime,analytics,vector
+          cli-version: ${{ env.SUPABASE_CLI_VERSION }}
 
       - name: Reset database (migrations + seed)
         run: supabase db reset
@@ -182,6 +183,20 @@ jobs:
             echo "::error::packages/db-types is stale. Run 'pnpm db:types' and commit the result."
             exit 1
           fi
+
+      # After a cache miss: keep this CLI version's images (pg_prove included, pulled by
+      # `supabase test db`) so later runs pull nothing (.github/actions/supabase-start).
+      - name: Save Supabase images
+        if: success() && steps.supabase.outputs.cache-hit != 'true'
+        run: |
+          mapfile -t images < <(docker images --format '{{.Repository}}:{{.Tag}}' | grep '^public.ecr.aws/supabase/')
+          docker save "${images[@]}" | zstd -T0 -3 -o /tmp/supabase-images.tar.zst
+          du -h /tmp/supabase-images.tar.zst
+      - uses: actions/cache/save@v4
+        if: success() && steps.supabase.outputs.cache-hit != 'true'
+        with:
+          path: /tmp/supabase-images.tar.zst
+          key: ${{ steps.supabase.outputs.cache-key }}
 
       - name: Stop Supabase
         if: always()

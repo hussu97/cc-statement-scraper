@@ -3,7 +3,10 @@ name: Deploy Supabase
 # Applies supabase/migrations to the production project and deploys the Edge
 # Functions. Production data is irreplaceable, so every run goes through:
 #
-#   test      pgTAP on a fresh local stack + deno lint/check/test (frozen lock). No secrets.
+#   test      pgTAP is CI's: this waits for ci.yml's "Supabase (migrations, pgTAP, types)"
+#             job on the same commit and refuses to deploy unless it passed (no Docker
+#             here, so a registry limit can't stall a deploy); then deno lint/check/test
+#             (frozen lock). No secrets.
 #   deploy    `production` environment (put required reviewers on it, so a
 #             push waits for a human click). Links the project, then:
 #               1. history check: every applied migration still exists and is
@@ -140,27 +143,36 @@ jobs:
     needs: plan
     if: needs.plan.outputs.migrations == 'true' || needs.plan.outputs.functions == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      checks: read
     steps:
       - uses: actions/checkout@v4
 
-      - uses: supabase/setup-cli@v1
-        with:
-          version: ${{ env.SUPABASE_CLI_VERSION }}
-
-      - name: Start Supabase (without heavy services)
+      # CI runs the migrations from scratch and pgTAP on every push to main that changes them
+      # (same commit, same tests). Wait for its latest attempt; a manual run of an older
+      # commit finds that commit's result.
+      - name: pgTAP passed in CI for this commit
         if: needs.plan.outputs.migrations == 'true'
-        run: supabase start -x studio,imgproxy,inbucket,edge-runtime,analytics,vector
-
-      - name: Migrations from scratch + pgTAP
-        if: needs.plan.outputs.migrations == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+          CHECK: "Supabase (migrations, pgTAP, types)"
         run: |
-          supabase db reset
-          supabase test db
-
-      - name: Stop Supabase
-        if: always() && needs.plan.outputs.migrations == 'true'
-        run: supabase stop --no-backup
+          name=$(jq -rn --arg n "$CHECK" '$n|@uri')
+          for i in $(seq 1 80); do
+            run=$(gh api "repos/$GITHUB_REPOSITORY/commits/$SHA/check-runs?check_name=$name&filter=latest" \
+                    -q '.check_runs | sort_by(.started_at) | last // {} | "\(.status // "missing") \(.conclusion // "")"')
+            case "$run" in
+              "completed success") echo "CI pgTAP passed for ${SHA::7}."; exit 0 ;;
+              completed*) echo "::error::CI's \"$CHECK\" for ${SHA::7} ended ${run#completed }: fix or re-run it, then re-run this deploy."; exit 1 ;;
+            esac
+            echo "CI's \"$CHECK\": ${run% *} ($i/80), waiting"
+            sleep 30
+          done
+          echo "::error::CI's \"$CHECK\" for ${SHA::7} did not finish in 40 minutes."
+          exit 1
 
       - uses: denoland/setup-deno@v2
         if: needs.plan.outputs.functions == 'true'

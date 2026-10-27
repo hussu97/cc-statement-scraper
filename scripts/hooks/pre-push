@@ -134,7 +134,7 @@ area_of() {
     apps/ios/LedgerKit/*) echo ios; echo iosapp ;;
     apps/ios/Ledger/*|apps/ios/ShareExtension/*|apps/ios/Ledger.xcodeproj/*|apps/ios/Config/*|apps/ios/project.yml) echo iosapp ;;
     .github/workflows/ci.yml) echo tooling; echo supabase; echo edge; echo parser; echo web; echo scraper ;;
-    .github/workflows/*|scripts/hooks/*|scripts/ci/*|scripts/install-hooks.sh|scripts/cutover/*.sh|apps/ios/scripts/*.sh|.claude/hooks/*) echo tooling ;;
+    .github/workflows/*|.github/actions/*|scripts/hooks/*|scripts/ci/*|scripts/install-hooks.sh|scripts/cutover/*.sh|apps/ios/scripts/*.sh|.claude/hooks/*) echo tooling ;;
   esac
 }
 
