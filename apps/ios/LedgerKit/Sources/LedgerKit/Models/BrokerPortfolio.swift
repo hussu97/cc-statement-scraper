@@ -40,6 +40,8 @@ public struct BrokerPortfolio: Decodable, Sendable, Hashable {
         public let ifEndedToday: NoteSummary.IfEndedToday?
         public let worstNow: NoteSummary.Worst?
         public let awaitingPrices: Bool?
+        /// Each share against its initial level and the next autocall (absent on an older server).
+        public let underlyings: [NoteDetail.Underlying]?
 
         public var noteStatus: NoteStatus { NoteStatus(raw: status) }
     }

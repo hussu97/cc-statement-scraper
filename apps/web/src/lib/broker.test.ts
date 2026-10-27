@@ -10,6 +10,7 @@ import {
   positionRef,
   providerLabel,
   sellFromPosition,
+  shareLines,
   syncStatus,
   dateTickFormatter,
   type PortfolioDay,
@@ -171,5 +172,38 @@ describe("portfolio chart", () => {
     expect(estimateNote([day("2026-01-01", "1", true), day("2026-01-02", "1", false)])).toBe(
       "Dashed: estimated from the broker's performance index before 2 Jan 2026; daily marks since.",
     );
+  });
+});
+
+describe("shareLines", () => {
+  const note = {
+    status: "live",
+    next: null,
+    if_called_next: null,
+    if_ended_today: null,
+    worst_now: null,
+    awaiting_prices: false,
+    underlyings: [
+      { symbol: "BBB", initial: "200", close: "220", perf_pct: "110.0000", is_worst: false, to_autocall_pct: "-4.55" },
+      { symbol: "AAA", initial: "100", close: "90.5", perf_pct: "90.5000", is_worst: true, to_autocall_pct: "10.50" },
+      { symbol: "CCC", initial: "50", close: null, perf_pct: null, to_autocall_pct: null },
+    ],
+  };
+
+  it("lists a live note's priced shares, worst first, with the distance to the call", () => {
+    expect(shareLines(note)).toEqual([
+      { symbol: "AAA", levels: "90.5 vs 100", perf: "90.5%", toCall: "needs +10.5%", callMet: false, worst: true },
+      { symbol: "BBB", levels: "220 vs 200", perf: "110%", toCall: "4.55% above", callMet: true, worst: false },
+    ]);
+  });
+
+  it("shows nothing for an ended note, an older payload or no note", () => {
+    expect(shareLines({ ...note, status: "autocalled" })).toEqual([]);
+    expect(shareLines({ ...note, underlyings: undefined })).toEqual([]);
+    expect(shareLines(null)).toEqual([]);
+  });
+
+  it("leaves the distance out when the note has no autocall left", () => {
+    expect(shareLines({ ...note, underlyings: [{ symbol: "AAA", initial: "100", close: "95", perf_pct: "95", to_autocall_pct: null }] })[0].toCall).toBeNull();
   });
 });

@@ -68,6 +68,22 @@ private struct BrokerPositionRowView: View {
                     Image(systemName: "chevron.right").font(.caption).foregroundStyle(Palette.muted).padding(.top, 4)
                 }
             }
+            if !row.shares.isEmpty {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(row.shares) { share in
+                        HStack(spacing: 8) {
+                            Text(share.symbol).font(Typography.caption.weight(.medium))
+                                .foregroundStyle(share.isWorst ? Palette.ink : Palette.ink2).frame(width: 48, alignment: .leading)
+                            Text(share.levels).font(Typography.caption).foregroundStyle(Palette.muted).moneyLine()
+                            Text(share.perf).font(Typography.caption).foregroundStyle(Palette.ink).moneyLine()
+                            if let toCall = share.toCall {
+                                Text(toCall).font(Typography.caption)
+                                    .foregroundStyle(share.callMet ? Palette.positive : Palette.warn).lineLimit(1)
+                            }
+                        }
+                    }
+                }
+            }
             if !row.exits.isEmpty { NoteExitsView(exits: row.exits) }
         }
         .padding(.vertical, 4)

@@ -38,7 +38,11 @@
       "profit": "2000.00",
       "invested": "8000.00",
       "income": "0",
-      "sell_now": { "total": "10000.00", "profit": "2000.00", "return_pct": "25.00" },
+      "sell_now": {
+        "total": "10000.00",
+        "profit": "2000.00",
+        "return_pct": "25.00"
+      },
       "note": null
     },
     {
@@ -60,23 +64,108 @@
       "profit": "-2000.00",
       "invested": "20000.00",
       "income": "1000.00",
-      "sell_now": { "total": "19000.00", "profit": "-1000.00", "return_pct": "-5.00" },
+      "sell_now": {
+        "total": "19000.00",
+        "profit": "-1000.00",
+        "return_pct": "-5.00"
+      },
       "note": {
         "status": "live",
         "next": {
-          "seq": 2, "days": 30, "kind": "observation", "is_final": false,
-          "obs_date": "2026-11-26", "pay_date": "2026-12-03",
-          "coupon": { "amount": "500.00", "rate_pct": "2.5", "would_pay": true, "barrier_pct": "70" },
-          "autocall": { "amount": "20000.00", "would_call": false, "trigger_pct": "100", "redemption_pct": "100" }
+          "seq": 2,
+          "days": 30,
+          "kind": "observation",
+          "is_final": false,
+          "obs_date": "2026-11-26",
+          "pay_date": "2026-12-03",
+          "coupon": {
+            "amount": "500.00",
+            "rate_pct": "2.5",
+            "would_pay": true,
+            "barrier_pct": "70"
+          },
+          "autocall": {
+            "amount": "20000.00",
+            "would_call": false,
+            "trigger_pct": "100",
+            "redemption_pct": "100"
+          }
         },
         "if_called_next": {
-          "obs_date": "2026-11-26", "pay_date": "2026-12-03", "trigger_pct": "100", "redemption_pct": "100",
-          "redemption": "20000.00", "coupons": "1500.00", "total": "21500.00", "profit": "1500.00",
-          "return_pct": "7.50", "annualised_pct": "12.00"
+          "obs_date": "2026-11-26",
+          "pay_date": "2026-12-03",
+          "trigger_pct": "100",
+          "redemption_pct": "100",
+          "redemption": "20000.00",
+          "coupons": "1500.00",
+          "total": "21500.00",
+          "profit": "1500.00",
+          "return_pct": "7.50",
+          "annualised_pct": "12.00"
         },
-        "if_ended_today": { "payout_pct": "100", "settlement": "cash", "amount": "20000.00", "total": "21000.00", "profit": "1000.00" },
-        "worst_now": { "pct": "85.0000", "symbol": "AAA", "priced": true },
-        "awaiting_prices": false
+        "if_ended_today": {
+          "payout_pct": "100",
+          "settlement": "cash",
+          "amount": "20000.00",
+          "total": "21000.00",
+          "profit": "1000.00"
+        },
+        "worst_now": {
+          "pct": "85.0000",
+          "symbol": "AAA",
+          "priced": true
+        },
+        "awaiting_prices": false,
+        "underlyings": [
+          {
+            "symbol": "BBB",
+            "name": "Bbb Corp",
+            "bloomberg_code": null,
+            "initial": "200",
+            "close": "220",
+            "close_date": "2026-10-26",
+            "perf_pct": "110.0000",
+            "is_worst": false,
+            "to_autocall_pct": "-4.55",
+            "to_coupon_pct": null,
+            "to_break_even_pct": null,
+            "autocall_level": "210.0000",
+            "coupon_level": null,
+            "break_even_level": null
+          },
+          {
+            "symbol": "AAA",
+            "name": "Aaa Inc",
+            "bloomberg_code": null,
+            "initial": "100",
+            "close": "90.5",
+            "close_date": "2026-10-26",
+            "perf_pct": "90.5000",
+            "is_worst": true,
+            "to_autocall_pct": "10.50",
+            "to_coupon_pct": null,
+            "to_break_even_pct": null,
+            "autocall_level": "100.0000",
+            "coupon_level": null,
+            "break_even_level": null
+          },
+          {
+            "symbol": "CCC",
+            "name": "Ccc Ltd",
+            "bloomberg_code": null,
+            "initial": "50",
+            "close": null,
+            "close_date": null,
+            "perf_pct": null,
+            "is_worst": false,
+            "to_autocall_pct": null,
+            "to_coupon_pct": null,
+            "to_break_even_pct": null,
+            "autocall_level": null,
+            "coupon_level": null,
+            "break_even_level": null
+          }
+        ]
       }
     },
     {
@@ -98,7 +187,11 @@
       "profit": "0.00",
       "invested": "30000.00",
       "income": "2000.00",
-      "sell_now": { "total": "32000.00", "profit": "2000.00", "return_pct": "6.67" },
+      "sell_now": {
+        "total": "32000.00",
+        "profit": "2000.00",
+        "return_pct": "6.67"
+      },
       "note": null
     },
     {
@@ -157,9 +250,37 @@
     }
   ],
   "series": [
-    { "as_of": "2026-10-23", "total": "58000.00", "cash": null, "positions": null, "net_deposits": "50000.00", "estimated": true },
-    { "as_of": "2026-10-24", "total": "59000.00", "cash": null, "positions": null, "net_deposits": "50000.00", "estimated": true },
-    { "as_of": "2026-10-26", "total": "59500.00", "cash": "1000.00", "positions": "58500.00", "net_deposits": "50000.00", "estimated": false },
-    { "as_of": "2026-10-27", "total": "60000.00", "cash": "1000.00", "positions": "59000.00", "net_deposits": "50000.00", "estimated": false }
+    {
+      "as_of": "2026-10-23",
+      "total": "58000.00",
+      "cash": null,
+      "positions": null,
+      "net_deposits": "50000.00",
+      "estimated": true
+    },
+    {
+      "as_of": "2026-10-24",
+      "total": "59000.00",
+      "cash": null,
+      "positions": null,
+      "net_deposits": "50000.00",
+      "estimated": true
+    },
+    {
+      "as_of": "2026-10-26",
+      "total": "59500.00",
+      "cash": "1000.00",
+      "positions": "58500.00",
+      "net_deposits": "50000.00",
+      "estimated": false
+    },
+    {
+      "as_of": "2026-10-27",
+      "total": "60000.00",
+      "cash": "1000.00",
+      "positions": "59000.00",
+      "net_deposits": "50000.00",
+      "estimated": false
+    }
   ]
 }

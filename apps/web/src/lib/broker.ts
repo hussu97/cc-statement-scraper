@@ -5,7 +5,7 @@
 import { daysBetween, formatDate, formatMonth, formatRelative } from "./dates";
 import { toAmount, type MoneyInput } from "./money";
 import { trimDecimal } from "./holdings";
-import { pct, type CallScenario, type SellToday } from "./notes";
+import { distanceMet, distanceText, isEnded, pct, type CallScenario, type SellToday } from "./notes";
 
 export interface BrokerSync {
   last_synced_at: string | null;
@@ -31,6 +31,49 @@ export interface BrokerPositionNote {
   if_ended_today: { total: string; profit: string } | null;
   worst_now: { pct: string; symbol: string; priced: boolean } | null;
   awaiting_prices: boolean;
+  /** Each share against its initial level and the next autocall (absent on an older payload). */
+  underlyings?: BrokerNoteShare[] | null;
+}
+
+/** A note's share as the evaluator sees it today (decimal strings). */
+export interface BrokerNoteShare {
+  symbol: string;
+  name?: string | null;
+  initial: string;
+  close: string | null;
+  close_date?: string | null;
+  perf_pct: string | null;
+  is_worst?: boolean;
+  to_autocall_pct: string | null;
+  autocall_level?: string | null;
+}
+
+/** One share's line on a position: "now 316.8 vs 346.36 initial", its % of initial, and the distance to the next call. */
+export interface ShareLine {
+  symbol: string;
+  levels: string;
+  perf: string;
+  toCall: string | null;
+  callMet: boolean;
+  worst: boolean;
+}
+
+/** The shares of a live note, worst first; empty when the note has ended or no share has a close. */
+export function shareLines(note: BrokerPositionNote | null | undefined): ShareLine[] {
+  if (!note || isEnded(note.status) || !Array.isArray(note.underlyings)) return [];
+  return note.underlyings
+    .filter((u) => u && u.close !== null && u.close !== undefined)
+    .map((u) => ({
+      symbol: u.symbol,
+      levels: `${trimDecimal(u.close!)} vs ${trimDecimal(u.initial)}`,
+      perf: pct(u.perf_pct, 1),
+      toCall: u.to_autocall_pct === null || u.to_autocall_pct === undefined ? null : distanceText(u.to_autocall_pct),
+      callMet: distanceMet(u.to_autocall_pct),
+      worst: !!u.is_worst,
+      sortKey: Number(u.perf_pct ?? Infinity),
+    }))
+    .sort((a, b) => a.sortKey - b.sortKey)
+    .map(({ sortKey: _k, ...line }) => line);
 }
 
 /** structured_note | broker | security; another kind reads as a security. */

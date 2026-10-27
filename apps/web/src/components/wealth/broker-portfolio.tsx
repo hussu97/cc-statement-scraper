@@ -13,6 +13,7 @@ import {
   sellFromPosition,
   syncStatus,
   type BrokerPortfolio,
+  shareLines,
   type BrokerPosition,
   type ClosedPosition,
 } from "@/lib/broker";
@@ -159,6 +160,7 @@ function PositionRow({ x, currency, showCall }: { x: BrokerPosition; currency: s
   const isNote = positionKind(x.kind) === "structured_note";
   const status = x.note ? noteStatus(x.note.status) : null;
   const income = toAmount(x.income);
+  const shares = shareLines(x.note);
   return (
     <tr className="align-top">
       <td className="min-w-56 py-2.5 pr-3">
@@ -178,6 +180,18 @@ function PositionRow({ x, currency, showCall }: { x: BrokerPosition; currency: s
           )}
           {x.note?.next && !isEnded(x.note.status) && <> · next {formatDate(x.note.next.obs_date, "short")}</>}
         </p>
+        {shares.length > 0 && (
+          <ul className="mt-1.5 space-y-0.5 text-[12px]">
+            {shares.map((u) => (
+              <li key={u.symbol} className="tabular flex flex-wrap gap-x-2">
+                <span className={cn("w-12 font-medium", u.worst ? "text-ink" : "text-muted")}>{u.symbol}</span>
+                <span className="text-muted">{u.levels}</span>
+                <span className="text-ink">{u.perf}</span>
+                {u.toCall && <span className={u.callMet ? "text-positive" : "text-warn"}>{u.toCall} to call</span>}
+              </li>
+            ))}
+          </ul>
+        )}
       </td>
       <td className="tabular py-2.5 pr-3 text-right whitespace-nowrap">
         {formatQuantity(x.quantity)}

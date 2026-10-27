@@ -1,5 +1,19 @@
 # Changelog
 
+## Swissquote: each note's shares on the positions list — 2026-10-27
+
+### Backend (Supabase)
+
+- **feat** `broker_portfolio` gives each live note position its shares: the initial level, the latest close, the % of initial, and the distance to the next autocall and coupon levels. This is the note screen's table, now on the position.
+
+### Web
+
+- **feat** On a synced account's positions, a live note lists each share, worst first, with the close against the initial level, the % of initial and how far it is from the call (e.g. "needs +8% to call", or "4.9% above").
+
+### iOS
+
+- **feat** The same lines under each live note on the account screen's positions (`BrokerPositionRow.shares`).
+
 ## Swissquote sync: the cash account, positions, note values and history — 2026-10-27
 
 ### Backend (Supabase)

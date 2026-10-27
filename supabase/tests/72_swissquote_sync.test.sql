@@ -265,6 +265,14 @@ select is((pg_temp.v('sum')::jsonb)->'market'->>'value', '17000.00', 'the summar
 select is((pg_temp.v('sum')::jsonb)->'market'->>'profit', '1150.00', '… with the coupon received: 17,000 + 200 − 16,050');
 select is((pg_temp.v('sum')::jsonb)->'if_called_next'->>'pay_date', pg_temp.d(37)::text, 'and what it pays if called next');
 select is((pg_temp.v('sum')::jsonb)->'if_called_next'->>'total', '20400.00', '… 20,000 + both coupons');
+select pg_temp.as_user('uid');
+set local role authenticated;
+select pg_temp.set('pos73', (select p::text from jsonb_array_elements(public.broker_portfolio(pg_temp.v('p'), pg_temp.v('acc'))->'positions') p
+                             where p->>'isin' = 'XS0000000073'));
+reset role;
+select is((select string_agg((u->>'symbol') || ' ' || (u->>'initial') || ' ' || (u->>'close') || ' ' || (u->>'perf_pct') || ' ' || (u->>'to_autocall_pct'), ', ')
+           from jsonb_array_elements((pg_temp.v('pos73')::jsonb)->'note'->'underlyings') u),
+          'CCC 50 41 82 21.95', 'the position shows each share: initial, close, % of initial, distance to the next call');
 
 -- Cancelled: the position stays, the broker's rows stand.
 select pg_temp.as_user('uid');

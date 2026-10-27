@@ -36,6 +36,17 @@ struct BrokerPortfolioTests {
         #expect(p.series[0].cash == nil && p.series[3].positions == dec("59000.00"))
     }
 
+    @Test("a live note's shares on its position: worst first, now against initial, distance to the call")
+    func noteShares() throws {
+        let p = try Self.portfolio()
+        let row = BrokerPositionRow(p.positions[1], today: day("2026-10-27"))
+        #expect(row.shares.map(\.symbol) == ["AAA", "BBB"])        // CCC has no close yet
+        #expect(row.shares[0].levels == "90.5 vs 100" && row.shares[0].perf == "90.5%" && row.shares[0].isWorst)
+        #expect(row.shares[0].toCall == "needs +10.5% to call" && !row.shares[0].callMet)
+        #expect(row.shares[1].toCall == "4.55% above the call" && row.shares[1].callMet)
+        #expect(BrokerPositionRow(p.positions[0], today: day("2026-10-27")).shares.isEmpty)   // a share has none
+    }
+
     @Test("null (an account with no sync) and an empty body read as no portfolio")
     func noSync() throws {
         #expect(try BrokerPortfolio.decode(Data("null".utf8)) == nil)

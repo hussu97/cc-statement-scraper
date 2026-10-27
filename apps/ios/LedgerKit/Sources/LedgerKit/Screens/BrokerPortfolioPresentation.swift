@@ -136,12 +136,44 @@ public struct BrokerPositionRow: Sendable, Hashable, Identifiable {
     public let chips: [Chip]
     /// A note: sold today next to if called at its next autocall date.
     public let exits: [NoteExit]
+    /// A live note's shares, worst first: now against the initial level, % of it, distance to the call.
+    public let shares: [ShareLine]
     /// A structured note with terms opens the note screen.
     public let opensNote: Bool
 
     public struct Chip: Sendable, Hashable {
         public let label: String
         public let tone: Tone
+    }
+
+    /// `AMZN  249.09 vs 256.26  97.2%  needs +8.02% to call`.
+    public struct ShareLine: Sendable, Hashable, Identifiable {
+        public var id: String { symbol }
+        public let symbol: String
+        /// The latest close against the initial level: `"249.09 vs 256.26"`.
+        public let levels: String
+        /// `"97.2%"` of the initial level.
+        public let perf: String
+        /// `"needs +8.02% to call"`, `"4.9% above the call"`; nil when no autocall is left.
+        public let toCall: String?
+        public let callMet: Bool
+        public let isWorst: Bool
+    }
+
+    static func shares(_ note: BrokerPortfolio.Note?) -> [ShareLine] {
+        guard let note, !note.noteStatus.isEnded, let shares = note.underlyings else { return [] }
+        return shares.compactMap { u -> (Decimal, ShareLine)? in
+            guard let close = u.close else { return nil }
+            let toCall = u.toAutocallPct.map { d -> String in
+                d == 0 ? "at the call level" : d > 0 ? "\(NoteText.distance(d)) to call" : "\(NoteText.distance(d)) the call"
+            }
+            return (u.perfPct ?? .greatestFiniteMagnitude, ShareLine(
+                symbol: u.symbol, levels: "\(NoteText.number(close)) vs \(NoteText.number(u.initial))",
+                perf: NoteText.pct(u.perfPct, digits: 1), toCall: toCall,
+                callMet: NoteText.distanceMet(u.toAutocallPct), isWorst: u.isWorst))
+        }
+        .sorted { $0.0 < $1.0 }
+        .map(\.1)
     }
 
     init(_ p: BrokerPortfolio.Position, today: CalendarDay) {
@@ -174,6 +206,7 @@ public struct BrokerPositionRow: Sendable, Hashable, Identifiable {
         }
         self.chips = chips
         self.exits = exits
+        shares = Self.shares(p.note)
         opensNote = p.note != nil
     }
 
