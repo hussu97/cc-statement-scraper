@@ -694,7 +694,9 @@ begin
   -- what the ledger computes or the last one is a day old.
   if p_data->'opening' is not null and jsonb_typeof(p_data->'opening') = 'object'
      and not exists (select 1 from public.balance_checkpoints b where b.account_code = v_account
-                     and b.as_of <= ((p_data->'opening'->>'as_of')::timestamptz)) then
+                     and b.as_of <= coalesce((select min(bt.booked_at) from public.broker_transactions bt
+                                              where bt.account_code = v_account),
+                                             (p_data->'opening'->>'as_of')::timestamptz)) then
     insert into public.balance_checkpoints (profile_code, account_code, as_of, balance, source)
     values (p_profile_code, v_account, (p_data->'opening'->>'as_of')::timestamptz,
             (p_data->'opening'->>'balance')::numeric, 'broker');
