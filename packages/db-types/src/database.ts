@@ -34,6 +34,105 @@ export type Database = {
   }
   public: {
     Tables: {
+      account_entries: {
+        Row: {
+          account_code: string
+          amount: number
+          created_at: string
+          created_by: string | null
+          description: string
+          direction: string
+          entry_code: string
+          entry_date: string
+          profile_code: string
+          removed_at: string | null
+          txn_code: string | null
+        }
+        Insert: {
+          account_code: string
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          description: string
+          direction: string
+          entry_code?: string
+          entry_date: string
+          profile_code: string
+          removed_at?: string | null
+          txn_code?: string | null
+        }
+        Update: {
+          account_code?: string
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          direction?: string
+          entry_code?: string
+          entry_date?: string
+          profile_code?: string
+          removed_at?: string | null
+          txn_code?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_entries_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "account_entries_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "v_account_balances"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "account_entries_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "v_bank_balances"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "account_entries_profile_code_fkey"
+            columns: ["profile_code"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["profile_code"]
+          },
+          {
+            foreignKeyName: "account_entries_txn_code_fkey"
+            columns: ["txn_code"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["txn_code"]
+          },
+          {
+            foreignKeyName: "account_entries_txn_code_fkey"
+            columns: ["txn_code"]
+            isOneToOne: false
+            referencedRelation: "v_spend"
+            referencedColumns: ["txn_code"]
+          },
+          {
+            foreignKeyName: "account_entries_txn_code_fkey"
+            columns: ["txn_code"]
+            isOneToOne: false
+            referencedRelation: "v_transactions"
+            referencedColumns: ["transfer_txn_code"]
+          },
+          {
+            foreignKeyName: "account_entries_txn_code_fkey"
+            columns: ["txn_code"]
+            isOneToOne: false
+            referencedRelation: "v_transactions"
+            referencedColumns: ["txn_code"]
+          },
+        ]
+      }
       accounts: {
         Row: {
           account_code: string
@@ -1779,6 +1878,36 @@ export type Database = {
           },
         ]
       }
+      security_prices: {
+        Row: {
+          close: number
+          currency: string | null
+          fetched_at: string
+          price_code: string
+          price_date: string
+          source: string
+          symbol: string
+        }
+        Insert: {
+          close: number
+          currency?: string | null
+          fetched_at?: string
+          price_code?: string
+          price_date: string
+          source: string
+          symbol: string
+        }
+        Update: {
+          close?: number
+          currency?: string | null
+          fetched_at?: string
+          price_code?: string
+          price_date?: string
+          source?: string
+          symbol?: string
+        }
+        Relationships: []
+      }
       service_tokens: {
         Row: {
           created_at: string
@@ -2419,6 +2548,425 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_statement_payments"
             referencedColumns: ["profile_code", "stmt_code"]
+          },
+        ]
+      }
+      structured_note_events: {
+        Row: {
+          amount: number
+          created_at: string
+          delivered_holding_code: string | null
+          event_code: string
+          kind: string
+          note_code: string
+          obs_date: string
+          pay_date: string
+          profile_code: string
+          rate_pct: number
+          seq: number | null
+          settled_at: string | null
+          settlement: string
+          share_price: number | null
+          shares: number | null
+          txn_code: string | null
+          worst_pct: number
+          worst_symbol: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          delivered_holding_code?: string | null
+          event_code?: string
+          kind: string
+          note_code: string
+          obs_date: string
+          pay_date: string
+          profile_code: string
+          rate_pct: number
+          seq?: number | null
+          settled_at?: string | null
+          settlement?: string
+          share_price?: number | null
+          shares?: number | null
+          txn_code?: string | null
+          worst_pct: number
+          worst_symbol: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          delivered_holding_code?: string | null
+          event_code?: string
+          kind?: string
+          note_code?: string
+          obs_date?: string
+          pay_date?: string
+          profile_code?: string
+          rate_pct?: number
+          seq?: number | null
+          settled_at?: string | null
+          settlement?: string
+          share_price?: number | null
+          shares?: number | null
+          txn_code?: string | null
+          worst_pct?: number
+          worst_symbol?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "structured_note_events_note_fkey"
+            columns: ["profile_code", "note_code"]
+            isOneToOne: false
+            referencedRelation: "structured_notes"
+            referencedColumns: ["profile_code", "note_code"]
+          },
+          {
+            foreignKeyName: "structured_note_events_profile_code_fkey"
+            columns: ["profile_code"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["profile_code"]
+          },
+          {
+            foreignKeyName: "structured_note_events_txn_code_fkey"
+            columns: ["txn_code"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["txn_code"]
+          },
+          {
+            foreignKeyName: "structured_note_events_txn_code_fkey"
+            columns: ["txn_code"]
+            isOneToOne: false
+            referencedRelation: "v_spend"
+            referencedColumns: ["txn_code"]
+          },
+          {
+            foreignKeyName: "structured_note_events_txn_code_fkey"
+            columns: ["txn_code"]
+            isOneToOne: false
+            referencedRelation: "v_transactions"
+            referencedColumns: ["transfer_txn_code"]
+          },
+          {
+            foreignKeyName: "structured_note_events_txn_code_fkey"
+            columns: ["txn_code"]
+            isOneToOne: false
+            referencedRelation: "v_transactions"
+            referencedColumns: ["txn_code"]
+          },
+        ]
+      }
+      structured_note_observations: {
+        Row: {
+          autocall_amount_pct: number | null
+          autocall_trigger_pct: number | null
+          coupon_barrier_pct: number | null
+          coupon_memory: boolean
+          coupon_rate_pct: number | null
+          note_code: string
+          obs_date: string
+          observation_code: string
+          pay_date: string
+          profile_code: string
+          seq: number
+        }
+        Insert: {
+          autocall_amount_pct?: number | null
+          autocall_trigger_pct?: number | null
+          coupon_barrier_pct?: number | null
+          coupon_memory?: boolean
+          coupon_rate_pct?: number | null
+          note_code: string
+          obs_date: string
+          observation_code?: string
+          pay_date: string
+          profile_code: string
+          seq: number
+        }
+        Update: {
+          autocall_amount_pct?: number | null
+          autocall_trigger_pct?: number | null
+          coupon_barrier_pct?: number | null
+          coupon_memory?: boolean
+          coupon_rate_pct?: number | null
+          note_code?: string
+          obs_date?: string
+          observation_code?: string
+          pay_date?: string
+          profile_code?: string
+          seq?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "structured_note_observations_note_fkey"
+            columns: ["profile_code", "note_code"]
+            isOneToOne: false
+            referencedRelation: "structured_notes"
+            referencedColumns: ["profile_code", "note_code"]
+          },
+          {
+            foreignKeyName: "structured_note_observations_profile_code_fkey"
+            columns: ["profile_code"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["profile_code"]
+          },
+        ]
+      }
+      structured_note_payout_branches: {
+        Row: {
+          branch_code: string
+          intercept_pct: number
+          min_worst_pct: number
+          note_code: string
+          profile_code: string
+          settlement: string
+          slope: number
+        }
+        Insert: {
+          branch_code?: string
+          intercept_pct: number
+          min_worst_pct: number
+          note_code: string
+          profile_code: string
+          settlement: string
+          slope: number
+        }
+        Update: {
+          branch_code?: string
+          intercept_pct?: number
+          min_worst_pct?: number
+          note_code?: string
+          profile_code?: string
+          settlement?: string
+          slope?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "structured_note_payout_branches_note_fkey"
+            columns: ["profile_code", "note_code"]
+            isOneToOne: false
+            referencedRelation: "structured_notes"
+            referencedColumns: ["profile_code", "note_code"]
+          },
+          {
+            foreignKeyName: "structured_note_payout_branches_profile_code_fkey"
+            columns: ["profile_code"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["profile_code"]
+          },
+        ]
+      }
+      structured_note_underlyings: {
+        Row: {
+          bloomberg_code: string | null
+          exchange: string | null
+          initial_level: number
+          isin: string | null
+          name: string
+          note_code: string
+          ordinal: number
+          profile_code: string
+          symbol: string
+          underlying_code: string
+        }
+        Insert: {
+          bloomberg_code?: string | null
+          exchange?: string | null
+          initial_level: number
+          isin?: string | null
+          name: string
+          note_code: string
+          ordinal: number
+          profile_code: string
+          symbol: string
+          underlying_code?: string
+        }
+        Update: {
+          bloomberg_code?: string | null
+          exchange?: string | null
+          initial_level?: number
+          isin?: string | null
+          name?: string
+          note_code?: string
+          ordinal?: number
+          profile_code?: string
+          symbol?: string
+          underlying_code?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "structured_note_underlyings_note_fkey"
+            columns: ["profile_code", "note_code"]
+            isOneToOne: false
+            referencedRelation: "structured_notes"
+            referencedColumns: ["profile_code", "note_code"]
+          },
+          {
+            foreignKeyName: "structured_note_underlyings_profile_code_fkey"
+            columns: ["profile_code"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["profile_code"]
+          },
+        ]
+      }
+      structured_notes: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          currency: string
+          denomination: number
+          ended_on: string | null
+          extracted_terms: Json | null
+          final_valuation_date: string
+          funding_account_code: string | null
+          guarantor: string | null
+          holding_code: string
+          invested_amount: number
+          isin: string | null
+          issue_date: string | null
+          issue_price_pct: number
+          issuer: string | null
+          maturity_date: string
+          nominal: number
+          note_code: string
+          product_name: string
+          profile_code: string
+          purchase_price_pct: number
+          purchase_txn_code: string | null
+          status: string
+          strike_date: string
+          termsheet_filename: string | null
+          termsheet_path: string | null
+          trade_date: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          currency: string
+          denomination: number
+          ended_on?: string | null
+          extracted_terms?: Json | null
+          final_valuation_date: string
+          funding_account_code?: string | null
+          guarantor?: string | null
+          holding_code: string
+          invested_amount: number
+          isin?: string | null
+          issue_date?: string | null
+          issue_price_pct: number
+          issuer?: string | null
+          maturity_date: string
+          nominal: number
+          note_code?: string
+          product_name: string
+          profile_code: string
+          purchase_price_pct: number
+          purchase_txn_code?: string | null
+          status?: string
+          strike_date: string
+          termsheet_filename?: string | null
+          termsheet_path?: string | null
+          trade_date: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          denomination?: number
+          ended_on?: string | null
+          extracted_terms?: Json | null
+          final_valuation_date?: string
+          funding_account_code?: string | null
+          guarantor?: string | null
+          holding_code?: string
+          invested_amount?: number
+          isin?: string | null
+          issue_date?: string | null
+          issue_price_pct?: number
+          issuer?: string | null
+          maturity_date?: string
+          nominal?: number
+          note_code?: string
+          product_name?: string
+          profile_code?: string
+          purchase_price_pct?: number
+          purchase_txn_code?: string | null
+          status?: string
+          strike_date?: string
+          termsheet_filename?: string | null
+          termsheet_path?: string | null
+          trade_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "structured_notes_account_fkey"
+            columns: ["profile_code", "funding_account_code"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "structured_notes_account_fkey"
+            columns: ["profile_code", "funding_account_code"]
+            isOneToOne: false
+            referencedRelation: "v_account_balances"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "structured_notes_account_fkey"
+            columns: ["profile_code", "funding_account_code"]
+            isOneToOne: false
+            referencedRelation: "v_bank_balances"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "structured_notes_holding_fkey"
+            columns: ["profile_code", "holding_code"]
+            isOneToOne: false
+            referencedRelation: "holdings"
+            referencedColumns: ["profile_code", "holding_code"]
+          },
+          {
+            foreignKeyName: "structured_notes_profile_code_fkey"
+            columns: ["profile_code"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["profile_code"]
+          },
+          {
+            foreignKeyName: "structured_notes_purchase_txn_code_fkey"
+            columns: ["purchase_txn_code"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["txn_code"]
+          },
+          {
+            foreignKeyName: "structured_notes_purchase_txn_code_fkey"
+            columns: ["purchase_txn_code"]
+            isOneToOne: false
+            referencedRelation: "v_spend"
+            referencedColumns: ["txn_code"]
+          },
+          {
+            foreignKeyName: "structured_notes_purchase_txn_code_fkey"
+            columns: ["purchase_txn_code"]
+            isOneToOne: false
+            referencedRelation: "v_transactions"
+            referencedColumns: ["transfer_txn_code"]
+          },
+          {
+            foreignKeyName: "structured_notes_purchase_txn_code_fkey"
+            columns: ["purchase_txn_code"]
+            isOneToOne: false
+            referencedRelation: "v_transactions"
+            referencedColumns: ["txn_code"]
           },
         ]
       }
@@ -3236,6 +3784,17 @@ export type Database = {
         }
         Returns: Json
       }
+      add_account_entry: {
+        Args: {
+          p_account_code: string
+          p_amount: string
+          p_description?: string
+          p_direction: string
+          p_entry_date: string
+          p_profile_code: string
+        }
+        Returns: string
+      }
       add_holding_flow: {
         Args: {
           p_amount: string
@@ -3344,6 +3903,10 @@ export type Database = {
         Args: { p_email: string; p_profile_code: string }
         Returns: undefined
       }
+      cancel_structured_note: {
+        Args: { p_holding_code: string; p_profile_code: string }
+        Returns: undefined
+      }
       cash_flow: {
         Args: {
           p_account_code?: string
@@ -3404,6 +3967,10 @@ export type Database = {
       create_service_token: {
         Args: { p_name: string; p_profile_code: string; p_scopes: string[] }
         Returns: Json
+      }
+      create_structured_note: {
+        Args: { p_draft: Json; p_profile_code: string }
+        Returns: string
       }
       daily_spend: {
         Args: { p_from: string; p_profile_code: string; p_to: string }
@@ -3601,6 +4168,14 @@ export type Database = {
         }
         Returns: Json
       }
+      price_symbols: {
+        Args: { p_profile_code?: string }
+        Returns: {
+          from_date: string
+          last_date: string
+          symbol: string
+        }[]
+      }
       promote_sms_template: {
         Args: { p_template_code: string }
         Returns: undefined
@@ -3654,6 +4229,10 @@ export type Database = {
         Returns: string
       }
       record_metal_prices: { Args: { p_quotes: Json }; Returns: Json }
+      record_security_prices: {
+        Args: { p_rows: Json; p_source?: string }
+        Returns: number
+      }
       recurring_list: {
         Args: { p_profile_code: string }
         Returns: {
@@ -3674,6 +4253,10 @@ export type Database = {
       }
       reject_merchant_suggestion: {
         Args: { p_merchant_code: string; p_profile_code: string }
+        Returns: undefined
+      }
+      remove_account_entry: {
+        Args: { p_entry_code: string; p_profile_code: string }
         Returns: undefined
       }
       remove_holding_flow: {
@@ -3781,6 +4364,7 @@ export type Database = {
         Args: { p_category_code: string; p_txn_codes: string[] }
         Returns: number
       }
+      settle_structured_notes: { Args: never; Returns: number }
       spend_breakdown: {
         Args: {
           p_bank_codes?: string[]
@@ -3853,6 +4437,14 @@ export type Database = {
       }
       statement_detail: {
         Args: { p_profile_code: string; p_stmt_code: string }
+        Returns: Json
+      }
+      structured_note_detail: {
+        Args: { p_holding_code: string; p_profile_code: string }
+        Returns: Json
+      }
+      structured_notes_summary: {
+        Args: { p_profile_code: string }
         Returns: Json
       }
       upsert_fx_rates: {

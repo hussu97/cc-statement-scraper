@@ -189,6 +189,8 @@ select set_eq(
     'public.net_worth', 'public.cash_flow', 'private.generate_wealth_insights',
     -- Investments (20261021093154): a flow's paying transaction and its account
     'public.holding_detail',
+    -- Structured notes (20261027124257): a bank account's typed entries; a note's funding account
+    'public.add_account_entry', 'public.create_structured_note',
     -- a card payment's leg on the same bank's current account (20261020170933)
     'private.add_payment_leg',
     -- consolidated statements (20261021115816): a bank statement's account (bank accounts only),

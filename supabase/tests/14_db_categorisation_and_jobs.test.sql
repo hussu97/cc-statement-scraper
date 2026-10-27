@@ -41,8 +41,8 @@ insert into public.accounts (profile_code, bank_code) values (pg_temp.v('p'), 'F
 select pg_temp.set('acc', (select account_code from public.accounts where profile_code = pg_temp.v('p')));
 
 -- ═══ DB-24 / DP-09: seed rules ════════════════════════════════════════════
-select is((select count(*)::int from public.category_rules where profile_code = pg_temp.v('p')), 247,
-          'a new profile gets 247 seed rules (198 + taxonomy v2, + SIB BONUS 20261020110137, + Salary, + Dividends)');
+select is((select count(*)::int from public.category_rules where profile_code = pg_temp.v('p')), 248,
+          'a new profile gets 248 seed rules (198 + taxonomy v2, + SIB BONUS 20261020110137, + Salary, + Dividends, + NOTE COUPON)');
 select is((select match_type || ' ' || pattern from private.seed_rules where category_name = 'Dining' and match_type = 'regex'),
           'regex \mREST(AURANT[A-Z]*|O)?\M', 'the REST seed is a whole-word regex');
 select is((select name from public.category_rules where profile_code = pg_temp.v('p') and pattern = '\mNOON\M'),
