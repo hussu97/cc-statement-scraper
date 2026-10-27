@@ -172,6 +172,17 @@ select is((pg_temp.v('bp')::jsonb)->>'profit', '642.00', 'profit = total − net
 select is(((pg_temp.v('bp')::jsonb)->'positions'->0)->>'isin', 'US0000000072', 'one open position');
 select is(((pg_temp.v('bp')::jsonb)->'positions'->0->'sell_now')->>'total', '1107.00', 'sold today: the mark plus the dividend');
 select is(((pg_temp.v('bp')::jsonb)->'closed'->0)->>'profit', '550.00', 'the redeemed note: 10,000 + 100 − 9,550');
+select is((pg_temp.v('bp')::jsonb)->'closed_total'->>'profit', '550.00', 'what ended positions came to, together');
+select pg_temp.as_user('uid');
+set local role authenticated;
+select is((public.broker_accounts_summary(pg_temp.v('p'))->0)->>'total', '10642.00', 'the account in one line for Investments');
+select is(jsonb_array_length(public.broker_accounts_summary(pg_temp.v('p'))->0->'holding_codes'), 2, '… with the holdings it holds');
+reset role;
+select pg_temp.as_user('uid2');
+set local role authenticated;
+select throws_ok($$ select public.broker_accounts_summary(pg_temp.v('p')) $$, '42501', null, 'a stranger cannot read the summary');
+reset role;
+select set_config('request.jwt.claims', '', true);
 select is(jsonb_array_length((pg_temp.v('bp')::jsonb)->'series'), 2, 'the daily values');
 select pg_temp.as_user('uid2');
 set local role authenticated;
@@ -273,6 +284,18 @@ reset role;
 select is((select string_agg((u->>'symbol') || ' ' || (u->>'initial') || ' ' || (u->>'close') || ' ' || (u->>'perf_pct') || ' ' || (u->>'to_autocall_pct'), ', ')
            from jsonb_array_elements((pg_temp.v('pos73')::jsonb)->'note'->'underlyings') u),
           'CCC 50 41 82 21.95', 'the position shows each share: initial, close, % of initial, distance to the next call');
+select is((pg_temp.v('pos73')::jsonb)->'note'->'verdict',
+          jsonb_build_object('kind', 'needs', 'symbol', 'CCC', 'gap_pct', '21.95', 'date', pg_temp.d(30)),
+          'its verdict: CCC must rise 21.95% by the next autocall date');
+select is((pg_temp.v('sum')::jsonb)->'verdict'->>'kind', 'needs', 'the note summary carries the same verdict');
+select is(private.note_verdict('{"worst_now": {"pct": "101", "symbol": "AAA"}, "levels": [{"kind": "autocall", "date": "2027-01-01", "distance_pct": "-1.0"}]}', 'live')->>'kind',
+          'on_track', 'every share at or above the trigger: on track to be called');
+select is(private.note_verdict('{"worst_now": {"pct": "60", "symbol": "AAA"}, "levels": [{"kind": "autocall", "date": "2027-01-01", "distance_pct": "66.7"}, {"kind": "coupon", "date": "2026-12-01", "distance_pct": "16.7"}]}', 'live')->>'kind',
+          'coupon_at_risk', 'below the coupon barrier: the coupon is at risk');
+select is(private.note_verdict('{"worst_now": {"pct": "95", "symbol": "AAA"}, "levels": [{"kind": "break_even", "date": "2028-06-20", "distance_pct": "-5"}]}', 'live')->>'kind',
+          'to_maturity', 'no autocall left: runs to maturity');
+select is(private.note_verdict('{}', 'autocalled')->>'kind', 'ended', 'an ended note is ended');
+select is(private.note_verdict('{"awaiting_prices": true}', 'live')->>'kind', 'awaiting_prices', 'no closes yet: awaiting prices');
 
 -- Cancelled: the position stays, the broker's rows stand.
 select pg_temp.as_user('uid');

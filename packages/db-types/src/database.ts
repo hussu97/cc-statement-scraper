@@ -4238,6 +4238,10 @@ export type Database = {
         Args: { p_attempt?: number; p_doc_code: string }
         Returns: Json
       }
+      broker_accounts_summary: {
+        Args: { p_profile_code: string }
+        Returns: Json
+      }
       broker_portfolio: {
         Args: { p_account_code: string; p_profile_code: string }
         Returns: Json
