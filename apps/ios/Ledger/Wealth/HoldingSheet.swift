@@ -40,7 +40,7 @@ struct HoldingSheet: View {
                 if draft.canChangeKind {
                     Section {
                         Picker("Kind", selection: $draft.kind.animation()) {
-                            ForEach(HoldingKind.allCases) { Label($0.label, systemImage: $0.systemImage).tag($0) }
+                            ForEach(HoldingKind.addable) { Label($0.label, systemImage: $0.systemImage).tag($0) }
                         }
                     } header: {
                         Text("What it is")

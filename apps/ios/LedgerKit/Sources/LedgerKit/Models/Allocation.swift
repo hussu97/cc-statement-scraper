@@ -31,6 +31,7 @@ public struct AllocationSlice: Decodable, Sendable, Hashable, Identifiable {
         case "broker": "Broker accounts"
         case "security": "Shares and funds"
         case "deposit": "Fixed deposits"
+        case "structured_note": "Structured notes"
         case "owed": "Owed on cards"
         default: assetClass.replacingOccurrences(of: "_", with: " ").capitalized
         }
@@ -46,6 +47,7 @@ public struct AllocationSlice: Decodable, Sendable, Hashable, Identifiable {
         case "broker": "cat-15"
         case "security": "cat-5"
         case "deposit": "cat-13"
+        case "structured_note": "cat-9"
         default: "cat-10"
         }
     }
