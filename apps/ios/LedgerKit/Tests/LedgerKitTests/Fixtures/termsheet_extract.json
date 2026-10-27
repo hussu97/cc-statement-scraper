@@ -1,0 +1,36 @@
+{
+  "draft": {
+    "name": "Example Bank B Athena AMZN/META/MSFT 2031",
+    "terms": {
+      "product_name": "5Y Athena Worst-of on Amazon.com Inc, Meta Platforms Inc and MICROSOFT CORP in USD",
+      "isin": "XS0000000603",
+      "issuer": "Example Bank B Issuance B.V.",
+      "guarantor": "Example Bank B",
+      "currency": "USD",
+      "denomination": "1",
+      "issue_price_pct": "54",
+      "strike_date": "2026-08-27",
+      "issue_date": "2026-09-11",
+      "final_valuation_date": "2031-08-27",
+      "maturity_date": "2031-09-04",
+      "underlyings": [
+        { "name": "Amazon.com Inc", "symbol": "AMZN", "bloomberg_code": "AMZN UW", "isin": null, "exchange": null, "initial_level": "256.26" },
+        { "name": "Meta Platforms Inc", "symbol": "META", "bloomberg_code": "META UW", "isin": null, "exchange": null, "initial_level": "742.5" },
+        { "name": "MICROSOFT CORP", "symbol": "", "bloomberg_code": null, "isin": null, "exchange": null, "initial_level": "505.12" }
+      ],
+      "observations": [
+        { "obs_date": "2027-05-27", "pay_date": "2027-06-04", "coupon_rate_pct": null, "coupon_barrier_pct": null, "coupon_memory": false, "autocall_trigger_pct": "105", "autocall_amount_pct": "64" },
+        { "obs_date": "2028-05-29", "pay_date": "2028-06-05", "coupon_rate_pct": null, "coupon_barrier_pct": null, "coupon_memory": false, "autocall_trigger_pct": "100", "autocall_amount_pct": "74" }
+      ],
+      "payout": [
+        { "min_worst_pct": "100", "intercept_pct": "100", "slope": "0", "settlement": "cash", "description": "100%" },
+        { "min_worst_pct": "45", "intercept_pct": "-45", "slope": "1", "settlement": "cash", "description": "100% + (WP − 145%)" },
+        { "min_worst_pct": "0", "intercept_pct": "0", "slope": "0", "settlement": "cash", "description": "0%" }
+      ]
+    },
+    "termsheet_path": "prf_x/3f2a.pdf",
+    "termsheet_filename": "Example Step-Up Note Sept 26.PDF",
+    "extracted_terms": { "product_name": "5Y Athena", "underlyings": [{ "bloomberg_code": "AMZN UW" }], "not_modelled": [] }
+  },
+  "warnings": ["MICROSOFT CORP: no price symbol could be derived. Enter its ticker."]
+}

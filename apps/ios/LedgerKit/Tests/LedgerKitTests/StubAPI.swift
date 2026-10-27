@@ -381,6 +381,61 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         if let savingsError { throw savingsError }
         return savingsFixture
     }
+    // MARK: Structured notes: scripted answers, and each write
+    /// `structured_notes_summary`'s answer; nil throws (offline).
+    var notesFixture: [NoteSummary]?
+    /// `structured_note_detail`'s answer; nil throws (offline).
+    var noteDetailFixture: NoteDetail?
+    /// `termsheet-extract`'s answer, or the error it throws; nil throws offline.
+    var extractResult: Result<TermSheetExtract, LedgerAPIError>?
+    /// `stock-prices`' answer, or the error it throws; nil answers nothing stored.
+    var pricesResult: Result<NotePriceRefresh, LedgerAPIError>?
+    /// Thrown by the notes' writes (create, cancel, entries) when set.
+    var noteWriteError: LedgerAPIError?
+    private(set) var createdNotes: [(form: NoteDraftForm, draft: NoteDraft)] = []
+    private(set) var cancelledNotes: [String] = []
+    private(set) var extractedFiles: [String] = []
+    private(set) var accountEntries: [AccountEntryDraft.Submission] = []
+    func structuredNotes(profileCode: String) async throws -> [NoteSummary] {
+        count("structuredNotes")
+        guard let fixture = lock.withLock({ notesFixture }) else { throw LedgerAPIError.network("-1009") }
+        return fixture
+    }
+    func structuredNoteDetail(profileCode: String, holdingCode: String) async throws -> NoteDetail {
+        count("structuredNoteDetail")
+        guard let fixture = lock.withLock({ noteDetailFixture }) else { throw LedgerAPIError.network("-1009") }
+        return fixture
+    }
+    func cancelStructuredNote(profileCode: String, holdingCode: String) async throws {
+        if let noteWriteError { throw noteWriteError }
+        lock.withLock { cancelledNotes.append(holdingCode) }
+    }
+    func createStructuredNote(profileCode: String, draft: NoteDraftForm, reviewed: NoteDraft) async throws -> String {
+        if let noteWriteError { throw noteWriteError }
+        lock.withLock { createdNotes.append((draft, reviewed)) }
+        return "hld_note"
+    }
+    func refreshNotePrices(profileCode: String) async throws -> NotePriceRefresh {
+        count("refreshNotePrices")
+        switch lock.withLock({ pricesResult }) {
+        case .success(let r): return r
+        case .failure(let e): throw e
+        case nil: return NotePriceRefresh(stored: 0)
+        }
+    }
+    func extractTermSheet(profileCode: String, file: UploadFile) async throws -> TermSheetExtract {
+        lock.withLock { extractedFiles.append(file.filename) }
+        switch lock.withLock({ extractResult }) {
+        case .success(let r): return r
+        case .failure(let e): throw e
+        case nil: throw LedgerAPIError.network("-1009")
+        }
+    }
+    func addAccountEntry(profileCode: String, entry: AccountEntryDraft.Submission) async throws -> String {
+        if let noteWriteError { throw noteWriteError }
+        lock.withLock { accountEntries.append(entry) }
+        return "ent_new"
+    }
     // MARK: Analysis (PAR-12): scripted answers, and each call's arguments
     var dailyRows: [DailySpend] = []
     var hourRows: [HourWeekdaySpend] = []

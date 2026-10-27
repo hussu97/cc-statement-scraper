@@ -1,0 +1,177 @@
+[
+ {
+  "awaiting_prices": false,
+  "break_even_pct": "60",
+  "currency": "USD",
+  "due": {
+   "coupons": "0.00",
+   "redemption": "0.00",
+   "total": "0.00"
+  },
+  "ended_on": null,
+  "funding_account_code": "acc_01k5ys7hhab989y1ezem39ws7d",
+  "holding_code": "hld_01k5ys7hjshpc6we8k6nac2tz9",
+  "if_ended_today": {
+   "amount": "10000.00",
+   "payout_pct": "100",
+   "profit": "0.00",
+   "settlement": "cash",
+   "total": "10000.00"
+  },
+  "institution": "Swissquote",
+  "invested": "10000.00",
+  "isin": "XS0000000603",
+  "issuer": "Example Bank B Issuance B.V.",
+  "maturity_date": "2031-07-01",
+  "name": "Example Bank B Athena AMZN/META 2031",
+  "next": {
+   "autocall": {
+    "amount": "10900.00",
+    "redemption_pct": "109",
+    "trigger_pct": "100",
+    "would_call": false
+   },
+   "coupon": null,
+   "days": 245,
+   "is_final": false,
+   "kind": "observation",
+   "obs_date": "2027-06-29",
+   "pay_date": "2027-07-06",
+   "seq": 1
+  },
+  "nominal": "10000.00",
+  "note_code": "snt_01k5ys7hjsvrtb0w31gt8nnngy",
+  "product_name": "5Y Athena Worst-of",
+  "purchase_price_pct": "100",
+  "received": {
+   "coupons": "0.00",
+   "redemption": "0.00",
+   "total": "0.00"
+  },
+  "result": null,
+  "status": "live",
+  "symbols": [
+   "AMZN",
+   "META"
+  ],
+  "trade_date": "2026-07-04",
+  "worst_now": {
+   "pct": "90.8607",
+   "priced": true,
+   "symbol": "AMZN"
+  }
+ },
+ {
+  "awaiting_prices": false,
+  "break_even_pct": "99",
+  "currency": "USD",
+  "due": {
+   "coupons": "0.00",
+   "redemption": "0.00",
+   "total": "0.00"
+  },
+  "ended_on": null,
+  "funding_account_code": "acc_01k5ys7hhab989y1ezem39ws7d",
+  "holding_code": "hld_01k5ys7hj5wskbg45vcb5vtz79",
+  "if_ended_today": {
+   "amount": "31274.78",
+   "payout_pct": "62.5496",
+   "profit": "-5975.22",
+   "settlement": "physical",
+   "total": "31274.78"
+  },
+  "institution": "Swissquote",
+  "invested": "37250.00",
+  "isin": "XS0000000405",
+  "issuer": "Example Bank M Financial",
+  "maturity_date": "2027-12-08",
+  "name": "Example Bank M Phoenix AMZN/MSFT/GOOGL",
+  "next": {
+   "autocall": {
+    "amount": "50000.00",
+    "redemption_pct": "100",
+    "trigger_pct": "105",
+    "would_call": false
+   },
+   "coupon": {
+    "amount": "2334.50",
+    "barrier_pct": "98",
+    "rate_pct": "4.669",
+    "would_pay": false
+   },
+   "days": 30,
+   "is_final": false,
+   "kind": "observation",
+   "obs_date": "2026-11-26",
+   "pay_date": "2026-12-03",
+   "seq": 7
+  },
+  "nominal": "50000.00",
+  "note_code": "snt_01k5ys7hj5cysb0mfqrsdqz0x6",
+  "product_name": "47 Months USD Worst of Memory Phoenix Autocall",
+  "purchase_price_pct": "74.5",
+  "received": {
+   "coupons": "0.00",
+   "redemption": "0.00",
+   "total": "0.00"
+  },
+  "result": null,
+  "status": "live",
+  "symbols": [
+   "AMZN",
+   "MSFT",
+   "GOOGL"
+  ],
+  "trade_date": "2026-05-05",
+  "worst_now": {
+   "pct": "87.0496",
+   "priced": true,
+   "symbol": "AMZN"
+  }
+ },
+ {
+  "awaiting_prices": false,
+  "break_even_pct": "70",
+  "currency": "USD",
+  "due": {
+   "coupons": "0.00",
+   "redemption": "0.00",
+   "total": "0.00"
+  },
+  "ended_on": "2026-06-21",
+  "funding_account_code": "acc_01k5ys7hhab989y1ezem39ws7d",
+  "holding_code": "hld_01k5ys7hk0xmxhfb9100t0ncs9",
+  "if_ended_today": null,
+  "institution": "Swissquote",
+  "invested": "5000.00",
+  "isin": null,
+  "issuer": null,
+  "maturity_date": "2026-10-19",
+  "name": "Example Bank L Phoenix GOOGL 2026",
+  "next": null,
+  "nominal": "5000.00",
+  "note_code": "snt_01k5ys7hk0vz53rq074ssxjrjg",
+  "product_name": "6M Phoenix on Alphabet",
+  "purchase_price_pct": "100",
+  "received": {
+   "coupons": "100.00",
+   "redemption": "5000.00",
+   "total": "5100.00"
+  },
+  "result": {
+   "profit": "100.00",
+   "return_pct": "2.00",
+   "total": "5100.00"
+  },
+  "status": "autocalled",
+  "symbols": [
+   "GOOGL"
+  ],
+  "trade_date": "2026-04-15",
+  "worst_now": {
+   "pct": "108.9684",
+   "priced": true,
+   "symbol": "GOOGL"
+  }
+ }
+]

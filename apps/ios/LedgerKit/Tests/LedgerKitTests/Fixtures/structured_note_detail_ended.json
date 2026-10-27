@@ -1,0 +1,254 @@
+{
+ "awaiting_prices": false,
+ "break_even_pct": "70",
+ "currency": "USD",
+ "due": {
+  "coupons": "0.00",
+  "redemption": "0.00",
+  "total": "0.00"
+ },
+ "ended_on": "2026-06-21",
+ "events": [
+  {
+   "amount": "5000.00",
+   "delivered_holding_code": null,
+   "event_code": "sne_01k5ys7hk5y8b6772sr7aa6qza",
+   "kind": "autocall",
+   "obs_date": "2026-06-14",
+   "pay_date": "2026-06-21",
+   "rate_pct": "100",
+   "settled": true,
+   "settlement": "cash",
+   "share_symbol": null,
+   "shares": null,
+   "txn_code": "txn_01k5ys7hk80htyjqe8kmarxypq"
+  },
+  {
+   "amount": "50.00",
+   "delivered_holding_code": null,
+   "event_code": "sne_01k5ys7hk50p14ty0h1f3ayqxc",
+   "kind": "coupon",
+   "obs_date": "2026-06-14",
+   "pay_date": "2026-06-21",
+   "rate_pct": "1",
+   "settled": true,
+   "settlement": "cash",
+   "share_symbol": null,
+   "shares": null,
+   "txn_code": "txn_01k5ys7hkbajtpbpct996zxzwp"
+  },
+  {
+   "amount": "50.00",
+   "delivered_holding_code": null,
+   "event_code": "sne_01k5ys7hk59xa17t5ed90d6ebw",
+   "kind": "coupon",
+   "obs_date": "2026-05-15",
+   "pay_date": "2026-05-22",
+   "rate_pct": "1",
+   "settled": true,
+   "settlement": "cash",
+   "share_symbol": null,
+   "shares": null,
+   "txn_code": "txn_01k5ys7hk5q554ab6d9rmxagsm"
+  }
+ ],
+ "funding_account_code": "acc_01k5ys7hhab989y1ezem39ws7d",
+ "holding_code": "hld_01k5ys7hk0xmxhfb9100t0ncs9",
+ "if_ended_today": null,
+ "institution": "Swissquote",
+ "invested": "5000.00",
+ "isin": null,
+ "issuer": null,
+ "levels": null,
+ "maturity_date": "2026-10-19",
+ "memory_unpaid_pct": "0",
+ "name": "Example Bank L Phoenix GOOGL 2026",
+ "next": null,
+ "nominal": "5000.00",
+ "note_code": "snt_01k5ys7hk0vz53rq074ssxjrjg",
+ "observations": [
+  {
+   "autocall_amount_pct": null,
+   "autocall_trigger_pct": null,
+   "coupon_barrier_pct": "80",
+   "coupon_memory": false,
+   "coupon_rate_pct": "1",
+   "obs_date": "2026-05-15",
+   "pay_date": "2026-05-22",
+   "seq": 1
+  },
+  {
+   "autocall_amount_pct": "100",
+   "autocall_trigger_pct": "100",
+   "coupon_barrier_pct": "80",
+   "coupon_memory": false,
+   "coupon_rate_pct": "1",
+   "obs_date": "2026-06-14",
+   "pay_date": "2026-06-21",
+   "seq": 2
+  },
+  {
+   "autocall_amount_pct": "100",
+   "autocall_trigger_pct": "100",
+   "coupon_barrier_pct": "80",
+   "coupon_memory": false,
+   "coupon_rate_pct": "1",
+   "obs_date": "2026-07-14",
+   "pay_date": "2026-07-21",
+   "seq": 3
+  },
+  {
+   "autocall_amount_pct": "100",
+   "autocall_trigger_pct": "100",
+   "coupon_barrier_pct": "80",
+   "coupon_memory": false,
+   "coupon_rate_pct": "1",
+   "obs_date": "2026-08-13",
+   "pay_date": "2026-08-20",
+   "seq": 4
+  },
+  {
+   "autocall_amount_pct": "100",
+   "autocall_trigger_pct": "100",
+   "coupon_barrier_pct": "80",
+   "coupon_memory": false,
+   "coupon_rate_pct": "1",
+   "obs_date": "2026-09-12",
+   "pay_date": "2026-09-19",
+   "seq": 5
+  }
+ ],
+ "outcomes": [
+  {
+   "amount": "50.00",
+   "barrier_pct": "80",
+   "kind": "coupon",
+   "obs_date": "2026-05-15",
+   "paid": true,
+   "pay_date": "2026-05-22",
+   "rate_pct": "1",
+   "seq": 1,
+   "worst_pct": "99.0745",
+   "worst_symbol": "GOOGL"
+  },
+  {
+   "amount": "50.00",
+   "barrier_pct": "80",
+   "kind": "coupon",
+   "obs_date": "2026-06-14",
+   "paid": true,
+   "pay_date": "2026-06-21",
+   "rate_pct": "1",
+   "seq": 2,
+   "worst_pct": "103.9457",
+   "worst_symbol": "GOOGL"
+  },
+  {
+   "amount": "5000.00",
+   "kind": "autocall",
+   "obs_date": "2026-06-14",
+   "paid": true,
+   "pay_date": "2026-06-21",
+   "rate_pct": "100",
+   "seq": 2,
+   "settlement": "cash",
+   "trigger_pct": "100",
+   "worst_pct": "103.9457",
+   "worst_symbol": "GOOGL"
+  }
+ ],
+ "payout": [
+  {
+   "intercept_pct": "100",
+   "min_worst_pct": "70",
+   "settlement": "cash",
+   "slope": "0"
+  },
+  {
+   "intercept_pct": "0",
+   "min_worst_pct": "0",
+   "settlement": "cash",
+   "slope": "1"
+  }
+ ],
+ "product_name": "6M Phoenix on Alphabet",
+ "purchase_price_pct": "100",
+ "received": {
+  "coupons": "100.00",
+  "redemption": "5000.00",
+  "total": "5100.00"
+ },
+ "result": {
+  "profit": "100.00",
+  "return_pct": "2.00",
+  "total": "5100.00"
+ },
+ "scenarios": null,
+ "series": {
+  "GOOGL": [
+   [
+    "2026-04-15",
+    "100.00"
+   ],
+   [
+    "2026-04-16",
+    "100.36"
+   ],
+   [
+    "2026-04-17",
+    "100.69"
+   ],
+   [
+    "2026-04-18",
+    "101.01"
+   ],
+   [
+    "2026-06-20",
+    "105.22"
+   ],
+   [
+    "2026-06-21",
+    "105.32"
+   ]
+  ]
+ },
+ "status": "autocalled",
+ "symbols": [
+  "GOOGL"
+ ],
+ "terms": {
+  "denomination": "1000.00",
+  "final_valuation_date": "2026-10-12",
+  "guarantor": null,
+  "issue_date": null,
+  "issue_price_pct": "100",
+  "maturity_date": "2026-10-19",
+  "strike_date": "2026-04-15",
+  "termsheet_filename": null,
+  "termsheet_path": null
+ },
+ "trade_date": "2026-04-15",
+ "underlyings": [
+  {
+   "autocall_level": "303.62",
+   "bloomberg_code": null,
+   "break_even_level": "212.534",
+   "close": "330.85",
+   "close_date": "2026-10-26",
+   "coupon_level": "242.896",
+   "initial": "303.62",
+   "is_worst": true,
+   "name": "Alphabet Inc",
+   "perf_pct": "108.9684",
+   "symbol": "GOOGL",
+   "to_autocall_pct": "-8.23",
+   "to_break_even_pct": "-35.76",
+   "to_coupon_pct": "-26.58"
+  }
+ ],
+ "worst_now": {
+  "pct": "108.9684",
+  "priced": true,
+  "symbol": "GOOGL"
+ }
+}
