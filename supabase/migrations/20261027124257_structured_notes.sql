@@ -1099,10 +1099,10 @@ end;
 $$;
 grant execute on function public.settle_structured_notes() to service_role;
 
--- Service: the symbols to price and the first day each needs (notes not ended or cancelled,
--- and shares a note delivered), optionally for one ledger.
+-- Service: the symbols to price, the first day each needs (notes not ended or cancelled, and
+-- shares a note delivered), and the first and last close stored; optionally for one ledger.
 create function public.price_symbols(p_profile_code text default null)
-returns table (symbol text, from_date date, last_date date)
+returns table (symbol text, from_date date, first_date date, last_date date)
 language plpgsql
 stable
 security definer
@@ -1111,7 +1111,9 @@ as $$
 begin
   perform private.assert_service_role();
   return query
-  select s.symbol, min(s.from_date), (select max(sp.price_date) from public.security_prices sp where sp.symbol = s.symbol)
+  select s.symbol, min(s.from_date),
+         (select min(sp.price_date) from public.security_prices sp where sp.symbol = s.symbol),
+         (select max(sp.price_date) from public.security_prices sp where sp.symbol = s.symbol)
   from (
     select u.symbol, n.strike_date - 7 as from_date
     from public.structured_note_underlyings u

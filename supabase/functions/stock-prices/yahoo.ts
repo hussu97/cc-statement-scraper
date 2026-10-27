@@ -120,3 +120,19 @@ export function bloombergToYahoo(code: string): string | null {
   if (suffix === undefined) return null;
   return m[1].toUpperCase().replace("/", "-") + suffix;
 }
+
+const DAY = 86_400_000;
+
+/** A symbol to price (public.price_symbols): the first day a note needs, and the stored closes' range. */
+export interface PriceSymbol {
+  symbol: string;
+  from_date: string;
+  first_date: string | null;
+  last_date: string | null;
+}
+
+/** From the day a note needs when the stored closes start later (a new note on a share already followed), else 5 days before the last close. */
+export function fetchFrom(s: PriceSymbol): Date {
+  if (!s.first_date || !s.last_date || s.first_date > s.from_date) return new Date(Date.parse(s.from_date));
+  return new Date(Date.parse(s.last_date) - 5 * DAY);
+}
