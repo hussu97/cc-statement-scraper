@@ -204,6 +204,6 @@ describe("shareLines", () => {
   });
 
   it("leaves the distance out when the note has no autocall left", () => {
-    expect(shareLines({ ...note, underlyings: [{ symbol: "AAA", initial: "100", close: "95", perf_pct: "95", to_autocall_pct: null }] })[0].toCall).toBeNull();
+    expect(shareLines({ ...note, underlyings: [{ symbol: "AAA", initial: "100", close: "95", perf_pct: "95", to_autocall_pct: null }] })[0]?.toCall).toBeNull();
   });
 });
