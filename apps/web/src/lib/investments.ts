@@ -15,9 +15,11 @@ export const HOLDING_KINDS = [
   { value: "broker", label: "Broker account", group: "Broker accounts" },
   { value: "security", label: "Shares or fund", group: "Shares & funds" },
   { value: "deposit", label: "Fixed deposit", group: "Deposits" },
+  // Added from a term sheet (components/notes), never through the holding form.
+  { value: "structured_note", label: "Structured note", group: "Structured notes" },
 ] as const;
 export type HoldingKind = (typeof HOLDING_KINDS)[number]["value"];
-export type InvestmentKind = Exclude<HoldingKind, "metal">;
+export type InvestmentKind = Exclude<HoldingKind, "metal" | "structured_note">;
 
 export function isHoldingKind(v: unknown): v is HoldingKind {
   return HOLDING_KINDS.some((k) => k.value === v);
@@ -38,9 +40,13 @@ export interface HoldingGroup<T> {
   holdings: T[];
 }
 
-/** Holdings in the page's groups (Metals, Plans, Broker accounts, Shares & funds, Deposits), keeping the server's order inside each; empty groups are left out. */
+/**
+ * Holdings in the page's groups (Metals, Plans, Broker accounts, Shares & funds, Deposits), keeping
+ * the server's order inside each; empty groups are left out. Structured notes are left out too:
+ * the notes card lists them with their status.
+ */
 export function groupHoldings<T extends { kind?: string | null }>(holdings: readonly T[]): HoldingGroup<T>[] {
-  return HOLDING_KINDS.map((k) => ({ kind: k.value, label: k.group, holdings: holdings.filter((h) => kindOf(h) === k.value) })).filter((g) => g.holdings.length > 0);
+  return HOLDING_KINDS.filter((k) => k.value !== "structured_note").map((k) => ({ kind: k.value, label: k.group, holdings: holdings.filter((h) => kindOf(h) === k.value) })).filter((g) => g.holdings.length > 0);
 }
 
 /** The link picker's order: plans, broker accounts, shares and funds, deposits, then metals; the server's order within each kind. */
@@ -258,7 +264,7 @@ export function investmentToForm(h: {
 }): InvestmentForm {
   const kind = kindOf(h);
   return {
-    kind: kind === "metal" ? "plan" : kind,
+    kind: kind === "metal" || kind === "structured_note" ? "plan" : kind,
     name: h.name,
     institution: h.institution ?? "",
     currency: h.currency ?? "AED",
@@ -494,6 +500,7 @@ export const ALLOCATION_CLASSES: Record<string, { label: string; token: string }
   broker: { label: "Broker accounts", token: "cat-12" },
   security: { label: "Shares & funds", token: "cat-1" },
   deposit: { label: "Deposits", token: "cat-13" },
+  structured_note: { label: "Structured notes", token: "cat-15" },
 };
 
 export interface AllocationRow {

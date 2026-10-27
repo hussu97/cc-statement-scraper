@@ -9,6 +9,7 @@
 
 | When | Lesson |
 |---|---|
+| 2026-10-27 | [An app's enum decoded from the server must tolerate a value it doesn't know: a new kind breaks every installed build](#an-apps-enum-decoded-from-the-server-must-tolerate-a-value-it-doesnt-know-a-new-kind-breaks-every-installed-build) |
 | 2026-10-26 | [A card's first six digits are its BIN, never its last four: map them to `first6`](#a-cards-first-six-digits-are-its-bin-never-its-last-four-map-them-to-first6) |
 | 2026-10-22 | [A line appended to an env file without a newline glues two secrets: the push script refuses `KEY=` inside a value](#a-line-appended-to-an-env-file-without-a-newline-glues-two-secrets-the-push-script-refuses-key-inside-a-value) |
 | 2026-10-18 | [An automation can't feed an App Shortcut: capture intents are actions only](#an-automation-cant-feed-an-app-shortcut-capture-intents-are-actions-only) |
@@ -46,6 +47,19 @@
 | 2026-10-08 | [Tooling defaults that don't work here: `gh` account, Supabase MCP, `localhost`, pip](#tooling-defaults-that-dont-work-here-gh-account-supabase-mcp-localhost-pip) |
 
 ## Lessons
+
+### An app's enum decoded from the server must tolerate a value it doesn't know: a new kind breaks every installed build
+- **What went wrong**: structured notes added `holdings.kind = 'structured_note'`. iOS decoded
+  `HoldingKind` as a strict `String` enum, so once the migration deployed, `holdings_valuation`,
+  `holding_returns` and `cash_flow_savings` would have thrown on build 40 and every older build
+  still installed: the whole Investments tab gone until the next TestFlight build was installed.
+  Caught in review before the push, not in production.
+- **Rule**: an iOS enum decoded from a server value decodes an unknown raw value to a safe
+  fallback instead of throwing (or the field is a `String`, as `AllocationSlice.assetClass` is).
+  A new server value ships only after the builds in use tolerate it; when the app learns it in
+  the same push, say so: installed builds fall back until they update.
+- **Enforced by**: LedgerKit `HoldingKindDecodingTests` (an unknown kind reads as a broker
+  account; a valuation with a structured note decodes).
 
 ### A card's first six digits are its BIN, never its last four: map them to `first6`
 - **What went wrong**: EIB's payment confirmation names the card as "starting with 542459". The

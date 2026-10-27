@@ -34,6 +34,9 @@ import { BankLogo } from "@/components/bank-logo";
 import { UpdateBalanceDialog } from "@/components/cash/bank-account-dialogs";
 import { AccountLedgerTable } from "@/components/wealth/account-ledger";
 import { TransactionDrawer } from "@/components/activity/drawer";
+import { NotesCard } from "@/components/notes/notes-card";
+import { AddNoteDialog } from "@/components/notes/add-note-dialog";
+import { AccountEntryDialog } from "@/components/notes/account-entry-dialog";
 
 // The chart library loads after the page renders (as on Overview, WEB-53).
 const BalanceChart = lazy(() => import("@/components/wealth/balance-chart").then((m) => ({ default: m.BalanceChart })));
@@ -76,6 +79,8 @@ function AccountView({ accountCode }: { accountCode: string }) {
   const cash = useCashPosition(profileCode);
   const position = cash.data?.accounts.find((a) => a.account_code === accountCode) ?? null;
   const [updating, setUpdating] = useState<CashAccount | null>(null);
+  const [entering, setEntering] = useState<CashAccount | null>(null);
+  const [addingNote, setAddingNote] = useState(false);
   const setMonth = (by: number) => void navigate({ search: { month: shiftAccountMonth(start, by, today) }, replace: true });
 
   if (ledger.isError && isNotFound(ledger.error)) return <AccountNotFound />;
@@ -111,6 +116,16 @@ function AccountView({ accountCode }: { accountCode: string }) {
         retry={() => void cash.refetch()}
         onUpdate={isOwner && position ? () => setUpdating(position) : undefined}
       />
+      {isOwner && position && (
+        <div className="-mt-3 flex justify-end">
+          <Button size="sm" variant="link" className="text-[13px]" onClick={() => setEntering(position)}>
+            Add a deposit or withdrawal
+          </Button>
+        </div>
+      )}
+
+      {/* A broker's cash (Swissquote) pays for notes; any account that funds one lists it. */}
+      <NotesCard profileCode={profileCode} isOwner={isOwner} onAdd={() => setAddingNote(true)} fundingAccount={accountCode} hideWhenEmpty={account?.bank_code !== "SWQ"} />
 
       <Card>
         <CardHeader
@@ -140,6 +155,8 @@ function AccountView({ accountCode }: { accountCode: string }) {
       </Card>
 
       {isOwner && <UpdateBalanceDialog profileCode={profileCode} account={updating} onClose={() => setUpdating(null)} />}
+      {isOwner && <AccountEntryDialog profileCode={profileCode} account={entering} onClose={() => setEntering(null)} />}
+      {isOwner && <AddNoteDialog profileCode={profileCode} open={addingNote} onClose={() => setAddingNote(false)} fundingAccount={accountCode} />}
     </div>
   );
 }

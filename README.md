@@ -236,15 +236,16 @@ JWTs. The service client logs which source it used (never the value).
 
 | Variable | Used by | Default | Purpose |
 |---|---|---|---|
-| `CRON_SECRET` | worker, gmail-watch-renew, outlook-poll, ops-monitor, fx-rates, metal-prices, rl360-sync | required | Must equal Vault `edge_cron_secret` (`x-cron-secret` header) |
+| `CRON_SECRET` | worker, gmail-watch-renew, outlook-poll, ops-monitor, fx-rates, metal-prices, stock-prices, rl360-sync | required | Must equal Vault `edge_cron_secret` (`x-cron-secret` header) |
 | `PARSER_URL` | worker | required | Cloud Run parser base URL |
 | `PARSER_SECRET` | worker | required | Sent as `X-Parser-Secret` |
 | `PARSER_DOCUMENT_BASE_URL` | worker | — | Rewrites the signed Storage URL origin (local only) |
 | `PARSER_TIMEOUT_MS` | worker | `75000` | Parser call timeout. Keep above the parser's 60 s kill and below Cloud Run's 120 s timeout |
 | `WORKER_BUDGET_MS` | worker | `50000` | Stop starting new rounds after this long |
 | `EDGE_WALL_CLOCK_MS` | worker | `150000` | Edge Function wall clock (free plan; 400000 on paid). A round starts only if it can finish before it (parse: `PARSER_TIMEOUT_MS` + 20 s; LLM: 65 s) |
-| `ANTHROPIC_API_KEY` | worker | — | Enables LLM categorisation and the SMS fallback (queues wait while unset) |
+| `ANTHROPIC_API_KEY` | worker, termsheet-extract | — | Enables LLM categorisation and the SMS fallback (queues wait while unset), and reading term sheets |
 | `LLM_MODEL` | worker | `claude-haiku-5-5` | Claude model id |
+| `TERMSHEET_LLM_MODEL` | termsheet-extract | `claude-sonnet-5-5` | Claude model that reads structured-note term sheets |
 | `GMAIL_PUSH_AUDIENCE` | gmail-push | required | Expected OIDC audience of Pub/Sub push tokens |
 | `GMAIL_PUSH_SA_EMAIL` | gmail-push | required | Service account the push token must be issued to |
 | `GMAIL_PUBSUB_TOPIC` | gmail-watch-renew | required | `projects/<p>/topics/<t>` |
@@ -336,6 +337,7 @@ Used for the production Edge Function secrets and Vault entries, and for secret 
 | `/wealth` | **Wealth overview** (Wealth mode; the sidebar's Spending / Wealth switcher, also in the phone header): net worth (bank cash − what the cards owe) and what it's missing, net worth over time, bank accounts (Update balance, Add bank account for owners), owed on cards, this month's cash flow, wealth insights |
 | `/wealth/accounts`, `/wealth/accounts/$accountCode` | **Accounts** and an **account page**: balance and Update balance, a 90-day balance chart, the month's opening, money in and out and closing, a statement-style ledger (flow, editable category, amount, balance after) with flow filters |
 | `/wealth/investments` | **Investments**: gold and silver valued at Dubai retail rates (refreshed every 6 hours), total value, gain on what you paid and the last 24 hours; per-gram price strip; 90-day value vs paid (or the 24K / silver price); holdings with a photo per form (bar, coin, jewellery), Add / Edit / Close (owner); weights in g, kg or tola |
+| `/wealth/investments/$holdingCode` (a structured note) | **Structured notes**: Add from term sheet (upload, review every term the model read with its warnings, amount invested, price, nominal, trade date and the account it was paid from); a note's page: invested, received, the result or what it pays if it ended today, break-even; the next observation and whether its coupon / autocall would happen at today's prices; each share's last close and level against the autocall, coupon and break-even levels; a price chart since the strike with the levels; scenarios (called on each date, the payoff by where the worst share ends, best and worst case); the schedule with outcomes; Update prices and Remove (owner). The Investments page lists the notes (live, ended); a bank account page lists the notes paid from it and takes typed deposits and withdrawals; Add bank account takes a currency (Swissquote: USD) |
 | `/wealth/cash-flow` | **Cash flow** (`/cash-flow` redirects): the month's money in, committed (family support, saving), spent, unfiled out and moves, the server's net, months of net; an account filter; months before the first bank alert marked partial |
 | `/budgets` | **Budgets**: total and per category, on every card or one card, with progress |
 | `/cards` | **Cards & Statements**: accounts, cards (each with its editable Wallet name for the payment shortcut), statements with recon status, upload with a live per-file processing log, documents (each with its processing log) |
@@ -353,8 +355,9 @@ Used for the production Edge Function secrets and Vault entries, and for secret 
 | Activity | Spending ledger (debit-card purchases tagged Debit), filters, transaction detail and categorisation, bulk select (Categorise, Exclude / Include; owners) |
 | Mode menu | "Spending ⌄" / "Wealth ⌄" at the top of each root screen swaps the tab bar (remembered on the device). Spending: Overview, Activity, Insights, Budgets, Settings. Wealth: Overview, Accounts, Cash flow, Settings |
 | Wealth overview | Net worth (bank cash − what the cards owe) and what it's missing, net worth over time, bank accounts, owed on cards, this month's cash flow, wealth insights |
-| Accounts → account ledger | Bank accounts (Update balance, Add bank account for owners); an account's 90-day balance chart, month switcher, opening / in / out / closing, and rows with flow and balance after (tap to file a transfer) |
-| Investments | Gold and silver: value, gain on what you paid, 24-hour change, per-gram prices, a 90-day value / price chart, holdings with photos, Add / Edit / Close (owner) |
+| Accounts → account ledger | Bank accounts (Update balance, Add bank account for owners); an account's 90-day balance chart, month switcher, opening / in / out / closing, and rows with flow and balance after (tap to file a transfer); Add a deposit or withdrawal (owners) and the structured notes paid from the account |
+| Investments | Gold and silver: value, gain on what you paid, 24-hour change, per-gram prices, a 90-day value / price chart, holdings with photos, Add / Edit / Close (owner); structured notes (live, ended) with Add from term sheet (owners) |
+| Investments → structured note | Invested, received, result or if it ended today, break-even; the next observation at today's prices; each share against the barriers with a chart since the strike; scenarios, schedule with outcomes, terms; Update prices and Remove (owners) |
 | Cash flow | The month's cash flow groups and net, months of net, an account filter, partial months marked |
 | Insights | Swift Charts views over the same RPCs: Trends, Worth a look, Unusual spending, More analysis (daily calendar, weekday × hour, year over year, foreign currency, subscriptions); the budgets card's "See all budgets" opens the Budgets tab |
 | Budgets | Month switcher, `budget_status` per budget (spent of limit, % used, pace; tone from the server's figures; this month an "expected by today" tick and "AED X over pace" from its `expected_share` and `over_pace_aed`), budgets not active that month (the server's `is_effective`, with `p_include_inactive`), create / edit / delete with an optional card (owners; viewers read only) |
@@ -377,7 +380,9 @@ Used for the production Edge Function secrets and Vault entries, and for secret 
 | `sms-ingest` | POST JSON `{profile_code?, messages[≤200]}` | User JWT or service token `sms:ingest` | Batch SMS ingest (idempotent on `client_msg_id`) |
 | `gmail-push` | POST (Pub/Sub envelope) | Google OIDC token | Gmail notifications → documents (200 done or permanent failure acked, 503 budget used up, 500 transient: Pub/Sub redelivers) |
 | `member-invite` | POST JSON `{profile_code, email, role?, action?, redirect_to?}` (`action`: `invite` or `resend`) | User JWT (owner) | Add a member and send the Auth invite email (sign-ups are off), or resend it. `redirect_to` must be on the caller's own origin |
-| `worker`, `gmail-watch-renew`, `outlook-poll`, `ops-monitor`, `fx-rates`, `metal-prices`, `rl360-sync` | POST | `x-cron-secret` | pg_cron-driven jobs |
+| `termsheet-extract` | POST multipart (`profile_code`, `file`: one PDF) | User JWT (owner) | Read a structured note's term sheet into draft terms with warnings (`docs/contracts/termsheet-v1.md`); the PDF goes to the private `term-sheets` bucket |
+| `stock-prices` | POST JSON `{profile_code}` | User JWT (owner) | Fetch the closes a ledger's notes need (backfill after adding one) and settle the notes; returns `{symbols, stored, settled, failed}` |
+| `worker`, `gmail-watch-renew`, `outlook-poll`, `ops-monitor`, `fx-rates`, `metal-prices`, `stock-prices`, `rl360-sync` | POST | `x-cron-secret` | pg_cron-driven jobs |
 
 ### RPCs (`supabase.rpc(...)`, PostgREST)
 

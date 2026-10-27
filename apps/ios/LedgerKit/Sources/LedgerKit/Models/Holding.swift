@@ -3,10 +3,24 @@ import Foundation
 /// What a holding is (`holdings.kind`): gold or silver priced by the feed, a savings plan, a
 /// broker account valued as a whole, shares or a fund (units × a price you enter), or a fixed
 /// deposit whose value accrues.
+///
+/// A structured note is added from its term sheet (`create_structured_note`), never through the
+/// holding form: `addable` leaves it out. A kind this build doesn't know decodes as a broker
+/// account (valued as a whole) instead of failing the whole response: a new kind on the server
+/// once meant every installed build would lose the Investments tab (`HoldingKindDecodingTests`).
 public enum HoldingKind: String, CaseIterable, Identifiable, Hashable, Sendable, Codable {
     case metal, plan, broker, security, deposit
+    case structuredNote = "structured_note"
 
     public var id: String { rawValue }
+
+    /// The kinds the holding form adds and edits.
+    public static let addable: [HoldingKind] = [.metal, .plan, .broker, .security, .deposit]
+
+    public init(from decoder: any Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = HoldingKind(rawValue: raw) ?? .broker
+    }
 
     /// The kind picker: `"Gold or silver"`, `"Plan"`.
     public var label: String {
@@ -16,6 +30,7 @@ public enum HoldingKind: String, CaseIterable, Identifiable, Hashable, Sendable,
         case .broker: "Broker account"
         case .security: "Shares or fund"
         case .deposit: "Fixed deposit"
+        case .structuredNote: "Structured note"
         }
     }
 
@@ -27,6 +42,7 @@ public enum HoldingKind: String, CaseIterable, Identifiable, Hashable, Sendable,
         case .broker: "Broker accounts"
         case .security: "Shares and funds"
         case .deposit: "Fixed deposits"
+        case .structuredNote: "Structured notes"
         }
     }
 
@@ -38,6 +54,7 @@ public enum HoldingKind: String, CaseIterable, Identifiable, Hashable, Sendable,
         case .broker: "chart.line.uptrend.xyaxis"
         case .security: "chart.bar.xaxis"
         case .deposit: "banknote"
+        case .structuredNote: "doc.text.magnifyingglass"
         }
     }
 
@@ -49,6 +66,7 @@ public enum HoldingKind: String, CaseIterable, Identifiable, Hashable, Sendable,
         case .broker: "A broker account (IBKR, Swissquote, Sarwa) valued as a whole. You record its value."
         case .security: "Shares or a fund you hold units of. Its value is the units times the price you enter."
         case .deposit: "A fixed deposit. Its value is the principal plus profit accrued to today, an estimate."
+        case .structuredNote: "An autocallable or other note, added from its term sheet. It counts at what you invested until it ends."
         }
     }
 
