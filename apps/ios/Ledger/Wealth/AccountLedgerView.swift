@@ -4,14 +4,20 @@ import SwiftUI
 /// One bank account like a bank statement (Wealth mode): its balance and Update balance, the last
 /// 90 days of balances, then a month of rows with their flow and the balance after each, under
 /// the month's opening, in, out and closing. A row opens the transaction sheet, where an owner
-/// files a transfer under Support, Saving or a category. Every figure is the server's.
+/// files a transfer under Support, Saving or a category. An owner adds a deposit or withdrawal no
+/// alert or statement brings in, and the structured notes paid from the account are listed (on a
+/// Swissquote account, with Add from term sheet). Every figure is the server's.
 struct AccountLedgerView: View {
     let model: AccountLedgerModel
     let profileCode: String
     let canEdit: Bool
     @Environment(CashModel.self) private var cash
+    @Environment(NotesModel.self) private var notes
     @State private var opened: LedgerTransaction?
     @State private var updating: UpdateBalanceDraft?
+    @State private var entering: AccountEntryDraft?
+    @State private var addingNote: AddNoteModel?
+    @State private var openedNote: String?
 
     /// The account's balance as Accounts lists it (`cash_position`).
     private var balance: BankAccountBalance? {
@@ -24,6 +30,23 @@ struct AccountLedgerView: View {
                 if let balance { updating = UpdateBalanceDraft(account: balance) }
             }
             .padding(.top, 8)
+            if canEdit, let balance {
+                Button { entering = notes.newEntry(for: balance) } label: {
+                    Label("Add a deposit or withdrawal", systemImage: "plus.circle")
+                }
+                .font(Typography.rowMeta).tint(Palette.accent)
+                .frame(minHeight: Metrics.tapMin)
+            }
+            if let notice = notes.notice {
+                Label(notice.text, systemImage: notice.isError ? "exclamationmark.triangle" : "checkmark.circle")
+                    .font(Typography.rowMeta)
+                    .foregroundStyle(notice.isError ? Palette.danger : Palette.positive)
+            }
+            if notes.showsCard(fundingAccount: model.accountCode, bankCode: balance?.bankCode, canEdit: canEdit) {
+                NotesCard(model: notes, profileCode: profileCode, canEdit: canEdit, fundingAccount: model.accountCode) {
+                    addingNote = notes.addModel(fundingAccount: model.accountCode)
+                }
+            }
             BalanceChartCard(series: model.series, currency: model.state.value?.account.currency ?? balance?.currency ?? "AED")
             MonthSwitcher(month: model.month)
             StateContainer(state: model.state, retry: reload) { ledger in
@@ -50,7 +73,22 @@ struct AccountLedgerView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task(id: model.month.month) { await model.loadIfNeeded(profileCode: profileCode) }
         .task { await cash.loadIfNeeded(profileCode: profileCode) }
-        .refreshable { await model.load(profileCode: profileCode) }
+        .task { await notes.loadIfNeeded(profileCode: profileCode) }
+        .refreshable {
+            async let a: Void = model.load(profileCode: profileCode)
+            async let b: Void = notes.load(profileCode: profileCode)
+            _ = await (a, b)
+        }
+        .onDisappear { notes.notice = nil }
+        .sheet(item: $entering) { draft in
+            AccountEntrySheet(model: notes, draft: draft, profileCode: profileCode, canEdit: canEdit)
+        }
+        .sheet(item: $addingNote) { add in
+            AddNoteSheet(model: add, profileCode: profileCode, canEdit: canEdit) { openedNote = $0 }
+        }
+        .navigationDestination(item: $openedNote) { code in
+            NoteDetailView(notes: notes, holdingCode: code, profileCode: profileCode, canEdit: canEdit)
+        }
         .sheet(item: $opened) { txn in
             if canEdit {
                 CategorySheet(transaction: txn, categories: model.categories, profileCode: profileCode,
