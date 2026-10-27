@@ -183,6 +183,17 @@ Deno.test("rebuildValues: walks the daily return index back from today, net of d
   assertEquals(rebuildValues([], flows, "2026-01-04", 1), []);
 });
 
+Deno.test("rebuildValues: a trade-date jump in the index and its fall at settlement are read as flat", () => {
+  const entries = [
+    { date: "2026-01-01", twrPerf: 0 },
+    { date: "2026-01-02", twrPerf: 30 }, // the note counted before its cash left
+    { date: "2026-01-03", twrPerf: 30 },
+    { date: "2026-01-04", twrPerf: 2 }, // settled
+  ];
+  const out = rebuildValues(entries, new Map([["2026-01-01", 1000]]), "2026-01-05", 1000);
+  assertEquals(out.map((s) => s.total_value), ["1000.00", "1000.00", "1000.00", "1000.00"]);
+});
+
 Deno.test("depositsByDay: payments only, by Dubai day", () => {
   const rows = normalizeTransactions([
     sqTx({ action: "G", netAmount: 5000, date: "2024-10-08T22:00:00+00:00" }),
