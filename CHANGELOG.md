@@ -19,7 +19,7 @@
   - Cancelling it leaves the position and the broker's rows.
 - **fix** A coupon paid before a note was bought (a purchase after issue) is the seller's (`coupon_before_purchase`): no longer counted as received or settled.
 - **refactor** `termsheet-extract/read.ts`: reading a term sheet is shared by the upload and the sync.
-- **fix** A synced note the broker redeemed before any close was stored reads as ended, with the result the broker paid. The rebuilt history reads a daily move over 12% in Swissquote's index as flat: the index jumps on a note's trade date and falls back at settlement.
+- **fix** A synced note the broker redeemed before any close was stored reads as ended, with the result the broker paid. The rebuilt history reads a daily move over 12% in Swissquote's index as flat: the index jumps on a note's trade date and falls back at settlement. It starts at the first deposit (the account's creation date comes from the passive-income config; a missing one no longer dates the opening to 2000).
 
 ### Web
 
@@ -31,6 +31,15 @@
   - The account's notes list no longer repeats what these show.
 - **feat** A note's page has a "Sell or hold" card: sold today at the bid against if called on its next date. The notes list adds both figures.
 - **feat** The balance source `broker` reads "from broker sync"; a coupon paid before the purchase shows muted as "Before purchase".
+
+### iOS
+
+- **feat** On a synced account's screen (`broker_portfolio`, LedgerKit `BrokerPortfolio` and `BrokerPortfolioPresentation`):
+  - The portfolio: total with AED, cash, positions, net deposits, profit, income, fees, and the sync status.
+  - A chart of value against net deposits, with rebuilt days dashed.
+  - Positions with *Sell today* beside *If called <date>*; a note row opens the note.
+  - Ended positions with their return and annualised return.
+- **feat** The note screen and notes card show sold today against if called next (`NoteExit`). New server values decode: the balance source `broker` reads "from the broker", and a coupon paid before the purchase reads as such.
 
 ### Docs
 

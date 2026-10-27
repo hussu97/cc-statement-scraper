@@ -65,7 +65,8 @@ public enum NoteText {
         case "autocall": "Called early"
         case "autocall_missed": "Not called"
         case "maturity": "Redeemed"
-        default: kind
+        case "coupon_before_purchase": "Coupon paid before you bought it"
+        default: kind.replacingOccurrences(of: "_", with: " ").capitalized
         }
     }
 

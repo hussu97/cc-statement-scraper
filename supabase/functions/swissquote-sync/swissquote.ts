@@ -8,7 +8,7 @@
 // (`challenge/preference` would start the app's push approval instead: never called.)
 // Then, with header x-sq-application-id: WLS:
 //   GET  …portfoliooverview-plugin/api/portfolio-overview/        portfolioId, iban
-//   GET  …accountsummary-plugin/api/config                         portfolioCreationDate
+//   GET  /sq-passive-income-plugin/api/config                       portfolioCreationDate, performance start
 //   GET  …assets-plugin/api/assets/CHF/<ccy>                       cash per currency
 //   GET  …positions-plugin/api/positions/CHF/<ccy>?groupingType=PRODUCT_TYPE
 //   POST /eding_fox-transactions-plugin/rest-api/transactions      every movement, running balance
@@ -349,9 +349,12 @@ export function rebuildValues(
   today: string,
   todayValue: number,
 ): Snapshot[] {
-  const pts = entries.filter((e) => typeof e.twrPerf === "number" && e.date < today).sort((a, b) =>
-    a.date < b.date ? -1 : 1
-  );
+  const first = [...flows.keys()].sort()[0];
+  const pts = entries.filter((e) => typeof e.twrPerf === "number" && e.date < today && (!first || e.date >= first))
+    .sort((
+      a,
+      b,
+    ) => a.date < b.date ? -1 : 1);
   if (pts.length === 0) return [];
   const out: Snapshot[] = [];
   let value = todayValue;

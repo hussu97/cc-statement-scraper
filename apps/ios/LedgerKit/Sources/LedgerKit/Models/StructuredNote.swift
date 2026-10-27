@@ -92,6 +92,16 @@ public struct NoteSummary: Decodable, Sendable, Hashable, Identifiable {
         public let profit: Decimal
     }
 
+    /// What it fetches sold today at the broker's bid (`value`); `profit` is that plus the coupons
+    /// received, against what was invested. Nil without a broker mark.
+    public struct Market: Decodable, Sendable, Hashable {
+        /// The bid in % of the nominal, when the broker prices it that way.
+        public let pricePct: Decimal?
+        public let value: Decimal
+        public let asOf: CalendarDay?
+        public let profit: Decimal
+    }
+
     public var id: String { noteCode }
     public let noteCode: String
     public let holdingCode: String
@@ -122,6 +132,11 @@ public struct NoteSummary: Decodable, Sendable, Hashable, Identifiable {
     public let ifEndedToday: IfEndedToday?
     /// Its shares' price symbols in term-sheet order (null from the server when it has none).
     public let symbols: [String]?
+    /// Sold today at the broker's bid (20261027165732); nil without a mark, or from an older server.
+    public let market: Market?
+    /// What it pays if called at its next autocall date (the first autocall scenario); nil when no
+    /// autocall date is left, or from an older server.
+    public let ifCalledNext: NoteDetail.AutocallScenario?
 
     public var noteStatus: NoteStatus { NoteStatus(raw: status) }
     public var isEnded: Bool { noteStatus.isEnded }

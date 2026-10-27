@@ -13,6 +13,9 @@ public final class AccountLedgerModel: TransactionEditing {
     public let month: MonthSelection
     public private(set) var state: LoadState<AccountLedger> = .idle
     public private(set) var series: LoadState<[BalancePoint]> = .idle
+    /// The broker sync's portfolio (`broker_portfolio`): nil inside once read for an account with
+    /// no sync. `brokerSection` says what the screen shows.
+    public private(set) var portfolio: LoadState<BrokerPortfolio?> = .idle
     /// A failed write or a transaction that couldn't be opened.
     public var errorMessage: String?
     /// Runs after a write, with the ledger: Wealth's Overview and Accounts reload.
@@ -23,6 +26,7 @@ public final class AccountLedgerModel: TransactionEditing {
     private let categoryOptions: @MainActor () -> [FilterMeta.CategoryOption]
     private var gate = RequestGate<Key>()
     private var seriesGate = RequestGate<String>()
+    private var portfolioGate = RequestGate<String>()
 
     struct Key: Hashable, Sendable {
         let profileCode: String
@@ -54,16 +58,18 @@ public final class AccountLedgerModel: TransactionEditing {
         let (ticket, sameKey) = gate.begin(key)
         state = sameKey ? state.startLoading() : .loading(previous: nil)
         async let chart: Void = loadSeries(profileCode: profileCode, force: sameKey)
+        async let broker: Void = loadPortfolio(profileCode: profileCode, force: sameKey)
         do {
             let ledger = try await api.accountLedger(profileCode: profileCode, accountCode: accountCode,
                                                      from: first, to: first.endOfMonth)
-            guard gate.isCurrent(ticket) else { return await chart }
-            gate.finish(key)
-            state = .loaded(ledger)
+            if gate.isCurrent(ticket) {
+                gate.finish(key)
+                state = .loaded(ledger)
+            }
         } catch {
             if gate.isCurrent(ticket) { state = state.fail(error) }
         }
-        await chart
+        _ = await (chart, broker)
     }
 
     /// Loads unless this month of this ledger is on screen or loading.
@@ -88,6 +94,28 @@ public final class AccountLedgerModel: TransactionEditing {
         } catch {
             if seriesGate.isCurrent(ticket) { series = series.fail(error) }
         }
+    }
+
+    /// The broker portfolio, once per ledger (again after a failure); `force` re-reads one already
+    /// loaded (pull to refresh).
+    private func loadPortfolio(profileCode: String, force: Bool) async {
+        let failed = portfolio.errorMessage != nil && portfolio.value == nil
+        guard force || failed || portfolioGate.requested != profileCode else { return }
+        let (ticket, sameKey) = portfolioGate.begin(profileCode)
+        portfolio = sameKey ? portfolio.startLoading() : .loading(previous: nil)
+        do {
+            let value = try await api.brokerPortfolio(profileCode: profileCode, accountCode: accountCode)
+            guard portfolioGate.isCurrent(ticket) else { return }
+            portfolioGate.finish(profileCode)
+            portfolio = .loaded(value)
+        } catch {
+            if portfolioGate.isCurrent(ticket) { portfolio = portfolio.fail(error) }
+        }
+    }
+
+    /// What the account screen shows of the broker portfolio, for an account of `bankCode`.
+    public func brokerSection(bankCode: String?, now: Date = .now) -> BrokerSection {
+        BrokerSection(portfolio, bankCode: bankCode, now: now)
     }
 
     // MARK: The transaction sheet
