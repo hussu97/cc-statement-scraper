@@ -156,6 +156,10 @@ select is((select count(*)::int from public.holding_flows where holding_code in 
           5, 'no flow twice');
 select is((select count(*)::int from public.balance_checkpoints where account_code = pg_temp.v('acc')), 2,
           'no new checkpoint while the cash agrees and the last one is recent');
+select pg_temp.sync(jsonb_set(pg_temp.payload('9542.00', pg_temp.txs(), jsonb_build_array(pg_temp.share())),
+                              '{opening,as_of}', to_jsonb(pg_temp.at(-201))));
+select is((select count(*)::int from public.balance_checkpoints where account_code = pg_temp.v('acc')), 2,
+          'an opening a little earlier than the last one is still the same opening');
 
 -- ── the screen ──────────────────────────────────────────────────────────────
 select pg_temp.as_user('uid');
