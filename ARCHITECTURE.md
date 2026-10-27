@@ -72,6 +72,8 @@ a `deno test` guard enforces this.
 | `ops-monitor` | pg_cron every 15 min | Reads `ops_health()` and raises one Sentry issue per problem type, then sends the `ops-heartbeat` cron check-in. |
 | `member-invite` | User JWT (owner) | Adds a member (`add_profile_member` as the caller) and, for an email with no Auth user (sign-ups are off), sends the Auth invite with the service client; `resend` re-sends to a never-confirmed member. Rate-limited per caller and per address; the invite redirects only to the caller's own origin. |
 | `metal-prices` | pg_cron every 6 hours (`7 */6 * * *`) | Gold at the Dubai Jewellery Group's retail rates by karat (dubaicityofgold.com, else Khaleej Times' 24K), Dubai retail silver per kilo (Khaleej Times JSON-LD), spot gold and silver for reference (gold-api.com, else Swissquote); `record_metal_prices` converts to AED per gram and refuses a jump over 50%. |
+| `stock-prices` | pg_cron Mon–Sat 22:30 UTC (`30 22 * * 1-6`), or an owner's JWT after adding a note | Daily closes of every share a structured note follows (and shares a note delivered) from Yahoo Finance's chart endpoint (no key; query2 when query1 refuses), from 5 days before the last stored close or 7 days before the note's strike, a session still trading left out; `record_security_prices`, then `settle_structured_notes` posts coupons, autocalls and maturities. A symbol it cannot price fails the cron run (Sentry). |
+| `termsheet-extract` | User JWT (owner), multipart PDF | Stores the term sheet in `term-sheets`, sends it to Claude (`TERMSHEET_LLM_MODEL`, default `claude-sonnet-5-5`) as a document with a JSON schema, and normalises the answer into the termsheet-v1 draft (`docs/contracts/termsheet-v1.md`) with warnings for the review: printed levels that disagree with the initial level, half coupons or autocalls, dates out of order, a payout without a 0% branch or that falls as the worst share rises, and features it does not model. Nothing from the document is logged. |
 | `rl360-sync` | pg_cron daily (`20 2 * * *`, 06:20 Dubai) | Signs in to RL360's Online Service Centre with each login in `RL360_LOGINS`, reads every plan's value and premium history (plain HTML, no browser), and calls `import_holding_data`: it claims the profile's RL360 plan by plan number, stores the value (source `import`, never over a manual one), reconciles premiums with linked card payments (±7 days, 5%; unmatched premiums become imported contributions) and returns the month-ends still without a value, which the function backfills (30 a run). |
 | `fx-rates` | pg_cron daily 21:00 UTC | Fetches open.er-api.com, inverts quotes to AED per unit with exact decimals, calls `upsert_fx_rates` (which re-estimates pending SMS). |
 
@@ -510,7 +512,7 @@ set-based `UPDATE … WHERE … IS DISTINCT FROM` applies the results.
   `merchant_category_skips` are left out: `declined` until the category set changes,
   `rejected` for good.
 
-**LLM.** Claude Haiku (`LLM_MODEL`, default `claude-haiku-5-5`) receives only merchant names, up to
+**LLM.** (Term sheets the user uploads for a structured note go to `TERMSHEET_LLM_MODEL` through `termsheet-extract`; nothing else of a document is ever sent.) Claude Haiku (`LLM_MODEL`, default `claude-haiku-5-5`) receives only merchant names, up to
 3 distinct example descriptions per merchant and the category list, keyed by short refs (`m1`, `c1`)
 that the worker maps back to codes. It never sees amounts or PDFs.
 Suggestions below 0.5 confidence are dropped and never override a manual merchant choice. When
@@ -884,6 +886,7 @@ all-profiles run, purges `document_events` older than 90 days first):
 | `ledger-recategorize-sweep` | `17 */3 * * *` | `private.recategorize_stale()` |
 | `ledger-fx-rates` | `0 21 * * *` | `fx-rates` function |
 | `ledger-metal-prices` | `7 */6 * * *` | `metal-prices` function |
+| `ledger-stock-prices` | `30 22 * * 1-6` | `stock-prices` function |
 | `ledger-rl360-sync` | `20 2 * * *` | `rl360-sync` function |
 | `ledger-nightly` | `0 22 * * *` | `private.nightly()` |
 | `ledger-llm-enqueue` | `0 18 * * *` | `private.enqueue_llm_categorize()` |

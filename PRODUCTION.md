@@ -196,6 +196,7 @@ reads a key it doesn't list.
 | `PARSER_SECRET` | the Secret Manager `parser-secret` value (identical to `services/parser/.env.production`) | yes |
 | `PARSER_URL` | the URL printed by the parser deploy (§3), **only after it has deployed** | placeholder |
 | `ANTHROPIC_API_KEY`, `LLM_MODEL` | Anthropic console | yes |
+| `TERMSHEET_LLM_MODEL` | optional: the model that reads term sheets (default `claude-sonnet-5-5`) | no (default) |
 | `SENTRY_DSN`, `SENTRY_ENVIRONMENT` | Sentry `credit-card-ledger-backend` DSN; `production` | yes |
 | `SENTRY_RELEASE` | the commit being deployed: pass `--sentry-release "$(git rev-parse --short HEAD)"` (the Deploy Supabase workflow also sets it) | placeholder |
 | `GMAIL_OAUTH_CLIENT_ID`, `GMAIL_OAUTH_CLIENT_SECRET` | the Google OAuth client `ledger-gmail` in `credit-card-scraper-ht` (§5) | set (2026-10-12; secret broken by a glued line 2026-10-21, see below) |
@@ -249,7 +250,7 @@ Deploy every function. Each one's `verify_jwt = false` comes from `supabase/conf
 
 ```bash
 supabase functions deploy --project-ref nkmylznisjcnmqbxosey
-# statements-upload sms-ingest worker gmail-push gmail-watch-renew outlook-poll ops-monitor fx-rates metal-prices rl360-sync member-invite
+# statements-upload sms-ingest worker gmail-push gmail-watch-renew outlook-poll ops-monitor fx-rates metal-prices stock-prices termsheet-extract rl360-sync member-invite
 ```
 
 Smoke test (`CRON_SECRET` exported from the same file as in §2.4):
@@ -269,6 +270,7 @@ curl -s -X POST https://nkmylznisjcnmqbxosey.supabase.co/functions/v1/worker \
 | `ledger-recategorize-sweep` | `17 */3 * * *` | stale `rules_version` sweep |
 | `ledger-fx-rates` | `0 21 * * *` | `fx-rates` function |
 | `ledger-metal-prices` | `7 */6 * * *` | `metal-prices` function (gold/silver prices; no secret beyond `CRON_SECRET`) |
+| `ledger-stock-prices` | `30 22 * * 1-6` | `stock-prices` function (closes of the shares structured notes follow, from Yahoo Finance, no key; then settles the notes) |
 | `ledger-rl360-sync` | `20 2 * * *` (06:20 Dubai) | `rl360-sync` function (RL360 plan values and premiums; needs `RL360_LOGINS`, skips when unset) |
 | `ledger-nightly` | `0 22 * * *` (02:00 Dubai) | purge `document_events` older than 90 days, void released authorisations, recurring detection, insights, net worth snapshot |
 | `ledger-llm-enqueue` | `0 18 * * *` | queue uncategorised merchants for the LLM |
