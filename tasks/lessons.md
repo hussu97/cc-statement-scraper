@@ -9,6 +9,7 @@
 
 | When | Lesson |
 |---|---|
+| 2026-10-27 | [CI pulls Supabase's images anonymously: cache them, and never let a deploy depend on a pull](#ci-pulls-supabases-images-anonymously-cache-them-and-never-let-a-deploy-depend-on-a-pull) |
 | 2026-10-27 | [An app's enum decoded from the server must tolerate a value it doesn't know: a new kind breaks every installed build](#an-apps-enum-decoded-from-the-server-must-tolerate-a-value-it-doesnt-know-a-new-kind-breaks-every-installed-build) |
 | 2026-10-26 | [A card's first six digits are its BIN, never its last four: map them to `first6`](#a-cards-first-six-digits-are-its-bin-never-its-last-four-map-them-to-first6) |
 | 2026-10-22 | [A line appended to an env file without a newline glues two secrets: the push script refuses `KEY=` inside a value](#a-line-appended-to-an-env-file-without-a-newline-glues-two-secrets-the-push-script-refuses-key-inside-a-value) |
@@ -47,6 +48,21 @@
 | 2026-10-08 | [Tooling defaults that don't work here: `gh` account, Supabase MCP, `localhost`, pip](#tooling-defaults-that-dont-work-here-gh-account-supabase-mcp-localhost-pip) |
 
 ## Lessons
+
+### CI pulls Supabase's images anonymously: cache them, and never let a deploy depend on a pull
+- **What went wrong**: the structured-notes release (27 Oct 2026) merged with every check green, but
+  `deploy-supabase` failed twice before deploying anything: its pre-deploy `test` job started a
+  local stack and every pull from `public.ecr.aws` was refused (`toomanyrequests: Data limit
+  exceeded`, Amazon's anonymous per-IP allowance, shared by GitHub's runners). The PR's CI had
+  failed the same way an hour earlier. Meanwhile TestFlight build 41, which calls the new RPCs,
+  was already out. The migrations and functions were deployed from the Mac with the workflow's
+  own steps.
+- **Rule**: a deploy never re-runs a check that needs a registry pull; it waits for CI's result
+  on the same commit. CI loads the Supabase images from the Actions cache (keyed on the CLI
+  version) and starts only the services pgTAP uses; `-x` names must be the CLI's current ones
+  (`inbucket`/`analytics` were silently ignored, so mail and logging images were pulled too).
+- **Enforced by**: `.github/actions/supabase-start` (cache, services, retries) used by `ci.yml`;
+  `deploy-supabase.yml`'s `test` job has no Docker step, it checks CI's job for `github.sha`.
 
 ### An app's enum decoded from the server must tolerate a value it doesn't know: a new kind breaks every installed build
 - **What went wrong**: structured notes added `holdings.kind = 'structured_note'`. iOS decoded

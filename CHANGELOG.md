@@ -24,6 +24,10 @@
 - **feat** Add from term sheet (owners): pick the PDF, `termsheet-extract` reads it, then a review of the name, the shares' price symbols, the schedule and payout in one line each and the model's warnings, with amount invested, price paid, trade date and the paying account (bank accounts in the note's currency); Save calls `create_structured_note`, fetches prices and opens the note. Per-date corrections stay on the web.
 - **feat** A bank account's screen takes a deposit or withdrawal (`add_account_entry`) and lists the notes paid from it (on a Swissquote account, with Add from term sheet).
 
+### Tooling
+
+- **fix** CI starts Supabase from cached images (`.github/actions/supabase-start`, keyed on the CLI version) with only the services pgTAP uses, so GitHub's shared runners stop hitting `public.ecr.aws`'s anonymous data limit; `deploy-supabase` waits for CI's pgTAP on the same commit instead of starting its own stack, so a registry limit can't block a deploy. This release's migrations and functions were deployed from the Mac with the workflow's steps after two refused pulls.
+
 ### Docs
 
 - **docs** ARCHITECTURE (structured notes and broker cash, the two functions and the cron job), PRODUCTION (functions, cron, `TERMSHEET_LLM_MODEL`), README (endpoints, env), `docs/contracts/termsheet-v1.md`, `assets/banks/README.md` (SWQ).
