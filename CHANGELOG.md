@@ -11,6 +11,13 @@
 - **feat** `stock-prices` Edge Function and pg_cron job `ledger-stock-prices` (Mon–Sat 22:30 UTC): daily closes from Yahoo Finance for the shares notes follow, then settlement. An owner can run it for their ledger right after adding a note (backfill).
 - **feat** `termsheet-extract` Edge Function: a term-sheet PDF → draft note terms (Claude, `TERMSHEET_LLM_MODEL`, default `claude-sonnet-5-5`) with warnings for the review; PDFs kept in the private `term-sheets` bucket. Contract `docs/contracts/termsheet-v1.md`.
 
+- **fix** `stock-prices` fetches a share back to a new note's strike when its stored closes start later (a note on a share another note already follows), so the new note's past observations are evaluated.
+
+### Web
+
+- **feat** Structured notes: Add from term sheet (upload → review and correct every extracted term, with the model's warnings → amount invested, price, nominal, trade date, paying account), then the note's page: status, invested and received, the result or the payout if it ended today, break-even, the next observation with whether its coupon or autocall would happen at today's prices, each share against the autocall, coupon and break-even levels, a price chart since the strike, scenarios (called on each date, payoff by the worst share's final level, best and worst case), the schedule with outcomes, Update prices and Remove.
+- **feat** Investments lists structured notes (live and ended) and counts live ones at what was invested; a bank account page lists the notes paid from it and takes typed deposits and withdrawals; Add bank account takes a currency (Swissquote defaults to USD).
+
 ### Docs
 
 - **docs** ARCHITECTURE (structured notes and broker cash, the two functions and the cron job), PRODUCTION (functions, cron, `TERMSHEET_LLM_MODEL`), README (endpoints, env), `docs/contracts/termsheet-v1.md`, `assets/banks/README.md` (SWQ).

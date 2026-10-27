@@ -131,6 +131,14 @@ export function AddBankAccountDialog({ profileCode, open, onOpenChange }: { prof
   );
 }
 
+type AccountCurrency = "AED" | "USD" | "EUR" | "GBP";
+const CURRENCIES: { value: AccountCurrency; label: string }[] = [
+  { value: "AED", label: "AED" },
+  { value: "USD", label: "USD" },
+  { value: "EUR", label: "EUR" },
+  { value: "GBP", label: "GBP" },
+];
+
 function BankAccountForm({ profileCode, onDone }: { profileCode: string; onDone: () => void }) {
   const banks = useBanks();
   const create = useCreateBankAccount(profileCode);
@@ -139,7 +147,13 @@ function BankAccountForm({ profileCode, onDone }: { profileCode: string; onDone:
   const [kind, setKind] = useState<BankAccountKind>("current");
   const [ref, setRef] = useState("");
   const [nickname, setNickname] = useState("");
+  const [currency, setCurrency] = useState<AccountCurrency>("AED");
   const [error, setError] = useState<string | null>(null);
+  const pickBank = (code: string) => {
+    setBank(code);
+    // Swissquote keeps the cash notes are bought with in USD.
+    if (code === "SWQ") setCurrency("USD");
+  };
 
   const bankOptions = useMemo(
     () =>
@@ -163,7 +177,7 @@ function BankAccountForm({ profileCode, onDone }: { profileCode: string; onDone:
       return;
     }
     setError(null);
-    const input = { bank_code: bank, kind, account_ref: normalizeAccountRef(ref), nickname };
+    const input = { bank_code: bank, kind, account_ref: normalizeAccountRef(ref), nickname, currency };
     create.mutate(input, {
       onSuccess: () => {
         toast({ title: "Bank account added", description: `${bank} · ${bankAccountLabel(input)}. Record its balance to count it in your cash.`, tone: "positive" });
@@ -178,7 +192,7 @@ function BankAccountForm({ profileCode, onDone }: { profileCode: string; onDone:
       <Field label="Bank" hint={banks.isError ? "Couldn't load the banks. Close this and try again." : undefined}>
         {(id, desc) => (
           <div id={id} aria-describedby={desc}>
-            <Select ariaLabel="Bank" placeholder={banks.isLoading ? "Loading banks…" : "Pick a bank"} className="w-full" value={bank || undefined} onValueChange={setBank} options={bankOptions} disabled={!banks.data} />
+            <Select ariaLabel="Bank" placeholder={banks.isLoading ? "Loading banks…" : "Pick a bank"} className="w-full" value={bank || undefined} onValueChange={pickBank} options={bankOptions} disabled={!banks.data} />
           </div>
         )}
       </Field>
@@ -186,6 +200,13 @@ function BankAccountForm({ profileCode, onDone }: { profileCode: string; onDone:
         {(id) => (
           <div id={id}>
             <Segmented ariaLabel="Account type" value={kind} onChange={setKind} options={BANK_ACCOUNT_KINDS} />
+          </div>
+        )}
+      </Field>
+      <Field label="Currency">
+        {(id) => (
+          <div id={id}>
+            <Segmented ariaLabel="Currency" value={currency} onChange={setCurrency} options={CURRENCIES} />
           </div>
         )}
       </Field>

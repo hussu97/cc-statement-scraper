@@ -40,6 +40,7 @@ const KIND_HINT: Record<HoldingKind, string> = {
   broker: "An account valued as a whole: IBKR, Swissquote, Sarwa. You enter its value.",
   security: "Shares or a fund: the units you hold times a price you enter.",
   deposit: "A fixed deposit: principal, profit rate and maturity. Its value accrues day by day.",
+  structured_note: "An autocallable or other note, added from its term sheet.",
 };
 
 /**
@@ -63,7 +64,7 @@ export function HoldingDialog({ profileCode, open, holding, onClose }: { profile
       {open &&
         (kind === null ? (
           <KindPicker onPick={setPicked} />
-        ) : kind === "metal" ? (
+        ) : kind === "structured_note" ? null : kind === "metal" ? (
           <HoldingFormBody key={holding?.holding_code ?? "new"} profileCode={profileCode} holding={holding} onDone={close} onBack={holding ? undefined : () => setPicked(null)} />
         ) : (
           <InvestmentFormBody
@@ -82,7 +83,7 @@ export function HoldingDialog({ profileCode, open, holding, onClose }: { profile
 function KindPicker({ onPick }: { onPick: (k: HoldingKind) => void }) {
   return (
     <ul className="flex flex-col gap-2" aria-label="Kind of investment">
-      {HOLDING_KINDS.map((k) => (
+      {HOLDING_KINDS.filter((k) => k.value !== "structured_note").map((k) => (
         <li key={k.value}>
           <button
             type="button"
