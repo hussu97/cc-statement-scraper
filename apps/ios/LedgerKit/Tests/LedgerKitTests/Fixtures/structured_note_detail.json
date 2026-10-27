@@ -1,0 +1,839 @@
+{
+ "awaiting_prices": false,
+ "break_even_pct": "99",
+ "currency": "USD",
+ "due": {
+  "coupons": "0.00",
+  "redemption": "0.00",
+  "total": "0.00"
+ },
+ "ended_on": null,
+ "events": [],
+ "funding_account_code": "acc_01m5ys7hhab989y1ezem39ws7d",
+ "holding_code": "hld_01m5ys7hj5wskbg45vcb5vtz79",
+ "if_ended_today": {
+  "amount": "31274.78",
+  "payout_pct": "62.5496",
+  "profit": "-5975.22",
+  "settlement": "physical",
+  "total": "31274.78"
+ },
+ "institution": "Swissquote",
+ "invested": "37250.00",
+ "isin": "XS3536529152",
+ "issuer": "Marex Financial",
+ "levels": [
+  {
+   "date": "2026-11-26",
+   "distance_pct": "20.62",
+   "kind": "autocall",
+   "pct": "105"
+  },
+  {
+   "date": "2027-12-01",
+   "distance_pct": "14.88",
+   "kind": "final",
+   "payout_pct": "100",
+   "pct": "100",
+   "settlement": "cash"
+  },
+  {
+   "date": "2027-12-01",
+   "distance_pct": "13.73",
+   "kind": "break_even",
+   "pct": "99"
+  },
+  {
+   "date": "2026-11-26",
+   "distance_pct": "12.58",
+   "kind": "coupon",
+   "pct": "98"
+  }
+ ],
+ "maturity_date": "2027-12-08",
+ "memory_unpaid_pct": "4.002",
+ "name": "Marex Phoenix AMZN/MSFT/GOOGL",
+ "next": {
+  "autocall": {
+   "amount": "50000.00",
+   "redemption_pct": "100",
+   "trigger_pct": "105",
+   "would_call": false
+  },
+  "coupon": {
+   "amount": "2334.50",
+   "barrier_pct": "98",
+   "rate_pct": "4.669",
+   "would_pay": false
+  },
+  "days": 30,
+  "is_final": false,
+  "kind": "observation",
+  "obs_date": "2026-11-26",
+  "pay_date": "2026-12-03",
+  "seq": 7
+ },
+ "nominal": "50000.00",
+ "note_code": "snt_01m5ys7hj5cysb0mfqrsdqz0x6",
+ "observations": [
+  {
+   "autocall_amount_pct": null,
+   "autocall_trigger_pct": null,
+   "coupon_barrier_pct": "98",
+   "coupon_memory": true,
+   "coupon_rate_pct": "0.667",
+   "obs_date": "2026-05-30",
+   "pay_date": "2026-06-06",
+   "seq": 1
+  },
+  {
+   "autocall_amount_pct": null,
+   "autocall_trigger_pct": null,
+   "coupon_barrier_pct": "98",
+   "coupon_memory": true,
+   "coupon_rate_pct": "0.667",
+   "obs_date": "2026-06-29",
+   "pay_date": "2026-07-06",
+   "seq": 2
+  },
+  {
+   "autocall_amount_pct": "100",
+   "autocall_trigger_pct": "105",
+   "coupon_barrier_pct": "98",
+   "coupon_memory": true,
+   "coupon_rate_pct": "0.667",
+   "obs_date": "2026-07-29",
+   "pay_date": "2026-08-05",
+   "seq": 3
+  },
+  {
+   "autocall_amount_pct": "100",
+   "autocall_trigger_pct": "105",
+   "coupon_barrier_pct": "98",
+   "coupon_memory": true,
+   "coupon_rate_pct": "0.667",
+   "obs_date": "2026-08-28",
+   "pay_date": "2026-09-04",
+   "seq": 4
+  },
+  {
+   "autocall_amount_pct": "100",
+   "autocall_trigger_pct": "105",
+   "coupon_barrier_pct": "98",
+   "coupon_memory": true,
+   "coupon_rate_pct": "0.667",
+   "obs_date": "2026-09-27",
+   "pay_date": "2026-10-04",
+   "seq": 5
+  },
+  {
+   "autocall_amount_pct": "100",
+   "autocall_trigger_pct": "105",
+   "coupon_barrier_pct": "98",
+   "coupon_memory": true,
+   "coupon_rate_pct": "0.667",
+   "obs_date": "2026-10-27",
+   "pay_date": "2026-11-03",
+   "seq": 6
+  },
+  {
+   "autocall_amount_pct": "100",
+   "autocall_trigger_pct": "105",
+   "coupon_barrier_pct": "98",
+   "coupon_memory": true,
+   "coupon_rate_pct": "0.667",
+   "obs_date": "2026-11-26",
+   "pay_date": "2026-12-03",
+   "seq": 7
+  },
+  {
+   "autocall_amount_pct": "100",
+   "autocall_trigger_pct": "105",
+   "coupon_barrier_pct": "98",
+   "coupon_memory": true,
+   "coupon_rate_pct": "0.667",
+   "obs_date": "2026-12-26",
+   "pay_date": "2027-01-02",
+   "seq": 8
+  },
+  {
+   "autocall_amount_pct": "100",
+   "autocall_trigger_pct": "105",
+   "coupon_barrier_pct": "98",
+   "coupon_memory": true,
+   "coupon_rate_pct": "0.667",
+   "obs_date": "2027-01-25",
+   "pay_date": "2027-02-01",
+   "seq": 9
+  }
+ ],
+ "outcomes": [
+  {
+   "barrier_pct": "98",
+   "kind": "coupon_missed",
+   "memory": true,
+   "obs_date": "2026-05-30",
+   "pay_date": "2026-06-06",
+   "rate_pct": "0.667",
+   "seq": 1,
+   "worst_pct": "93.1107",
+   "worst_symbol": "AMZN"
+  },
+  {
+   "barrier_pct": "98",
+   "kind": "coupon_missed",
+   "memory": true,
+   "obs_date": "2026-06-29",
+   "pay_date": "2026-07-06",
+   "rate_pct": "0.667",
+   "seq": 2,
+   "worst_pct": "95.8055",
+   "worst_symbol": "AMZN"
+  },
+  {
+   "barrier_pct": "98",
+   "kind": "coupon_missed",
+   "memory": true,
+   "obs_date": "2026-07-29",
+   "pay_date": "2026-08-05",
+   "rate_pct": "0.667",
+   "seq": 3,
+   "worst_pct": "90.3756",
+   "worst_symbol": "AMZN"
+  },
+  {
+   "kind": "autocall_missed",
+   "obs_date": "2026-07-29",
+   "pay_date": "2026-08-05",
+   "seq": 3,
+   "trigger_pct": "105",
+   "worst_pct": "90.3756",
+   "worst_symbol": "AMZN"
+  },
+  {
+   "barrier_pct": "98",
+   "kind": "coupon_missed",
+   "memory": true,
+   "obs_date": "2026-08-28",
+   "pay_date": "2026-09-04",
+   "rate_pct": "0.667",
+   "seq": 4,
+   "worst_pct": "91.3156",
+   "worst_symbol": "AMZN"
+  },
+  {
+   "kind": "autocall_missed",
+   "obs_date": "2026-08-28",
+   "pay_date": "2026-09-04",
+   "seq": 4,
+   "trigger_pct": "105",
+   "worst_pct": "91.3156",
+   "worst_symbol": "AMZN"
+  },
+  {
+   "barrier_pct": "98",
+   "kind": "coupon_missed",
+   "memory": true,
+   "obs_date": "2026-09-27",
+   "pay_date": "2026-10-04",
+   "rate_pct": "0.667",
+   "seq": 5,
+   "worst_pct": "87.8732",
+   "worst_symbol": "AMZN"
+  },
+  {
+   "kind": "autocall_missed",
+   "obs_date": "2026-09-27",
+   "pay_date": "2026-10-04",
+   "seq": 5,
+   "trigger_pct": "105",
+   "worst_pct": "87.8732",
+   "worst_symbol": "AMZN"
+  },
+  {
+   "barrier_pct": "98",
+   "kind": "coupon_missed",
+   "memory": true,
+   "obs_date": "2026-10-27",
+   "pay_date": "2026-11-03",
+   "rate_pct": "0.667",
+   "seq": 6,
+   "worst_pct": "87.0496",
+   "worst_symbol": "AMZN"
+  },
+  {
+   "kind": "autocall_missed",
+   "obs_date": "2026-10-27",
+   "pay_date": "2026-11-03",
+   "seq": 6,
+   "trigger_pct": "105",
+   "worst_pct": "87.0496",
+   "worst_symbol": "AMZN"
+  }
+ ],
+ "payout": [
+  {
+   "intercept_pct": "100",
+   "min_worst_pct": "100",
+   "settlement": "cash",
+   "slope": "0"
+  },
+  {
+   "intercept_pct": "-24.5",
+   "min_worst_pct": "0",
+   "settlement": "physical",
+   "slope": "1"
+  }
+ ],
+ "product_name": "47 Months USD Worst of Memory Phoenix Autocall",
+ "purchase_price_pct": "74.5",
+ "received": {
+  "coupons": "0.00",
+  "redemption": "0.00",
+  "total": "0.00"
+ },
+ "result": null,
+ "scenarios": {
+  "autocall": [
+   {
+    "annualised_pct": "79.57",
+    "coupons": "2334.50",
+    "obs_date": "2026-11-26",
+    "pay_date": "2026-12-03",
+    "profit": "15084.50",
+    "redemption": "50000.00",
+    "redemption_pct": "100",
+    "return_pct": "40.50",
+    "total": "52334.50",
+    "trigger_pct": "105"
+   },
+   {
+    "annualised_pct": "68.61",
+    "coupons": "2668.00",
+    "obs_date": "2026-12-26",
+    "pay_date": "2027-01-02",
+    "profit": "15418.00",
+    "redemption": "50000.00",
+    "redemption_pct": "100",
+    "return_pct": "41.39",
+    "total": "52668.00",
+    "trigger_pct": "105"
+   },
+   {
+    "annualised_pct": "60.52",
+    "coupons": "3001.50",
+    "obs_date": "2027-01-25",
+    "pay_date": "2027-02-01",
+    "profit": "15751.50",
+    "redemption": "50000.00",
+    "redemption_pct": "100",
+    "return_pct": "42.29",
+    "total": "53001.50",
+    "trigger_pct": "105"
+   },
+   {
+    "annualised_pct": "54.31",
+    "coupons": "3335.00",
+    "obs_date": "2027-02-24",
+    "pay_date": "2027-03-03",
+    "profit": "16085.00",
+    "redemption": "50000.00",
+    "redemption_pct": "100",
+    "return_pct": "43.18",
+    "total": "53335.00",
+    "trigger_pct": "105"
+   },
+   {
+    "annualised_pct": "49.40",
+    "coupons": "3668.50",
+    "obs_date": "2027-03-26",
+    "pay_date": "2027-04-02",
+    "profit": "16418.50",
+    "redemption": "50000.00",
+    "redemption_pct": "100",
+    "return_pct": "44.08",
+    "total": "53668.50",
+    "trigger_pct": "105"
+   },
+   {
+    "annualised_pct": "45.42",
+    "coupons": "4002.00",
+    "obs_date": "2027-04-25",
+    "pay_date": "2027-05-02",
+    "profit": "16752.00",
+    "redemption": "50000.00",
+    "redemption_pct": "100",
+    "return_pct": "44.97",
+    "total": "54002.00",
+    "trigger_pct": "105"
+   },
+   {
+    "annualised_pct": "42.12",
+    "coupons": "4335.50",
+    "obs_date": "2027-05-25",
+    "pay_date": "2027-06-01",
+    "profit": "17085.50",
+    "redemption": "50000.00",
+    "redemption_pct": "100",
+    "return_pct": "45.87",
+    "total": "54335.50",
+    "trigger_pct": "105"
+   },
+   {
+    "annualised_pct": "39.35",
+    "coupons": "4669.00",
+    "obs_date": "2027-06-24",
+    "pay_date": "2027-07-01",
+    "profit": "17419.00",
+    "redemption": "50000.00",
+    "redemption_pct": "100",
+    "return_pct": "46.76",
+    "total": "54669.00",
+    "trigger_pct": "105"
+   },
+   {
+    "annualised_pct": "36.99",
+    "coupons": "5002.50",
+    "obs_date": "2027-07-24",
+    "pay_date": "2027-07-31",
+    "profit": "17752.50",
+    "redemption": "50000.00",
+    "redemption_pct": "100",
+    "return_pct": "47.66",
+    "total": "55002.50",
+    "trigger_pct": "105"
+   },
+   {
+    "annualised_pct": "34.95",
+    "coupons": "5336.00",
+    "obs_date": "2027-08-23",
+    "pay_date": "2027-08-30",
+    "profit": "18086.00",
+    "redemption": "50000.00",
+    "redemption_pct": "100",
+    "return_pct": "48.55",
+    "total": "55336.00",
+    "trigger_pct": "105"
+   },
+   {
+    "annualised_pct": "33.17",
+    "coupons": "5669.50",
+    "obs_date": "2027-09-22",
+    "pay_date": "2027-09-29",
+    "profit": "18419.50",
+    "redemption": "50000.00",
+    "redemption_pct": "100",
+    "return_pct": "49.45",
+    "total": "55669.50",
+    "trigger_pct": "105"
+   },
+   {
+    "annualised_pct": "31.60",
+    "coupons": "6003.00",
+    "obs_date": "2027-10-22",
+    "pay_date": "2027-10-29",
+    "profit": "18753.00",
+    "redemption": "50000.00",
+    "redemption_pct": "100",
+    "return_pct": "50.34",
+    "total": "56003.00",
+    "trigger_pct": "105"
+   },
+   {
+    "annualised_pct": "30.21",
+    "coupons": "6336.50",
+    "obs_date": "2027-11-21",
+    "pay_date": "2027-11-28",
+    "profit": "19086.50",
+    "redemption": "50000.00",
+    "redemption_pct": "100",
+    "return_pct": "51.24",
+    "total": "56336.50",
+    "trigger_pct": "105"
+   }
+  ],
+  "best": {
+   "date": "2027-11-28",
+   "profit": "19086.50",
+   "total": "56336.50",
+   "when": "autocall"
+  },
+  "maturity": [
+   {
+    "amount": "0.00",
+    "payout_pct": "0",
+    "profit": "-37250.00",
+    "settlement": "physical",
+    "worst_pct": "0"
+   },
+   {
+    "amount": "0.00",
+    "payout_pct": "0",
+    "profit": "-37250.00",
+    "settlement": "physical",
+    "worst_pct": "5"
+   },
+   {
+    "amount": "0.00",
+    "payout_pct": "0",
+    "profit": "-37250.00",
+    "settlement": "physical",
+    "worst_pct": "10"
+   },
+   {
+    "amount": "0.00",
+    "payout_pct": "0",
+    "profit": "-37250.00",
+    "settlement": "physical",
+    "worst_pct": "15"
+   },
+   {
+    "amount": "0.00",
+    "payout_pct": "0",
+    "profit": "-37250.00",
+    "settlement": "physical",
+    "worst_pct": "20"
+   },
+   {
+    "amount": "250.00",
+    "payout_pct": "0.5",
+    "profit": "-37000.00",
+    "settlement": "physical",
+    "worst_pct": "25"
+   },
+   {
+    "amount": "2750.00",
+    "payout_pct": "5.5",
+    "profit": "-34500.00",
+    "settlement": "physical",
+    "worst_pct": "30"
+   },
+   {
+    "amount": "5250.00",
+    "payout_pct": "10.5",
+    "profit": "-32000.00",
+    "settlement": "physical",
+    "worst_pct": "35"
+   },
+   {
+    "amount": "7750.00",
+    "payout_pct": "15.5",
+    "profit": "-29500.00",
+    "settlement": "physical",
+    "worst_pct": "40"
+   },
+   {
+    "amount": "10250.00",
+    "payout_pct": "20.5",
+    "profit": "-27000.00",
+    "settlement": "physical",
+    "worst_pct": "45"
+   },
+   {
+    "amount": "12750.00",
+    "payout_pct": "25.5",
+    "profit": "-24500.00",
+    "settlement": "physical",
+    "worst_pct": "50"
+   },
+   {
+    "amount": "15250.00",
+    "payout_pct": "30.5",
+    "profit": "-22000.00",
+    "settlement": "physical",
+    "worst_pct": "55"
+   },
+   {
+    "amount": "17750.00",
+    "payout_pct": "35.5",
+    "profit": "-19500.00",
+    "settlement": "physical",
+    "worst_pct": "60"
+   },
+   {
+    "amount": "20250.00",
+    "payout_pct": "40.5",
+    "profit": "-17000.00",
+    "settlement": "physical",
+    "worst_pct": "65"
+   },
+   {
+    "amount": "22750.00",
+    "payout_pct": "45.5",
+    "profit": "-14500.00",
+    "settlement": "physical",
+    "worst_pct": "70"
+   },
+   {
+    "amount": "25250.00",
+    "payout_pct": "50.5",
+    "profit": "-12000.00",
+    "settlement": "physical",
+    "worst_pct": "75"
+   },
+   {
+    "amount": "27750.00",
+    "payout_pct": "55.5",
+    "profit": "-9500.00",
+    "settlement": "physical",
+    "worst_pct": "80"
+   },
+   {
+    "amount": "30250.00",
+    "payout_pct": "60.5",
+    "profit": "-7000.00",
+    "settlement": "physical",
+    "worst_pct": "85"
+   },
+   {
+    "amount": "32750.00",
+    "payout_pct": "65.5",
+    "profit": "-4500.00",
+    "settlement": "physical",
+    "worst_pct": "90"
+   },
+   {
+    "amount": "35250.00",
+    "payout_pct": "70.5",
+    "profit": "-2000.00",
+    "settlement": "physical",
+    "worst_pct": "95"
+   },
+   {
+    "amount": "50000.00",
+    "payout_pct": "100",
+    "profit": "12750.00",
+    "settlement": "cash",
+    "worst_pct": "100"
+   },
+   {
+    "amount": "50000.00",
+    "payout_pct": "100",
+    "profit": "12750.00",
+    "settlement": "cash",
+    "worst_pct": "105"
+   },
+   {
+    "amount": "50000.00",
+    "payout_pct": "100",
+    "profit": "12750.00",
+    "settlement": "cash",
+    "worst_pct": "110"
+   },
+   {
+    "amount": "50000.00",
+    "payout_pct": "100",
+    "profit": "12750.00",
+    "settlement": "cash",
+    "worst_pct": "115"
+   },
+   {
+    "amount": "50000.00",
+    "payout_pct": "100",
+    "profit": "12750.00",
+    "settlement": "cash",
+    "worst_pct": "120"
+   },
+   {
+    "amount": "50000.00",
+    "payout_pct": "100",
+    "profit": "12750.00",
+    "settlement": "cash",
+    "worst_pct": "125"
+   },
+   {
+    "amount": "50000.00",
+    "payout_pct": "100",
+    "profit": "12750.00",
+    "settlement": "cash",
+    "worst_pct": "130"
+   },
+   {
+    "amount": "50000.00",
+    "payout_pct": "100",
+    "profit": "12750.00",
+    "settlement": "cash",
+    "worst_pct": "135"
+   },
+   {
+    "amount": "50000.00",
+    "payout_pct": "100",
+    "profit": "12750.00",
+    "settlement": "cash",
+    "worst_pct": "140"
+   },
+   {
+    "amount": "50000.00",
+    "payout_pct": "100",
+    "profit": "12750.00",
+    "settlement": "cash",
+    "worst_pct": "145"
+   },
+   {
+    "amount": "50000.00",
+    "payout_pct": "100",
+    "profit": "12750.00",
+    "settlement": "cash",
+    "worst_pct": "150"
+   }
+  ],
+  "remaining_coupons": "6336.50",
+  "worst": {
+   "profit": "-37250.00",
+   "total": "0.00"
+  }
+ },
+ "series": {
+  "AMZN": [
+   [
+    "2026-04-30",
+    "100.00"
+   ],
+   [
+    "2026-05-01",
+    "99.79"
+   ],
+   [
+    "2026-05-02",
+    "99.55"
+   ],
+   [
+    "2026-05-03",
+    "99.28"
+   ],
+   [
+    "2026-10-25",
+    "87.43"
+   ],
+   [
+    "2026-10-26",
+    "87.05"
+   ]
+  ],
+  "GOOGL": [
+   [
+    "2026-04-30",
+    "100.00"
+   ],
+   [
+    "2026-05-01",
+    "99.90"
+   ],
+   [
+    "2026-05-02",
+    "99.77"
+   ],
+   [
+    "2026-05-03",
+    "99.61"
+   ],
+   [
+    "2026-10-25",
+    "106.57"
+   ],
+   [
+    "2026-10-26",
+    "106.31"
+   ]
+  ],
+  "MSFT": [
+   [
+    "2026-04-30",
+    "100.00"
+   ],
+   [
+    "2026-05-01",
+    "99.87"
+   ],
+   [
+    "2026-05-02",
+    "99.72"
+   ],
+   [
+    "2026-05-03",
+    "99.54"
+   ],
+   [
+    "2026-10-25",
+    "102.30"
+   ],
+   [
+    "2026-10-26",
+    "102.00"
+   ]
+  ]
+ },
+ "status": "live",
+ "symbols": [
+  "AMZN",
+  "MSFT",
+  "GOOGL"
+ ],
+ "terms": {
+  "denomination": "1000.00",
+  "final_valuation_date": "2027-12-01",
+  "guarantor": null,
+  "issue_date": "2026-05-10",
+  "issue_price_pct": "74.5",
+  "maturity_date": "2027-12-08",
+  "strike_date": "2026-04-30",
+  "termsheet_filename": null,
+  "termsheet_path": null
+ },
+ "trade_date": "2026-05-05",
+ "underlyings": [
+  {
+   "autocall_level": "234.5595",
+   "bloomberg_code": "AMZN UW",
+   "break_even_level": "221.1561",
+   "close": "194.46",
+   "close_date": "2026-10-26",
+   "coupon_level": "218.9222",
+   "initial": "223.39",
+   "is_worst": true,
+   "name": "Amazon.com Inc",
+   "perf_pct": "87.0496",
+   "symbol": "AMZN",
+   "to_autocall_pct": "20.62",
+   "to_break_even_pct": "13.73",
+   "to_coupon_pct": "12.58"
+  },
+  {
+   "autocall_level": "520.3275",
+   "bloomberg_code": null,
+   "break_even_level": "490.5945",
+   "close": "505.48",
+   "close_date": "2026-10-26",
+   "coupon_level": "485.639",
+   "initial": "495.55",
+   "is_worst": false,
+   "name": "Microsoft Corp",
+   "perf_pct": "102.0038",
+   "symbol": "MSFT",
+   "to_autocall_pct": "2.94",
+   "to_break_even_pct": "-2.94",
+   "to_coupon_pct": "-3.93"
+  },
+  {
+   "autocall_level": "326.781",
+   "bloomberg_code": null,
+   "break_even_level": "308.1078",
+   "close": "330.85",
+   "close_date": "2026-10-26",
+   "coupon_level": "304.9956",
+   "initial": "311.22",
+   "is_worst": false,
+   "name": "Alphabet Inc",
+   "perf_pct": "106.3074",
+   "symbol": "GOOGL",
+   "to_autocall_pct": "-1.23",
+   "to_break_even_pct": "-6.87",
+   "to_coupon_pct": "-7.81"
+  }
+ ],
+ "worst_now": {
+  "pct": "87.0496",
+  "priced": true,
+  "symbol": "AMZN"
+ }
+}

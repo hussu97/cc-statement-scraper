@@ -5,8 +5,8 @@ import Supabase
 /// with `LedgerJSON`, so money always goes through the exact-decimal path.
 public final class SupabaseLedgerAPI: LedgerAPI, @unchecked Sendable {
     public let client: SupabaseClient
-    private let config: LedgerConfig
-    private let session: URLSession
+    let config: LedgerConfig
+    let session: URLSession
 
     public init(client: SupabaseClient, config: LedgerConfig, session: URLSession = .shared) {
         self.client = client
