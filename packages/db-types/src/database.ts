@@ -4171,6 +4171,7 @@ export type Database = {
       price_symbols: {
         Args: { p_profile_code?: string }
         Returns: {
+          first_date: string
           from_date: string
           last_date: string
           symbol: string

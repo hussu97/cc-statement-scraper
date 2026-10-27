@@ -1,5 +1,5 @@
 import { assertEquals, assertThrows } from "jsr:@std/assert@1.0.13";
-import { bloombergToYahoo, chartUrl, parseChart } from "../stock-prices/yahoo.ts";
+import { bloombergToYahoo, chartUrl, fetchFrom, parseChart } from "../stock-prices/yahoo.ts";
 
 // The shape query1.finance.yahoo.com served for AMZN on 27 Oct 2026 (Dubai), trimmed.
 const AMZN = {
@@ -59,4 +59,11 @@ Deno.test("bloombergToYahoo: US codes bare, others suffixed, unknown null", () =
   assertEquals(bloombergToYahoo("BRK/B UN Equity"), "BRK-B");
   assertEquals(bloombergToYahoo("XYZ QQ Equity"), null);
   assertEquals(bloombergToYahoo("Amazon.com Inc"), null);
+});
+
+Deno.test("fetchFrom: back to the strike when the stored closes start later, else 5 days before the last", () => {
+  const s = { symbol: "AMZN", from_date: "2026-01-08", first_date: "2026-08-06", last_date: "2026-10-26" };
+  assertEquals(fetchFrom(s).toISOString().slice(0, 10), "2026-01-08");
+  assertEquals(fetchFrom({ ...s, first_date: "2026-01-05" }).toISOString().slice(0, 10), "2026-10-21");
+  assertEquals(fetchFrom({ ...s, first_date: null, last_date: null }).toISOString().slice(0, 10), "2026-01-08");
 });

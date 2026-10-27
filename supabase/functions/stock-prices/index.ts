@@ -4,8 +4,8 @@
 //
 // Callers:
 //   * pg_cron with x-cron-secret (job `ledger-stock-prices`, 30 22 * * 1-6 UTC, after the US
-//     close): every symbol, from the day after its last stored close (5 days back, so a
-//     corrected close is replaced), or from 7 days before the note's strike.
+//     close): every symbol, from 5 days before its last stored close (a corrected close is
+//     replaced), or from 7 days before a note's strike when the stored closes start later.
 //   * a ledger owner (user JWT, body {"profile_code"}): right after adding a note, so its past
 //     observations have closes. Runs synchronously and returns what was stored.
 // Source: Yahoo Finance's chart endpoint (./yahoo.ts); query2 when query1 refuses.
@@ -15,10 +15,9 @@ import { assertOwner, requireCron, requireUser } from "../_shared/auth.ts";
 import { HttpError, json, pgErrorToHttp, readJson, requireMethod } from "../_shared/http.ts";
 import { runCronJob } from "../_shared/cron.ts";
 import { serviceClient } from "../_shared/supabase.ts";
-import { chartHosts, chartUrl, type Close, parseChart } from "./yahoo.ts";
+import { chartHosts, chartUrl, type Close, fetchFrom, parseChart, type PriceSymbol } from "./yahoo.ts";
 
 const UA = "Mozilla/5.0 (compatible; BankLedger/1.0)";
-const DAY = 86_400_000;
 
 async function handler(req: Request): Promise<Response> {
   requireMethod(req, "POST");
@@ -49,12 +48,6 @@ async function fetchCloses(symbol: string, from: Date, to: Date): Promise<Close[
   throw new Error(`${symbol}: ${errors.join(", ")}`);
 }
 
-interface PriceSymbol {
-  symbol: string;
-  from_date: string;
-  last_date: string | null;
-}
-
 async function refresh(profileCode: string | null) {
   const db = serviceClient();
   const { data, error } = await db.rpc("price_symbols", { p_profile_code: profileCode });
@@ -65,7 +58,7 @@ async function refresh(profileCode: string | null) {
   const rows: Close[] = [];
   // A handful of symbols: one at a time keeps well under Yahoo's rate limit.
   for (const s of symbols) {
-    const from = s.last_date ? new Date(Date.parse(s.last_date) - 5 * DAY) : new Date(Date.parse(s.from_date));
+    const from = fetchFrom(s);
     try {
       rows.push(...await fetchCloses(s.symbol, from, now));
     } catch (e) {
