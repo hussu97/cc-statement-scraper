@@ -628,14 +628,44 @@ had a card and an account).
    `bank-logos` with `scripts/brand/upload-bank-logos.sh` (production action).
 
 ### Plan
-- [ ] Migration: `first6` (cards; template field; process_sms card resolution; resolve_review
-      records it), the EIB LLM template moved from last4 to first6 (guarded), `private.merge_cards`.
-- [ ] Migration content: ignored templates (FAB promos via AD-FAB, FAB Key Facts, FAB and EIB
-      due reminders), DFM bank + iVESTOR credit template, Dividends category + rule.
-- [ ] Migration production data (guarded DO blocks, no-op elsewhere): first6 on •6177/•4557 and
-      the merge; wallet_name on •4557; the four non-bank messages ignored; Hussain's DFM account,
-      then re-run its SMS.
-- [ ] LLM fallback: `first6` field and prompt rule (a card's first digits are never last4).
-- [ ] pgTAP (`70_sms_cleanup`), deno tests, `pnpm db:types` drift (no local Docker: CI).
-- [ ] assets/banks/DFM.png + README row.
-- [ ] Docs: CHANGELOG, ARCHITECTURE (SMS fields), lessons.
+- [x] Migration `20261026170630_sms_noise_bins_ivestor`: `cards.first6`, the `first6` template
+      field and `process_sms` resolution (the cards carrying it, else the one account earlier
+      messages were bound to; never registers a card). resolve_review needed no change: a message
+      without last4 is already bound to the chosen account (DB-43), which is what the fallback reads.
+      `private.merge_cards` (closes the emptied card, like merge_accounts).
+- [x] Content: adverts by sender (`AD-…`, ignore_reason `promotion`) instead of a FAB promo
+      template; "(ignored)" FAB Key Facts, FAB due reminder, EIB payment reminder; seeded "EIB credit
+      card payment received" (first6) with the two LLM templates switched off; DFM bank (FX markup
+      1.15%: no purchase fee, scheme only), iVESTOR credit template, Dividends category + rule.
+- [x] Production data (guarded DO blocks): first6 on •6177/•4557, both payments moved, the two
+      cards merged (closed); wallet_name on •4557; the four non-bank / blank-sender messages
+      `user_not_txn`; Hussain's DFM iVESTOR account and its re-run SMS.
+- [x] LLM fallback: `first6` field, prompt rule, expect handling (`llm_test.ts`).
+- [x] Web: an unknown_card review for a BIN-only card reads "EIB card starting 542459".
+- [x] pgTAP `70_sms_cleanup`; OTP fixture, logo list, FX markup and seed counts (01, 05, 14, 20,
+      25, 38) updated.
+- [x] assets/banks/DFM.png (DFM's own file, unmodified) + README row; uploaded by the owner.
+- [x] Docs: CHANGELOG, ARCHITECTURE (SMS path), lessons.
+
+### Production check (26–27 Oct)
+- Shipped as main 4d4f670 (approved 26 Oct); Deploy Supabase green, its pgTAP included (the
+  branch's second CI run never reached pgTAP: Docker image pulls were rate-limited twice).
+- No unparsed SMS left in any ledger. Hussain and Tejasvie: 3 `promotion`, 3 `other` notices,
+  4 `user_not_txn`.
+- DFM iVESTOR (Hussain): current account with card •5246; the 16 Oct dividend AED 113.92 posted,
+  filed under Dividends; balance checkpoint AED 517.78 (sms). Logo served from `bank-logos`.
+- EIB (Tejasvie): AED 62.00 on Amazon •6177 (first6 542459), AED 5,133.00 on RTA •4557 (first6
+  457828); the two LLM templates off, the seeded one on.
+- Wallet: "RTA Platinum Card" on •4557; the 22 Oct AED 8.00 tap is a duplicate of its SMS and its
+  review resolved.
+- The two merged cards (•2459, •7828) had no references left and were deleted by the owner in the
+  SQL editor (27 Oct; the MCP write prompt timed out three times); verified gone.
+
+### Review (27 Oct)
+- One change from the design: the cards are closed by the migration, not deleted (a destructive
+  migration stops the deploy, as merge_accounts found); the two empty rows were deleted by hand.
+- First CI run: pgTAP failed on intended consequences (seed counts +1 category and rule; every bank
+  needs an FX markup). DFM's markup comes from DFM's own user guide (Schedule of Fees: no purchase
+  fee, Emirates NBD conversion), so the scheme part only.
+- Local checks (no Docker here): deno lint/fmt/check/test (181), web lint, typecheck, test (624),
+  build; pgTAP and types drift ran in CI and the deploy.
