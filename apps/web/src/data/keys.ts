@@ -43,6 +43,8 @@ export const keys = {
   /** Structured notes (20261027124257): under "cash", so a note, a price backfill or an entry refreshes net worth too. */
   notes: (p: string) => ["p", p, "cash", "notes"] as const,
   noteDetail: (p: string, holding: string) => ["p", p, "cash", "note", holding] as const,
+  /** A broker account's portfolio (20261027165732): under "cash", so a note, an entry or a balance change refreshes it. */
+  brokerPortfolio: (p: string, account: string) => ["p", p, "cash", "broker", account] as const,
   holdingReturns: (p: string, period: string) => ["p", p, "cash", "holding-returns", period] as const,
   cashFlowSavings: (p: string, from: string, to: string, account?: string) => ["p", p, "cash", "savings", from, to, account ?? "all"] as const,
   /** Metal prices are global reference data, not per ledger. */

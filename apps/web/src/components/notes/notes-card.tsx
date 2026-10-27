@@ -1,13 +1,14 @@
 import { Link } from "@tanstack/react-router";
 import { ChevronRight, Plus, ScrollText } from "lucide-react";
 import { useNotesSummary, type NoteSummary } from "@/data/notes";
-import { isEnded, noteStatus, pct } from "@/lib/notes";
+import { calledNext, isEnded, noteStatus, pct, sellFromMarket } from "@/lib/notes";
 import { formatDate } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/cn";
 import { Badge, Card, CardHeader } from "@/components/ui/display";
 import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
+import { SellOrWaitInline } from "./sell-or-wait";
 
 /**
  * Structured notes: live first, then ended. On Investments every note; on an account page
@@ -19,6 +20,7 @@ export function NotesCard({
   onAdd,
   fundingAccount,
   hideWhenEmpty,
+  exclude,
 }: {
   profileCode: string;
   isOwner: boolean;
@@ -26,9 +28,11 @@ export function NotesCard({
   fundingAccount?: string;
   /** On an account page: render nothing until a note is paid from it. */
   hideWhenEmpty?: boolean;
+  /** Holdings another card on the page already shows (a broker account's positions). */
+  exclude?: ReadonlySet<string>;
 }) {
   const q = useNotesSummary(profileCode);
-  const notes = (q.data ?? []).filter((n) => !fundingAccount || n.funding_account_code === fundingAccount);
+  const notes = (q.data ?? []).filter((n) => (!fundingAccount || n.funding_account_code === fundingAccount) && !exclude?.has(n.holding_code));
   const live = notes.filter((n) => !isEnded(n.status));
   const ended = notes.filter((n) => isEnded(n.status));
   if (fundingAccount && q.data && notes.length === 0 && (!isOwner || hideWhenEmpty)) return null;
@@ -134,6 +138,11 @@ function NoteRow({ n }: { n: NoteSummary }) {
             "invested"
           )}
         </p>
+        {!ended && (n.market || n.if_called_next) && (
+          <div className="mt-0.5 flex justify-end">
+            <SellOrWaitInline sell={sellFromMarket(n.market)} called={calledNext(n.if_called_next)} currency={n.currency} />
+          </div>
+        )}
       </div>
       <ChevronRight className="size-4 shrink-0 text-subtle group-hover:text-ink-2" />
     </Link>

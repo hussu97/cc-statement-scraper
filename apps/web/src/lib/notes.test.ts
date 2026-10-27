@@ -13,6 +13,12 @@ import {
   scheduleSummary,
   seriesRows,
   maturityTableRows,
+  calledLabel,
+  calledNext,
+  outcomeLabel,
+  outcomeTone,
+  returnText,
+  sellFromMarket,
   type InvestmentForm,
   type NoteDraft,
 } from "./notes";
@@ -138,5 +144,58 @@ describe("chart and tables", () => {
       { min_worst_pct: "0", intercept_pct: "0", slope: "1", settlement: "cash" },
     ]).map((r) => r.worst_pct);
     expect(rows).toEqual(["0", "10", "20", "30", "40", "45", "50", "60", "70", "80", "90", "100", "110", "120", "130", "140", "150"]);
+  });
+});
+
+describe("outcome kinds", () => {
+  it("labels known kinds, including a coupon paid before the purchase", () => {
+    expect(outcomeLabel("coupon")).toBe("Coupon paid");
+    expect(outcomeLabel("coupon_before_purchase")).toBe("Before purchase");
+    expect(outcomeTone("coupon")).toBe("positive");
+    expect(outcomeTone("autocall")).toBe("positive");
+    expect(outcomeTone("coupon_before_purchase")).toBe("muted");
+    expect(outcomeTone("maturity")).toBe("muted");
+  });
+  it("never breaks on a kind it doesn't know", () => {
+    expect(outcomeLabel("partial_redemption")).toBe("Partial redemption");
+    expect(outcomeLabel(null)).toBe("Outcome");
+    expect(outcomeTone("partial_redemption")).toBe("muted");
+  });
+});
+
+describe("sell today or if called", () => {
+  it("reads the market quote as sell-today", () => {
+    expect(sellFromMarket({ price_pct: "90", value: "9000.00", as_of: "2026-10-27", profit: "-1000.00" })).toEqual({
+      total: "9000.00",
+      profit: "-1000.00",
+      returnPct: null,
+      pricePct: "90",
+      asOf: "2026-10-27",
+    });
+    expect(sellFromMarket(null)).toBeNull();
+    expect(sellFromMarket(undefined)).toBeNull();
+  });
+  it("reads the first autocall as if-called", () => {
+    const c = calledNext({
+      obs_date: "2027-03-15",
+      pay_date: "2027-03-22",
+      trigger_pct: "100",
+      redemption_pct: "110",
+      redemption: "11000.00",
+      coupons: "0.00",
+      total: "11000.00",
+      profit: "1000.00",
+      return_pct: "10.00",
+      annualised_pct: "20.00",
+    })!;
+    expect(c).toEqual({ obsDate: "2027-03-15", payDate: "2027-03-22", total: "11000.00", profit: "1000.00", returnPct: "10.00", annualisedPct: "20.00", triggerPct: "100" });
+    expect(calledLabel(c)).toBe("If called 22 Mar 2027");
+    expect(calledLabel(c, "short")).toBe("If called 22 Mar");
+    expect(calledNext(null)).toBeNull();
+  });
+  it("words a return", () => {
+    expect(returnText("10.00", "20.00")).toBe("10% · 20% a year");
+    expect(returnText("15.321")).toBe("15.32%");
+    expect(returnText(null)).toBe("—");
   });
 });

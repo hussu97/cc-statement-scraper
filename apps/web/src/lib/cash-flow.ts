@@ -226,6 +226,8 @@ export function balanceSourceLabel(source: string | null | undefined): string | 
   if (source === "sms") return "from SMS";
   if (source === "manual") return "entered";
   if (source === "statement") return "from statement";
+  // The broker's own cash figure, recorded at each sync (20261027165732_swissquote_sync.sql).
+  if (source === "broker") return "from broker sync";
   return null;
 }
 
