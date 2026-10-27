@@ -75,6 +75,7 @@ a `deno test` guard enforces this.
 | `stock-prices` | pg_cron Mon–Sat 22:30 UTC (`30 22 * * 1-6`), or an owner's JWT after adding a note | Daily closes of every share a structured note follows (and shares a note delivered) from Yahoo Finance's chart endpoint (no key; query2 when query1 refuses), from 5 days before the last stored close or 7 days before the note's strike, a session still trading left out; `record_security_prices`, then `settle_structured_notes` posts coupons, autocalls and maturities. A symbol it cannot price fails the cron run (Sentry). |
 | `termsheet-extract` | User JWT (owner), multipart PDF | Stores the term sheet in `term-sheets`, sends it to Claude (`TERMSHEET_LLM_MODEL`, default `claude-sonnet-5-5`) as a document with a JSON schema, and normalises the answer into the termsheet-v1 draft (`docs/contracts/termsheet-v1.md`) with warnings for the review: printed levels that disagree with the initial level, half coupons or autocalls, dates out of order, a payout without a 0% branch or that falls as the worst share rises, and features it does not model. Nothing from the document is logged. |
 | `rl360-sync` | pg_cron daily (`20 2 * * *`, 06:20 Dubai) | Signs in to RL360's Online Service Centre with each login in `RL360_LOGINS`, reads every plan's value and premium history (plain HTML, no browser), and calls `import_holding_data`: it claims the profile's RL360 plan by plan number, stores the value (source `import`, never over a manual one), reconciles premiums with linked card payments (±7 days, 5%; unmatched premiums become imported contributions) and returns the month-ends still without a value, which the function backfills (30 a run). |
+| `swissquote-sync` | pg_cron daily (`30 21 * * *`, 01:30 Dubai) | Signs in to Swissquote with each login in `SWISSQUOTE_LOGINS` (password, then the Level-3 matrix card's cell as JSON; never the phone push), reads the portfolio, cash, positions, every transaction since the account opened, product types and the daily performance index, and calls `import_broker_data` (the cash account, its transactions, holdings and flows, the day's marks, the cash checkpoint and daily values; idempotent). Then reads the term sheet of up to one position without terms a run (`{"terms": n}` for more) from Swissquote Messages into a structured note. A failure is recorded on the connection (`record_broker_sync_error`) and reaches Sentry; messages never carry logins or codes. |
 | `fx-rates` | pg_cron daily 21:00 UTC | Fetches open.er-api.com, inverts quotes to AED per unit with exact decimals, calls `upsert_fx_rates` (which re-estimates pending SMS). |
 
 Shared code in `_shared/`: `auth.ts` (JWT, service token and cron secret), `sentry.ts`
@@ -701,6 +702,47 @@ schedule, payout, evaluation, events, each share's closes as % of initial); serv
 `settle_structured_notes`, `price_symbols`. Term sheets live in the private `term-sheets` bucket
 at `<profile_code>/<sha256>.pdf`.
 
+**Swissquote sync** (`20261027165732`). The `swissquote-sync` function reads the Swissquote
+portfolio nightly through the web platform's own JSON (sign-in: a form post, then the Level-3
+matrix card's challenge as JSON; no browser and no phone push) and hands it to
+`import_broker_data` (service, idempotent):
+- **The cash account.** `broker_connections` ties a portfolio to the ledger's USD Swissquote
+  account, made on the first sync.
+- **Transactions.** `broker_transactions` is the evidence: one row per Swissquote movement, keyed
+  by its transaction id. A cash row derives one posted transaction on the account
+  (`amount_source = 'broker'`, typed evidence for `refresh_transaction`):
+  - a deposit, a buy or sell (a transfer linked to its holding: saving);
+  - a coupon ("NOTE COUPON <ISIN>", Investment income) or a redemption ("NOTE REDEMPTION <ISIN>",
+    a withdrawal from the holding);
+  - a dividend (Dividends) or deposit interest (Investment income);
+  - a custody fee (a `fee`: Bank Fees & Interest);
+  - a reversal, the opposite of what it reverses.
+- **Holdings.** Each ISIN is a holding (`external_ref` = ISIN): shares are a `security`, anything
+  else a `broker` holding until a term sheet makes it a structured note. Its flows come from the
+  broker rows (`source = 'import'`).
+- **Marks.** `broker_positions` keeps each day's mark (quantity, bid, % of nominal for notes,
+  value, cost) and writes the holding's valuation. A live note is worth its latest mark, else what
+  was invested.
+- **Cash.** A `broker` balance checkpoint records Swissquote's own cash figure.
+- **Daily values.** `broker_snapshots` holds the value per day. Days before the first sync are
+  rebuilt from the platform's daily return index walked back from today net of deposits
+  (`estimated`; within 0.05% of Swissquote's year-end report).
+- **Notes on a synced account.** A note funded from a synced account posts nothing of its own:
+  `create_structured_note` adopts the position's holding and takes what was bought from the
+  broker's buy rows; `settle_structured_note` links each coupon or redemption to the broker's row
+  once it arrives (a coupon paid inside a redemption price settles with it, and a redemption ends
+  the note even before its closes are in); `cancel_structured_note` leaves the position and the
+  broker's rows. A coupon paid before a note was bought is the seller's
+  (`coupon_before_purchase`, never counted).
+- **Term sheets.** For positions still without terms, the function reads the term sheet attached
+  to the trade ticket in Swissquote Messages with the termsheet-extract code
+  (`termsheet-extract/read.ts`), once per ISIN (`terms_tried`).
+- **The screen.** `broker_portfolio` (member) serves the account screen: cash, positions (value,
+  cost, paid, *sold today* = bid value + income against what was invested, and for a note *if
+  called next* = the first autocall scenario), ended positions with their return and annualised
+  return, and the daily values against net deposits. `note_summary` gains `market` and
+  `if_called_next`.
+
 There is likewise **one definition of what a card owes**: `public.v_account_balances`
 (`security_invoker`). A sum of transactions cannot know the balance carried in before the first
 document, so each account is anchored on a balance the bank printed, the latest of:
@@ -888,6 +930,7 @@ all-profiles run, purges `document_events` older than 90 days first):
 | `ledger-metal-prices` | `7 */6 * * *` | `metal-prices` function |
 | `ledger-stock-prices` | `30 22 * * 1-6` | `stock-prices` function |
 | `ledger-rl360-sync` | `20 2 * * *` | `rl360-sync` function |
+| `ledger-swissquote-sync` | `30 21 * * *` | `swissquote-sync` function |
 | `ledger-nightly` | `0 22 * * *` | `private.nightly()` |
 | `ledger-llm-enqueue` | `0 18 * * *` | `private.enqueue_llm_categorize()` |
 | `ledger-legacy-choices` | `45 22 * * *` | `private.legacy_choices_cron()`: applies staged legacy category choices once per transaction (never over a later user edit), then unschedules itself when nothing is pending or 30 days after staging. Leftovers: `private.legacy_unmatched_choices()` |

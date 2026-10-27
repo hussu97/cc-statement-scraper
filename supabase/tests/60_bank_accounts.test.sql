@@ -191,6 +191,8 @@ select set_eq(
     'public.holding_detail',
     -- Structured notes (20261027124257): a bank account's typed entries; a note's funding account
     'public.add_account_entry', 'public.create_structured_note',
+    -- Swissquote sync (20261027165732): the broker's cash account (bank accounts only)
+    'public.import_broker_data', 'private.broker_holding', 'public.broker_portfolio',
     -- a card payment's leg on the same bank's current account (20261020170933)
     'private.add_payment_leg',
     -- consolidated statements (20261021115816): a bank statement's account (bank accounts only),
