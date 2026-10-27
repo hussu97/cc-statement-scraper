@@ -72,6 +72,8 @@ export interface NewBankAccount {
   /** Digits only, or "" when unknown. */
   account_ref: string;
   nickname: string;
+  /** ISO code; AED unless given (a broker's cash: USD). */
+  currency?: string;
 }
 
 export function useCreateBankAccount(profileCode: string) {
@@ -85,6 +87,7 @@ export function useCreateBankAccount(profileCode: string) {
           p_kind: a.kind,
           p_account_ref: a.account_ref,
           ...(a.nickname.trim() ? { p_nickname: a.nickname.trim() } : {}),
+          ...(a.currency ? { p_currency: a.currency } : {}),
         }),
       ),
     // Adding an account re-runs its bank's earlier alerts, so transactions may appear too.

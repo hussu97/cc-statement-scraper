@@ -124,7 +124,8 @@ function HoldingRow({ h, actions }: { h: Holding; actions: HoldingActions }) {
   const kind = kindOf(h);
   const own = h.currency && h.currency !== "AED" ? formatOwnValue(h.value, h.currency) : null;
   const aed = aedEquivalent(h.value_aed, h.currency);
-  const { onEdit, onClose, onUpdateValue } = actions;
+  // A structured note is changed from its own page (cancel_structured_note), never the holding form.
+  const { onEdit, onClose, onUpdateValue } = kind === "structured_note" ? ({} as HoldingActions) : actions;
   return (
     <li className="flex flex-col gap-2 px-5 py-3.5 sm:flex-row sm:items-start sm:gap-4">
       <div className="flex min-w-0 flex-1 items-start gap-3">
