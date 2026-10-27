@@ -108,7 +108,7 @@ public struct HoldingDraft: Sendable, Hashable, Identifiable {
         switch kind {
         case .metal: "e.g. Ten tola bar"
         case .plan: "e.g. RL360 Quantum"
-        case .broker: "e.g. IBKR account"
+        case .broker, .structuredNote: "e.g. IBKR account"
         case .security: "e.g. Talabat shares"
         case .deposit: "e.g. Wio 12-month deposit"
         }
@@ -118,7 +118,7 @@ public struct HoldingDraft: Sendable, Hashable, Identifiable {
     public var institutionPlaceholder: String {
         switch kind {
         case .metal, .plan: "e.g. RL360"
-        case .broker: "e.g. Interactive Brokers"
+        case .broker, .structuredNote: "e.g. Interactive Brokers"
         case .security: "e.g. DFM"
         case .deposit: "e.g. Wio"
         }
@@ -161,7 +161,7 @@ public struct HoldingDraft: Sendable, Hashable, Identifiable {
         case .plan, .broker: "Then open it to record its value and the money you've put in."
         case .security: "Then open it to record the unit price and the money you've put in."
         case .deposit: "Its value accrues each day to maturity: an estimate until the bank says otherwise."
-        case .metal: nil
+        case .metal, .structuredNote: nil
         }
     }
 

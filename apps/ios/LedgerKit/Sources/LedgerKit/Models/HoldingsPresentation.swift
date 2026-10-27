@@ -63,7 +63,7 @@ extension Holding {
             case nil:
                 return weight
             }
-        case .plan, .broker:
+        case .plan, .broker, .structuredNote:
             return [institution ?? kind.label, currency == "AED" ? nil : currency].compactMap { $0 }.joined(separator: " · ")
         case .security:
             let u = units.map { HoldingsText.units($0) }
