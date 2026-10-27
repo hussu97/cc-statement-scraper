@@ -730,10 +730,39 @@ with no browser and no phone push. Production had no SWQ data before this, so th
       privileges matrix; `pnpm db:types`.
 - [x] Edge `swissquote-sync`: session (login, card), fetchers, normalisers, performance
       back-fill, term-sheet import, cron; tests with a fake fetch.
-- [ ] Web: SWQ account page portfolio card (positions, value chart), note market vs
+- [x] Web: SWQ account page portfolio card (positions, value chart), note market vs
       if-called, `broker` balance label; tests.
-- [ ] iOS: same in LedgerKit + views; tolerant decoding; tests.
-- [ ] Run it: local sync against the live account into the local stack, then look at web and
+- [x] iOS: same in LedgerKit + views; tolerant decoding; tests.
+- [x] Run it: local sync against the live account into the local stack, then look at web and
       iOS.
-- [ ] Docs: CHANGELOG, ARCHITECTURE, PRODUCTION (secret, cron), README, lessons.
+- [x] Docs: CHANGELOG, ARCHITECTURE, PRODUCTION (secret, cron), README, lessons.
 - [ ] Production (each needs a yes): secret `SWISSQUOTE_LOGINS`, deploy, first sync.
+
+### Review (27 Oct)
+- **Live account, run locally.** Swissquote was read into the local stack several times from a
+  fresh reset (`supabase functions serve`, cron secret), with the same result each time:
+  - 77 transactions and a cash balance of USD 920.53, matching Swissquote.
+  - 9 open positions, valued at Swissquote's marks.
+  - 6 ended notes, all called early, each with its result.
+  - 11 of the 13 term sheets in Messages became notes. The two credit-linked notes are correctly
+    refused as not autocallables and stay `broker` holdings.
+  - The rebuilt 2025 year-end value is within 0.02% of Swissquote's own report.
+- **Found while running it.**
+  - A note bought after issue counted the seller's coupons (lessons).
+  - Swissquote's performance index jumps on a note's trade date and falls back at settlement:
+    read as flat.
+  - Notes the broker redeemed before any close was stored read as live.
+  - The account's creation date is only in the passive-income config.
+  - Swissquote's timestamps move between requests, so the opening checkpoint was written twice.
+- **Changed from the design.** Swissquote's `rest-api/transactions` is a complete, structured
+  ledger with a running balance, so no PDF is parsed (the parser contract is untouched).
+  Closed positions are offered for term-sheet import too, for their history.
+- **Checks.** The CI mirror passed: migrations, deno lint/fmt/check/test (210), web
+  lint/typecheck/test (655)/build, pgTAP (2,068, fresh reset), types drift, swift test (690),
+  xcodebuild. Web looked at in the browser; iOS run in the simulator (by its agent).
+- **Production** (each step needs a yes):
+  - `SWISSQUOTE_LOGINS` for Hussain's ledger is written to `.env.production`; the push script's
+    dry run passes. Still to do: push it.
+  - Merge (deploys the migration, both functions and a TestFlight build).
+  - Run the first sync with `{"sync":true,"terms":5}`; the nightly runs read one term sheet each.
+
