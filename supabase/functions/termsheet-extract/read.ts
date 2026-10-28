@@ -6,7 +6,7 @@
 import { HttpError } from "../_shared/http.ts";
 import { serviceClient } from "../_shared/supabase.ts";
 import { prepareDocument } from "../_shared/documents.ts";
-import { encodeBase64 } from "../_shared/deps.ts";
+import { encodeBase64 } from "../_shared/base64.ts";
 import { LlmOutputError, structuredCall } from "../_shared/llm.ts";
 import { normalizeExtraction, NotATermSheet, TERMSHEET_SCHEMA, TERMSHEET_SYSTEM, termsheetModel } from "./termsheet.ts";
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## Edge Functions deploy without jsr.io — 2026-10-28
+
+### Backend (Supabase)
+
+- **fix** The Edge Functions carry their own base64 (`_shared/base64.ts`: native `Uint8Array.fromBase64`/`toBase64` when the runtime has them, else a table-driven codec) instead of `jsr:@std/encoding`. Supabase's bundler timed out fetching that package from jsr.io in three production deploys in a row. A guard test (`guard_test.ts`) fails if deployed function code imports from `jsr:` again; tests still use `jsr:@std/assert`, which is never bundled.
+
 ## Mashreq NEO consolidated statement: current and savings accounts and their lines — 2026-10-28
 
 ### Parser

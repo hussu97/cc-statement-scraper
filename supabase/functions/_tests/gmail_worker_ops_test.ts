@@ -98,8 +98,8 @@ Deno.test("historyMessageIds dedupes", () => {
 });
 
 Deno.test("decodeBase64Any handles url-safe and standard alphabets, with or without padding (SRV-07)", () => {
-  const dec = (s: string, impl: "auto" | "std" = "auto") => new TextDecoder().decode(decodeBase64Any(s, impl));
-  for (const impl of ["auto", "std"] as const) {
+  const dec = (s: string, impl: "auto" | "portable" = "auto") => new TextDecoder().decode(decodeBase64Any(s, impl));
+  for (const impl of ["auto", "portable"] as const) {
     assertEquals(dec("JVBERi0_Pz8", impl), "%PDF-???", impl); // Gmail: base64url, no padding
     assertEquals(dec("JVBERi0/Pz8=", impl), "%PDF-???", impl); // Graph: standard, padded
     assertEquals(dec("JVBE\nRi0/Pz8=", impl), "%PDF-???", impl); // line-wrapped
@@ -108,7 +108,7 @@ Deno.test("decodeBase64Any handles url-safe and standard alphabets, with or with
   }
   // ~21 MB decodes well inside the 2 s Edge CPU limit (the atob loop took ~1 s per 20 MB).
   const b64 = "QUFB".repeat(1024 * 7000); // "AAA" × 7,168,000
-  for (const impl of ["auto", "std"] as const) {
+  for (const impl of ["auto", "portable"] as const) {
     const t0 = performance.now();
     assertEquals(decodeBase64Any(b64, impl).length, 3 * 1024 * 7000);
     const ms = performance.now() - t0;

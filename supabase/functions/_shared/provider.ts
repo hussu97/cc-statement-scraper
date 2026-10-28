@@ -3,10 +3,10 @@
 //
 // SRV-07: `Uint8Array.from(atob(s), c => c.charCodeAt(0))` costs about 1 s of CPU per
 // 20 MB, against the 2 s Edge CPU limit. The native `Uint8Array.fromBase64` (V8 ≥ 14)
-// takes ~4 ms and @std/encoding ~45 ms, so either is fine; the native one is used when
-// the runtime has it.
+// takes ~4 ms and the table-driven portable decoder (`./base64.ts`) a few tens of ms, so
+// either is fine; the native one is used when the runtime has it.
 
-import { decodeBase64, decodeBase64Url } from "./deps.ts";
+import { decodeBase64, decodeBase64Portable } from "./base64.ts";
 import { MAX_PDF_BYTES } from "./documents.ts";
 
 export class ProviderHttpError extends Error {
@@ -16,25 +16,16 @@ export class ProviderHttpError extends Error {
   }
 }
 
-type FromBase64 = (s: string, opts: { alphabet: "base64" | "base64url" }) => Uint8Array;
-const nativeFromBase64: FromBase64 | null = typeof (Uint8Array as unknown as { fromBase64?: unknown }).fromBase64 ===
-    "function"
-  ? (Uint8Array as unknown as { fromBase64: FromBase64 }).fromBase64.bind(Uint8Array)
-  : null;
-
 /**
  * Decode standard or URL-safe base64, with or without padding (Gmail sends base64url
  * without padding, Graph standard base64). Whitespace is ignored. Throws on bad input.
  */
-export function decodeBase64Any(data: string, impl: "auto" | "std" = "auto"): Uint8Array {
+export function decodeBase64Any(data: string, impl: "auto" | "portable" = "auto"): Uint8Array {
   const clean = data.replace(/\s+/g, "");
   if (!clean) return new Uint8Array();
-  const urlSafe = /[-_]/.test(clean);
-  if (impl === "auto" && nativeFromBase64) {
-    // The default lastChunkHandling ("loose") accepts missing padding.
-    return nativeFromBase64(clean, { alphabet: urlSafe ? "base64url" : "base64" });
-  }
-  return urlSafe ? decodeBase64Url(clean) : decodeBase64(clean);
+  if (impl === "portable") return decodeBase64Portable(clean);
+  // The native decoder's default lastChunkHandling ("loose") accepts missing padding.
+  return decodeBase64(clean, /[-_]/.test(clean) ? "base64url" : "base64");
 }
 
 /** Largest attachment worth downloading: the `statements` bucket and storeDocument limit. */

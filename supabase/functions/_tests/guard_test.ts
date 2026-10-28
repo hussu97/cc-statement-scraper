@@ -63,3 +63,22 @@ for (const name of functionNames()) {
     assert(section.test(toml), `config.toml needs [functions.${name}] verify_jwt = false`);
   });
 }
+
+// 28 Oct 2026: Supabase's bundler timed out fetching jsr:@std/encoding during three production
+// deploys in a row. Deployed code imports npm: packages (pinned in _shared/deps.ts) and its own
+// modules only; jsr: is for the tests, which are never bundled.
+Deno.test("deployed function code imports nothing from jsr.io", () => {
+  const offenders: string[] = [];
+  const walk = (dir: URL, rel: string) => {
+    for (const e of Deno.readDirSync(dir)) {
+      if (e.isDirectory && e.name !== "_tests" && !e.name.startsWith(".")) {
+        walk(new URL(`${e.name}/`, dir), `${rel}${e.name}/`);
+      } else if (e.isFile && e.name.endsWith(".ts") && !e.name.endsWith("_test.ts")) {
+        const src = Deno.readTextFileSync(new URL(e.name, dir));
+        if (/from\s+["']jsr:|import\(\s*["']jsr:/.test(src)) offenders.push(`${rel}${e.name}`);
+      }
+    }
+  };
+  walk(functionsDir, "");
+  assert(offenders.length === 0, `jsr: imports in deployed code: ${offenders.join(", ")}`);
+});
