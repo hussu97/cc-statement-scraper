@@ -11,11 +11,23 @@
 
 ### Web
 
+- **feat** India mode, offered only when `india_overview.available`: `/india` (Kite and Coin in INR with AED under it; P&L, invested, cash, last 24 hours; one period, 30 days / 90 days / YTD / 365 days via `?period=`, for the value chart and the period's returns; a row per account), `/india/kite` and `/india/coin` (the account's portfolio: Portfolio and Sold via `?tab=past`). Wealth no longer shows Zerodha anywhere.
+- **change** Investments: one period control (30 days / 90 days / YTD / 365 days, `?period=`) drives the value chart and the Returns card; "All" stays on a holding's own page. The gold and silver price strip and the price charts are gone; a metal's own page shows the rate for its metal and purity, with its 24-hour move.
+- **change** Investments rows lead with AED and show the account's or holding's own currency second; broker rows show AED profit and the last 24 hours. Every holding row uses one type size.
+- **change** A broker account opened from Accounts (`/wealth/accounts/$code`) is a plain bank account: balance and statement. Its portfolio moved to `/wealth/investments/accounts/$code`, where Investments' broker rows go.
+- **change** The Wealth overview shows no warnings (stale balances, cards without a balance, estimates, missing figures).
+
 ### iOS
+
+- **feat** India mode (offered only when the ledger has Kite or Coin): Overview (INR first, AED second; P&L, invested, last 24 hours; a period picker for the value-against-invested chart and the period's returns; a row per account) and Kite and Coin tabs with each account's portfolio.
+- **change** Investments: the same one period (30 days / 90 days / YTD / 365 days) for the value chart and the returns; no gold and silver strip or price charts; a metal's screen shows its own rate per gram with the 24-hour move.
+- **change** Broker rows lead with AED (own currency under it), AED profit and the 24-hour move; holding rows keep one type size (the name wraps instead of the amount shrinking beside a long name).
+- **change** A broker account opened from Accounts or Overview reads like any bank account; Investments opens its portfolio.
+- **change** The Wealth overview drops the net-worth caveats, the completeness chip and the investments caveats.
 
 ### Docs
 
-- ARCHITECTURE "India mode"; README's RPC table lists the Wealth and India RPCs.
+- ARCHITECTURE "India mode"; README's RPC table lists the Wealth and India RPCs; README screens list India.
 
 ## Zerodha as two accounts: Zerodha Kite and Zerodha Coin, each with its own logo — 2026-10-28
 
