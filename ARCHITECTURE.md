@@ -666,6 +666,20 @@ value each day and says whether that is all of them (`complete`). `net_worth`
 returns `allocation` by class (cash, gold, silver, plan, broker, security, deposit; owed as a
 negative row).
 
+**A savings account as an investment** (`20261028082732`, `tasks/todo.md` §13). A
+`savings_account` holding is backed by one bank account (`holdings.account_code`, one active
+holding per account; `track_account_as_investment` creates or reopens it, owner only, with an
+optional stated `rate_pct`). Its value on any day is the account's balance
+(`private.bank_balance_at`), so it always matches Accounts. The account's own transactions are its
+flows (source `account`, from `sync_txn_holding_flow`, also run over the account's history when it
+is tracked): `transfer_in` is a contribution, `transfer_out` a withdrawal, an interest credit
+income; purchases and fees make none (they stay spend). The interest is credited into the account,
+so `holding_returns` and `holdings_valuation` count it once (reported as income, not added to
+growth or gain again, and not a cash flow of the XIRR). Counted once: `net_worth` leaves the
+account out of cash (`private.account_is_invested`) and counts the holding (allocation class
+`savings_account`); `cash_position` lists the account with `investment_holding_code` and leaves
+it out of `total_aed`. Closing the holding puts the account back in cash.
+
 **Structured notes and broker cash** (`20261027124257`). Swissquote (`SWQ`) is a bank; its cash is
 a USD `current` account, and every non-AED bank account now counts in cash and net worth
 (`v_bank_balances.balance_aed` through `private.to_aed`). `account_entries` are deposits and

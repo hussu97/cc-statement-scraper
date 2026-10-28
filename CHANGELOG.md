@@ -1,5 +1,23 @@
 # Changelog
 
+## A savings account as an investment; Mashreq remittances — 2026-10-28
+
+### Backend (Supabase)
+
+- **feat** A bank account can be shown under Investments (`track_account_as_investment`, owner): a `savings_account` holding (`holdings.account_code`, optional stated `rate_pct`) worth the account's balance on any day. The account's transfers in and out are its contributions and withdrawals and its interest credits its income, made automatically from its transactions (flow source `account`). Net worth counts it once: the account leaves cash and the holding joins the holdings (allocation class `savings_account`); `cash_position` lists it with `investment_holding_code` outside the cash total. Interest stays in the account, so `holding_returns` and `holdings_valuation` count it once. `holdings_valuation` also returns each holding's `account_code`.
+
+### Parser
+
+- **fix** Mashreq consolidated statements (parser 2026.10.28.1): inward and outward remittances are named transfers, and a row whose description starts with its value date ("VALUE DATE: 31-05-2026 Account to Account Transfer …") is read like any other.
+
+### Web
+
+- **feat** Investments has a Savings accounts group: the row shows the stated rate and the balance's date, the holding page shows money moved in, interest earned and gain, the flows "from the account" and a card for the bank account; Accounts marks such an account "In Investments" and says the total leaves it out; a bank account's page offers "Show under Investments" (with an optional rate) or links to it.
+
+### iOS
+
+- **feat** The same on the phone: a Savings accounts group on Investments, the holding screen with its bank account and stated rate (no manual value or flows), "In Investments" on Accounts, and "Show under Investments" on a bank account's screen.
+
 ## Zerodha Kite and Coin in detail: what each position is, today's move, allocation, SIPs and AMFI prices — 2026-10-28
 
 ### Backend (Supabase)
