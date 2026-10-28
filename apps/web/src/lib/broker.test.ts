@@ -142,6 +142,9 @@ describe("positions", () => {
     expect(notes.map((x) => x.holding_code)).toEqual(["hld_00000000000000000000000001"]);
     expect(others.map((x) => x.holding_code)).toEqual(["hld_00000000000000000000000002", "hld_ended", "hld_bare"]);
     expect(isLiveNote(p.positions[0]!)).toBe(true);
+    // A credit-linked note the issuer called, or hit by a credit event, has ended.
+    expect(isLiveNote({ ...p.positions[0]!, note: { ...p.positions[0]!.note!, status: "called" } })).toBe(false);
+    expect(isLiveNote({ ...p.positions[0]!, note: { ...p.positions[0]!.note!, status: "credit_event" } })).toBe(false);
   });
   it("takes a holding's result from sell_now, else its profit", () => {
     expect(holdingResult(p.positions[0]!)).toEqual({ profit: "-900.00", returnPct: "-4.50" });

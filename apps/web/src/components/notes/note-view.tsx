@@ -5,6 +5,7 @@ import { useCancelNote, useNoteDetail, useRefreshNotePrices, type NoteDetail } f
 import { errorMessage } from "@/data/api";
 import { calledNext, isEnded, noteStatus, pct } from "@/lib/notes";
 import { couponLine, gapText, nextCheckLine, verdictDate, verdictLine, VERDICT_TEXT } from "@/lib/note-verdict";
+import { annualisedText, creditVerdict, isCreditLinked } from "@/lib/credit-notes";
 import { signTone } from "@/lib/holdings";
 import { formatDate } from "@/lib/dates";
 import { formatMoney, formatTotal } from "@/lib/money";
@@ -18,12 +19,14 @@ import { useToast } from "@/components/ui/toast";
 import { FormError } from "@/components/cash/bank-account-dialogs";
 import { StockBars } from "./stock-bars";
 import { PriceHistorySection, ScenariosSection, ScheduleSection, TermsSection } from "./note-sections";
+import { CallDatesSection, CouponScheduleSection, ReferenceEntityCard } from "./credit-sections";
 
 const TONE_TEXT = { positive: "text-positive", danger: "text-danger", neutral: "text-ink" } as const;
 
 /**
  * One structured note (Wealth → Investments), answering one question first: will it be called,
- * and what does it need? Then its stocks, its money, and the detail collapsed below.
+ * and what does it need? Then its stocks, its money, and the detail collapsed below. A
+ * credit-linked note answers what it pays instead, and its reference entity takes the stocks' place.
  */
 export function NoteView({ profileCode, holdingCode, isOwner }: { profileCode: string; holdingCode: string; isOwner: boolean }) {
   const q = useNoteDetail(profileCode, holdingCode);
@@ -61,19 +64,32 @@ export function NoteView({ profileCode, holdingCode, isOwner }: { profileCode: s
       ) : (
         <>
           <Verdict n={n} />
-          {!isEnded(n.status) && n.underlyings.some((u) => u.close !== null) && (
-            <Card>
-              <CardHeader title="The stocks" />
-              <StockBars shares={n.underlyings} className="max-w-3xl px-5 pb-4" />
-            </Card>
+          {isCreditLinked(n) ? (
+            <ReferenceEntityCard n={n} />
+          ) : (
+            !isEnded(n.status) &&
+            n.underlyings.some((u) => u.close !== null) && (
+              <Card>
+                <CardHeader title="The stocks" />
+                <StockBars shares={n.underlyings} className="max-w-3xl px-5 pb-4" />
+              </Card>
+            )
           )}
           <MoneyCard n={n} />
-          <div className="flex flex-col gap-3">
-            {n.scenarios && !isEnded(n.status) && <ScenariosSection n={n} />}
-            <ScheduleSection n={n} />
-            <PriceHistorySection n={n} />
-            <TermsSection profileCode={profileCode} n={n} />
-          </div>
+          {isCreditLinked(n) ? (
+            <div className="flex flex-col gap-3">
+              <CouponScheduleSection n={n} />
+              <CallDatesSection n={n} />
+              <TermsSection profileCode={profileCode} n={n} />
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {n.scenarios && !isEnded(n.status) && <ScenariosSection n={n} />}
+              <ScheduleSection n={n} />
+              <PriceHistorySection n={n} />
+              <TermsSection profileCode={profileCode} n={n} />
+            </div>
+          )}
           {isOwner && <CancelDialog profileCode={profileCode} n={cancelling ? n : null} onClose={() => setCancelling(false)} />}
         </>
       )}
@@ -131,6 +147,21 @@ function Verdict({ n }: { n: NoteDetail }) {
       </Card>
     );
   }
+  const credit = isCreditLinked(n) ? creditVerdict(n.verdict, n.credit, n.currency) : null;
+  if (credit) {
+    return (
+      <Card className="px-5 py-4">
+        <p className={cn("text-[20px] leading-snug font-medium md:text-[22px]", VERDICT_TEXT[credit.headline.tone])}>{credit.headline.text}</p>
+        {credit.lines.map((l, i) => (
+          <p key={l} className={cn("text-[13px] text-ink-2", i === 0 ? "mt-1.5" : "mt-0.5")}>
+            {l}
+          </p>
+        ))}
+      </Card>
+    );
+  }
+  // A credit-linked note's verdict this build doesn't know: no share-check line (it has no shares).
+  if (isCreditLinked(n)) return null;
   const line = verdictLine(n.verdict);
   const coupon = n.verdict?.kind === "coupon_at_risk" ? couponLine(n.next, money) : null;
   // With the coupon at stake spelled out, the check line only says when.
@@ -160,12 +191,16 @@ function Figure({ label, children, sub }: { label: string; children: ReactNode; 
   );
 }
 
-/** The money in three numbers: paid, worth today, if called (live); paid, got back, profit (ended). */
+/**
+ * The money in three numbers: paid, worth today, if called (live); paid, got back, profit (ended).
+ * A live credit-linked note shows held to maturity instead of if called.
+ */
 function MoneyCard({ n }: { n: NoteDetail }) {
   const c = n.currency;
   const t = (v: string | null | undefined, signed = false) => formatTotal(v, { currency: c, signed });
   const called = calledNext(n.if_called_next);
   const r = n.result;
+  const credit = isCreditLinked(n) ? n.credit : null;
   return (
     <Card className="px-5 py-4">
       <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
@@ -178,6 +213,28 @@ function MoneyCard({ n }: { n: NoteDetail }) {
             {r && (
               <Figure label="Profit" sub={<span className="text-muted">{pct(r.return_pct, 1)} return</span>}>
                 <span className={TONE_TEXT[signTone(r.profit)]}>{t(r.profit, true)}</span>
+              </Figure>
+            )}
+          </>
+        ) : credit ? (
+          <>
+            <Figure
+              label="Worth today"
+              sub={n.market ? <span className={TONE_TEXT[signTone(n.market.profit)]}>{t(n.market.profit, true)} if sold today</span> : <span className="text-muted">No broker price yet</span>}
+            >
+              {n.market ? t(n.market.value) : "—"}
+            </Figure>
+            {credit.to_maturity && (
+              <Figure
+                label="Held to maturity"
+                sub={
+                  <>
+                    <span className={TONE_TEXT[signTone(credit.to_maturity.profit)]}>{t(credit.to_maturity.profit, true)}</span>
+                    {annualisedText(credit.to_maturity.annualised_pct) && <span className="text-muted"> · {annualisedText(credit.to_maturity.annualised_pct)}</span>}
+                  </>
+                }
+              >
+                {t(credit.to_maturity.total)}
               </Figure>
             )}
           </>

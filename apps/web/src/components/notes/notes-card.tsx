@@ -54,7 +54,7 @@ function NoteRow({ n }: { n: NoteSummary }) {
     >
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-ink">{n.name}</p>
-        <VerdictText verdict={n.verdict} className="mt-0.5 text-[12px]" />
+        <VerdictText verdict={n.verdict} currency={n.currency} className="mt-0.5 text-[12px]" />
       </div>
       <div className="tabular text-right">
         <p className="text-sm font-medium text-ink">{n.market ? formatTotal(n.market.value, { currency: n.currency }) : formatTotal(n.invested, { currency: n.currency })}</p>

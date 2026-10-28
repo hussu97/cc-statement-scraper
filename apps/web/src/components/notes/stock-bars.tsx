@@ -4,8 +4,8 @@ import { cn } from "@/lib/cn";
 const DOT: Record<BarTone, string> = { positive: "bg-positive", warn: "bg-warn", danger: "bg-danger" };
 
 /** The note in one line, coloured by how it reads; nothing for a verdict this build doesn't know. */
-export function VerdictText({ verdict, className }: { verdict: NoteVerdict | null | undefined; className?: string }) {
-  const line = verdictLine(verdict);
+export function VerdictText({ verdict, currency, className }: { verdict: NoteVerdict | null | undefined; currency?: string; className?: string }) {
+  const line = verdictLine(verdict, undefined, currency);
   if (!line) return null;
   return <p className={cn("font-medium", VERDICT_TEXT[line.tone], className)}>{line.text}</p>;
 }

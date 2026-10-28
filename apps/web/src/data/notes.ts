@@ -1,4 +1,5 @@
-// Structured notes (20261027124257_structured_notes.sql) and typed account entries.
+// Structured notes (20261027124257_structured_notes.sql; credit-linked notes,
+// 20261028110553_credit_linked_notes.sql) and typed account entries.
 // structured_notes_summary and structured_note_detail return jsonb (Json in the generated types),
 // so their shapes are declared here from the migration. Every figure is the server's
 // (private.note_evaluate, CLAUDE.md §2.2); numbers are decimal strings, seq and days are counts.
@@ -16,7 +17,8 @@ export interface Money3 {
 }
 
 export interface NoteNext {
-  kind: "observation" | "final";
+  /** A credit-linked note's next payment is a "coupon" (or its "final"), with barrier_pct "0". */
+  kind: "observation" | "coupon" | "final";
   seq?: number;
   obs_date: string;
   pay_date: string;
@@ -24,6 +26,63 @@ export interface NoteNext {
   is_final: boolean;
   coupon?: { rate_pct: string; barrier_pct: string; amount: string; would_pay: boolean | null } | null;
   autocall?: { trigger_pct: string; redemption_pct: string; amount: string; would_call: boolean | null } | null;
+}
+
+/** equity (worst-of share notes) | credit_linked; a type this build doesn't know renders as equity. */
+export type NoteType = "equity" | "credit_linked" | (string & {});
+
+/** monthly | quarterly | semiannual | annual | at_maturity (lib/credit-notes words it). */
+export type CouponFrequency = "monthly" | "quarterly" | "semiannual" | "annual" | "at_maturity" | (string & {});
+
+/** One coupon of a credit-linked note's schedule (private.cln_schedule), as private.cln_evaluate sees it. */
+export interface CreditCoupon {
+  seq: number;
+  period_start: string;
+  pay_date: string;
+  /** This period's rate, % of face value (not a yearly rate). */
+  rate_pct: string;
+  amount: string;
+  is_final: boolean;
+  is_call_date: boolean;
+  status: "paid" | "to_come" | "before_purchase" | "not_paid" | (string & {});
+}
+
+/** Held to a date (maturity or the next call): what comes back in all, the profit and the return. */
+export interface CreditScenario {
+  date: string;
+  total: string;
+  profit: string;
+  return_pct: string;
+  annualised_pct: string | null;
+  /** Every coupon, received and to come (to_maturity only). */
+  coupons?: string;
+}
+
+/** A credit-linked note's terms and figures (private.cln_evaluate's `credit`); the summary omits `schedule`. */
+export interface NoteCredit {
+  reference_entity: string;
+  seniority: string | null;
+  transaction_type: string | null;
+  reference_obligation_isin: string | null;
+  /** A year, e.g. "10.5". */
+  coupon_rate_pct: string;
+  coupon_frequency: CouponFrequency;
+  day_count: string | null;
+  /** Interest builds up and is paid only at maturity or call. */
+  interest_at_maturity: boolean;
+  interest_start_date: string | null;
+  first_coupon_date: string | null;
+  maturity_date: string;
+  longstop_maturity_date: string | null;
+  call_dates: string[];
+  call_notice_days: string | null;
+  next_call_date: string | null;
+  accrued: { amount: string; since: string } | null;
+  remaining_coupons: string;
+  to_maturity: CreditScenario | null;
+  if_called_next: CreditScenario | null;
+  /** What a credit event would cost today; null once the note has ended. */
+  credit_event: { principal_at_risk: string; interest_lost: string; accrued_lost: string; kept: string } | null;
 }
 
 export interface NoteSummary {
@@ -55,7 +114,11 @@ export interface NoteSummary {
   market?: MarketQuote | null;
   /** The first autocall still ahead (20261027165732); null when none is left. */
   if_called_next?: CallScenario | null;
-  symbols: string[];
+  symbols: string[] | null;
+  /** Absent on an older server (every note was equity then). */
+  note_type?: NoteType;
+  /** A credit-linked note's terms and figures; null for an equity note. */
+  credit?: NoteCredit | null;
   /** The note in one line (lib/note-verdict words it); absent on an older server. */
   verdict?: NoteVerdict | null;
 }
@@ -144,13 +207,16 @@ export interface NoteEvent {
 }
 
 export interface NoteDetail extends NoteSummary {
+  credit?: (NoteCredit & { schedule: CreditCoupon[] }) | null;
   terms: {
+    note_type?: NoteType;
     guarantor: string | null;
     denomination: string;
     issue_price_pct: string;
-    strike_date: string;
+    /** Equity notes only; null for a credit-linked note. */
+    strike_date: string | null;
     issue_date: string | null;
-    final_valuation_date: string;
+    final_valuation_date: string | null;
     maturity_date: string;
     termsheet_path: string | null;
     termsheet_filename: string | null;

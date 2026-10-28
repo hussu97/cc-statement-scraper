@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { couponLine, gapText, monthYear, nextCheckLine, shareBars, verdictDate, verdictLine, type NoteShare } from "./note-verdict";
+import { couponLine, gapText, isCreditVerdict, monthYear, nextCheckLine, shareBars, verdictDate, verdictLine, type NoteShare } from "./note-verdict";
 
 const TODAY = "2026-10-27";
 
@@ -36,6 +36,21 @@ describe("verdictLine", () => {
 
   it("shows nothing for an unknown kind or no verdict", () => {
     expect(verdictLine({ kind: "something_new" }, TODAY)).toBeNull();
+  });
+  it("words a credit-linked note in one line, in its currency", () => {
+    // broker_portfolio's two Example Bank N CLNs (local stack, 28 Oct 2026).
+    expect(verdictLine({ date: "2026-11-20", kind: "cln_paying", amount: "87.50", rate_pct: "10.5", maturity_date: "2031-12-20" }, TODAY, "USD")).toEqual({
+      text: "Paying 10.5% a year · next coupon USD 87.50 on 20 Nov",
+      tone: "positive",
+    });
+    expect(verdictLine({ date: "2026-12-20", kind: "cln_accruing", amount: "3168.96", rate_pct: "13.25", call_date: "2026-12-20", maturity_date: "2034-12-20" }, TODAY, "USD")).toEqual({
+      text: "13.25% a year, building up · USD 3,168.96 accrued",
+      tone: "neutral",
+    });
+    expect(verdictLine({ kind: "cln_paying", rate_pct: "10.5" }, TODAY, "USD")?.text).toBe("Paying 10.5% a year");
+    expect(isCreditVerdict({ kind: "cln_accruing" })).toBe(true);
+    expect(isCreditVerdict({ kind: "on_track" })).toBe(false);
+    expect(isCreditVerdict(null)).toBe(false);
     expect(verdictLine(null, TODAY)).toBeNull();
   });
 

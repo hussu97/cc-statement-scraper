@@ -7,22 +7,29 @@ import { trimDecimal } from "./holdings";
 
 // ── statuses and outcomes ──────────────────────────────────────────────────
 
-export type NoteStatus = "live" | "awaiting_strike" | "autocalled" | "matured" | "cancelled";
+/** called (the issuer's call) and credit_event are a credit-linked note's (20261028110553). */
+export type NoteStatus = "live" | "awaiting_strike" | "autocalled" | "called" | "matured" | "credit_event" | "cancelled";
 
-export const NOTE_STATUS: Record<NoteStatus, { label: string; tone: "accent" | "positive" | "neutral" | "warn" }> = {
+type StatusTone = "accent" | "positive" | "neutral" | "warn" | "danger";
+
+export const NOTE_STATUS: Record<NoteStatus, { label: string; tone: StatusTone }> = {
   live: { label: "Live", tone: "accent" },
   awaiting_strike: { label: "Not struck yet", tone: "neutral" },
   autocalled: { label: "Called early", tone: "positive" },
+  called: { label: "Called by issuer", tone: "positive" },
   matured: { label: "Matured", tone: "neutral" },
+  credit_event: { label: "Credit event", tone: "danger" },
   cancelled: { label: "Cancelled", tone: "warn" },
 };
 
-export function noteStatus(s: string | null | undefined): { label: string; tone: "accent" | "positive" | "neutral" | "warn" } {
+export function noteStatus(s: string | null | undefined): { label: string; tone: StatusTone } {
   return NOTE_STATUS[(s ?? "live") as NoteStatus] ?? NOTE_STATUS.live;
 }
 
+const ENDED = new Set(["autocalled", "called", "matured", "credit_event", "cancelled"]);
+
 export function isEnded(s: string | null | undefined): boolean {
-  return s === "autocalled" || s === "matured" || s === "cancelled";
+  return ENDED.has(s ?? "");
 }
 
 /** "98" → "98%", "0.667" → "0.667%"; with `digits`, rounded to at most that many places ("91.4655", 2 → "91.47%"). "—" when absent. */

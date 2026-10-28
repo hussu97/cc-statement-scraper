@@ -2,6 +2,7 @@ import { lazy, Suspense, useState, type ReactNode } from "react";
 import { CalendarClock, ChevronDown, FileText } from "lucide-react";
 import type { NoteDetail, NoteOutcome } from "@/data/notes";
 import { isEnded, maturityTableRows, outcomeLabel, outcomeTone, payoutRows, pct } from "@/lib/notes";
+import { couponTermsText, entityTermsText, isCreditLinked, maturityTermsText } from "@/lib/credit-notes";
 import { formatDate } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/cn";
@@ -10,7 +11,8 @@ import { EmptyState, LoadingBlock } from "@/components/ui/states";
 import { TermSheetDialog } from "./term-sheet-dialog";
 
 // A note's detail, one tap away and closed by default (the note page leads with its verdict, its
-// stocks and its money): every scenario, the full schedule, the price history and the terms.
+// stocks and its money): every scenario, the full schedule, the price history and the terms. A
+// credit-linked note's coupon schedule and call dates are in credit-sections; its terms are here.
 
 // The chart library loads only when the section opens (as on Overview, WEB-53).
 const NoteChart = lazy(() => import("./note-chart").then((m) => ({ default: m.NoteChart })));
@@ -209,14 +211,23 @@ export function ScheduleSection({ n }: { n: NoteDetail }) {
 export function TermsSection({ profileCode, n }: { profileCode: string; n: NoteDetail }) {
   const t = n.terms;
   const [viewing, setViewing] = useState(false);
+  const credit = isCreditLinked(n) ? n.credit : null;
   const rows: [string, ReactNode][] = [
     ["Product", n.product_name],
     ["ISIN", n.isin ?? "—"],
     ["Issuer", [n.issuer, t.guarantor && `guaranteed by ${t.guarantor}`].filter(Boolean).join(", ") || "—"],
     ["Denomination", `${money(t.denomination, n.currency)} at ${pct(t.issue_price_pct)} issue price`],
     ["Bought", `${money(n.nominal, n.currency)} face value at ${pct(n.purchase_price_pct)} on ${formatDate(n.trade_date)}`],
-    ["Break-even at maturity", n.break_even_pct ? `every stock at or above ${pct(n.break_even_pct)} of its start` : "—"],
-    ["Strike · final valuation · maturity", `${formatDate(t.strike_date)} · ${formatDate(t.final_valuation_date)} · ${formatDate(t.maturity_date)}`],
+    ...((credit
+      ? [
+          ["Coupon", couponTermsText(credit)],
+          ["Maturity", maturityTermsText(credit)],
+          ["Reference entity", entityTermsText(credit)],
+        ]
+      : [
+          ["Break-even at maturity", n.break_even_pct ? `every stock at or above ${pct(n.break_even_pct)} of its start` : "—"],
+          ["Strike · final valuation · maturity", `${formatDate(t.strike_date)} · ${formatDate(t.final_valuation_date)} · ${formatDate(t.maturity_date)}`],
+        ]) satisfies [string, ReactNode][]),
     [
       "Term sheet",
       t.termsheet_path ? (

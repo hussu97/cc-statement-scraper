@@ -401,12 +401,12 @@ export function estimateNote(series: readonly PortfolioDay[]): string | null {
 
 // ── the account page: notes, other holdings, past notes ────────────────────
 
-/** A live structured note with its terms: it gets a card with its verdict and its shares. */
+/** A live structured note with its terms: it gets a card with its verdict and its shares (a credit-linked note: its verdict alone). Called or credit event has ended. */
 export function isLiveNote(p: Pick<BrokerPosition, "kind" | "note">): boolean {
   return positionKind(p.kind) === "structured_note" && !!p.note && !isEnded(p.note.status);
 }
 
-/** The positions as "Your notes" (live notes with terms) and "Other holdings" (shares, notes without terms, CLNs), in the server's order. */
+/** The positions as "Your notes" (live notes with terms, credit-linked ones too) and "Other holdings" (shares, notes without terms), in the server's order. */
 export function splitPositions<T extends Pick<BrokerPosition, "kind" | "note">>(positions: readonly T[]): { notes: T[]; others: T[] } {
   return { notes: positions.filter(isLiveNote), others: positions.filter((p) => !isLiveNote(p)) };
 }

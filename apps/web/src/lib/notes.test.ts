@@ -5,6 +5,7 @@ import {
   distanceMet,
   distanceText,
   levelLabel,
+  isEnded,
   noteStatus,
   payoutRows,
   pct,
@@ -22,6 +23,10 @@ describe("wording", () => {
   it("statuses", () => {
     expect(noteStatus("autocalled").label).toBe("Called early");
     expect(noteStatus(undefined).label).toBe("Live");
+    expect(noteStatus("called")).toEqual({ label: "Called by issuer", tone: "positive" });
+    expect(noteStatus("credit_event")).toEqual({ label: "Credit event", tone: "danger" });
+    expect(["autocalled", "called", "matured", "credit_event", "cancelled"].every(isEnded)).toBe(true);
+    expect(["live", "awaiting_strike", null].some(isEnded)).toBe(false);
   });
   it("percentages", () => {
     expect(pct("98.00")).toBe("98%");

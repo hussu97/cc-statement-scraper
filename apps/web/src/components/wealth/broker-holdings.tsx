@@ -4,7 +4,7 @@ import { BriefcaseBusiness, ChevronRight } from "lucide-react";
 import { groupBySegment, holdingResult, segmentHolds, segmentLabel, splitPositions, type BrokerPortfolio, type BrokerPosition } from "@/lib/broker";
 import { formatUnits } from "@/lib/investments";
 import { calledNext, pct } from "@/lib/notes";
-import { verdictDate } from "@/lib/note-verdict";
+import { isCreditVerdict, verdictDate } from "@/lib/note-verdict";
 import { signTone } from "@/lib/holdings";
 import { formatTotal } from "@/lib/money";
 import { cn } from "@/lib/cn";
@@ -14,7 +14,8 @@ import { StockBars, VerdictText } from "@/components/notes/stock-bars";
 import { TONE_TEXT } from "./broker-portfolio";
 
 /**
- * The Portfolio tab: a card per live note (verdict, two numbers, its stocks), then everything else
+ * The Portfolio tab: a card per live note (verdict, two numbers, its stocks; a credit-linked note
+ * has no stocks), then everything else
  * in one line each. Against cost (Zerodha): a card per segment (Kite, Coin), each holding with its
  * units, what it cost, its worth and its P&L. `linked` (default) links each holding to its Wealth
  * page; India (Kite, Coin) passes false, as its holdings have no page outside the portfolio.
@@ -94,7 +95,7 @@ function NoteCard({ x, currency }: { x: BrokerPosition; currency: string }) {
         </div>
         <ChevronRight className="mt-0.5 size-4 shrink-0 text-subtle group-hover:text-ink-2" />
       </div>
-      <VerdictText verdict={n.verdict} className="mt-2 text-[14px]" />
+      <VerdictText verdict={n.verdict} currency={currency} className="mt-2 text-[14px]" />
       <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
         <div className="min-w-0">
           <dt className="text-[12px] text-subtle">Worth today</dt>
@@ -116,7 +117,7 @@ function NoteCard({ x, currency }: { x: BrokerPosition; currency: string }) {
           </div>
         )}
       </dl>
-      <StockBars shares={n.underlyings} className="mt-4 border-t border-border pt-3" />
+      {!isCreditVerdict(n.verdict) && <StockBars shares={n.underlyings} className="mt-4 border-t border-border pt-3" />}
     </Link>
   );
 }

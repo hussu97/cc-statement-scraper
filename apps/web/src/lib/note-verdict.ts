@@ -5,16 +5,31 @@
 // (CLAUDE.md §2.2). Pure, unit-tested.
 import { daysBetween, formatDate, todayDubai, type ISODate } from "./dates";
 import { trimDecimal } from "./holdings";
+import { formatMoney } from "./money";
 import { pct } from "./notes";
 
-/** on_track | needs | coupon_at_risk | to_maturity | awaiting_prices | ended; a kind this build doesn't know shows nothing. */
+/**
+ * on_track | needs | coupon_at_risk | to_maturity (equity), cln_paying | cln_accruing
+ * (credit-linked), awaiting_prices | ended; a kind this build doesn't know shows nothing.
+ */
 export interface NoteVerdict {
   kind: string;
   symbol?: string | null;
   gap_pct?: string | null;
+  /** The check or call date; cln_paying: the next coupon; cln_accruing: the next call or maturity. */
   date?: string | null;
   call_gap_pct?: string | null;
   call_date?: string | null;
+  /** Credit-linked: the coupon rate a year. */
+  rate_pct?: string | null;
+  /** cln_paying: the next coupon; cln_accruing: the interest accrued so far. */
+  amount?: string | null;
+  maturity_date?: string | null;
+}
+
+/** A credit-linked note's verdict: no shares to draw, and its amounts need the note's currency. */
+export function isCreditVerdict(v: NoteVerdict | null | undefined): boolean {
+  return v?.kind === "cln_paying" || v?.kind === "cln_accruing";
 }
 
 export type VerdictTone = "positive" | "neutral" | "warn" | "danger";
@@ -51,9 +66,14 @@ export function monthYear(d: string | null | undefined): string {
   return m && y ? `${m} ${y}` : "—";
 }
 
-/** The note's headline: what has to happen, in plain words, and how it reads (tone). Null for an unknown kind. */
-export function verdictLine(v: NoteVerdict | null | undefined, today: ISODate = todayDubai()): VerdictLine | null {
+/**
+ * The note's headline: what has to happen, in plain words, and how it reads (tone). Null for an
+ * unknown kind. `currency` words a credit-linked note's amounts (the note page words them at length:
+ * lib/credit-notes creditVerdict).
+ */
+export function verdictLine(v: NoteVerdict | null | undefined, today: ISODate = todayDubai(), currency?: string): VerdictLine | null {
   if (!v) return null;
+  const money = (x: string) => formatMoney(x, { currency });
   const sym = v.symbol ?? "the weakest stock";
   const gap = num(v.gap_pct);
   switch (v.kind) {
@@ -68,6 +88,10 @@ export function verdictLine(v: NoteVerdict | null | undefined, today: ISODate = 
       return gap === null || gap <= 0
         ? { text: `Runs to ${monthYear(v.date)} · capital safe while ${sym} stays above its break-even`, tone: "neutral" }
         : { text: `Runs to ${monthYear(v.date)} · ${sym} is ${gapText(v.gap_pct)} below break-even`, tone: "danger" };
+    case "cln_paying":
+      return { text: `Paying ${pct(v.rate_pct)} a year${v.amount && v.date ? ` · next coupon ${money(v.amount)} on ${verdictDate(v.date, today)}` : ""}`, tone: "positive" };
+    case "cln_accruing":
+      return { text: `${pct(v.rate_pct)} a year, building up${v.amount ? ` · ${money(v.amount)} accrued` : ""}`, tone: "neutral" };
     case "awaiting_prices":
       return { text: "Waiting for today's prices", tone: "neutral" };
     case "ended":
