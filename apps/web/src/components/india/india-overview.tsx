@@ -120,8 +120,8 @@ export function IndiaReturnsCard({ o, stale }: { o: IndiaOverview; stale?: boole
           </dl>
           {o.from && (
             <p className="mt-3 text-[11px] text-subtle">
-              From {formatDate(o.from)} to {o.to ? formatDate(o.to) : "today"}, ending at {f.end}. Added is the change in what is invested, at cost; growth is the change in
-              value beyond it.
+              From {formatDate(o.from)} to {o.to ? formatDate(o.to) : "today"}, ending at {f.end}. Added is money that came into the accounts (a buy paid from their own
+              cash adds nothing); growth is the change in value beyond it.
             </p>
           )}
         </div>
