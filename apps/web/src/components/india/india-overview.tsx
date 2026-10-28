@@ -152,19 +152,22 @@ function AccountRow({ a, currency }: { a: IndiaAccount; currency: string }) {
   const body = (
     <>
       <BankLogo bankCode={a.bank_code} size="md" decorative />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-[13.5px] font-medium text-ink group-hover:text-accent">{a.name}</span>
-        <span className={cn("block truncate text-[12px]", a.sync_status === "error" ? "text-warn" : "text-muted")}>
-          {[positionsText(a.positions), sync].filter(Boolean).join(" · ")}
+      {/* On a phone the figures sit under the name, so neither is cut short. */}
+      <span className="flex min-w-0 flex-1 flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[13.5px] font-medium text-ink group-hover:text-accent">{a.name}</span>
+          <span className={cn("block truncate text-[12px]", a.sync_status === "error" ? "text-warn" : "text-muted")}>
+            {[positionsText(a.positions), sync].filter(Boolean).join(" · ")}
+          </span>
         </span>
-      </span>
-      <span className="tabular shrink-0 text-right text-[13px]">
-        <span className="block font-medium text-ink">{formatInr(a.value, { currency })}</span>
-        <span className="block text-[12px]">
-          <Signed amount={a.pnl} pct={a.pnl_pct} currency={currency} empty="P&L not known" />
-        </span>
-        <span className="block text-[11.5px] text-muted">
-          24h <Signed amount={a.change_24h} pct={a.change_24h_pct} currency={currency} empty="—" className="text-[11.5px]" />
+        <span className="tabular flex flex-wrap items-baseline gap-x-3 text-[13px] sm:block sm:shrink-0 sm:text-right">
+          <span className="block font-medium text-ink">{formatInr(a.value, { currency })}</span>
+          <span className="block text-[12px]">
+            <Signed amount={a.pnl} pct={a.pnl_pct} currency={currency} empty="P&L not known" />
+          </span>
+          <span className="block text-[11.5px] text-muted">
+            24h <Signed amount={a.change_24h} pct={a.change_24h_pct} currency={currency} empty="—" className="text-[11.5px]" />
+          </span>
         </span>
       </span>
       {to && <ChevronRight className="size-4 shrink-0 text-subtle group-hover:text-ink-2" />}
