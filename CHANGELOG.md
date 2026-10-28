@@ -1,5 +1,17 @@
 # Changelog
 
+## Term sheets open in the app, with a share button — 2026-10-28
+
+### Web
+
+- **feat** A structured note's **Terms** shows the term sheet's file name as a link. It opens the PDF in the app: the browser's own viewer in a dialog, read from the private `term-sheets` bucket (`termSheetBlob` / `useTermSheet` in `data/notes.ts`), with **Share** (the system share sheet, where the browser can share files), **Download** and **Open in new tab**. A shared or downloaded copy keeps the original file name, always ending `.pdf` (`lib/term-sheet.ts`). Live and ended notes both have one: every note's PDF was already stored when the sync read it.
+- **change** The CSP allows `frame-src 'self' blob:` so the viewer can frame the PDF; `object-src` stays `'none'` (guarded in `vercel-config.test.ts`). `Dialog` takes `size="lg"` for a document.
+- **fix** `would_pay` / `would_call` are typed nullable: they are null until a note's shares have prices.
+
+### iOS
+
+- **feat** Under a note's **Terms**, the term sheet's file name opens the PDF in the app (PDFKit), with a share button that hands the PDF to the share sheet (Mail, Messages, Files, Print) under its original name. LedgerKit `TermSheetPDF` signs a short-lived URL from `term-sheets` and keeps the bytes in memory only while the viewer is open; `NoteDetailModel.openTermSheet()`.
+- **fix** The notes list no longer fails with "The data couldn't be read" for a note without prices yet (one the sync has just added): `NoteNext`'s `wouldPay` / `wouldCall` decode null.
 ## A savings account as an investment; Mashreq remittances — 2026-10-28
 
 ### Backend (Supabase)

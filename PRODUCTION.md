@@ -524,7 +524,8 @@ together with a separate staging Supabase project whose URL the Preview env and 
   - `connect-src` the project's Supabase URL over `https://` (REST, Auth, Storage, Functions)
     and `wss://` (Realtime), plus Sentry ingest (`*.ingest[.us|.de].sentry.io`)
   - `font-src 'self'` (Inter and Fraunces are self-hosted via `@fontsource`; no Google Fonts)
-  - `worker-src blob:` for the Sentry Replay worker; `frame-ancestors 'none'`
+  - `worker-src blob:` for the Sentry Replay worker; `frame-src 'self' blob:` for the
+    term-sheet PDF viewer (`object-src 'none'`); `frame-ancestors 'none'`
 - The CSP hard-codes the project ref (`<project-ref>`). If `VITE_SUPABASE_URL` ever
   points elsewhere, update `connect-src`. If the inline script in `index.html` changes, update
   its hash. The vitest guard `src/test/vercel-config.test.ts` fails until both match.
