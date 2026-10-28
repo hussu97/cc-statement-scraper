@@ -211,8 +211,10 @@ Mashreq's card statements). Same shape as ADCB's, with these differences:
 - `txn_date` = `posting_date` = the row's date (a "VALUE DATE:" in the description stays text). An
   undated row with all-zero amounts is narration and joins the description of the row above
   ("… FROM ACCOUNT No:… TO ACCOUNT No:…").
-- Kinds: `Account to Account Transfer` and `IPP TRANSFER` are `transfer_out` / `transfer_in`
-  (merchant `ACCOUNT TO ACCOUNT TRANSFER` / `IPP TRANSFER`), a description naming INTEREST is
+- Kinds (after any leading `VALUE DATE: dd-mm-yyyy`): `Account to Account Transfer`, `IPP TRANSFER`
+  and `Inward` / `Outward Remittance` are `transfer_out` / `transfer_in` (merchant `ACCOUNT TO
+  ACCOUNT TRANSFER`, `IPP TRANSFER`, `INWARD REMITTANCE`, `OUTWARD REMITTANCE`; parser
+  2026.10.28.1), a description naming INTEREST is
   `interest`, FEE/CHARGES/COMMISSION/VAT is `fee`; anything else is a transfer by direction and
   listed in `metadata.unrecognised_lines` (debit-card purchases included, until a sample shows
   their shape).

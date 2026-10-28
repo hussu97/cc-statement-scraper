@@ -57,10 +57,12 @@ _ACCOUNT_NO_RE = re.compile(r"\bAccount No (?P<number>\d{8,20}) (?P<currency>[A-
 _IBAN_RE = re.compile(r"\bIBAN (?P<iban>[A-Z]{2}\d{2}[A-Z0-9]{10,30})\b")
 _PAGE_RE = re.compile(r"^Page \d+ of \d+$")
 
-# Description shapes.
+# Description shapes. A row booked on another day than its value date starts "VALUE DATE: dd-mm-yyyy".
+_VALUE_DATE_PREFIX_RE = re.compile(r"^VALUE DATE:?\s*\d{2}-\d{2}-\d{4}\s+")
 _INTEREST_RE = re.compile(r"\bINTEREST\b")
 _OWN_TRANSFER_RE = re.compile(r"^ACCOUNT TO ACCOUNT TRANSFER\b")
 _IPP_RE = re.compile(r"^IPP TRANSFER\b")
+_REMITTANCE_RE = re.compile(r"^(?P<way>INWARD|OUTWARD) REMITTANCE\b")
 _FEE_RE = re.compile(r"\b(FEES?|CHARGES?|COMMISSION|VAT)\b")
 
 
@@ -469,12 +471,14 @@ class Classified:
 
 def classify(description: str, direction: str) -> Classified:
     """The line's kind from its description; unknown shapes keep only their direction."""
-    text = merchant_normalize(description)
+    text = _VALUE_DATE_PREFIX_RE.sub("", merchant_normalize(description))
     transfer = "transfer_out" if direction == "debit" else "transfer_in"
     if _OWN_TRANSFER_RE.match(text):
         return Classified(transfer, "ACCOUNT TO ACCOUNT TRANSFER", True)
     if _IPP_RE.match(text):
         return Classified(transfer, "IPP TRANSFER", True)
+    if m := _REMITTANCE_RE.match(text):
+        return Classified(transfer, f"{m['way']} REMITTANCE", True)
     if _INTEREST_RE.search(text):
         return Classified("interest", "INTEREST", True)
     if _FEE_RE.search(text):

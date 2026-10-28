@@ -48,6 +48,17 @@ def _parse(tmp_path: Path, pages: list, hint: str | None = "MASHREQ", **settings
             "IPP TRANSFER",
             True,
         ),
+        # A row booked on another day than its value date carries the value date first.
+        (
+            "VALUE DATE: 31-05-2026 Account to Account Transfer FROM ACCOUNT No:1 TO ACCOUNT No: 2",
+            "debit",
+            "transfer_out",
+            "ACCOUNT TO ACCOUNT TRANSFER",
+            True,
+        ),
+        ("VALUE DATE: 31-05-2026 IPP TRANSFER 0190AE00 - J SAMPLE", "debit", "transfer_out", "IPP TRANSFER", True),
+        ("Inward Remittance J SAMPLE SAMPLE BANK P.J.S.C.", "credit", "transfer_in", "INWARD REMITTANCE", True),
+        ("OUTWARD REMITTANCE J SAMPLE", "debit", "transfer_out", "OUTWARD REMITTANCE", True),
         ("VALUE DATE: 01-10-2026 Interest 099990002222", "credit", "interest", "INTEREST", True),
         ("SERVICE CHARGES", "debit", "fee", "SERVICE CHARGES", True),
         ("POS PURCHASE SAMPLE MART", "debit", "transfer_out", "POS PURCHASE SAMPLE MART", False),
