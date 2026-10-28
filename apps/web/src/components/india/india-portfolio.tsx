@@ -13,7 +13,7 @@ import { Segmented } from "@/components/ui/segmented";
 import { EmptyState } from "@/components/ui/states";
 import { TONE_TEXT } from "@/components/wealth/broker-portfolio";
 
-// Zerodha Kite and Coin in detail (tasks/todo.md §13): where the money sits, what stands out,
+// Zerodha Kite and Coin in detail (tasks/todo.md §14): where the money sits, what stands out,
 // Coin's SIPs, and every position, sortable, each linking to its own page. Figures are
 // broker_portfolio's; the view only lays them out.
 

@@ -1,7 +1,7 @@
 import LedgerKit
 import SwiftUI
 
-// Zerodha Kite and Coin in detail (tasks/todo.md §13): where the money sits, what stands out,
+// Zerodha Kite and Coin in detail (tasks/todo.md §14): where the money sits, what stands out,
 // Coin's SIPs. The words, the order and which rows show are LedgerKit's
 // (`BrokerPortfolioPresentation`); these views lay them out.
 

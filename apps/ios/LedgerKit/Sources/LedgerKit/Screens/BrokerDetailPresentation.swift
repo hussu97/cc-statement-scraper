@@ -1,6 +1,6 @@
 import Foundation
 
-// Zerodha Kite and Coin in detail (tasks/todo.md §13), worded: where the money sits, what stands
+// Zerodha Kite and Coin in detail (tasks/todo.md §14), worded: where the money sits, what stands
 // out, Coin's SIPs, and every position sortable. Sorting orders the server's numbers; nothing here
 // adds money up (CLAUDE.md §2.2).
 

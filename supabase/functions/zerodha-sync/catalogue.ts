@@ -1,4 +1,4 @@
-// What the sync adds to Zerodha's holdings (tasks/todo.md §13), all optional: a failure leaves the
+// What the sync adds to Zerodha's holdings (tasks/todo.md §14), all optional: a failure leaves the
 // position as Kite reported it.
 //   GET api.kite.trade/instruments/{NSE,BSE}        public CSV: a share's or ETF's company name
 //   GET api.kite.trade/mf/instruments              CSV: a fund's scheme type and fund house (AMC)

@@ -1,4 +1,4 @@
--- Zerodha Kite and Coin in detail (tasks/todo.md §13): what each position is, how it moved today,
+-- Zerodha Kite and Coin in detail (tasks/todo.md §14): what each position is, how it moved today,
 -- where the money sits, and the Coin SIPs.
 --
 -- 1. broker_positions gains nullable prev_price (Kite's previous close; a fund's previous NAV),

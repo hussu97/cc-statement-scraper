@@ -282,7 +282,7 @@ Deno.test("readPortfolio: Kite, Coin and Funds; a segment that fails is left out
   await assertRejects(() => readPortfolio(s, "ZZ9999", () => Promise.resolve()), Error, "another user");
 });
 
-// ── what the sync adds (catalogue.ts, tasks/todo.md §13) ───────────────────────
+// ── what the sync adds (catalogue.ts, tasks/todo.md §14) ───────────────────────
 
 const NSE_CSV =
   `instrument_token,exchange_token,tradingsymbol,name,last_price,expiry,strike,tick_size,lot_size,instrument_type,segment,exchange

@@ -1,7 +1,7 @@
 import Foundation
 
 // Zerodha Kite and Coin in detail (`20261028062806_zerodha_position_detail.sql`, tasks/todo.md
-// §13): what a position is and how it moved today, where the account's money sits, what stands
+// §14): what a position is and how it moved today, where the account's money sits, what stands
 // out, Coin's SIPs, and one position over time. Every figure is the server's decimal string;
 // `BrokerDetailPresentation` words it. Absent on an older server and for other brokers.
 

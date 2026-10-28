@@ -1,4 +1,4 @@
-// A broker account in detail (Zerodha Kite and Coin, tasks/todo.md §13): the positions list's
+// A broker account in detail (Zerodha Kite and Coin, tasks/todo.md §14): the positions list's
 // sort codec, the words for a position, a SIP and an allocation, and a tolerant reader for
 // broker_position_detail (20261028062806_zerodha_position_detail.sql). Every figure is the
 // server's (CLAUDE.md §2.2): sorting orders the server's numbers and money stays a decimal string

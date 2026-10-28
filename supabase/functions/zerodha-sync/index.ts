@@ -8,7 +8,7 @@
 // Coin holdings and Funds, and send them to import_zerodha_data, which keeps the ledger's two
 // accounts (Zerodha Kite with the Funds cash, Zerodha Coin), holdings, marks, inferred flows and
 // daily values (idempotent per day). Company names, fund types, AMFI's dated NAVs and the Coin
-// SIPs only enrich it (tasks/todo.md §13): one that fails is a note in the result and a warning in
+// SIPs only enrich it (tasks/todo.md §14): one that fails is a note in the result and a warning in
 // the log, and the sync goes on. Sign out. A segment whose
 // read failed is left out (its marks carry over) and recorded on the connection; any failure is
 // thrown after the other logins ran, so Sentry captures it. Messages never carry logins, codes,

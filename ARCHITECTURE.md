@@ -765,7 +765,7 @@ document, so each account is anchored on a balance the bank printed, the latest 
 An SMS statement anchor has no lines to say what it covers, so the activity added to it is by
 date (after the statement date, plus charges dated on it that are still pending), not by `stmt_code`.
 
-**Zerodha sync** (`20261027202923`, `20261028054048`, `20261028062806`, `tasks/todo.md` §12–13). The `zerodha-sync`
+**Zerodha sync** (`20261027202923`, `20261028054048`, `20261028062806`, `tasks/todo.md` §12, §14). The `zerodha-sync`
 function reads a Kite user's portfolio on weekday nights and hands it to `import_zerodha_data`
 (service, idempotent per day). It reuses the broker tables:
 - **Two accounts.** Kite and Coin are separate broker accounts, each with its own bank and logo:
@@ -791,7 +791,7 @@ function reads a Kite user's portfolio on weekday nights and hands it to `import
   the open positions) and a `basis`. For Zerodha the basis is `cost`: `net_deposits` is invested
   + cash, so the profit is the unrealised P&L. Each position carries its segment and its return
   on cost, and `segments` totals the account's segment (one entry per account).
-- **Detail** (§13). Each mark also keeps `prev_price` (Kite's previous close; a fund's last mark
+- **Detail** (§14). Each mark also keeps `prev_price` (Kite's previous close; a fund's last mark
   from an earlier NAV date, found by the import), `price_date`, `exchange`, `folio`, `asset_class`
   (`stock` | `etf` | `fund`; an ETF is a Kite ISIN starting `INF`), `category` (a fund's scheme
   type, from Kite's `/mf/instruments`) and `issuer` (its fund house as AMFI names it). Kite
