@@ -78,4 +78,9 @@ describe("vercel.json", () => {
     expect(cspDirectives().get("default-src")).toEqual(["'self'"]);
     expect(cspDirectives().get("frame-ancestors")).toEqual(["'none'"]);
   });
+
+  it("CSP frames only our own documents and blob: (the term-sheet PDF viewer), never plugins", () => {
+    expect(cspDirectives().get("frame-src")).toEqual(["'self'", "blob:"]);
+    expect(cspDirectives().get("object-src")).toEqual(["'none'"]);
+  });
 });

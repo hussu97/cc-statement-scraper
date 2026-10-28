@@ -87,3 +87,19 @@ export function useClampPage(page: number, size: number, total: number | undefin
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, size, total]);
 }
+
+/** An object URL for a blob (a PDF for a frame), revoked when the blob changes or on unmount. */
+export function useObjectUrl(blob: Blob | null): string | null {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!blob) return;
+    const u = URL.createObjectURL(blob);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the URL is an external resource made and revoked here
+    setUrl(u);
+    return () => {
+      URL.revokeObjectURL(u);
+      setUrl(null);
+    };
+  }, [blob]);
+  return url;
+}

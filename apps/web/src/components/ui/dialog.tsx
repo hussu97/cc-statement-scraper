@@ -15,6 +15,9 @@ interface BaseProps {
   onCloseAutoFocus?: (e: Event) => void;
 }
 
+/** Dialog width: "md" for forms, "lg" for a document (the term-sheet viewer). */
+type DialogSize = "md" | "lg";
+
 const OVERLAY = "fixed inset-0 z-40 bg-bg/70 animate-fade-in backdrop-blur-[2px]";
 
 /** Title row shared by Dialog and Sheet: long titles wrap, never push the close button out. */
@@ -38,7 +41,7 @@ function Header({ title, description, fallback }: { title: ReactNode; descriptio
 }
 
 /** Centered modal dialog. Sized against the viewport box (%), never 100vw. */
-export function Dialog({ open, onOpenChange, title, description, children, footer, className, onCloseAutoFocus }: BaseProps) {
+export function Dialog({ open, onOpenChange, title, description, children, footer, className, onCloseAutoFocus, size = "md" }: BaseProps & { size?: DialogSize }) {
   return (
     <D.Root open={open} onOpenChange={onOpenChange}>
       <D.Portal>
@@ -46,7 +49,8 @@ export function Dialog({ open, onOpenChange, title, description, children, foote
         <D.Content
           onCloseAutoFocus={onCloseAutoFocus}
           className={cn(
-            "fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-32px)] w-[calc(100%-32px)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col rounded-lg border border-border bg-surface animate-rise focus:outline-none",
+            "fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-32px)] w-[calc(100%-32px)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-lg border border-border bg-surface animate-rise focus:outline-none",
+            size === "lg" ? "max-w-4xl" : "max-w-lg",
             className,
           )}
         >

@@ -7,7 +7,7 @@ import { supabase, type RpcArgs } from "@/lib/supabase";
 import type { CallScenario, MarketQuote, PayoutBranch } from "@/lib/notes";
 import type { NoteShare, NoteVerdict } from "@/lib/note-verdict";
 import { keys, LEDGER_DOMAINS } from "./keys";
-import { functionError, must } from "./api";
+import { ApiError, functionError, must } from "./api";
 
 export interface Money3 {
   coupons: string;
@@ -22,8 +22,8 @@ export interface NoteNext {
   pay_date: string;
   days: number;
   is_final: boolean;
-  coupon?: { rate_pct: string; barrier_pct: string; amount: string; would_pay: boolean } | null;
-  autocall?: { trigger_pct: string; redemption_pct: string; amount: string; would_call: boolean } | null;
+  coupon?: { rate_pct: string; barrier_pct: string; amount: string; would_pay: boolean | null } | null;
+  autocall?: { trigger_pct: string; redemption_pct: string; amount: string; would_call: boolean | null } | null;
 }
 
 export interface NoteSummary {
@@ -191,6 +191,32 @@ export function useNoteDetail(profileCode: string, holdingCode: string, enabled 
       const args: RpcArgs<"structured_note_detail"> = { p_profile_code: profileCode, p_holding_code: holdingCode };
       return must(await supabase.rpc("structured_note_detail", args)) as unknown as NoteDetail;
     },
+  });
+}
+
+/**
+ * A note's term sheet PDF from the private `term-sheets` bucket (storage RLS: members only), for
+ * the in-app viewer and the share sheet. Fetched only while the viewer is open; the path is the
+ * file's sha256, so a fetched copy never goes stale.
+ */
+export async function termSheetBlob(path: string): Promise<Blob> {
+  const { data, error } = await supabase.storage.from("term-sheets").download(path);
+  if (error || !data) {
+    throw new ApiError(
+      /not.?found/i.test(error?.message ?? "") ? "The PDF file isn't in storage." : (error?.message ?? "Couldn't open the PDF."),
+    );
+  }
+  return data.type === "application/pdf" ? data : new Blob([data], { type: "application/pdf" });
+}
+
+export function useTermSheet(profileCode: string, path: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: keys.termSheet(profileCode, path ?? ""),
+    enabled: enabled && !!path,
+    staleTime: Infinity,
+    gcTime: 60_000,
+    retry: 1,
+    queryFn: () => termSheetBlob(path!),
   });
 }
 

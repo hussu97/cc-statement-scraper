@@ -72,7 +72,7 @@ export function NoteView({ profileCode, holdingCode, isOwner }: { profileCode: s
             {n.scenarios && !isEnded(n.status) && <ScenariosSection n={n} />}
             <ScheduleSection n={n} />
             <PriceHistorySection n={n} />
-            <TermsSection n={n} />
+            <TermsSection profileCode={profileCode} n={n} />
           </div>
           {isOwner && <CancelDialog profileCode={profileCode} n={cancelling ? n : null} onClose={() => setCancelling(false)} />}
         </>

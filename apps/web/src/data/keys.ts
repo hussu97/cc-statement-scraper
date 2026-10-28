@@ -43,6 +43,8 @@ export const keys = {
   /** Structured notes (20261027124257): under "cash", so a note, a price backfill or an entry refreshes net worth too. */
   notes: (p: string) => ["p", p, "cash", "notes"] as const,
   noteDetail: (p: string, holding: string) => ["p", p, "cash", "note", holding] as const,
+  /** A note's stored term sheet PDF (the `term-sheets` bucket path is content-addressed: never stale). */
+  termSheet: (p: string, path: string) => ["p", p, "term-sheet", path] as const,
   /** A broker account's portfolio (20261027165732): under "cash", so a note, an entry or a balance change refreshes it. */
   brokerPortfolio: (p: string, account: string) => ["p", p, "cash", "broker", account] as const,
   brokerPosition: (p: string, account: string, isin: string) => ["p", p, "cash", "broker", account, "position", isin] as const,

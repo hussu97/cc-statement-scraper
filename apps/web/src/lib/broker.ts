@@ -20,8 +20,8 @@ export interface BrokerNoteNext {
   pay_date: string;
   days: number;
   is_final: boolean;
-  coupon?: { would_pay: boolean } | null;
-  autocall?: { would_call: boolean } | null;
+  coupon?: { would_pay: boolean | null } | null;
+  autocall?: { would_call: boolean | null } | null;
 }
 
 export interface BrokerPositionNote {

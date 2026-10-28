@@ -1,5 +1,5 @@
-import { lazy, Suspense, type ReactNode } from "react";
-import { CalendarClock, ChevronDown } from "lucide-react";
+import { lazy, Suspense, useState, type ReactNode } from "react";
+import { CalendarClock, ChevronDown, FileText } from "lucide-react";
 import type { NoteDetail, NoteOutcome } from "@/data/notes";
 import { isEnded, maturityTableRows, outcomeLabel, outcomeTone, payoutRows, pct } from "@/lib/notes";
 import { formatDate } from "@/lib/dates";
@@ -7,6 +7,7 @@ import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/cn";
 import { Card } from "@/components/ui/display";
 import { EmptyState, LoadingBlock } from "@/components/ui/states";
+import { TermSheetDialog } from "./term-sheet-dialog";
 
 // A note's detail, one tap away and closed by default (the note page leads with its verdict, its
 // stocks and its money): every scenario, the full schedule, the price history and the terms.
@@ -205,8 +206,9 @@ export function ScheduleSection({ n }: { n: NoteDetail }) {
   );
 }
 
-export function TermsSection({ n }: { n: NoteDetail }) {
+export function TermsSection({ profileCode, n }: { profileCode: string; n: NoteDetail }) {
   const t = n.terms;
+  const [viewing, setViewing] = useState(false);
   const rows: [string, ReactNode][] = [
     ["Product", n.product_name],
     ["ISIN", n.isin ?? "—"],
@@ -215,7 +217,21 @@ export function TermsSection({ n }: { n: NoteDetail }) {
     ["Bought", `${money(n.nominal, n.currency)} face value at ${pct(n.purchase_price_pct)} on ${formatDate(n.trade_date)}`],
     ["Break-even at maturity", n.break_even_pct ? `every stock at or above ${pct(n.break_even_pct)} of its start` : "—"],
     ["Strike · final valuation · maturity", `${formatDate(t.strike_date)} · ${formatDate(t.final_valuation_date)} · ${formatDate(t.maturity_date)}`],
-    ["Term sheet", t.termsheet_filename ?? "—"],
+    [
+      "Term sheet",
+      t.termsheet_path ? (
+        <button
+          type="button"
+          onClick={() => setViewing(true)}
+          className="tap inline-flex items-start gap-1.5 text-left text-accent underline-offset-4 hover:underline"
+        >
+          <FileText className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+          <span>{t.termsheet_filename?.trim() || "View term sheet"}</span>
+        </button>
+      ) : (
+        "—"
+      ),
+    ],
   ];
   return (
     <Collapsible title="Terms" hint="as read from the term sheet">
@@ -227,6 +243,16 @@ export function TermsSection({ n }: { n: NoteDetail }) {
           </div>
         ))}
       </dl>
+      {t.termsheet_path && (
+        <TermSheetDialog
+          profileCode={profileCode}
+          path={t.termsheet_path}
+          filename={t.termsheet_filename}
+          title={n.name}
+          open={viewing}
+          onOpenChange={setViewing}
+        />
+      )}
     </Collapsible>
   );
 }
