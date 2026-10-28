@@ -9,6 +9,7 @@
 
 | When | Lesson |
 |---|---|
+| 2026-10-28 | [Deployed Edge code imports no jsr: package: Supabase's bundler fetches it at deploy time and times out](#deployed-edge-code-imports-no-jsr-package-supabases-bundler-fetches-it-at-deploy-time-and-times-out) |
 | 2026-10-27 | [A note bought after issue did not get the coupons paid before: evaluate income from the trade date](#a-note-bought-after-issue-did-not-get-the-coupons-paid-before-evaluate-income-from-the-trade-date) |
 | 2026-10-27 | [CI pulls Supabase's images anonymously: cache them, and never let a deploy depend on a pull](#ci-pulls-supabases-images-anonymously-cache-them-and-never-let-a-deploy-depend-on-a-pull) |
 | 2026-10-27 | [An app's enum decoded from the server must tolerate a value it doesn't know: a new kind breaks every installed build](#an-apps-enum-decoded-from-the-server-must-tolerate-a-value-it-doesnt-know-a-new-kind-breaks-every-installed-build) |
@@ -49,6 +50,18 @@
 | 2026-10-08 | [Tooling defaults that don't work here: `gh` account, Supabase MCP, `localhost`, pip](#tooling-defaults-that-dont-work-here-gh-account-supabase-mcp-localhost-pip) |
 
 ## Lessons
+
+### Deployed Edge code imports no jsr: package: Supabase's bundler fetches it at deploy time and times out
+- **What went wrong**: on 28 Oct three production `Deploy Edge Functions` steps in a row failed
+  with "Fetch 'https://jsr.io/@std/encoding/…' timed out after 10s". `--use-api` bundles on
+  Supabase's side, which fetched `jsr:@std/encoding` (base64) for every function, a different one
+  failing each time. The functions had to be deployed by hand with `--use-docker`.
+- **Rule**: deployed function code imports only `npm:` packages pinned in `_shared/deps.ts` and
+  its own modules; small helpers (base64 is `_shared/base64.ts`) are written in-tree. `jsr:` is
+  for tests, which are never bundled. If a deploy still fails on a registry fetch, deploy with
+  `supabase functions deploy --use-docker` (local bundling) and fix the import.
+- **Enforced by**: `supabase/functions/_tests/guard_test.ts` ("deployed function code imports
+  nothing from jsr.io").
 
 ### A note bought after issue did not get the coupons paid before: evaluate income from the trade date
 - **What went wrong**: the Swissquote sync's first real data included a Phoenix note bought on
