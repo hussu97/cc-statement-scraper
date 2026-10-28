@@ -83,6 +83,7 @@ create temp table fx as select $sms_otp_fixture${
   "You have initiated an international transfer of USD 15,000 to JOHN QUINCY PUBLIC SAMPLE. AED 55,162.50 will be debited from your AED account.",
   "You've made an autopay of AED 19,082 towards your Wio Credit balance.",
   "Your AED 205.33 cashback for September has been credited to your account",
+  "AED 48,500 sent by JOHN QUINCY PUBLIC SAMPLE and has been credited into your account number 63XXXX9204.",
   "Payment of USD 2,000 (AED 7,400) was done at RI using your Wio Personal card 9207 with Credit money",
   "Your estimated repayment is AED 19,082. Your statement closes at 11:59 PM on 2026-09-30, and auto-pay runs at 9:00 PM on 2026-10-01. You can adjust your repayment amount any time in the app.",
   "Your credit payment is due today. Statement amount: AED 19,082. Auto-pay will be processed at 9:00 PM tonight. You can adjust the repayment amount in the app before then.",

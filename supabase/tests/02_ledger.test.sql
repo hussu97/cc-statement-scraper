@@ -111,7 +111,8 @@ select is(pg_temp.sms('Your Cr.Card XXX9208 was used for USD10.00 on 05/07/2026 
                       '2026-07-05 06:00:05+00', 'aaaaaaaa-0000-0000-0000-000000000001')->>'status', 'duplicate_delivery',
           'the same client_msg_id is idempotent');
 select is(pg_temp.sms('Your Cr.Card XXX9208 was used for USD10.00 on 05/07/2026 10:00:00 at NETFLIX.COM. Avl Cr. limit is AED 1.00',
-                      '2026-07-05 06:01:00+00')->>'status', 'duplicate', 'the same alert delivered twice links as a duplicate');
+                      '2026-07-05 06:01:00+00')->>'status', 'duplicate_delivery',
+          'the same alert delivered twice (two automations) is a repeat delivery (20261028110327)');
 select is(pg_temp.sms('Your OTP for purchase is 123456', now())->>'status', 'rejected_otp', 'OTPs are rejected and never stored');
 select is((select count(*)::int from public.sms_messages where profile_code = pg_temp.v('p') and body like '%OTP%'), 0, 'no OTP row exists');
 select is(pg_temp.sms('Your Cr.Card XXX9999 was used for AED5.00 on 06/07/2026 10:00:00 at KIOSK. Avl Cr. limit is AED 1.00',

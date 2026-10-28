@@ -304,7 +304,14 @@ parse. `created_at` defaults to `clock_timestamp()` so events of one transaction
 `ingest_sms(profile, [{client_msg_id, received_at, sender, body}])` validates, stores and
 processes **each message on its own**, so one bad message never fails the batch. Every message
 gets its own result status: the `process_sms` outcome (for example `unknown_card`, `held`,
-`ignored`, `unparsed`); `duplicate_delivery` for a `client_msg_id` already stored;
+`ignored`, `unparsed`); `duplicate_delivery` for a `client_msg_id` already stored, or for a
+**repeat delivery**: the same sender and text (`body_hash`) as a message this ledger stored less
+than 10 minutes earlier by `received_at` (one SMS that two Shortcuts automations sent, each with
+a fresh `client_msg_id`, or a bank resend). A repeat is kept, `parse_status = ignored`,
+`ignore_reason = 'repeat'`, `parsed_fields.repeat_of` = the first `sms_code`, and is never
+processed: no second transaction, review, checkpoint or LLM fallback; its result carries
+`repeat_of` and the first copy's `txn_code`. A first copy whose processing `failed` doesn't
+count. Text that differs at all (another available limit or balance) is a new message;
 `rejected_otp` (defence in depth: OTPs are dropped on the device, the only filtering the phone
 does; both sides use one pattern, `private.sms_otp_pattern()` = `SMSCapture.otpPatternSource`,
 pinned by a shared fixture); `invalid` with a `reason`
@@ -1125,13 +1132,15 @@ ADCB, FAB, ENBD, SIB and EIB credit-card purchase, refund and decline format in 
 seed, and Wio's says "card" in lower case; a single keyword means each alert fires once.
 Bank-account alerts (ADCB "Cr./Dr. transaction … account number", FAB remittances) never say
 "Card", so an optional second automation on "Account" catches them (Phase 2b); a message saying
-both is sent twice and the server drops the repeat (`match_sms` step 1). Settings → *Set up SMS capture* walks through it
+two keywords (FAB's "IBAN/Account/Card" notice; every card alert once an "AED" automation
+exists) is sent once per automation, and `ingest_sms` keeps one (repeat delivery, §SMS path), so
+any set of overlapping automations is safe. Settings → *Set up SMS capture* walks through it
 and shows "Last captured" and a "Send test" button. Whether Shortcuts' "contains" is
 case-insensitive (the ENBD refund and every Wio payment say "card") still needs a real-device check.
 
 ```
 Bank SMS → Shortcuts automation → LogBankSMSIntent (openAppWhenRun = false, separate process)
-  → SMSCapture.classify (on device: drop OTPs, debit-card / account alerts, no-amount messages)
+  → SMSCapture.classify (on device: drop OTPs and empty input only; the server classifies)
   → App Group outbox (fresh client_msg_id) → flush via rpc('ingest_sms') to the "SMS go to" ledger
   → per-message result; failures classified as permanent / transient / signed out
 ```

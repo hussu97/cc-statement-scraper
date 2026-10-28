@@ -9,6 +9,7 @@
 
 | When | Lesson |
 |---|---|
+| 2026-10-28 | [One SMS reaches the server once per automation: dedup by content at ingest, not by `client_msg_id`](#one-sms-reaches-the-server-once-per-automation-dedup-by-content-at-ingest-not-by-client_msg_id) |
 | 2026-10-28 | [Deployed Edge code imports no jsr: package: Supabase's bundler fetches it at deploy time and times out](#deployed-edge-code-imports-no-jsr-package-supabases-bundler-fetches-it-at-deploy-time-and-times-out) |
 | 2026-10-27 | [A note bought after issue did not get the coupons paid before: evaluate income from the trade date](#a-note-bought-after-issue-did-not-get-the-coupons-paid-before-evaluate-income-from-the-trade-date) |
 | 2026-10-27 | [CI pulls Supabase's images anonymously: cache them, and never let a deploy depend on a pull](#ci-pulls-supabases-images-anonymously-cache-them-and-never-let-a-deploy-depend-on-a-pull) |
@@ -50,6 +51,18 @@
 | 2026-10-08 | [Tooling defaults that don't work here: `gh` account, Supabase MCP, `localhost`, pip](#tooling-defaults-that-dont-work-here-gh-account-supabase-mcp-localhost-pip) |
 
 ## Lessons
+
+### One SMS reaches the server once per automation: dedup by content at ingest, not by `client_msg_id`
+- **What went wrong**: each Shortcuts automation run hands the app the message with a fresh
+  `client_msg_id`, so an alert matching two automations ("Card" and "AED", or FAB's
+  "IBAN/Account/Card" notice) arrived twice. Only `match_sms` step 1 caught it, and only for a
+  parsed transaction alert: an unparsed message was stored twice and went to the LLM fallback twice
+  (two SIB reminders 3 s apart, 27 Oct), and a held one would be reviewed twice.
+- **Rule**: `ingest_sms` treats the same sender and text within 10 minutes as one message and
+  stores the copy as an ignored `repeat`, never processed. Any set of overlapping automations is
+  then safe; don't try to make keywords disjoint on the phone. `client_msg_id` only makes one
+  delivery idempotent.
+- **Enforced by**: `supabase/tests/77_sms_repeat_delivery.test.sql`.
 
 ### Deployed Edge code imports no jsr: package: Supabase's bundler fetches it at deploy time and times out
 - **What went wrong**: on 28 Oct three production `Deploy Edge Functions` steps in a row failed

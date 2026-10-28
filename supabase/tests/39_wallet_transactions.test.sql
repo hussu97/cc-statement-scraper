@@ -147,7 +147,7 @@ select is((select count(*)::int from public.transaction_evidence e
 -- SMS↔SMS duplicate detection is unchanged: the same bank alert twice is still a duplicate.
 select pg_temp.set('sd1', pg_temp.wio_sms('33.00', 'Zoom Market', 7, '18:00')::text);
 select pg_temp.set('sd2', pg_temp.wio_sms('33.00', 'Zoom Market', 7, '18:01')::text);
-select is(pg_temp.v('sd2')::jsonb->>'status', 'duplicate', 'a resent bank SMS is still a duplicate');
+select is(pg_temp.v('sd2')::jsonb->>'status', 'duplicate_delivery', 'a resent bank SMS is a repeat delivery (20261028110327)');
 select is(pg_temp.v('sd2')::jsonb->>'txn_code', pg_temp.v('sd1')::jsonb->>'txn_code', 'of the first SMS''s transaction');
 
 -- ═══ the name match ignores case ════════════════════════════════════════════

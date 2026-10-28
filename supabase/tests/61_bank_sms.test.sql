@@ -61,7 +61,7 @@ select is((select balance from public.v_bank_balances where account_code = pg_te
 
 -- ── the same alert again (both automations fired) ───────────────────────────
 select is(pg_temp.sms('ADCBAlert', pg_temp.v('credit'), pg_temp.v('t0')::timestamptz + interval '20 seconds')->>'status',
-          'duplicate', 'a repeat of the same alert is a duplicate');
+          'duplicate_delivery', 'a repeat of the same alert is a repeat delivery (20261028110327)');
 select is((select count(*)::int from public.transactions where account_code = pg_temp.v('cur')), 1,
           'still one transaction');
 select is((select count(*)::int from public.balance_checkpoints where account_code = pg_temp.v('cur')), 1,

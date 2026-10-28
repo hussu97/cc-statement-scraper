@@ -1,5 +1,16 @@
 # Changelog
 
+## One SMS sent by two automations is logged once; Wio money in — 2026-10-28
+
+### Backend (Supabase)
+
+- **fix** `ingest_sms` keeps one copy of an SMS that several Shortcuts automations sent (an alert holding both "Card" and "AED"): the same sender and text within 10 minutes is stored as an ignored repeat (`ignore_reason = 'repeat'`, `parsed_fields.repeat_of`) and never processed, and the phone hears `duplicate_delivery`. Before, only a parsed transaction alert was caught; an unparsed or held one went to the LLM fallback or into review twice (two SIB reminders on 27 Oct). A message whose text differs at all, a balance or available limit, is still new.
+- **feat** Template **Wio money in** ("AED 48,500 sent by NAME and has been credited into your account number 63XXXX9204."): a transfer in on the Wio account it names, so a move from FAB …9221 pairs as an own transfer.
+
+### Docs
+
+- ARCHITECTURE: the repeat-delivery rule (SMS path, §9); the device drops only OTPs.
+
 ## Term sheets open in the app, with a share button — 2026-10-28
 
 ### Web
