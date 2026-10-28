@@ -2,56 +2,34 @@ import Charts
 import LedgerKit
 import SwiftUI
 
-/// The last 90 days: the holdings' value against their cost, or (the segmented control) the 24K
-/// gold or silver price per gram. Every point is the server's; a day without one is left out.
+/// The holdings' value against their cost over the period on screen (the same days as the
+/// returns below it). Every point is the server's; a day without one is left out.
 struct InvestmentsChartCard: View {
     let model: InvestmentsModel
-    let content: InvestmentsModel.Content
 
     var body: some View {
         Card {
-            SectionHeader(title: "Last \(InvestmentsChart.days) days")
-            Picker("Chart", selection: Binding(get: { model.chart }, set: { c in Task { await model.selectChart(c) } })) {
-                ForEach(InvestmentsChart.allCases) { Text($0.title).tag($0) }
+            SectionHeader(title: "Value", trailing: InvestmentsChart.spanTitle(model.period))
+            switch model.selectedSeries {
+            case .failed(let message, nil):
+                Text(message).font(Typography.caption).foregroundStyle(Palette.danger)
+            default:
+                if let series = model.selectedSeries.value {
+                    let known = InvestmentsChart.known(series)
+                    if known.count >= 2 {
+                        valueChart(known)
+                    } else {
+                        Text(InvestmentsChart.tooFewMessage).font(Typography.caption).foregroundStyle(Palette.muted)
+                            .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
+                    }
+                    Text(InvestmentsChart.note).font(Typography.caption).foregroundStyle(Palette.muted)
+                    if let partial = InvestmentsChart.partialNote(series) {
+                        Text(partial).font(Typography.caption).foregroundStyle(Palette.warn)
+                    }
+                } else {
+                    ProgressView().frame(maxWidth: .infinity, minHeight: 180)
+                }
             }
-            .pickerStyle(.segmented)
-            if let prices = model.selectedPrices {
-                priceBody(prices)
-            } else {
-                valueBody
-            }
-            Text(model.chart.note).font(Typography.caption).foregroundStyle(Palette.muted)
-            if model.chart == .value, let partial = InvestmentsChart.partialNote(content.series) {
-                Text(partial).font(Typography.caption).foregroundStyle(Palette.warn)
-            }
-        }
-    }
-
-    @ViewBuilder private var valueBody: some View {
-        if let error = content.seriesError {
-            Text(error).font(Typography.caption).foregroundStyle(Palette.danger)
-        } else {
-            let known = InvestmentsChart.known(content.series)
-            if known.count >= 2 {
-                valueChart(known)
-            } else {
-                Text(InvestmentsChart.tooFewMessage).font(Typography.caption).foregroundStyle(Palette.muted)
-            }
-        }
-    }
-
-    @ViewBuilder private func priceBody(_ state: LoadState<[MetalPricePoint]>) -> some View {
-        if let points = state.value {
-            let known = InvestmentsChart.known(points)
-            if known.count >= 2 {
-                priceChart(known)
-            } else {
-                Text(InvestmentsChart.tooFewMessage).font(Typography.caption).foregroundStyle(Palette.muted)
-            }
-        } else if let error = state.errorMessage {
-            Text(error).font(Typography.caption).foregroundStyle(Palette.danger)
-        } else {
-            ProgressView().frame(maxWidth: .infinity, minHeight: 180)
         }
     }
 
@@ -74,37 +52,28 @@ struct InvestmentsChartCard: View {
         }
         .chartForegroundStyleScale(["Value": Palette.accent, "Cost": Palette.muted])
         .chartLegend(position: .top, alignment: .leading)
-        .modifier(DayAxes())
+        .modifier(DayAxes(short: model.period == .thirtyDays))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Investments value against cost over the last \(InvestmentsChart.days) days")
+        .accessibilityLabel("Investments value against cost over \(InvestmentsChart.span(model.period))")
         .accessibilityValue(points.last?.valueAed.map { "Latest \(MoneyFormat.aed($0))" } ?? "")
-    }
-
-    private func priceChart(_ points: [MetalPricePoint]) -> some View {
-        Chart(points) { p in
-            if let price = p.aedPerGram {
-                LineMark(x: .value("Day", p.date.startDate, unit: .day), y: .value("AED per gram", price.chartValue))
-                    .foregroundStyle(Palette.accent)
-                    .interpolationMethod(.monotone)
-            }
-        }
-        .modifier(DayAxes())
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(model.chart.title) price per gram over the last \(InvestmentsChart.days) days")
-        .accessibilityValue(points.last?.aedPerGram.map { "Latest \(HoldingsText.perGram($0))" } ?? "")
     }
 }
 
-/// Months along the bottom, compact AED up the side, the scale following the figures.
+/// Months (or weeks) along the bottom, compact AED up the side, the scale following the figures.
 private struct DayAxes: ViewModifier {
+    /// 30 days: a week per mark, labelled by day; longer spans a month per mark.
+    var short = false
+
     func body(content: Content) -> some View {
         content
             .chartYScale(domain: .automatic(includesZero: false))
             .chartXAxis {
-                AxisMarks(values: .stride(by: .month)) { value in
+                AxisMarks(values: .stride(by: short ? .weekOfYear : .month)) { value in
                     AxisGridLine().foregroundStyle(ChartPalette.grid)
                     AxisValueLabel {
-                        if let date = value.as(Date.self) { Text(LedgerDates.monthAbbrev(CalendarDay(date: date))) }
+                        if let date = value.as(Date.self) {
+                            Text(short ? LedgerDates.dayLabel(CalendarDay(date: date)) : LedgerDates.monthAbbrev(CalendarDay(date: date)))
+                        }
                     }
                 }
             }

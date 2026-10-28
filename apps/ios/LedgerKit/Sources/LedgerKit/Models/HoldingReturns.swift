@@ -5,15 +5,35 @@ public enum ReturnsPeriod: String, CaseIterable, Identifiable, Hashable, Sendabl
     case all
     case ytd
     case twelveMonths = "12m"
+    case thirtyDays = "30d"
+    case ninetyDays = "90d"
 
     public var id: String { rawValue }
 
-    /// The segmented control: `"All"`, `"This year"`, `"12 months"`.
+    /// A holding's own screen: all time, this year, 12 months.
+    public static let holding: [ReturnsPeriod] = [.all, .ytd, .twelveMonths]
+    /// Investments: one choice for the value chart and the returns.
+    public static let investments: [ReturnsPeriod] = [.thirtyDays, .ninetyDays, .ytd, .twelveMonths]
+
+    /// A holding's segmented control: `"All"`, `"This year"`, `"12 months"`.
     public var title: String {
         switch self {
         case .all: "All"
         case .ytd: "This year"
         case .twelveMonths: "12 months"
+        case .thirtyDays: "30 days"
+        case .ninetyDays: "90 days"
+        }
+    }
+
+    /// Investments' segmented control: `"30 days"`, `"90 days"`, `"YTD"`, `"365 days"`.
+    public var shortTitle: String {
+        switch self {
+        case .all: "All"
+        case .ytd: "YTD"
+        case .twelveMonths: "365 days"
+        case .thirtyDays: "30 days"
+        case .ninetyDays: "90 days"
         }
     }
 
@@ -23,6 +43,20 @@ public enum ReturnsPeriod: String, CaseIterable, Identifiable, Hashable, Sendabl
         case .all: "since you started"
         case .ytd: "this year"
         case .twelveMonths: "in the last 12 months"
+        case .thirtyDays: "in the last 30 days"
+        case .ninetyDays: "in the last 90 days"
+        }
+    }
+
+    /// The days the server's returns cover (`holding_returns`' `from` to today), for the value
+    /// chart to draw the same span; nil for all time.
+    public func range(today: CalendarDay) -> (from: CalendarDay, to: CalendarDay)? {
+        switch self {
+        case .all: nil
+        case .ytd: (CalendarDay(year: today.year, month: 1, day: 1), today)
+        case .twelveMonths: (today.adding(days: -365), today)
+        case .thirtyDays: (today.adding(days: -30), today)
+        case .ninetyDays: (today.adding(days: -90), today)
         }
     }
 }

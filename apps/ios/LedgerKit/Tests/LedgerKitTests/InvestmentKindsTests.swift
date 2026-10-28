@@ -65,10 +65,8 @@ struct HoldingKindsDecodingTests {
         #expect(v.groups.map(\.kind) == [.metal, .plan, .broker, .security, .deposit])
         #expect(v.groups.first?.holdings.map(\.name) == ["1 kg bar", "Silver bars", "Ten tola bar", "Bangles"])
         #expect(v.groups.first?.countText == "4 holdings" && v.groups.last?.title == "Fixed deposits")
-        #expect(v.showsMetalPrices && v.holding(KindsFixtures.plan)?.name == "RL360 plan")
+        #expect(v.holding(KindsFixtures.plan)?.name == "RL360 plan")
         #expect(v.caveats.contains("Fixed deposits are estimated: profit accrues each day to maturity."))
-        let noMetals = HoldingsValuation(valueAed: 1, holdings: [Holding(holdingCode: "h", name: "P", kind: .plan)])
-        #expect(!noMetals.showsMetalPrices && HoldingsValuation(valueAed: 0).showsMetalPrices)
     }
 }
 
@@ -294,7 +292,7 @@ struct HoldingFlowsTests {
         let missing = try #require(ytd.figures(for: KindsFixtures.plan))
         #expect(missing.figures.startValueAed == nil && missing.figures.annualText == nil)
         #expect(ytd.total.lines(period: .ytd).first?.label == "Value at start")
-        #expect(ReturnsPeriod.allCases.map(\.title) == ["All", "This year", "12 months"] && ReturnsPeriod.twelveMonths.rawValue == "12m")
+        #expect(ReturnsPeriod.holding.map(\.title) == ["All", "This year", "12 months"] && ReturnsPeriod.twelveMonths.rawValue == "12m")
     }
 }
 

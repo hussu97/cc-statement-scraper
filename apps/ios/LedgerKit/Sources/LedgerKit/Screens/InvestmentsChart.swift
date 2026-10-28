@@ -1,50 +1,28 @@
 import Foundation
 
-/// What the Investments chart draws: the holdings' value against their cost, or a price.
-public enum InvestmentsChart: String, CaseIterable, Identifiable, Hashable, Sendable {
-    case value, gold24k, silver
-
-    public var id: String { rawValue }
-
-    /// The segmented control: `"Value"`, `"24K gold"`, `"Silver"`.
-    public var title: String {
-        switch self {
-        case .value: "Value"
-        case .gold24k: "24K gold"
-        case .silver: "Silver"
-        }
-    }
-
-    /// The price series behind a price chart; nil for the value chart.
-    public var quote: MetalQuote? {
-        switch self {
-        case .value: nil
-        case .gold24k: .gold24k
-        case .silver: .silverRetail
-        }
-    }
-
+/// The Investments value chart: the holdings' value against their cost over the period on screen.
+public enum InvestmentsChart {
     /// Under the chart.
-    public var note: String {
-        switch self {
-        case .value:
-            "The holdings you had each day, at that day's prices and values, against what they had cost to date."
-        case .gold24k: "Dubai retail 24K gold (999.9), AED per gram, each day's last price."
-        case .silver: "Dubai retail silver, AED per gram, each day's last price."
+    public static let note =
+        "The holdings you had each day, at that day's prices and values, against what they had cost to date."
+
+    /// The span in words: `"the last 90 days"`, `"this year"`, `"the last 365 days"`.
+    public static func span(_ period: ReturnsPeriod) -> String {
+        switch period {
+        case .all: "all time"
+        case .ytd: "this year"
+        default: "the last \(period.shortTitle)"
         }
     }
 
-    /// How many days every chart covers.
-    public static let days = 90
+    /// A card's header beside its title: `"Last 90 days"`, `"This year"`.
+    public static func spanTitle(_ period: ReturnsPeriod) -> String {
+        (span(period).hasPrefix("the ") ? String(span(period).dropFirst(4)) : span(period)).capitalizedFirst
+    }
 
     /// The value chart's known days, oldest first.
     public static func known(_ points: [HoldingValuePoint]) -> [HoldingValuePoint] {
         points.filter { $0.valueAed != nil }.sorted { $0.date < $1.date }
-    }
-
-    /// A price chart's known days, oldest first.
-    public static func known(_ points: [MetalPricePoint]) -> [MetalPricePoint] {
-        points.filter { $0.aedPerGram != nil }.sorted { $0.date < $1.date }
     }
 
     /// A y-axis tick (a chart position, not money): compact AED (`"650k"`, `"496"`), or two

@@ -3,14 +3,17 @@ import SwiftUI
 
 /// One bank account (Wealth mode). Any account reads like a bank statement
 /// (`AccountTransactions`): its balance, the last 90 days, a month of rows; a row opens the
-/// transaction sheet, where an owner files a transfer. A synced broker account (Swissquote) leads
-/// with its three numbers and the value over time, then offers Portfolio (its live notes and other
-/// holdings), Transactions (the statement) and Past notes. Every figure is the server's; what
+/// transaction sheet, where an owner files a transfer. Opened from Accounts, a synced broker account
+/// (Swissquote, Zerodha) reads the same, without its notes or holdings. Opened from Investments
+/// (`showsPortfolio`), it leads with its three numbers and the value over time, then offers
+/// Portfolio (its live notes and other holdings), Transactions (the statement) and Past notes. Every figure is the server's; what
 /// shows is LedgerKit's (`BrokerSection`, `BrokerPortfolioPresentation`).
 struct AccountLedgerView: View {
     let model: AccountLedgerModel
     let profileCode: String
     let canEdit: Bool
+    /// Investments' broker row: the portfolio, not only the statement.
+    var showsPortfolio = false
     @Environment(CashModel.self) private var cash
     @Environment(NotesModel.self) private var notes
     @Environment(InvestmentsModel.self) private var investments
@@ -34,7 +37,9 @@ struct AccountLedgerView: View {
                     .foregroundStyle(notice.isError ? Palette.danger : Palette.positive)
                     .padding(.top, 8)
             }
-            if case .loaded(let p) = section {
+            if !showsPortfolio {
+                transactions(isBroker: section.isBroker).padding(.top, 8)
+            } else if case .loaded(let p) = section {
                 BrokerSummaryCard(p: p).padding(.top, 8)
                 BrokerValueChartCard(chart: p.chart)
                 Picker("Show", selection: $tab) {
@@ -43,12 +48,12 @@ struct AccountLedgerView: View {
                 .pickerStyle(.segmented)
                 switch p.tabs.contains(tab) ? tab : .portfolio {
                 case .portfolio: BrokerPortfolioTab(p: p) { route = $0 }
-                case .transactions: transactions
+                case .transactions: transactions(isBroker: true)
                 case .pastNotes: BrokerPastNotesTab(p: p) { route = $0 }
                 }
             } else {
                 BrokerPortfolioStatus(section: section, retry: reload).padding(.top, 8)
-                transactions
+                transactions(isBroker: section.isBroker)
             }
         }
         .ledgerNavigation(model.state.value?.account.title ?? balance?.title ?? "Account")
@@ -92,10 +97,11 @@ struct AccountLedgerView: View {
         }
     }
 
-    private var transactions: some View {
+    /// The statement; a broker account's notes are its portfolio's, not listed here.
+    private func transactions(isBroker: Bool) -> some View {
         AccountTransactions(
             model: model, balance: balance, canEdit: canEdit,
-            notes: notes.liveRows(fundingAccount: model.accountCode, excluding: model.brokerHoldings) ?? [],
+            notes: isBroker ? [] : notes.liveRows(fundingAccount: model.accountCode, excluding: model.brokerHoldings) ?? [],
             update: { if let balance { updating = UpdateBalanceDraft(account: balance) } },
             addEntry: { if let balance { entering = notes.newEntry(for: balance) } },
             openRow: open,

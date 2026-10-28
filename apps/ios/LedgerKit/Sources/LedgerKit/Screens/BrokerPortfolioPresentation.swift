@@ -169,6 +169,9 @@ public enum BrokerSection: Sendable, Hashable {
     case failed(String)
     case loaded(BrokerPortfolioPresentation)
 
+    /// A synced broker account (loaded or not): its statement lists no notes, which are its portfolio's.
+    public var isBroker: Bool { self != .hidden }
+
     /// The banks whose accounts sync from a broker.
     public static let brokerBanks: Set<String> = ["SWQ", "ZRD"]
 

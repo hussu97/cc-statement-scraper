@@ -1,9 +1,10 @@
 import LedgerKit
 import SwiftUI
 
-/// Investments' returns for a period (All / This year / 12 months): money added kept apart from
-/// growth, income, the simple return and the money-weighted yearly rate, and which holdings the
-/// total leaves out for want of a start value. Every figure is the server's (`holding_returns`).
+/// Investments' returns for the period the picker above shows (the value chart's days): money
+/// added kept apart from growth, income, the simple return and the money-weighted yearly rate, and
+/// which holdings the total leaves out for want of a start value. Every figure is the server's
+/// (`holding_returns`).
 struct ReturnsCard: View {
     let model: InvestmentsModel
     let profileCode: String
@@ -11,22 +12,16 @@ struct ReturnsCard: View {
     var body: some View {
         Card {
             SectionHeader(title: "Returns", trailing: model.selectedReturns.value?.rangeText)
-            Picker("Period", selection: Binding(
-                get: { model.returnsPeriod },
-                set: { period in Task { await model.selectReturns(period, profileCode: profileCode) } })) {
-                ForEach(ReturnsPeriod.allCases) { Text($0.title).tag($0) }
-            }
-            .pickerStyle(.segmented)
             switch model.selectedReturns {
             case .failed(let message, nil):
                 Text(message).font(Typography.caption).foregroundStyle(Palette.danger)
                 Button("Try again") {
-                    Task { await model.selectReturns(model.returnsPeriod, profileCode: profileCode) }
+                    Task { await model.select(model.period, profileCode: profileCode) }
                 }
                 .buttonStyle(.bordered).tint(Palette.accent)
             default:
                 if let returns = model.selectedReturns.value {
-                    ReturnFiguresView(figures: returns.total, period: model.returnsPeriod)
+                    ReturnFiguresView(figures: returns.total, period: model.period)
                     if let note = returns.incompleteNote {
                         Label(note, systemImage: "exclamationmark.triangle")
                             .font(Typography.caption).foregroundStyle(Palette.warn)

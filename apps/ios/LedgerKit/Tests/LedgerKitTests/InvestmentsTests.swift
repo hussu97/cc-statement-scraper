@@ -35,17 +35,26 @@ struct InvestmentsDecodingTests {
         #expect(MetalQuote(wireKey: "silverRetail") == .silverRetail && MetalQuote(wireKey: "platinum") == nil)
     }
 
-    @Test("the series: value and cost per day, a price per day")
+    @Test("the series: value and cost per day; the chart keeps the known days in order")
     func series() throws {
         let value = try LedgerJSON.decode([HoldingValuePoint].self, from: try fixture("holdings_value_series"))
         #expect(value.count == 5 && value.last?.valueAed == dec("656286.21") && value.last?.costAed == dec("524000.00"))
-        let price = try LedgerJSON.decode([MetalPricePoint].self, from: try fixture("metal_price_series"))
-        #expect(price.count == 4 && price.last?.date == day("2026-10-21") && price.last?.aedPerGram != nil)
-        let gaps = [MetalPricePoint(date: day("2026-10-01"), aedPerGram: nil),
-                    MetalPricePoint(date: day("2026-10-03"), aedPerGram: 7), MetalPricePoint(date: day("2026-10-02"), aedPerGram: 6)]
-        #expect(InvestmentsChart.known(gaps).map(\.date) == [day("2026-10-02"), day("2026-10-03")])
+        #expect(InvestmentsChart.known(value.reversed()).map(\.date) == value.filter { $0.valueAed != nil }.map(\.date))
         #expect(InvestmentsChart.axisLabel(7.955) == "7.96" && InvestmentsChart.axisLabel(496) == "496")
         #expect(InvestmentsChart.axisLabel(650_000) == "650k")
+    }
+
+    @Test("one period for the chart and the returns: 30 and 90 days, this year, 365 days, as the server counts them")
+    func periods() {
+        let today = day("2026-10-28")
+        #expect(ReturnsPeriod.investments.map(\.shortTitle) == ["30 days", "90 days", "YTD", "365 days"])
+        #expect(ReturnsPeriod.investments.map(\.rawValue) == ["30d", "90d", "ytd", "12m"])
+        #expect(ReturnsPeriod.thirtyDays.range(today: today)?.from == day("2026-09-28"))
+        #expect(ReturnsPeriod.ninetyDays.range(today: today)?.from == day("2026-07-30"))
+        #expect(ReturnsPeriod.ytd.range(today: today)?.from == day("2026-01-01"))
+        #expect(ReturnsPeriod.twelveMonths.range(today: today)?.from == day("2025-10-28"))
+        #expect(ReturnsPeriod.all.range(today: today) == nil && ReturnsPeriod.holding == [.all, .ytd, .twelveMonths])
+        #expect(InvestmentsChart.spanTitle(.ninetyDays) == "Last 90 days" && InvestmentsChart.spanTitle(.ytd) == "This year")
     }
 
     @Test("net worth adds the holdings; an older server's answer reads as none")
@@ -232,11 +241,13 @@ struct InvestmentsPresentationTests {
         #expect(fresh.staleText(now: now) == nil)
     }
 
-    @Test("totals: gain, change, the retail strip in order and what the figures leave out")
+    @Test("totals: gain, change, a metal's own rate and what the figures leave out")
     func totals() throws {
         let v = try InvestmentsDecodingTests.valuation()
         #expect(v.heroAmount == "656,286" && v.gainText == "+AED 93,249.96 (+17.80%)" && v.changeText == "−AED 1,463.63")
-        #expect(v.retailPrices.map(\.quote) == MetalQuote.retail)
+        let gold = Holding(holdingCode: "g", name: "Bar", metal: .gold, grams: 10, karat: 24, quote: "gold_24k")
+        #expect(v.rate(for: gold)?.title == "24K gold, Dubai retail" && v.rate(for: gold)?.price.priceText == "AED 496.00")
+        #expect(v.rate(for: Holding(holdingCode: "p", name: "P", kind: .plan)) == nil)
         #expect(v.prices[.gold24k]?.changeText == "−0.13%" && v.prices[.gold24k]?.priceText == "AED 496.00")
         #expect(v.caveats == ["1 holding has no cost, so the gain leaves it out. Add what you paid to count it."])
         let rough = HoldingsValuation(valueAed: 10, complete: false, costsComplete: true, staleCount: 2, holdings: [
@@ -245,7 +256,6 @@ struct InvestmentsPresentationTests {
         ])
         #expect(rough.caveats == ["1 holding has no price or value yet, so the total leaves it out.",
                                   "2 holdings are valued at out-of-date prices or values."])
-        #expect(HoldingsValuation(valueAed: 0).pricesNote().hasPrefix("No gold or silver prices yet"))
         #expect(HoldingsValuation.emptyMessage(canEdit: false).contains("Owners can add"))
     }
 
@@ -272,28 +282,26 @@ struct InvestmentsModelTests {
         let api = StubAPI()
         api.valuationFixture = try InvestmentsDecodingTests.valuation()
         api.valueSeriesFixture = try LedgerJSON.decode([HoldingValuePoint].self, from: try fixture("holdings_value_series"))
-        api.priceSeriesFixture = try LedgerJSON.decode([MetalPricePoint].self, from: try fixture("metal_price_series"))
         return api
     }
 
     func model(_ api: StubAPI) -> InvestmentsModel { InvestmentsModel(api: api, today: { day("2026-10-21") }) }
 
-    @Test("loads the valuation and 90 days of value; a price chart loads its quote once")
+    @Test("loads the valuation, then 90 days of value and returns; another period loads both once")
     func load() async throws {
         let api = try Self.api()
         let m = model(api)
         await m.load(profileCode: "prf_a")
         let content = try #require(m.state.value)
-        #expect(content.valuation.holdingsCount == 4 && content.series.count == 5 && content.seriesError == nil)
-        #expect(api.valueSeriesRanges.last?.from == day("2026-07-24") && api.valueSeriesRanges.last?.to == day("2026-10-21"))
-        #expect(m.selectedPrices == nil && api.calls("metalPriceSeries") == 0)
-        await m.selectChart(.silver)
-        #expect(api.priceSeriesCalls.last?.quote == .silverRetail && m.selectedPrices?.value?.count == 4)
-        await m.selectChart(.value)
-        await m.selectChart(.silver)
-        #expect(api.calls("metalPriceSeries") == 1)
-        await m.selectChart(.gold24k)
-        #expect(api.priceSeriesCalls.last?.quote == .gold24k)
+        #expect(content.valuation.holdingsCount == 4 && m.period == .ninetyDays && m.selectedSeries.value?.count == 5)
+        #expect(api.valueSeriesRanges.last?.from == day("2026-07-23") && api.valueSeriesRanges.last?.to == day("2026-10-21"))
+        await m.select(.thirtyDays, profileCode: "prf_a")
+        #expect(m.period == .thirtyDays && api.valueSeriesRanges.last?.from == day("2026-09-21"))
+        await m.select(.ninetyDays, profileCode: "prf_a")
+        await m.select(.thirtyDays, profileCode: "prf_a")
+        #expect(api.calls("holdingsValueSeries") == 2)
+        await m.select(.ytd, profileCode: "prf_a")
+        #expect(api.valueSeriesRanges.last?.from == day("2026-01-01"))
     }
 
     @Test("the series failing keeps the holdings; the valuation failing fails the screen")
@@ -302,7 +310,7 @@ struct InvestmentsModelTests {
         api.valueSeriesError = .network("-1009")
         let m = model(api)
         await m.load(profileCode: "prf_a")
-        #expect(m.state.value?.series.isEmpty == true && m.state.value?.seriesError != nil)
+        #expect(m.state.value != nil && m.selectedSeries.errorMessage != nil)
         api.valuationFixture = nil
         let failing = model(api)
         await failing.load(profileCode: "prf_a")

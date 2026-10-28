@@ -87,7 +87,7 @@ struct HoldingDetailView: View {
             }
             Section {
                 Picker("Period", selection: $period) {
-                    ForEach(ReturnsPeriod.allCases) { Text($0.title).tag($0) }
+                    ForEach(ReturnsPeriod.holding) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 PeriodReturnRow(period: period, state: model.returns[period])
@@ -122,6 +122,7 @@ struct HoldingDetailView: View {
                     .font(Typography.caption).foregroundStyle(Palette.muted)
             }
             if let asOf = holding.asOfText() { Text(asOf).font(Typography.caption).foregroundStyle(Palette.muted) }
+            if let rate = investments.state.value?.valuation.rate(for: holding) { MetalRateLine(rate: rate) }
             if let stale = holding.staleText() {
                 Label(stale, systemImage: "clock.badge.exclamationmark").font(Typography.caption).foregroundStyle(Palette.warn)
             }
@@ -265,5 +266,31 @@ private struct FlowRow: View {
         }
         .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// The Dubai retail rate a metal is valued at, per gram, with its 24-hour move and as of when.
+private struct MetalRateLine: View {
+    let rate: (title: String, quote: MetalQuote, price: MetalPrice)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(rate.title).font(Typography.caption).foregroundStyle(Palette.muted)
+                if rate.price.isStale { Chip(label: "Stale", tone: .warn) }
+            }
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(HoldingsText.perGram(rate.price.aedPerGram)).font(Typography.rowMeta).foregroundStyle(Palette.ink)
+                    .monospacedDigit()
+                if let change = rate.price.changeText {
+                    Text("\(change) in 24h").font(Typography.caption).foregroundStyle(rate.price.changeTone.color)
+                }
+            }
+            Text(rate.price.asOfText()).font(Typography.caption).foregroundStyle(Palette.muted)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: Metrics.radiusMd))
+        .overlay(RoundedRectangle(cornerRadius: Metrics.radiusMd).stroke(Palette.border, lineWidth: 0.5))
     }
 }

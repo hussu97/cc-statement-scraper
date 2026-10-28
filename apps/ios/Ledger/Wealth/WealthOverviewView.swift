@@ -69,7 +69,6 @@ private struct NetWorthHero: View {
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(netWorth.heroAccessibilityLabel)
-            Chip(label: netWorth.completenessText, tone: netWorth.completenessTone)
             VStack(alignment: .leading, spacing: 4) {
                 line("Cash in bank accounts", netWorth.cashText)
                 if netWorth.showsHoldings { line("Investments", netWorth.holdingsAdditionText) }
@@ -77,10 +76,6 @@ private struct NetWorthHero: View {
             }
             if let asOf = netWorth.asOfText() {
                 Text(asOf).font(Typography.caption).foregroundStyle(Palette.muted)
-            }
-            ForEach(netWorth.caveats, id: \.self) { caveat in
-                Label(caveat, systemImage: "exclamationmark.triangle")
-                    .font(Typography.caption).foregroundStyle(Palette.warn)
             }
         }
     }
@@ -122,9 +117,6 @@ private struct InvestmentsSummaryCard: View {
                     row("Gain", valuation.gainText ?? "Add what you paid",
                         valuation.gainText == nil ? Palette.muted : valuation.gainTone.color)
                     if let change = valuation.changeText { row("Last 24 hours", change, valuation.changeTone.color) }
-                    ForEach(valuation.caveats, id: \.self) { caveat in
-                        Text(caveat).font(Typography.caption).foregroundStyle(Palette.warn)
-                    }
                 }
             } else {
                 Text("Couldn't load the investments. Pull to refresh.")

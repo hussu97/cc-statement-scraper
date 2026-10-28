@@ -14,18 +14,20 @@ struct HoldingRow: View {
         HStack(alignment: .top, spacing: 12) {
             HoldingThumbnail(holding: holding, supabaseURL: catalog?.supabaseURL)
             VStack(alignment: .leading, spacing: 4) {
+                // Every row the same type sizes: the name wraps (two lines at most) rather than the
+                // amount shrinking to fit beside it, which made long-named metals look smaller.
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(holding.name).font(Typography.rowTitle).foregroundStyle(Palette.ink)
-                    Spacer(minLength: 8)
-                    Text(holding.valueText)
-                        .font(holding.hasValue ? Typography.amount : Typography.rowMeta)
-                        .foregroundStyle(holding.hasValue ? Palette.ink : Palette.muted).moneyLine()
+                        .lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
+                    Text(holding.valueText).font(Typography.amount)
+                        .foregroundStyle(holding.hasValue ? Palette.ink : Palette.muted)
+                        .monospacedDigit().fixedSize()
                 }
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(holding.detail).font(Typography.caption).foregroundStyle(Palette.muted)
-                    Spacer(minLength: 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     if let own = holding.ownValueText {
-                        Text(own).font(Typography.caption).foregroundStyle(Palette.muted).moneyLine()
+                        Text(own).font(Typography.caption).foregroundStyle(Palette.muted).monospacedDigit().fixedSize()
                     }
                 }
                 // Gain and the day's move side by side, stacked when they don't fit.

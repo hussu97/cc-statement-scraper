@@ -255,18 +255,17 @@ extension HoldingsValuation {
         return out
     }
 
-    /// The Dubai retail prices the holdings are valued at, in the strip's order (those known).
-    public var retailPrices: [(quote: MetalQuote, price: MetalPrice)] {
-        MetalQuote.retail.compactMap { q in prices[q].map { (q, $0) } }
-    }
-
-    /// `"Dubai retail prices, as of today, 11:23. They refresh every 6 hours."`
-    public func pricesNote(now: Date = .now) -> String {
-        guard let latest = retailPrices.map(\.price.asOf).max() else {
-            return "No gold or silver prices yet. They refresh every 6 hours."
+    /// The rate a metal holding is valued at: its own metal and purity only (`"22K gold"`,
+    /// `"AED 452.50 per gram"`, the 24-hour move, as of when); nil for any other kind or without
+    /// that price. A holding's own screen shows it; Investments shows no rates of its own.
+    public func rate(for holding: Holding) -> (title: String, quote: MetalQuote, price: MetalPrice)? {
+        guard holding.kind == .metal, let raw = holding.quote, let quote = MetalQuote(wireKey: raw),
+              let price = prices[quote] else { return nil }
+        let title = switch quote {
+        case .gold24k, .gold22k, .gold21k, .gold18k: "\(quote.label) gold"
+        default: quote.label
         }
-        return "Dubai retail prices per gram, " + CashText.asOf(latest, now: now).lowercasedFirst
-            + ". They refresh every 6 hours."
+        return ("\(title), Dubai retail", quote, price)
     }
 
     /// `"4 holdings"`.
@@ -275,9 +274,6 @@ extension HoldingsValuation {
     /// The holdings by kind (gold and silver, plans, broker accounts, shares and funds, deposits),
     /// each in the server's order; a kind with none is left out.
     public var groups: [HoldingGroup] { HoldingGroup.groups(holdings) }
-
-    /// The price strip shows while there is gold or silver to price (or before any holding).
-    public var showsMetalPrices: Bool { isEmpty || holdings.contains { $0.kind == .metal } }
 
     /// The holding with this code, if still active.
     public func holding(_ code: String) -> Holding? { holdings.first { $0.holdingCode == code } }

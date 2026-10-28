@@ -31,7 +31,7 @@ public final class HoldingDetailModel {
 
     public func load(profileCode: String) async {
         detail = detail.startLoading()
-        for period in ReturnsPeriod.allCases { returns[period] = .loading(previous: returns[period]?.value) }
+        for period in ReturnsPeriod.holding { returns[period] = .loading(previous: returns[period]?.value) }
         let api = self.api
         let code = holdingCode
         async let d: Result<HoldingDetail, any Error> = Self.result { try await api.holdingDetail(profileCode: profileCode, holdingCode: code) }

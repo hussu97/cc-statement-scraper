@@ -75,12 +75,21 @@ struct BrokerAccountsTests {
         #expect(a[1].provider == "interactive_brokers" && a[1].netDeposits == nil && a[1].syncStatus == "error")
     }
 
-    @Test("a row per account: value, AED, profit and live notes; a failed sync said")
+    @Test("a row per account: AED first, its own currency second, AED profit, the 24-hour move; a failed sync said")
     func rows() throws {
         let rows = try Self.accounts().map(BrokerAccountRow.init)
-        #expect(rows[0].title == "Swissquote" && rows[0].valueText == "USD 60,000" && rows[0].aedText == "≈ AED 220,350")
-        #expect(rows[0].detail == "+USD 10,000 · 1 live note" && rows[0].profitTone == .positive && !rows[0].syncFailed)
-        #expect(rows[1].aedText == nil && rows[1].detail == "−AED 120 · last sync failed" && rows[1].syncFailed)
+        #expect(rows[0].title == "Swissquote" && rows[0].valueText == "AED 220,350" && rows[0].ownText == "USD 60,000")
+        #expect(rows[0].detail == "+AED 36,725 · 1 live note" && rows[0].profitTone == .positive && !rows[0].syncFailed)
+        #expect(rows[0].changeText == "−AED 1,203 (−0.55%) in 24h" && rows[0].changeTone == .danger)
+        #expect(rows[1].valueText == "AED 0" && rows[1].ownText == nil && rows[1].changeText == nil)
+        #expect(rows[1].detail == "−AED 120 · last sync failed" && rows[1].syncFailed)
+    }
+
+    @Test("an older server without AED profit or the 24-hour move: the account's own currency")
+    func olderServer() throws {
+        let json = #"[{"account_code": "acc_01aaaaaaaaaaaaaaaaaaaaaaaa", "name": "Swissquote", "currency": "USD", "total": "60000.00", "total_aed": "220350.00", "profit": "10000.00", "live_notes": "0", "positions": "1"}]"#
+        let row = try #require(try LedgerJSON.decode([BrokerAccountSummary].self, from: Data(json.utf8)).first.map(BrokerAccountRow.init))
+        #expect(row.valueText == "AED 220,350" && row.detail == "+USD 10,000" && row.changeText == nil)
     }
 
     @Test("the holdings an account shows leave Investments' own lists, and so do its notes")

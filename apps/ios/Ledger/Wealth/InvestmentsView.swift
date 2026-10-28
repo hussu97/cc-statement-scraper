@@ -2,10 +2,10 @@ import LedgerKit
 import SwiftUI
 
 /// Wealth's Investments tab: the total the server values every holding at, the gain against what
-/// went in and the last 24 hours, today's Dubai retail metal prices (while there is gold or silver),
-/// 90 days of value or price, returns by period, then a row per synced broker account (standing in
-/// for every holding it shows, opening the account), the other holdings grouped by kind, each
-/// opening its own screen, and the live notes held anywhere else. Owners add a holding of any kind;
+/// went in and the last 24 hours, one period (30 days, 90 days, YTD, 365 days) for the value chart
+/// and the returns, then a row per synced broker account (standing in for every holding it shows,
+/// opening its portfolio), the other holdings grouped by kind, each opening its own screen, and the
+/// live notes held anywhere else. Owners add a holding of any kind;
 /// notes come from the broker sync. Every figure is the server's; what is listed is LedgerKit's
 /// (`InvestmentsLayout`).
 struct InvestmentsView: View {
@@ -28,9 +28,14 @@ struct InvestmentsView: View {
             }
             StateContainer(state: model.state, retry: reload) { content in
                 InvestmentsHero(valuation: content.valuation)
-                if content.valuation.showsMetalPrices { PriceStrip(valuation: content.valuation) }
                 if !content.valuation.isEmpty {
-                    InvestmentsChartCard(model: model, content: content)
+                    Picker("Period", selection: Binding(
+                        get: { model.period },
+                        set: { period in Task { await model.select(period, profileCode: profileCode) } })) {
+                        ForEach(ReturnsPeriod.investments) { Text($0.shortTitle).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    InvestmentsChartCard(model: model)
                     ReturnsCard(model: model, profileCode: profileCode)
                 }
                 let layout = content.layout
@@ -74,7 +79,8 @@ struct InvestmentsView: View {
                 ForEach(layout.brokerRows) { row in
                     if row.id != layout.brokerRows.first?.id { Divider().overlay(Palette.border) }
                     NavigationLink {
-                        AccountLedgerView(model: ledgers.model(for: row.accountCode), profileCode: profileCode, canEdit: canEdit)
+                        AccountLedgerView(model: ledgers.model(for: row.accountCode), profileCode: profileCode, canEdit: canEdit,
+                                          showsPortfolio: true)
                     } label: {
                         BrokerAccountLine(row: row)
                     }
@@ -129,7 +135,8 @@ struct InvestmentsView: View {
     private func reload() { Task { await model.load(profileCode: profileCode) } }
 }
 
-/// A synced broker account standing in for its holdings: name, value (≈ AED), profit and live notes.
+/// A synced broker account standing in for its holdings: name, AED value (its own currency under
+/// it), profit, live notes and the 24-hour move.
 private struct BrokerAccountLine: View {
     let row: BrokerAccountRow
 
@@ -142,13 +149,16 @@ private struct BrokerAccountLine: View {
                         Text(row.title).font(Typography.rowTitle).foregroundStyle(Palette.ink)
                         Text(row.detail).font(Typography.caption)
                             .foregroundStyle(row.syncFailed ? Palette.warn : row.profitTone.color)
+                        if let change = row.changeText {
+                            Text(change).font(Typography.caption).foregroundStyle(row.changeTone.color)
+                        }
                     }
                 }
             } trailing: {
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(row.valueText).font(Typography.amount).foregroundStyle(Palette.ink).moneyLine()
-                    if let aed = row.aedText {
-                        Text(aed).font(Typography.caption).foregroundStyle(Palette.muted).moneyLine()
+                    Text(row.valueText).font(Typography.amount).foregroundStyle(Palette.ink).monospacedDigit().fixedSize()
+                    if let own = row.ownText {
+                        Text(own).font(Typography.caption).foregroundStyle(Palette.muted).monospacedDigit().fixedSize()
                     }
                 }
             }
@@ -197,40 +207,5 @@ private struct InvestmentsHero: View {
             Text(value).font(Typography.amount).foregroundStyle(color).moneyLine()
         }
         .accessibilityElement(children: .combine)
-    }
-}
-
-/// Today's Dubai retail prices per gram (24K, 22K, 21K, 18K, silver) with the 24-hour move.
-private struct PriceStrip: View {
-    let valuation: HoldingsValuation
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(valuation.retailPrices, id: \.quote) { item in tile(item.quote, item.price) }
-                }
-            }
-            Text(valuation.pricesNote()).font(Typography.caption).foregroundStyle(Palette.muted)
-        }
-    }
-
-    private func tile(_ quote: MetalQuote, _ price: MetalPrice) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 6) {
-                Text(quote.label).font(Typography.caption).foregroundStyle(Palette.muted)
-                if price.isStale { Chip(label: "Stale", tone: .warn) }
-            }
-            Text(price.priceText).font(Typography.amount).foregroundStyle(Palette.ink).moneyLine()
-            Text(price.changeText ?? "–").font(Typography.caption)
-                .foregroundStyle(price.changeText == nil ? Palette.muted : price.changeTone.color)
-        }
-        .padding(10)
-        .frame(minWidth: 104, alignment: .leading)
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: Metrics.radiusMd))
-        .overlay(RoundedRectangle(cornerRadius: Metrics.radiusMd).stroke(Palette.border, lineWidth: 0.5))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(quote.label), \(price.priceText) per gram" + (price.changeText.map { ", \($0) in 24 hours" } ?? "")
-                            + (price.isStale ? ", stale" : ""))
     }
 }

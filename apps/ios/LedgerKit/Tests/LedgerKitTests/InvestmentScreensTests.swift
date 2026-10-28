@@ -25,28 +25,28 @@ struct InvestmentScreensTests {
         api.valuationFixture = try KindsFixtures.valuation()
         api.holdingDetailFixture = try KindsFixtures.detail()
         api.returnsFixtures = [.all: try KindsFixtures.returns(), .ytd: try KindsFixtures.returns("holding_returns_ytd"),
-                               .twelveMonths: try KindsFixtures.returns()]
+                               .twelveMonths: try KindsFixtures.returns(), .ninetyDays: try KindsFixtures.returns()]
         return api
     }
 
-    @Test("Investments loads all-time returns with the holdings; another period loads once when picked")
+    @Test("Investments loads 90 days of returns with the holdings; another period loads once when picked")
     func returns() async throws {
         let api = try Self.api()
         let m = InvestmentsModel(api: api, today: { day("2026-10-21") })
         await m.load(profileCode: "prf_a")
-        #expect(m.selectedReturns.value?.total.annualPct != nil && api.returnsCalls == [.all])
-        await m.selectReturns(.ytd, profileCode: "prf_a")
-        #expect(m.returnsPeriod == .ytd && m.selectedReturns.value?.total.complete == false)
-        await m.selectReturns(.all, profileCode: "prf_a")
-        await m.selectReturns(.ytd, profileCode: "prf_a")
-        #expect(api.returnsCalls == [.all, .ytd])
+        #expect(m.selectedReturns.value?.total.annualPct != nil && api.returnsCalls == [.ninetyDays])
+        await m.select(.ytd, profileCode: "prf_a")
+        #expect(m.period == .ytd && m.selectedReturns.value?.total.complete == false)
+        await m.select(.ninetyDays, profileCode: "prf_a")
+        await m.select(.ytd, profileCode: "prf_a")
+        #expect(api.returnsCalls == [.ninetyDays, .ytd])
         await m.refresh(profileCode: "prf_a")
-        #expect(api.returnsCalls.last == .ytd && m.returns[.all] == nil)
+        #expect(api.returnsCalls.last == .ytd && m.returns[.ninetyDays] == nil)
         api.returnsFixtures = [:]
-        await m.selectReturns(.twelveMonths, profileCode: "prf_a")
+        await m.select(.twelveMonths, profileCode: "prf_a")
         #expect(m.selectedReturns.errorMessage != nil && m.state.value != nil)
         m.reset()
-        #expect(m.returnsPeriod == .all && m.returns.isEmpty)
+        #expect(m.period == .ninetyDays && m.returns.isEmpty && m.series.isEmpty)
     }
 
     @Test("a holding's screen: its flows, values and its row in every period's returns")

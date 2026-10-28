@@ -1,27 +1,21 @@
 import Foundation
 import Observation
 
-/// Wealth mode's Investments tab: every holding valued by the server (`holdings_valuation`), the
-/// 90-day value against cost (`holdings_value_series`) or a metal price (`metal_price_series`),
-/// returns for a period (`holding_returns`), and Add, Edit and Close for owners. A holding's own
+/// Wealth mode's Investments tab: every holding valued by the server (`holdings_valuation`), and
+/// for one period (30 days, 90 days, YTD, 365 days) the value against cost (`holdings_value_series`)
+/// and the returns (`holding_returns`) over the same days, and Add, Edit and Close for owners. A holding's own
 /// screen is a `HoldingDetailModel`. Every figure is the server's; the model only loads and words them.
 @MainActor
 @Observable
 public final class InvestmentsModel {
     public struct Content: Sendable {
         public let valuation: HoldingsValuation
-        /// Oldest first; empty when it failed (`seriesError`).
-        public let series: [HoldingValuePoint]
-        public let seriesError: String?
         /// The synced broker accounts (`broker_accounts_summary`); empty when there are none or the
         /// read failed, and then every holding is listed on its own.
         public let brokerAccounts: [BrokerAccountSummary]
 
-        public init(valuation: HoldingsValuation, series: [HoldingValuePoint] = [], seriesError: String? = nil,
-                    brokerAccounts: [BrokerAccountSummary] = []) {
+        public init(valuation: HoldingsValuation, brokerAccounts: [BrokerAccountSummary] = []) {
             self.valuation = valuation
-            self.series = series
-            self.seriesError = seriesError
             self.brokerAccounts = brokerAccounts
         }
 
@@ -35,12 +29,10 @@ public final class InvestmentsModel {
     }
 
     public private(set) var state: LoadState<Content> = .idle
-    /// The chart on screen.
-    public private(set) var chart: InvestmentsChart = .value
-    /// Each price chart's days, loaded when first shown.
-    public private(set) var priceSeries: [MetalQuote: LoadState<[MetalPricePoint]>] = [:]
-    /// The returns card's period.
-    public private(set) var returnsPeriod: ReturnsPeriod = .all
+    /// The period the value chart and the returns both show.
+    public private(set) var period: ReturnsPeriod = .ninetyDays
+    /// Each period's value against cost, oldest first, loaded when first shown (and again after a write).
+    public private(set) var series: [ReturnsPeriod: LoadState<[HoldingValuePoint]>] = [:]
     /// Each period's returns, loaded when first shown (and again after a write).
     public private(set) var returns: [ReturnsPeriod: LoadState<HoldingReturns>] = [:]
     public private(set) var isSaving = false
@@ -58,10 +50,10 @@ public final class InvestmentsModel {
         self.today = today
     }
 
-    /// The chart's first and last day.
-    public var range: (from: CalendarDay, to: CalendarDay) {
+    /// The chart's first and last day for a period (the returns' own span).
+    public func range(_ period: ReturnsPeriod) -> (from: CalendarDay, to: CalendarDay) {
         let to = today()
-        return (to.adding(days: -(InvestmentsChart.days - 1)), to)
+        return period.range(today: to) ?? (to.adding(days: -365), to)
     }
 
     /// A new holding's form.
@@ -81,37 +73,26 @@ public final class InvestmentsModel {
     public func load(profileCode: String) async {
         let (ticket, sameKey) = gate.begin(profileCode)
         state = sameKey ? state.startLoading() : .loading(previous: nil)
-        if !sameKey { priceSeries = [:] }
         // Other periods re-read when next shown; the one on screen keeps its figures while it reloads.
-        returns = sameKey ? returns.filter { $0.key == returnsPeriod } : [:]
-        let (from, to) = range
+        returns = sameKey ? returns.filter { $0.key == period } : [:]
+        series = sameKey ? series.filter { $0.key == period } : [:]
         let api = self.api
         do {
             async let valuation = api.holdingsValuation(profileCode: profileCode)
-            async let series: Result<[HoldingValuePoint], any Error> = {
-                do {
-                    return .success(try await api.holdingsValueSeries(profileCode: profileCode, from: from, to: to))
-                } catch {
-                    return .failure(error)
-                }
-            }()
             // A failed read lists every holding on its own rather than hiding any.
             async let brokers = (try? await api.brokerAccounts(profileCode: profileCode)) ?? []
-            let (v, s, b) = try await (valuation, series, brokers)
+            let (v, b) = try await (valuation, brokers)
             guard gate.isCurrent(ticket) else { return }
             gate.finish(profileCode)
-            switch s {
-            case .success(let points):
-                state = .loaded(Content(valuation: v, series: points.sorted { $0.date < $1.date }, brokerAccounts: b))
-            case .failure(let error):
-                state = .loaded(Content(valuation: v, seriesError: LoadState<Content>.message(for: error), brokerAccounts: b))
-            }
+            state = .loaded(Content(valuation: v, brokerAccounts: b))
         } catch {
             guard gate.isCurrent(ticket) else { return }
             state = state.fail(error)
         }
-        if let quote = chart.quote, gate.isCurrent(ticket) { await loadPrices(quote) }
-        if gate.isCurrent(ticket), state.value != nil { await loadReturns(returnsPeriod, profileCode: profileCode) }
+        guard gate.isCurrent(ticket), state.value != nil else { return }
+        async let s: Void = loadSeries(period, profileCode: profileCode)
+        async let r: Void = loadReturns(period, profileCode: profileCode)
+        _ = await (s, r)
     }
 
     /// Loads unless this ledger is already on screen or loading.
@@ -129,38 +110,42 @@ public final class InvestmentsModel {
     public func reset() {
         gate.reset()
         state = .idle
-        chart = .value
-        priceSeries = [:]
-        returnsPeriod = .all
+        period = .ninetyDays
+        series = [:]
         returns = [:]
         notice = nil
         isSaving = false
     }
 
-    /// Shows `chart`, loading its price series the first time (or after it failed).
-    public func selectChart(_ chart: InvestmentsChart) async {
-        self.chart = chart
-        guard let quote = chart.quote else { return }
-        if let loaded = priceSeries[quote], loaded.value != nil || loaded.isLoading { return }
-        await loadPrices(quote)
+    // MARK: Period
+
+    /// Shows `period`'s chart and returns, loading each the first time (or after it failed).
+    public func select(_ period: ReturnsPeriod, profileCode: String) async {
+        self.period = period
+        let needsSeries = series[period].map { $0.value == nil && !$0.isLoading } ?? true
+        let needsReturns = returns[period].map { $0.value == nil && !$0.isLoading } ?? true
+        async let s: Void = needsSeries ? loadSeries(period, profileCode: profileCode) : ()
+        async let r: Void = needsReturns ? loadReturns(period, profileCode: profileCode) : ()
+        _ = await (s, r)
     }
 
-    /// The price chart's state; nil for the value chart.
-    public var selectedPrices: LoadState<[MetalPricePoint]>? {
-        chart.quote.map { priceSeries[$0] ?? .loading(previous: nil) }
-    }
-
-    // MARK: Returns
-
-    /// Shows `period`'s returns, loading them the first time (or after they failed).
-    public func selectReturns(_ period: ReturnsPeriod, profileCode: String) async {
-        returnsPeriod = period
-        if let loaded = returns[period], loaded.value != nil || loaded.isLoading { return }
-        await loadReturns(period, profileCode: profileCode)
-    }
+    /// The value chart's state for the period on screen.
+    public var selectedSeries: LoadState<[HoldingValuePoint]> { series[period] ?? .loading(previous: nil) }
 
     /// The returns card's state for the period on screen.
-    public var selectedReturns: LoadState<HoldingReturns> { returns[returnsPeriod] ?? .loading(previous: nil) }
+    public var selectedReturns: LoadState<HoldingReturns> { returns[period] ?? .loading(previous: nil) }
+
+    private func loadSeries(_ period: ReturnsPeriod, profileCode: String) async {
+        let (from, to) = range(period)
+        series[period] = .loading(previous: series[period]?.value)
+        do {
+            let points = try await api.holdingsValueSeries(profileCode: profileCode, from: from, to: to)
+            guard gate.requested == profileCode else { return }
+            series[period] = .loaded(points.sorted { $0.date < $1.date })
+        } catch {
+            series[period] = .failed(LoadState<[HoldingValuePoint]>.message(for: error), previous: series[period]?.value)
+        }
+    }
 
     private func loadReturns(_ period: ReturnsPeriod, profileCode: String) async {
         returns[period] = .loading(previous: returns[period]?.value)
@@ -170,18 +155,6 @@ public final class InvestmentsModel {
             returns[period] = .loaded(r)
         } catch {
             returns[period] = .failed(LoadState<HoldingReturns>.message(for: error), previous: returns[period]?.value)
-        }
-    }
-
-    private func loadPrices(_ quote: MetalQuote) async {
-        let (from, to) = range
-        priceSeries[quote] = .loading(previous: priceSeries[quote]?.value)
-        do {
-            let points = try await api.metalPriceSeries(quote: quote, from: from, to: to)
-            priceSeries[quote] = .loaded(points.sorted { $0.date < $1.date })
-        } catch {
-            priceSeries[quote] = .failed(LoadState<[MetalPricePoint]>.message(for: error),
-                                         previous: priceSeries[quote]?.value)
         }
     }
 
