@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { BriefcaseBusiness, ChevronRight } from "lucide-react";
 import { groupBySegment, holdingResult, segmentHolds, segmentLabel, splitPositions, type BrokerPortfolio, type BrokerPosition } from "@/lib/broker";
@@ -15,9 +16,10 @@ import { TONE_TEXT } from "./broker-portfolio";
 /**
  * The Portfolio tab: a card per live note (verdict, two numbers, its stocks), then everything else
  * in one line each. Against cost (Zerodha): a card per segment (Kite, Coin), each holding with its
- * units, what it cost, its worth and its P&L.
+ * units, what it cost, its worth and its P&L. `linked` (default) links each holding to its Wealth
+ * page; India (Kite, Coin) passes false, as its holdings have no page outside the portfolio.
  */
-export function PortfolioTab({ portfolio: p }: { portfolio: BrokerPortfolio }) {
+export function PortfolioTab({ portfolio: p, linked = true }: { portfolio: BrokerPortfolio; linked?: boolean }) {
   const { notes, others } = splitPositions(p.positions);
   if (p.positions.length === 0) {
     return (
@@ -37,7 +39,7 @@ export function PortfolioTab({ portfolio: p }: { portfolio: BrokerPortfolio }) {
             <ul className="divide-y divide-border border-t border-border">
               {g.items.map((x) => (
                 <li key={x.holding_code}>
-                  <HoldingRow x={x} currency={x.currency || p.currency} showCost />
+                  <HoldingRow x={x} currency={x.currency || p.currency} showCost linked={linked} />
                 </li>
               ))}
             </ul>
@@ -66,7 +68,7 @@ export function PortfolioTab({ portfolio: p }: { portfolio: BrokerPortfolio }) {
           <ul className="divide-y divide-border border-t border-border">
             {others.map((x) => (
               <li key={x.holding_code}>
-                <HoldingRow x={x} currency={x.currency || p.currency} />
+                <HoldingRow x={x} currency={x.currency || p.currency} linked={linked} />
               </li>
             ))}
           </ul>
@@ -119,14 +121,22 @@ function NoteCard({ x, currency }: { x: BrokerPosition; currency: string }) {
   );
 }
 
-function HoldingRow({ x, currency, showCost = false }: { x: BrokerPosition; currency: string; showCost?: boolean }) {
+/** A holding's row: a link to its page, or (`linked` false) the same row without one. */
+export function HoldingRowShell({ holdingCode, linked, children }: { holdingCode: string; linked: boolean; children: ReactNode }) {
+  const row = "group flex items-center gap-3 px-5 py-3";
+  if (!linked) return <div className={row}>{children}</div>;
+  return (
+    <Link to="/wealth/investments/$holdingCode" params={{ holdingCode }} className={`tap ${row} hover:bg-surface-2/60 focus-visible:bg-surface-2/60`}>
+      {children}
+      <ChevronRight className="size-4 shrink-0 text-subtle group-hover:text-ink-2" />
+    </Link>
+  );
+}
+
+function HoldingRow({ x, currency, showCost = false, linked }: { x: BrokerPosition; currency: string; showCost?: boolean; linked: boolean }) {
   const r = holdingResult(x);
   return (
-    <Link
-      to="/wealth/investments/$holdingCode"
-      params={{ holdingCode: x.holding_code }}
-      className="tap group flex items-center gap-3 px-5 py-3 hover:bg-surface-2/60 focus-visible:bg-surface-2/60"
-    >
+    <HoldingRowShell holdingCode={x.holding_code} linked={linked}>
       {showCost ? (
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13px] font-medium text-ink">{x.name}</span>
@@ -146,7 +156,6 @@ function HoldingRow({ x, currency, showCost = false }: { x: BrokerPosition; curr
           </span>
         )}
       </span>
-      <ChevronRight className="size-4 shrink-0 text-subtle group-hover:text-ink-2" />
-    </Link>
+    </HoldingRowShell>
   );
 }

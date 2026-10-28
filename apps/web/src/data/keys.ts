@@ -47,6 +47,8 @@ export const keys = {
   brokerPortfolio: (p: string, account: string) => ["p", p, "cash", "broker", account] as const,
   /** Every synced broker account in one line each (Investments). */
   brokerAccounts: (p: string) => ["p", p, "cash", "broker-accounts"] as const,
+  /** India mode (Zerodha Kite and Coin): under "cash", so a sync, a holding or a balance change refreshes it. */
+  india: (p: string, period: string) => ["p", p, "cash", "india", period] as const,
   holdingReturns: (p: string, period: string) => ["p", p, "cash", "holding-returns", period] as const,
   cashFlowSavings: (p: string, from: string, to: string, account?: string) => ["p", p, "cash", "savings", from, to, account ?? "all"] as const,
   /** Metal prices are global reference data, not per ledger. */

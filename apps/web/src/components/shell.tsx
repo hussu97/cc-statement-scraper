@@ -17,6 +17,9 @@ import {
   Shapes,
   Target,
   Check,
+  ChartCandlestick,
+  IndianRupee,
+  PiggyBank,
   Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -26,8 +29,9 @@ import { useAuth, signOut } from "@/data/auth";
 import { memberProfiles, useProfileContext, type ProfileSummary } from "@/data/profile";
 import { useRealtimeInvalidation } from "@/data/realtime";
 import { useOpenReviewCount } from "@/data/reviews";
+import { useIndiaAvailable } from "@/data/india";
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger, Segmented, TooltipProvider } from "./ui/primitives";
-import { APP_MODES, MODE_INFO, modeOfPath, readRememberedMode, rememberMode, resolveMode, type AppMode } from "@/lib/mode";
+import { MODE_INFO, modeOfPath, readRememberedMode, rememberMode, resolveMode, visibleModes, type AppMode } from "@/lib/mode";
 import { Toaster } from "./ui/toast";
 import { Sheet } from "./ui/dialog";
 import { ErrorState } from "./ui/states";
@@ -56,16 +60,24 @@ const MODE_NAV: Record<AppMode, NavItem[]> = {
     { to: "/wealth/investments", label: "Investments", icon: <Coins /> },
     { to: "/wealth/cash-flow", label: "Cash flow", icon: <ArrowLeftRight /> },
   ],
+  india: [
+    { to: "/india", label: "Overview", icon: <LayoutGrid /> },
+    { to: "/india/kite", label: "Kite", icon: <ChartCandlestick /> },
+    { to: "/india/coin", label: "Coin", icon: <PiggyBank /> },
+  ],
 };
 
 /** Each mode's phone tabs (the rest go in More). Review, the daily action surface, is always one. */
 const MOBILE_TABS: Record<AppMode, string[]> = {
   spending: ["/", "/activity", "/insights", "/review"],
   wealth: ["/wealth", "/wealth/accounts", "/wealth/investments", "/review"],
+  india: ["/india", "/india/kite", "/india/coin", "/review"],
 };
 
 interface Nav {
   mode: AppMode;
+  /** The modes the switcher offers (India only on a ledger that has it). */
+  modes: AppMode[];
   /** The mode's own screens. */
   primary: NavItem[];
   /** Review, Rules and Settings: in both modes. */
@@ -74,8 +86,9 @@ interface Nav {
 }
 
 /**
- * The mode comes from the path (/wealth/* is Wealth); a shared screen keeps the last mode,
- * remembered across visits (localStorage, wrapped). Switching goes to that mode's home.
+ * The mode comes from the path (/wealth/* is Wealth, /india/* is India); a shared screen keeps the
+ * last mode, remembered across visits (localStorage, wrapped). Switching goes to that mode's home.
+ * India is offered only when india_overview says the ledger has it.
  */
 function useNav(profileCode: string | null): Nav {
   const reviews = useOpenReviewCount(profileCode);
@@ -86,10 +99,12 @@ function useNav(profileCode: string | null): Nav {
   // A mode's own screen makes it the remembered one (adjusting state while rendering, not in an effect).
   const fromPath = modeOfPath(path);
   if (fromPath && fromPath !== remembered) setRemembered(fromPath);
-  const mode = resolveMode(path, remembered);
+  const india = useIndiaAvailable(profileCode);
+  const mode = resolveMode(path, remembered, india);
   useEffect(() => rememberMode(mode), [mode]);
   return {
     mode,
+    modes: visibleModes(india, mode),
     primary: MODE_NAV[mode],
     shared: [
       { to: "/review", label: "Review", icon: <Inbox />, badge: open || undefined },
@@ -104,7 +119,7 @@ function useNav(profileCode: string | null): Nav {
 }
 
 /** A mode's home and Overview match only exactly; every other entry also owns its sub-paths. */
-const EXACT = new Set(["/", "/wealth"]);
+const EXACT = new Set(["/", "/wealth", "/india"]);
 
 function useIsActive() {
   const path = useRouterState({ select: (s) => s.location.pathname });
@@ -112,9 +127,9 @@ function useIsActive() {
   return (to: string) => (EXACT.has(to) ? path === to : path === to || path.startsWith(`${to}/`) || (to === "/cards" && path.startsWith("/statements/")));
 }
 
-const MODE_ICON: Record<AppMode, ReactNode> = { spending: <Wallet />, wealth: <Landmark /> };
+const MODE_ICON: Record<AppMode, ReactNode> = { spending: <Wallet />, wealth: <Landmark />, india: <IndianRupee /> };
 
-/** The Spending / Wealth dropdown at the top of the sidebar (and in the phone header). */
+/** The Spending / Wealth / India dropdown at the top of the sidebar (and in the phone header). */
 function ModeSwitcher({ nav, compact }: { nav: Nav; compact?: boolean }) {
   const info = MODE_INFO[nav.mode];
   return (
@@ -138,7 +153,7 @@ function ModeSwitcher({ nav, compact }: { nav: Nav; compact?: boolean }) {
       </MenuTrigger>
       <MenuContent align="start" className="w-60">
         <MenuLabel>Mode</MenuLabel>
-        {APP_MODES.map((m) => (
+        {nav.modes.map((m) => (
           <MenuItem key={m} onSelect={() => nav.setMode(m)}>
             <span className="text-subtle [&_svg]:size-4">{MODE_ICON[m]}</span>
             <span className="min-w-0 flex-1">
@@ -324,7 +339,7 @@ function MobileNav({ nav }: { nav: Nav }) {
               setMore(false);
               nav.setMode(m);
             }}
-            options={APP_MODES.map((m) => ({ value: m, label: MODE_INFO[m].label }))}
+            options={nav.modes.map((m) => ({ value: m, label: MODE_INFO[m].label }))}
           />
         </div>
         <nav className="flex flex-col gap-1" aria-label="More">

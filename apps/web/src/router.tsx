@@ -6,6 +6,7 @@ import { parseSignInSearch } from "@/lib/redirect";
 import { parseCashFlowSearch } from "@/lib/cash-flow";
 import { parseAccountSearch, parsePortfolioSearch } from "@/lib/wealth";
 import { parseInvestmentsSearch } from "@/lib/investments";
+import { parseIndiaAccountSearch, parseIndiaSearch } from "@/lib/india";
 
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
@@ -145,6 +146,32 @@ export const wealthCashFlowRoute = createRoute({
   component: lazyRouteComponent(() => import("@/routes/wealth-cash-flow"), "CashFlowPage"),
 });
 
+// ── India mode (tasks/todo.md §12): Zerodha Kite and Coin, in INR, apart from Wealth ──
+
+/** Kite and Coin together: value, P&L, the last 24 hours, a period's chart and returns, a row per account. `?period=` (90 days when absent). */
+export const indiaRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/india",
+  validateSearch: (s: Record<string, unknown>) => parseIndiaSearch(s),
+  component: lazyRouteComponent(() => import("@/routes/india"), "IndiaOverviewPage"),
+});
+
+/** The Kite account's portfolio: the portfolio card, then Portfolio / Sold tabs (`?tab=past`). */
+export const indiaKiteRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/india/kite",
+  validateSearch: (s: Record<string, unknown>) => parseIndiaAccountSearch(s),
+  component: lazyRouteComponent(() => import("@/routes/india-account"), "IndiaKitePage"),
+});
+
+/** The Coin account's portfolio, as Kite's. */
+export const indiaCoinRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/india/coin",
+  validateSearch: (s: Record<string, unknown>) => parseIndiaAccountSearch(s),
+  component: lazyRouteComponent(() => import("@/routes/india-account"), "IndiaCoinPage"),
+});
+
 const budgetsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/budgets",
@@ -192,7 +219,7 @@ const routeTree = rootRoute.addChildren([
   signInRoute,
   welcomeRoute,
   privacyRoute,
-  appRoute.addChildren([overviewRoute, activityRoute, insightsRoute, categoryRoute, cashFlowRedirectRoute, wealthRoute, wealthAccountsRoute, wealthAccountRoute, wealthInvestmentsRoute, wealthPortfolioRoute, wealthHoldingRoute, wealthCashFlowRoute, budgetsRoute, cardsRoute, statementRoute, reviewRoute, rulesRoute, settingsRoute]),
+  appRoute.addChildren([overviewRoute, activityRoute, insightsRoute, categoryRoute, cashFlowRedirectRoute, wealthRoute, wealthAccountsRoute, wealthAccountRoute, wealthInvestmentsRoute, wealthPortfolioRoute, wealthHoldingRoute, wealthCashFlowRoute, indiaRoute, indiaKiteRoute, indiaCoinRoute, budgetsRoute, cardsRoute, statementRoute, reviewRoute, rulesRoute, settingsRoute]),
 ]);
 
 export const router = createRouter({ routeTree, defaultPreload: "intent", scrollRestoration: true });
