@@ -74,9 +74,9 @@ select throws_ok($$ select public.import_zerodha_data(pg_temp.v('p'),
 select pg_temp.set('r1', pg_temp.sync(-4, '1000.00', array['kite', 'coin'],
   jsonb_build_array(pg_temp.kite('10', '2500', '2000'), pg_temp.coin('100.5', '50', '40')))::text);
 select pg_temp.set('acc', (pg_temp.v('r1')::jsonb)->>'account_code');
-select is((select bank_code || ' ' || kind || ' ' || currency || ' ' || product_name from public.accounts
+select is((select bank_code || ' ' || kind || ' ' || currency || ' ' || product_name || ' ' || nickname from public.accounts
            where account_code = pg_temp.v('acc')),
-          'ZRD current INR Trading account', 'the cash account is made: Zerodha, current, INR');
+          'ZRD current INR Trading account Zerodha', 'the cash account is made: Zerodha, current, INR, named');
 select is((select provider || ' ' || portfolio_ref || ' ' || last_status from public.broker_connections
            where account_code = pg_temp.v('acc')),
           'zerodha ZX7301 ok', 'linked to the Kite user, upper-cased');

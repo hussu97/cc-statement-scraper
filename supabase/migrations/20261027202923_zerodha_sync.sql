@@ -113,8 +113,9 @@ begin
       and not exists (select 1 from public.broker_connections x where x.account_code = a.account_code)
     order by a.created_at limit 1;
     if v_account is null then
-      insert into public.accounts (profile_code, bank_code, kind, currency, product_name)
-      values (p_profile_code, 'ZRD', 'current', 'INR', 'Trading account')
+      -- Named on creation (a nickname is the user's to change): it has no account number to show.
+      insert into public.accounts (profile_code, bank_code, kind, currency, product_name, nickname)
+      values (p_profile_code, 'ZRD', 'current', 'INR', 'Trading account', 'Zerodha')
       returning account_code into v_account;
     end if;
     insert into public.broker_connections (profile_code, account_code, provider, portfolio_ref)
