@@ -62,6 +62,13 @@ select results_eq(
   $$ values (pg_temp.v('wio'), 'internal_in'::text, 48500.00::numeric(14,2)),
             (pg_temp.v('fab'), 'internal_out'::text, 48500.00::numeric(14,2)) $$,
   'FAB …9221 → Wio …9204 is a move between own accounts');
+-- 20261028115637: the 50,000 salary into FAB is income, so it is not the other leg of the 50,000
+-- Wio paid someone else the same day.
+select results_eq(
+  $$ select account_code, flow from public.v_cash_flow
+     where profile_code = pg_temp.v('p') and amount_aed = 50000 order by flow $$,
+  $$ values (pg_temp.v('fab'), 'income'::text), (pg_temp.v('wio'), 'money_out'::text) $$,
+  'a transfer out the size of a salary credit is money out, not an own transfer');
 
 -- ── the transfer notice again: it holds "Card" and "AED", so both automations sent it ─────────
 select pg_temp.set('notice2', pg_temp.sms('FAB', pg_temp.v('notice'), pg_temp.at(96) + interval '3 seconds')::text);

@@ -601,7 +601,8 @@ repayments and internal moves are settlement and never change it. Payees are cat
 rule on kind, amount and bank ("ADCB transfer out of 23,700 → Family support") files a transfer
 that names no counterparty. An unfiled transfer is a move between the ledger's own accounts
 (`internal_in`/`internal_out`) when another of its bank accounts has the opposite transfer of the
-same AED amount within 3 days, or when a `transfer_notice` SMS (FAB's funds-transfer confirmation)
+same AED amount within 3 days, itself unfiled or filed as a transfer (a salary credit is no one's
+other leg), or when a `transfer_notice` SMS (FAB's funds-transfer confirmation)
 for it names one of its bank accounts' digits (`parsed_fields.counterparty_ref`). FAB's "Salary
 Credit" alert is an `account_credit` described SALARY CREDIT, which a seed rule files under Salary.
 **Wio** has a debit account and Wio Credit, a credit line (a `credit_card` account with an

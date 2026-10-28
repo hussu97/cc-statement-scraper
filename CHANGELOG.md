@@ -28,6 +28,7 @@
 
 - **fix** `ingest_sms` keeps one copy of an SMS that several Shortcuts automations sent (an alert holding both "Card" and "AED"): the same sender and text within 10 minutes is stored as an ignored repeat (`ignore_reason = 'repeat'`, `parsed_fields.repeat_of`) and never processed, and the phone hears `duplicate_delivery`. Before, only a parsed transaction alert was caught; an unparsed or held one went to the LLM fallback or into review twice (two SIB reminders on 27 Oct). A message whose text differs at all, a balance or available limit, is still new.
 - **feat** Template **Wio money in** ("AED 48,500 sent by NAME and has been credited into your account number 63XXXX9204."): a transfer in on the Wio account it names, so a move from FAB …9221 pairs as an own transfer.
+- **fix** An own transfer's other leg must be unfiled or filed as a transfer (`v_cash_flow`, rule a). A 50,000 salary credit into FAB had made a 50,000 payment to someone else from Wio the same day look like a move between own accounts; it is money out again.
 
 ### Docs
 
