@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo, type ReactNode } from "react";
-import { basisWords, estimateNote, portfolioPoints, segmentHolds, segmentLabel, syncStatus, type BrokerPortfolio, type SegmentTotal } from "@/lib/broker";
+import { basisWords, estimateNote, portfolioPoints, segmentHolds, segmentLabel, segmentLines, syncStatus, type BrokerPortfolio, type SegmentTotal } from "@/lib/broker";
 import { pct } from "@/lib/notes";
 import { signTone } from "@/lib/holdings";
 import { formatTotal } from "@/lib/money";
@@ -24,8 +24,9 @@ function Figure({ label, children, sub }: { label: string; children: ReactNode; 
 
 /**
  * The account at the broker in three numbers (value, profit, cash), when it last synced, and its
- * value against what went in. Against cost (Zerodha): the P&L on what the holdings cost, Kite and
- * Coin one line each, and the holdings' worth against their cost over time.
+ * value against what went in. Against cost (Zerodha Kite, Zerodha Coin): the P&L on what the
+ * holdings cost, a line per segment when there is more than one, and the holdings' worth against
+ * their cost over time.
  */
 export function PortfolioCard({ portfolio: p }: { portfolio: BrokerPortfolio }) {
   const c = p.currency;
@@ -33,6 +34,7 @@ export function PortfolioCard({ portfolio: p }: { portfolio: BrokerPortfolio }) 
   const words = basisWords(p.basis);
   const points = useMemo(() => portfolioPoints(p.series, p.basis), [p.series, p.basis]);
   const note = estimateNote(p.series);
+  const segments = segmentLines(p);
   return (
     <Card>
       <dl className="grid grid-cols-2 gap-x-4 gap-y-4 px-5 pt-5 sm:grid-cols-3 sm:gap-x-6">
@@ -51,9 +53,9 @@ export function PortfolioCard({ portfolio: p }: { portfolio: BrokerPortfolio }) 
         </Figure>
         <Figure label="Cash">{formatTotal(p.cash, { currency: c })}</Figure>
       </dl>
-      {p.segments.length > 0 && (
+      {segments.length > 0 && (
         <ul className="mx-5 mt-4 divide-y divide-border rounded-md border border-border">
-          {p.segments.map((s) => (
+          {segments.map((s) => (
             <SegmentLine key={s.segment} s={s} currency={c} />
           ))}
         </ul>

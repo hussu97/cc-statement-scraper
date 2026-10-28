@@ -5,6 +5,7 @@ import {
   groupBySegment,
   segmentHolds,
   segmentLabel,
+  segmentLines,
   estimateNote,
   heldMonths,
   holdingResult,
@@ -260,6 +261,14 @@ describe("a portfolio measured against cost (Zerodha)", () => {
       ["other", [3]],
     ]);
     expect(groupBySegment([])).toEqual([]);
+  });
+
+  it("lists segment lines only when the account has more than one segment", () => {
+    const p = parseBrokerPortfolio(ZERODHA)!;
+    expect(segmentLines(p).map((s) => s.segment)).toEqual(["kite", "coin"]);
+    // Zerodha Kite and Zerodha Coin are separate accounts, one segment each: no line repeats the figures.
+    expect(segmentLines({ segments: p.segments.slice(0, 1) })).toEqual([]);
+    expect(segmentLines({ segments: [] })).toEqual([]);
   });
 
   it("names segments and the basis's words", () => {
