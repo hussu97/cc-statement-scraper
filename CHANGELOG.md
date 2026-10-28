@@ -1,5 +1,27 @@
 # Changelog
 
+## Credit-linked notes: a second note type, and the two Example Bank N CLNs — 2026-10-28
+
+### Backend (Supabase)
+
+- **feat** Structured notes have a type: `equity` (worst-of notes on shares, unchanged) or `credit_linked`, a fixed coupon that stops if the reference entity has a credit event and 100% at maturity. `structured_note_credit_terms` holds the reference entity, seniority, reference bond, coupon rate p.a., frequency (monthly … annual, or all at maturity), day count, interest start, first coupon, longstop maturity and the issuer's call dates. Statuses add `called` and `credit_event`.
+- **feat** `private.cln_evaluate` (behind `note_evaluate`; the equity evaluator is unchanged as `note_evaluate_equity`): the generated 30/360 coupon schedule (`private.cln_schedule`, `private.year_fraction`), what was received (on a synced account the broker's coupons), interest accrued, remaining coupons, held to maturity, if called at the next call date, and what a credit event would cost. Summary and detail carry `note_type` and `credit`; verdicts `cln_paying` and `cln_accruing`. A broker redemption before maturity ends a CLN as `called`.
+- **feat** `create_structured_note` takes `terms.note_type = 'credit_linked'` with a `credit` block.
+- **feat** The two Example Bank N CLNs on Swissquote (Example Airlines 10.5% monthly to 2031; Example Motors 13.25% paid at maturity, callable yearly, to 2034) become notes with their stored term sheets: a guarded content migration with terms read by hand from the PDFs (no model call).
+- **feat** The term-sheet reader recognises credit-linked notes (schema `note_type` + `credit`, prompt, normalisation), so the nightly Swissquote sync turns new CLNs into notes.
+
+### Web
+
+- **feat** A credit-linked note's page leads with its verdict ("Paying 10.5% a year · next coupon USD 87.50 on 20 Nov 2026" or "13.25% a year, building up" with the interest accrued and what a call at the next date pays back), then a **Reference entity** card saying what a credit event would cost, Paid / Worth today / Held to maturity, and collapsed **Coupon schedule**, **Issuer call dates** and **Terms** (with the term sheet). No stock bars or scenarios. The notes list and Swissquote positions show the verdict line; statuses "Called by issuer" and "Credit event".
+
+### iOS
+
+- **feat** The same for credit-linked notes on the note screen, the Notes card and the Swissquote positions. LedgerKit decodes `note_type` and `credit` and words them (`CreditNotePresentation`); "Update prices" is hidden for a CLN.
+
+### Docs
+
+- **docs** termsheet-v1 documents the credit-linked shape; ARCHITECTURE the CLN evaluation; plan and review in `tasks/todo.md` §15.
+
 ## One SMS sent by two automations is logged once; Wio money in — 2026-10-28
 
 ### Backend (Supabase)

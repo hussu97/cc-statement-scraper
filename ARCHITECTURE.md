@@ -724,6 +724,26 @@ schedule, payout, evaluation, events, each share's closes as % of initial); serv
 `settle_structured_notes`, `price_symbols`. Term sheets live in the private `term-sheets` bucket
 at `<profile_code>/<sha256>.pdf`.
 
+**Credit-linked notes** (`20261028110553`). `structured_notes.note_type` is `equity` (all of the
+above) or `credit_linked`: a fixed coupon that stops if the reference entity has a credit event,
+100% at maturity, no shares (strike and final valuation dates null). Statuses add `called` (the
+issuer's call) and `credit_event`. `structured_note_credit_terms` (1:1, member read) holds the
+reference entity, seniority, reference bond, coupon rate p.a., frequency (`monthly` … `annual`, or
+`at_maturity`), day count (`30/360` default), interest start, first coupon date, longstop maturity
+and the issuer's call dates. The schedule is generated, never stored: `private.cln_schedule`
+(coupons on the first coupon date and every 1/3/6/12 months, the last at maturity, each
+rate × `private.year_fraction` of its period). `private.note_evaluate` dispatches on the type: the
+equity evaluator is `private.note_evaluate_equity`; `private.cln_evaluate` gives the same top-level
+keys (received, next coupon with barrier 0, events for the settlement; no shares, levels or
+scenarios) plus `credit`: the schedule with each coupon's status, interest accrued, remaining
+coupons, held to maturity, if called at the next call date, and what a credit event puts at risk.
+On a synced account what was received is the broker's coupon and redemption flows. Verdicts:
+`cln_paying` (the next coupon) and `cln_accruing` (interest paid at maturity: accrued so far, next
+call). A broker redemption before maturity ends a CLN as `called`. `create_structured_note` takes
+`terms.note_type = 'credit_linked'` with a `credit` block (termsheet-v1); the reader recognises
+CLNs, so the Swissquote sync turns new ones into notes. The two Example Bank N CLNs held on 28 Oct were
+loaded by a guarded content migration (`20261028110554`) from terms read by hand.
+
 **Swissquote sync** (`20261027165732`). The `swissquote-sync` function reads the Swissquote
 portfolio nightly through the web platform's own JSON (sign-in: a form post, then the Level-3
 matrix card's challenge as JSON; no browser and no phone push) and hands it to
