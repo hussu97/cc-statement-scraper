@@ -1,5 +1,15 @@
 # Changelog
 
+## Mashreq NEO consolidated statement: current and savings accounts and their lines — 2026-10-28
+
+### Parser
+
+- **feat** Mashreq NEO's monthly "Consolidated Relationship Statement" (`mashreqstatements@mashreq.com`, opened with `MASHREQ_PDF_PASSWORD`) is read as parse-v1 `account_statement_pdf` (parser 2026.10.28): one statement per current/savings account with its number, IBAN, product, alert suffix (last four digits), opening and closing balance and lines. The table is read from word positions: each description cell goes to the row it is centred on, an undated all-zero row is narration for the row above, three-decimal amounts become money, and every running balance and the CLOSING BALANCE must follow or the parse fails. Account-to-account and IPP transfers, interest and fees are named; any other description keeps its direction and is listed by shape in `metadata.unrecognised_lines`.
+
+### Docs
+
+- **docs** parse-v1 documents the Mashreq layout under bank-account statements; plan and review in `tasks/todo.md` §13.
+
 ## India mode; Investments periods; broker 24h — 2026-10-28
 
 ### Backend (Supabase)

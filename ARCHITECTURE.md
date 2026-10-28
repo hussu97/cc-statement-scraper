@@ -825,8 +825,9 @@ account" fallbacks in SMS and statement resolution, and `merge_accounts`) filter
 `kind = 'credit_card'`, and `60_bank_accounts.test.sql` lists every function that reads
 `accounts`, so a new reader fails until it is classified. Plan: `tasks/todo.md` §3.
 
-**Bank-account statements** (`20261021115816`, `tasks/todo.md` §9). ADCB's consolidated statement
-of accounts is parse-v1 `account_statement_pdf`: each statement names its account (`account`:
+**Bank-account statements** (`20261021115816`, `tasks/todo.md` §9, §13). ADCB's consolidated
+statement of accounts and Mashreq NEO's consolidated relationship statement (a parser-only
+addition, 2026.10.28) are parse-v1 `account_statement_pdf`: each statement names its account (`account`:
 kind, full number, alert suffix `ref`, IBAN, product). `ingest_parsed_document` resolves it with
 `private.resolve_bank_statement_account` (full number, else an `account_ref` the number ends
 with, else a new current/savings account; never the card resolver), registers the debit cards
