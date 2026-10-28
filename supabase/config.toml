@@ -484,6 +484,9 @@ verify_jwt = false
 [functions.swissquote-sync]
 verify_jwt = false
 
+[functions.zerodha-sync]
+verify_jwt = false
+
 [functions.member-invite]
 verify_jwt = false
 

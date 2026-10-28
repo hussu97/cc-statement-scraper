@@ -96,6 +96,20 @@ Deno.test("scrubBreadcrumb strips data payloads and URL queries", () => {
   assertEquals(b.data.password_candidates, "[Filtered]");
 });
 
+Deno.test("Kite sign-in fields are filtered (zerodha-sync)", () => {
+  // deno-lint-ignore no-explicit-any
+  const b: any = scrubBreadcrumb(
+    {
+      category: "fetch",
+      data: { twofa_value: "287082", totp_secret: "GEZDGNBV", request_token: "RT1", checksum_ok: true },
+    } as any,
+  );
+  assertEquals(b.data.twofa_value, "[Filtered]");
+  assertEquals(b.data.totp_secret, "[Filtered]");
+  assertEquals(b.data.request_token, "[Filtered]");
+  assertEquals(b.data.checksum_ok, true);
+});
+
 Deno.test("Gmail events are recognised and muted unless GMAIL_SENTRY_ALERTS is on", async () => {
   const { gmailAlertsEnabled, isGmailEvent } = await import("../_shared/sentry.ts");
   assert(isGmailEvent({ tags: { function: "gmail-push" } }));

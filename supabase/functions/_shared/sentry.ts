@@ -38,7 +38,7 @@ const SENSITIVE_HEADERS = new Set([
 // Field names whose values are never sent: SMS text, passwords, tokens, signed URLs, emails.
 const SENSITIVE_KEY_EXACT =
   /^(body|raw_body|sms|sms_body|message_body|messages|text|password|passwords|password_candidates|token|access_token|refresh_token|id_token|service_token|secret|client_secret|authorization|apikey|api_key|settings|document_url|signed_url|signedurl|email|mailbox_email|sender|subject|merchant|merchant_raw|description|description_raw|data)$/i;
-const SENSITIVE_KEY_SUBSTR = /(password|secret|token|authorization|api[_-]?key|cookie)/i;
+const SENSITIVE_KEY_SUBSTR = /(password|secret|token|authorization|api[_-]?key|cookie|totp|twofa)/i;
 
 const FILTERED = "[Filtered]";
 

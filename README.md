@@ -236,7 +236,7 @@ JWTs. The service client logs which source it used (never the value).
 
 | Variable | Used by | Default | Purpose |
 |---|---|---|---|
-| `CRON_SECRET` | worker, gmail-watch-renew, outlook-poll, ops-monitor, fx-rates, metal-prices, stock-prices, rl360-sync, swissquote-sync | required | Must equal Vault `edge_cron_secret` (`x-cron-secret` header) |
+| `CRON_SECRET` | worker, gmail-watch-renew, outlook-poll, ops-monitor, fx-rates, metal-prices, stock-prices, rl360-sync, swissquote-sync, zerodha-sync | required | Must equal Vault `edge_cron_secret` (`x-cron-secret` header) |
 | `PARSER_URL` | worker | required | Cloud Run parser base URL |
 | `PARSER_SECRET` | worker | required | Sent as `X-Parser-Secret` |
 | `PARSER_DOCUMENT_BASE_URL` | worker | — | Rewrites the signed Storage URL origin (local only) |
@@ -256,6 +256,7 @@ JWTs. The service client logs which source it used (never the value).
 | `OUTLOOK_BUDGET_MS` | outlook-poll | `100000` | Time budget per run (resumes next run) |
 | `GMAIL_PUSH_BUDGET_MS` | gmail-push | `100000` | Time budget per push; the rest continues on the redelivery (503) |
 | `SWISSQUOTE_LOGINS` | swissquote-sync | unset (sync off) | JSON array `[{profile_code, username, password, card, currency}]`: a Swissquote login with its Level-3 matrix card (cell → code); written by `scripts/cutover/swissquote-logins.py`, never typed in chat |
+| `ZERODHA_LOGINS` | zerodha-sync | unset (sync off) | JSON array `[{profile_code, user_id, password, totp_secret, api_key, api_secret}]`: a Kite login with its TOTP seed and the user's own Kite Connect app; written by `scripts/cutover/zerodha-logins.py`, never typed in chat |
 | `RL360_LOGINS` | rl360-sync | unset (sync off) | JSON array `[{profile_code, username, password}]` of RL360 Online Service Centre logins; production only, typed into `.env.production` by the owner |
 | `OPS_SMS_UNPARSED_THRESHOLD` | ops-monitor | `5` | Unparsed SMS per 24 h before an issue |
 | `OPS_OPEN_REVIEWS_THRESHOLD` | ops-monitor | `50` | Open reviews before an issue |
@@ -384,7 +385,7 @@ Used for the production Edge Function secrets and Vault entries, and for secret 
 | `member-invite` | POST JSON `{profile_code, email, role?, action?, redirect_to?}` (`action`: `invite` or `resend`) | User JWT (owner) | Add a member and send the Auth invite email (sign-ups are off), or resend it. `redirect_to` must be on the caller's own origin |
 | `termsheet-extract` | POST multipart (`profile_code`, `file`: one PDF) | User JWT (owner) | Read a structured note's term sheet into draft terms with warnings (`docs/contracts/termsheet-v1.md`); the PDF goes to the private `term-sheets` bucket. No app calls it since the 27 Oct redesign (the Swissquote sync reads term sheets itself); kept for scripts |
 | `stock-prices` | POST JSON `{profile_code}` | User JWT (owner) | Fetch the closes a ledger's notes need (backfill after adding one) and settle the notes; returns `{symbols, stored, settled, failed}` |
-| `worker`, `gmail-watch-renew`, `outlook-poll`, `ops-monitor`, `fx-rates`, `metal-prices`, `stock-prices`, `rl360-sync`, `swissquote-sync` | POST | `x-cron-secret` | pg_cron-driven jobs |
+| `worker`, `gmail-watch-renew`, `outlook-poll`, `ops-monitor`, `fx-rates`, `metal-prices`, `stock-prices`, `rl360-sync`, `swissquote-sync`, `zerodha-sync` | POST | `x-cron-secret` | pg_cron-driven jobs |
 
 ### RPCs (`supabase.rpc(...)`, PostgREST)
 

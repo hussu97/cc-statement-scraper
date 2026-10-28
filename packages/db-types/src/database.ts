@@ -4432,6 +4432,10 @@ export type Database = {
         }
         Returns: Json
       }
+      import_zerodha_data: {
+        Args: { p_data: Json; p_profile_code: string }
+        Returns: Json
+      }
       ingest_parsed_document: {
         Args: { p_doc_code: string; p_payload: Json }
         Returns: Json

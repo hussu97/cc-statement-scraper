@@ -1,5 +1,21 @@
 # Changelog
 
+## Zerodha: Kite and Coin holdings, invested against current value, and their trend — 2026-10-28
+
+### Backend (Supabase)
+
+- **feat** `zerodha-sync` (Edge, weekdays 23:30 IST) reads Kite (stocks, ETFs) and Coin (mutual funds) holdings and Funds cash through the user's own free Kite Connect Personal app. Sign-in is automatic: password, then the TOTP from the 2FA seed in `ZERODHA_LOGINS`. The Connect flow's request token is read from the redirect and exchanged with the API secret, and every run signs out.
+- **feat** `import_zerodha_data` (service) keeps the Zerodha INR account (bank `ZRD`), a `security` holding per ISIN, each day's mark, the cash checkpoint and the day's value. Holdings count in net worth and allocation.
+  - Flows are inferred from day to day: the first sight at cost, more units at the cost added, fewer at the day's price, a sold position closed at its last price.
+  - A segment that could not be read keeps its marks and is reported as partly synced.
+- **feat** `broker_portfolio` and `broker_accounts_summary` add `invested` (the cost of open positions) and `basis`. For Zerodha the basis is cost: `net_deposits` is invested + cash, so the profit is the unrealised P&L. Each position has its `segment` and return on cost, `segments` totals Kite and Coin, and each day of the series carries its invested amount and the split.
+- **change** A holding belongs to a broker account when the account has a row or a mark for it, so closed Zerodha positions list as past.
+- **change** Sentry also filters `totp` and `twofa` fields.
+
+### Docs
+
+- **docs** ARCHITECTURE (Zerodha sync), PRODUCTION (`ZERODHA_LOGINS`, authorising the Kite app, the cron job, the deploy list), README (env, endpoints), `scripts/cutover/zerodha-logins.py`, tasks/todo.md §12.
+
 ## Notes and Swissquote, simpler: one answer per screen; ended notes and term-sheet upload out of the way — 2026-10-27
 
 ### Backend (Supabase)

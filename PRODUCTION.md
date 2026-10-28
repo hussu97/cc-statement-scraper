@@ -247,6 +247,21 @@ supabase secrets list --project-ref <project-ref>      # names and digests only
   the sync does nothing. After the first push, run it once with `-d '{"sync":true,"terms":5}'`:
   it builds the history and reads 5 term sheets (the nightly runs read one each). Each run signs
   out any open Swissquote web session.
+- **`ZERODHA_LOGINS`** (zerodha-sync): a one-line JSON array
+  `[{"profile_code":"prf_…","user_id":"…","password":"…","totp_secret":"…","api_key":"…","api_secret":"…"}]`.
+  It holds the Kite login, the base32 seed of its TOTP and the user's own Kite Connect Personal
+  app (free). Together they are full access to the Zerodha account: keep them only in
+  `.env.production`. Before the first run:
+  1. In the Kite developer console, set the app's redirect URL to any URL (the sync reads the
+     token from the redirect and never opens it).
+  2. Authorise the app once, by signing in through
+     `https://kite.trade/connect/login?v=3&api_key=<key>` in a browser.
+
+  Write the secret with `python3 scripts/cutover/zerodha-logins.py --profile prf_…`. It asks
+  without echo, writes into `.env.production` and prints only a count. Push it with the script
+  above. Unset, the sync does nothing. After the first push, run it once with
+  `-d '{"sync":true}'`. The history starts with that run: the free plan has no market data to
+  backfill.
 - **Worker timing.** Leave `PARSER_TIMEOUT_MS` at its default **75000** (set it explicitly only
   to document it): it must stay above the parser's own 60 s kill (§3) and below Cloud Run's
   120 s request timeout. `EDGE_WALL_CLOCK_MS` is 150000 on the free plan (400000 on paid); the
@@ -259,7 +274,7 @@ Deploy every function. Each one's `verify_jwt = false` comes from `supabase/conf
 
 ```bash
 supabase functions deploy --project-ref <project-ref>
-# statements-upload sms-ingest worker gmail-push gmail-watch-renew outlook-poll ops-monitor fx-rates metal-prices stock-prices termsheet-extract rl360-sync swissquote-sync member-invite
+# statements-upload sms-ingest worker gmail-push gmail-watch-renew outlook-poll ops-monitor fx-rates metal-prices stock-prices termsheet-extract rl360-sync swissquote-sync zerodha-sync member-invite
 ```
 
 Smoke test (`CRON_SECRET` exported from the same file as in §2.4):
@@ -282,6 +297,7 @@ curl -s -X POST https://<project-ref>.supabase.co/functions/v1/worker \
 | `ledger-stock-prices` | `30 22 * * 1-6` | `stock-prices` function (closes of the shares structured notes follow, from Yahoo Finance, no key; then settles the notes) |
 | `ledger-rl360-sync` | `20 2 * * *` (06:20 Dubai) | `rl360-sync` function (RL360 plan values and premiums; needs `RL360_LOGINS`, skips when unset) |
 | `ledger-swissquote-sync` | `30 21 * * *` (01:30 Dubai) | `swissquote-sync` function (the Swissquote cash account, positions, values and note terms; needs `SWISSQUOTE_LOGINS`, skips when unset) |
+| `ledger-zerodha-sync` | `0 18 * * 1-5` (23:30 IST, 22:00 Dubai) | `zerodha-sync` function (Kite and Coin holdings, Funds cash and the day's value; needs `ZERODHA_LOGINS`, skips when unset) |
 | `ledger-nightly` | `0 22 * * *` (02:00 Dubai) | purge `document_events` older than 90 days, void released authorisations, recurring detection, insights, net worth snapshot |
 | `ledger-llm-enqueue` | `0 18 * * *` | queue uncategorised merchants for the LLM |
 | `ledger-legacy-choices` | `45 22 * * *` | apply staged legacy category choices once per transaction (cutover helper); unschedules itself when nothing is pending or 30 days after staging |

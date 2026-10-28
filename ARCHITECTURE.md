@@ -76,6 +76,7 @@ a `deno test` guard enforces this.
 | `termsheet-extract` | User JWT (owner), multipart PDF | Stores the term sheet in `term-sheets`, sends it to Claude (`TERMSHEET_LLM_MODEL`, default `claude-sonnet-5-5`) as a document with a JSON schema, and normalises the answer into the termsheet-v1 draft (`docs/contracts/termsheet-v1.md`) with warnings for the review: printed levels that disagree with the initial level, half coupons or autocalls, dates out of order, a payout without a 0% branch or that falls as the worst share rises, and features it does not model. Nothing from the document is logged. |
 | `rl360-sync` | pg_cron daily (`20 2 * * *`, 06:20 Dubai) | Signs in to RL360's Online Service Centre with each login in `RL360_LOGINS`, reads every plan's value and premium history (plain HTML, no browser), and calls `import_holding_data`: it claims the profile's RL360 plan by plan number, stores the value (source `import`, never over a manual one), reconciles premiums with linked card payments (±7 days, 5%; unmatched premiums become imported contributions) and returns the month-ends still without a value, which the function backfills (30 a run). |
 | `swissquote-sync` | pg_cron daily (`30 21 * * *`, 01:30 Dubai) | Signs in to Swissquote with each login in `SWISSQUOTE_LOGINS` (password, then the Level-3 matrix card's cell as JSON; never the phone push), reads the portfolio, cash, positions, every transaction since the account opened, product types and the daily performance index, and calls `import_broker_data` (the cash account, its transactions, holdings and flows, the day's marks, the cash checkpoint and daily values; idempotent). Then reads the term sheet of up to one position without terms a run (`{"terms": n}` for more) from Swissquote Messages into a structured note. A failure is recorded on the connection (`record_broker_sync_error`) and reaches Sentry; messages never carry logins or codes. |
+| `zerodha-sync` | pg_cron weekdays (`0 18 * * 1-5`, 23:30 IST) | Signs in to each login's own Kite Connect app in `ZERODHA_LOGINS` (user id and password, then the TOTP from the 2FA seed; the Connect flow's `request_token` is read from the redirect and exchanged with the API secret; the free Personal plan has no refresh token), reads the profile, Kite holdings, Coin holdings (`/mf/holdings`) and Funds, calls `import_zerodha_data`, and signs out. A segment that cannot be read keeps its last marks and the run is recorded as partly synced (`record_broker_sync_error`) and reaches Sentry; messages never carry logins, codes or tokens. |
 | `fx-rates` | pg_cron daily 21:00 UTC | Fetches open.er-api.com, inverts quotes to AED per unit with exact decimals, calls `upsert_fx_rates` (which re-estimates pending SMS). |
 
 Shared code in `_shared/`: `auth.ts` (JWT, service token and cron secret), `sentry.ts`
@@ -764,6 +765,28 @@ document, so each account is anchored on a balance the bank printed, the latest 
 An SMS statement anchor has no lines to say what it covers, so the activity added to it is by
 date (after the statement date, plus charges dated on it that are still pending), not by `stmt_code`.
 
+**Zerodha sync** (`20261027202923`, `tasks/todo.md` §12). The `zerodha-sync` function reads a
+Kite user's portfolio on weekday nights and hands it to `import_zerodha_data` (service,
+idempotent per day). It reuses the broker tables:
+- **The account.** `broker_connections` (provider `zerodha`, `portfolio_ref` = the Kite user id)
+  ties it to an INR "Trading account" at Zerodha (bank `ZRD`). Funds' available cash is a `broker`
+  balance checkpoint.
+- **Holdings.** Each ISIN, Kite (stocks, ETFs) or Coin (mutual funds), is a `security` holding:
+  units and a unit price per day. It has no symbol, so the Yahoo price job leaves it alone.
+  `broker_positions` keeps each day's mark (product type `EQUITY` or `MUTUAL_FUND`, the average
+  price as cost). A segment that could not be read keeps its last marks for the day.
+- **Flows, inferred.** The free plan has no trade history, so flows come from comparing days.
+  The first sight of a position is a contribution at cost, more units add the cost added, and
+  fewer units are a withdrawal at the day's price. A position gone from a segment that was read
+  is closed at its last price; bought back, it opens again. There is one flow per holding and day
+  (`zerodha:<isin>:<day>`).
+- **Value per day.** `broker_snapshots` holds cash + positions; each day of `broker_portfolio`'s
+  series carries the invested amount and the Kite and Coin split.
+- **The screen.** `broker_portfolio` and `broker_accounts_summary` report `invested` (the cost of
+  the open positions) and a `basis`. For Zerodha the basis is `cost`: `net_deposits` is invested
+  + cash, so the profit is the unrealised P&L. Each position carries its segment and its return
+  on cost, and `segments` totals Kite and Coin.
+
 **Bank accounts** (Phase 2a, `20261020110310`). `accounts.kind` is `credit_card`, `current` or
 `savings`. A bank account has an `account_ref` (the digits a bank prints after the mask,
 `XXX310001` → `310001`, unique per profile and bank) and never a credit limit or cycle close day
@@ -937,6 +960,7 @@ all-profiles run, purges `document_events` older than 90 days first):
 | `ledger-stock-prices` | `30 22 * * 1-6` | `stock-prices` function |
 | `ledger-rl360-sync` | `20 2 * * *` | `rl360-sync` function |
 | `ledger-swissquote-sync` | `30 21 * * *` | `swissquote-sync` function |
+| `ledger-zerodha-sync` | `0 18 * * 1-5` | `zerodha-sync` function |
 | `ledger-nightly` | `0 22 * * *` | `private.nightly()` |
 | `ledger-llm-enqueue` | `0 18 * * *` | `private.enqueue_llm_categorize()` |
 | `ledger-legacy-choices` | `45 22 * * *` | `private.legacy_choices_cron()`: applies staged legacy category choices once per transaction (never over a later user edit), then unschedules itself when nothing is pending or 30 days after staging. Leftovers: `private.legacy_unmatched_choices()` |
