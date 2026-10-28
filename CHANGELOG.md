@@ -1,5 +1,22 @@
 # Changelog
 
+## India mode; Investments periods; broker 24h — 2026-10-28
+
+### Backend (Supabase)
+
+- **feat** India mode, apart from Wealth: an account at an India bank (`KITE`, `COIN`, legacy `ZRD`; `private.is_india_bank`) and every holding marked on one (`holdings.portfolio = 'india'`, kept by a trigger on `broker_positions`, backfilled) are India's. Wealth's net worth and allocation, Investments (valuation, value per day, returns), cash and the Accounts list, cash flow and its savings, wealth insights and the broker summary leave them out. Spend is unchanged.
+- **feat** `india_overview(profile, period)` (member; `30d`, `90d` default, `ytd`, `12m`): Kite and Coin per account and in total, in INR with AED beside: value, invested, cash, P&L, the day's move against each position's previous mark, the period's start and end value, money added (the change in cash + buys at cost − sales at their price) and growth, and the value and cost per day. A start before the ledger's first India sync is unknown: null, not 0. An AED total with no INR rate is null.
+- **feat** `holding_returns` takes `30d` and `90d`.
+- **feat** `broker_accounts_summary` rows add `profit_aed` and the day's move of open positions: `change_24h`, `change_24h_aed`, `change_24h_pct`.
+
+### Web
+
+### iOS
+
+### Docs
+
+- ARCHITECTURE "India mode"; README's RPC table lists the Wealth and India RPCs.
+
 ## Zerodha as two accounts: Zerodha Kite and Zerodha Coin, each with its own logo — 2026-10-28
 
 ### Backend (Supabase)

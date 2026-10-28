@@ -196,6 +196,9 @@ select set_eq(
     -- Zerodha as Kite and Coin (20261028054048): a segment's INR account (bank accounts only), and
     -- moving an old single account to bank KITE
     'private.zerodha_connection', 'private.zerodha_split_single_accounts',
+    -- India mode (20261028061444): India's accounts (bank accounts at an India bank only), a
+    -- holding marked on one, and cash flow's savings leaving them out
+    'private.india_accounts', 'private.broker_positions_portfolio', 'public.cash_flow_savings',
     -- a card payment's leg on the same bank's current account (20261020170933)
     'private.add_payment_leg',
     -- consolidated statements (20261021115816): a bank statement's account (bank accounts only),

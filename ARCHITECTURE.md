@@ -657,7 +657,7 @@ whole description, min 2: Wio prints RL360 as "RI") links matching purchases, fe
 and when the rule is saved; `link_transaction` links or unlinks by hand. **A linked payment is
 saving**: `v_spend` leaves it out and `v_cash_flow` files it as `saving` with `holding_code` (a
 linked credit is negative saving); `cash_flow_savings` breaks saving down by holding.
-`holding_returns(profile, all|ytd|12m)` gives, per holding and in total, start and end value,
+`holding_returns(profile, all|ytd|12m|90d|30d)` gives, per holding and in total, start and end value,
 added (contributions − withdrawals), income, growth = end − start − added + income, simple % and
 a money-weighted yearly return (`private.xirr`, bisection, from 90 days of history); a holding
 with no value at the period's start (this year, 12 months) or with no contribution at all (all
@@ -791,6 +791,27 @@ function reads a Kite user's portfolio on weekday nights and hands it to `import
   the open positions) and a `basis`. For Zerodha the basis is `cost`: `net_deposits` is invested
   + cash, so the profit is the unrealised P&L. Each position carries its segment and its return
   on cost, and `segments` totals the account's segment (one entry per account).
+
+**India mode** (`20261028061444`). India is its own mode, fully apart from Wealth. An account at an
+India bank (`private.is_india_bank`: `KITE`, `COIN` and the legacy `ZRD`) and every holding marked
+on one (`holdings.portfolio = 'india'`, set by the `broker_positions_portfolio` trigger, backfilled
+once) are left out of everything Wealth shows: `private.holding_values` (so `holdings_valuation`,
+`holdings_value_series`, `holding_returns` and net worth), net worth's cash and allocation (and its
+snapshots and series), `cash_position` (the Accounts list), `cash_flow` and `cash_flow_savings`,
+the wealth insights, and `broker_accounts_summary`. Spend screens are unchanged.
+- **The screen.** `india_overview(profile, 30d|90d|ytd|12m)`: per India account (Kite, Coin, then a
+  legacy one, whose `segment` is `kite`) and in total, in INR with AED beside it: value (cash +
+  positions at the latest mark), invested (cost of open positions), P&L, and the day's move
+  (each position against its previous priced mark at today's quantity,
+  `private.broker_latest_positions`). Over the period: the start value (each account's last
+  snapshot before it; 0 for an account opened inside it after the data began), the end, what was
+  added (the change in cash + the positions' flows: buys at cost, sales at their price) and the
+  growth = end − start − added. When the ledger's India data begins inside the period the start
+  is unknown, so start, added and growth are null rather than 0. `series` is the value and cost on
+  each day with a snapshot, each account's last one carried. Kite's and Coin's own pages keep
+  `broker_portfolio`.
+- **The day's move** is also on `broker_accounts_summary` (`change_24h`, `_aed`, `_pct`), with
+  `profit_aed`.
 
 **Bank accounts** (Phase 2a, `20261020110310`). `accounts.kind` is `credit_card`, `current` or
 `savings`. A bank account has an `account_ref` (the digits a bank prints after the mask,

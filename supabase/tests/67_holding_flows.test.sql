@@ -169,7 +169,7 @@ select is((select h->>'annual_pct' from jsonb_array_elements(public.holding_retu
            where h->>'name' = 'World fund'), null, 'under 90 days of history: no yearly rate');
 select is((select (h->>'complete')::boolean from jsonb_array_elements(public.holding_returns(pg_temp.v('p'), 'all')->'holdings') h
            where h->>'name' = 'RL360 plan'), true, 'a plan with linked payments is complete');
-select throws_ok($$ select public.holding_returns(pg_temp.v('p'), 'week') $$, '22023', null, 'periods are all, ytd and 12m');
+select throws_ok($$ select public.holding_returns(pg_temp.v('p'), 'week') $$, '22023', null, 'periods are all, ytd, 12m, 90d and 30d');
 
 -- ── cash flow by holding, allocation ────────────────────────────────────────
 select results_eq(

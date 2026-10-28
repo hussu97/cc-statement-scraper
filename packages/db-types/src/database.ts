@@ -1658,6 +1658,7 @@ export type Database = {
           metal: string | null
           name: string
           notes: string | null
+          portfolio: string
           principal: number | null
           profile_code: string
           purity: number | null
@@ -1687,6 +1688,7 @@ export type Database = {
           metal?: string | null
           name: string
           notes?: string | null
+          portfolio?: string
           principal?: number | null
           profile_code: string
           purity?: number | null
@@ -1716,6 +1718,7 @@ export type Database = {
           metal?: string | null
           name?: string
           notes?: string | null
+          portfolio?: string
           principal?: number | null
           profile_code?: string
           purity?: number | null
@@ -4434,6 +4437,10 @@ export type Database = {
       }
       import_zerodha_data: {
         Args: { p_data: Json; p_profile_code: string }
+        Returns: Json
+      }
+      india_overview: {
+        Args: { p_period?: string; p_profile_code: string }
         Returns: Json
       }
       ingest_parsed_document: {

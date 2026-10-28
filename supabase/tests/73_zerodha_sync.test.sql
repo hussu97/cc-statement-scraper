@@ -4,8 +4,8 @@
 -- day's mark on its segment's account, the cash checkpoints and each account's value per day. Flows are inferred from day to day: the first sight at cost,
 -- more units at the cost added, fewer units at the day's price, a sold position closed at its
 -- last price, and a re-bought one opened again. A segment whose read failed keeps its marks.
--- broker_portfolio and broker_accounts_summary report invested against value, per account. Dates
--- are relative to today.
+-- broker_portfolio reports invested against value, per account; Wealth's broker_accounts_summary
+-- leaves both out (they are India's). Dates are relative to today.
 begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
@@ -226,11 +226,8 @@ select is((select string_agg((d->>'as_of') || ' ' || (d->>'invested') || ' ' || 
             || pg_temp.d(-2) || ' 3200.00 4400.00, ' || pg_temp.d(-1) || ' 3200.00 4480.00',
           'Coin every day: invested against the total');
 select is((pg_temp.v('bp')::jsonb)->'closed_total'->>'count', '0', 'nothing closed: the share is held again');
-select is((select string_agg((x->>'name') || ' ' || (x->>'bank_code') || ' ' || (x->>'basis') || ' ' || (x->>'invested')
-                             || ' ' || (x->>'profit') || ' ' || jsonb_array_length(x->'holding_codes'), ', ' order by x->>'name' desc)
-           from jsonb_array_elements(pg_temp.v('bs')::jsonb) x),
-          'Zerodha Kite KITE cost 13500.00 0.00 1, Zerodha Coin COIN cost 3200.00 1280.00 1',
-          'the summary: a line per account, each against cost, with its own holdings');
+select is(pg_temp.v('bs')::jsonb, '[]'::jsonb,
+          'Wealth''s broker summary leaves Kite and Coin out: they are India''s (75_india_mode)');
 
 select pg_temp.as_user('uid2');
 set local role authenticated;
