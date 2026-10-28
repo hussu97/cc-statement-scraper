@@ -4,7 +4,7 @@ import { insightsRouteSearch, parseRangeSearch, parseTabSearch } from "@/lib/sea
 import { parsePageSearch } from "@/lib/infinite";
 import { parseSignInSearch } from "@/lib/redirect";
 import { parseCashFlowSearch } from "@/lib/cash-flow";
-import { parseAccountSearch } from "@/lib/wealth";
+import { parseAccountSearch, parsePortfolioSearch } from "@/lib/wealth";
 
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
@@ -99,7 +99,10 @@ const wealthAccountsRoute = createRoute({
   component: lazyRouteComponent(() => import("@/routes/wealth-accounts"), "AccountsPage"),
 });
 
-/** One bank account: balance, balance chart and the month's ledger. `?month=YYYY-MM`, this month when absent. */
+/**
+ * One bank account: balance, balance chart and the month's ledger. `?month=YYYY-MM`, this month
+ * when absent. A broker account's portfolio is under Investments (wealthPortfolioRoute).
+ */
 export const wealthAccountRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/wealth/accounts/$accountCode",
@@ -112,6 +115,17 @@ const wealthInvestmentsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/wealth/investments",
   component: lazyRouteComponent(() => import("@/routes/wealth-investments"), "InvestmentsPage"),
+});
+
+/**
+ * A synced broker account's portfolio: the portfolio card, then Portfolio / Transactions / Past
+ * tabs. `?tab=` (Portfolio when absent) and the Transactions tab's `?month=YYYY-MM`.
+ */
+export const wealthPortfolioRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/wealth/investments/accounts/$accountCode",
+  validateSearch: (s: Record<string, unknown>) => parsePortfolioSearch(s),
+  component: lazyRouteComponent(() => import("@/routes/wealth-portfolio"), "PortfolioPage"),
 });
 
 /** One holding: value, cost, income, gain, returns, flows (with linked payments) and value history. */
@@ -176,7 +190,7 @@ const routeTree = rootRoute.addChildren([
   signInRoute,
   welcomeRoute,
   privacyRoute,
-  appRoute.addChildren([overviewRoute, activityRoute, insightsRoute, categoryRoute, cashFlowRedirectRoute, wealthRoute, wealthAccountsRoute, wealthAccountRoute, wealthInvestmentsRoute, wealthHoldingRoute, wealthCashFlowRoute, budgetsRoute, cardsRoute, statementRoute, reviewRoute, rulesRoute, settingsRoute]),
+  appRoute.addChildren([overviewRoute, activityRoute, insightsRoute, categoryRoute, cashFlowRedirectRoute, wealthRoute, wealthAccountsRoute, wealthAccountRoute, wealthInvestmentsRoute, wealthPortfolioRoute, wealthHoldingRoute, wealthCashFlowRoute, budgetsRoute, cardsRoute, statementRoute, reviewRoute, rulesRoute, settingsRoute]),
 ]);
 
 export const router = createRouter({ routeTree, defaultPreload: "intent", scrollRestoration: true });

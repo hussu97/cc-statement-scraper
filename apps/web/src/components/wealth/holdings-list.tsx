@@ -30,8 +30,8 @@ export interface BrokerGroups {
 
 /**
  * Every holding, grouped by kind, each with its value (own currency and AED), its date, cost and
- * gain. A synced broker account (Swissquote) is one row at the top, linking to its page; the
- * holdings it covers aren't listed again.
+ * gain. A synced broker account (Swissquote, Zerodha) is one row at the top, linking to its
+ * portfolio; the holdings it covers aren't listed again.
  */
 export function HoldingsListCard({
   q,
@@ -116,7 +116,7 @@ function BrokerRow({ a }: { a: BrokerAccountSummary }) {
   return (
     <li>
       <Link
-        to="/wealth/accounts/$accountCode"
+        to="/wealth/investments/accounts/$accountCode"
         params={{ accountCode: a.account_code }}
         className="tap group flex items-center gap-3 px-5 py-3.5 hover:bg-surface-2/60 focus-visible:bg-surface-2/60"
       >
@@ -124,7 +124,7 @@ function BrokerRow({ a }: { a: BrokerAccountSummary }) {
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-ink group-hover:text-accent">{a.name}</p>
           <p className="tabular mt-0.5 text-[12px] text-ink-2">{brokerAccountLine(a)}</p>
-          {a.sync_status === "error" && <p className="mt-0.5 text-[11px] text-warn">The last sync failed: open the account to see why.</p>}
+          {a.sync_status === "error" && <p className="mt-0.5 text-[11px] text-warn">The last sync failed: open the portfolio to see why.</p>}
         </div>
         <ChevronRight className="size-4 shrink-0 text-subtle group-hover:text-ink-2" />
       </Link>

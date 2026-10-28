@@ -21,8 +21,8 @@ import { AccountLedgerTable } from "./account-ledger";
 // The chart library loads after the page renders (as on Overview, WEB-53).
 const BalanceChart = lazy(() => import("./balance-chart").then((m) => ({ default: m.BalanceChart })));
 
-// An account's balance and its month as a statement: the whole page for a bank account, the
-// Transactions tab for a synced broker account (routes/wealth-account.tsx).
+// An account's balance and its month as a statement: the whole page for a bank account
+// (routes/wealth-account.tsx), the Transactions tab of a broker's portfolio (routes/wealth-portfolio.tsx).
 
 export function BalanceCard({
   profileCode,

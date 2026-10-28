@@ -15,8 +15,9 @@ import {
   netWorthHistoryMonths,
   netWorthNotes,
   netWorthPoints,
-  accountTab,
   parseAccountSearch,
+  parsePortfolioSearch,
+  portfolioTab,
   shiftAccountMonth,
 } from "./wealth";
 
@@ -33,13 +34,20 @@ describe("account page month (?month=YYYY-MM)", () => {
     expect(parseAccountSearch({}, TODAY)).toHaveProperty("month", undefined);
   });
 
-  it("keeps a known tab other than the default", () => {
-    expect(parseAccountSearch({ tab: "past" }, TODAY)).toEqual({ month: undefined, tab: "past" });
-    expect(parseAccountSearch({ tab: "transactions", month: "2026-09" }, TODAY)).toEqual({ month: "2026-09", tab: "transactions" });
-    expect(parseAccountSearch({ tab: "portfolio" }, TODAY)).toHaveProperty("tab", undefined);
-    expect(parseAccountSearch({ tab: "<x>" }, TODAY)).toHaveProperty("tab", undefined);
-    expect(accountTab(undefined)).toBe("portfolio");
-    expect(accountTab("past")).toBe("past");
+  it("drops an old ?tab= on a bank account's page, explicitly (the router lays it over the raw URL)", () => {
+    const s = parseAccountSearch({ tab: "past", month: "2026-09" }, TODAY);
+    expect(s).toEqual({ month: "2026-09", tab: undefined });
+    expect(s).toHaveProperty("tab", undefined);
+    expect({ tab: "past", ...s }.tab).toBeUndefined();
+  });
+
+  it("keeps a known portfolio tab other than the default, and the month", () => {
+    expect(parsePortfolioSearch({ tab: "past" }, TODAY)).toEqual({ month: undefined, tab: "past" });
+    expect(parsePortfolioSearch({ tab: "transactions", month: "2026-09" }, TODAY)).toEqual({ month: "2026-09", tab: "transactions" });
+    expect(parsePortfolioSearch({ tab: "portfolio" }, TODAY)).toHaveProperty("tab", undefined);
+    expect(parsePortfolioSearch({ tab: "<x>", month: "2026-11" }, TODAY)).toEqual({ month: undefined, tab: undefined });
+    expect(portfolioTab(undefined)).toBe("portfolio");
+    expect(portfolioTab("past")).toBe("past");
   });
 
   it("turns the param into a first-of-month and back; this month is the default", () => {
