@@ -1,7 +1,7 @@
 """Stateless credit-card statement parsing service (contract: docs/contracts/parse-v1.md)."""
 
 CONTRACT_VERSION = 1
-PARSER_VERSION = "2026.10.21"
+PARSER_VERSION = "2026.10.28"
 
 SUPPORTED_BANKS = ("FAB", "ADCB", "ENBD", "EIB", "SIB", "MASHREQ", "WIO")
 

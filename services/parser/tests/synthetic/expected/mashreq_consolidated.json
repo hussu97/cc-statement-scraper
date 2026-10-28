@@ -1,0 +1,197 @@
+{
+  "bank_code": "MASHREQ",
+  "contract_version": 1,
+  "document_kind": "account_statement_pdf",
+  "statements": [
+    {
+      "account": {
+        "currency": "AED",
+        "iban": "AE000330000099990002222",
+        "kind": "savings",
+        "number": "099990002222",
+        "product": "Neo Plus Saver - Balance",
+        "ref": "2222"
+      },
+      "bank_code": "MASHREQ",
+      "card_holder": "JANE Q SAMPLE",
+      "card_type": null,
+      "due_date": null,
+      "kind": "statement",
+      "lines": [
+        {
+          "amount_aed": "5000.00",
+          "amount_original": "5000.00",
+          "card_holder": null,
+          "card_last4": null,
+          "country_code": null,
+          "currency_original": "AED",
+          "description_raw": "Account to Account Transfer FROM ACCOUNT No:099990002222 TO ACCOUNT No: 099990001111",
+          "direction": "debit",
+          "fx_rate": "1",
+          "kind": "transfer_out",
+          "legacy_fingerprint": "22a56d62b98bdfdce07df9f3ab72dd88949c789b3adb382ac7a341929fdb2ad8",
+          "line_no": 1,
+          "merchant_normalized": "ACCOUNT TO ACCOUNT TRANSFER",
+          "posting_date": "2026-09-01",
+          "txn_date": "2026-09-01",
+          "txn_time": null
+        },
+        {
+          "amount_aed": "41.66",
+          "amount_original": "41.66",
+          "card_holder": null,
+          "card_last4": null,
+          "country_code": null,
+          "currency_original": "AED",
+          "description_raw": "VALUE DATE: 01-10-2026 Interest 099990002222",
+          "direction": "credit",
+          "fx_rate": "1",
+          "kind": "interest",
+          "legacy_fingerprint": "1089539db574780fad440549965cc70ad91c26ef1fa8c1f3ee9f4ad50abce7bc",
+          "line_no": 2,
+          "merchant_normalized": "INTEREST",
+          "posting_date": "2026-09-30",
+          "txn_date": "2026-09-30",
+          "txn_time": null
+        }
+      ],
+      "metadata": {
+        "layout": "mashreq_consolidated",
+        "pdf_sha256": "<pdf_sha256>",
+        "unrecognised_lines": []
+      },
+      "period_end": "2026-09-30",
+      "period_start": "2026-09-01",
+      "primary_card_last4": null,
+      "reference_source": "fallback",
+      "statement_date": "2026-09-30",
+      "statement_reference": "099990002222-20260930",
+      "totals": {
+        "closing_balance": "10041.66",
+        "credit_limit": null,
+        "min_due": null,
+        "opening_balance": "15000.00",
+        "total_credits": "41.66",
+        "total_debits": "5000.00"
+      },
+      "warnings": []
+    },
+    {
+      "account": {
+        "currency": "AED",
+        "iban": "AE000330000099990001111",
+        "kind": "current",
+        "number": "099990001111",
+        "product": "Neo Current Account",
+        "ref": "1111"
+      },
+      "bank_code": "MASHREQ",
+      "card_holder": "JANE Q SAMPLE",
+      "card_type": null,
+      "due_date": null,
+      "kind": "statement",
+      "lines": [
+        {
+          "amount_aed": "5000.00",
+          "amount_original": "5000.00",
+          "card_holder": null,
+          "card_last4": null,
+          "country_code": null,
+          "currency_original": "AED",
+          "description_raw": "Account to Account Transfer FROM ACCOUNT No:099990002222 TO ACCOUNT No: 099990001111",
+          "direction": "credit",
+          "fx_rate": "1",
+          "kind": "transfer_in",
+          "legacy_fingerprint": "66a3e98708049905476edf280d25eeacae8c636f462d01d880e6b7bf0e24a39d",
+          "line_no": 1,
+          "merchant_normalized": "ACCOUNT TO ACCOUNT TRANSFER",
+          "posting_date": "2026-09-01",
+          "txn_date": "2026-09-01",
+          "txn_time": null
+        },
+        {
+          "amount_aed": "750.00",
+          "amount_original": "750.00",
+          "card_holder": null,
+          "card_last4": null,
+          "country_code": null,
+          "currency_original": "AED",
+          "description_raw": "IPP TRANSFER 019030000000AE000860000009999999999 - JANE Q SAMPLE - /REF/ Family Support - T_00000000000000000000000000000001",
+          "direction": "debit",
+          "fx_rate": "1",
+          "kind": "transfer_out",
+          "legacy_fingerprint": "fcb4cb611634667170303f5af7e2515f865c86875a2463760db147d80338d183",
+          "line_no": 2,
+          "merchant_normalized": "IPP TRANSFER",
+          "posting_date": "2026-09-02",
+          "txn_date": "2026-09-02",
+          "txn_time": null
+        },
+        {
+          "amount_aed": "200.00",
+          "amount_original": "200.00",
+          "card_holder": null,
+          "card_last4": null,
+          "country_code": null,
+          "currency_original": "AED",
+          "description_raw": "POS PURCHASE SAMPLE MART 1234",
+          "direction": "debit",
+          "fx_rate": "1",
+          "kind": "transfer_out",
+          "legacy_fingerprint": "5acb075c61f7922808ecbcee7491585a374df5cbb7185a08eb9b544673946918",
+          "line_no": 3,
+          "merchant_normalized": "POS PURCHASE SAMPLE MART 1234",
+          "posting_date": "2026-09-10",
+          "txn_date": "2026-09-10",
+          "txn_time": null
+        },
+        {
+          "amount_aed": "50.00",
+          "amount_original": "50.00",
+          "card_holder": null,
+          "card_last4": null,
+          "country_code": null,
+          "currency_original": "AED",
+          "description_raw": "SERVICE CHARGES",
+          "direction": "debit",
+          "fx_rate": "1",
+          "kind": "fee",
+          "legacy_fingerprint": "977cdcc144a3bf3b4862f7ff47b3a3832e64aefde5ad9edcfd8a7d83a0a0f9a5",
+          "line_no": 4,
+          "merchant_normalized": "SERVICE CHARGES",
+          "posting_date": "2026-09-15",
+          "txn_date": "2026-09-15",
+          "txn_time": null
+        }
+      ],
+      "metadata": {
+        "layout": "mashreq_consolidated",
+        "pdf_sha256": "<pdf_sha256>",
+        "unrecognised_lines": [
+          {
+            "direction": "debit",
+            "line_no": 3,
+            "shape": "POS w w w #"
+          }
+        ]
+      },
+      "period_end": "2026-09-30",
+      "period_start": "2026-09-01",
+      "primary_card_last4": null,
+      "reference_source": "fallback",
+      "statement_date": "2026-09-30",
+      "statement_reference": "099990001111-20260930",
+      "totals": {
+        "closing_balance": "4000.01",
+        "credit_limit": null,
+        "min_due": null,
+        "opening_balance": "0.01",
+        "total_credits": "5000.00",
+        "total_debits": "1000.00"
+      },
+      "warnings": [
+        "1 line(s) have a description this parser does not know; kept as transfers by direction"
+      ]
+    }
+  ]
+}

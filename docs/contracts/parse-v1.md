@@ -107,8 +107,8 @@ All money values are **decimal strings, absolute (non-negative)**, except `total
 Field rules:
 - `parser_version` changes whenever the output for the same PDF changes (see [Versioning](#versioning)).
 - `document_kind` is `statement_pdf`, `history_pdf` or `account_statement_pdf`. SIB "transaction history"
-  exports are `history_pdf`; ADCB's consolidated statement of accounts is `account_statement_pdf`
-  (see [Bank-account statements](#bank-account-statements-account_statement_pdf)).
+  exports are `history_pdf`; ADCB's consolidated statement of accounts and Mashreq NEO's
+  consolidated relationship statement are `account_statement_pdf` (see [Bank-account statements](#bank-account-statements-account_statement_pdf)).
 - `statements[].kind` is `statement` or `history_extract`. A `history_pdf` produces only `history_extract` statements.
 - `reference_source` is `explicit`, `fallback` or null.
 - `totals` contains every key. A value is null when that parser doesn't extract it. FAB, ENBD/EIB,
@@ -197,6 +197,25 @@ Since parser 2026.10.21. ADCB e-mails one "Consolidated Statement of Accounts" a
 
   A deposit's `amount` is principal plus profit accrued to `as_of`. A card summary is a
   cross-check (ingest only refreshes a known card's credit limit); TouchPoints are not read.
+
+**Mashreq NEO** (since parser 2026.10.28) e-mails a monthly "Consolidated Relationship Statement"
+(from `mashreqstatements@mashreq.com`, opened with `MASHREQ_PDF_PASSWORD`, the same key as
+Mashreq's card statements). Same shape as ADCB's, with these differences:
+
+- `account.kind` comes from the section ("Savings/Current Account Statement"), `product` from the
+  page-1 summary ("Neo Plus Saver - Balance"), `ref` is the last **four** digits, and
+  `card_holder` is the customer's name. There are no `deposits[]` or `card_summaries[]`.
+- Amounts print three decimals; a third decimal other than 0 fails the parse. `total_debits` /
+  `total_credits` are the sums of the lines (the table has no Total row); the CLOSING BALANCE row
+  must equal the last running balance.
+- `txn_date` = `posting_date` = the row's date (a "VALUE DATE:" in the description stays text). An
+  undated row with all-zero amounts is narration and joins the description of the row above
+  ("… FROM ACCOUNT No:… TO ACCOUNT No:…").
+- Kinds: `Account to Account Transfer` and `IPP TRANSFER` are `transfer_out` / `transfer_in`
+  (merchant `ACCOUNT TO ACCOUNT TRANSFER` / `IPP TRANSFER`), a description naming INTEREST is
+  `interest`, FEE/CHARGES/COMMISSION/VAT is `fee`; anything else is a transfer by direction and
+  listed in `metadata.unrecognised_lines` (debit-card purchases included, until a sample shows
+  their shape).
 
 Ingest (`public.ingest_parsed_document`) resolves each statement to a bank account by `account.ref`
 (creating it when absent), records the closing balance as a `balance_checkpoints` row

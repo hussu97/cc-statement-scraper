@@ -405,6 +405,107 @@ _ADCB_CONSOLIDATED_PAGES: list[list[Line]] = [
 ]
 
 
+# ---------------------------------------------------------------- Mashreq consolidated
+# Mashreq NEO's monthly "Consolidated Relationship Statement" (current and savings accounts).
+# Columns sit at the real statement's x positions, amounts right-aligned with three decimals.
+# A description cell is centred on its row's amounts, so a long one starts above its date; an
+# undated all-zero row is narration for the row above. Page 4 continues the current account.
+
+# Helvetica advance widths (per 1000 em) of the characters right-aligned below.
+_HELV = {**dict.fromkeys("0123456789", 556), ",": 278, ".": 278, "D": 722, "e": 556, "b": 556,
+         "i": 222, "t": 278, "C": 722, "r": 333, "d": 556, "B": 667, "a": 556, "l": 222, "n": 556, "c": 500}
+
+
+def _right(edge: float, text: str) -> tuple[float, str]:
+    """A segment whose right edge is ``edge`` at the synthetic font size (8pt)."""
+    return (round(edge - sum(_HELV[ch] for ch in text) * 8 / 1000, 2), text)
+
+
+def _mrow(date: str | None, description: str, reference: str | None, debit: str, credit: str, balance: str) -> Line:
+    row: list[tuple[float, str]] = []
+    if date:
+        row.append((51, date))
+    if description:
+        row.append((103.6, description))
+    if reference:
+        row.append((277, reference))
+    return [*row, _right(432, debit), _right(495, credit), _right(573, balance)]
+
+
+_MASHREQ_TABLE_HEADER: Line = [(51, "Date"), (103.6, "Transaction"), (277, "Reference"), (330, "no"),
+                               _right(432, "Debit"), _right(495, "Credit"), _right(573, "Balance")]
+
+
+def _mashreq_account_page(kind: str, number: str) -> list[Line]:
+    return [
+        [(38.5, "JANE Q SAMPLE")],
+        [(283.4, f"{kind} Account Statement")],
+        [(38.5, "SAMPLE TOWER"), (283.4, "Account No"), (370.5, number), (450, "AED")],
+        [(38.5, "DUBAI"), (283.4, "IBAN"), (370.5, f"AE000330000{number}")],
+        [(283.4, "Customer Number"), (370.5, "099990001")],
+        [(49.5, "Statement for Period 01/09/2026 to 30/09/2026")],
+        _MASHREQ_TABLE_HEADER,
+    ]
+
+
+_MASHREQ_CONSOLIDATED_PAGES: list[list[Line]] = [
+    [
+        [(266.9, "Consolidated Relationship Statement")],
+        [(38.5, "JANE Q SAMPLE"), (266.9, "Customer Number"), (509.4, "099990001")],
+        [(38.5, "SAMPLE TOWER"), (266.9, "Issue Date"), (506.6, "02/10/2026")],
+        [(38.5, "DUBAI"), (266.9, "Statement Period"), (455.2, "01/09/2026 to 30/09/2026")],
+        [(266.9, "Mashreq NEO is part of Mashreqbank PSC")],
+        [],
+        [(50.2, "Current Account Summary")],
+        [(50.2, "Account Type"), (116.8, "Account Number"), (186.4, "Currency"), (297.1, "AED Balance")],
+        [],
+        [(50.2, "Neo Current")],
+        [(120.6, "099990001111"), (194.5, "AED"), _right(327, "4,000.010")],
+        [(50.2, "Account")],
+        [(50.2, "IBAN: AE000330000099990001111")],
+        [(50.2, "Savings Account Summary")],
+        [(50.2, "Account Type"), (146.8, "Account Number"), (232.2, "Currency"), (367.4, "AED Balance")],
+        [],
+        [(50.2, "Neo Plus Saver - Balance"), (158.1, "099990002222"), (240.4, "AED"), _right(418, "10,041.660")],
+        [(50.2, "IBAN: AE000330000099990002222")],
+        [(280, "Page 1 of 4")],
+    ],
+    [
+        *_mashreq_account_page("Savings", "099990002222"),
+        _mrow(None, "OPENING BALANCE", None, "0.000", "0.000", "15,000.000"),
+        _mrow("01/09/2026", "Account to Account Transfer", "033AACT000000001", "5,000.000", "0.000", "10,000.000"),
+        [(103.6, "FROM ACCOUNT No:099990002222 TO")],
+        _mrow(None, "", None, "0.000", "0.000", "0.000"),
+        [(103.6, "ACCOUNT No: 099990001111")],
+        _mrow("30/09/2026", "VALUE DATE: 01-10-2026 Interest", "017MCITAED", "0.000", "41.660", "10,041.660"),
+        [(103.6, "099990002222")],
+        _mrow(None, "CLOSING BALANCE", None, "0.000", "0.000", "10,041.660"),
+        [(280, "Page 2 of 4")],
+    ],
+    [
+        *_mashreq_account_page("Current", "099990001111"),
+        _mrow(None, "OPENING BALANCE", None, "0.000", "0.000", "0.010"),
+        _mrow("01/09/2026", "Account to Account Transfer", "033AACT000000001", "0.000", "5,000.000", "5,000.010"),
+        [(103.6, "FROM ACCOUNT No:099990002222 TO")],
+        _mrow(None, "", None, "0.000", "0.000", "0.000"),
+        [(103.6, "ACCOUNT No: 099990001111")],
+        [(103.6, "IPP TRANSFER")],
+        [(103.6, "019030000000AE000860000009999999999 -")],
+        _mrow("02/09/2026", "JANE Q SAMPLE - /REF/ Family", "033IPPD00000001A", "750.000", "0.000", "4,250.010"),
+        [(103.6, "Support -")],
+        [(103.6, "T_00000000000000000000000000000001")],
+        [(280, "Page 3 of 4")],
+    ],
+    [
+        *_mashreq_account_page("Current", "099990001111"),
+        _mrow("10/09/2026", "POS PURCHASE SAMPLE MART 1234", "033POS000000001", "200.000", "0.000", "4,050.010"),
+        _mrow("15/09/2026", "SERVICE CHARGES", "033CHG000000001", "50.000", "0.000", "4,000.010"),
+        _mrow(None, "CLOSING BALANCE", None, "0.000", "0.000", "4,000.010"),
+        [(280, "Page 4 of 4")],
+    ],
+]
+
+
 CASES: dict[str, Case] = {
     "mashreq_statement": Case(_MASHREQ_PAGES),
     # X-17: Mashreq and EIB passwords reach their parsers.
@@ -452,6 +553,12 @@ CASES: dict[str, Case] = {
         password=PASSWORD,
         settings={"ADCB_CID": PASSWORD, "ADCB_PDF_PASSWORD": "another-card-password"},
         bank_code_hint="ADCB",
+    ),
+    # Mashreq's consolidated statement opens with the same MASHREQ_PDF_PASSWORD as its cards.
+    "mashreq_consolidated": Case(
+        _MASHREQ_CONSOLIDATED_PAGES,
+        password=PASSWORD,
+        settings={"MASHREQ_PDF_PASSWORD": PASSWORD},
     ),
     "sib_history": Case(_SIB_HISTORY_PAGES),
     "sib_history_new_card": Case(_SIB_HISTORY_NEW_CARD_PAGES),

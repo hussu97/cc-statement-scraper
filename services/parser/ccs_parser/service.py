@@ -244,6 +244,10 @@ def _parse_as(
         consolidated = _adcb_consolidated(pdf_path, runtime_settings, pdf_sha256)
         if consolidated is not None:
             return _validated(bank_code, consolidated, extra_warnings)
+    if bank_code == "MASHREQ":
+        consolidated = _mashreq_consolidated(pdf_path, runtime_settings, pdf_sha256)
+        if consolidated is not None:
+            return _validated(bank_code, consolidated, extra_warnings)
     try:
         parsed = parse_statement_pdf(
             bank_code,
@@ -298,6 +302,25 @@ def _adcb_consolidated(pdf_path: Path, settings: dict[str, str], pdf_sha256: str
         "statements": ac.statements_out(c, pdf_sha256),
         "deposits": ac.deposits_out(c),
         "card_summaries": ac.card_summaries_out(c),
+    }
+
+
+def _mashreq_consolidated(pdf_path: Path, settings: dict[str, str], pdf_sha256: str) -> dict[str, Any] | None:
+    """Mashreq NEO's consolidated relationship statement (bank accounts), or None for any other PDF."""
+    from ccs_parser.banks import mashreq_consolidated as mc  # noqa: PLC0415
+
+    read = mc.read_pdf(pdf_path, [settings.get("MASHREQ_PDF_PASSWORD")])
+    if read is None or not mc.is_consolidated(read[0]):
+        return None
+    c = mc.parse_consolidated(*read)
+    if not c.accounts:
+        raise ParserError("UNSUPPORTED_LAYOUT", "Mashreq consolidated: no account tables found.")
+    return {
+        "contract_version": CONTRACT_VERSION,
+        "parser_version": PARSER_VERSION,
+        "bank_code": "MASHREQ",
+        "document_kind": "account_statement_pdf",
+        "statements": mc.statements_out(c, pdf_sha256),
     }
 
 
