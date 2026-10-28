@@ -11,6 +11,10 @@
 
 - **change** Zerodha Kite and Zerodha Coin each have their own account page, name and logo. The segment lines under the three numbers show only on an account with more than one segment (`segmentLines`), so a Kite or Coin page doesn't repeat its figures.
 
+### iOS
+
+- **change** The same on the account screen: `BrokerPortfolioPresentation.segments` is empty for a single-segment account, and `BrokerSection` treats banks `KITE` and `COIN` as broker accounts (loading and failure shown like Swissquote).
+
 ## Zerodha: Kite and Coin holdings, invested against current value, and their trend — 2026-10-28
 
 ### Backend (Supabase)

@@ -87,8 +87,12 @@ public struct BrokerPortfolioPresentation: Sendable, Hashable {
 
     // MARK: Segments (Zerodha)
 
-    /// Kite and Coin, one line each under the three numbers; empty for other brokers.
-    public var segments: [BrokerSegmentLine] { portfolio.segments.map { BrokerSegmentLine($0, currency: currency) } }
+    /// A line per segment under the three numbers, only when the account has more than one (a
+    /// Zerodha account from before Kite and Coin were split). Zerodha Kite and Zerodha Coin are
+    /// each one segment, whose line would repeat the figures above it; empty for other brokers.
+    public var segments: [BrokerSegmentLine] {
+        portfolio.segments.count > 1 ? portfolio.segments.map { BrokerSegmentLine($0, currency: currency) } : []
+    }
 
     /// Against cost, the Portfolio tab is a card per segment (largest value first within each);
     /// empty otherwise, when the tab shows notes and other holdings.
@@ -169,8 +173,8 @@ public enum BrokerSection: Sendable, Hashable {
     case failed(String)
     case loaded(BrokerPortfolioPresentation)
 
-    /// The banks whose accounts sync from a broker.
-    public static let brokerBanks: Set<String> = ["SWQ", "ZRD"]
+    /// The banks whose accounts sync from a broker (Zerodha Kite and Zerodha Coin; ZRD from before they were split).
+    public static let brokerBanks: Set<String> = ["SWQ", "ZRD", "KITE", "COIN"]
 
     public init(_ state: LoadState<BrokerPortfolio?>, bankCode: String?, now: Date = .now) {
         if case .some(.some(let portfolio)) = state.value {
