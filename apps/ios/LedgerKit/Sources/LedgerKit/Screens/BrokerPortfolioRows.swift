@@ -9,6 +9,8 @@ public struct BrokerNoteCard: Sendable, Hashable, Identifiable {
     public let title: String
     /// `"Called on 15 Mar 2027 if GOOGL rises 9.3%"`; nil without a verdict this build can word.
     public let verdict: String?
+    /// A credit-linked note's second line: `"Next coupon USD 87.50 on 20 Nov 2026 · matures 20 Dec 2031"`.
+    public let verdictDetail: String?
     public let verdictTone: Tone
     /// "Worth today", then "If called on …" (or "Paid").
     public let figures: [NoteStat]
@@ -18,6 +20,7 @@ public struct BrokerNoteCard: Sendable, Hashable, Identifiable {
         holdingCode = p.holdingCode
         title = p.name
         verdict = p.note?.verdict?.headline(today: today)
+        verdictDetail = p.note?.verdict?.creditLine(currency: p.currency)
         verdictTone = p.note?.verdict?.tone ?? .neutral
         let worth = NoteStat("Worth today", p.value.map { NoteText.whole($0, currency: p.currency) } ?? "No price")
         if let called = p.note?.ifCalledNext {
@@ -34,7 +37,7 @@ public struct BrokerNoteCard: Sendable, Hashable, Identifiable {
 
     /// For VoiceOver.
     public var accessibilityLabel: String {
-        ([title, verdict].compactMap { $0 }
+        ([title, verdict, verdictDetail].compactMap { $0 }
             + figures.map { "\($0.label) \($0.value)" + ($0.sub.map { ", \($0)" } ?? "") }
             + bars.map(\.accessibilityLabel)).joined(separator: "; ")
     }

@@ -2,8 +2,9 @@ import LedgerKit
 import SwiftUI
 
 /// One structured note, one question first: how is it doing? The name and status, the verdict in
-/// big words with when the next check is, its stocks on bars, then the money in three numbers
-/// (paid, worth today, if called; once ended: paid, got back, profit). The rest (every scenario,
+/// big words with when the next check is, its stocks on bars (a credit-linked note: its reference
+/// entity and what a credit event would cost), then the money in three numbers (paid, worth today,
+/// if called or held to maturity; once ended: paid, got back, profit). The rest (every scenario,
 /// the full schedule, the price history, the terms) waits collapsed. Owners update prices or
 /// remove a note added by mistake from the "…" menu. Every figure is the server's; the words and
 /// what shows are LedgerKit's.
@@ -33,11 +34,15 @@ struct NoteDetailView: View {
             StateContainer(state: model.state, retry: reload) { note in
                 NoteHeader(note: note)
                 VerdictBlock(note: note)
-                let bars = note.bars
-                if !bars.isEmpty {
-                    Card {
-                        SectionHeader(title: "The stocks")
-                        NoteStockBars(bars: bars)
+                if let entity = note.creditEntity {
+                    CreditEntityCard(entity: entity)
+                } else {
+                    let bars = note.bars
+                    if !bars.isEmpty {
+                        Card {
+                            SectionHeader(title: "The stocks")
+                            NoteStockBars(bars: bars)
+                        }
                     }
                 }
                 Card { StatTiles(stats: note.moneyStats(), columns: 3) }
@@ -176,6 +181,8 @@ private struct NoteDetailSections: View {
         switch section {
         case .scenarios: NoteScenariosContent(note: note)
         case .schedule: NoteScheduleContent(note: note)
+        case .couponSchedule: CreditScheduleContent(note: note)
+        case .callDates: CreditCallDatesContent(note: note)
         case .priceHistory: NoteChart(lines: note.seriesLines, levels: note.isEnded ? [] : note.levels ?? [])
         case .terms:
             VStack(alignment: .leading, spacing: 8) {

@@ -1,0 +1,203 @@
+{
+ "cash": "1000.00",
+ "fees": "0",
+ "sips": [],
+ "sync": {
+  "error": null,
+  "status": "ok",
+  "last_synced_at": "2026-10-28T11:12:38.755167+00:00",
+  "last_attempt_at": "2026-10-28T11:12:38.755167+00:00"
+ },
+ "as_of": "2026-10-28",
+ "basis": "deposits",
+ "total": "26310.00",
+ "closed": [],
+ "income": "14.58",
+ "profit": "-3690.00",
+ "series": [
+  {
+   "cash": "1000.00",
+   "as_of": "2026-10-28",
+   "total": "26310.00",
+   "invested": null,
+   "segments": null,
+   "estimated": false,
+   "positions": "25310.00",
+   "net_deposits": "30000.00"
+  }
+ ],
+ "issuers": [],
+ "currency": "USD",
+ "invested": "0",
+ "provider": "swissquote",
+ "segments": [],
+ "positions": [
+  {
+   "cost": null,
+   "isin": "XS0000000207",
+   "kind": "structured_note",
+   "name": "Example Bank N CLN Example Motors 13.25% 2034",
+   "note": {
+    "next": {
+     "seq": 1,
+     "days": 2975,
+     "kind": "final",
+     "coupon": {
+      "amount": "18276.90",
+      "rate_pct": "130.549306",
+      "would_pay": true,
+      "barrier_pct": "0"
+     },
+     "is_final": true,
+     "obs_date": "2034-12-20",
+     "pay_date": "2034-12-20"
+    },
+    "status": "live",
+    "verdict": {
+     "date": "2026-12-20",
+     "kind": "cln_accruing",
+     "amount": "3168.96",
+     "rate_pct": "13.25",
+     "call_date": "2026-12-20",
+     "maturity_date": "2034-12-20"
+    },
+    "worst_now": null,
+    "underlyings": [],
+    "if_called_next": null,
+    "if_ended_today": null,
+    "awaiting_prices": false
+   },
+   "as_of": "2026-10-28",
+   "folio": null,
+   "price": "108.5",
+   "value": "15190.00",
+   "income": "0",
+   "issuer": null,
+   "profit": null,
+   "symbol": "EXB EXM",
+   "segment": null,
+   "category": null,
+   "currency": "USD",
+   "exchange": null,
+   "invested": "14100.00",
+   "quantity": "14000",
+   "sell_now": {
+    "total": "15190.00",
+    "profit": "1090.00",
+    "return_pct": "7.73"
+   },
+   "value_aed": "55785.28",
+   "cost_price": null,
+   "day_change": null,
+   "prev_price": null,
+   "price_date": null,
+   "return_pct": null,
+   "weight_pct": "60.02",
+   "asset_class": null,
+   "holding_code": "hld_01k613cjvckwz4100679vcrg22",
+   "price_in_pct": true,
+   "product_type": "WARRANT",
+   "security_name": "EXB EXM",
+   "day_change_pct": null
+  },
+  {
+   "cost": null,
+   "isin": "XS0000000108",
+   "kind": "structured_note",
+   "name": "Example Bank N CLN Example Airlines 10.5% 2031",
+   "note": {
+    "next": {
+     "seq": 26,
+     "days": 23,
+     "kind": "coupon",
+     "coupon": {
+      "amount": "87.50",
+      "rate_pct": "0.875",
+      "would_pay": true,
+      "barrier_pct": "0"
+     },
+     "is_final": false,
+     "obs_date": "2026-11-20",
+     "pay_date": "2026-11-20"
+    },
+    "status": "live",
+    "verdict": {
+     "date": "2026-11-20",
+     "kind": "cln_paying",
+     "amount": "87.50",
+     "rate_pct": "10.5",
+     "maturity_date": "2031-12-20"
+    },
+    "worst_now": null,
+    "underlyings": [],
+    "if_called_next": null,
+    "if_ended_today": null,
+    "awaiting_prices": false
+   },
+   "as_of": "2026-10-28",
+   "folio": null,
+   "price": "101.2",
+   "value": "10120.00",
+   "income": "14.58",
+   "issuer": null,
+   "profit": null,
+   "symbol": "EXB EXA",
+   "segment": null,
+   "category": null,
+   "currency": "USD",
+   "exchange": null,
+   "invested": "10050.00",
+   "quantity": "10000",
+   "sell_now": {
+    "total": "10134.58",
+    "profit": "84.58",
+    "return_pct": "0.84"
+   },
+   "value_aed": "37165.70",
+   "cost_price": null,
+   "day_change": null,
+   "prev_price": null,
+   "price_date": null,
+   "return_pct": null,
+   "weight_pct": "39.98",
+   "asset_class": null,
+   "holding_code": "hld_01k613cjvb49dbw2cc4rc919mg",
+   "price_in_pct": true,
+   "product_type": "WARRANT",
+   "security_name": "EXB EXA",
+   "day_change_pct": null
+  }
+ ],
+ "total_aed": "96623.48",
+ "allocation": [
+  {
+   "key": "product:warrant",
+   "label": "Warrant",
+   "value": "25310.00",
+   "profit": "25310.00",
+   "invested": "0",
+   "positions": "2",
+   "return_pct": null,
+   "weight_pct": "100.00"
+  }
+ ],
+ "day_change": null,
+ "highlights": {
+  "best": [],
+  "worst": [],
+  "losers_today": [],
+  "gainers_today": [],
+  "top5_weight_pct": null
+ },
+ "account_code": "acc_01k613cjv7mcsdpm4d9gbge0d6",
+ "closed_total": {
+  "count": "0",
+  "profit": "0",
+  "invested": "0",
+  "received": "0"
+ },
+ "net_deposits": "30000.00",
+ "portfolio_ref": "DEMOPORTFOLIO",
+ "day_change_pct": null,
+ "positions_value": "25310.00"
+}

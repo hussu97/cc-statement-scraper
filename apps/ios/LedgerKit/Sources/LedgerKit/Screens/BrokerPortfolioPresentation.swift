@@ -144,7 +144,7 @@ public struct BrokerPortfolioPresentation: Sendable, Hashable {
     /// `"6 called early · +USD 21,441 earned on USD 98,275"`; nil from an older server or with nothing ended.
     public var pastSummary: String? {
         guard let t = portfolio.closedTotal, t.count > 0 else { return nil }
-        let allCalled = !portfolio.closed.isEmpty && portfolio.closed.allSatisfy { $0.noteStatus == "autocalled" }
+        let allCalled = !portfolio.closed.isEmpty && portfolio.closed.allSatisfy { $0.noteStatus == "autocalled" || $0.noteStatus == "called" }
         let what = "\(t.count) \(allCalled ? "called early" : "ended")"
         let result = t.profit < 0
             ? "\(whole(-t.profit)) lost on \(whole(t.invested))"

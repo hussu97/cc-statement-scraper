@@ -51,8 +51,10 @@ public final class NoteDetailModel {
 
     // MARK: What the screen offers
 
-    /// Update prices: owners, while the note is live.
-    public func canRefreshPrices(canEdit: Bool) -> Bool { canEdit && state.value.map { !$0.isEnded } == true }
+    /// Update prices: owners, while the note is live. Not a credit-linked note: it has no shares.
+    public func canRefreshPrices(canEdit: Bool) -> Bool {
+        canEdit && state.value.map { !$0.isEnded && !$0.summary.isCreditLinked } == true
+    }
 
     /// Remove: owners, unless it is already cancelled.
     public func canRemove(canEdit: Bool) -> Bool {

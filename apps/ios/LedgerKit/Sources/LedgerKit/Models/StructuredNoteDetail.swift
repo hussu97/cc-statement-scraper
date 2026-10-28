@@ -25,9 +25,10 @@ public struct NoteDetail: Decodable, Sendable, Hashable {
         public let guarantor: String?
         public let denomination: Decimal
         public let issuePricePct: Decimal
-        public let strikeDate: CalendarDay
+        /// Nil for a credit-linked note (no shares to strike or value).
+        public let strikeDate: CalendarDay?
         public let issueDate: CalendarDay?
-        public let finalValuationDate: CalendarDay
+        public let finalValuationDate: CalendarDay?
         public let maturityDate: CalendarDay
         public let termsheetPath: String?
         public let termsheetFilename: String?
@@ -125,8 +126,9 @@ public struct NoteDetail: Decodable, Sendable, Hashable {
         public let seq: Int?
         public let obsDate: CalendarDay
         public let payDate: CalendarDay
-        public let worstPct: Decimal
-        public let worstSymbol: String
+        /// Nil for a credit-linked note's coupons (no shares).
+        public let worstPct: Decimal?
+        public let worstSymbol: String?
         public let amount: Decimal?
         public let settlement: String?
     }

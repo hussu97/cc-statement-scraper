@@ -39,9 +39,9 @@ public enum NoteText {
         value > 0 ? "+" + pct(value, digits: digits) : pct(value, digits: digits)
     }
 
-    /// `"+USD 3,845 · 28% a year"`: a profit and, when known, its yearly rate.
-    public static func profitLine(_ profit: Decimal, annualisedPct: Decimal?, currency: String) -> String {
-        ([signedWhole(profit, currency: currency)] + [annualisedPct.map { "\(pct($0, digits: 0)) a year" }].compactMap { $0 })
+    /// `"+USD 3,845 · 28% a year"`: a profit and, when known, its yearly rate (`digits` places).
+    public static func profitLine(_ profit: Decimal, annualisedPct: Decimal?, currency: String, digits: Int = 0) -> String {
+        ([signedWhole(profit, currency: currency)] + [annualisedPct.map { "\(pct($0, digits: digits)) a year" }].compactMap { $0 })
             .joined(separator: " · ")
     }
 

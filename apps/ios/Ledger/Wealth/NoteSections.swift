@@ -95,8 +95,8 @@ struct NoteScheduleContent: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(note.scheduleSummary).font(Typography.caption).foregroundStyle(Palette.muted)
                 .fixedSize(horizontal: false, vertical: true)
-            if note.observations.isEmpty {
-                Text("Only the final valuation on \(LedgerDates.fullDayLabel(note.terms.finalValuationDate)).")
+            if note.observations.isEmpty, let final = note.terms.finalValuationDate {
+                Text("Only the final valuation on \(LedgerDates.fullDayLabel(final)).")
                     .font(Typography.rowMeta).foregroundStyle(Palette.muted)
             }
             ForEach(note.scheduleRows) { row in

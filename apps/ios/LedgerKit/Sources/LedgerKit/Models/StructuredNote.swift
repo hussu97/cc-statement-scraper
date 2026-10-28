@@ -6,6 +6,10 @@ public enum NoteStatus: String, Sendable, Hashable {
     case live
     case awaitingStrike = "awaiting_strike"
     case autocalled, matured, cancelled
+    /// A credit-linked note the issuer repaid early, and one ended by its reference entity's
+    /// credit event (20261028110553).
+    case called
+    case creditEvent = "credit_event"
 
     public init(raw: String?) { self = raw.flatMap(NoteStatus.init(rawValue:)) ?? .live }
 
@@ -17,6 +21,8 @@ public enum NoteStatus: String, Sendable, Hashable {
         case .autocalled: "Called early"
         case .matured: "Matured"
         case .cancelled: "Cancelled"
+        case .called: "Called by issuer"
+        case .creditEvent: "Credit event"
         }
     }
 
@@ -24,13 +30,19 @@ public enum NoteStatus: String, Sendable, Hashable {
         switch self {
         case .live: .info
         case .awaitingStrike, .matured: .neutral
-        case .autocalled: .positive
+        case .autocalled, .called: .positive
         case .cancelled: .warn
+        case .creditEvent: .danger
         }
     }
 
-    /// Called, matured or cancelled: the note pays nothing more.
-    public var isEnded: Bool { self == .autocalled || self == .matured || self == .cancelled }
+    /// Called, matured, cancelled or ended by a credit event: the note pays nothing more.
+    public var isEnded: Bool {
+        switch self {
+        case .autocalled, .called, .matured, .cancelled, .creditEvent: true
+        case .live, .awaitingStrike: false
+        }
+    }
 }
 
 /// Coupons, redemption and their total, in the note's currency.
@@ -141,6 +153,14 @@ public struct NoteSummary: Decodable, Sendable, Hashable, Identifiable {
     public let ifCalledNext: NoteDetail.AutocallScenario?
     /// The note in one line (20261027200000); nil from an older server.
     public let verdict: NoteVerdict?
+    /// Raw: `equity` (worst-of shares) or `credit_linked` (20261028110553); nil from an older
+    /// server, which means equity. A type this build doesn't know still decodes.
+    public let noteType: String?
+    /// A credit-linked note's terms and figures; nil for an equity note.
+    public let credit: NoteCredit?
+
+    /// A credit-linked note with its credit figures: no shares, barriers, levels or scenarios.
+    public var isCreditLinked: Bool { noteType == "credit_linked" && credit != nil }
 
     public var noteStatus: NoteStatus { NoteStatus(raw: status) }
     public var isEnded: Bool { noteStatus.isEnded }
@@ -161,6 +181,8 @@ public struct NoteListRow: Sendable, Hashable, Identifiable {
     public let holdingCode: String
     public let title: String
     public let verdict: String?
+    /// A credit-linked note's second line: `"Next coupon USD 87.50 on 20 Nov 2026 · matures 20 Dec 2031"`.
+    public let verdictDetail: String?
     public let verdictTone: Tone
     /// `"Worth today"` or `"Paid"`.
     public let valueLabel: String
@@ -171,6 +193,7 @@ public struct NoteListRow: Sendable, Hashable, Identifiable {
         holdingCode = note.holdingCode
         title = note.name
         verdict = note.verdict?.headline(today: today)
+        verdictDetail = note.verdict?.creditLine(currency: note.currency)
         verdictTone = note.verdict?.tone ?? .neutral
         if let market = note.market {
             valueLabel = "Worth today"
@@ -183,7 +206,7 @@ public struct NoteListRow: Sendable, Hashable, Identifiable {
 
     /// For VoiceOver.
     public var accessibilityLabel: String {
-        ([title, verdict].compactMap { $0 } + ["\(valueLabel) \(valueText)"]).joined(separator: ", ")
+        ([title, verdict, verdictDetail].compactMap { $0 } + ["\(valueLabel) \(valueText)"]).joined(separator: ", ")
     }
 
     /// The live notes to list: those paid from `fundingAccount` (every one when nil), leaving out

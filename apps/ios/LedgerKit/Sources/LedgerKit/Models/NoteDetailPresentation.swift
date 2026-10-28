@@ -22,6 +22,9 @@ public enum NoteSection: String, Sendable, Hashable, CaseIterable, Identifiable 
     case schedule = "Full schedule"
     case priceHistory = "Price history"
     case terms = "Terms"
+    /// A credit-linked note's coupons, and the dates its issuer may repay it early.
+    case couponSchedule = "Coupon schedule"
+    case callDates = "Issuer call dates"
 
     public var id: String { rawValue }
     public var title: String { rawValue }
@@ -63,7 +66,9 @@ extension NoteDetail {
     /// coupon pays and when the call comes. Empty once ended.
     /// `"Next check 15 Mar 2027 · in 139 days · called if every stock is at or above 100% of its start"`.
     public func countdown(today: CalendarDay = LedgerDates.today()) -> [String] {
-        guard !isEnded, let next = summary.next else { return [] }
+        guard !isEnded else { return [] }
+        if summary.isCreditLinked { return creditCountdown }
+        guard let next = summary.next else { return [] }
         let when = "\(LedgerDates.fullDayLabel(next.obsDate)) · \(NoteText.inDays(next.days))"
         let atRisk = summary.verdict?.kind == .couponAtRisk
         var lines: [String] = []
@@ -88,7 +93,7 @@ extension NoteDetail {
     public var bars: [NoteStockBar] { isEnded ? [] : NoteStockBar.bars(underlyings) }
 
     /// The money in three numbers. Live: paid, worth today (and what selling would make), if called
-    /// at the next date. Ended: paid, got back, profit.
+    /// at the next date (a credit-linked note: held to maturity). Ended: paid, got back, profit.
     public func moneyStats(today: CalendarDay = LedgerDates.today()) -> [NoteStat] {
         let s = summary
         let paid = NoteStat("Paid", whole(s.invested))
@@ -102,6 +107,9 @@ extension NoteDetail {
                                   sub: s.market.map { "\(NoteText.signedWhole($0.profit, currency: currency)) if sold today" }
                                       ?? "No broker price yet",
                                   tone: .neutral)]
+        if s.isCreditLinked {
+            return out + [heldToMaturityStat].compactMap { $0 }
+        }
         if let c = s.ifCalledNext {
             out.append(NoteStat("If called on \(LedgerDates.dayLabel(c.obsDate, today: today))", whole(c.total),
                                 sub: NoteText.profitLine(c.profit, annualisedPct: c.annualisedPct, currency: currency),
@@ -111,13 +119,16 @@ extension NoteDetail {
     }
 
     /// The collapsed sections this note has: scenarios only while the server has them, the price
-    /// history once there are closes.
+    /// history once there are closes. A credit-linked note: its coupons, its call dates (when it
+    /// has any) and the terms.
     public var sections: [NoteSection] {
-        NoteSection.allCases.filter { section in
+        if summary.isCreditLinked { return creditSections }
+        return NoteSection.allCases.filter { section in
             switch section {
             case .scenarios: scenarios != nil
             case .priceHistory: !seriesLines.isEmpty
             case .schedule, .terms: true
+            case .couponSchedule, .callDates: false
             }
         }
     }
@@ -154,8 +165,9 @@ extension NoteDetail {
         observations.map { o in
             let outs = outcomes(on: o.obsDate).map { x -> NoteScheduleRow.Line in
                 let amount = x.amount.map { " \(money($0))" } ?? ""
+                let worst = x.worstSymbol.map { " · worst \($0) \(NoteText.pct(x.worstPct, digits: 2))" } ?? ""
                 return NoteScheduleRow.Line(
-                    text: "\(NoteText.outcomeLabel(x.kind))\(amount) · worst \(x.worstSymbol) \(NoteText.pct(x.worstPct, digits: 2))",
+                    text: "\(NoteText.outcomeLabel(x.kind))\(amount)\(worst)",
                     tone: NoteText.outcomeTone(x.kind))
             }
             let awaiting = summary.awaitingPrices && o.obsDate <= (summary.next?.obsDate ?? o.obsDate)
@@ -173,16 +185,20 @@ extension NoteDetail {
         observations.count == 1 ? "1 observation date" : "\(observations.count) observation dates"
     }
 
-    /// The terms as read from the term sheet.
+    /// The terms as read from the term sheet; a credit-linked note's coupon, maturity and
+    /// reference entity in place of the strike and final valuation.
     public var termRows: [(label: String, value: String)] {
         let issuer = [summary.issuer, terms.guarantor.map { "guaranteed by \($0)" }].compactMap { $0 }.joined(separator: ", ")
-        return [
+        let head = [
             ("Product", summary.productName),
             ("Issuer", issuer.isEmpty ? "—" : issuer),
             ("ISIN", summary.isin ?? "—"),
             ("Denomination", "\(money(terms.denomination)) at \(NoteText.pct(terms.issuePricePct)) issue price"),
-            ("Strike", LedgerDates.fullDayLabel(terms.strikeDate)),
-            ("Final valuation", LedgerDates.fullDayLabel(terms.finalValuationDate)),
+        ]
+        if summary.isCreditLinked { return head + creditTermRows }
+        return head + [
+            ("Strike", terms.strikeDate.map(LedgerDates.fullDayLabel) ?? "—"),
+            ("Final valuation", terms.finalValuationDate.map(LedgerDates.fullDayLabel) ?? "—"),
             ("Maturity", LedgerDates.fullDayLabel(terms.maturityDate)),
         ]
     }

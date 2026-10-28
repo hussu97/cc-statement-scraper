@@ -1,0 +1,140 @@
+{
+ "due": {
+  "total": "0.00",
+  "coupons": "0.00",
+  "redemption": "0.00"
+ },
+ "isin": "XS0000000207",
+ "name": "Example Bank N CLN Example Motors 13.25% 2034",
+ "next": {
+  "seq": 1,
+  "days": 2975,
+  "kind": "final",
+  "coupon": {
+   "amount": "18276.90",
+   "rate_pct": "130.549306",
+   "would_pay": true,
+   "barrier_pct": "0"
+  },
+  "is_final": true,
+  "obs_date": "2034-12-20",
+  "pay_date": "2034-12-20"
+ },
+ "terms": {
+  "guarantor": "Example Bank N",
+  "note_type": "credit_linked",
+  "issue_date": "2025-02-13",
+  "strike_date": null,
+  "denomination": "1000.00",
+  "maturity_date": "2034-12-20",
+  "termsheet_path": "prf_01k613bzzwn49n0aaaxbh8ggd4/00000000000000000000000000000000000000000000000000000000000000b2.pdf",
+  "issue_price_pct": "100",
+  "termsheet_filename": "FinalTS-XS0000000207-EXBN-CLN-Example-Motors-2034.pdf",
+  "final_valuation_date": null
+ },
+ "credit": {
+  "accrued": {
+   "since": "2025-02-13",
+   "amount": "3168.96"
+  },
+  "day_count": "30/360",
+  "seniority": "Senior",
+  "call_dates": [
+   "2025-12-20",
+   "2026-12-20",
+   "2027-12-20",
+   "2028-12-20",
+   "2029-12-20",
+   "2030-12-20",
+   "2031-12-20",
+   "2032-12-20",
+   "2033-12-20"
+  ],
+  "to_maturity": {
+   "date": "2034-12-20",
+   "total": "32276.90",
+   "profit": "18176.90",
+   "coupons": "18276.90",
+   "return_pct": "128.91",
+   "annualised_pct": "8.81"
+  },
+  "credit_event": {
+   "kept": "0.00",
+   "accrued_lost": "3168.96",
+   "interest_lost": "18276.90",
+   "principal_at_risk": "14000.00"
+  },
+  "maturity_date": "2034-12-20",
+  "if_called_next": {
+   "date": "2026-12-20",
+   "total": "17436.90",
+   "profit": "3336.90",
+   "return_pct": "23.67",
+   "annualised_pct": "12.53"
+  },
+  "next_call_date": "2026-12-20",
+  "coupon_rate_pct": "13.25",
+  "call_notice_days": "10",
+  "coupon_frequency": "at_maturity",
+  "reference_entity": "Example Motors Automotive PLC",
+  "transaction_type": "Standard European Corporate",
+  "first_coupon_date": null,
+  "remaining_coupons": "18276.90",
+  "interest_start_date": "2025-02-13",
+  "interest_at_maturity": true,
+  "longstop_maturity_date": "2035-12-20",
+  "reference_obligation_isin": "XS0000RB0002",
+  "schedule": [
+   {"seq": 1, "amount": "18276.90", "status": "to_come", "is_final": true, "pay_date": "2034-12-20", "rate_pct": "130.549306", "is_call_date": false, "period_start": "2025-02-13"}
+  ]
+ },
+ "issuer": "Example Bank N Structured Issuance SA",
+ "levels": null,
+ "market": {
+  "as_of": "2026-10-28",
+  "value": "15190.00",
+  "profit": "1090.00",
+  "price_pct": "108.5"
+ },
+ "payout": [],
+ "result": null,
+ "series": {},
+ "status": "live",
+ "nominal": "14000.00",
+ "symbols": null,
+ "verdict": {
+  "date": "2026-12-20",
+  "kind": "cln_accruing",
+  "amount": "3168.96",
+  "rate_pct": "13.25",
+  "call_date": "2026-12-20",
+  "maturity_date": "2034-12-20"
+ },
+ "currency": "USD",
+ "ended_on": null,
+ "invested": "14100.00",
+ "received": {
+  "total": "0.00",
+  "coupons": "0.00",
+  "redemption": "0.00"
+ },
+ "note_code": "snt_01k613cjz8tk4g37d666qe5m39",
+ "note_type": "credit_linked",
+ "scenarios": null,
+ "worst_now": null,
+ "trade_date": "2025-03-03",
+ "institution": "Swissquote",
+ "underlyings": [],
+ "holding_code": "hld_01k613cjvckwz4100679vcrg22",
+ "observations": [],
+ "product_name": "Credit Linked Notes referenced to Example Motors Automotive PLC due 20 December 2034, coupon paid at maturity",
+ "maturity_date": "2034-12-20",
+ "break_even_pct": null,
+ "if_called_next": null,
+ "if_ended_today": null,
+ "awaiting_prices": false,
+ "memory_unpaid_pct": "0",
+ "purchase_price_pct": "100",
+ "funding_account_code": "acc_01k613cjv7mcsdpm4d9gbge0d6",
+ "outcomes": []
+}

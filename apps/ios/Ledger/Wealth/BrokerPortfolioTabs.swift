@@ -83,6 +83,10 @@ private struct BrokerNoteCardView: View {
                     .foregroundStyle(card.verdictTone == .neutral ? Palette.ink : card.verdictTone.color)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if let detail = card.verdictDetail {
+                Text(detail).font(Typography.caption).foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             HStack(alignment: .top, spacing: 12) {
                 ForEach(card.figures) { figure in
                     VStack(alignment: .leading, spacing: 2) {

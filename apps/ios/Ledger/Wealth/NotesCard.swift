@@ -35,6 +35,10 @@ private struct NoteLine: View {
                             .foregroundStyle(row.verdictTone == .neutral ? Palette.muted : row.verdictTone.color)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                    if let detail = row.verdictDetail {
+                        Text(detail).font(Typography.caption).foregroundStyle(Palette.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             } trailing: {
                 VStack(alignment: .trailing, spacing: 2) {

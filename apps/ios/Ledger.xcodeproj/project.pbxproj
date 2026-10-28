@@ -106,6 +106,7 @@
 		C5A4A377005DFC5A8A379D11 /* SetupChecklistCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C90F3BB1055921EA00C9200 /* SetupChecklistCard.swift */; };
 		C7D2A9DBE9043F127D748D46 /* ChartDescriptor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 933BB97FFFA1958362EEA82B /* ChartDescriptor.swift */; };
 		CFBFA4CB0A654D198FC043A1 /* BankAccountSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31B78F42683E160744D5AC1 /* BankAccountSheets.swift */; };
+		D2FA88090BACC49050034324 /* CreditNoteSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FDB36C8BAFC995BBFD3B2B8 /* CreditNoteSections.swift */; };
 		D735424BB191ECF6BEFB087C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F190BDC9EB8084E38F344EE7 /* Assets.xcassets */; };
 		D87A5C0497D290473C9FFE3E /* CategoryDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C57A1D8901CB31AB03C4518 /* CategoryDetailView.swift */; };
 		D987345F5472C568EB6B0C2A /* UtilisationWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 132F44CB313BF94C3BC3D2A9 /* UtilisationWidget.swift */; };
@@ -169,6 +170,7 @@
 		076A0083646CF5850906DE83 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		0A25D970A4511B5531978319 /* BudgetEditSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetEditSheet.swift; sourceTree = "<group>"; };
 		0ABF726E543E833CAE3F9C23 /* TrendsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendsView.swift; sourceTree = "<group>"; };
+		0FDB36C8BAFC995BBFD3B2B8 /* CreditNoteSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreditNoteSections.swift; sourceTree = "<group>"; };
 		11D547CA077A0BBC6F976DC3 /* LedgerControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerControls.swift; sourceTree = "<group>"; };
 		132F44CB313BF94C3BC3D2A9 /* UtilisationWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UtilisationWidget.swift; sourceTree = "<group>"; };
 		15C0186C1E6AFC4A04ACCC41 /* LedgerKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LedgerKit; path = LedgerKit; sourceTree = SOURCE_ROOT; };
@@ -505,6 +507,7 @@
 				4F46360655CAA8BBED7FE5E4 /* BrokerPortfolioTabs.swift */,
 				958E2BEB0B418C54D65B30E1 /* BrokerValueChartCard.swift */,
 				A272DEE22CB3F804087894B1 /* CashFlowView.swift */,
+				0FDB36C8BAFC995BBFD3B2B8 /* CreditNoteSections.swift */,
 				013B729402CCB560A27BFB76 /* HoldingDetailView.swift */,
 				7BB6AFBACF89F7D2274E318B /* HoldingFlowSheets.swift */,
 				EA7E5AE1F7AF0F673B68AE64 /* HoldingKindFields.swift */,
@@ -980,6 +983,7 @@
 				E5EB7FF2C25CAEADF48222E7 /* CategoryRingCard.swift in Sources */,
 				C7D2A9DBE9043F127D748D46 /* ChartDescriptor.swift in Sources */,
 				2AF7A777F5554D6851F1C5F0 /* Components.swift in Sources */,
+				D2FA88090BACC49050034324 /* CreditNoteSections.swift in Sources */,
 				A5CF4EB0016821D0969568AB /* ForeignSpendView.swift in Sources */,
 				E43EF93F5455BEBBC096595F /* FormatProposalView.swift in Sources */,
 				ED325B9BA4B367EF0EA35685 /* GuideSteps.swift in Sources */,
