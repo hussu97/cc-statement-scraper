@@ -9,7 +9,8 @@
 -- 3. import_zerodha_data takes the new position fields and an optional `sips` list (absent: the
 --    last rows stay). A Kite holding still named by its ticker takes the company name. A fund's
 --    previous price is its last mark from an earlier NAV date.
--- 4. broker_portfolio: each position adds the fields above, its day change, weight and return; the
+-- 4. broker_portfolio: each position adds the fields above, its average cost (cost_price), day
+--    change, weight and return; the
 --    account adds its day change, allocation, fund houses, highlights and SIPs.
 -- 5. broker_position_detail(profile, account, isin): one position, its marks over time and SIPs.
 
@@ -576,7 +577,7 @@ begin
       'cost', k.cost, 'profit', bp.profit, 'invested', f.invested, 'income', f.income,
       'segment', case when v_cost_basis then private.zerodha_segment(bp.product_type) end,
       'asset_class', bp.asset_class, 'category', bp.category, 'issuer', bp.issuer, 'exchange', bp.exchange,
-      'folio', bp.folio, 'price_date', bp.price_date, 'prev_price', bp.prev_price,
+      'folio', bp.folio, 'price_date', bp.price_date, 'prev_price', bp.prev_price, 'cost_price', bp.cost_price,
       'day_change', dc.day_change,
       'day_change_pct', case when dc.day_base > 0 then round(dc.day_change / dc.day_base * 100, 2) end,
       'weight_pct', case when v_marked > 0 and bp.market_value is not null then round(bp.market_value / v_marked * 100, 2) end,

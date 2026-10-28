@@ -63,6 +63,90 @@ export interface BrokerPosition {
   note: BrokerPositionNote | null;
   /** Zerodha: kite | coin; absent elsewhere and on an older payload. */
   segment?: string | null;
+  // Zerodha's detail (20261028062806); absent or null elsewhere and on an older payload.
+  /** stock | etf | fund. */
+  asset_class?: string | null;
+  /** A fund's scheme type: Equity, Debt, Hybrid, … */
+  category?: string | null;
+  /** A fund's fund house. */
+  issuer?: string | null;
+  exchange?: string | null;
+  folio?: string | null;
+  /** The date of the price (a fund's NAV date); null when the broker doesn't say. */
+  price_date?: string | null;
+  prev_price?: string | null;
+  /** The average price paid per unit. */
+  cost_price?: string | null;
+  /** Today's move against the previous close (a fund: its previous NAV); null when unknown. */
+  day_change?: string | null;
+  day_change_pct?: string | null;
+  /** Its share of the account's positions, in %. */
+  weight_pct?: string | null;
+  /** Its return on cost, in %. */
+  return_pct?: string | null;
+}
+
+/** Where the money sits: stocks, ETFs, a fund's scheme type, or another broker's product type. */
+export interface AllocationSlice {
+  key: string;
+  label: string;
+  positions: string | null;
+  value: string | null;
+  weight_pct: string | null;
+  invested: string | null;
+  profit: string | null;
+  return_pct: string | null;
+}
+
+export interface IssuerSlice {
+  issuer: string;
+  positions: string | null;
+  value: string | null;
+  weight_pct: string | null;
+}
+
+/** A position in a highlight list (best, worst, today's movers). */
+export interface HighlightItem {
+  holding_code: string | null;
+  isin: string | null;
+  name: string;
+  symbol: string | null;
+  value: string | null;
+  return_pct: string | null;
+  profit: string | null;
+  day_change: string | null;
+  day_change_pct: string | null;
+}
+
+export interface Highlights {
+  best: HighlightItem[];
+  worst: HighlightItem[];
+  gainers_today: HighlightItem[];
+  losers_today: HighlightItem[];
+  /** How much of the account its five largest positions are (more than five held). */
+  top5_weight_pct: string | null;
+}
+
+/** A Coin SIP as Zerodha reports it, with its latest instalment's outcome. */
+export interface Sip {
+  sip_code: string;
+  isin: string;
+  fund: string;
+  holding_code: string | null;
+  /** active | paused | cancelled | other. */
+  status: string;
+  frequency: string | null;
+  amount: string | null;
+  currency: string;
+  day: string | null;
+  next_instalment: string | null;
+  last_instalment: string | null;
+  completed: string | null;
+  step_up: Record<string, string> | null;
+  started_at: string | null;
+  last_order: { status: string; message: string | null; at: string | null } | null;
+  /** The latest instalment was rejected. */
+  missed: boolean;
 }
 
 export interface ClosedPosition {
@@ -135,6 +219,13 @@ export interface BrokerPortfolio {
   /** Every closed position together (decimal strings; count too); null on an older payload. */
   closed_total: ClosedTotal | null;
   series: PortfolioDay[];
+  /** Today's move of the positions with a previous price (null without one, and elsewhere). */
+  day_change: string | null;
+  day_change_pct: string | null;
+  allocation: AllocationSlice[];
+  issuers: IssuerSlice[];
+  highlights: Highlights | null;
+  sips: Sip[];
 }
 
 export interface ClosedTotal {
@@ -167,11 +258,36 @@ export function parseBrokerPortfolio(raw: unknown): BrokerPortfolio | null {
     positions: list<BrokerPosition>(raw.positions).map((p) => ({ ...p, note: isObject(p.note) ? p.note : null, sell_now: isObject(p.sell_now) ? p.sell_now : null })),
     closed: list<ClosedPosition>(raw.closed),
     closed_total: isObject(raw.closed_total) ? (raw.closed_total as unknown as ClosedTotal) : null,
+    day_change: str(raw.day_change),
+    day_change_pct: str(raw.day_change_pct),
+    allocation: list<AllocationSlice>(raw.allocation).filter((a) => typeof a.key === "string" && typeof a.label === "string"),
+    issuers: list<IssuerSlice>(raw.issuers).filter((a) => typeof a.issuer === "string"),
+    highlights: parseHighlights(raw.highlights),
+    sips: parseSips(raw.sips),
     series: list<PortfolioDay>(raw.series)
       .filter((d) => typeof d.as_of === "string")
       .map((d) => ({ ...d, estimated: d.estimated === true }))
       .sort((a, b) => a.as_of.localeCompare(b.as_of)),
   };
+}
+
+function parseHighlights(raw: unknown): Highlights | null {
+  if (!isObject(raw)) return null;
+  const items = (v: unknown) => list<HighlightItem>(v).filter((h) => typeof h.name === "string");
+  return {
+    best: items(raw.best),
+    worst: items(raw.worst),
+    gainers_today: items(raw.gainers_today),
+    losers_today: items(raw.losers_today),
+    top5_weight_pct: typeof raw.top5_weight_pct === "string" ? raw.top5_weight_pct : null,
+  };
+}
+
+/** SIPs from broker_portfolio or broker_position_detail; a malformed row is dropped. */
+export function parseSips(raw: unknown): Sip[] {
+  return list<Sip>(raw)
+    .filter((x) => typeof x.sip_code === "string" && typeof x.fund === "string" && typeof x.status === "string")
+    .map((x) => ({ ...x, missed: x.missed === true, last_order: isObject(x.last_order) ? x.last_order : null, step_up: isObject(x.step_up) ? x.step_up : null }));
 }
 
 export function positionKind(kind: string | null | undefined): PositionKind {
@@ -208,6 +324,11 @@ export function groupBySegment<T extends { segment?: string | null }>(positions:
   const order = ["kite", "coin"];
   const keyOf = (p: T) => (p.segment && order.includes(p.segment) ? p.segment : "other");
   return [...order, "other"].map((segment) => ({ segment, items: positions.filter((p) => keyOf(p) === segment) })).filter((g) => g.items.length > 0);
+}
+
+/** Whether the card shows cash: always, except an account measured against cost that holds none (Zerodha Coin). */
+export function showsCash(p: Pick<BrokerPortfolio, "basis" | "cash">): boolean {
+  return !(p.basis === "cost" && (p.cash === null || toAmount(p.cash) === 0));
 }
 
 /** The words a portfolio uses for what it is measured against. */

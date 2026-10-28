@@ -128,6 +128,7 @@ select is(pg_temp.pos('kite', 'INE000A01073')->>'day_change', '1000.00', 'a shar
 select is(pg_temp.pos('kite', 'INE000A01073')->>'day_change_pct', '4.17', 'and in %');
 select is(pg_temp.pos('kite', 'INE000A01073')->>'weight_pct', '83.33', 'its weight in the account''s positions');
 select is(pg_temp.pos('kite', 'INE000A01073')->>'return_pct', '25.00', 'its return on cost');
+select is(pg_temp.pos('kite', 'INE000A01073')->>'cost_price', '2000', 'and its average cost');
 select is(pg_temp.pos('kite', 'INF100A01011')->>'day_change', '-100.00', 'the ETF fell 1 a unit');
 select is(pg_temp.portfolio('kite')->>'day_change', '900.00', 'the account''s day change');
 select is(pg_temp.portfolio('kite')->>'day_change_pct', '3.09', 'against the previous value (29,100)');

@@ -1,5 +1,6 @@
 import { lazy, Suspense, useMemo, type ReactNode } from "react";
-import { basisWords, estimateNote, portfolioPoints, segmentHolds, segmentLabel, segmentLines, syncStatus, type BrokerPortfolio, type SegmentTotal } from "@/lib/broker";
+import { basisWords, estimateNote, portfolioPoints, segmentHolds, segmentLabel, segmentLines, showsCash, syncStatus, type BrokerPortfolio, type SegmentTotal } from "@/lib/broker";
+import { formatPct } from "@/lib/holdings";
 import { pct } from "@/lib/notes";
 import { signTone } from "@/lib/holdings";
 import { formatTotal } from "@/lib/money";
@@ -26,7 +27,8 @@ function Figure({ label, children, sub }: { label: string; children: ReactNode; 
  * The account at the broker in three numbers (value, profit, cash), when it last synced, and its
  * value against what went in. Against cost (Zerodha Kite, Zerodha Coin): the P&L on what the
  * holdings cost, a line per segment when there is more than one, and the holdings' worth against
- * their cost over time.
+ * their cost over time. Today's move shows when the server has one (Zerodha); cash is left out
+ * where it is always nil (Coin).
  */
 export function PortfolioCard({ portfolio: p }: { portfolio: BrokerPortfolio }) {
   const c = p.currency;
@@ -35,9 +37,11 @@ export function PortfolioCard({ portfolio: p }: { portfolio: BrokerPortfolio }) 
   const points = useMemo(() => portfolioPoints(p.series, p.basis), [p.series, p.basis]);
   const note = estimateNote(p.series);
   const segments = segmentLines(p);
+  const today = p.day_change !== null;
+  const cash = showsCash(p);
   return (
     <Card>
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-4 px-5 pt-5 sm:grid-cols-3 sm:gap-x-6">
+      <dl className={cn("grid grid-cols-2 gap-x-4 gap-y-4 px-5 pt-5 sm:gap-x-6", Number(today) + Number(cash) === 2 ? "xl:grid-cols-4" : Number(today) + Number(cash) === 1 ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
         <Figure label="Total value" sub={c.toUpperCase() !== "AED" ? (p.total_aed ? `≈ ${formatTotal(p.total_aed)}` : "No AED rate yet") : undefined}>
           {formatTotal(p.total, { currency: c })}
         </Figure>
@@ -51,7 +55,12 @@ export function PortfolioCard({ portfolio: p }: { portfolio: BrokerPortfolio }) 
         >
           <span className={TONE_TEXT[signTone(p.profit)]}>{formatTotal(p.profit, { currency: c, signed: true })}</span>
         </Figure>
-        <Figure label="Cash">{formatTotal(p.cash, { currency: c })}</Figure>
+        {today && (
+          <Figure label="Today" sub={formatPct(p.day_change_pct, { signed: true }) ?? undefined}>
+            <span className={TONE_TEXT[signTone(p.day_change)]}>{formatTotal(p.day_change, { currency: c, signed: true })}</span>
+          </Figure>
+        )}
+        {cash && <Figure label="Cash">{formatTotal(p.cash, { currency: c })}</Figure>}
       </dl>
       {segments.length > 0 && (
         <ul className="mx-5 mt-4 divide-y divide-border rounded-md border border-border">

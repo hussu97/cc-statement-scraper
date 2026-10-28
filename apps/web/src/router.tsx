@@ -172,6 +172,20 @@ export const indiaCoinRoute = createRoute({
   component: lazyRouteComponent(() => import("@/routes/india-account"), "IndiaCoinPage"),
 });
 
+/** A Kite position by ISIN: what it is, its worth against its cost over time, today's move. */
+export const indiaKitePositionRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/india/kite/$isin",
+  component: lazyRouteComponent(() => import("@/routes/india-position"), "IndiaKitePositionPage"),
+});
+
+/** A Coin fund by ISIN, as a Kite position, with its SIPs. */
+export const indiaCoinPositionRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/india/coin/$isin",
+  component: lazyRouteComponent(() => import("@/routes/india-position"), "IndiaCoinPositionPage"),
+});
+
 const budgetsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/budgets",
@@ -219,7 +233,7 @@ const routeTree = rootRoute.addChildren([
   signInRoute,
   welcomeRoute,
   privacyRoute,
-  appRoute.addChildren([overviewRoute, activityRoute, insightsRoute, categoryRoute, cashFlowRedirectRoute, wealthRoute, wealthAccountsRoute, wealthAccountRoute, wealthInvestmentsRoute, wealthPortfolioRoute, wealthHoldingRoute, wealthCashFlowRoute, indiaRoute, indiaKiteRoute, indiaCoinRoute, budgetsRoute, cardsRoute, statementRoute, reviewRoute, rulesRoute, settingsRoute]),
+  appRoute.addChildren([overviewRoute, activityRoute, insightsRoute, categoryRoute, cashFlowRedirectRoute, wealthRoute, wealthAccountsRoute, wealthAccountRoute, wealthInvestmentsRoute, wealthPortfolioRoute, wealthHoldingRoute, wealthCashFlowRoute, indiaRoute, indiaKiteRoute, indiaCoinRoute, indiaKitePositionRoute, indiaCoinPositionRoute, budgetsRoute, cardsRoute, statementRoute, reviewRoute, rulesRoute, settingsRoute]),
 ]);
 
 export const router = createRouter({ routeTree, defaultPreload: "intent", scrollRestoration: true });

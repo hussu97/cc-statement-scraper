@@ -45,6 +45,7 @@ export const keys = {
   noteDetail: (p: string, holding: string) => ["p", p, "cash", "note", holding] as const,
   /** A broker account's portfolio (20261027165732): under "cash", so a note, an entry or a balance change refreshes it. */
   brokerPortfolio: (p: string, account: string) => ["p", p, "cash", "broker", account] as const,
+  brokerPosition: (p: string, account: string, isin: string) => ["p", p, "cash", "broker", account, "position", isin] as const,
   /** Every synced broker account in one line each (Investments). */
   brokerAccounts: (p: string) => ["p", p, "cash", "broker-accounts"] as const,
   /** India mode (Zerodha Kite and Coin): under "cash", so a sync, a holding or a balance change refreshes it. */

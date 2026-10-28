@@ -9,6 +9,13 @@
 - **feat** `broker_portfolio` adds, per position, the day change, weight and return on cost, and per account the day change, `allocation` (stocks and ETFs; funds by scheme type), `issuers` (fund houses), `highlights` (best and worst by return, today's biggest moves, the top five's share) and `sips`. New `broker_position_detail(profile, account, isin)`: one position, its marks over time and its SIPs.
 - **feat** `zerodha-sync` reads company names (Kite's public instrument lists), fund scheme types (`/mf/instruments`), AMFI's daily NAVs with their date and fund house, and Coin's SIPs and orders. Coin funds are now priced from AMFI's NAV, since Coin's lags by days and has no date. Each source only enriches the sync: one that fails is a note in the result, and the run goes on.
 - **change** A Kite holding still named by its ticker takes the company name; a name the user gave stays.
+- **feat** Each position in `broker_portfolio` also carries its average cost (`cost_price`).
+
+### Web
+
+- **feat** India → Kite and Coin: a **Today** figure (the day's move against the previous close, or a fund's previous NAV), **Allocation** (stocks and ETFs; funds by scheme type, or by fund house), **Highlights** (best and worst since bought, today's biggest moves, the five largest positions' share) and, on Coin, **SIPs** (schedule, step-up, next instalment; a rejected instalment flagged with its reason and its date in India). Coin's always-nil cash is no longer shown.
+- **feat** The **Holdings** tab lists every position with units, invested, value, P&L and today's move, sortable by value, P&L %, today, weight or name (`?sort=`). On a phone each row shows the figure it is sorted by.
+- **feat** A page per position (`/india/kite/$isin`, `/india/coin/$isin`): value with its price (a fund's NAV and its date), P&L, today, share of the account, its worth against its cost over time, the details (units, average cost, previous price, symbol and exchange, scheme type, fund house, folio, ISIN) and the fund's SIPs.
 ## Edge Functions deploy without jsr.io — 2026-10-28
 
 ### Backend (Supabase)

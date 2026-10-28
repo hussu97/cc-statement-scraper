@@ -6,6 +6,7 @@
 import { formatTotal, toAmount, type MoneyInput } from "./money";
 import { formatPct } from "./holdings";
 import { DEFAULT_INVESTMENT_PERIOD, INVESTMENT_PERIODS, investmentPeriod, type InvestmentPeriod } from "./investments";
+import { positionSort, positionSortParam, type PositionSort } from "./broker-detail";
 
 // ── payload ────────────────────────────────────────────────────────────────
 
@@ -218,9 +219,10 @@ export function indiaAccountTab(raw: unknown): IndiaAccountTab {
   return raw === "past" ? "past" : "portfolio";
 }
 
-/** `/india/kite?tab=past`: Past, or undefined for the Portfolio default. */
-export function parseIndiaAccountSearch(raw: Record<string, unknown>): { tab?: IndiaAccountTab } {
-  return { tab: indiaAccountTab(raw.tab) === "past" ? "past" : undefined };
+/** `/india/kite?tab=past&sort=today`: Past, or undefined for the Portfolio default; the positions' sort, undefined for the default. */
+export function parseIndiaAccountSearch(raw: Record<string, unknown>): { tab?: IndiaAccountTab; sort?: PositionSort } {
+  const sort = positionSort(raw.sort);
+  return { tab: indiaAccountTab(raw.tab) === "past" ? "past" : undefined, sort: raw.sort === sort ? positionSortParam(sort) : undefined };
 }
 
 // ── wording ────────────────────────────────────────────────────────────────

@@ -5,25 +5,26 @@ import { useIndiaOverview } from "@/data/india";
 import { useBrokerPortfolio } from "@/data/broker";
 import { INDIA_TAB, indiaAccountFor, indiaAccountTab, type IndiaAccount, type IndiaAccountTab, type IndiaSegment } from "@/lib/india";
 import { basisWords } from "@/lib/broker";
+import { positionSort, positionSortParam, type PositionSort } from "@/lib/broker-detail";
 import { Card, PageHeader } from "@/components/ui/display";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/primitives";
 import { EmptyState, ErrorState, LoadingBlock } from "@/components/ui/states";
 import { BankLogo } from "@/components/bank-logo";
 import { PortfolioCard } from "@/components/wealth/broker-portfolio";
-import { PortfolioTab } from "@/components/wealth/broker-holdings";
+import { AllocationCard, HighlightsCard, PositionsCard, SipsCard } from "@/components/india/india-portfolio";
 import { PastNotesTab } from "@/components/wealth/broker-past";
 import { NoIndia } from "./india";
 
 /** India → Kite: the Kite account's portfolio, in INR. */
 export function IndiaKitePage() {
-  const tab = indiaAccountTab(indiaKiteRoute.useSearch().tab);
-  return <IndiaAccountPage segment="kite" tab={tab} />;
+  const search = indiaKiteRoute.useSearch();
+  return <IndiaAccountPage segment="kite" tab={indiaAccountTab(search.tab)} sort={positionSort(search.sort)} />;
 }
 
 /** India → Coin: the Coin account's portfolio, in INR. */
 export function IndiaCoinPage() {
-  const tab = indiaAccountTab(indiaCoinRoute.useSearch().tab);
-  return <IndiaAccountPage segment="coin" tab={tab} />;
+  const search = indiaCoinRoute.useSearch();
+  return <IndiaAccountPage segment="coin" tab={indiaAccountTab(search.tab)} sort={positionSort(search.sort)} />;
 }
 
 function Header({ segment, account }: { segment: IndiaSegment; account: IndiaAccount | null }) {
@@ -56,7 +57,7 @@ function NoAccount({ segment }: { segment: IndiaSegment }) {
   );
 }
 
-function IndiaAccountPage({ segment, tab }: { segment: IndiaSegment; tab: IndiaAccountTab }) {
+function IndiaAccountPage({ segment, tab, sort }: { segment: IndiaSegment; tab: IndiaAccountTab; sort: PositionSort }) {
   const { profile_code: profileCode } = useActiveProfile();
   const overview = useIndiaOverview(profileCode);
   const o = overview.data;
@@ -78,16 +79,17 @@ function IndiaAccountPage({ segment, tab }: { segment: IndiaSegment; tab: IndiaA
       ) : !account ? (
         <NoAccount segment={segment} />
       ) : (
-        <Portfolio key={account.account_code} profileCode={profileCode} accountCode={account.account_code} segment={segment} tab={tab} />
+        <Portfolio key={account.account_code} profileCode={profileCode} accountCode={account.account_code} segment={segment} tab={tab} sort={sort} />
       )}
     </div>
   );
 }
 
-function Portfolio({ profileCode, accountCode, segment, tab }: { profileCode: string; accountCode: string; segment: IndiaSegment; tab: IndiaAccountTab }) {
+function Portfolio({ profileCode, accountCode, segment, tab, sort }: { profileCode: string; accountCode: string; segment: IndiaSegment; tab: IndiaAccountTab; sort: PositionSort }) {
   const q = useBrokerPortfolio(profileCode, accountCode);
   const navigate = useNavigate({ from: INDIA_TAB[segment].path });
   const setTab = (t: string) => void navigate({ search: (s) => ({ ...s, tab: indiaAccountTab(t) === "past" ? "past" : undefined }), replace: true, resetScroll: false });
+  const setSort = (x: PositionSort) => void navigate({ search: (s) => ({ ...s, sort: positionSortParam(x) }), replace: true, resetScroll: false });
   const p = q.data ?? null;
 
   if (q.isLoading)
@@ -111,16 +113,23 @@ function Portfolio({ profileCode, accountCode, segment, tab }: { profileCode: st
   return (
     <>
       <PortfolioCard portfolio={p} />
+      {(p.allocation.length > 0 || p.highlights) && (
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+          <AllocationCard portfolio={p} />
+          <HighlightsCard portfolio={p} segment={segment} />
+        </div>
+      )}
+      <SipsCard sips={p.sips} />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="mb-4">
-          <TabsTrigger value="portfolio">Portfolio</TabsTrigger>
+          <TabsTrigger value="portfolio">Holdings</TabsTrigger>
           <TabsTrigger value="past">
             {basisWords(p.basis).past}
             {p.closed.length > 0 ? ` (${p.closed.length})` : ""}
           </TabsTrigger>
         </TabsList>
         <TabsContent value="portfolio">
-          <PortfolioTab portfolio={p} linked={false} />
+          <PositionsCard portfolio={p} segment={segment} sort={sort} onSort={setSort} />
         </TabsContent>
         <TabsContent value="past">
           <PastNotesTab portfolio={p} linked={false} />
