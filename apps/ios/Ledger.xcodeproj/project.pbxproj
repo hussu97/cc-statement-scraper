@@ -40,6 +40,7 @@
 		3B024CF99D69019941B0A15C /* HoldingPhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B64630311C62FD15AC17740 /* HoldingPhoto.swift */; };
 		422A6F1FD0CDB23E0425862C /* LogCardPaymentIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = D30D95BAF30905880DE075A8 /* LogCardPaymentIntent.swift */; };
 		448F5C737129DF546A921867 /* SavingsAccountViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAF3A8CF76509774BD13BA4F /* SavingsAccountViews.swift */; };
+		49C70239815E902A9998497A /* PDFKitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84BAA4AF5C03C17A4573ED85 /* PDFKitView.swift */; };
 		49D81ED55559A99D12B73F08 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6F2FA96E42C0B4A8F21A7391 /* WidgetKit.framework */; };
 		4CF8BA51B1B5A50B3C0B7185 /* PrivacyCover.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D3D0FE265167769766B23F5 /* PrivacyCover.swift */; };
 		4E142F33C460497F23C39750 /* LedgerKit in Frameworks */ = {isa = PBXBuildFile; productRef = 3CADAE061DE32CE51E97EF02 /* LedgerKit */; };
@@ -74,6 +75,7 @@
 		88E22D6FB72866F27D8AE476 /* ActivitySheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0120325ABB16C928EB7D78A2 /* ActivitySheets.swift */; };
 		89BCBC8BC12E7306FCA58F3A /* TrendsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ABF726E543E833CAE3F9C23 /* TrendsView.swift */; };
 		8C58D7674B9E904EDD66A742 /* InsightFeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A696A72DEE2FE0ADC633595 /* InsightFeedView.swift */; };
+		8DB7CCF9A6AE3600E5196E22 /* TermSheetSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9D729FE3FBF3BB5D575DB8F /* TermSheetSheet.swift */; };
 		8EF31E94D9A4CD25896B3BD6 /* TrendsResults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92A8AEC54902F08807D00634 /* TrendsResults.swift */; };
 		928FF3F6E089E97EB2442886 /* NotePriceChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F68446DF33FF6314FEE4D25 /* NotePriceChart.swift */; };
 		932E3EB322602C54C4764F58 /* CardWalletNamesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95DCC00204983D702C001D63 /* CardWalletNamesView.swift */; };
@@ -214,6 +216,7 @@
 		7D0F477A0B843C6F8017F998 /* ActivitySummaryRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivitySummaryRow.swift; sourceTree = "<group>"; };
 		83DA32C112CECFBCD77C51E7 /* HoldingSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldingSheet.swift; sourceTree = "<group>"; };
 		842801DBC37F9A8E31C6DFA8 /* ProfilePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilePickerView.swift; sourceTree = "<group>"; };
+		84BAA4AF5C03C17A4573ED85 /* PDFKitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFKitView.swift; sourceTree = "<group>"; };
 		870A6ACF064D75EDCE634F89 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		8802E77E86B569258157B0CA /* CardPaymentGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardPaymentGuideView.swift; sourceTree = "<group>"; };
 		8A8FE46536007B961F065540 /* WealthCharts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WealthCharts.swift; sourceTree = "<group>"; };
@@ -282,6 +285,7 @@
 		F62D21289B23718DD5F57954 /* PasskeysView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasskeysView.swift; sourceTree = "<group>"; };
 		F8A491D8C79A061F71F857D7 /* LedgerShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = LedgerShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		F92DD0D24E75E49A36270126 /* LocalNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalNotifications.swift; sourceTree = "<group>"; };
+		F9D729FE3FBF3BB5D575DB8F /* TermSheetSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TermSheetSheet.swift; sourceTree = "<group>"; };
 		FAF03A93FDD5126FCF6005BC /* InvestmentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvestmentsView.swift; sourceTree = "<group>"; };
 		FCE4248BBC6E6FA967938803 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -474,6 +478,7 @@
 				BF198F50092EDA75F342D73A /* GuideSteps.swift */,
 				5B4BB4BE741A2728C651F5B4 /* MonthSwitcher.swift */,
 				B5F7B5FD1E6564824D0B7AB5 /* PagingFooter.swift */,
+				84BAA4AF5C03C17A4573ED85 /* PDFKitView.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -515,6 +520,7 @@
 				D923E4AABE0E0B4180BFA2E5 /* NoteStockBars.swift */,
 				F5056715E03ACD312D50F429 /* ReturnsCard.swift */,
 				CAF3A8CF76509774BD13BA4F /* SavingsAccountViews.swift */,
+				F9D729FE3FBF3BB5D575DB8F /* TermSheetSheet.swift */,
 				8A8FE46536007B961F065540 /* WealthCharts.swift */,
 				A112FD4971B41B6C813BCC33 /* WealthOverviewView.swift */,
 			);
@@ -1008,6 +1014,7 @@
 				A6792114E70BC70B2162EC68 /* OpenLinkIntents.swift in Sources */,
 				04912B1C9183546039CC8D3B /* OverviewStrips.swift in Sources */,
 				ADA71066669326EC96C41A89 /* OverviewView.swift in Sources */,
+				49C70239815E902A9998497A /* PDFKitView.swift in Sources */,
 				27C14FFDDFA24615121DC5DD /* PaceRuleView.swift in Sources */,
 				AC6B124273C727CF4191CF2D /* PagingFooter.swift in Sources */,
 				67823B3F9665BD78F8BE1182 /* PasskeysView.swift in Sources */,
@@ -1031,6 +1038,7 @@
 				F36EF8148860144D5242451A /* StatementPDFView.swift in Sources */,
 				659B1CF789C0735789CC64EE /* StatementsView.swift in Sources */,
 				99FDF6F02D3531D5B366EB59 /* SubscriptionsView.swift in Sources */,
+				8DB7CCF9A6AE3600E5196E22 /* TermSheetSheet.swift in Sources */,
 				051BA67209BA99FF81613115 /* TransactionDetailViews.swift in Sources */,
 				8EF31E94D9A4CD25896B3BD6 /* TrendsResults.swift in Sources */,
 				A7539BFA02F7ADE8FEB4CB34 /* TrendsTable.swift in Sources */,

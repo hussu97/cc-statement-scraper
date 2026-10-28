@@ -46,14 +46,16 @@ public struct NoteNext: Decodable, Sendable, Hashable {
         public let ratePct: Decimal
         public let barrierPct: Decimal
         public let amount: Decimal
-        public let wouldPay: Bool
+        /// Nil until the shares have prices (a note the sync has just added).
+        public let wouldPay: Bool?
     }
 
     public struct Autocall: Decodable, Sendable, Hashable {
         public let triggerPct: Decimal
         public let redemptionPct: Decimal
         public let amount: Decimal
-        public let wouldCall: Bool
+        /// Nil until the shares have prices.
+        public let wouldCall: Bool?
     }
 
     /// `observation` or `final`.

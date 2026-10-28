@@ -108,6 +108,9 @@ public protocol LedgerAPI: SMSIngestAPI, AnalysisAPI, InvestmentsAPI, NotesAPI, 
     /// A short-lived signed URL for the document's PDF in the `statements` bucket (members).
     /// `StatementPDF.Failure.notAvailable` when the document has no stored file.
     func statementPDFURL(profileCode: String, docCode: String) async throws -> URL
+    /// A short-lived signed URL for a structured note's term sheet in the `term-sheets` bucket
+    /// (members; SupabaseLedgerAPI+TermSheetPDF.swift). `path` is the note's `termsheet_path`.
+    func termSheetPDFURL(path: String) async throws -> URL
 
     // Budgets (SupabaseLedgerAPI+Budgets.swift)
     /// Inserts a new budget (no `budgetCode`) or updates one. Owners only (RLS).

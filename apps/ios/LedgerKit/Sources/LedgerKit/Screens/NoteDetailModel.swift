@@ -12,15 +12,19 @@ public final class NoteDetailModel {
     public private(set) var isSaving = false
     /// Update prices' outcome, shown at the top.
     public var notice: InvestmentsModel.Notice?
+    /// The term sheet viewer (signed URL, bytes in memory while it is open).
+    public let termSheet: TermSheetPDF
 
     private let api: any LedgerAPI
     /// After a write: the ledger and, for the list, a notice to show there.
     private let onChange: @MainActor (String, InvestmentsModel.Notice?) async -> Void
 
     public init(holdingCode: String, api: any LedgerAPI,
-                onChange: @escaping @MainActor (String, InvestmentsModel.Notice?) async -> Void = { _, _ in }) {
+                onChange: @escaping @MainActor (String, InvestmentsModel.Notice?) async -> Void = { _, _ in },
+                fetchPDF: @escaping StatementPDF.Fetch = StatementPDF.download) {
         self.holdingCode = holdingCode
         self.api = api
+        termSheet = TermSheetPDF(api: api, fetch: fetchPDF)
         self.onChange = onChange
     }
 
@@ -31,6 +35,13 @@ public final class NoteDetailModel {
         } catch {
             state = state.fail(error)
         }
+    }
+
+    /// Opens the loaded note's term sheet, titled by the note.
+    public func openTermSheet() async {
+        guard let note = state.value else { return }
+        await termSheet.open(path: note.terms.termsheetPath, filename: note.terms.termsheetFilename,
+                             title: note.summary.name)
     }
 
     public func loadIfNeeded(profileCode: String) async {

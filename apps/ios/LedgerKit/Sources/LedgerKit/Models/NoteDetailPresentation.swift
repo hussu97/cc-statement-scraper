@@ -184,8 +184,17 @@ extension NoteDetail {
             ("Strike", LedgerDates.fullDayLabel(terms.strikeDate)),
             ("Final valuation", LedgerDates.fullDayLabel(terms.finalValuationDate)),
             ("Maturity", LedgerDates.fullDayLabel(terms.maturityDate)),
-            ("Term sheet", terms.termsheetFilename ?? "—"),
         ]
+    }
+
+    /// The term sheet under the terms: the stored PDF opens in the app (`TermSheetPDF`); a note
+    /// without one says so instead of offering a dead link.
+    public var hasTermSheet: Bool { TermSheetPDF.canOpen(path: terms.termsheetPath) }
+
+    /// The term sheet's row text: its file name, else "Term sheet".
+    public var termSheetLabel: String {
+        let name = terms.termsheetFilename?.trimmingCharacters(in: .whitespaces) ?? ""
+        return name.isEmpty ? "Term sheet" : name
     }
 
     /// The header's one muted line: `"Example Bank M Financial · XS0000000405"`.

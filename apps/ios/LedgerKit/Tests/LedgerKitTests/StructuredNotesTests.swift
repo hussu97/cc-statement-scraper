@@ -160,6 +160,24 @@ struct StructuredNotesTests {
         #expect(ended.scheduleRows.flatMap(\.outcomes).contains { $0.text == "Called early USD 5,000.00 · worst GOOGL 103.95%" })
     }
 
+    @Test("a note without prices yet (just synced) still decodes: the next check's would-pay is unknown")
+    func awaitingPrices() throws {
+        var notes = try #require(try JSONSerialization.jsonObject(with: fixture("structured_notes_summary")) as? [[String: Any]])
+        var next = try #require(notes[1]["next"] as? [String: Any])
+        var coupon = try #require(next["coupon"] as? [String: Any])
+        var autocall = try #require(next["autocall"] as? [String: Any])
+        coupon["would_pay"] = NSNull()
+        autocall["would_call"] = NSNull()
+        next["coupon"] = coupon
+        next["autocall"] = autocall
+        notes[1]["next"] = next
+        notes[1]["worst_now"] = NSNull()
+        notes[1]["if_ended_today"] = NSNull()
+        notes[1]["verdict"] = ["kind": "awaiting_prices"]
+        let decoded = try LedgerJSON.decode([NoteSummary].self, from: JSONSerialization.data(withJSONObject: notes))
+        #expect(decoded[1].next?.coupon?.wouldPay == nil && decoded[1].next?.autocall?.wouldCall == nil)
+    }
+
     @Test("a coupon at risk: the verdict, the coupon it pays and when the call comes; the money with if called")
     func couponAtRisk() throws {
         var json = try #require(try JSONSerialization.jsonObject(with: fixture("structured_note_detail")) as? [String: Any])

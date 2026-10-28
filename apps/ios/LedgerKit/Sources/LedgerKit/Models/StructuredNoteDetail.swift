@@ -29,6 +29,7 @@ public struct NoteDetail: Decodable, Sendable, Hashable {
         public let issueDate: CalendarDay?
         public let finalValuationDate: CalendarDay
         public let maturityDate: CalendarDay
+        public let termsheetPath: String?
         public let termsheetFilename: String?
     }
 

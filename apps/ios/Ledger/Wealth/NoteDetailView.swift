@@ -41,7 +41,9 @@ struct NoteDetailView: View {
                     }
                 }
                 Card { StatTiles(stats: note.moneyStats(), columns: 3) }
-                NoteDetailSections(note: note)
+                NoteDetailSections(note: note, termSheetLoading: model.termSheet.isLoading) {
+                    Task { await model.openTermSheet() }
+                }
             }
             .padding(.top, 8)
         }
@@ -82,6 +84,16 @@ struct NoteDetailView: View {
             Button("Keep it", role: .cancel) {}
         } message: {
             Text(NoteDetailModel.removeMessage)
+        }
+        .sheet(item: Binding(get: { model.termSheet.document },
+                             set: { if $0 == nil { model.termSheet.close() } })) { document in
+            TermSheetSheet(document: document)
+        }
+        .alert("Couldn't open the term sheet", isPresented: Binding(get: { model.termSheet.errorMessage != nil },
+                                                                    set: { if !$0 { model.termSheet.errorMessage = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(model.termSheet.errorMessage ?? "")
         }
         .alert("Couldn't remove it", isPresented: Binding(get: { removeError != nil }, set: { if !$0 { removeError = nil } })) {
             Button("OK", role: .cancel) {}
@@ -137,9 +149,12 @@ private struct VerdictBlock: View {
     }
 }
 
-/// Every scenario, the full schedule, the price history and the terms, each collapsed.
+/// Every scenario, the full schedule, the price history and the terms (with the term sheet,
+/// which opens in the app), each collapsed.
 private struct NoteDetailSections: View {
     let note: NoteDetail
+    let termSheetLoading: Bool
+    let openTermSheet: () -> Void
 
     var body: some View {
         let sections = note.sections
@@ -162,7 +177,12 @@ private struct NoteDetailSections: View {
         case .scenarios: NoteScenariosContent(note: note)
         case .schedule: NoteScheduleContent(note: note)
         case .priceHistory: NoteChart(lines: note.seriesLines, levels: note.isEnded ? [] : note.levels ?? [])
-        case .terms: NoteTermsContent(note: note)
+        case .terms:
+            VStack(alignment: .leading, spacing: 8) {
+                NoteTermsContent(note: note)
+                TermSheetRow(note: note, isLoading: termSheetLoading, open: openTermSheet)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }

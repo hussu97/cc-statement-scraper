@@ -708,6 +708,18 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         return try answer.get()
     }
 
+    /// `termSheetPDFURL`'s answer by storage path; a missing path is a storage "not found".
+    var termSheetURLs: [String: Result<URL, any Error>] = [:]
+    private(set) var termSheetURLRequests: [String] = []
+    func termSheetPDFURL(path: String) async throws -> URL {
+        let answer = lock.withLock {
+            termSheetURLRequests.append(path)
+            return termSheetURLs[path]
+        }
+        guard let answer else { throw StatementPDF.Failure.storage("Object not found") }
+        return try answer.get()
+    }
+
     func changes(profileCode: String) -> AsyncStream<LedgerChange> {
         let script: [String]? = lock.withLock {
             defer { subscriptions += 1 }
