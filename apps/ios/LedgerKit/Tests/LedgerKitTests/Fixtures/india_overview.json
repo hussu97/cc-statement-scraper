@@ -1,0 +1,41 @@
+{
+  "available": true,
+  "currency": "INR",
+  "period": "90d",
+  "from": "2026-07-30",
+  "to": "2026-10-28",
+  "total": {
+    "value": "1254310.55",
+    "value_aed": "54321.40",
+    "invested": "1102000.00",
+    "cash": "18250.30",
+    "pnl": "134060.25",
+    "pnl_pct": "12.17",
+    "change_24h": "-4210.50",
+    "change_24h_aed": "-182.35",
+    "change_24h_pct": "-0.34",
+    "period_start_value": "1080000.00",
+    "period_end_value": "1254310.55",
+    "period_added": "95000.00",
+    "period_growth": "79310.55",
+    "period_growth_pct": "6.75",
+    "positions": "12",
+    "last_synced_at": "2026-10-28T08:30:00+00:00"
+  },
+  "accounts": [
+    {"account_code": "acc_01KITE00000000000000000000", "bank_code": "KITE", "name": "Zerodha Kite", "segment": "kite",
+     "value": "812450.25", "value_aed": "35184.10", "invested": "748240.00", "cash": "18250.30",
+     "pnl": "64210.25", "pnl_pct": "8.59", "change_24h": "1204.00", "change_24h_pct": "0.29",
+     "positions": "8", "last_synced_at": "2026-10-28T08:30:00+00:00", "sync_status": "ok"},
+    {"account_code": "acc_01COIN00000000000000000000", "bank_code": "COIN", "name": "Zerodha Coin", "segment": "coin",
+     "value": "441860.30", "value_aed": "19137.30", "invested": "353760.00", "cash": null,
+     "pnl": "69850.00", "pnl_pct": "19.74", "change_24h": null, "change_24h_pct": null,
+     "positions": "4", "last_synced_at": "2026-10-27T20:00:00+00:00", "sync_status": "error"}
+  ],
+  "series": [
+    {"date": "2026-10-28", "value": "1254310.55", "invested": "1102000.00"},
+    {"date": "2026-07-30", "value": "1080000.00", "invested": "1007000.00"},
+    {"date": "2026-08-30", "value": null, "invested": "1050000.00"},
+    {"date": "2026-09-30", "value": "1190000.00", "invested": "1080000.00"}
+  ]
+}

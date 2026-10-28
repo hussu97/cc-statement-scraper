@@ -14,6 +14,8 @@ struct AccountLedgerView: View {
     let canEdit: Bool
     /// Investments' broker row: the portfolio, not only the statement.
     var showsPortfolio = false
+    /// A tab's root (India's Kite and Coin): a large title and the mode menu.
+    var isTabRoot = false
     @Environment(CashModel.self) private var cash
     @Environment(NotesModel.self) private var notes
     @Environment(InvestmentsModel.self) private var investments
@@ -57,7 +59,10 @@ struct AccountLedgerView: View {
             }
         }
         .ledgerNavigation(model.state.value?.account.title ?? balance?.title ?? "Account")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(isTabRoot ? .automatic : .inline)
+        .toolbar {
+            if isTabRoot { ToolbarItem(placement: .principal) { ModeMenu() } }
+        }
         .task(id: model.month.month) { await model.loadIfNeeded(profileCode: profileCode) }
         .task { await cash.loadIfNeeded(profileCode: profileCode) }
         .task { await notes.loadIfNeeded(profileCode: profileCode) }

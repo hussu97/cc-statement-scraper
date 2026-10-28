@@ -59,8 +59,9 @@ struct InvestmentsChartCard: View {
     }
 }
 
-/// Months (or weeks) along the bottom, compact AED up the side, the scale following the figures.
-private struct DayAxes: ViewModifier {
+/// Months (or weeks) along the bottom, compact figures up the side, the scale following them
+/// (India's chart too).
+struct DayAxes: ViewModifier {
     /// 30 days: a week per mark, labelled by day; longer spans a month per mark.
     var short = false
 

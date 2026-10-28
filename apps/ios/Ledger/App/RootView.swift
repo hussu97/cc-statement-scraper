@@ -50,9 +50,10 @@ struct RootView: View {
     }
 }
 
-/// The tab bar of the mode on screen (`AppMode.tabs`), switched from the title menu in each root
-/// screen. Overview and Settings are in both modes; Settings (cards, statements) is shared, so its
-/// stack stays as it was across a switch.
+/// The tab bar of the mode on screen (`TabRouter.shownTabs`), switched from the title menu in each
+/// root screen. Overview and Settings are in Spending and Wealth; Settings (cards, statements) is
+/// shared, so its stack stays as it was across a switch. India is Overview, Kite and Coin, for a
+/// ledger that has them.
 struct MainTabs: View {
     let model: AppModel
     let profileCode: String
@@ -60,7 +61,7 @@ struct MainTabs: View {
     var body: some View {
         @Bindable var tabs = model.tabs
         TabView(selection: $tabs.tab) {
-            ForEach(tabs.mode.tabs, id: \.self) { tab in
+            ForEach(tabs.shownTabs, id: \.self) { tab in
                 Tab(tab.title, systemImage: tab.systemImage, value: tab) { screen(tab) }
                     // SMS that haven't reached the server for an hour (BACKLOG IOS-12r).
                     .badge(tab == .settings ? model.settings.outboxStatus.badgeCount : 0)
@@ -89,6 +90,13 @@ struct MainTabs: View {
     @ViewBuilder private func screen(_ tab: LedgerTab) -> some View {
         @Bindable var tabs = model.tabs
         switch tab {
+        case .overview where tabs.mode == .india:
+            NavigationStack { IndiaOverviewView(model: model.screens.india, profileCode: profileCode) }
+        case .kite, .coin:
+            NavigationStack {
+                IndiaAccountTab(model: model.screens.india, tab: tab, profileCode: profileCode,
+                                canEdit: model.profiles.canWrite)
+            }
         case .overview where tabs.mode == .wealth:
             NavigationStack {
                 WealthOverviewView(model: model.screens.wealthOverview, profileCode: profileCode,

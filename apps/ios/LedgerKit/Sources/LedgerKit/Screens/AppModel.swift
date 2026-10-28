@@ -76,6 +76,12 @@ public final class AppModel {
         let widgets = services.widgets
         lock = AppLock(defaults: .standard, authenticator: LocalDeviceAuthenticator(),
                        onRequireChanged: { widgets.hidesLockScreenAmounts = $0 })
+        // India is offered only for a ledger with a Kite or Coin account; a remembered India
+        // falls back to Spending for one without (`TabRouter.indiaLoaded`).
+        let (tabs, screens) = (self.tabs, self.screens)
+        screens.india.onLoaded = { indiaTabs, code in
+            if screens.activeProfile == code { tabs.indiaLoaded(indiaTabs) }
+        }
         // The current month of the ledger on screen feeds the widgets (N-2).
         let profiles = self.profiles
         screens.overview.onLoaded = { overview, code in

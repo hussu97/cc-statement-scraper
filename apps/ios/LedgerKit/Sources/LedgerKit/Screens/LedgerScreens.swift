@@ -33,6 +33,8 @@ public final class LedgerScreens {
     public let investments: InvestmentsModel
     /// Structured notes: on Investments, on the account that pays for them, and their own screens.
     public let notes: NotesModel
+    /// India mode: Zerodha Kite and Coin in rupees, and whether the ledger has them at all.
+    public let india: IndiaModel
 
     /// The ledger the tabs hold. The UI shows the tabs only when this equals
     /// the selected ledger, so the previous ledger's numbers never flash.
@@ -62,6 +64,7 @@ public final class LedgerScreens {
                                         categories: { activity.meta?.assignableCategories ?? [] })
         investments = InvestmentsModel(api: api, today: today)
         notes = NotesModel(api: api, today: today)
+        india = IndiaModel(api: api)
         self.live = live ?? LiveUpdates(api: api)
         // A budget written on the Budgets tab changes Insights' budgets card.
         budgets.onChange = { [insights] code in await insights.refresh(profileCode: code) }
@@ -121,7 +124,9 @@ public final class LedgerScreens {
         }
         async let a: Void = overview.loadIfNeeded(profileCode: code, month: month.requestMonth)
         async let b: Void = activity.loadIfNeeded(profileCode: code)
-        _ = await (a, b)
+        // Whether the mode menu offers India (and a remembered India stays on screen).
+        async let c: Void = india.loadIfNeeded(profileCode: code)
+        _ = await (a, b, c)
         if activeProfile == code { month.setFirstDay(activity.meta?.dateRange?.min) }
     }
 
@@ -142,6 +147,7 @@ public final class LedgerScreens {
         let (overview, activity, insights, budgets, statements, review) = (overview, activity, insights, budgets, statements, review)
         let (feed, anomalies, cash) = (feed, anomalies, cash)
         let (wealthOverview, accountLedgers, investments, notes) = (wealthOverview, accountLedgers, investments, notes)
+        let india = india
         await withDiscardingTaskGroup { group in
             if money { group.addTask { await overview.refresh(profileCode: code) } }
             if money { group.addTask { await feed.refresh(profileCode: code) } }
@@ -154,6 +160,8 @@ public final class LedgerScreens {
             if txns { group.addTask { await investments.refresh(profileCode: code) } }
             // A note's coupon or redemption is a transaction on its account.
             if txns { group.addTask { await notes.refresh(profileCode: code) } }
+            // A broker sync posts its cash moves as transactions; the foreground re-reads the marks.
+            if txns { group.addTask { await india.refresh(profileCode: code) } }
             if txns {
                 group.addTask { await activity.refresh(profileCode: code) }
                 group.addTask { await insights.refresh(profileCode: code) }
@@ -185,6 +193,7 @@ public final class LedgerScreens {
         accountLedgers.reset()
         investments.reset()
         notes.reset()
+        india.reset()
         month.reset()
     }
 }

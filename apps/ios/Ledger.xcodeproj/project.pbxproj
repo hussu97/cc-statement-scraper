@@ -44,12 +44,15 @@
 		4E5309A305E082B648C197FE /* ActivityFilterSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4F0B0D61CCC31F4906C0E54 /* ActivityFilterSheet.swift */; };
 		4F5F815454811A4ECF4C88FF /* InsightsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05EB2567DB0EA258329DBD95 /* InsightsView.swift */; };
 		51D624FD760D12688795252E /* NoteSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DFCDA294581488C72B55E09 /* NoteSections.swift */; };
+		53542CB82A168480BEA9FF15 /* IndiaOverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CD86D749DCEB1686BFFE6F7 /* IndiaOverviewView.swift */; };
 		5C505CAE19B5A46F6B81569A /* WorthALookCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA2C5CA2D95D362FD6EED551 /* WorthALookCard.swift */; };
+		5D379A6F4F1ADCFBA922A5F6 /* IndiaAccountTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2B2597958773ABEBEC188E8 /* IndiaAccountTab.swift */; };
 		639DD622BB9374953943A550 /* InvestmentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAF03A93FDD5126FCF6005BC /* InvestmentsView.swift */; };
 		64DA37F832CAF1265B346D60 /* DueWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E0E8F29832625D4E0CE1A50 /* DueWidget.swift */; };
 		659B1CF789C0735789CC64EE /* StatementsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F52CAA6FE73B46EFE59439A4 /* StatementsView.swift */; };
 		67823B3F9665BD78F8BE1182 /* PasskeysView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62D21289B23718DD5F57954 /* PasskeysView.swift */; };
 		6FC7465D05CDF439807AE76B /* BrokerValueChartCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 958E2BEB0B418C54D65B30E1 /* BrokerValueChartCard.swift */; };
+		714EF84D2C828E1443D0B42E /* IndiaChartCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2976E11E8EBA9E71972E41C5 /* IndiaChartCard.swift */; };
 		738FC2230617C85A8AC57684 /* BackgroundSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 577A951513B717E3C3EB9347 /* BackgroundSync.swift */; };
 		748435885CB091FA9BFCACAA /* ActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAE2E3AE75D7627DDCE82B40 /* ActivityView.swift */; };
 		7592D087035DDFD3D18F5E5D /* HourPatternView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE93B867E5140AD923627BFA /* HourPatternView.swift */; };
@@ -170,11 +173,13 @@
 		259FDE76F5AD9DC9DEFE2BFF /* YearOverYearView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YearOverYearView.swift; sourceTree = "<group>"; };
 		25B5474CFF14BBFCDCBA56AC /* AccountsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsView.swift; sourceTree = "<group>"; };
 		264DF1988B5FD484847487E6 /* SpendFilterSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendFilterSheet.swift; sourceTree = "<group>"; };
+		2976E11E8EBA9E71972E41C5 /* IndiaChartCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IndiaChartCard.swift; sourceTree = "<group>"; };
 		29A5D1F13A9777F8DF1C1BCC /* Ledger.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Ledger.entitlements; sourceTree = "<group>"; };
 		2C57A1D8901CB31AB03C4518 /* CategoryDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryDetailView.swift; sourceTree = "<group>"; };
 		2F68446DF33FF6314FEE4D25 /* NotePriceChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotePriceChart.swift; sourceTree = "<group>"; };
 		306FF1BBB7DC9A30BCC65C13 /* LogBankSMSIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogBankSMSIntent.swift; sourceTree = "<group>"; };
 		397B421B503B658A12151A59 /* PaceRuleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaceRuleView.swift; sourceTree = "<group>"; };
+		3CD86D749DCEB1686BFFE6F7 /* IndiaOverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IndiaOverviewView.swift; sourceTree = "<group>"; };
 		3F97ED19E6EAD9BD539F47D2 /* AnomaliesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnomaliesView.swift; sourceTree = "<group>"; };
 		41E5147D73DD93C7A015339F /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		440D48465D990731AC380564 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -261,6 +266,7 @@
 		F190BDC9EB8084E38F344EE7 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		F1D9A6F55EDEC6633699FC7B /* BudgetsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetsView.swift; sourceTree = "<group>"; };
 		F1E4A856AC27772DBFEAAA57 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		F2B2597958773ABEBEC188E8 /* IndiaAccountTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IndiaAccountTab.swift; sourceTree = "<group>"; };
 		F5056715E03ACD312D50F429 /* ReturnsCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReturnsCard.swift; sourceTree = "<group>"; };
 		F52CAA6FE73B46EFE59439A4 /* StatementsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatementsView.swift; sourceTree = "<group>"; };
 		F58FDA6BA36479357BC7BFC5 /* CategoriseLastTransactionIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoriseLastTransactionIntent.swift; sourceTree = "<group>"; };
@@ -325,6 +331,7 @@
 				92831103A0F0271328A9729A /* Budgets */,
 				5030C06C655C9CFC205813C2 /* Cash */,
 				70B7A106562AC9DE924B57DE /* Components */,
+				44F8B631635A153757D5301F /* India */,
 				EBFBF1ABEFB6004D629B4CF6 /* Insights */,
 				FD9612D2EC0D00E696282BA1 /* Intents */,
 				65D5F81E8AF042129118B445 /* Onboarding */,
@@ -361,6 +368,16 @@
 				FCE4248BBC6E6FA967938803 /* RootView.swift */,
 			);
 			path = App;
+			sourceTree = "<group>";
+		};
+		44F8B631635A153757D5301F /* India */ = {
+			isa = PBXGroup;
+			children = (
+				F2B2597958773ABEBEC188E8 /* IndiaAccountTab.swift */,
+				2976E11E8EBA9E71972E41C5 /* IndiaChartCard.swift */,
+				3CD86D749DCEB1686BFFE6F7 /* IndiaOverviewView.swift */,
+			);
+			path = India;
 			sourceTree = "<group>";
 		};
 		4633D38C398A212F90654F29 /* Overview */ = {
@@ -952,6 +969,9 @@
 				F5B934CC0086C3383A00AC2D /* HoldingRow.swift in Sources */,
 				78C3ED45DA79654878068933 /* HoldingSheet.swift in Sources */,
 				7592D087035DDFD3D18F5E5D /* HourPatternView.swift in Sources */,
+				5D379A6F4F1ADCFBA922A5F6 /* IndiaAccountTab.swift in Sources */,
+				714EF84D2C828E1443D0B42E /* IndiaChartCard.swift in Sources */,
+				53542CB82A168480BEA9FF15 /* IndiaOverviewView.swift in Sources */,
 				8C58D7674B9E904EDD66A742 /* InsightFeedView.swift in Sources */,
 				4F5F815454811A4ECF4C88FF /* InsightsView.swift in Sources */,
 				8564769CCCA39F6228FDF841 /* InvestmentLinkSection.swift in Sources */,

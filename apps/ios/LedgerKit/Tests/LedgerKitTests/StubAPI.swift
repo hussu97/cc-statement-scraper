@@ -298,6 +298,17 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         if let error = lock.withLock({ brokerPortfolioError }) { throw error }
         return lock.withLock { brokerPortfolioFixture }
     }
+    // MARK: India mode: scripted answer
+    /// `india_overview`'s answer for each period (a missing period: India not available);
+    /// `indiaError` is thrown when set. Every call's period is kept in `indiaCalls`.
+    var indiaFixtures: [ReturnsPeriod: IndiaOverview] = [:]
+    var indiaError: LedgerAPIError?
+    private(set) var indiaCalls: [ReturnsPeriod] = []
+    func indiaOverview(profileCode: String, period: ReturnsPeriod) async throws -> IndiaOverview {
+        lock.withLock { indiaCalls.append(period) }
+        if let error = lock.withLock({ indiaError }) { throw error }
+        return lock.withLock { indiaFixtures[period] } ?? IndiaOverview(available: false, period: period)
+    }
     /// `broker_accounts_summary`'s answer; `brokerAccountsError` is thrown when set.
     var brokerAccountsFixture: [BrokerAccountSummary] = []
     var brokerAccountsError: LedgerAPIError?

@@ -1,8 +1,9 @@
 import LedgerKit
 import SwiftUI
 
-/// The header's mode switch (Wealth mode): `Spending ⌄` / `Wealth ⌄` in each root screen's
-/// navigation bar, a menu of the two modes. Which tabs each shows is `AppMode`'s.
+/// The header's mode switch (Wealth mode): `Spending ⌄` / `Wealth ⌄` / `India ⌄` in each root
+/// screen's navigation bar, a menu of the modes the ledger has (`TabRouter.modes`: India only with
+/// a Kite or Coin account). Which tabs each shows is `AppMode`'s.
 struct ModeMenu: View {
     @Environment(TabRouter.self) private var tabs: TabRouter?
 
@@ -10,7 +11,7 @@ struct ModeMenu: View {
         if let tabs {
             Menu {
                 Picker("Mode", selection: Binding(get: { tabs.mode }, set: { tabs.switchMode($0) })) {
-                    ForEach(AppMode.allCases) { mode in
+                    ForEach(tabs.modes) { mode in
                         Label {
                             Text(mode.title)
                             Text(mode.subtitle)
@@ -31,7 +32,7 @@ struct ModeMenu: View {
             }
             .accessibilityLabel("Mode")
             .accessibilityValue(tabs.mode.title)
-            .accessibilityHint("Switches between Spending and Wealth")
+            .accessibilityHint(AppMode.menuHint(tabs.modes))
         }
     }
 }
