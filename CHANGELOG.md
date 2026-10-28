@@ -12,6 +12,15 @@
 - **change** A holding belongs to a broker account when the account has a row or a mark for it, so closed Zerodha positions list as past.
 - **change** Sentry also filters `totp` and `twofa` fields.
 
+### Web
+
+- **feat** The Zerodha account page:
+  - Total value, P&L on what was invested, and cash.
+  - Kite (stocks and ETFs) and Coin (mutual funds) one line each: invested, current, P&L.
+  - The holdings' worth against their cost over time.
+  - Tabs: **Portfolio** (a card per segment, each holding with its units, cost, worth and P&L), **Transactions** and **Sold**.
+- Investments lists Zerodha as one row; its holdings count in the totals, returns and net worth.
+
 ### Docs
 
 - **docs** ARCHITECTURE (Zerodha sync), PRODUCTION (`ZERODHA_LOGINS`, authorising the Kite app, the cron job, the deploy list), README (env, endpoints), `scripts/cutover/zerodha-logins.py`, tasks/todo.md §12.

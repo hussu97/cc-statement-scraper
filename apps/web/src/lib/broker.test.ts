@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  basisWords,
   dateTickFormatter,
+  groupBySegment,
+  segmentHolds,
+  segmentLabel,
   estimateNote,
   heldMonths,
   holdingResult,
@@ -180,5 +184,88 @@ describe("portfolio chart", () => {
     expect(estimateNote([day("2026-01-01", "1", true), day("2026-01-02", "1", false)])).toBe(
       "Dashed: estimated from the broker's performance index before 2 Jan 2026; daily marks since.",
     );
+  });
+});
+
+// ── Zerodha: measured against cost, Kite and Coin ──────────────────────────
+const ZERODHA = {
+  account_code: "acc_00000000000000000000000009",
+  provider: "zerodha",
+  portfolio_ref: "AB1234",
+  currency: "INR",
+  basis: "cost",
+  sync: { last_synced_at: "2026-10-27T18:00:00Z", last_attempt_at: "2026-10-27T18:00:00Z", status: "ok", error: null },
+  as_of: "2026-10-27",
+  cash: "1000.00",
+  positions_value: "17980.00",
+  total: "18980.00",
+  invested: "16700.00",
+  net_deposits: "17700.00",
+  profit: "1280.00",
+  positions: [
+    { holding_code: "hld_1", kind: "security", name: "Test Fund", segment: "coin", value: "4480.00", cost: "3200.00", quantity: "80.000000" },
+    { holding_code: "hld_2", kind: "security", name: "TESTCO", segment: "kite", value: "13500.00", cost: "13500.00", quantity: "5.000000" },
+  ],
+  segments: [
+    { segment: "kite", positions: "1", invested: "13500.00", value: "13500.00", value_aed: "594.00", profit: "0.00", return_pct: "0.00" },
+    { segment: "coin", positions: "1", invested: "3200.00", value: "4480.00", value_aed: "197.12", profit: "1280.00", return_pct: "40.00" },
+    { positions: "1" },
+  ],
+  series: [
+    { as_of: "2026-10-27", total: "18980.00", cash: "1000.00", positions: "17980.00", invested: "16700.00", net_deposits: "17700.00", estimated: false },
+    { as_of: "2026-10-24", total: "31025.00", cash: "1000.00", positions: "30025.00", invested: "24020.00", net_deposits: "25020.00", estimated: false },
+  ],
+};
+
+describe("a portfolio measured against cost (Zerodha)", () => {
+  it("reads the basis, the invested amount and the segments; drops a segment without a name", () => {
+    const p = parseBrokerPortfolio(ZERODHA)!;
+    expect(p.basis).toBe("cost");
+    expect(p.invested).toBe("16700.00");
+    expect(p.segments.map((s) => s.segment)).toEqual(["kite", "coin"]);
+    expect(p.positions[0]!.segment).toBe("coin");
+  });
+
+  it("reads an older payload as measured against deposits, with no segments", () => {
+    const p = parseBrokerPortfolio({ ...ZERODHA, basis: undefined, segments: undefined, invested: undefined })!;
+    expect(p.basis).toBe("deposits");
+    expect(p.segments).toEqual([]);
+    expect(p.invested).toBeNull();
+  });
+
+  it("charts the holdings' worth against their cost, cash aside", () => {
+    const p = parseBrokerPortfolio(ZERODHA)!;
+    const points = portfolioPoints(p.series, p.basis);
+    expect(points.map((x) => [x.date, x.marked, x.deposits])).toEqual([
+      ["2026-10-24", 30025, 24020],
+      ["2026-10-27", 17980, 16700],
+    ]);
+    // Against deposits (the default), the total against net deposits.
+    expect(portfolioPoints(p.series).map((x) => [x.marked, x.deposits])).toEqual([
+      [31025, 25020],
+      [18980, 17700],
+    ]);
+  });
+
+  it("groups positions Kite first, then Coin, then anything else, in the server's order", () => {
+    const groups = groupBySegment([
+      { id: 1, segment: "coin" },
+      { id: 2, segment: "kite" },
+      { id: 3, segment: null },
+      { id: 4, segment: "kite" },
+    ]);
+    expect(groups.map((g) => [g.segment, g.items.map((x) => x.id)])).toEqual([
+      ["kite", [2, 4]],
+      ["coin", [1]],
+      ["other", [3]],
+    ]);
+    expect(groupBySegment([])).toEqual([]);
+  });
+
+  it("names segments and the basis's words", () => {
+    expect([segmentLabel("kite"), segmentLabel("coin"), segmentLabel("fno"), segmentLabel(null)]).toEqual(["Kite", "Coin", "Other", "Other"]);
+    expect(segmentHolds("coin")).toBe("Mutual funds");
+    expect(basisWords("cost")).toMatchObject({ profit: "P&L", line: "Invested", past: "Sold" });
+    expect(basisWords("deposits")).toMatchObject({ profit: "Profit", line: "Put in", past: "Past notes" });
   });
 });

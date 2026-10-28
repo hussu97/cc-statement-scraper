@@ -6,6 +6,7 @@ import { useActiveProfile } from "@/data/profile";
 import { useCashPosition, type CashAccount } from "@/data/cash";
 import { isNotFound, useAccountLedger } from "@/data/wealth";
 import { useBrokerPortfolio } from "@/data/broker";
+import { basisWords } from "@/lib/broker";
 import { bankAccountLabel } from "@/lib/cash-flow";
 import { accountKindLabel, accountMonthStart, accountTab, shiftAccountMonth } from "@/lib/wealth";
 import { monthEnd, monthStart, todayDubai } from "@/lib/dates";
@@ -62,7 +63,7 @@ function AccountView({ accountCode }: { accountCode: string }) {
   const ledger = useAccountLedger(profileCode, accountCode, { from: start, to: monthEnd(start) });
   const cash = useCashPosition(profileCode);
   const position = cash.data?.accounts.find((a) => a.account_code === accountCode) ?? null;
-  // A broker account (Swissquote) has a synced portfolio; every other account returns null.
+  // A broker account (Swissquote, Zerodha) has a synced portfolio; every other account returns null.
   const broker = useBrokerPortfolio(profileCode, accountCode);
   const portfolio = broker.data ?? null;
   const [updating, setUpdating] = useState<CashAccount | null>(null);
@@ -133,7 +134,7 @@ function AccountView({ accountCode }: { accountCode: string }) {
             <TabsList className="mb-4">
               <TabsTrigger value="portfolio">Portfolio</TabsTrigger>
               <TabsTrigger value="transactions">Transactions</TabsTrigger>
-              <TabsTrigger value="past">Past notes{portfolio.closed.length > 0 ? ` (${portfolio.closed.length})` : ""}</TabsTrigger>
+              <TabsTrigger value="past">{basisWords(portfolio.basis).past}{portfolio.closed.length > 0 ? ` (${portfolio.closed.length})` : ""}</TabsTrigger>
             </TabsList>
             <TabsContent value="portfolio">
               <PortfolioTab portfolio={portfolio} />

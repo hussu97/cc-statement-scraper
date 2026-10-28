@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { dateTickFormatter, type PortfolioPoint } from "@/lib/broker";
+import { dateTickFormatter, type Basis, type PortfolioPoint } from "@/lib/broker";
 import { formatDate } from "@/lib/dates";
 import { formatTotal } from "@/lib/money";
 import { AXIS_TICK, GRID_STROKE, axisMoney } from "@/components/charts/chart-tooltip";
@@ -8,11 +8,13 @@ import { AXIS_TICK, GRID_STROKE, axisMoney } from "@/components/charts/chart-too
 const TIP = "min-w-44 rounded-md border border-border bg-surface px-3 py-2 text-[12px] shadow-[0_8px_24px_-12px_var(--color-border-strong)]";
 
 /**
- * A broker portfolio's value each day against the net deposits (broker_portfolio.series). Days
- * rebuilt from the broker's performance index are drawn dashed; daily marks solid. Values are the
- * server's, converted for drawing only.
+ * A broker portfolio's value each day against the net deposits, or, against cost (Zerodha), its
+ * holdings' worth against what they cost (broker_portfolio.series). Days rebuilt from the broker's
+ * performance index are drawn dashed; daily marks solid. Values are the server's, converted for
+ * drawing only.
  */
-export function PortfolioChart({ points, currency, className = "h-56" }: { points: PortfolioPoint[]; currency: string; className?: string }) {
+export function PortfolioChart({ points, currency, basis = "deposits", className = "h-56" }: { points: PortfolioPoint[]; currency: string; basis?: Basis; className?: string }) {
+  const cost = basis === "cost";
   const hasEstimate = points.some((p) => p.isEstimated);
   const tick = useMemo(() => dateTickFormatter(points), [points]);
   return (
@@ -35,21 +37,27 @@ export function PortfolioChart({ points, currency, className = "h-56" }: { point
                     {d.estimated && <span className="font-normal text-muted"> · estimated</span>}
                   </p>
                   <dl className="mt-1 grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5">
-                    <dt className="text-ink-2">Value</dt>
-                    <dd className="tabular text-right text-ink">{formatTotal(d.total, { currency })}</dd>
+                    <dt className="text-ink-2">{cost ? "Holdings" : "Value"}</dt>
+                    <dd className="tabular text-right text-ink">{formatTotal(cost ? d.positions : d.total, { currency })}</dd>
+                    {cost && d.invested != null && (
+                      <>
+                        <dt className="text-muted">Invested</dt>
+                        <dd className="tabular text-right text-muted">{formatTotal(d.invested, { currency })}</dd>
+                      </>
+                    )}
                     {d.cash !== null && (
                       <>
                         <dt className="text-muted">Cash</dt>
                         <dd className="tabular text-right text-muted">{formatTotal(d.cash, { currency })}</dd>
                       </>
                     )}
-                    {d.positions !== null && (
+                    {!cost && d.positions !== null && (
                       <>
                         <dt className="text-muted">Positions</dt>
                         <dd className="tabular text-right text-muted">{formatTotal(d.positions, { currency })}</dd>
                       </>
                     )}
-                    {d.net_deposits !== null && (
+                    {!cost && d.net_deposits !== null && (
                       <>
                         <dt className="text-muted">Net deposits</dt>
                         <dd className="tabular text-right text-muted">{formatTotal(d.net_deposits, { currency })}</dd>
@@ -60,7 +68,7 @@ export function PortfolioChart({ points, currency, className = "h-56" }: { point
               );
             }}
           />
-          <Line type="stepAfter" dataKey="deposits" name="Net deposits" stroke="var(--chart-axis)" strokeWidth={1.5} isAnimationActive={false} dot={false} activeDot={false} connectNulls={false} />
+          <Line type="stepAfter" dataKey="deposits" name={cost ? "Invested" : "Net deposits"} stroke="var(--chart-axis)" strokeWidth={1.5} isAnimationActive={false} dot={false} activeDot={false} connectNulls={false} />
           {hasEstimate && (
             <Line
               type="linear"

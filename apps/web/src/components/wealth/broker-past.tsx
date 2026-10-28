@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { ChevronRight, History } from "lucide-react";
-import { heldMonths, pastHeadline, type BrokerPortfolio, type ClosedPosition } from "@/lib/broker";
+import { basisWords, heldMonths, pastHeadline, type BrokerPortfolio, type ClosedPosition } from "@/lib/broker";
 import { pct } from "@/lib/notes";
 import { signTone } from "@/lib/holdings";
 import { formatTotal } from "@/lib/money";
@@ -15,15 +15,15 @@ export function PastNotesTab({ portfolio: p }: { portfolio: BrokerPortfolio }) {
   if (p.closed.length === 0) {
     return (
       <Card>
-        <EmptyState icon={<History />} title="Nothing has ended yet">
-          Notes that are called early or mature, and positions you sell, are listed here with what they made.
+        <EmptyState icon={<History />} title={p.basis === "cost" ? "Nothing sold yet" : "Nothing has ended yet"}>
+          {basisWords(p.basis).ended}
         </EmptyState>
       </Card>
     );
   }
   return (
     <Card>
-      <CardHeader title={headline ?? "Past notes"} />
+      <CardHeader title={headline ?? basisWords(p.basis).past} />
       <ul className="divide-y divide-border border-t border-border">
         {p.closed.map((x) => (
           <li key={x.holding_code}>

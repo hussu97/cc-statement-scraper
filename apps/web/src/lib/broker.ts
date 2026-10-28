@@ -61,6 +61,8 @@ export interface BrokerPosition {
   income: string | null;
   sell_now: { total: string; profit: string; return_pct: string | null } | null;
   note: BrokerPositionNote | null;
+  /** Zerodha: kite | coin; absent elsewhere and on an older payload. */
+  segment?: string | null;
 }
 
 export interface ClosedPosition {
@@ -85,8 +87,27 @@ export interface PortfolioDay {
   cash: string | null;
   positions: string | null;
   net_deposits: string | null;
+  /** The cost of the positions held that day (absent on an older payload). */
+  invested?: string | null;
   /** Rebuilt from the broker's performance index, not a daily mark. */
   estimated: boolean;
+}
+
+/**
+ * What the profit is measured against: `deposits` (net money paid in, Swissquote) or `cost` (what
+ * the positions cost; Zerodha, which has no deposit history).
+ */
+export type Basis = "deposits" | "cost";
+
+/** Zerodha's Kite or Coin in one line: invested, worth now, P&L. */
+export interface SegmentTotal {
+  segment: string;
+  positions: string | null;
+  invested: string | null;
+  value: string | null;
+  value_aed: string | null;
+  profit: string | null;
+  return_pct: string | null;
 }
 
 export interface BrokerPortfolio {
@@ -94,6 +115,7 @@ export interface BrokerPortfolio {
   provider: string;
   portfolio_ref: string | null;
   currency: string;
+  basis: Basis;
   sync: BrokerSync;
   as_of: string | null;
   cash: string | null;
@@ -101,10 +123,14 @@ export interface BrokerPortfolio {
   total: string | null;
   total_aed: string | null;
   net_deposits: string | null;
+  /** The cost of the open positions. */
+  invested: string | null;
   profit: string | null;
   income: string | null;
   fees: string | null;
   positions: BrokerPosition[];
+  /** Kite and Coin (Zerodha); empty elsewhere. */
+  segments: SegmentTotal[];
   closed: ClosedPosition[];
   /** Every closed position together (decimal strings; count too); null on an older payload. */
   closed_total: ClosedTotal | null;
@@ -134,6 +160,9 @@ export function parseBrokerPortfolio(raw: unknown): BrokerPortfolio | null {
     ...(raw as unknown as BrokerPortfolio),
     currency: str(raw.currency) ?? "USD",
     provider: str(raw.provider) ?? "broker",
+    basis: raw.basis === "cost" ? "cost" : "deposits",
+    invested: str(raw.invested),
+    segments: list<SegmentTotal>(raw.segments).filter((x) => typeof x.segment === "string"),
     sync: { last_synced_at: str(sync.last_synced_at), last_attempt_at: str(sync.last_attempt_at), status: str(sync.status), error: str(sync.error) },
     positions: list<BrokerPosition>(raw.positions).map((p) => ({ ...p, note: isObject(p.note) ? p.note : null, sell_now: isObject(p.sell_now) ? p.sell_now : null })),
     closed: list<ClosedPosition>(raw.closed),
@@ -153,6 +182,30 @@ export function positionKind(kind: string | null | undefined): PositionKind {
 export function providerLabel(provider: string | null | undefined): string {
   const p = (provider ?? "").trim();
   return p ? p.charAt(0).toUpperCase() + p.slice(1) : "Broker";
+}
+
+/** "Kite", "Coin"; another segment reads as "Other". */
+export function segmentLabel(segment: string | null | undefined): string {
+  return segment === "kite" ? "Kite" : segment === "coin" ? "Coin" : "Other";
+}
+
+/** What a segment holds, for its heading. */
+export function segmentHolds(segment: string | null | undefined): string {
+  return segment === "kite" ? "Stocks and ETFs" : segment === "coin" ? "Mutual funds" : "Other holdings";
+}
+
+/** Positions by segment (Kite, Coin, then any other), each group in the server's order; empty groups dropped. */
+export function groupBySegment<T extends { segment?: string | null }>(positions: readonly T[]): { segment: string; items: T[] }[] {
+  const order = ["kite", "coin"];
+  const keyOf = (p: T) => (p.segment && order.includes(p.segment) ? p.segment : "other");
+  return [...order, "other"].map((segment) => ({ segment, items: positions.filter((p) => keyOf(p) === segment) })).filter((g) => g.items.length > 0);
+}
+
+/** The words a portfolio uses for what it is measured against. */
+export function basisWords(basis: Basis): { profit: string; line: string; past: string; ended: string } {
+  return basis === "cost"
+    ? { profit: "P&L", line: "Invested", past: "Sold", ended: "Holdings you sell are listed here with what they made." }
+    : { profit: "Profit", line: "Put in", past: "Past notes", ended: "Notes that are called early or mature, and positions you sell, are listed here with what they made." };
 }
 
 /** The sync line under the portfolio: when it last synced, or why the last attempt failed. */
@@ -183,15 +236,17 @@ export interface PortfolioPoint {
  * The series as chart points. A segment touching an estimated day is drawn dashed: an estimated
  * point and its neighbours carry `estimated`, so the dashed and solid lines meet at the first mark.
  */
-export function portfolioPoints(series: readonly PortfolioDay[]): PortfolioPoint[] {
+export function portfolioPoints(series: readonly PortfolioDay[], basis: Basis = "deposits"): PortfolioPoint[] {
+  // Against cost, the line is the holdings' worth against what they cost (cash aside).
+  const cost = basis === "cost";
   return series.map((d, i) => {
-    const total = toAmount(d.total as MoneyInput);
+    const total = toAmount((cost ? d.positions : d.total) as MoneyInput);
     const nearEstimate = d.estimated || !!series[i - 1]?.estimated || !!series[i + 1]?.estimated;
     return {
       date: d.as_of,
       marked: d.estimated ? null : total,
       estimated: nearEstimate ? total : null,
-      deposits: toAmount(d.net_deposits as MoneyInput),
+      deposits: toAmount((cost ? (d.invested ?? null) : d.net_deposits) as MoneyInput),
       isEstimated: d.estimated,
       day: d,
     };
