@@ -22,6 +22,7 @@ const obj = (properties: Record<string, unknown>) => ({
 /** What the model fills in. Numbers are decimal strings; dates YYYY-MM-DD; % are percent (98 = 98%). */
 export const TERMSHEET_SCHEMA: Record<string, unknown> = obj({
   is_term_sheet: { type: "boolean" },
+  note_type: { type: "string", enum: ["equity", "credit_linked"] },
   short_name: str,
   product_name: str,
   isin: nstr,
@@ -30,9 +31,9 @@ export const TERMSHEET_SCHEMA: Record<string, unknown> = obj({
   currency: str,
   denomination: str,
   issue_price_pct: str,
-  strike_date: str,
+  strike_date: nstr,
   issue_date: nstr,
-  final_valuation_date: str,
+  final_valuation_date: nstr,
   maturity_date: str,
   underlyings: {
     type: "array",
@@ -67,26 +68,46 @@ export const TERMSHEET_SCHEMA: Record<string, unknown> = obj({
       description: str,
     }),
   },
+  credit: obj({
+    reference_entity: nstr,
+    seniority: nstr,
+    transaction_type: nstr,
+    reference_obligation_isin: nstr,
+    coupon_rate_pct: nstr,
+    coupon_frequency: nstr,
+    day_count: nstr,
+    interest_start_date: nstr,
+    first_coupon_date: nstr,
+    longstop_maturity_date: nstr,
+    call_dates: { type: "array", items: str },
+    call_notice_days: nstr,
+  }),
   unsupported: { type: "array", items: str },
 });
 
 export const TERMSHEET_SYSTEM = [
-  "You read the term sheet of a structured note (an equity-linked autocallable, Phoenix, Athena,",
-  "reverse convertible, ...) and transcribe its terms exactly. Never invent a value: copy numbers and",
-  "dates as printed, converted to the formats below. If the document is not a structured-note term",
-  "sheet, set is_term_sheet false and fill the rest with empty values.",
+  "You read the term sheet of a structured note and transcribe its terms exactly. Never invent a",
+  "value: copy numbers and dates as printed, converted to the formats below. If the document is not a",
+  "structured-note term sheet, set is_term_sheet false and fill the rest with empty values.",
+  "",
+  'note_type: "equity" for a note on shares (an autocallable, Phoenix, Athena, reverse convertible,',
+  "...): fill underlyings, observations and payout, and leave credit empty (nulls, no call dates).",
+  '"credit_linked" for a credit-linked note (CLN: a fixed coupon that depends on a reference entity',
+  "not having a credit event): fill credit, leave underlyings, observations and payout empty and",
+  "strike_date and final_valuation_date null.",
   "",
   "Formats: dates YYYY-MM-DD. Numbers as decimal strings without separators or units. Percentages",
   'as percent numbers: 98% → "98", 0.667% → "0.667". Levels are percent of each underlying\'s',
   "initial level; amounts are percent of the denomination (nominal).",
   "",
   "short_name: at most 60 characters, issuer + structure + tickers + maturity year,",
-  'e.g. "Example Bank A Phoenix AMZN/META/ORCL 2029".',
+  'e.g. "Example Bank A Phoenix AMZN/META/ORCL 2029"; for a CLN issuer + "CLN" + reference entity + rate +',
+  'maturity year, e.g. "Example Bank N CLN Example Airlines 10.5% 2031".',
   "currency / denomination: the settlement currency and the denomination (calculation amount, or",
   "the notional per certificate). issue_price_pct: the issue price in % of denomination.",
   "strike_date: the initial fixing / strike / trade date that fixed the initial levels.",
-  "final_valuation_date: the final fixing / redemption valuation date. maturity_date: the",
-  "redemption / maturity date.",
+  "final_valuation_date: the final fixing / redemption valuation date (both null for a CLN).",
+  "maturity_date: the redemption / maturity date.",
   "",
   "underlyings: one per share, in the sheet's order. initial_level: the initial fixing / RI initial",
   'value / Share initial, in the share\'s currency. bloomberg_code as printed (e.g. "GOOGL UW Equity").',
@@ -121,12 +142,27 @@ export const TERMSHEET_SYSTEM = [
   "  [{100, 100, 0, cash}, {45, -45, 1, cash}, {0, 0, 0, cash}].",
   "description: the branch in a few words as the sheet states it.",
   "",
+  'credit (credit-linked notes only): reference_entity as printed ("Example Airlines Group Inc").',
+  'seniority ("Senior", "Subordinated"), transaction_type (the ISDA Physical Settlement Matrix',
+  'type, e.g. "Standard European Corporate"), reference_obligation_isin. coupon_rate_pct: the fixed',
+  'interest rate PER ANNUM (10.50% p.a. → "10.5"). coupon_frequency: monthly, quarterly, semiannual,',
+  "annual, or at_maturity when all interest is paid on the maturity date (or an early redemption).",
+  'day_count: "30/360", "act/360" or "act/365". interest_start_date: the interest commencement date',
+  "(often the issue date). first_coupon_date: the first interest payment date; null for at_maturity.",
+  "maturity_date: the scheduled maturity date. longstop_maturity_date: the latest date maturity can be",
+  "extended to while a credit event is determined. call_dates: every optional redemption date on",
+  "which the issuer may call the notes; empty if there is no issuer call. call_notice_days: the",
+  "minimum notice in business days for a call.",
+  "",
   "unsupported: only a term that changes what is paid and that these fields cannot express, in a",
-  "short sentence each: a barrier observed daily or continuously, an issuer call, a coupon not tied",
-  "to the worst share, a basket average instead of worst-of, quanto or FX conversion. Never list what",
+  "short sentence each: for an equity note, a barrier observed daily or continuously, an issuer",
+  "call, a coupon not tied to the worst share, a basket average instead of worst-of, quanto or FX conversion. Never list what",
   "the fields already express: an issue price below 100%, memory coupons, an autocall or coupon that",
   "needs every share at or above a level, physical delivery rounded to whole shares with a cash",
-  "residual, the calculation agent choosing between tied shares. Usually empty.",
+  "residual, the calculation agent choosing between tied shares. For a credit-linked note: a",
+  "floating or step-up coupon, a basket or first-to-default of several reference entities, tranching,",
+  "a fixed recovery; never the credit event terms, the issuer call or the maturity extension (the",
+  "credit fields express them). Usually empty.",
 ].join("\n");
 
 // ── normalisation ───────────────────────────────────────────────────────────
@@ -158,7 +194,25 @@ export interface DraftBranch {
   description: string;
 }
 
+export type CouponFrequency = "monthly" | "quarterly" | "semiannual" | "annual" | "at_maturity";
+
+export interface DraftCredit {
+  reference_entity: string;
+  seniority: string | null;
+  transaction_type: string | null;
+  reference_obligation_isin: string | null;
+  coupon_rate_pct: string;
+  coupon_frequency: CouponFrequency;
+  day_count: "30/360" | "act/360" | "act/365";
+  interest_start_date: string;
+  first_coupon_date: string | null;
+  longstop_maturity_date: string | null;
+  call_dates: string[];
+  call_notice_days: number | null;
+}
+
 export interface DraftTerms {
+  note_type: "equity" | "credit_linked";
   product_name: string;
   isin: string | null;
   issuer: string | null;
@@ -166,13 +220,14 @@ export interface DraftTerms {
   currency: string;
   denomination: string;
   issue_price_pct: string;
-  strike_date: string;
+  strike_date: string | null;
   issue_date: string | null;
-  final_valuation_date: string;
+  final_valuation_date: string | null;
   maturity_date: string;
   underlyings: DraftUnderlying[];
   observations: DraftObservation[];
   payout: DraftBranch[];
+  credit?: DraftCredit;
 }
 
 export interface Extraction {
@@ -244,6 +299,7 @@ export function normalizeExtraction(raw: unknown): Extraction {
 
   const currency = need(text(r.currency, 3)?.toUpperCase() ?? null, "currency");
   if (!/^[A-Z]{3}$/.test(currency)) throw new Error("the term sheet's currency could not be read");
+  if (r.note_type === "credit_linked") return normalizeCredit(r, currency, warnings, need);
   const strike = need(isoDate(r.strike_date), "strike date");
   const finalDate = need(isoDate(r.final_valuation_date), "final valuation date");
   const maturity = need(isoDate(r.maturity_date), "maturity date");
@@ -373,6 +429,7 @@ export function normalizeExtraction(raw: unknown): Extraction {
   return {
     name: text(r.short_name, 80) ?? productName.slice(0, 80),
     terms: {
+      note_type: "equity",
       product_name: productName,
       isin: isin(r.isin),
       issuer: text(r.issuer, 120),
@@ -387,6 +444,108 @@ export function normalizeExtraction(raw: unknown): Extraction {
       underlyings,
       observations,
       payout,
+    },
+    warnings,
+  };
+}
+
+const FREQUENCIES: CouponFrequency[] = ["monthly", "quarterly", "semiannual", "annual", "at_maturity"];
+const MONTHS: Record<string, number> = { monthly: 1, quarterly: 3, semiannual: 6, annual: 12 };
+
+/** A credit-linked note's answer → its draft: the credit block instead of shares and a payout. */
+function normalizeCredit(
+  r: Record<string, unknown>,
+  currency: string,
+  warnings: string[],
+  need: <T>(v: T | null, what: string) => T,
+): Extraction {
+  const c = (r.credit ?? {}) as Record<string, unknown>;
+  const maturity = need(isoDate(r.maturity_date), "maturity date");
+  const issueDate = isoDate(r.issue_date);
+  const entity = need(text(c.reference_entity, 160), "reference entity");
+  const rate = need(decimal(c.coupon_rate_pct), "coupon rate");
+  if (Number(rate) <= 0 || Number(rate) >= 100) throw new Error("the term sheet's coupon rate could not be read");
+  const freqText = text(c.coupon_frequency, 20)?.toLowerCase().replace(/[\s-]/g, "") ?? null;
+  const frequency = FREQUENCIES.find((f) => f.replace("_", "") === freqText?.replace("_", "")) ?? null;
+  need(frequency, "coupon frequency");
+  const start = need(isoDate(c.interest_start_date) ?? issueDate, "interest start date");
+  let first = frequency === "at_maturity" ? null : need(isoDate(c.first_coupon_date), "first coupon date");
+  if (first !== null && (first <= start || first > maturity)) {
+    throw new Error("the term sheet's first coupon date does not fall between the interest start and maturity");
+  }
+  if (start >= maturity) throw new Error("the term sheet's interest start is not before maturity");
+  const dc = text(c.day_count, 12)?.toLowerCase().replace(/\s/g, "") ?? "";
+  const dayCount = dc.startsWith("act/360") || dc.startsWith("actual/360")
+    ? "act/360"
+    : dc.startsWith("act/365") || dc.startsWith("actual/365")
+    ? "act/365"
+    : "30/360";
+  if (dc && !["30/360", "act/360", "act/365", "actual/360", "actual/365"].some((x) => dc.startsWith(x))) {
+    warnings.push(`Day count "${text(c.day_count, 20)}" is read as 30/360: check it.`);
+  }
+  const callDates: string[] = [];
+  for (const d of (c.call_dates ?? []) as unknown[]) {
+    const iso = isoDate(d);
+    if (!iso) continue;
+    if (iso <= start || iso >= maturity) {
+      warnings.push(`Call date ${iso} falls outside the interest start and maturity; it was left out.`);
+      continue;
+    }
+    if (!callDates.includes(iso)) callDates.push(iso);
+  }
+  callDates.sort();
+  // A first coupon that is not on the schedule's day of month usually means a misread date.
+  if (first !== null && frequency !== "at_maturity") {
+    const step = MONTHS[frequency!];
+    const m = (Number(maturity.slice(0, 4)) - Number(first.slice(0, 4))) * 12 +
+      Number(maturity.slice(5, 7)) - Number(first.slice(5, 7));
+    if (m % step !== 0 || maturity.slice(8) !== first.slice(8)) {
+      warnings.push("The first coupon date and maturity are not on the same schedule: check the coupon dates.");
+    }
+  } else {
+    first = null;
+  }
+  const longstop = isoDate(c.longstop_maturity_date);
+  const notice = decimal(c.call_notice_days);
+  for (const u of r.unsupported as unknown[] ?? []) {
+    const t = text(u, 200);
+    if (t) warnings.push(`Not modelled: ${t}`);
+  }
+  const denomination = need(decimal(r.denomination), "denomination");
+  const issuePrice = need(decimal(r.issue_price_pct), "issue price");
+  const productName = text(r.product_name, 300) ?? "Credit-linked note";
+  return {
+    name: text(r.short_name, 80) ?? productName.slice(0, 80),
+    terms: {
+      note_type: "credit_linked",
+      product_name: productName,
+      isin: isin(r.isin),
+      issuer: text(r.issuer, 120),
+      guarantor: text(r.guarantor, 120),
+      currency,
+      denomination,
+      issue_price_pct: issuePrice,
+      strike_date: null,
+      issue_date: issueDate,
+      final_valuation_date: null,
+      maturity_date: maturity,
+      underlyings: [],
+      observations: [],
+      payout: [],
+      credit: {
+        reference_entity: entity,
+        seniority: text(c.seniority, 60),
+        transaction_type: text(c.transaction_type, 80),
+        reference_obligation_isin: isin(c.reference_obligation_isin),
+        coupon_rate_pct: rate,
+        coupon_frequency: frequency!,
+        day_count: dayCount,
+        interest_start_date: start,
+        first_coupon_date: first,
+        longstop_maturity_date: longstop && longstop > maturity ? longstop : null,
+        call_dates: callDates,
+        call_notice_days: notice !== null && Number.isInteger(Number(notice)) ? Number(notice) : null,
+      },
     },
     warnings,
   };

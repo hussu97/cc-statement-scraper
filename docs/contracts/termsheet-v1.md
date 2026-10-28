@@ -57,7 +57,48 @@ at most 25 MB). The PDF is stored at `term-sheets/<profile_code>/<sha256>.pdf`.
 ```
 
 Errors: `422 NOT_A_TERM_SHEET`, `422 UNREADABLE` (a required field: currency, dates,
-denomination, issue price, an underlying's initial level), `503 LLM_NOT_CONFIGURED`.
+denomination, issue price, an underlying's initial level; for a credit-linked note the reference
+entity, coupon rate, frequency, interest start and first coupon date), `503 LLM_NOT_CONFIGURED`.
+
+### A credit-linked note (`note_type: "credit_linked"`, 28 Oct 2026)
+
+`terms.note_type` is `"equity"` (above) or `"credit_linked"`. A credit-linked note (CLN) pays a
+fixed coupon while its reference entity has no credit event, and 100% at maturity. Its terms have
+`strike_date` and `final_valuation_date` null, empty `underlyings`, `observations` and `payout`,
+and a `credit` block:
+
+```json
+{
+  "note_type": "credit_linked",
+  "maturity_date": "2031-12-20",
+  "credit": {
+    "reference_entity": "Example Airlines Group Inc",
+    "seniority": "Senior Level",
+    "transaction_type": "Standard North American Corporate",
+    "reference_obligation_isin": "US0000AA0001",
+    "coupon_rate_pct": "10.5",
+    "coupon_frequency": "monthly",
+    "day_count": "30/360",
+    "interest_start_date": "2024-10-15",
+    "first_coupon_date": "2024-10-20",
+    "longstop_maturity_date": "2032-12-20",
+    "call_dates": [],
+    "call_notice_days": null
+  }
+}
+```
+
+- `coupon_rate_pct` is **per annum**. `coupon_frequency`: `monthly`, `quarterly`, `semiannual`,
+  `annual`, or `at_maturity` (all interest paid at maturity or call; `first_coupon_date` null).
+  Coupons fall on `first_coupon_date` and every 1/3/6/12 months after it, the last on
+  `maturity_date`; each pays `coupon_rate_pct × day-count fraction` of the period
+  (`private.cln_schedule`).
+- `day_count`: `30/360` (default), `act/360` or `act/365`.
+- `call_dates`: the issuer may repay at 100% plus accrued interest on these dates (between the
+  interest start and maturity); `call_notice_days` its minimum notice.
+- `longstop_maturity_date`: the latest maturity while a credit event is being determined.
+- Warnings: a call date out of range (left out), a first coupon off the maturity's schedule, a
+  day count read as 30/360, and anything not modelled (floating coupons, baskets, tranching).
 
 ### Fields
 

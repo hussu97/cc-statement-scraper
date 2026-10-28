@@ -136,3 +136,113 @@ Deno.test("decimal and payoutAt", () => {
   const b = normalizeExtraction(ATHENA).terms.payout;
   assertEquals([payoutAt(b, 120), payoutAt(b, 80), payoutAt(b, 40)], [100, 35, 0]);
 });
+
+// What the model answers for Example Bank N's Example Airlines CLN (16 Sep 2024): a monthly coupon.
+const CLN = {
+  is_term_sheet: true,
+  note_type: "credit_linked",
+  short_name: "Example Bank N CLN Example Airlines 10.5% 2031",
+  product_name: "Fixed Rate Credit Linked Notes referenced to Example Airlines Group Inc due 20 December 2031",
+  isin: "XS0000000108",
+  issuer: "EXAMPLE BANK N STRUCTURED ISSUANCE SA",
+  guarantor: "EXAMPLE BANK N",
+  currency: "USD",
+  denomination: "1,000",
+  issue_price_pct: "100%",
+  strike_date: null,
+  issue_date: "2024-10-15",
+  final_valuation_date: null,
+  maturity_date: "2031-12-20",
+  underlyings: [],
+  observations: [],
+  payout: [],
+  credit: {
+    reference_entity: "Example Airlines Group Inc",
+    seniority: "Senior Level",
+    transaction_type: "Standard North American Corporate",
+    reference_obligation_isin: "US0000AA0001",
+    coupon_rate_pct: "10.50%",
+    coupon_frequency: "monthly",
+    day_count: "30/360",
+    interest_start_date: "2024-10-15",
+    first_coupon_date: "2024-10-20",
+    longstop_maturity_date: "2032-12-20",
+    call_dates: [],
+    call_notice_days: null,
+  },
+  unsupported: [],
+};
+
+Deno.test("normalizeExtraction: a credit-linked note becomes its credit block", () => {
+  const x = normalizeExtraction(CLN);
+  assertEquals(x.name, "Example Bank N CLN Example Airlines 10.5% 2031");
+  assertEquals(x.terms.note_type, "credit_linked");
+  assertEquals([x.terms.strike_date, x.terms.final_valuation_date], [null, null]);
+  assertEquals([x.terms.underlyings.length, x.terms.observations.length, x.terms.payout.length], [0, 0, 0]);
+  assertEquals(x.terms.denomination, "1000");
+  assertEquals(x.terms.credit, {
+    reference_entity: "Example Airlines Group Inc",
+    seniority: "Senior Level",
+    transaction_type: "Standard North American Corporate",
+    reference_obligation_isin: "US0000AA0001",
+    coupon_rate_pct: "10.5",
+    coupon_frequency: "monthly",
+    day_count: "30/360",
+    interest_start_date: "2024-10-15",
+    first_coupon_date: "2024-10-20",
+    longstop_maturity_date: "2032-12-20",
+    call_dates: [],
+    call_notice_days: null,
+  });
+  assertEquals(x.warnings, []);
+});
+
+Deno.test("normalizeExtraction: a CLN paid at maturity keeps its call dates in range", () => {
+  const x = normalizeExtraction({
+    ...CLN,
+    issue_date: "2025-02-13",
+    maturity_date: "2034-12-20",
+    credit: {
+      ...CLN.credit,
+      coupon_rate_pct: "13.25",
+      coupon_frequency: "At maturity",
+      interest_start_date: null,
+      first_coupon_date: "2034-12-20",
+      call_dates: ["2026-12-20", "2025-12-20", "2025-12-20", "2035-01-01"],
+      call_notice_days: "10",
+    },
+  });
+  assertEquals(x.terms.credit?.coupon_frequency, "at_maturity");
+  assertEquals(x.terms.credit?.interest_start_date, "2025-02-13"); // the issue date
+  assertEquals(x.terms.credit?.first_coupon_date, null);
+  assertEquals(x.terms.credit?.call_dates, ["2025-12-20", "2026-12-20"]);
+  assertEquals(x.terms.credit?.call_notice_days, 10);
+  assertEquals(x.warnings, ["Call date 2035-01-01 falls outside the interest start and maturity; it was left out."]);
+});
+
+Deno.test("normalizeExtraction: a CLN without its reference entity, rate or schedule fails", () => {
+  assertThrows(
+    () => normalizeExtraction({ ...CLN, credit: { ...CLN.credit, reference_entity: " " } }),
+    Error,
+    "reference entity",
+  );
+  assertThrows(
+    () => normalizeExtraction({ ...CLN, credit: { ...CLN.credit, coupon_rate_pct: null } }),
+    Error,
+    "coupon rate",
+  );
+  assertThrows(
+    () => normalizeExtraction({ ...CLN, credit: { ...CLN.credit, coupon_frequency: "weekly" } }),
+    Error,
+    "coupon frequency",
+  );
+  assertThrows(
+    () => normalizeExtraction({ ...CLN, credit: { ...CLN.credit, first_coupon_date: null } }),
+    Error,
+    "first coupon date",
+  );
+  const off = normalizeExtraction({ ...CLN, credit: { ...CLN.credit, first_coupon_date: "2024-10-21" } });
+  assertEquals(off.warnings, [
+    "The first coupon date and maturity are not on the same schedule: check the coupon dates.",
+  ]);
+});
