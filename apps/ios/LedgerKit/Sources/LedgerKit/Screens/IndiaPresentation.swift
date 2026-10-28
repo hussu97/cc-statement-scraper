@@ -110,8 +110,17 @@ public enum IndiaPeriod {
     /// Instead of the lines, when the server sent none.
     public static let emptyMessage = "No figures for this period yet: they show after the accounts' first syncs."
 
+    /// Under the lines: what growth is, or, when the server has no value at the period's start
+    /// (the first sync came later), why there is none: `"No value on 30 Jul 2026, the period's
+    /// first day, so no growth for it yet. A shorter period may have one."`
+    public static func note(_ o: IndiaOverview) -> String {
+        guard o.total.periodGrowth == nil, o.total.periodStartValue == nil, let from = o.from else { return growthNote }
+        return "No value on \(LedgerDates.fullDayLabel(from)), the period's first day, so no growth for it yet. "
+            + "A shorter period may have one."
+    }
+
     /// What growth is.
-    public static let note = "Growth leaves out money added: what the accounts made, not what went in."
+    public static let growthNote = "Growth leaves out money added: what the accounts made, not what went in."
 }
 
 /// India's value chart: every India account's value against what its open positions cost.

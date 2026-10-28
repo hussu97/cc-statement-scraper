@@ -86,7 +86,7 @@ struct IndiaPeriodCard: View {
                                 .accessibilityElement(children: .combine)
                             }
                         }
-                        Text(IndiaPeriod.note).font(Typography.caption).foregroundStyle(Palette.muted)
+                        Text(IndiaPeriod.note(overview)).font(Typography.caption).foregroundStyle(Palette.muted)
                     }
                 } else {
                     ProgressView().frame(maxWidth: .infinity, minHeight: 120)

@@ -96,6 +96,11 @@ struct IndiaPresentationTests {
         #expect(lines.map(\.text) == ["INR 1,080,000", "+INR 95,000", "INR 1,254,311", "+INR 79,311", "+6.75%"])
         #expect(IndiaPeriod.rangeText(o) == "Since 30 Jul 2026")
         #expect(IndiaPeriod.lines(IndiaOverview(available: true)).isEmpty)
+        #expect(IndiaPeriod.note(o) == IndiaPeriod.growthNote)
+        let late = IndiaOverview(available: true, from: day("2026-07-30"), total: .init(periodEndValue: dec("573077.83")))
+        #expect(IndiaPeriod.lines(late).map(\.label) == ["Value now"])
+        #expect(IndiaPeriod.note(late)
+            == "No value on 30 Jul 2026, the period's first day, so no growth for it yet. A shorter period may have one.")
         #expect(IndiaChart.known(o.series).map(\.date) == [day("2026-07-30"), day("2026-09-30"), day("2026-10-28")])
     }
 
