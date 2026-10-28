@@ -3071,6 +3071,75 @@ export type Database = {
           },
         ]
       }
+      structured_note_credit_terms: {
+        Row: {
+          call_dates: string[]
+          call_notice_days: number | null
+          coupon_frequency: string
+          coupon_rate_pct: number
+          credit_terms_code: string
+          day_count: string
+          first_coupon_date: string | null
+          interest_start_date: string
+          longstop_maturity_date: string | null
+          note_code: string
+          profile_code: string
+          reference_entity: string
+          reference_obligation_isin: string | null
+          seniority: string | null
+          transaction_type: string | null
+        }
+        Insert: {
+          call_dates?: string[]
+          call_notice_days?: number | null
+          coupon_frequency: string
+          coupon_rate_pct: number
+          credit_terms_code?: string
+          day_count?: string
+          first_coupon_date?: string | null
+          interest_start_date: string
+          longstop_maturity_date?: string | null
+          note_code: string
+          profile_code: string
+          reference_entity: string
+          reference_obligation_isin?: string | null
+          seniority?: string | null
+          transaction_type?: string | null
+        }
+        Update: {
+          call_dates?: string[]
+          call_notice_days?: number | null
+          coupon_frequency?: string
+          coupon_rate_pct?: number
+          credit_terms_code?: string
+          day_count?: string
+          first_coupon_date?: string | null
+          interest_start_date?: string
+          longstop_maturity_date?: string | null
+          note_code?: string
+          profile_code?: string
+          reference_entity?: string
+          reference_obligation_isin?: string | null
+          seniority?: string | null
+          transaction_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "structured_note_credit_terms_note_fkey"
+            columns: ["profile_code", "note_code"]
+            isOneToOne: false
+            referencedRelation: "structured_notes"
+            referencedColumns: ["profile_code", "note_code"]
+          },
+          {
+            foreignKeyName: "structured_note_credit_terms_profile_code_fkey"
+            columns: ["profile_code"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["profile_code"]
+          },
+        ]
+      }
       structured_note_events: {
         Row: {
           amount: number
@@ -3089,8 +3158,8 @@ export type Database = {
           share_price: number | null
           shares: number | null
           txn_code: string | null
-          worst_pct: number
-          worst_symbol: string
+          worst_pct: number | null
+          worst_symbol: string | null
         }
         Insert: {
           amount: number
@@ -3109,8 +3178,8 @@ export type Database = {
           share_price?: number | null
           shares?: number | null
           txn_code?: string | null
-          worst_pct: number
-          worst_symbol: string
+          worst_pct?: number | null
+          worst_symbol?: string | null
         }
         Update: {
           amount?: number
@@ -3129,8 +3198,8 @@ export type Database = {
           share_price?: number | null
           shares?: number | null
           txn_code?: string | null
-          worst_pct?: number
-          worst_symbol?: string
+          worst_pct?: number | null
+          worst_symbol?: string | null
         }
         Relationships: [
           {
@@ -3341,7 +3410,7 @@ export type Database = {
           denomination: number
           ended_on: string | null
           extracted_terms: Json | null
-          final_valuation_date: string
+          final_valuation_date: string | null
           funding_account_code: string | null
           guarantor: string | null
           holding_code: string
@@ -3353,12 +3422,13 @@ export type Database = {
           maturity_date: string
           nominal: number
           note_code: string
+          note_type: string
           product_name: string
           profile_code: string
           purchase_price_pct: number
           purchase_txn_code: string | null
           status: string
-          strike_date: string
+          strike_date: string | null
           termsheet_filename: string | null
           termsheet_path: string | null
           trade_date: string
@@ -3371,7 +3441,7 @@ export type Database = {
           denomination: number
           ended_on?: string | null
           extracted_terms?: Json | null
-          final_valuation_date: string
+          final_valuation_date?: string | null
           funding_account_code?: string | null
           guarantor?: string | null
           holding_code: string
@@ -3383,12 +3453,13 @@ export type Database = {
           maturity_date: string
           nominal: number
           note_code?: string
+          note_type?: string
           product_name: string
           profile_code: string
           purchase_price_pct: number
           purchase_txn_code?: string | null
           status?: string
-          strike_date: string
+          strike_date?: string | null
           termsheet_filename?: string | null
           termsheet_path?: string | null
           trade_date: string
@@ -3401,7 +3472,7 @@ export type Database = {
           denomination?: number
           ended_on?: string | null
           extracted_terms?: Json | null
-          final_valuation_date?: string
+          final_valuation_date?: string | null
           funding_account_code?: string | null
           guarantor?: string | null
           holding_code?: string
@@ -3413,12 +3484,13 @@ export type Database = {
           maturity_date?: string
           nominal?: number
           note_code?: string
+          note_type?: string
           product_name?: string
           profile_code?: string
           purchase_price_pct?: number
           purchase_txn_code?: string | null
           status?: string
-          strike_date?: string
+          strike_date?: string | null
           termsheet_filename?: string | null
           termsheet_path?: string | null
           trade_date?: string
