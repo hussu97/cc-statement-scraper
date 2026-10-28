@@ -26,6 +26,14 @@ extension SupabaseLedgerAPI {
         try await rpc("save_holding", String.self, Self.saveHoldingParams(profileCode: profileCode, holding: holding))
     }
 
+    public func trackAccountAsInvestment(profileCode: String, accountCode: String, ratePct: String?,
+                                         name: String?) async throws -> String {
+        try await rpc("track_account_as_investment", String.self, [
+            "p_profile_code": .string(profileCode), "p_account_code": .string(accountCode),
+            "p_rate_pct": ratePct.map(AnyJSON.string) ?? .null, "p_name": name.map(AnyJSON.string) ?? .null,
+        ])
+    }
+
     public func closeHolding(profileCode: String, holdingCode: String) async throws {
         _ = try await read(Ignored.self) {
             try await client.rpc("close_holding", params: [

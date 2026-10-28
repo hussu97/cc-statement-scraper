@@ -4,7 +4,9 @@ import SwiftUI
 /// One holding (pushed from Investments): its value and gain as the tab shows them, its returns
 /// for every period, its recorded values with Update value, and its money in and out, a linked
 /// payment naming its description and bank. Owners add a flow, swipe one to remove it (or unlink
-/// its payment), update the value and edit or close the holding. `HoldingDetailModel` decides.
+/// its payment), update the value and edit or close the holding. A savings account instead shows
+/// the bank account it is valued at (`SavingsAccountSection`): its flows are that account's.
+/// `HoldingDetailModel` and `HoldingActions` decide.
 struct HoldingDetailView: View {
     let investments: InvestmentsModel
     let holdingCode: String
@@ -20,6 +22,7 @@ struct HoldingDetailView: View {
     @State private var showAllValues = false
     @Environment(\.dismiss) private var dismiss
     @Environment(BankCatalog.self) private var catalog: BankCatalog?
+    @Environment(CashModel.self) private var cash
 
     init(investments: InvestmentsModel, holdingCode: String, profileCode: String, canEdit: Bool) {
         self.investments = investments
@@ -35,6 +38,9 @@ struct HoldingDetailView: View {
         Group {
             if let holding {
                 list(holding)
+            } else if investments.state.value == nil, investments.state.errorMessage == nil {
+                // Opened from a bank account before Investments has loaded.
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 EmptyCard(systemImage: "tray", message: "This holding is closed or no longer in the ledger.")
                     .padding(Metrics.gutter)
@@ -45,7 +51,7 @@ struct HoldingDetailView: View {
         .ledgerNavigation(holding?.name ?? "Holding")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if canEdit, let holding {
+            if let holding, holding.actions(canEdit: canEdit).edit {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Edit") { editing = investments.draft(for: holding) }
                 }
@@ -66,9 +72,14 @@ struct HoldingDetailView: View {
             Text(error ?? "")
         }
         .task { await model.loadIfNeeded(profileCode: profileCode) }
+        .task { await investments.loadIfNeeded(profileCode: profileCode) }
+        .task(id: holding?.isSavingsAccount) {
+            if holding?.isSavingsAccount == true { await cash.loadIfNeeded(profileCode: profileCode) }
+        }
         .refreshable {
             await model.load(profileCode: profileCode)
             await investments.refresh(profileCode: profileCode)
+            if holding?.isSavingsAccount == true { await cash.refresh(profileCode: profileCode) }
         }
         // Closed from its Edit sheet: back to the list.
         .onChange(of: holding == nil) { _, gone in
@@ -94,8 +105,11 @@ struct HoldingDetailView: View {
             } header: {
                 Text("Returns")
             }
+            if holding.isSavingsAccount {
+                SavingsAccountSection(holding: holding, investments: investments, profileCode: profileCode, canEdit: canEdit)
+            }
             if model.showsValueHistory(for: holding) { valuesSection(holding) }
-            if holding.kind.takesFlows || !model.flows.isEmpty { flowsSection(holding) }
+            if holding.kind.listsFlows || !model.flows.isEmpty { flowsSection(holding) }
         }
         .scrollContentBackground(.hidden)
     }
@@ -137,7 +151,7 @@ struct HoldingDetailView: View {
 
     private func valuesSection(_ holding: Holding) -> some View {
         Section {
-            if canEdit, holding.canRecordValue {
+            if holding.actions(canEdit: canEdit).recordValue {
                 Button {
                     updating = model.newValue(for: holding)
                 } label: {
@@ -173,7 +187,7 @@ struct HoldingDetailView: View {
 
     private func flowsSection(_ holding: Holding) -> some View {
         Section {
-            if canEdit, holding.kind.takesFlows {
+            if holding.actions(canEdit: canEdit).addFlow {
                 Button { addingFlow = model.newFlow(for: holding) } label: {
                     Label("Add money in or out", systemImage: "plus.circle")
                 }
@@ -198,7 +212,9 @@ struct HoldingDetailView: View {
         } header: {
             Text("Money in and out")
         } footer: {
-            if canEdit, model.flows.contains(where: \.canRemove) {
+            if let note = model.flowsNote(for: holding) {
+                Text(note)
+            } else if canEdit, model.flows.contains(where: \.canRemove) {
                 Text("Swipe a row to remove it. Unlinking a payment makes it spending again; the payment rule won't link it back.")
             }
         }

@@ -2,20 +2,29 @@ import Foundation
 
 /// What a holding is (`holdings.kind`): gold or silver priced by the feed, a savings plan, a
 /// broker account valued as a whole, shares or a fund (units × a price you enter), or a fixed
-/// deposit whose value accrues.
+/// deposit whose value accrues, or a bank savings account valued at its balance.
 ///
 /// A structured note comes from the broker sync, which reads its term sheet (`create_structured_note`),
-/// never through the holding form: `addable` leaves it out. A kind this build doesn't know decodes as a broker
+/// and a savings account from its bank account's screen (`track_account_as_investment`), never
+/// through the holding form: `addable` leaves both out. A kind this build doesn't know decodes as a broker
 /// account (valued as a whole) instead of failing the whole response: a new kind on the server
 /// once meant every installed build would lose the Investments tab (`HoldingKindDecodingTests`).
 public enum HoldingKind: String, CaseIterable, Identifiable, Hashable, Sendable, Codable {
     case metal, plan, broker, security, deposit
     case structuredNote = "structured_note"
+    case savingsAccount = "savings_account"
 
     public var id: String { rawValue }
 
     /// The kinds the holding form adds and edits.
     public static let addable: [HoldingKind] = [.metal, .plan, .broker, .security, .deposit]
+
+    /// The groups Investments lists, in order: the addable kinds, then savings accounts.
+    /// Structured notes have their own card.
+    public static let listed: [HoldingKind] = addable + [.savingsAccount]
+
+    /// The holding form edits it (`save_holding` takes only the addable kinds).
+    public var isEditable: Bool { Self.addable.contains(self) }
 
     public init(from decoder: any Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)
@@ -31,6 +40,7 @@ public enum HoldingKind: String, CaseIterable, Identifiable, Hashable, Sendable,
         case .security: "Shares or fund"
         case .deposit: "Fixed deposit"
         case .structuredNote: "Structured note"
+        case .savingsAccount: "Savings account"
         }
     }
 
@@ -43,6 +53,7 @@ public enum HoldingKind: String, CaseIterable, Identifiable, Hashable, Sendable,
         case .security: "Shares and funds"
         case .deposit: "Fixed deposits"
         case .structuredNote: "Structured notes"
+        case .savingsAccount: "Savings accounts"
         }
     }
 
@@ -55,6 +66,7 @@ public enum HoldingKind: String, CaseIterable, Identifiable, Hashable, Sendable,
         case .security: "chart.bar.xaxis"
         case .deposit: "banknote"
         case .structuredNote: "doc.text.magnifyingglass"
+        case .savingsAccount: "building.columns"
         }
     }
 
@@ -67,6 +79,7 @@ public enum HoldingKind: String, CaseIterable, Identifiable, Hashable, Sendable,
         case .security: "Shares or a fund you hold units of. Its value is the units times the price you enter."
         case .deposit: "A fixed deposit. Its value is the principal plus profit accrued to today, an estimate."
         case .structuredNote: "An autocallable or other note, brought in by the broker sync. It counts at what you invested until it ends."
+        case .savingsAccount: "A bank savings account, shown here from its account's screen. Its value is the account's balance; its interest is the return."
         }
     }
 
@@ -74,8 +87,12 @@ public enum HoldingKind: String, CaseIterable, Identifiable, Hashable, Sendable,
     /// the feed and deposits accrue, so they take neither.
     public var recordsValue: Bool { self == .plan || self == .broker || self == .security }
 
-    /// Money in and out is recorded for every kind but metals, whose cost is on the holding.
-    public var takesFlows: Bool { self != .metal }
+    /// Money in and out is listed for every kind but metals, whose cost is on the holding.
+    public var listsFlows: Bool { self != .metal }
+
+    /// Money in and out is added by hand for every kind but metals and savings accounts, whose
+    /// flows are their account's transfers and interest.
+    public var takesFlows: Bool { self != .metal && self != .savingsAccount }
 }
 
 /// One active holding in `holdings_valuation.holdings`, valued by the server. Metals carry their

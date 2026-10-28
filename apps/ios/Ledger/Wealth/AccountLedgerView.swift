@@ -6,7 +6,9 @@ import SwiftUI
 /// transaction sheet, where an owner files a transfer. Opened from Accounts, a synced broker account
 /// (Swissquote, Zerodha) reads the same, without its notes or holdings. Opened from Investments
 /// (`showsPortfolio`), it leads with its three numbers and the value over time, then offers
-/// Portfolio (its live notes and other holdings), Transactions (the statement) and Past notes. Every figure is the server's; what
+/// Portfolio (its live notes and other holdings), Transactions (the statement) and Past notes. A
+/// current or savings account says when it is shown under Investments (opening that holding), or
+/// offers owners Show under Investments. Every figure is the server's; what
 /// shows is LedgerKit's (`BrokerSection`, `BrokerPortfolioPresentation`).
 struct AccountLedgerView: View {
     let model: AccountLedgerModel
@@ -22,6 +24,7 @@ struct AccountLedgerView: View {
     @State private var opened: LedgerTransaction?
     @State private var updating: UpdateBalanceDraft?
     @State private var entering: AccountEntryDraft?
+    @State private var tracking: TrackAccountDraft?
     @State private var route: AccountRoute?
     @State private var tab: BrokerTab = .portfolio
 
@@ -85,6 +88,9 @@ struct AccountLedgerView: View {
         .sheet(item: $entering) { draft in
             AccountEntrySheet(model: notes, draft: draft, profileCode: profileCode, canEdit: canEdit)
         }
+        .sheet(item: $tracking) { draft in
+            TrackAccountSheet(model: investments, draft: draft, profileCode: profileCode, canEdit: canEdit)
+        }
         .navigationDestination(item: $route) { route in
             switch route {
             case .note(let code):
@@ -123,6 +129,8 @@ struct AccountLedgerView: View {
             addEntry: { if let balance { entering = notes.newEntry(for: balance) } },
             openRow: open,
             openNote: { route = .note($0) },
+            openInvestment: isBroker ? nil : { route = .holding($0) },
+            showAsInvestment: isBroker ? nil : { if let balance { tracking = TrackAccountDraft(account: balance) } },
             reload: reload)
     }
 

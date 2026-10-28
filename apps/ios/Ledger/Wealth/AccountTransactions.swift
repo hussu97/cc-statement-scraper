@@ -15,10 +15,17 @@ struct AccountTransactions: View {
     let addEntry: () -> Void
     let openRow: (AccountLedgerRow) -> Void
     let openNote: (String) -> Void
+    /// Opens the savings account holding this account is shown as (nil on a broker account).
+    var openInvestment: ((String) -> Void)?
+    /// The owner's Show under Investments (nil on a broker account).
+    var showAsInvestment: (() -> Void)?
     let reload: () -> Void
 
     var body: some View {
         BalanceHeader(account: balance, ledger: model.state.value?.account, canEdit: canEdit, update: update)
+        if let balance, let openInvestment, let showAsInvestment {
+            AccountInvestmentRow(account: balance, canEdit: canEdit, open: openInvestment, show: showAsInvestment)
+        }
         if canEdit, balance != nil {
             Button(action: addEntry) { Label("Add a deposit or withdrawal", systemImage: "plus.circle") }
                 .font(Typography.rowMeta).tint(Palette.accent)

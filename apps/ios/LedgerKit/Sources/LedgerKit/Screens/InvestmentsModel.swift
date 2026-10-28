@@ -170,12 +170,34 @@ public final class InvestmentsModel {
         }
     }
 
-    /// Closes the holding (it stops counting; the row is kept). Nil when closed, else why not.
+    /// Closes the holding (it stops counting; the row is kept). Nil when closed, else why not. A
+    /// savings account's account counts as cash again.
     public func close(_ holding: Holding, profileCode: String, canEdit: Bool) async -> String? {
         guard canEdit else { return HoldingDraft.ownerOnlyMessage }
-        return await write(profileCode: profileCode, saved: "\(holding.name) closed.") {
+        let saved = holding.isSavingsAccount ? SavingsAccountText.stoppedMessage(holding) : "\(holding.name) closed."
+        return await write(profileCode: profileCode, saved: saved) {
             try await $0.closeHolding(profileCode: profileCode, holdingCode: holding.holdingCode)
         }
+    }
+
+    /// Shows a bank account under Investments as a savings account valued at its balance (owners).
+    /// Nil when done (the sheet closes; Accounts re-reads and names the holding), else the sentence
+    /// the form shows.
+    public func track(_ draft: TrackAccountDraft, profileCode: String, canEdit: Bool) async -> String? {
+        guard canEdit else { return HoldingDraft.ownerOnlyMessage }
+        if let problem = draft.validate() { return problem }
+        guard !isSaving else { return nil }
+        isSaving = true
+        defer { isSaving = false }
+        do {
+            _ = try await api.trackAccountAsInvestment(profileCode: profileCode, accountCode: draft.accountCode,
+                                                       ratePct: draft.normalizedRate, name: nil)
+        } catch {
+            return TrackAccountDraft.message(for: error)
+        }
+        notice = Notice(text: draft.savedMessage, isError: false)
+        await afterWrite(profileCode: profileCode)
+        return nil
     }
 
     /// The Close confirmation's wording.

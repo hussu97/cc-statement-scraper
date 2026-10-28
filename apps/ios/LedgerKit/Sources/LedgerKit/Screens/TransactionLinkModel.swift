@@ -42,8 +42,9 @@ public final class TransactionLinkModel {
     public static let footer =
         "A payment linked to an investment counts as saving, not spending, and adds to what the investment cost. Unlink it and the investment's payment rule won't link it again."
 
-    /// The holdings to choose from, by kind as Investments groups them.
-    public var groups: [HoldingGroup] { HoldingGroup.groups(choices.value ?? []) }
+    /// The holdings to choose from, by kind as Investments groups them. A savings account is left
+    /// out: its flows are its own account's transactions, never a linked payment.
+    public var groups: [HoldingGroup] { HoldingGroup.groups(choices.value ?? [], kinds: HoldingKind.addable) }
 
     /// The picker's empty state, said only once loaded.
     public var noChoicesMessage: String? {

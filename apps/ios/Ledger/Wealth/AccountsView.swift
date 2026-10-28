@@ -83,18 +83,23 @@ struct CashTotal: View {
                 Text(caveat).font(Typography.caption)
                     .foregroundStyle(position.caveatTone == .warn ? Palette.warn : Palette.muted)
             }
+            if let invested = position.investedNote {
+                Text(invested).font(Typography.caption).foregroundStyle(Palette.muted)
+            }
         }
     }
 }
 
-/// One bank account: logo, name, balance and how fresh, opening its ledger; an owner's Update
-/// balance under it when `update` is set.
+/// One bank account: logo, name, balance and how fresh, opening its ledger; "In Investments"
+/// (opening the holding) when it is shown there; an owner's Update balance under it when `update`
+/// is set.
 struct BankAccountRow: View {
     let account: BankAccountBalance
     let profileCode: String
     let canEdit: Bool
     var update: (() -> Void)?
     @Environment(AccountLedgers.self) private var ledgers
+    @Environment(InvestmentsModel.self) private var investments
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -118,6 +123,7 @@ struct BankAccountRow: View {
                                 .foregroundStyle(account.hasBalance ? Palette.ink : Palette.muted)
                                 .moneyLine()
                             if let stale = account.staleLabel { Chip(label: stale, tone: .warn) }
+                            if account.isShownAsInvestment { Chip(label: SavingsAccountText.chip, tone: .info) }
                         }
                         Image(systemName: "chevron.right").font(.caption).foregroundStyle(Palette.muted)
                     }
@@ -126,12 +132,25 @@ struct BankAccountRow: View {
             }
             .buttonStyle(.plain)
             .accessibilityHint("Opens the account's transactions")
-            if account.asOfText() != nil || (canEdit && update != nil) {
+            if account.asOfText() != nil || (canEdit && update != nil) || account.isShownAsInvestment {
                 HStack(alignment: .firstTextBaseline) {
                     if let asOf = account.asOfText() {
                         Text(asOf).font(Typography.caption).foregroundStyle(Palette.muted)
                     }
                     Spacer(minLength: 8)
+                    if let code = account.investmentHoldingCode {
+                        NavigationLink {
+                            HoldingDetailView(investments: investments, holdingCode: code, profileCode: profileCode,
+                                              canEdit: canEdit)
+                        } label: {
+                            Text("Open investment")
+                                .font(Typography.rowMeta).foregroundStyle(Palette.accent)
+                                .frame(minHeight: Metrics.tapMin)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Open \(account.title) under Investments")
+                    }
                     if canEdit, let update {
                         Button(action: update) {
                             Text(account.updateLabel)

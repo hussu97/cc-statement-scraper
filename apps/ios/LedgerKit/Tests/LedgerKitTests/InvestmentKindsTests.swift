@@ -107,10 +107,10 @@ struct HoldingKindsPresentationTests {
 
     @Test("kinds: labels, groups, symbols and what each records")
     func kinds() {
-        #expect(HoldingKind.allCases.map(\.label) == ["Gold or silver", "Plan", "Broker account", "Shares or fund", "Fixed deposit", "Structured note"])
+        #expect(HoldingKind.allCases.map(\.label) == ["Gold or silver", "Plan", "Broker account", "Shares or fund", "Fixed deposit", "Structured note", "Savings account"])
         #expect(HoldingKind.allCases.filter(\.recordsValue) == [.plan, .broker, .security])
         #expect(!HoldingKind.metal.takesFlows && HoldingKind.deposit.takesFlows)
-        #expect(Set(HoldingKind.allCases.map(\.systemImage)).count == 6)
+        #expect(Set(HoldingKind.allCases.map(\.systemImage)).count == 7)
     }
 }
 

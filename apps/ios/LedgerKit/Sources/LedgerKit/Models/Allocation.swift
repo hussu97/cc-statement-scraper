@@ -5,7 +5,8 @@ import Foundation
 /// first, then owed. Every figure is the server's.
 public struct AllocationSlice: Decodable, Sendable, Hashable, Identifiable {
     public var id: String { assetClass }
-    /// `cash`, `gold`, `silver`, `plan`, `broker`, `security`, `deposit` or `owed`.
+    /// `cash`, `gold`, `silver`, `plan`, `broker`, `security`, `deposit`, `structured_note`,
+    /// `savings_account` or `owed`.
     public let assetClass: String
     public let valueAed: Decimal
     /// Percent of all assets (`"49.15"`); nil for owed.
@@ -32,6 +33,7 @@ public struct AllocationSlice: Decodable, Sendable, Hashable, Identifiable {
         case "security": "Shares and funds"
         case "deposit": "Fixed deposits"
         case "structured_note": "Structured notes"
+        case "savings_account": "Savings accounts"
         case "owed": "Owed on cards"
         default: assetClass.replacingOccurrences(of: "_", with: " ").capitalized
         }
@@ -48,6 +50,7 @@ public struct AllocationSlice: Decodable, Sendable, Hashable, Identifiable {
         case "security": "cat-5"
         case "deposit": "cat-13"
         case "structured_note": "cat-9"
+        case "savings_account": "cat-6"
         default: "cat-10"
         }
     }

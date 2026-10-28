@@ -76,10 +76,19 @@ public final class HoldingDetailModel {
     public func noFlowsMessage(for holding: Holding) -> String? {
         guard detail.value != nil, flows.isEmpty else { return nil }
         if holding.kind == .metal { return "Add what you paid on the holding to count its gain." }
+        if holding.isSavingsAccount {
+            return "No transfers or interest on the account yet. They're added as its transactions arrive."
+        }
         guard let match = holding.linkRuleMatch else {
             return "No money in or out yet. Add it here, or link the payments from their transactions."
         }
         return "No money in or out yet. Payments \(match) are linked as they arrive."
+    }
+
+    /// Under the flows: where a savings account's come from; nil for other kinds.
+    public func flowsNote(for holding: Holding) -> String? {
+        guard holding.isSavingsAccount else { return nil }
+        return "The account's transfers in and out and its interest, from its statements and SMS. Change them on the account's transactions."
     }
 
     /// Whether the screen lists values: the kinds you value yourself, and a deposit once its

@@ -39,6 +39,7 @@
 		352CD0D4DA9730E63CF46468 /* BrokerHoldingsList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64D1C972A70809B3517BE084 /* BrokerHoldingsList.swift */; };
 		3B024CF99D69019941B0A15C /* HoldingPhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B64630311C62FD15AC17740 /* HoldingPhoto.swift */; };
 		422A6F1FD0CDB23E0425862C /* LogCardPaymentIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = D30D95BAF30905880DE075A8 /* LogCardPaymentIntent.swift */; };
+		448F5C737129DF546A921867 /* SavingsAccountViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAF3A8CF76509774BD13BA4F /* SavingsAccountViews.swift */; };
 		49D81ED55559A99D12B73F08 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6F2FA96E42C0B4A8F21A7391 /* WidgetKit.framework */; };
 		4CF8BA51B1B5A50B3C0B7185 /* PrivacyCover.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D3D0FE265167769766B23F5 /* PrivacyCover.swift */; };
 		4E142F33C460497F23C39750 /* LedgerKit in Frameworks */ = {isa = PBXBuildFile; productRef = 3CADAE061DE32CE51E97EF02 /* LedgerKit */; };
@@ -254,6 +255,7 @@
 		C7C5873FCC2E19704B1FA5F5 /* ShortcutInputStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutInputStrip.swift; sourceTree = "<group>"; };
 		C85D8FFE075C3A5378BB0BEC /* SpendSplitCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendSplitCard.swift; sourceTree = "<group>"; };
 		C8D9C7F9F51B52A384067462 /* SpendCalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendCalendarView.swift; sourceTree = "<group>"; };
+		CAF3A8CF76509774BD13BA4F /* SavingsAccountViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavingsAccountViews.swift; sourceTree = "<group>"; };
 		D21059F2B887CC7A1599A309 /* LedgerWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = LedgerWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		D30D95BAF30905880DE075A8 /* LogCardPaymentIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogCardPaymentIntent.swift; sourceTree = "<group>"; };
 		D31B78F42683E160744D5AC1 /* BankAccountSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BankAccountSheets.swift; sourceTree = "<group>"; };
@@ -512,6 +514,7 @@
 				9DFCDA294581488C72B55E09 /* NoteSections.swift */,
 				D923E4AABE0E0B4180BFA2E5 /* NoteStockBars.swift */,
 				F5056715E03ACD312D50F429 /* ReturnsCard.swift */,
+				CAF3A8CF76509774BD13BA4F /* SavingsAccountViews.swift */,
 				8A8FE46536007B961F065540 /* WealthCharts.swift */,
 				A112FD4971B41B6C813BCC33 /* WealthOverviewView.swift */,
 			);
@@ -1015,6 +1018,7 @@
 				E0FD108F9F8CAE01FBFFBA28 /* ReviewView.swift in Sources */,
 				860158FF70A963842E055393 /* RootView.swift in Sources */,
 				F11E6EF9D13C280E1E1E7A65 /* SMSSettingsViews.swift in Sources */,
+				448F5C737129DF546A921867 /* SavingsAccountViews.swift in Sources */,
 				1D830163AD6DCE4782E30CE8 /* SettingsView.swift in Sources */,
 				C5A4A377005DFC5A8A379D11 /* SetupChecklistCard.swift in Sources */,
 				020FAB3A57B88E91B1AD044E /* ShortcutInputStrip.swift in Sources */,

@@ -15,7 +15,13 @@ public protocol InvestmentsAPI: Sendable {
     /// `rpc('save_holding')`: adds (no `holdingCode`) or edits a holding; returns its code (owners;
     /// 42501 otherwise, 22023 with a readable message for bad input, P0002 for an unknown holding).
     func saveHolding(profileCode: String, holding: HoldingSubmission) async throws -> String
+    /// `rpc('track_account_as_investment')`: shows a current or savings account under Investments as
+    /// a `savings_account` holding valued at its balance, out of cash; returns the holding's code.
+    /// Idempotent, and reopens a closed one (owners; 22023 for a card or a bad rate).
+    func trackAccountAsInvestment(profileCode: String, accountCode: String, ratePct: String?,
+                                  name: String?) async throws -> String
     /// `rpc('close_holding')`: the holding stops counting; the row is kept (owners; P0002 when unknown).
+    /// A savings account's account counts as cash again.
     func closeHolding(profileCode: String, holdingCode: String) async throws
     /// `rpc('holding_detail')`: a holding's active flows (with the paying transaction) and recorded values.
     func holdingDetail(profileCode: String, holdingCode: String) async throws -> HoldingDetail

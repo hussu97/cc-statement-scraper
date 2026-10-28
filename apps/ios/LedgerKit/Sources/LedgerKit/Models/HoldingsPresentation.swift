@@ -48,7 +48,7 @@ public enum HoldingsText {
 extension Holding {
     /// The row's second line, by kind: `"24K · 999.9 · 1,000 g"`, `"22K gold · 85 g"`,
     /// `"Silver 999 · 8,000 g"`, `"RL360 · USD"`, `"EXCO · 2,000 units"`,
-    /// `"Wio · 4.25% · matures 23 Jun 2027"`.
+    /// `"Wio · 4.25% · matures 23 Jun 2027"`, `"MASHREQ · Savings account · 5% a year"`.
     public func detail(today: CalendarDay = LedgerDates.today()) -> String {
         switch kind {
         case .metal:
@@ -74,6 +74,9 @@ extension Holding {
                 (day <= today ? "matured " : "matures ") + LedgerDates.dayLabel(day, today: today)
             }
             return [institution, rate, matures].compactMap { $0 }.joined(separator: " · ")
+        case .savingsAccount:
+            return [institution, kind.label, savingsRateText, currency == "AED" ? nil : currency]
+                .compactMap { $0 }.joined(separator: " · ")
         }
     }
 
@@ -114,7 +117,13 @@ extension Holding {
     /// What the row says instead of a gain.
     public var noGainText: String {
         if valueAed == nil { return kind == .metal ? "No price yet" : "No value yet" }
-        if costAed == nil { return kind == .metal ? "No cost entered" : "No money in recorded" }
+        if costAed == nil {
+            switch kind {
+            case .metal: return "No cost entered"
+            case .savingsAccount: return "No transfers in yet"
+            default: return "No money in recorded"
+            }
+        }
         return "No gain yet"
     }
 
@@ -137,7 +146,7 @@ extension Holding {
     public func asOfText(today: CalendarDay = LedgerDates.today()) -> String? {
         guard kind != .metal, let valueAsOf else { return nil }
         if isEstimate { return "Profit accrued to " + LedgerDates.dayLabel(valueAsOf, today: today) }
-        let what = kind == .security ? "Price" : "Value"
+        let what = kind == .security ? "Price" : kind == .savingsAccount ? "Balance" : "Value"
         return "\(what) as of " + LedgerDates.dayLabel(valueAsOf, today: today)
     }
 
@@ -150,6 +159,11 @@ extension Holding {
         if kind == .metal {
             guard let priceAsOf else { return nil }
             return "Price " + CashText.asOf(priceAsOf, now: now).lowercasedFirst + ": it hasn't updated for over 3 days."
+        }
+        if kind == .savingsAccount {
+            guard let valueAsOf else { return "The account has no recent balance: add a statement or update its balance." }
+            return "The balance is from " + LedgerDates.dayLabel(valueAsOf, today: LedgerDates.today(now: now))
+                + ", over 45 days ago. Add a newer statement or update the account's balance."
         }
         let what = kind == .security ? "price" : "value"
         guard let valueAsOf else { return "No recent \(what): record one." }
@@ -187,10 +201,11 @@ public struct HoldingGroup: Sendable, Hashable, Identifiable {
     /// `"2 holdings"`.
     public var countText: String { HoldingsText.holdings(holdings.count) }
 
-    /// `holdings` by kind in `HoldingKind` order, each kind keeping their order; empty kinds left out.
-    /// Structured notes are left out too: their own card lists them, with their status.
-    public static func groups(_ holdings: [Holding]) -> [HoldingGroup] {
-        HoldingKind.addable.compactMap { kind in
+    /// `holdings` by kind in `kinds` order, each kind keeping their order; empty kinds left out.
+    /// Structured notes are left out too: their own card lists them, with their status. Linking a
+    /// payment offers only `HoldingKind.addable` (a savings account's flows are its own transactions).
+    public static func groups(_ holdings: [Holding], kinds: [HoldingKind] = HoldingKind.listed) -> [HoldingGroup] {
+        kinds.compactMap { kind in
             let inKind = holdings.filter { $0.kind == kind }
             return inKind.isEmpty ? nil : HoldingGroup(kind: kind, holdings: inKind)
         }
@@ -271,7 +286,8 @@ extension HoldingsValuation {
     /// `"4 holdings"`.
     public var countText: String { HoldingsText.holdings(holdingsCount) }
 
-    /// The holdings by kind (gold and silver, plans, broker accounts, shares and funds, deposits),
+    /// The holdings by kind (gold and silver, plans, broker accounts, shares and funds, deposits,
+    /// savings accounts),
     /// each in the server's order; a kind with none is left out.
     public var groups: [HoldingGroup] { HoldingGroup.groups(holdings) }
 

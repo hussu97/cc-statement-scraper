@@ -370,6 +370,13 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         if let holdingWriteError { throw holdingWriteError }
         lock.withLock { closedHoldings.append(holdingCode) }
     }
+    private(set) var trackedAccounts: [(account: String, rate: String?, name: String?)] = []
+    func trackAccountAsInvestment(profileCode: String, accountCode: String, ratePct: String?,
+                                  name: String?) async throws -> String {
+        if let holdingWriteError { throw holdingWriteError }
+        lock.withLock { trackedAccounts.append((accountCode, ratePct, name)) }
+        return "hld_savings"
+    }
     /// `holding_detail`'s answer; nil throws (offline).
     var holdingDetailFixture: HoldingDetail?
     /// Each period's `holding_returns`; a missing period throws (offline).

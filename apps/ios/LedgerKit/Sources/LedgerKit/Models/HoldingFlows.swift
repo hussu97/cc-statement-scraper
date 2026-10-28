@@ -46,8 +46,9 @@ public struct HoldingFlow: Decodable, Sendable, Hashable, Identifiable {
     /// In the holding's currency.
     public let amount: Decimal
     public let amountAed: Decimal
-    /// `manual`, `rule` (linked by the payment rule), `link` (linked by hand) or `holding_cost`
-    /// (a metal's cost, edited on the holding).
+    /// `manual`, `rule` (linked by the payment rule), `link` (linked by hand), `holding_cost`
+    /// (a metal's cost, edited on the holding), `import` (a provider sync) or `account` (a savings
+    /// account's own transfer or interest).
     public let source: String
     public let notes: String?
     public let txnCode: String?
@@ -92,6 +93,7 @@ public struct HoldingFlow: Decodable, Sendable, Hashable, Identifiable {
         case "link": parts.append("linked by hand")
         case "holding_cost": parts.append("the holding's cost")
         case "import": parts.append("synced from the provider")
+        case "account": parts.append("from the account")
         default: parts.append("added by hand")
         }
         return parts.joined(separator: " · ")
@@ -113,8 +115,9 @@ public struct HoldingFlow: Decodable, Sendable, Hashable, Identifiable {
     /// `"AED 7,345.00"` under a foreign amount; nil for an AED holding.
     public func aedText(currency: String) -> String? { currency == "AED" ? nil : MoneyFormat.aed(amountAed) }
 
-    /// A metal's cost is edited on the holding; everything else can be removed or unlinked.
-    public var canRemove: Bool { source != "holding_cost" }
+    /// A metal's cost is edited on the holding, and a savings account's flows are its own
+    /// transactions; everything else can be removed or unlinked.
+    public var canRemove: Bool { source != "holding_cost" && source != "account" }
     /// The swipe action: `"Unlink"` for a paid flow, `"Remove"` for one added by hand.
     public var removeTitle: String { isLinked ? "Unlink" : "Remove" }
     /// After it: what happened to the payment.

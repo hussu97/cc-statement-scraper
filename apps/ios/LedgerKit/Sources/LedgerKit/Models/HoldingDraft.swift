@@ -109,6 +109,7 @@ public struct HoldingDraft: Sendable, Hashable, Identifiable {
         case .metal: "e.g. Ten tola bar"
         case .plan: "e.g. RL360 Quantum"
         case .broker, .structuredNote: "e.g. IBKR account"
+        case .savingsAccount: "e.g. Neo Plus Saver"
         case .security: "e.g. Example Co shares"
         case .deposit: "e.g. Wio 12-month deposit"
         }
@@ -119,6 +120,7 @@ public struct HoldingDraft: Sendable, Hashable, Identifiable {
         switch kind {
         case .metal, .plan: "e.g. RL360"
         case .broker, .structuredNote: "e.g. Interactive Brokers"
+        case .savingsAccount: "e.g. Mashreq"
         case .security: "e.g. DFM"
         case .deposit: "e.g. Wio"
         }
@@ -161,7 +163,7 @@ public struct HoldingDraft: Sendable, Hashable, Identifiable {
         case .plan, .broker: "Then open it to record its value and the money you've put in."
         case .security: "Then open it to record the unit price and the money you've put in."
         case .deposit: "Its value accrues each day to maturity: an estimate until the bank says otherwise."
-        case .metal, .structuredNote: nil
+        case .metal, .structuredNote, .savingsAccount: nil
         }
     }
 

@@ -52,7 +52,9 @@ public struct CashPosition: Decodable, Sendable, Hashable {
                 ? "1 account has no balance yet, so the total leaves it out."
                 : "\(missingCount) accounts have no balance yet, so the total leaves them out.")
         }
-        if accounts.contains(where: { $0.balance != nil && ($0.balanceAed == nil || $0.unpricedCount > 0) }) {
+        if accounts.contains(where: {
+            !$0.isShownAsInvestment && $0.balance != nil && ($0.balanceAed == nil || $0.unpricedCount > 0)
+        }) {
             out.append("Some amounts aren't converted to AED yet, so the total may be off.")
         }
         if staleCount > 0 {
@@ -66,6 +68,15 @@ public struct CashPosition: Decodable, Sendable, Hashable {
         canEdit
             ? "No bank accounts yet. Add your current or savings account with + to see its balance here."
             : "No bank accounts yet. An owner of this ledger can add them."
+    }
+
+    /// Under the total when an account is shown under Investments: it is listed, not added.
+    public var investedNote: String? {
+        let n = accounts.filter(\.isShownAsInvestment).count
+        guard n > 0 else { return nil }
+        return n == 1
+            ? "The total leaves out 1 account shown under Investments, where net worth counts it."
+            : "The total leaves out \(n) accounts shown under Investments, where net worth counts them."
     }
 
     /// The caveat tone: a total missing something warns; a stale one is information.
@@ -90,10 +101,14 @@ public struct BankAccountBalance: Decodable, Sendable, Hashable, Identifiable {
     public let anchorSource: String?
     public let isStale: Bool
     public let unpricedCount: Int
+    /// The `savings_account` holding this account is shown under Investments as; nil when it
+    /// counts as cash (and before the server sent it). Such an account is out of the total.
+    public let investmentHoldingCode: String?
 
     public init(accountCode: String, bankCode: String, kind: String, nickname: String?, accountRef: String?,
                 currency: String = "AED", balance: Decimal?, balanceAed: Decimal?, asOf: Date?,
-                anchorSource: String? = nil, isStale: Bool = false, unpricedCount: Int = 0) {
+                anchorSource: String? = nil, isStale: Bool = false, unpricedCount: Int = 0,
+                investmentHoldingCode: String? = nil) {
         self.accountCode = accountCode
         self.bankCode = bankCode
         self.kind = kind
@@ -106,6 +121,7 @@ public struct BankAccountBalance: Decodable, Sendable, Hashable, Identifiable {
         self.anchorSource = anchorSource
         self.isStale = isStale
         self.unpricedCount = unpricedCount
+        self.investmentHoldingCode = investmentHoldingCode
     }
 
     /// `"Current ··· 310001"`, `"Savings account"` without a ref.
