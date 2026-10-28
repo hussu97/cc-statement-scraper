@@ -1,5 +1,14 @@
 # Changelog
 
+## Zerodha Kite and Coin in detail: what each position is, today's move, allocation, SIPs and AMFI prices — 2026-10-28
+
+### Backend (Supabase)
+
+- **feat** `broker_positions` keeps each mark's previous price, price date, exchange, folio, asset class (`stock`, `etf`, `fund`), scheme type and fund house. A fund's previous price is its last mark from an earlier NAV date.
+- **feat** `broker_sips`: Coin's SIPs as Zerodha reports them (status, amount, day, next instalment, instalments done, step-up), each with its latest order's outcome, so a rejected instalment shows. One no longer listed is cancelled.
+- **feat** `broker_portfolio` adds, per position, the day change, weight and return on cost, and per account the day change, `allocation` (stocks and ETFs; funds by scheme type), `issuers` (fund houses), `highlights` (best and worst by return, today's biggest moves, the top five's share) and `sips`. New `broker_position_detail(profile, account, isin)`: one position, its marks over time and its SIPs.
+- **feat** `zerodha-sync` reads company names (Kite's public instrument lists), fund scheme types (`/mf/instruments`), AMFI's daily NAVs with their date and fund house, and Coin's SIPs and orders. Coin funds are now priced from AMFI's NAV, since Coin's lags by days and has no date. Each source only enriches the sync: one that fails is a note in the result, and the run goes on.
+- **change** A Kite holding still named by its ticker takes the company name; a name the user gave stays.
 ## Edge Functions deploy without jsr.io — 2026-10-28
 
 ### Backend (Supabase)

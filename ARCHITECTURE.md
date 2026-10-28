@@ -76,7 +76,7 @@ a `deno test` guard enforces this.
 | `termsheet-extract` | User JWT (owner), multipart PDF | Stores the term sheet in `term-sheets`, sends it to Claude (`TERMSHEET_LLM_MODEL`, default `claude-sonnet-5-5`) as a document with a JSON schema, and normalises the answer into the termsheet-v1 draft (`docs/contracts/termsheet-v1.md`) with warnings for the review: printed levels that disagree with the initial level, half coupons or autocalls, dates out of order, a payout without a 0% branch or that falls as the worst share rises, and features it does not model. Nothing from the document is logged. |
 | `rl360-sync` | pg_cron daily (`20 2 * * *`, 06:20 Dubai) | Signs in to RL360's Online Service Centre with each login in `RL360_LOGINS`, reads every plan's value and premium history (plain HTML, no browser), and calls `import_holding_data`: it claims the profile's RL360 plan by plan number, stores the value (source `import`, never over a manual one), reconciles premiums with linked card payments (±7 days, 5%; unmatched premiums become imported contributions) and returns the month-ends still without a value, which the function backfills (30 a run). |
 | `swissquote-sync` | pg_cron daily (`30 21 * * *`, 01:30 Dubai) | Signs in to Swissquote with each login in `SWISSQUOTE_LOGINS` (password, then the Level-3 matrix card's cell as JSON; never the phone push), reads the portfolio, cash, positions, every transaction since the account opened, product types and the daily performance index, and calls `import_broker_data` (the cash account, its transactions, holdings and flows, the day's marks, the cash checkpoint and daily values; idempotent). Then reads the term sheet of up to one position without terms a run (`{"terms": n}` for more) from Swissquote Messages into a structured note. A failure is recorded on the connection (`record_broker_sync_error`) and reaches Sentry; messages never carry logins or codes. |
-| `zerodha-sync` | pg_cron weekdays (`0 18 * * 1-5`, 23:30 IST) | Signs in to each login's own Kite Connect app in `ZERODHA_LOGINS` (user id and password, then the TOTP from the 2FA seed; the Connect flow's `request_token` is read from the redirect and exchanged with the API secret; the free Personal plan has no refresh token), reads the profile, Kite holdings, Coin holdings (`/mf/holdings`) and Funds, calls `import_zerodha_data`, and signs out. A segment that cannot be read keeps its last marks and the run is recorded as partly synced (`record_broker_sync_error`) and reaches Sentry; messages never carry logins, codes or tokens. |
+| `zerodha-sync` | pg_cron weekdays (`0 18 * * 1-5`, 23:30 IST) | Signs in to each login's own Kite Connect app in `ZERODHA_LOGINS` (user id and password, then the TOTP from the 2FA seed; the Connect flow's `request_token` is read from the redirect and exchanged with the API secret; the free Personal plan has no refresh token), reads the profile, Kite holdings, Coin holdings (`/mf/holdings`) and Funds, then (optional, never failing the run) company names from Kite's instrument lists, fund types (`/mf/instruments`), AMFI's dated NAVs and fund houses (`portal.amfiindia.com/spages/NAVAll.txt`) and Coin's SIPs and their latest orders, calls `import_zerodha_data`, and signs out. A segment that cannot be read keeps its last marks and the run is recorded as partly synced (`record_broker_sync_error`) and reaches Sentry; messages never carry logins, codes or tokens. |
 | `fx-rates` | pg_cron daily 21:00 UTC | Fetches open.er-api.com, inverts quotes to AED per unit with exact decimals, calls `upsert_fx_rates` (which re-estimates pending SMS). |
 
 Shared code in `_shared/`: `auth.ts` (JWT, service token and cron secret), `sentry.ts`
@@ -765,7 +765,7 @@ document, so each account is anchored on a balance the bank printed, the latest 
 An SMS statement anchor has no lines to say what it covers, so the activity added to it is by
 date (after the statement date, plus charges dated on it that are still pending), not by `stmt_code`.
 
-**Zerodha sync** (`20261027202923`, `20261028054048`, `tasks/todo.md` §12). The `zerodha-sync`
+**Zerodha sync** (`20261027202923`, `20261028054048`, `20261028062806`, `tasks/todo.md` §12–13). The `zerodha-sync`
 function reads a Kite user's portfolio on weekday nights and hands it to `import_zerodha_data`
 (service, idempotent per day). It reuses the broker tables:
 - **Two accounts.** Kite and Coin are separate broker accounts, each with its own bank and logo:
@@ -791,6 +791,21 @@ function reads a Kite user's portfolio on weekday nights and hands it to `import
   the open positions) and a `basis`. For Zerodha the basis is `cost`: `net_deposits` is invested
   + cash, so the profit is the unrealised P&L. Each position carries its segment and its return
   on cost, and `segments` totals the account's segment (one entry per account).
+- **Detail** (§13). Each mark also keeps `prev_price` (Kite's previous close; a fund's last mark
+  from an earlier NAV date, found by the import), `price_date`, `exchange`, `folio`, `asset_class`
+  (`stock` | `etf` | `fund`; an ETF is a Kite ISIN starting `INF`), `category` (a fund's scheme
+  type, from Kite's `/mf/instruments`) and `issuer` (its fund house as AMFI names it). Kite
+  positions take the company name from Kite's public instrument lists, and a holding still named
+  by its ticker is renamed. Coin funds are priced from AMFI's daily `NAVAll.txt` (dated), since
+  Coin's own NAV lags by days and is undated; Coin's stays when AMFI lacks the ISIN.
+  `broker_sips` mirrors Coin's SIPs (`/mf/sips`), each with its latest order's outcome from
+  `/mf/orders` (an order's `instruction_id` is its SIP's `sip_id`); one no longer listed is
+  cancelled. All of this only enriches: a source that fails is a note in the run's result and the
+  sync goes on. `broker_portfolio` adds per position the day change, weight and return, and per
+  account the day change, `allocation` (by asset class, a fund by scheme type), `issuers`,
+  `highlights` (best and worst by return, today's movers, the top five's share) and `sips`;
+  `broker_position_detail(profile, account, isin)` gives one position with its marks over time
+  and its SIPs.
 
 **India mode** (`20261028061444`). India is its own mode, fully apart from Wealth. An account at an
 India bank (`private.is_india_bank`: `KITE`, `COIN` and the legacy `ZRD`) and every holding marked

@@ -7,7 +7,9 @@
 // free Personal plan has no refresh token, so every run signs in), read the profile, Kite holdings,
 // Coin holdings and Funds, and send them to import_zerodha_data, which keeps the ledger's two
 // accounts (Zerodha Kite with the Funds cash, Zerodha Coin), holdings, marks, inferred flows and
-// daily values (idempotent per day). Sign out. A segment whose
+// daily values (idempotent per day). Company names, fund types, AMFI's dated NAVs and the Coin
+// SIPs only enrich it (tasks/todo.md §13): one that fails is a note in the result and a warning in
+// the log, and the sync goes on. Sign out. A segment whose
 // read failed is left out (its marks carry over) and recorded on the connection; any failure is
 // thrown after the other logins ran, so Sentry captures it. Messages never carry logins, codes,
 // tokens or response bodies.
@@ -31,13 +33,16 @@ interface ImportResult {
   positions_marked: number;
   positions_closed: number;
   value: string;
+  /** How many SIPs were read (null when not). */
+  sips: number | null;
 }
 
 async function syncLogin(login: ZerodhaLogin) {
   const session = new KiteSession(login);
   await session.signIn();
   try {
-    const { data, failed } = await readPortfolio(session, login.user_id);
+    const { data, failed, notes } = await readPortfolio(session, login.user_id);
+    if (notes.length > 0) console.warn(`zerodha-sync: ${login.profile_code}: ${notes.join("; ")}`);
     if (data.segments_read.length === 0) throw new Error(failed.join("; "));
     const db = serviceClient();
     const { data: result, error } = await db.rpc("import_zerodha_data", {
@@ -48,7 +53,14 @@ async function syncLogin(login: ZerodhaLogin) {
     const r = result as ImportResult;
     // Part of it could not be read: the screen says so, and Sentry hears of it.
     if (failed.length > 0) throw new Error(`partly synced (${failed.join("; ")})`);
-    return { accounts: r.accounts, positions: r.positions_marked, closed: r.positions_closed, value: r.value };
+    return {
+      accounts: r.accounts,
+      positions: r.positions_marked,
+      closed: r.positions_closed,
+      value: r.value,
+      sips: r.sips,
+      notes,
+    };
   } finally {
     await session.signOut();
   }

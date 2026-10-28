@@ -505,15 +505,22 @@ export type Database = {
         Row: {
           account_code: string
           as_of: string
+          asset_class: string | null
+          category: string | null
           cost_price: number | null
           currency: string
+          exchange: string | null
           fetched_at: string
+          folio: string | null
           holding_code: string
           isin: string
+          issuer: string | null
           market_value: number | null
           name: string
           position_code: string
+          prev_price: number | null
           price: number | null
+          price_date: string | null
           price_in_pct: boolean
           product_type: string
           profile_code: string
@@ -524,15 +531,22 @@ export type Database = {
         Insert: {
           account_code: string
           as_of: string
+          asset_class?: string | null
+          category?: string | null
           cost_price?: number | null
           currency: string
+          exchange?: string | null
           fetched_at?: string
+          folio?: string | null
           holding_code: string
           isin: string
+          issuer?: string | null
           market_value?: number | null
           name: string
           position_code?: string
+          prev_price?: number | null
           price?: number | null
+          price_date?: string | null
           price_in_pct: boolean
           product_type: string
           profile_code: string
@@ -543,15 +557,22 @@ export type Database = {
         Update: {
           account_code?: string
           as_of?: string
+          asset_class?: string | null
+          category?: string | null
           cost_price?: number | null
           currency?: string
+          exchange?: string | null
           fetched_at?: string
+          folio?: string | null
           holding_code?: string
           isin?: string
+          issuer?: string | null
           market_value?: number | null
           name?: string
           position_code?: string
+          prev_price?: number | null
           price?: number | null
+          price_date?: string | null
           price_in_pct?: boolean
           product_type?: string
           profile_code?: string
@@ -590,6 +611,104 @@ export type Database = {
           },
           {
             foreignKeyName: "broker_positions_profile_code_fkey"
+            columns: ["profile_code"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["profile_code"]
+          },
+        ]
+      }
+      broker_sips: {
+        Row: {
+          account_code: string
+          completed_instalments: number | null
+          currency: string
+          external_id: string
+          fetched_at: string
+          frequency: string | null
+          fund: string
+          instalment_amount: number | null
+          instalment_day: number | null
+          isin: string
+          last_instalment: string | null
+          last_order_at: string | null
+          last_order_message: string | null
+          last_order_status: string | null
+          next_instalment: string | null
+          profile_code: string
+          sip_code: string
+          started_at: string | null
+          status: string
+          step_up: Json | null
+        }
+        Insert: {
+          account_code: string
+          completed_instalments?: number | null
+          currency?: string
+          external_id: string
+          fetched_at?: string
+          frequency?: string | null
+          fund: string
+          instalment_amount?: number | null
+          instalment_day?: number | null
+          isin: string
+          last_instalment?: string | null
+          last_order_at?: string | null
+          last_order_message?: string | null
+          last_order_status?: string | null
+          next_instalment?: string | null
+          profile_code: string
+          sip_code?: string
+          started_at?: string | null
+          status: string
+          step_up?: Json | null
+        }
+        Update: {
+          account_code?: string
+          completed_instalments?: number | null
+          currency?: string
+          external_id?: string
+          fetched_at?: string
+          frequency?: string | null
+          fund?: string
+          instalment_amount?: number | null
+          instalment_day?: number | null
+          isin?: string
+          last_instalment?: string | null
+          last_order_at?: string | null
+          last_order_message?: string | null
+          last_order_status?: string | null
+          next_instalment?: string | null
+          profile_code?: string
+          sip_code?: string
+          started_at?: string | null
+          status?: string
+          step_up?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broker_sips_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "broker_sips_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "v_account_balances"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "broker_sips_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "v_bank_balances"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "broker_sips_profile_code_fkey"
             columns: ["profile_code"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -4247,6 +4366,10 @@ export type Database = {
       }
       broker_portfolio: {
         Args: { p_account_code: string; p_profile_code: string }
+        Returns: Json
+      }
+      broker_position_detail: {
+        Args: { p_account_code: string; p_isin: string; p_profile_code: string }
         Returns: Json
       }
       budget_status: {

@@ -10,12 +10,23 @@
 //   GET  /portfolio/holdings                         Kite: per ISIN, quantity, average and last price
 //   GET  /mf/holdings                                Coin: per fund ISIN, units, average price, NAV
 //   GET  /user/margins/equity                        Funds: available cash
+//   + names, fund types, AMFI NAVs and SIPs (catalogue.ts), each optional
 //   DELETE /session/token                            sign out
 // The app must have been authorised once by a sign-in in the browser. Market data (quotes,
 // history) is not in the free plan. Parsers are pure (tested in _tests/zerodha_sync_test.ts);
 // errors never carry logins, codes, tokens or response bodies.
 
 import { dec } from "../swissquote-sync/swissquote.ts";
+import {
+  AMFI_NAV_URL,
+  amfiNavs,
+  fundCatalogue,
+  instrumentNames,
+  type KiteMfOrder,
+  type KiteSip,
+  normalizeSips,
+  type ZerodhaSip,
+} from "./catalogue.ts";
 
 export const KITE_WEB = "https://kite.zerodha.com";
 export const KITE_CONNECT = "https://kite.trade";
@@ -237,6 +248,19 @@ export class KiteSession {
     return body.data as T;
   }
 
+  /** A CSV endpoint (the instrument lists). */
+  async getText(path: string): Promise<string> {
+    if (!this.#accessToken) throw new Error("Kite: not signed in");
+    const res = await this.#request(`${KITE_API}${path}`, {
+      headers: { authorization: `token ${this.login.api_key}:${this.#accessToken}` },
+    });
+    if (!res.ok) {
+      await res.body?.cancel();
+      throw new Error(`Kite ${path}: HTTP ${res.status}`);
+    }
+    return await res.text();
+  }
+
   /** Sign out: the access token dies now rather than at 06:00 IST. Never throws. */
   async signOut(): Promise<void> {
     if (!this.#accessToken) return;
@@ -258,6 +282,15 @@ export interface ZerodhaPosition {
   quantity: string;
   price: string | null;
   cost_price: string | null;
+  /** The previous close (Kite); a fund's previous NAV is found by the import from its marks. */
+  prev_price?: string | null;
+  /** The NAV's date (a fund priced from AMFI). */
+  price_date?: string | null;
+  exchange?: string | null;
+  folio?: string | null;
+  asset_class?: "stock" | "etf" | "fund";
+  category?: string | null;
+  issuer?: string | null;
 }
 
 const ISIN = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/;
@@ -265,6 +298,7 @@ const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : N
 
 export interface KiteHolding {
   tradingsymbol?: string;
+  exchange?: string;
   isin?: string;
   quantity?: number;
   t1_quantity?: number;
@@ -274,7 +308,8 @@ export interface KiteHolding {
   close_price?: number;
 }
 
-/** /portfolio/holdings → Kite positions: units held (settled + T1 − sold today), last price (else the close), average price. */
+/** /portfolio/holdings → Kite positions: units held (settled + T1 − sold today), last price (else the close), average
+ * price, the previous close, exchange, and stock or ETF (a fund unit's ISIN starts INF). */
 export function normalizeEquity(rows: KiteHolding[]): ZerodhaPosition[] {
   const out: ZerodhaPosition[] = [];
   for (const h of rows ?? []) {
@@ -291,6 +326,9 @@ export function normalizeEquity(rows: KiteHolding[]): ZerodhaPosition[] {
       quantity: dec(qty, 6)!,
       price: last > 0 ? dec(last, 8) : null,
       cost_price: dec(h.average_price, 8),
+      prev_price: num(h.close_price) > 0 ? dec(h.close_price, 8) : null,
+      exchange: (h.exchange ?? "").trim().toUpperCase() || null,
+      asset_class: isin.startsWith("INF") ? "etf" : "stock",
     });
   }
   return out;
@@ -298,13 +336,14 @@ export function normalizeEquity(rows: KiteHolding[]): ZerodhaPosition[] {
 
 export interface KiteMfHolding {
   fund?: string;
+  folio?: string;
   tradingsymbol?: string;
   quantity?: number;
   average_price?: number;
   last_price?: number;
 }
 
-/** /mf/holdings → Coin positions: the fund's ISIN (its tradingsymbol), units, NAV, average NAV. */
+/** /mf/holdings → Coin positions: the fund's ISIN (its tradingsymbol), units, NAV (undated), average NAV, folio. */
 export function normalizeMf(rows: KiteMfHolding[]): ZerodhaPosition[] {
   const out: ZerodhaPosition[] = [];
   for (const h of rows ?? []) {
@@ -319,6 +358,8 @@ export function normalizeMf(rows: KiteMfHolding[]): ZerodhaPosition[] {
       quantity: dec(qty, 6)!,
       price: num(h.last_price) > 0 ? dec(h.last_price, 8) : null,
       cost_price: dec(h.average_price, 8),
+      folio: (h.folio ?? "").trim().slice(0, 40) || null,
+      asset_class: "fund",
     });
   }
   return out;
@@ -335,8 +376,23 @@ const defaultPause = () => new Promise((r) => setTimeout(r, 400));
 
 export const why = (e: unknown) => (e instanceof Error ? e.message : String(e)).slice(0, 200);
 
-/** Reads the portfolio; a segment that fails is left out of segments_read and named in `failed`. */
-export async function readPortfolio(s: Pick<KiteSession, "get">, userId: string, pause = defaultPause) {
+const defaultFetchText = async (url: string) => {
+  const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
+  if (!res.ok) {
+    await res.body?.cancel();
+    throw new Error(`${new URL(url).hostname}: HTTP ${res.status}`);
+  }
+  return await res.text();
+};
+
+/** Reads the portfolio; a segment that fails is left out of segments_read and named in `failed`.
+ * What only enriches it (names, fund types, AMFI NAVs, SIPs) is named in `notes` when it fails. */
+export async function readPortfolio(
+  s: Pick<KiteSession, "get" | "getText">,
+  userId: string,
+  pause = defaultPause,
+  fetchText: (url: string) => Promise<string> = defaultFetchText,
+) {
   const profile = await s.get<{ user_id?: string }>("/user/profile");
   if ((profile.user_id ?? "").toUpperCase() !== userId) throw new Error("Kite: signed in as another user");
   const positions: ZerodhaPosition[] = [];
@@ -363,6 +419,7 @@ export async function readPortfolio(s: Pick<KiteSession, "get">, userId: string,
       failed.push(`Funds: ${why(e)}`);
       return null;
     });
+  const { sips, notes } = await enrich(s, positions, read.includes("coin"), pause, fetchText);
   return {
     data: {
       user_id: userId,
@@ -370,7 +427,71 @@ export async function readPortfolio(s: Pick<KiteSession, "get">, userId: string,
       cash,
       segments_read: read,
       positions,
+      ...(sips ? { sips } : {}),
     },
     failed,
+    notes,
   };
+}
+
+/** Company names (Kite), scheme type (Kite's fund list), AMFI's dated NAV and fund house name
+ * (else Kite's AMC code) for Coin, and the SIPs (null when unread). Changes the positions in place; each source that fails is a note. */
+export async function enrich(
+  s: Pick<KiteSession, "get" | "getText">,
+  positions: ZerodhaPosition[],
+  coinRead: boolean,
+  pause: () => Promise<unknown>,
+  fetchText: (url: string) => Promise<string>,
+): Promise<{ sips: ZerodhaSip[] | null; notes: string[] }> {
+  const notes: string[] = [];
+  const kite = positions.filter((p) => p.segment === "kite" && p.symbol && p.exchange);
+  for (const exchange of [...new Set(kite.map((p) => p.exchange!))].sort()) {
+    try {
+      const mine = kite.filter((p) => p.exchange === exchange);
+      const names = instrumentNames(
+        await s.getText(`/instruments/${exchange}`),
+        exchange,
+        new Set(mine.map((p) => p.symbol!)),
+      );
+      for (const p of mine) p.name = names.get(`${exchange}:${p.symbol}`) ?? p.name;
+    } catch (e) {
+      notes.push(`${exchange} names: ${why(e)}`);
+    }
+    await pause();
+  }
+  const funds = positions.filter((p) => p.segment === "coin");
+  const isins = new Set(funds.map((p) => p.isin));
+  if (funds.length > 0) {
+    try {
+      const info = fundCatalogue(await s.getText("/mf/instruments"), isins);
+      for (const p of funds) Object.assign(p, info.get(p.isin) ?? {});
+    } catch (e) {
+      notes.push(`Fund types: ${why(e)}`);
+    }
+    try {
+      const navs = amfiNavs(await fetchText(AMFI_NAV_URL), isins);
+      for (const p of funds) {
+        const n = navs.get(p.isin);
+        if (n) Object.assign(p, { price: n.nav, price_date: n.date }, n.house ? { issuer: n.house } : {});
+      }
+    } catch (e) {
+      notes.push(`AMFI NAVs: ${why(e)}`);
+    }
+  }
+  let sips: ZerodhaSip[] | null = null;
+  if (coinRead) {
+    await pause();
+    try {
+      const list = await s.get<KiteSip[]>("/mf/sips");
+      await pause();
+      const orders = await s.get<KiteMfOrder[]>("/mf/orders").catch((e) => {
+        notes.push(`Coin orders: ${why(e)}`);
+        return null;
+      });
+      sips = normalizeSips(list, orders);
+    } catch (e) {
+      notes.push(`Coin SIPs: ${why(e)}`);
+    }
+  }
+  return { sips, notes };
 }
