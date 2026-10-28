@@ -1,5 +1,12 @@
 # Changelog
 
+## Zerodha as two accounts: Zerodha Kite and Zerodha Coin, each with its own logo — 2026-10-28
+
+### Backend (Supabase)
+
+- **change** Kite (stocks, ETFs, and the Funds cash) and Coin (mutual funds) are separate broker accounts: banks `KITE` ("Zerodha Kite") and `COIN` ("Zerodha Coin"), each with its own logo and FX row, and a connection per segment (`portfolio_ref` `<user>-KITE` / `-COIN`). `import_zerodha_data` takes the same payload; marks, inferred flows and each day's value go to the segment's own account, a segment whose read failed keeps its own last marks, and the Coin account (made once Coin reports a fund) holds a daily 0 cash checkpoint. The result adds `accounts: {kite, coin}`; `account_code` is Kite's.
+- **change** A single Zerodha account from before (bank `ZRD`) becomes the Kite account, and its funds' marks and value per day move to a new Coin account (`private.zerodha_split_single_accounts`, guarded; production had none). `broker_portfolio` and `broker_accounts_summary` are unchanged: each account is measured against cost with one segment.
+
 ## Zerodha: Kite and Coin holdings, invested against current value, and their trend — 2026-10-28
 
 ### Backend (Supabase)
