@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { Landmark, Plus } from "lucide-react";
+import { Landmark, Plus, TrendingUp } from "lucide-react";
 import { useCashPosition, type CashAccount } from "@/data/cash";
-import { balanceSourceLabel, bankAccountLabel, cashCaveat } from "@/lib/cash-flow";
+import { balanceSourceLabel, bankAccountLabel, cashCaveat, investedNote } from "@/lib/cash-flow";
 import { formatMoney, formatTotal } from "@/lib/money";
 import { formatRelative } from "@/lib/dates";
 import { BankLogo } from "@/components/bank-logo";
@@ -33,6 +33,7 @@ export function BankAccountsCard({
   const [adding, setAdding] = useState(false);
   const [updating, setUpdating] = useState<CashAccount | null>(null);
   const caveat = q.data && !quiet ? cashCaveat(q.data) : null;
+  const invested = q.data ? investedNote(q.data.accounts) : null;
 
   return (
     <Card>
@@ -75,6 +76,7 @@ export function BankAccountsCard({
             <span className="text-[12px] text-subtle">Total</span>
             <span className="tabular text-2xl font-medium text-ink">{formatTotal(q.data.total_aed)}</span>
             {caveat && <span className="text-[12px] text-warn">{caveat}</span>}
+            {invested && <span className="text-[12px] text-subtle">{invested}</span>}
           </div>
           <ul className="divide-y divide-border">
             {q.data.accounts.map((a) => (
@@ -107,6 +109,19 @@ function AccountRow({ account: a, quiet, onUpdate }: { account: CashAccount; qui
           <span className="whitespace-nowrap">{a.bank_code}{a.nickname && a.account_ref ? ` ··· ${a.account_ref}` : ""}</span>
           {a.balance !== null && a.as_of && <span className="whitespace-nowrap">as of {formatRelative(a.as_of)}{source ? `, ${source}` : ""}</span>}
           {a.is_stale && !quiet && <Badge tone="warn">Over a week old</Badge>}
+          {a.investment_holding_code && (
+            <Link
+              to="/wealth/investments/$holdingCode"
+              params={{ holdingCode: a.investment_holding_code }}
+              title="Counted under Investments, so the total leaves it out"
+              className="rounded-pill focus-visible:outline-2 focus-visible:outline-accent"
+            >
+              <Badge tone="info" className="hover:underline">
+                <TrendingUp aria-hidden className="size-3" />
+                In Investments
+              </Badge>
+            </Link>
+          )}
         </p>
       </div>
       <div className="flex shrink-0 flex-col items-end gap-0.5 text-right">

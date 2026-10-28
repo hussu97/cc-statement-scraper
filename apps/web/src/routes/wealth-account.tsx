@@ -6,6 +6,7 @@ import { isNotFound, useAccountLedger } from "@/data/wealth";
 import { accountMonthStart, shiftAccountMonth } from "@/lib/wealth";
 import { monthEnd, monthStart, todayDubai } from "@/lib/dates";
 import { ACC_RE, AccountHeader, AccountNotFound, AccountStatement } from "@/components/wealth/account-page";
+import { AccountInvestmentBar } from "@/components/wealth/account-investment";
 
 /**
  * One bank account (Wealth → Accounts): its balance, balance over time, and the month as a
@@ -34,6 +35,7 @@ function AccountView({ accountCode }: { accountCode: string }) {
   return (
     <div className="animate-fade-in flex flex-col gap-6">
       <AccountHeader back={{ to: "/wealth/accounts", label: "Accounts" }} account={ledger.data?.account ?? position} />
+      <AccountInvestmentBar profileCode={profileCode} account={position} isOwner={isOwner} />
       <AccountStatement
         profileCode={profileCode}
         accountCode={accountCode}

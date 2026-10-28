@@ -22,9 +22,15 @@ export interface CashAccount {
   is_stale: boolean;
   /** Transactions since the balance without an AED amount (left out of balance_aed). */
   unpriced_count: number;
+  /**
+   * The savings_account holding that shows this account under Investments; null when it is cash.
+   * Such an account is listed but left out of total_aed and the counts (it is counted there).
+   * Absent from an older server.
+   */
+  investment_holding_code?: string | null;
 }
 
-/** public.cash_position: active bank accounts and the AED total (cash_position returns Json in the generated types). */
+/** public.cash_position: active bank accounts and the AED total, without accounts shown under Investments (cash_position returns Json in the generated types). */
 export interface CashPosition {
   total_aed: string;
   /** Every account has an AED balance and every amount since it is priced. */

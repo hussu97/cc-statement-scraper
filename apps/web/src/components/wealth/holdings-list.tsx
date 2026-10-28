@@ -3,7 +3,7 @@ import { ChevronRight, Coins, Plus } from "lucide-react";
 import type { Holding, useHoldingsValuation } from "@/data/holdings";
 import { brokerRowFigures, outsideBrokers, type BrokerAccountSummary } from "@/lib/broker-accounts";
 import { formatPct, formatWeight, holdingKind, quoteLabel, signTone } from "@/lib/holdings";
-import { groupHoldings, holdingValueLines, investmentFacts, kindOf, linkRuleText, valueInput } from "@/lib/investments";
+import { groupHoldings, holdingValueLines, investmentFacts, isAccountBacked, kindOf, linkRuleText, valueInput } from "@/lib/investments";
 import { formatDate, formatRelative } from "@/lib/dates";
 import { formatMoney, formatTotal } from "@/lib/money";
 import { cn } from "@/lib/cn";
@@ -173,7 +173,7 @@ export function ValueSource({ h }: { h: Holding }) {
         )
       ) : h.value_as_of ? (
         <span className="whitespace-nowrap">
-          {h.is_estimate ? "accrued to" : "value as of"} {formatDate(h.value_as_of.slice(0, 10))}
+          {h.is_estimate ? "accrued to" : kind === "savings_account" ? "balance as of" : "value as of"} {formatDate(h.value_as_of.slice(0, 10))}
         </span>
       ) : valueInput(kind) ? (
         <span>No value recorded yet</span>
@@ -189,8 +189,10 @@ function HoldingRow({ h, actions }: { h: Holding; actions: HoldingActions }) {
   const gainPct = formatPct(h.gain_pct, { signed: true });
   const kind = kindOf(h);
   const v = holdingValueLines(h);
-  // A structured note is changed from its own page (cancel_structured_note), never the holding form.
-  const { onEdit, onClose, onUpdateValue } = kind === "structured_note" ? ({} as HoldingActions) : actions;
+  // A structured note is changed from its own page (cancel_structured_note), never the holding
+  // form; a savings account is its bank account's balance, so it can only leave Investments.
+  const account = isAccountBacked(kind);
+  const { onEdit, onClose, onUpdateValue } = kind === "structured_note" ? ({} as HoldingActions) : account ? { onClose: actions.onClose } : actions;
   return (
     <li className="flex flex-col gap-2 px-5 py-3.5 sm:flex-row sm:items-start sm:gap-4">
       <div className="flex min-w-0 flex-1 items-start gap-3">
@@ -243,8 +245,14 @@ function HoldingRow({ h, actions }: { h: Holding; actions: HoldingActions }) {
               </Button>
             )}
             {onClose && (
-              <Button size="sm" variant="link" className="text-[12px] text-muted" onClick={() => onClose(h)} aria-label={`Close ${h.name}`}>
-                Close
+              <Button
+                size="sm"
+                variant="link"
+                className="text-[12px] text-muted"
+                onClick={() => onClose(h)}
+                aria-label={account ? `Stop showing ${h.name} under Investments` : `Close ${h.name}`}
+              >
+                {account ? "Remove from Investments" : "Close"}
               </Button>
             )}
           </div>

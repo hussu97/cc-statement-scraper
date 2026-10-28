@@ -30,7 +30,7 @@ import { Segmented } from "@/components/ui/segmented";
 import { useToast } from "@/components/ui/toast";
 import { FormError, FormFooter } from "@/components/cash/bank-account-dialogs";
 import { ConfirmDialog } from "@/components/rules/shared";
-import { HOLDING_KINDS, kindLabel, kindOf, type HoldingKind } from "@/lib/investments";
+import { ADDABLE_KINDS, isAccountBacked, kindLabel, kindOf, type HoldingKind } from "@/lib/investments";
 import { HoldingImage, KindIcon } from "./holding-image";
 import { InvestmentFormBody } from "./investment-form";
 
@@ -41,6 +41,7 @@ const KIND_HINT: Record<HoldingKind, string> = {
   security: "Shares or a fund: the units you hold times a price you enter.",
   deposit: "A fixed deposit: principal, profit rate and maturity. Its value accrues day by day.",
   structured_note: "An autocallable or other note, added by the broker sync from its term sheet.",
+  savings_account: "A bank savings account valued at its balance. Its transfers are money in and out and its interest is income.",
 };
 
 /**
@@ -64,7 +65,7 @@ export function HoldingDialog({ profileCode, open, holding, onClose }: { profile
       {open &&
         (kind === null ? (
           <KindPicker onPick={setPicked} />
-        ) : kind === "structured_note" ? null : kind === "metal" ? (
+        ) : kind === "structured_note" || kind === "savings_account" ? null : kind === "metal" ? (
           <HoldingFormBody key={holding?.holding_code ?? "new"} profileCode={profileCode} holding={holding} onDone={close} onBack={holding ? undefined : () => setPicked(null)} />
         ) : (
           <InvestmentFormBody
@@ -83,7 +84,7 @@ export function HoldingDialog({ profileCode, open, holding, onClose }: { profile
 function KindPicker({ onPick }: { onPick: (k: HoldingKind) => void }) {
   return (
     <ul className="flex flex-col gap-2" aria-label="Kind of investment">
-      {HOLDING_KINDS.filter((k) => k.value !== "structured_note").map((k) => (
+      {ADDABLE_KINDS.map((k) => (
         <li key={k.value}>
           <button
             type="button"
@@ -98,6 +99,7 @@ function KindPicker({ onPick }: { onPick: (k: HoldingKind) => void }) {
           </button>
         </li>
       ))}
+      <li className="px-1 pt-1 text-[12px] text-muted">A bank savings account? Open it under Accounts and choose Show under Investments.</li>
     </ul>
   );
 }
@@ -224,10 +226,15 @@ function HoldingFormBody({ profileCode, holding, onDone, onBack }: { profileCode
   );
 }
 
-/** Confirm, then close a holding: it stops counting (the record is kept). */
-export function CloseHoldingDialog({ profileCode, holding, onClose }: { profileCode: string; holding: Holding | null; onClose: () => void }) {
+/**
+ * Confirm, then close a holding: it stops counting (the record is kept). A savings account only
+ * leaves Investments: the bank account stays, and its balance counts as cash again. `onClosed`
+ * runs after a close succeeds (the holding's own page leaves for the account).
+ */
+export function CloseHoldingDialog({ profileCode, holding, onClose, onClosed }: { profileCode: string; holding: Holding | null; onClose: () => void; onClosed?: () => void }) {
   const close = useCloseHolding(profileCode);
   const toast = useToast();
+  const account = isAccountBacked(holding?.kind);
   return (
     <ConfirmDialog
       open={!!holding}
@@ -237,21 +244,31 @@ export function CloseHoldingDialog({ profileCode, holding, onClose }: { profileC
           close.reset();
         }
       }}
-      title="Close this holding?"
-      confirmLabel="Close holding"
+      title={account ? "Stop showing it under Investments?" : "Close this holding?"}
+      confirmLabel={account ? "Stop showing here" : "Close holding"}
       pending={close.isPending}
       error={close.error ? new Error(holdingErrorMessage(close.error)) : null}
       onConfirm={() =>
         holding &&
-        close.mutate(holding.holding_code, {
-          onSuccess: () => {
-            toast({ title: "Holding closed", description: `${holding.name} no longer counts in your investments.`, tone: "positive" });
+        // mutateAsync: its promise settles even when the refetch unmounts this dialog (the
+        // holding's own page, which then leaves); a failure shows through close.error.
+        void close.mutateAsync(holding.holding_code).then(
+          () => {
+            toast(
+              account
+                ? { title: "Back under Accounts", description: `${holding.name} counts as cash again.`, tone: "positive" }
+                : { title: "Holding closed", description: `${holding.name} no longer counts in your investments.`, tone: "positive" },
+            );
             onClose();
+            onClosed?.();
           },
-        })
+          () => undefined,
+        )
       }
     >
-      Sold or given away? “{holding?.name}” stops counting in your investments and net worth. Bank Ledger keeps its record.
+      {account
+        ? `“${holding?.name}” leaves Investments and its balance counts as cash again. The bank account, its balance and its transactions stay as they are under Accounts.`
+        : `Sold or given away? “${holding?.name}” stops counting in your investments and net worth. Bank Ledger keeps its record.`}
     </ConfirmDialog>
   );
 }

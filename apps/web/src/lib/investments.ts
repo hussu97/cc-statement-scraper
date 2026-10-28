@@ -17,9 +17,15 @@ export const HOLDING_KINDS = [
   { value: "deposit", label: "Fixed deposit", group: "Deposits" },
   // Created by the broker sync from its term sheet, never through the holding form.
   { value: "structured_note", label: "Structured note", group: "Structured notes" },
+  // A bank savings account shown here (track_account_as_investment), from the account's page.
+  { value: "savings_account", label: "Savings account", group: "Savings accounts" },
 ] as const;
 export type HoldingKind = (typeof HOLDING_KINDS)[number]["value"];
-export type InvestmentKind = Exclude<HoldingKind, "metal" | "structured_note">;
+/** The kinds the investment form adds and edits: not metals (their own form), notes (the broker sync) or savings accounts (an account's page). */
+export type InvestmentKind = Exclude<HoldingKind, "metal" | "structured_note" | "savings_account">;
+
+/** The kinds "Add holding" offers: a structured note comes from the broker sync, a savings account from its account's page. */
+export const ADDABLE_KINDS = HOLDING_KINDS.filter((k) => k.value !== "structured_note" && k.value !== "savings_account");
 
 export function isHoldingKind(v: unknown): v is HoldingKind {
   return HOLDING_KINDS.some((k) => k.value === v);
@@ -49,7 +55,11 @@ export function groupHoldings<T extends { kind?: string | null }>(holdings: read
   return HOLDING_KINDS.filter((k) => k.value !== "structured_note").map((k) => ({ kind: k.value, label: k.group, holdings: holdings.filter((h) => kindOf(h) === k.value) })).filter((g) => g.holdings.length > 0);
 }
 
-/** The link picker's order: plans, broker accounts, shares and funds, deposits, then metals; the server's order within each kind. */
+/**
+ * The link picker's order: plans, broker accounts, shares and funds, deposits, then metals; the
+ * server's order within each kind. A savings account is never offered: its flows are its own
+ * account's transactions.
+ */
 export function holdingsForLinking<T extends { kind?: string | null }>(holdings: readonly T[]): T[] {
   const order: HoldingKind[] = ["plan", "broker", "security", "deposit", "metal"];
   return order.flatMap((k) => holdings.filter((h) => kindOf(h) === k));
@@ -85,6 +95,16 @@ export function formatRate(rate: string | null | undefined): string {
   return t ? `${t}%` : "—";
 }
 
+/** A stated yearly rate ("5.000") as "5% a year"; null without one. */
+export function rateAYear(rate: string | null | undefined): string | null {
+  return trimDecimal(rate) ? `${formatRate(rate)} a year` : null;
+}
+
+/** A holding valued at its bank account's balance, whose flows are that account's transactions (savings_account). */
+export function isAccountBacked(kind: string | null | undefined): boolean {
+  return kind === "savings_account";
+}
+
 export interface InvestmentFacts {
   kind?: string | null;
   currency?: string | null;
@@ -101,6 +121,7 @@ export function investmentFacts(h: InvestmentFacts): string {
   const parts: (string | null | undefined)[] = [h.institution?.trim() || kindLabel(h.kind)];
   if (h.kind === "security") parts.push(h.symbol, h.units ? `${formatUnits(h.units)} units` : null, currency);
   else if (h.kind === "deposit") parts.push(h.rate_pct ? formatRate(h.rate_pct) : null, h.maturity_on ? `matures ${formatDate(h.maturity_on.slice(0, 10))}` : null, currency);
+  else if (h.kind === "savings_account") parts.push(kindLabel(h.kind), rateAYear(h.rate_pct), currency);
   else parts.push(currency);
   return parts.filter(Boolean).join(" · ");
 }
@@ -142,6 +163,7 @@ export function holdingValueLines(h: { kind?: string | null; currency?: string |
 export function noValueText(kind: string | null | undefined): string {
   if (kind === "metal") return "No price yet";
   if (kind === "deposit") return "Not started yet";
+  if (kind === "savings_account") return "No balance yet";
   return "No value yet";
 }
 
@@ -162,6 +184,7 @@ export const FLOW_SOURCE_LABEL: Record<string, string> = {
   link: "Linked by you",
   holding_cost: "Purchase cost",
   import: "Synced from the provider",
+  account: "From the account",
 };
 
 /** The note beside a stored value: a deposit's comes from its bank's statement, a plan's from the provider sync; null when entered by hand. */
@@ -187,9 +210,9 @@ export function visibleValues<T>(values: T[], showAll: boolean): { shown: T[]; h
   return { shown, hidden: values.length - shown.length };
 }
 
-/** A metal's purchase cost is edited on the holding; every other flow can be removed. */
+/** A metal's purchase cost is edited on the holding and a savings account's flows are its account's transactions; every other flow can be removed. */
 export function canRemoveFlow(source: string): boolean {
-  return source !== "holding_cost";
+  return source !== "holding_cost" && source !== "account";
 }
 
 /** "+" for money put into a holding, "−" for money taken out; income paid to you has no sign (display only). */
@@ -220,6 +243,28 @@ export function normalizeRate(raw: string): string | null {
   if (!/^\d{1,3}(\.\d{1,3})?$/.test(s)) return null;
   const d = parseDecimal(s);
   return d && d.n <= 100n * 10n ** BigInt(d.scale) ? s : null;
+}
+
+// ── a savings account under Investments ────────────────────────────────────
+
+/**
+ * "Show under Investments"'s optional interest rate: empty is no rate (null); else a percent
+ * 0–100 with ≤ 3 decimals, as track_account_as_investment's p_rate_pct.
+ */
+export function validateTrackRate(raw: string): { ok: true; rate: string | null } | { ok: false; error: string } {
+  if (!raw.trim()) return { ok: true, rate: null };
+  const rate = normalizeRate(raw);
+  return rate === null ? { ok: false, error: "Enter the interest rate a year in percent, e.g. 5 or 4.25, or leave it empty." } : { ok: true, rate };
+}
+
+/** The bank account (cash_position) a savings_account holding is shown for, by its investment_holding_code; null when none is. */
+export function investmentAccount<T extends { investment_holding_code?: string | null }>(accounts: readonly T[] | undefined, holdingCode: string): T | null {
+  return accounts?.find((a) => a.investment_holding_code === holdingCode) ?? null;
+}
+
+/** Whether a bank account can be shown under Investments: a current or savings account not shown there already. */
+export function canTrackAsInvestment(a: { kind?: string | null; investment_holding_code?: string | null }): boolean {
+  return (a.kind === "current" || a.kind === "savings") && !a.investment_holding_code;
 }
 
 // ── the investment form (plan, broker, security, deposit) ──────────────────
@@ -277,7 +322,7 @@ export function investmentToForm(h: {
 }): InvestmentForm {
   const kind = kindOf(h);
   return {
-    kind: kind === "metal" || kind === "structured_note" ? "plan" : kind,
+    kind: kind === "metal" || kind === "structured_note" || kind === "savings_account" ? "plan" : kind,
     name: h.name,
     institution: h.institution ?? "",
     currency: h.currency ?? "AED",
@@ -562,6 +607,7 @@ export const ALLOCATION_CLASSES: Record<string, { label: string; token: string }
   security: { label: "Shares & funds", token: "cat-1" },
   deposit: { label: "Deposits", token: "cat-13" },
   structured_note: { label: "Structured notes", token: "cat-15" },
+  savings_account: { label: "Savings accounts", token: "cat-11" },
 };
 
 export interface AllocationRow {

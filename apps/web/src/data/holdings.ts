@@ -22,7 +22,7 @@ export interface MetalPrice {
 export interface Holding {
   holding_code: string;
   name: string;
-  /** metal | plan | broker | security | deposit (lib/investments HOLDING_KINDS); absent from an older server (metals only). */
+  /** metal | plan | broker | security | deposit | structured_note | savings_account (lib/investments HOLDING_KINDS); absent from an older server (metals only). */
   kind?: string;
   /** The holding's own currency; metals are AED. */
   currency?: string;
@@ -41,7 +41,7 @@ export interface Holding {
   /** Shares and funds: units held and the ticker. */
   units?: string | null;
   symbol?: string | null;
-  /** Deposits: principal (own currency), profit rate in percent a year, maturity date. */
+  /** Deposits: principal (own currency), profit rate in percent a year, maturity date. A savings account may state its rate too. */
   principal?: string | null;
   rate_pct?: string | null;
   maturity_on?: string | null;
@@ -185,6 +185,27 @@ export function useCloseHolding(profileCode: string) {
   });
 }
 
+/** track_account_as_investment's arguments: the rate only when one is given (null leaves a stated one as it is). Pure, unit-tested. */
+export function trackAccountArgs(profileCode: string, v: { accountCode: string; ratePct: string | null }): RpcArgs<"track_account_as_investment"> {
+  const args: RpcArgs<"track_account_as_investment"> = { p_profile_code: profileCode, p_account_code: v.accountCode };
+  if (v.ratePct !== null) args.p_rate_pct = v.ratePct;
+  return args;
+}
+
+/**
+ * Show a bank account under Investments as a savings_account holding (or change its stated rate:
+ * the RPC is idempotent and reopens a closed one). Returns the holding's code. Its balance leaves
+ * cash for holdings, so net worth, Accounts, Investments and returns all refresh.
+ */
+export function useTrackAccountAsInvestment(profileCode: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (v: { accountCode: string; ratePct: string | null }) =>
+      must(await supabase.rpc("track_account_as_investment", trackAccountArgs(profileCode, v))) as string,
+    onSettled: () => invalidateWealth(qc, profileCode),
+  });
+}
+
 // ── one holding: flows, values, returns ────────────────────────────────────
 
 export interface HoldingFlow {
@@ -194,7 +215,8 @@ export interface HoldingFlow {
   /** In the holding's currency. */
   amount: string;
   amount_aed: string;
-  source: "manual" | "rule" | "link" | "holding_cost";
+  /** account: a savings account's own transaction (its transfers and interest). */
+  source: "manual" | "rule" | "link" | "holding_cost" | "import" | "account";
   notes: string | null;
   txn_code: string | null;
   txn_description: string | null;

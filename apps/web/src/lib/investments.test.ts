@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  ADDABLE_KINDS,
+  canTrackAsInvestment,
+  investmentAccount,
+  isAccountBacked,
+  kindLabel,
+  noValueText,
+  rateAYear,
+  validateTrackRate,
   depositValueNote,
   valuationSourceLabel,
   aedEquivalent,
@@ -344,5 +352,61 @@ describe("statement-valued deposits", () => {
       "An estimate: the principal plus simple profit at 2% a year, accrued day by day to maturity on 1 Apr 2027.",
     );
     expect(depositValueNote({}, false)).toBe("An estimate: the principal plus simple profit at its rate a year, accrued day by day to maturity.");
+  });
+});
+
+describe("a savings account under Investments", () => {
+  it("is a kind of its own, grouped after the others and never added from the holding form", () => {
+    expect(kindOf({ kind: "savings_account" })).toBe("savings_account");
+    expect(kindLabel("savings_account")).toBe("Savings account");
+    expect(groupHoldings([{ id: 1, kind: "savings_account" }, { id: 2, kind: "plan" }]).map((g) => g.label)).toEqual(["Plans", "Savings accounts"]);
+    expect(ADDABLE_KINDS.map((k) => k.value)).toEqual(["metal", "plan", "broker", "security", "deposit"]);
+    expect(investmentToForm({ kind: "savings_account", name: "Saver" }).kind).toBe("plan");
+  });
+
+  it("is valued at its balance and fed by its account: no Update value, no linking, no Remove", () => {
+    expect(valueInput("savings_account")).toBeNull();
+    expect(isAccountBacked("savings_account")).toBe(true);
+    expect(isAccountBacked("deposit")).toBe(false);
+    expect(holdingsForLinking([{ id: 1, kind: "savings_account" }, { id: 2, kind: "plan" }]).map((h) => h.id)).toEqual([2]);
+    expect(canRemoveFlow("account")).toBe(false);
+    expect(FLOW_SOURCE_LABEL.account).toBe("From the account");
+    expect(noValueText("savings_account")).toBe("No balance yet");
+  });
+
+  it("states its rate a year in its line", () => {
+    expect(rateAYear("5.000")).toBe("5% a year");
+    expect(rateAYear("4.250")).toBe("4.25% a year");
+    expect(rateAYear(null)).toBeNull();
+    expect(investmentFacts({ kind: "savings_account", institution: "MASHREQ", rate_pct: "5.000", currency: "AED" })).toBe("MASHREQ · Savings account · 5% a year");
+    expect(investmentFacts({ kind: "savings_account", institution: "WIO", rate_pct: null, currency: "USD" })).toBe("WIO · Savings account · USD");
+  });
+
+  it("has its own allocation class and colour token", () => {
+    const { assets } = allocationSlices([{ class: "savings_account", value_aed: "502083.89", share_pct: "60.00" }]);
+    expect(assets[0]).toMatchObject({ label: "Savings accounts", token: "cat-11", width: 60 });
+  });
+
+  it("takes an optional interest rate", () => {
+    expect(validateTrackRate("")).toEqual({ ok: true, rate: null });
+    expect(validateTrackRate("  ")).toEqual({ ok: true, rate: null });
+    expect(validateTrackRate("5")).toEqual({ ok: true, rate: "5" });
+    expect(validateTrackRate("4.25 %")).toEqual({ ok: true, rate: "4.25" });
+    expect(validateTrackRate("101").ok).toBe(false);
+    expect(validateTrackRate("five").ok).toBe(false);
+    expect(validateTrackRate("-1").ok).toBe(false);
+  });
+
+  it("finds the account a holding is shown for, and which accounts can be shown", () => {
+    const accounts = [
+      { account_code: "acc_a", kind: "savings", investment_holding_code: "hld_x" },
+      { account_code: "acc_b", kind: "current", investment_holding_code: null },
+    ];
+    expect(investmentAccount(accounts, "hld_x")?.account_code).toBe("acc_a");
+    expect(investmentAccount(accounts, "hld_y")).toBeNull();
+    expect(investmentAccount(undefined, "hld_x")).toBeNull();
+    expect(canTrackAsInvestment(accounts[0]!)).toBe(false);
+    expect(canTrackAsInvestment(accounts[1]!)).toBe(true);
+    expect(canTrackAsInvestment({ kind: "broker", investment_holding_code: null })).toBe(false);
   });
 });

@@ -6,6 +6,7 @@ import {
   balanceSourceLabel,
   bankAccountLabel,
   cashCaveat,
+  investedNote,
   cashFlowRange,
   flowChip,
   formatFlow,
@@ -182,6 +183,13 @@ describe("bank accounts", () => {
     expect(cashCaveat({ complete: true, stale_count: 2, missing_count: 0 })).toBe("2 balances are over a week old");
     expect(cashCaveat({ complete: false, stale_count: 1, missing_count: 2 })).toBe("2 accounts have no balance yet; 1 balance is over a week old");
     expect(cashCaveat({ complete: false, stale_count: 0, missing_count: 0 })).toBe("Some amounts have no AED value yet");
+  });
+
+  it("says when the total leaves out accounts counted under Investments", () => {
+    expect(investedNote([])).toBeNull();
+    expect(investedNote([{ investment_holding_code: null }, {}])).toBeNull();
+    expect(investedNote([{ investment_holding_code: "hld_1" }, { investment_holding_code: null }])).toBe("Leaves out 1 account counted under Investments");
+    expect(investedNote([{ investment_holding_code: "hld_1" }, { investment_holding_code: "hld_2" }])).toBe("Leaves out 2 accounts counted under Investments");
   });
 
   it("validates the account digits", () => {

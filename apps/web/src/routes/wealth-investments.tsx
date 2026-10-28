@@ -35,7 +35,7 @@ export function InvestmentsPage() {
     <div className="animate-fade-in flex flex-col gap-6">
       <PageHeader
         title="Investments"
-        description="Gold and silver at Dubai's retail rates, plans, broker accounts, shares, deposits and structured notes: what you put in, how it grew, and the yearly return."
+        description="Gold and silver at Dubai's retail rates, plans, broker accounts, shares, deposits, structured notes and savings accounts: what you put in, how it grew, and the yearly return."
       />
       <InvestmentsSummary q={q} />
       <HoldingsListCard

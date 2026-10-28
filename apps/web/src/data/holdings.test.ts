@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ApiError } from "./api";
-import { holdingErrorMessage, saveHoldingArgs } from "./holdings";
+import { holdingErrorMessage, saveHoldingArgs, trackAccountArgs } from "./holdings";
 
 describe("holdingErrorMessage", () => {
   it("says who may change investments and what went wrong", () => {
@@ -41,6 +41,18 @@ describe("saveHoldingArgs", () => {
     expect(dep).toMatchObject({ p_kind: "deposit", p_principal: "100000", p_rate_pct: "4.25", p_acquired_on: "2026-06-23", p_maturity_on: "2027-06-23" });
     expect(dep).not.toHaveProperty("p_metal");
     expect(dep).not.toHaveProperty("p_cost_aed");
+  });
+});
+
+describe("trackAccountArgs", () => {
+  it("sends the account, and the rate only when one is given", () => {
+    expect(trackAccountArgs("prf_1", { accountCode: "acc_1", ratePct: null })).toEqual({ p_profile_code: "prf_1", p_account_code: "acc_1" });
+    expect(trackAccountArgs("prf_1", { accountCode: "acc_1", ratePct: "5" })).toEqual({ p_profile_code: "prf_1", p_account_code: "acc_1", p_rate_pct: "5" });
+  });
+
+  it("words the server's refusals", () => {
+    expect(holdingErrorMessage(new ApiError("not a bank account of this ledger", { code: "22023" }))).toBe("Not a bank account of this ledger.");
+    expect(holdingErrorMessage(new ApiError("x", { code: "42501" }))).toMatch(/owner/);
   });
 });
 

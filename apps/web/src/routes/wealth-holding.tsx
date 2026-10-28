@@ -1,11 +1,29 @@
 import { useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { ChevronLeft, Coins, History, ListPlus, Plus } from "lucide-react";
 import { wealthHoldingRoute } from "@/router";
 import { useActiveProfile } from "@/data/profile";
+import { useCashPosition } from "@/data/cash";
 import { useHoldingDetail, useHoldingsValuation, type Holding, type HoldingDetail, type HoldingFlow, type MetalPrice } from "@/data/holdings";
 import { formatPct, formatPurity, holdingPrice, quoteLabel, signTone } from "@/lib/holdings";
-import { FLOW_KIND_LABEL, FLOW_SOURCE_LABEL, aedEquivalent, canRemoveFlow, depositValueNote, flowSign, formatOwnValue, formatUnitPrice, kindOf, noValueText, valuationSourceLabel, valueInput, visibleValues } from "@/lib/investments";
+import {
+  FLOW_KIND_LABEL,
+  FLOW_SOURCE_LABEL,
+  aedEquivalent,
+  canRemoveFlow,
+  depositValueNote,
+  flowSign,
+  formatOwnValue,
+  formatUnitPrice,
+  investmentAccount,
+  isAccountBacked,
+  kindOf,
+  noValueText,
+  rateAYear,
+  valuationSourceLabel,
+  valueInput,
+  visibleValues,
+} from "@/lib/investments";
 import type { HoldingKind } from "@/lib/investments";
 import { formatDate, formatRelative } from "@/lib/dates";
 import { formatMoney, formatTotal } from "@/lib/money";
@@ -16,7 +34,8 @@ import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
 import { BankLogo } from "@/components/bank-logo";
 import { HoldingAvatar } from "@/components/wealth/holding-image";
 import { holdingFacts, ValueSource } from "@/components/wealth/holdings-list";
-import { HoldingDialog } from "@/components/wealth/holding-dialogs";
+import { CloseHoldingDialog, HoldingDialog } from "@/components/wealth/holding-dialogs";
+import { BackingAccountCard, TrackAccountDialog, type TrackTarget } from "@/components/wealth/account-investment";
 import { AddFlowDialog, RemoveFlowDialog, UpdateValueDialog } from "@/components/wealth/holding-value-dialogs";
 import { ReturnsCard } from "@/components/wealth/returns";
 import { TONE_TEXT } from "@/components/wealth/investments";
@@ -67,15 +86,43 @@ function HoldingNotFound() {
 
 function HoldingView({ holdingCode }: { holdingCode: string }) {
   const { profile_code: profileCode, isOwner } = useActiveProfile();
+  const navigate = useNavigate();
   const q = useHoldingsValuation(profileCode);
   const detail = useHoldingDetail(profileCode, holdingCode);
+  // A savings account's bank account: holdings_valuation doesn't name it, cash_position does.
+  const cash = useCashPosition(profileCode);
   const h = q.data?.holdings.find((x) => x.holding_code === holdingCode) ?? null;
+  const accountBacked = isAccountBacked(h?.kind);
+  const backing = investmentAccount(cash.data?.accounts, holdingCode);
   const [editing, setEditing] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<HoldingFlow | null>(null);
+  const [rating, setRating] = useState<TrackTarget | null>(null);
+  const [closing, setClosing] = useState<Holding | null>(null);
+  const [leaving, setLeaving] = useState(false);
 
-  if (q.data && !h) return <HoldingNotFound />;
+  if (q.data && !h) {
+    // Just closed here: the page is about to leave (CloseHoldingDialog's onClosed).
+    return closing || leaving ? (
+      <Card>
+        <LoadingRows rows={3} />
+      </Card>
+    ) : (
+      <HoldingNotFound />
+    );
+  }
+
+  // A savings account is its bank account's balance: no value, flow, link or form edits, only
+  // its stated rate and leaving Investments.
+  const summaryActions: SummaryActions = !isOwner || !h
+    ? {}
+    : accountBacked
+      ? {
+          onRate: backing ? () => setRating({ accountCode: backing.account_code, label: h.name, ratePct: h.rate_pct, shown: true }) : undefined,
+          onRemove: () => setClosing(h),
+        }
+      : { onUpdate: valueInput(h.kind) ? () => setUpdating(true) : undefined, onEdit: () => setEditing(true) };
 
   return (
     <div className="animate-fade-in flex flex-col gap-6">
@@ -101,7 +148,7 @@ function HoldingView({ holdingCode }: { holdingCode: string }) {
           <ErrorState error={q.error} onRetry={() => void q.refetch()} />
         </Card>
       ) : (
-        <SummaryCard h={h} onUpdate={isOwner && valueInput(h.kind) ? () => setUpdating(true) : undefined} onEdit={isOwner ? () => setEditing(true) : undefined} />
+        <SummaryCard h={h} actions={summaryActions} />
       )}
 
       <ReturnsCard profileCode={profileCode} holdingCode={holdingCode} />
@@ -110,11 +157,14 @@ function HoldingView({ holdingCode }: { holdingCode: string }) {
         <FlowsCard
           detail={detail}
           currency={h?.currency ?? "AED"}
-          onAdd={isOwner && h ? () => setAdding(true) : undefined}
+          accountBacked={accountBacked}
+          onAdd={isOwner && h && !accountBacked ? () => setAdding(true) : undefined}
           onRemove={isOwner ? setRemoving : undefined}
         />
         {h && kindOf(h) === "metal" ? (
           <PriceCard h={h} price={holdingPrice(h, q.data?.prices)} />
+        ) : accountBacked ? (
+          <BackingAccountCard cash={cash} account={backing} />
         ) : (
           <ValuesCard h={h} detail={detail} onUpdate={isOwner && h && valueInput(h.kind) ? () => setUpdating(true) : undefined} />
         )}
@@ -126,22 +176,45 @@ function HoldingView({ holdingCode }: { holdingCode: string }) {
           <UpdateValueDialog profileCode={profileCode} holding={updating ? h : null} onClose={() => setUpdating(false)} />
           <AddFlowDialog profileCode={profileCode} holding={h} open={adding} onClose={() => setAdding(false)} />
           <RemoveFlowDialog profileCode={profileCode} flow={removing} currency={h.currency ?? "AED"} onClose={() => setRemoving(null)} />
+          <TrackAccountDialog profileCode={profileCode} target={rating} onClose={() => setRating(null)} />
+          <CloseHoldingDialog
+            profileCode={profileCode}
+            holding={closing}
+            onClose={() => setClosing(null)}
+            onClosed={() => {
+              setLeaving(true);
+              void (backing
+                ? navigate({ to: "/wealth/accounts/$accountCode", params: { accountCode: backing.account_code } })
+                : navigate({ to: "/wealth/investments" }));
+            }}
+          />
         </>
       )}
     </div>
   );
 }
 
-function SummaryCard({ h, onUpdate, onEdit }: { h: Holding; onUpdate?: () => void; onEdit?: () => void }) {
+interface SummaryActions {
+  onUpdate?: () => void;
+  onEdit?: () => void;
+  /** A savings account: change its stated rate. */
+  onRate?: () => void;
+  /** A savings account: stop showing it under Investments. */
+  onRemove?: () => void;
+}
+
+function SummaryCard({ h, actions: { onUpdate, onEdit, onRate, onRemove } }: { h: Holding; actions: SummaryActions }) {
   const kind = kindOf(h);
+  const accountBacked = isAccountBacked(kind);
   const foreign = !!h.currency && h.currency !== "AED";
   const own = foreign ? formatOwnValue(h.value, h.currency) : null;
   const gainPct = formatPct(h.gain_pct, { signed: true });
+  const rate = accountBacked ? rateAYear(h.rate_pct) : null;
   return (
     <Card>
       <div className="flex flex-wrap items-start justify-between gap-4 px-5 pt-5">
         <div>
-          <p className="text-[12px] text-subtle">{h.is_estimate ? "Value (estimated)" : "Value"}</p>
+          <p className="text-[12px] text-subtle">{h.is_estimate ? "Value (estimated)" : accountBacked ? "Value: the account's balance" : "Value"}</p>
           {h.value_aed === null ? (
             <p className="mt-1 text-lg text-muted">{noValueText(kind)}</p>
           ) : (
@@ -154,8 +227,8 @@ function SummaryCard({ h, onUpdate, onEdit }: { h: Holding; onUpdate?: () => voi
             <ValueSource h={h} />
           </p>
         </div>
-        {(onUpdate || onEdit) && (
-          <div className="flex gap-2">
+        {(onUpdate || onEdit || onRate || onRemove) && (
+          <div className="flex flex-wrap gap-2">
             {onUpdate && (
               <Button size="sm" variant="primary" onClick={onUpdate}>
                 Update value
@@ -166,16 +239,26 @@ function SummaryCard({ h, onUpdate, onEdit }: { h: Holding; onUpdate?: () => voi
                 Edit
               </Button>
             )}
+            {onRate && (
+              <Button size="sm" onClick={onRate}>
+                {h.rate_pct ? "Change rate" : "Add rate"}
+              </Button>
+            )}
+            {onRemove && (
+              <Button size="sm" variant="ghost" onClick={onRemove}>
+                Remove from Investments
+              </Button>
+            )}
           </div>
         )}
       </div>
       <dl className="grid grid-cols-2 gap-x-6 gap-y-3 px-5 pt-4 pb-5 text-sm sm:grid-cols-4">
         <div>
-          <dt className="text-[12px] text-subtle">Put in</dt>
+          <dt className="text-[12px] text-subtle">{accountBacked ? "Moved in, net" : "Put in"}</dt>
           <dd className="tabular mt-0.5 text-ink">{h.cost_aed === null ? <span className="text-muted">Nothing recorded</span> : formatTotal(h.cost_aed)}</dd>
         </div>
         <div>
-          <dt className="text-[12px] text-subtle">Income paid out</dt>
+          <dt className="text-[12px] text-subtle">{accountBacked ? "Interest earned" : "Income paid out"}</dt>
           <dd className="tabular mt-0.5 text-ink">{formatTotal(h.income_aed ?? "0")}</dd>
         </div>
         <div>
@@ -195,6 +278,12 @@ function SummaryCard({ h, onUpdate, onEdit }: { h: Holding; onUpdate?: () => voi
           <div>
             <dt className="text-[12px] text-subtle">Principal</dt>
             <dd className="tabular mt-0.5 text-ink">{formatTotal(h.principal, { currency: h.currency ?? "AED" })}</dd>
+          </div>
+        )}
+        {rate && (
+          <div>
+            <dt className="text-[12px] text-subtle">Interest rate</dt>
+            <dd className="tabular mt-0.5 text-ink">{rate}</dd>
           </div>
         )}
         {kind === "metal" && h.metal === "silver" && h.purity && (
@@ -217,11 +306,14 @@ function SummaryCard({ h, onUpdate, onEdit }: { h: Holding; onUpdate?: () => voi
 function FlowsCard({
   detail,
   currency,
+  accountBacked,
   onAdd,
   onRemove,
 }: {
   detail: ReturnType<typeof useHoldingDetail>;
   currency: string;
+  /** A savings account: its flows are its account's transfers and interest. */
+  accountBacked: boolean;
   onAdd?: () => void;
   onRemove?: (f: HoldingFlow) => void;
 }) {
@@ -244,7 +336,9 @@ function FlowsCard({
         <ErrorState error={detail.error} onRetry={() => void detail.refetch()} />
       ) : detail.data.flows.length === 0 ? (
         <EmptyState icon={<ListPlus />} title="No money in or out yet">
-          Link the payments that paid into it from their transaction, set a link rule on the holding, or add an amount paid from elsewhere.
+          {accountBacked
+            ? "Transfers into and out of the account, and the interest it pays, appear here as its statements and alerts arrive."
+            : "Link the payments that paid into it from their transaction, set a link rule on the holding, or add an amount paid from elsewhere."}
         </EmptyState>
       ) : (
         <ul className="divide-y divide-border border-t border-border">

@@ -242,6 +242,13 @@ export function cashCaveat(p: { complete: boolean; stale_count: number; missing_
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+/** Why the total is less than the rows: the accounts shown under Investments (cash_position leaves them out); null with none. */
+export function investedNote(accounts: readonly { investment_holding_code?: string | null }[]): string | null {
+  const n = accounts.filter((a) => a.investment_holding_code).length;
+  if (n === 0) return null;
+  return n === 1 ? "Leaves out 1 account counted under Investments" : `Leaves out ${n} accounts counted under Investments`;
+}
+
 /** The digits after the bank's mask: spaces, dashes and a leading X mask are dropped. */
 export function normalizeAccountRef(v: string): string {
   return v.replace(/[\s-]/g, "").replace(/^[xX*•]+/, "");

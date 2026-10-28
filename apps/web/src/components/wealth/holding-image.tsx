@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Briefcase, CalendarClock, Coins, PiggyBank, ScrollText, TrendingUp, type LucideIcon } from "lucide-react";
+import { Briefcase, CalendarClock, Coins, Landmark, PiggyBank, ScrollText, TrendingUp, type LucideIcon } from "lucide-react";
 import { formLabel, investmentImageUrl } from "@/lib/holdings";
 import { kindLabel, kindOf, type HoldingKind } from "@/lib/investments";
 import { cn } from "@/lib/cn";
@@ -28,7 +28,16 @@ export function HoldingImage({ imagePath, metal, form, size = "sm", className }:
   );
 }
 
-const KIND_ICON: Record<HoldingKind, LucideIcon> = { metal: Coins, plan: PiggyBank, broker: Briefcase, security: TrendingUp, deposit: CalendarClock, structured_note: ScrollText };
+const KIND_ICON: Record<HoldingKind, LucideIcon> = {
+  metal: Coins,
+  plan: PiggyBank,
+  broker: Briefcase,
+  security: TrendingUp,
+  deposit: CalendarClock,
+  structured_note: ScrollText,
+  // The bank-account glyph Accounts uses.
+  savings_account: Landmark,
+};
 
 /** A kind's icon, as a plain glyph (group headings, pickers). */
 export function KindIcon({ kind, className }: { kind: string | null | undefined; className?: string }) {
