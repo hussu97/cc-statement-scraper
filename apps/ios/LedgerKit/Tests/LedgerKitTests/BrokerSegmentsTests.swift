@@ -59,6 +59,15 @@ struct BrokerSegmentsTests {
         #expect(lines[1].accessibilityLabel.hasPrefix("Coin, Mutual funds: invested INR 255,526"))
     }
 
+    @Test("Zerodha Kite or Coin alone: no segment line repeats the three numbers")
+    func singleSegment() throws {
+        #expect(BrokerPortfolioPresentation(try Self.portfolio(), now: Self.now).segments.count == 2)
+        let json = #"{"account_code":"acc_1","provider":"zerodha","currency":"INR","basis":"cost","total":"10.00","profit":"1.00","segments":[{"segment":"coin","positions":"1","invested":"9.00","value":"10.00","value_aed":"0.44","profit":"1.00","return_pct":"11.11"}]}"#
+        let coin = try #require(try BrokerPortfolio.decode(Data(json.utf8)))
+        #expect(coin.segments.count == 1)
+        #expect(BrokerPortfolioPresentation(coin, now: Self.now).segments.isEmpty)
+    }
+
     @Test("the Portfolio tab: a card per segment, Kite first, largest value first, each with units and cost")
     func groups() throws {
         let groups = BrokerPortfolioPresentation(try Self.portfolio(), now: Self.now).segmentGroups
@@ -91,9 +100,11 @@ struct BrokerSegmentsTests {
         #expect(BrokerPortfolioPresentation(try BrokerPortfolioTests.portfolio()).chart.lineLabel == "Net deposits")
     }
 
-    @Test("a Zerodha account shows its loading and failure like Swissquote")
+    @Test("a Zerodha Kite or Coin account shows its loading and failure like Swissquote")
     func section() {
         #expect(BrokerSection(.loading(previous: nil), bankCode: "ZRD") == .loading)
+        #expect(BrokerSection(.loading(previous: nil), bankCode: "KITE") == .loading)
+        #expect(BrokerSection(.failed("Offline", previous: nil), bankCode: "COIN") == .failed("Offline"))
         #expect(BrokerSection(.loading(previous: nil), bankCode: "ENBD") == .hidden)
     }
 }

@@ -938,6 +938,8 @@ Deploy Supabase job failed at `supabase migration fetch --linked` (investigate; 
   (or Dashboard → Storage → `bank-logos` → Upload). Check one at
   `https://<ref>.supabase.co/storage/v1/object/public/bank-logos/FAB.png`. A bank without an
   image just shows the client's fallback; to change a file name, update `banks.logo_path`.
+  Uploaded since: `SWQ`, `ZRD`, and `KITE` / `COIN` (Zerodha Kite and Zerodha Coin, 28 Oct 2026,
+  `20261028054048`); a new bank's logo goes up the same way before its migration deploys.
 - **Private merchant masks** (ARCHITECTURE §5). Database owner only, as `postgres` in psql or the
   SQL editor (a production write: ask first). Never put a real pattern in the repository,
   a migration, a test or a doc:

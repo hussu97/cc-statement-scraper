@@ -5,8 +5,9 @@
 // For each login in ZERODHA_LOGINS ([{profile_code, user_id, password, totp_secret, api_key,
 // api_secret}], an Edge secret): sign in to the user's own Kite Connect app (password + TOTP; the
 // free Personal plan has no refresh token, so every run signs in), read the profile, Kite holdings,
-// Coin holdings and Funds, and send them to import_zerodha_data, which keeps the ledger's account,
-// holdings, marks, inferred flows and daily value (idempotent per day). Sign out. A segment whose
+// Coin holdings and Funds, and send them to import_zerodha_data, which keeps the ledger's two
+// accounts (Zerodha Kite with the Funds cash, Zerodha Coin), holdings, marks, inferred flows and
+// daily values (idempotent per day). Sign out. A segment whose
 // read failed is left out (its marks carry over) and recorded on the connection; any failure is
 // thrown after the other logins ran, so Sentry captures it. Messages never carry logins, codes,
 // tokens or response bodies.
@@ -25,7 +26,8 @@ async function handler(req: Request): Promise<Response> {
 }
 
 interface ImportResult {
-  account_code: string;
+  /** The Zerodha Kite and Zerodha Coin accounts (Coin null until it reports a fund). */
+  accounts: { kite: string; coin: string | null };
   positions_marked: number;
   positions_closed: number;
   value: string;
@@ -46,7 +48,7 @@ async function syncLogin(login: ZerodhaLogin) {
     const r = result as ImportResult;
     // Part of it could not be read: the screen says so, and Sentry hears of it.
     if (failed.length > 0) throw new Error(`partly synced (${failed.join("; ")})`);
-    return { account_code: r.account_code, positions: r.positions_marked, closed: r.positions_closed, value: r.value };
+    return { accounts: r.accounts, positions: r.positions_marked, closed: r.positions_closed, value: r.value };
   } finally {
     await session.signOut();
   }

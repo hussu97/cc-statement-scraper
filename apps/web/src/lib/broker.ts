@@ -189,6 +189,15 @@ export function segmentLabel(segment: string | null | undefined): string {
   return segment === "kite" ? "Kite" : segment === "coin" ? "Coin" : "Other";
 }
 
+/**
+ * The segment lines under the three numbers: only when the account has more than one (a Zerodha
+ * account from before Kite and Coin were split). Zerodha Kite and Zerodha Coin are each one
+ * segment, and a single line would repeat the figures above it.
+ */
+export function segmentLines(p: Pick<BrokerPortfolio, "segments">): SegmentTotal[] {
+  return p.segments.length > 1 ? p.segments : [];
+}
+
 /** What a segment holds, for its heading. */
 export function segmentHolds(segment: string | null | undefined): string {
   return segment === "kite" ? "Stocks and ETFs" : segment === "coin" ? "Mutual funds" : "Other holdings";

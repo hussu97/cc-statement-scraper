@@ -765,27 +765,32 @@ document, so each account is anchored on a balance the bank printed, the latest 
 An SMS statement anchor has no lines to say what it covers, so the activity added to it is by
 date (after the statement date, plus charges dated on it that are still pending), not by `stmt_code`.
 
-**Zerodha sync** (`20261027202923`, `tasks/todo.md` §12). The `zerodha-sync` function reads a
-Kite user's portfolio on weekday nights and hands it to `import_zerodha_data` (service,
-idempotent per day). It reuses the broker tables:
-- **The account.** `broker_connections` (provider `zerodha`, `portfolio_ref` = the Kite user id)
-  ties it to an INR "Trading account" at Zerodha (bank `ZRD`). Funds' available cash is a `broker`
-  balance checkpoint.
+**Zerodha sync** (`20261027202923`, `20261028054048`, `tasks/todo.md` §12). The `zerodha-sync`
+function reads a Kite user's portfolio on weekday nights and hands it to `import_zerodha_data`
+(service, idempotent per day). It reuses the broker tables:
+- **Two accounts.** Kite and Coin are separate broker accounts, each with its own bank and logo:
+  `broker_connections` (provider `zerodha`, `portfolio_ref` = `<Kite user id>-KITE` / `-COIN`)
+  ties each segment to an INR account, "Zerodha Kite" (bank `KITE`, the stocks and ETFs, and
+  Funds' available cash as a `broker` balance checkpoint) and "Zerodha Coin" (bank `COIN`, the
+  mutual funds, made once Coin reports a fund; its cash is a daily 0 checkpoint). Marks, flows
+  and each day's value go to the segment's account. A single Zerodha account from before
+  (bank `ZRD`, unsuffixed ref) is moved by `private.zerodha_split_single_accounts`: it becomes
+  Kite, and its funds' marks and value move to a new Coin account.
 - **Holdings.** Each ISIN, Kite (stocks, ETFs) or Coin (mutual funds), is a `security` holding:
   units and a unit price per day. It has no symbol, so the Yahoo price job leaves it alone.
   `broker_positions` keeps each day's mark (product type `EQUITY` or `MUTUAL_FUND`, the average
-  price as cost). A segment that could not be read keeps its last marks for the day.
+  price as cost). A segment that could not be read keeps its account's last marks for the day.
 - **Flows, inferred.** The free plan has no trade history, so flows come from comparing days.
   The first sight of a position is a contribution at cost, more units add the cost added, and
   fewer units are a withdrawal at the day's price. A position gone from a segment that was read
   is closed at its last price; bought back, it opens again. There is one flow per holding and day
   (`zerodha:<isin>:<day>`).
-- **Value per day.** `broker_snapshots` holds cash + positions; each day of `broker_portfolio`'s
-  series carries the invested amount and the Kite and Coin split.
+- **Value per day.** `broker_snapshots` holds each account's cash + positions; each day of
+  `broker_portfolio`'s series carries the invested amount and its segment.
 - **The screen.** `broker_portfolio` and `broker_accounts_summary` report `invested` (the cost of
   the open positions) and a `basis`. For Zerodha the basis is `cost`: `net_deposits` is invested
   + cash, so the profit is the unrealised P&L. Each position carries its segment and its return
-  on cost, and `segments` totals Kite and Coin.
+  on cost, and `segments` totals the account's segment (one entry per account).
 
 **Bank accounts** (Phase 2a, `20261020110310`). `accounts.kind` is `credit_card`, `current` or
 `savings`. A bank account has an `account_ref` (the digits a bank prints after the mask,

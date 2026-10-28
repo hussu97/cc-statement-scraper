@@ -1,9 +1,10 @@
--- Zerodha sync (20261027202923_zerodha_sync): import_zerodha_data makes the INR cash account and
--- connection, a `security` holding per ISIN (Kite and Coin), each day's mark, the Funds cash
--- checkpoint and the day's value. Flows are inferred from day to day: the first sight at cost,
+-- Zerodha sync (20261027202923_zerodha_sync, 20261028054048_zerodha_kite_coin_accounts):
+-- import_zerodha_data makes two INR broker accounts and connections, Zerodha Kite (stocks, ETFs,
+-- the Funds cash) and Zerodha Coin (mutual funds, no cash), a `security` holding per ISIN, each
+-- day's mark on its segment's account, the cash checkpoints and each account's value per day. Flows are inferred from day to day: the first sight at cost,
 -- more units at the cost added, fewer units at the day's price, a sold position closed at its
 -- last price, and a re-bought one opened again. A segment whose read failed keeps its marks.
--- broker_portfolio and broker_accounts_summary report invested against value, by segment. Dates
+-- broker_portfolio and broker_accounts_summary report invested against value, per account. Dates
 -- are relative to today.
 begin;
 create extension if not exists pgtap with schema extensions;
@@ -38,7 +39,11 @@ create function pg_temp.flows(p_isin text) returns text language sql as $$
 create function pg_temp.mark(p_isin text, p_day int) returns text language sql as $$
   select trim_scale(quantity) || ' @ ' || trim_scale(price) || ' = ' || market_value || ' (cost ' || trim_scale(cost_price)
          || ', ' || profit || ')' from public.broker_positions
-  where account_code = pg_temp.v('acc') and isin = p_isin and as_of = pg_temp.d(p_day) $$;
+  where account_code = pg_temp.v(case when p_isin like 'INF%' then 'coin' else 'acc' end)
+    and isin = p_isin and as_of = pg_temp.d(p_day) $$;
+create function pg_temp.snap(p_acc text, p_day int) returns text language sql as $$
+  select cash || ' ' || positions_value || ' ' || total_value from public.broker_snapshots
+  where account_code = pg_temp.v(p_acc) and as_of = pg_temp.d(p_day) $$;
 
 -- ── setup: an owner, a stranger, and an INR rate ────────────────────────────
 select pg_temp.set('today', public.dubai_date(now())::text);
@@ -73,13 +78,22 @@ select throws_ok($$ select public.import_zerodha_data(pg_temp.v('p'),
 -- ── day 1: first sight ──────────────────────────────────────────────────────
 select pg_temp.set('r1', pg_temp.sync(-4, '1000.00', array['kite', 'coin'],
   jsonb_build_array(pg_temp.kite('10', '2500', '2000'), pg_temp.coin('100.5', '50', '40')))::text);
-select pg_temp.set('acc', (pg_temp.v('r1')::jsonb)->>'account_code');
+select pg_temp.set('acc', (pg_temp.v('r1')::jsonb)->'accounts'->>'kite');
+select pg_temp.set('coin', (pg_temp.v('r1')::jsonb)->'accounts'->>'coin');
+select is((pg_temp.v('r1')::jsonb)->>'account_code', pg_temp.v('acc'), 'account_code is still Kite''s, for an older caller');
+select isnt(pg_temp.v('acc'), pg_temp.v('coin'), 'Kite and Coin are two accounts');
 select is((select bank_code || ' ' || kind || ' ' || currency || ' ' || product_name || ' ' || nickname from public.accounts
            where account_code = pg_temp.v('acc')),
-          'ZRD current INR Trading account Zerodha', 'the cash account is made: Zerodha, current, INR, named');
-select is((select provider || ' ' || portfolio_ref || ' ' || last_status from public.broker_connections
-           where account_code = pg_temp.v('acc')),
-          'zerodha ZX7301 ok', 'linked to the Kite user, upper-cased');
+          'KITE current INR Trading account Zerodha Kite', 'the Kite account is made: Zerodha Kite, current, INR, named');
+select is((select bank_code || ' ' || kind || ' ' || currency || ' ' || product_name || ' ' || nickname from public.accounts
+           where account_code = pg_temp.v('coin')),
+          'COIN current INR Mutual funds Zerodha Coin', 'and the Coin account: Zerodha Coin');
+select is((select string_agg(provider || ' ' || portfolio_ref || ' ' || last_status, ', ' order by portfolio_ref desc)
+           from public.broker_connections where profile_code = pg_temp.v('p')),
+          'zerodha ZX7301-KITE ok, zerodha ZX7301-COIN ok', 'each linked to the Kite user''s segment, upper-cased');
+select is((select string_agg(bank_code || ' ' || name || ' ' || logo_path, ', ' order by bank_code) from public.banks
+           where bank_code in ('KITE', 'COIN')),
+          'COIN Zerodha Coin COIN.png, KITE Zerodha Kite KITE.png', 'each bank has its own name and logo');
 select is((select string_agg(kind || ' ' || currency || ' ' || trim_scale(units) || ' ' || institution || ' '
                              || coalesce(symbol, '-'), ', ' order by external_ref)
            from public.holdings where profile_code = pg_temp.v('p')),
@@ -87,17 +101,21 @@ select is((select string_agg(kind || ' ' || currency || ' ' || trim_scale(units)
           'a security per ISIN, units held, no symbol (the Yahoo job leaves it alone)');
 select is(pg_temp.mark('INE000A01073', -4), '10 @ 2500 = 25000.00 (cost 2000, 5000.00)', 'the Kite mark: value and P&L');
 select is(pg_temp.mark('INF000A01073', -4), '100.5 @ 50 = 5025.00 (cost 40, 1005.00)', 'the Coin mark');
-select is((select product_type from public.broker_positions where isin = 'INF000A01073' and as_of = pg_temp.d(-4)),
-          'MUTUAL_FUND', 'a Coin fund is a MUTUAL_FUND');
+select is((select product_type || ' ' || (account_code = pg_temp.v('coin')) from public.broker_positions
+           where isin = 'INF000A01073' and as_of = pg_temp.d(-4)),
+          'MUTUAL_FUND true', 'a Coin fund is a MUTUAL_FUND, marked on the Coin account');
+select is((select count(*)::int from public.broker_positions where account_code = pg_temp.v('acc')), 1,
+          'the Kite account holds only the share');
 select is(pg_temp.flows('INE000A01073'), 'contribution 20000.00', 'first sight: a contribution at cost');
 select is(pg_temp.flows('INF000A01073'), 'contribution 4020.00', 'for the fund too');
 select is((select amount_aed from public.holding_flows where holding_code = pg_temp.hold('INE000A01073')),
           880.00::numeric(14,2), 'in AED at the INR rate');
 select is((select balance from public.balance_checkpoints where account_code = pg_temp.v('acc')),
-          1000.00::numeric(14,2), 'Funds cash is a broker checkpoint');
-select is((select cash || ' ' || positions_value || ' ' || total_value from public.broker_snapshots
-           where account_code = pg_temp.v('acc') and as_of = pg_temp.d(-4)),
-          '1000.00 30025.00 31025.00', 'the day''s value: cash + positions');
+          1000.00::numeric(14,2), 'Funds cash is a broker checkpoint on Kite');
+select is((select balance || ' ' || source from public.balance_checkpoints where account_code = pg_temp.v('coin')),
+          '0.00 broker', 'Coin holds no cash: a 0 checkpoint');
+select is(pg_temp.snap('acc', -4), '1000.00 25000.00 26000.00', 'Kite''s value for the day: cash + its positions');
+select is(pg_temp.snap('coin', -4), '0.00 5025.00 5025.00', 'Coin''s: its funds');
 select is((select unit_price::numeric from public.holding_valuations
            where holding_code = pg_temp.hold('INE000A01073') and as_of = pg_temp.d(-4)),
           2500::numeric, 'the holding''s unit price for the day');
@@ -107,9 +125,11 @@ select pg_temp.sync(-4, '1000.00', array['kite', 'coin'],
   jsonb_build_array(pg_temp.kite('10', '2500', '2000'), pg_temp.coin('100.5', '50', '40')));
 select is((select count(*)::int from public.holding_flows hf join public.holdings h using (holding_code)
            where h.profile_code = pg_temp.v('p')), 2, 'a re-run adds no flow');
-select is((select count(*)::int from public.broker_positions where account_code = pg_temp.v('acc')), 2, 'nor a mark');
-select is((select count(*)::int from public.balance_checkpoints where account_code = pg_temp.v('acc')), 1,
+select is((select count(*)::int from public.broker_positions where profile_code = pg_temp.v('p')), 2, 'nor a mark');
+select is((select count(*)::int from public.balance_checkpoints where profile_code = pg_temp.v('p')), 2,
           'nor a checkpoint');
+select is((select count(*)::int from public.broker_connections where profile_code = pg_temp.v('p')), 2,
+          'nor a connection');
 
 -- ── day 2: bought more of the share, redeemed some of the fund ─────────────
 select pg_temp.sync(-3, '500.00', array['kite', 'coin'],
@@ -130,8 +150,8 @@ select is(pg_temp.flows('INE000A01073'), 'contribution 20000.00, contribution 11
 select is((select status from public.holdings where holding_code = pg_temp.hold('INF000A01073')), 'active',
           'the fund stays: its segment was not read');
 select is(pg_temp.mark('INF000A01073', -2), '80 @ 55 = 4400.00 (cost 40, 1200.00)', 'it keeps its last mark for the day');
-select is((select total_value from public.broker_snapshots where account_code = pg_temp.v('acc') and as_of = pg_temp.d(-2)),
-          43900.00::numeric(14,2), 'so the day''s value is whole: 39,500 + 4,400');
+select is(pg_temp.snap('coin', -2), '0.00 4400.00 4400.00', 'so Coin''s value for the day is whole');
+select is(pg_temp.snap('acc', -2), '39500.00 0.00 39500.00', 'and Kite''s is its cash');
 
 -- ── day 4: bought back ──────────────────────────────────────────────────────
 select pg_temp.sync(-1, '26000.00', array['kite', 'coin'],
@@ -146,7 +166,9 @@ select is(pg_temp.flows('INF000A01073'), 'contribution 4020.00, withdrawal 1127.
 -- A same-day re-run that no longer sees the buy takes its flow and mark back.
 select pg_temp.sync(-1, '26000.00', array['kite', 'coin'], jsonb_build_array(pg_temp.coin('80', '56', '40')));
 select is((select count(*)::int from public.broker_positions where account_code = pg_temp.v('acc') and as_of = pg_temp.d(-1)),
-          1, 'today''s mark of a position no longer held goes');
+          0, 'today''s mark of a position no longer held goes');
+select is((select count(*)::int from public.broker_positions where account_code = pg_temp.v('coin') and as_of = pg_temp.d(-1)),
+          1, 'the other account''s stays');
 select pg_temp.sync(-1, '26000.00', array['kite', 'coin'],
   jsonb_build_array(pg_temp.kite('5', '2700', '2700'), pg_temp.coin('80', '56', '40')));
 select is(pg_temp.flows('INE000A01073'),
@@ -156,39 +178,59 @@ select is(pg_temp.flows('INE000A01073'),
 -- Another ledger cannot claim the same Kite user.
 select throws_ok($$ select public.import_zerodha_data(pg_temp.v('p2'), '{"user_id": "ZX7301", "segments_read": []}') $$,
                  '42501', null, 'a Kite user belongs to one ledger');
+-- A user with no funds has no Coin account.
+select pg_temp.set('r2', public.import_zerodha_data(pg_temp.v('p2'), jsonb_build_object(
+  'user_id', 'ab1234', 'fetched_at', pg_temp.at(-1), 'cash', '10.00', 'segments_read', '["kite", "coin"]'::jsonb,
+  'positions', jsonb_build_array(pg_temp.kite('1', '100', '90') || '{"isin": "INE111A01011"}')))::text);
+select is((select string_agg(c.portfolio_ref || ' ' || a.bank_code, ', ') from public.broker_connections c
+           join public.accounts a using (account_code) where c.profile_code = pg_temp.v('p2')),
+          'AB1234-KITE KITE', 'no funds: only the Kite account');
+select ok((pg_temp.v('r2')::jsonb)->'accounts'->'coin' = 'null'::jsonb, 'and no Coin account in the result');
 
 -- ── the screens ─────────────────────────────────────────────────────────────
 select pg_temp.as_user('uid');
 set local role authenticated;
 select pg_temp.set('bp', public.broker_portfolio(pg_temp.v('p'), pg_temp.v('acc'))::text);
+select pg_temp.set('bpc', public.broker_portfolio(pg_temp.v('p'), pg_temp.v('coin'))::text);
 select pg_temp.set('bs', public.broker_accounts_summary(pg_temp.v('p'))::text);
 reset role;
-select is((pg_temp.v('bp')::jsonb)->>'basis', 'cost', 'Zerodha is measured against cost');
+select is((pg_temp.v('bp')::jsonb)->>'basis', 'cost', 'Zerodha Kite is measured against cost');
+select is((pg_temp.v('bpc')::jsonb)->>'basis', 'cost', 'so is Zerodha Coin');
 select is((pg_temp.v('bp')::jsonb)->>'as_of', pg_temp.d(-1)::text, 'as of the last mark');
-select is((pg_temp.v('bp')::jsonb)->>'invested', '16700.00', 'invested: 5 × 2,700 + 80 × 40');
-select is((pg_temp.v('bp')::jsonb)->>'positions_value', '17980.00', 'worth: 5 × 2,700 + 80 × 56');
-select is((pg_temp.v('bp')::jsonb)->>'net_deposits', '42700.00', 'put in: invested + cash');
-select is((pg_temp.v('bp')::jsonb)->>'profit', '1280.00', 'so the profit is the unrealised P&L');
+select is((pg_temp.v('bp')::jsonb)->>'invested', '13500.00', 'Kite invested: 5 × 2,700');
+select is((pg_temp.v('bp')::jsonb)->>'net_deposits', '39500.00', 'put in: invested + cash');
+select is((pg_temp.v('bp')::jsonb)->>'profit', '0.00', 'Kite''s profit is its unrealised P&L');
+select is((pg_temp.v('bpc')::jsonb)->>'invested', '3200.00', 'Coin invested: 80 × 40');
+select is((pg_temp.v('bpc')::jsonb)->>'positions_value', '4480.00', 'worth: 80 × 56');
+select is((pg_temp.v('bpc')::jsonb)->>'cash', '0.00', 'no cash');
+select is((pg_temp.v('bpc')::jsonb)->>'profit', '1280.00', 'Coin''s P&L');
 select is((select string_agg(s->>'segment' || ' ' || (s->>'invested') || ' ' || (s->>'value') || ' ' || (s->>'profit')
                              || ' ' || coalesce(s->>'return_pct', '-'), ', ')
            from jsonb_array_elements((pg_temp.v('bp')::jsonb)->'segments') s),
-          'kite 13500.00 13500.00 0.00 0.00, coin 3200.00 4480.00 1280.00 40.00', 'Kite, then Coin');
-select is((select string_agg((x->>'segment') || ' ' || (x->'sell_now'->>'profit') || ' ' || (x->'sell_now'->>'return_pct'), ', '
-                             order by x->>'segment')
-           from jsonb_array_elements((pg_temp.v('bp')::jsonb)->'positions') x),
-          'coin 1280.00 40.00, kite 0.00 0.00', 'each position: its segment and its return on cost');
-select is((select string_agg((d->>'as_of') || ' ' || (d->>'invested') || ' ' || (d->>'total'), ', ')
+          'kite 13500.00 13500.00 0.00 0.00', 'one segment per account: Kite');
+select is((select string_agg(s->>'segment' || ' ' || (s->>'invested') || ' ' || (s->>'value') || ' ' || (s->>'profit')
+                             || ' ' || coalesce(s->>'return_pct', '-'), ', ')
+           from jsonb_array_elements((pg_temp.v('bpc')::jsonb)->'segments') s),
+          'coin 3200.00 4480.00 1280.00 40.00', 'and Coin');
+select is((select string_agg((x->>'segment') || ' ' || (x->'sell_now'->>'profit') || ' ' || (x->'sell_now'->>'return_pct'), ', ')
+           from jsonb_array_elements((pg_temp.v('bpc')::jsonb)->'positions') x),
+          'coin 1280.00 40.00', 'each position: its segment and its return on cost');
+select is((select string_agg((d->>'as_of') || ' ' || coalesce(d->>'invested', '-') || ' ' || (d->>'total'), ', ')
            from jsonb_array_elements((pg_temp.v('bp')::jsonb)->'series') d),
-          pg_temp.d(-4) || ' 24020.00 31025.00, ' || pg_temp.d(-3) || ' 34700.00 43900.00, '
-            || pg_temp.d(-2) || ' 3200.00 43900.00, ' || pg_temp.d(-1) || ' 16700.00 43980.00',
-          'every day: invested against the total');
-select is((pg_temp.v('bp')::jsonb)->'series'->0->'segments'->'coin'->>'value', '5025.00', 'split by segment');
+          pg_temp.d(-4) || ' 20000.00 26000.00, ' || pg_temp.d(-3) || ' 31500.00 39500.00, '
+            || pg_temp.d(-2) || ' - 39500.00, ' || pg_temp.d(-1) || ' 13500.00 39500.00',
+          'Kite every day: invested against the total');
+select is((select string_agg((d->>'as_of') || ' ' || (d->>'invested') || ' ' || (d->>'total'), ', ')
+           from jsonb_array_elements((pg_temp.v('bpc')::jsonb)->'series') d),
+          pg_temp.d(-4) || ' 4020.00 5025.00, ' || pg_temp.d(-3) || ' 3200.00 4400.00, '
+            || pg_temp.d(-2) || ' 3200.00 4400.00, ' || pg_temp.d(-1) || ' 3200.00 4480.00',
+          'Coin every day: invested against the total');
 select is((pg_temp.v('bp')::jsonb)->'closed_total'->>'count', '0', 'nothing closed: the share is held again');
-select is((pg_temp.v('bs')::jsonb)->0->>'basis', 'cost', 'the summary line: against cost');
-select is((pg_temp.v('bs')::jsonb)->0->>'invested', '16700.00', 'invested');
-select is((pg_temp.v('bs')::jsonb)->0->>'profit', '1280.00', 'and its P&L');
-select is(jsonb_array_length((pg_temp.v('bs')::jsonb)->0->'holding_codes'), 2,
-          'it covers both holdings, though Zerodha has no broker rows');
+select is((select string_agg((x->>'name') || ' ' || (x->>'bank_code') || ' ' || (x->>'basis') || ' ' || (x->>'invested')
+                             || ' ' || (x->>'profit') || ' ' || jsonb_array_length(x->'holding_codes'), ', ' order by x->>'name' desc)
+           from jsonb_array_elements(pg_temp.v('bs')::jsonb) x),
+          'Zerodha Kite KITE cost 13500.00 0.00 1, Zerodha Coin COIN cost 3200.00 1280.00 1',
+          'the summary: a line per account, each against cost, with its own holdings');
 
 select pg_temp.as_user('uid2');
 set local role authenticated;
@@ -201,8 +243,9 @@ select set_config('request.jwt.claims', '', true);
 select is((select count(*)::int from cron.job where jobname = 'ledger-zerodha-sync' and schedule = '0 18 * * 1-5'
              and command like '%invoke_edge(''zerodha-sync'')%'), 1, 'a weekday cron job calls the zerodha-sync function');
 select public.record_broker_sync_error(pg_temp.v('p'), 'zerodha', 'Kite: TOTP refused');
-select is((select last_status || ' ' || last_error from public.broker_connections where account_code = pg_temp.v('acc')),
-          'error Kite: TOTP refused', 'a failed sync is kept for the screen');
+select is((select string_agg(last_status || ' ' || last_error, ', ') from public.broker_connections
+           where profile_code = pg_temp.v('p')),
+          'error Kite: TOTP refused, error Kite: TOTP refused', 'a failed sync is kept for both accounts'' screens');
 
 select * from finish();
 rollback;
