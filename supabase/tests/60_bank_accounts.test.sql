@@ -199,6 +199,8 @@ select set_eq(
     -- India mode (20261028061444): India's accounts (bank accounts at an India bank only), a
     -- holding marked on one, and cash flow's savings leaving them out
     'private.india_accounts', 'private.broker_positions_portfolio', 'public.cash_flow_savings',
+    -- a savings account shown as an investment (20261028082732): bank accounts only
+    'public.track_account_as_investment',
     -- a card payment's leg on the same bank's current account (20261020170933)
     'private.add_payment_leg',
     -- consolidated statements (20261021115816): a bank statement's account (bank accounts only),

@@ -1758,6 +1758,7 @@ export type Database = {
       }
       holdings: {
         Row: {
+          account_code: string | null
           acquired_on: string | null
           cost_aed: number | null
           created_at: string
@@ -1788,6 +1789,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          account_code?: string | null
           acquired_on?: string | null
           cost_aed?: number | null
           created_at?: string
@@ -1818,6 +1820,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          account_code?: string | null
           acquired_on?: string | null
           cost_aed?: number | null
           created_at?: string
@@ -1848,6 +1851,27 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "holdings_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "holdings_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "v_account_balances"
+            referencedColumns: ["profile_code", "account_code"]
+          },
+          {
+            foreignKeyName: "holdings_account_fkey"
+            columns: ["profile_code", "account_code"]
+            isOneToOne: false
+            referencedRelation: "v_bank_balances"
+            referencedColumns: ["profile_code", "account_code"]
+          },
           {
             foreignKeyName: "holdings_profile_code_fkey"
             columns: ["profile_code"]
@@ -4975,6 +4999,15 @@ export type Database = {
       structured_notes_summary: {
         Args: { p_profile_code: string }
         Returns: Json
+      }
+      track_account_as_investment: {
+        Args: {
+          p_account_code: string
+          p_name?: string
+          p_profile_code: string
+          p_rate_pct?: string
+        }
+        Returns: string
       }
       upsert_fx_rates: {
         Args: { p_as_of: string; p_rates: Json; p_source: string }
