@@ -6,12 +6,12 @@ import { useNetWorth, useNetWorthSeries, type NetWorth } from "@/data/wealth";
 import { useCashFlow } from "@/data/cash";
 import { accountLabel, isWealthInsight, sortInsights, useDismissInsight, useInsights } from "@/data/overview";
 import { formatFlow, formatNet, monthFlows, netTone } from "@/lib/cash-flow";
-import { cardAnchorNote, netWorthHistoryMonths, netWorthNotes, netWorthPoints } from "@/lib/wealth";
+import { cardAnchorNote, netWorthHistoryMonths, netWorthPoints } from "@/lib/wealth";
 import { formatOutstanding } from "@/lib/balances";
 import { formatMonth, formatRelative, monthEnd, monthStart, todayDubai } from "@/lib/dates";
 import { formatCount, formatTotal } from "@/lib/money";
 import { cn } from "@/lib/cn";
-import { Badge, Card, CardHeader, Skeleton } from "@/components/ui/display";
+import { Card, CardHeader, Skeleton } from "@/components/ui/display";
 import { EmptyState, ErrorState, LoadingBlock, LoadingRows } from "@/components/ui/states";
 import { HeroAmount } from "@/components/ledger";
 import { BankLogo } from "@/components/bank-logo";
@@ -21,7 +21,7 @@ const NetWorthChart = lazy(() => import("./net-worth-chart").then((m) => ({ defa
 
 const TONE_TEXT = { positive: "text-positive", danger: "text-danger", neutral: "text-ink" } as const;
 
-/** Net worth now (public.net_worth): bank cash + investments − what the cards owe, with honest completeness. */
+/** Net worth now (public.net_worth): bank cash + investments − what the cards owe. */
 export function NetWorthHero({ profileCode }: { profileCode: string }) {
   const q = useNetWorth(profileCode);
   return (
@@ -46,7 +46,6 @@ export function NetWorthHero({ profileCode }: { profileCode: string }) {
 }
 
 function HeroBody({ n }: { n: NetWorth }) {
-  const notes = netWorthNotes(n);
   return (
     <div className="mt-2">
       <h1 className="sr-only">Net worth</h1>
@@ -83,7 +82,6 @@ function HeroBody({ n }: { n: NetWorth }) {
           </div>
         )}
       </dl>
-      {notes.length > 0 && <p className="mt-3 text-[12px] text-warn">{notes.join("; ")}.</p>}
     </div>
   );
 }
@@ -185,11 +183,6 @@ export function MonthCashCard({ profileCode }: { profileCode: string }) {
         </EmptyState>
       ) : (
         <div className="px-5 pb-5">
-          {flows.partial && (
-            <p className="mb-3 flex flex-wrap items-baseline gap-2 text-[12px] text-muted">
-              <Badge tone="info">Partial month</Badge> Money in before your first bank alert or balance wasn't captured.
-            </p>
-          )}
           <ul className="flex flex-col">
             {lines.map((l) => (
               <li key={l.flow} className="flex items-baseline justify-between gap-3 py-1 text-sm">

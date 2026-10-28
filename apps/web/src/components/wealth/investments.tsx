@@ -126,8 +126,6 @@ export function InvestmentsChartCard({ profileCode, period }: { profileCode: str
 export function InvestmentsCard({ profileCode }: { profileCode: string }) {
   const q = useHoldingsValuation(profileCode);
   const v = q.data;
-  const notes = v ? investmentNotes(v) : [];
-  const costNote = v ? gainNote(v) : null;
   return (
     <Card>
       <CardHeader
@@ -163,8 +161,6 @@ export function InvestmentsCard({ profileCode }: { profileCode: string }) {
               <dd>{v.change_24h_aed === null ? <span className="text-muted">Not known yet</span> : <SignedTotal value={v.change_24h_aed} />}</dd>
             </div>
           </dl>
-          {costNote && <p className="mt-3 text-[12px] text-muted">{costNote}.</p>}
-          {notes.length > 0 && <p className="mt-1 text-[12px] text-warn">{notes.join("; ")}.</p>}
         </div>
       )}
     </Card>

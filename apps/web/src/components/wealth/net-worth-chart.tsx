@@ -38,7 +38,6 @@ export function NetWorthChart({ points, className = "h-52" }: { points: NetWorth
                     <dt className="text-muted">Owed on cards</dt>
                     <dd className="tabular text-right text-muted">{formatTotal(p.owed)}</dd>
                   </dl>
-                  {!p.complete && <p className="mt-1 text-[11px] text-warn">Some balances were missing</p>}
                 </div>
               );
             }}

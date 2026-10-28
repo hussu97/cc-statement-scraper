@@ -13,7 +13,6 @@ import {
   hasBalances,
   matchesLedgerFilter,
   netWorthHistoryMonths,
-  netWorthNotes,
   netWorthPoints,
   parseAccountSearch,
   parsePortfolioSearch,
@@ -132,39 +131,13 @@ describe("balance chart points", () => {
 });
 
 describe("net worth", () => {
-  const base = { cash_complete: true, cash_missing_count: 0, cash_stale_count: 0, owed_complete: true, owed_has_estimate: false, has_bank_accounts: true, holdings_complete: true, holdings_count: 0 };
-
-  it("says nothing when every figure is known", () => {
-    expect(netWorthNotes(base)).toEqual([]);
-  });
-
-  it("names missing and old balances, and estimates, honestly", () => {
-    expect(netWorthNotes({ ...base, cash_complete: false, cash_missing_count: 1, cash_stale_count: 1, owed_has_estimate: true })).toEqual([
-      "1 account has no balance",
-      "1 is over a week old",
-      "card balance includes an estimate",
-    ]);
-    expect(netWorthNotes({ ...base, cash_complete: false, cash_stale_count: 2 })).toEqual(["2 balances are over a week old"]);
-    expect(netWorthNotes({ ...base, cash_complete: false })).toEqual(["Some bank amounts have no AED value yet"]);
-    expect(netWorthNotes({ ...base, owed_complete: false })).toEqual(["A card has no balance yet"]);
-  });
-
-  it("says when a gold or silver price is missing or stale", () => {
-    expect(netWorthNotes({ ...base, holdings_complete: false, holdings_count: 2 })).toEqual(["A gold or silver price is missing or over 3 days old"]);
-  });
-
-  it("says when there is no bank account to count", () => {
-    expect(netWorthNotes({ ...base, has_bank_accounts: false })[0]).toBe("No bank accounts yet: this is only what the cards owe");
-    expect(netWorthNotes({ ...base, has_bank_accounts: false, holdings_count: 1 })[0]).toBe("No bank accounts yet: cash isn't counted");
-  });
-
   it("charts the series and counts the months before today's live point", () => {
     const pts = netWorthPoints([
-      { month: "2026-09-01", as_of: "2026-09-30", net_aed: "1000.00", cash_aed: "3000", owed_aed: "2000", complete: true, is_live: false },
-      { month: "2026-10-01", as_of: "2026-10-20", net_aed: "-50.25", cash_aed: "0", holdings_aed: "1200.50", owed_aed: "1250.75", complete: false, is_live: true },
+      { month: "2026-09-01", as_of: "2026-09-30", net_aed: "1000.00", cash_aed: "3000", owed_aed: "2000", is_live: false },
+      { month: "2026-10-01", as_of: "2026-10-20", net_aed: "-50.25", cash_aed: "0", holdings_aed: "1200.50", owed_aed: "1250.75", is_live: true },
     ]);
     expect(pts[0]?.holdings).toBeNull();
-    expect(pts[1]).toEqual({ month: "2026-10-01", as_of: "2026-10-20", net: -50.25, cash: 0, holdings: 1200.5, owed: 1250.75, complete: false, is_live: true });
+    expect(pts[1]).toEqual({ month: "2026-10-01", as_of: "2026-10-20", net: -50.25, cash: 0, holdings: 1200.5, owed: 1250.75, is_live: true });
     expect(netWorthHistoryMonths(pts)).toBe(1);
     expect(netWorthHistoryMonths(pts.slice(1))).toBe(0);
   });

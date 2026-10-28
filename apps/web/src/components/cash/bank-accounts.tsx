@@ -13,13 +13,26 @@ import { AddBankAccountDialog, UpdateBalanceDialog } from "./bank-account-dialog
 
 /**
  * The ledger's bank accounts with their balances and the AED total (public.cash_position). Each
- * row opens the account's page (Wealth mode). `headerLink` sits beside Add in the header.
+ * row opens the account's page (Wealth mode). `headerLink` sits beside Add in the header. With
+ * `quiet` (the Wealth overview), no caveat on the total and no "over a week old" badges.
  */
-export function BankAccountsCard({ profileCode, isOwner, eyebrow = "Cash", headerLink }: { profileCode: string; isOwner: boolean; eyebrow?: string; headerLink?: ReactNode }) {
+export function BankAccountsCard({
+  profileCode,
+  isOwner,
+  eyebrow = "Cash",
+  headerLink,
+  quiet = false,
+}: {
+  profileCode: string;
+  isOwner: boolean;
+  eyebrow?: string;
+  headerLink?: ReactNode;
+  quiet?: boolean;
+}) {
   const q = useCashPosition(profileCode);
   const [adding, setAdding] = useState(false);
   const [updating, setUpdating] = useState<CashAccount | null>(null);
-  const caveat = q.data ? cashCaveat(q.data) : null;
+  const caveat = q.data && !quiet ? cashCaveat(q.data) : null;
 
   return (
     <Card>
@@ -65,7 +78,7 @@ export function BankAccountsCard({ profileCode, isOwner, eyebrow = "Cash", heade
           </div>
           <ul className="divide-y divide-border">
             {q.data.accounts.map((a) => (
-              <AccountRow key={a.account_code} account={a} onUpdate={isOwner ? () => setUpdating(a) : undefined} />
+              <AccountRow key={a.account_code} account={a} quiet={quiet} onUpdate={isOwner ? () => setUpdating(a) : undefined} />
             ))}
           </ul>
         </>
@@ -76,7 +89,7 @@ export function BankAccountsCard({ profileCode, isOwner, eyebrow = "Cash", heade
   );
 }
 
-function AccountRow({ account: a, onUpdate }: { account: CashAccount; onUpdate?: () => void }) {
+function AccountRow({ account: a, quiet, onUpdate }: { account: CashAccount; quiet: boolean; onUpdate?: () => void }) {
   const source = balanceSourceLabel(a.anchor_source);
   const foreign = a.currency.toUpperCase() !== "AED";
   return (
@@ -93,7 +106,7 @@ function AccountRow({ account: a, onUpdate }: { account: CashAccount; onUpdate?:
         <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-subtle">
           <span className="whitespace-nowrap">{a.bank_code}{a.nickname && a.account_ref ? ` ··· ${a.account_ref}` : ""}</span>
           {a.balance !== null && a.as_of && <span className="whitespace-nowrap">as of {formatRelative(a.as_of)}{source ? `, ${source}` : ""}</span>}
-          {a.is_stale && <Badge tone="warn">Over a week old</Badge>}
+          {a.is_stale && !quiet && <Badge tone="warn">Over a week old</Badge>}
         </p>
       </div>
       <div className="flex shrink-0 flex-col items-end gap-0.5 text-right">

@@ -21,6 +21,7 @@ export function WealthOverviewPage() {
           profileCode={profileCode}
           isOwner={isOwner}
           eyebrow="Assets"
+          quiet
           headerLink={
             <Link to="/wealth/accounts" className="tap hidden text-[13px] text-accent hover:underline sm:inline">
               All accounts
