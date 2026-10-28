@@ -19,6 +19,12 @@ import {
   incompleteDetail,
   incompleteNote,
   incompleteReason,
+  INVESTMENT_PERIODS,
+  investmentPeriod,
+  investmentPeriodParam,
+  investmentPeriodRange,
+  investmentPeriodTitle,
+  parseInvestmentsSearch,
   investmentFacts,
   investmentToForm,
   kindOf,
@@ -188,6 +194,44 @@ describe("values and flows", () => {
     expect(validateFlowForm("AED", f, TODAY)).toEqual({ ok: true, input: { kind: "income", flow_date: "2026-10-01", amount: "120", notes: "Dividend" } });
     expect(validateFlowForm("AED", { ...f, amount: "0" }, TODAY)).toMatchObject({ ok: false });
     expect(validateFlowForm("AED", { ...f, date: "2026-10-22" }, TODAY)).toMatchObject({ ok: false });
+  });
+});
+
+describe("Investments' period (?period=)", () => {
+  const TODAY_P = "2026-10-28";
+
+  it("offers 30 days, 90 days, YTD and 365 days, each a holding_returns p_period, and no all time", () => {
+    expect(INVESTMENT_PERIODS.map((p) => [p.value, p.label])).toEqual([
+      ["30d", "30 days"],
+      ["90d", "90 days"],
+      ["ytd", "YTD"],
+      ["12m", "365 days"],
+    ]);
+  });
+
+  it("reads a known period, else the default (90 days)", () => {
+    expect(investmentPeriod("30d")).toBe("30d");
+    expect(investmentPeriod("12m")).toBe("12m");
+    expect(investmentPeriod("all")).toBe("90d");
+    expect(investmentPeriod(undefined)).toBe("90d");
+  });
+
+  it("keeps a non-default period in the URL and drops the rest explicitly", () => {
+    expect(parseInvestmentsSearch({ period: "ytd" })).toEqual({ period: "ytd" });
+    expect(parseInvestmentsSearch({ period: "90d" })).toHaveProperty("period", undefined);
+    expect(parseInvestmentsSearch({ period: "all" })).toHaveProperty("period", undefined);
+    expect(parseInvestmentsSearch({})).toHaveProperty("period", undefined);
+    expect(investmentPeriodParam("90d")).toBeUndefined();
+    expect(investmentPeriodParam("30d")).toBe("30d");
+  });
+
+  it("spans what holding_returns counts: 30 or 90 days back, 1 January, 365 days back", () => {
+    expect(investmentPeriodRange("30d", TODAY_P)).toEqual({ from: "2026-09-28", to: TODAY_P });
+    expect(investmentPeriodRange("90d", TODAY_P)).toEqual({ from: "2026-07-30", to: TODAY_P });
+    expect(investmentPeriodRange("ytd", TODAY_P)).toEqual({ from: "2026-01-01", to: TODAY_P });
+    expect(investmentPeriodRange("12m", TODAY_P)).toEqual({ from: "2025-10-28", to: TODAY_P });
+    expect(investmentPeriodTitle("12m")).toBe("Last 365 days");
+    expect(investmentPeriodTitle("ytd")).toBe("This year");
   });
 });
 

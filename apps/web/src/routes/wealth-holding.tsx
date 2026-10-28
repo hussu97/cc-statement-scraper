@@ -3,14 +3,14 @@ import { Link } from "@tanstack/react-router";
 import { ChevronLeft, Coins, History, ListPlus, Plus } from "lucide-react";
 import { wealthHoldingRoute } from "@/router";
 import { useActiveProfile } from "@/data/profile";
-import { useHoldingDetail, useHoldingsValuation, type Holding, type HoldingDetail, type HoldingFlow } from "@/data/holdings";
-import { formatPct, formatPurity, signTone } from "@/lib/holdings";
+import { useHoldingDetail, useHoldingsValuation, type Holding, type HoldingDetail, type HoldingFlow, type MetalPrice } from "@/data/holdings";
+import { formatPct, formatPurity, holdingPrice, quoteLabel, signTone } from "@/lib/holdings";
 import { FLOW_KIND_LABEL, FLOW_SOURCE_LABEL, aedEquivalent, canRemoveFlow, depositValueNote, flowSign, formatOwnValue, formatUnitPrice, kindOf, noValueText, valuationSourceLabel, valueInput, visibleValues } from "@/lib/investments";
 import type { HoldingKind } from "@/lib/investments";
-import { formatDate } from "@/lib/dates";
+import { formatDate, formatRelative } from "@/lib/dates";
 import { formatMoney, formatTotal } from "@/lib/money";
 import { cn } from "@/lib/cn";
-import { Card, CardHeader, Skeleton } from "@/components/ui/display";
+import { Badge, Card, CardHeader, Skeleton } from "@/components/ui/display";
 import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
 import { BankLogo } from "@/components/bank-logo";
@@ -113,7 +113,11 @@ function HoldingView({ holdingCode }: { holdingCode: string }) {
           onAdd={isOwner && h ? () => setAdding(true) : undefined}
           onRemove={isOwner ? setRemoving : undefined}
         />
-        <ValuesCard h={h} detail={detail} onUpdate={isOwner && h && valueInput(h.kind) ? () => setUpdating(true) : undefined} />
+        {h && kindOf(h) === "metal" ? (
+          <PriceCard h={h} price={holdingPrice(h, q.data?.prices)} />
+        ) : (
+          <ValuesCard h={h} detail={detail} onUpdate={isOwner && h && valueInput(h.kind) ? () => setUpdating(true) : undefined} />
+        )}
       </div>
 
       {isOwner && h && (
@@ -287,6 +291,32 @@ function FlowRow({ f, currency, onRemove }: { f: HoldingFlow; currency: string; 
   );
 }
 
+/** The Dubai retail rate per gram that values a metal holding (its own metal and purity), with its 24-hour change and age. */
+function PriceCard({ h, price }: { h: Holding; price: MetalPrice | null }) {
+  const change = price ? formatPct(price.change_24h_pct, { signed: true }) : null;
+  return (
+    <Card>
+      <CardHeader eyebrow="Dubai retail, per gram" title={quoteLabel(h.quote)} />
+      {price ? (
+        <div className="px-5 pb-5">
+          <p className="tabular text-2xl font-medium text-ink">{formatMoney(price.aed_per_gram)}</p>
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-subtle">
+            {change && <span className={cn("tabular", TONE_TEXT[signTone(price.change_24h_pct)])}>{change} in 24 hours</span>}
+            <span>as of {formatRelative(price.as_of)}</span>
+            {price.is_stale && <Badge tone="warn">Stale</Badge>}
+          </p>
+          <p className="mt-3 text-[12px] text-muted">The holding is valued at this rate, refreshed every 6 hours.</p>
+        </div>
+      ) : (
+        <EmptyState icon={<Coins />} title="No price yet">
+          Bank Ledger fetches gold and silver prices every 6 hours. The holding is valued from the first fetch.
+        </EmptyState>
+      )}
+      <p className="border-t border-border px-5 py-3 text-[11px] text-subtle">Gold: Dubai Jewellery Group rates. Silver: Dubai retail rate.</p>
+    </Card>
+  );
+}
+
 function ValuesCard({ h, detail, onUpdate }: { h: Holding | null; detail: ReturnType<typeof useHoldingDetail>; onUpdate?: () => void }) {
   const kind = h ? kindOf(h) : null;
   return (
@@ -302,9 +332,7 @@ function ValuesCard({ h, detail, onUpdate }: { h: Holding | null; detail: Return
           )
         }
       />
-      {kind === "metal" ? (
-        <p className="px-5 pb-5 text-[13px] text-muted">Valued at Dubai's retail rate for its metal and karat, refreshed every 6 hours. The price chart is on the Investments page.</p>
-      ) : kind === "deposit" && h ? (
+      {kind === "deposit" && h ? (
         <>
           <p className="px-5 pb-5 text-[13px] text-muted">{depositValueNote(h, (detail.data?.valuations.length ?? 0) > 0)}</p>
           {detail.data && detail.data.valuations.length > 0 && <ValueList detail={detail.data} currency={h.currency ?? "AED"} kind={kind} />}

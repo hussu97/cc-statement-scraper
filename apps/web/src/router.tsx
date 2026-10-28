@@ -5,6 +5,7 @@ import { parsePageSearch } from "@/lib/infinite";
 import { parseSignInSearch } from "@/lib/redirect";
 import { parseCashFlowSearch } from "@/lib/cash-flow";
 import { parseAccountSearch, parsePortfolioSearch } from "@/lib/wealth";
+import { parseInvestmentsSearch } from "@/lib/investments";
 
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
@@ -110,10 +111,11 @@ export const wealthAccountRoute = createRoute({
   component: lazyRouteComponent(() => import("@/routes/wealth-account"), "AccountPage"),
 });
 
-/** Investments: metals, plans, broker accounts, shares and funds, deposits (values, gains, returns). */
-const wealthInvestmentsRoute = createRoute({
+/** Investments: metals, plans, broker accounts, shares and funds, deposits (values, gains, returns). `?period=` drives the chart and the returns. */
+export const wealthInvestmentsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/wealth/investments",
+  validateSearch: (s: Record<string, unknown>) => parseInvestmentsSearch(s),
   component: lazyRouteComponent(() => import("@/routes/wealth-investments"), "InvestmentsPage"),
 });
 

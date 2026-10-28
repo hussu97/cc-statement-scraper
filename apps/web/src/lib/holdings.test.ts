@@ -13,14 +13,13 @@ import {
   formatWeight,
   gainNote,
   holdingKind,
+  holdingPrice,
   holdingToForm,
   holdingsPoints,
   investmentNotes,
-  investmentRange,
   partialDaysNote,
   normalizeCost,
   parseDecimal,
-  pricePoints,
   purityFraction,
   quoteLabel,
   signTone,
@@ -149,19 +148,30 @@ describe("chart: partial days", () => {
   });
 });
 
-describe("chart", () => {
-  it("spans 90 days, today included", () => {
-    expect(investmentRange(TODAY)).toEqual({ from: "2026-07-24", to: TODAY });
+describe("a metal holding's price", () => {
+  const prices = {
+    gold_24k: { aed_per_gram: "520.25", as_of: "2026-10-20T06:00:00Z", change_24h_pct: "0.40", is_stale: false },
+    gold_22k: { aed_per_gram: "481.75", as_of: "2026-10-20T06:00:00Z", change_24h_pct: "-0.12", is_stale: false },
+  };
+
+  it("is the rate for its own metal and purity, none other", () => {
+    expect(holdingPrice({ kind: "metal", quote: "gold_22k" }, prices)?.aed_per_gram).toBe("481.75");
+    expect(holdingPrice({ quote: "gold_24k" }, prices)?.aed_per_gram).toBe("520.25");
   });
 
+  it("is null before a price, without a quote, or for any other kind", () => {
+    expect(holdingPrice({ kind: "metal", quote: "silver_retail" }, prices)).toBeNull();
+    expect(holdingPrice({ kind: "metal", quote: null }, prices)).toBeNull();
+    expect(holdingPrice({ kind: "plan", quote: "gold_24k" }, prices)).toBeNull();
+    expect(holdingPrice({ kind: "metal", quote: "gold_24k" }, undefined)).toBeNull();
+  });
+});
+
+describe("chart", () => {
   it("keeps a null day a gap, never a zero", () => {
     expect(holdingsPoints([{ date: "2026-10-01", value_aed: null, cost_aed: "100.00" }, { date: "2026-10-02", value_aed: "120.50", cost_aed: "100.00" }])).toEqual([
       { date: "2026-10-01", value: null, cost: 100, complete: true },
       { date: "2026-10-02", value: 120.5, cost: 100, complete: true },
-    ]);
-    expect(pricePoints([{ date: "2026-10-01", aed_per_gram: null }, { date: "2026-10-02", aed_per_gram: "489.500000" }])).toEqual([
-      { date: "2026-10-01", price: null },
-      { date: "2026-10-02", price: 489.5 },
     ]);
   });
 });

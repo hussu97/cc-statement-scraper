@@ -2,7 +2,7 @@
 // The form's weight is converted to grams as an exact decimal (BigInt, never a float); every
 // value, gain and percentage is the server's (holdings_valuation, CLAUDE.md §2.2). Weights and
 // purities here are measurements, not money: these helpers only parse and format them.
-import { addDays, isISODate, todayDubai, type ISODate } from "./dates";
+import { isISODate, todayDubai, type ISODate } from "./dates";
 import { toAmount, type MoneyInput } from "./money";
 import { publicObjectUrl } from "./public-object";
 
@@ -196,17 +196,17 @@ export const QUOTE_LABEL: Record<string, string> = {
   silver_spot: "Silver spot",
 };
 
-/** The price strip: Dubai retail rates, gold by karat then silver. */
-export const PRICE_STRIP = ["gold_24k", "gold_22k", "gold_21k", "gold_18k", "silver_retail"] as const;
-
-/** The price chart's choices (metal_price_series quotes). */
-export const PRICE_CHART_QUOTES = [
-  { value: "gold_24k", label: "24K gold" },
-  { value: "silver_retail", label: "Silver" },
-] as const;
-
 export function quoteLabel(quote: string | null | undefined): string {
   return (quote && QUOTE_LABEL[quote]) || "Price";
+}
+
+/**
+ * The Dubai retail rate that values a metal holding: holdings_valuation's price for the holding's
+ * own quote (its metal and purity, e.g. gold_22k). Null for any other kind, or before a price.
+ */
+export function holdingPrice<P>(h: { kind?: string | null; quote: string | null }, prices: Partial<Record<string, P>> | null | undefined): P | null {
+  if ((h.kind ?? "metal") !== "metal" || !h.quote) return null;
+  return prices?.[h.quote] ?? null;
 }
 
 /**
@@ -260,13 +260,6 @@ function capitalise(s: string): string {
 
 // ── chart ──────────────────────────────────────────────────────────────────
 
-/** Days of history on the Investments chart. */
-export const INVESTMENT_DAYS = 90;
-
-export function investmentRange(today: ISODate = todayDubai()): { from: ISODate; to: ISODate } {
-  return { from: addDays(today, -(INVESTMENT_DAYS - 1)), to: today };
-}
-
 export interface HoldingsPoint {
   date: ISODate;
   /** For plotting only (display): null is a gap. */
@@ -283,16 +276,6 @@ export function holdingsPoints(series: readonly { date: string; value_aed: Money
 /** The note under the value chart when some day in range counts only part of the holdings; null when every day is whole. */
 export function partialDaysNote(points: readonly { complete: boolean }[]): string | null {
   return points.some((p) => !p.complete) ? "Some holdings had no value on some days, so those days show part of the total." : null;
-}
-
-export interface PricePoint {
-  date: ISODate;
-  /** AED per gram, for plotting only. */
-  price: number | null;
-}
-
-export function pricePoints(series: readonly { date: string; aed_per_gram: MoneyInput }[]): PricePoint[] {
-  return series.map((p) => ({ date: p.date.slice(0, 10), price: toAmount(p.aed_per_gram) }));
 }
 
 // ── the holding form ───────────────────────────────────────────────────────

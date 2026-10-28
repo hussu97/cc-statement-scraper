@@ -50,7 +50,6 @@ export const keys = {
   holdingReturns: (p: string, period: string) => ["p", p, "cash", "holding-returns", period] as const,
   cashFlowSavings: (p: string, from: string, to: string, account?: string) => ["p", p, "cash", "savings", from, to, account ?? "all"] as const,
   /** Metal prices are global reference data, not per ledger. */
-  metalPriceSeries: (quote: string, from: string, to: string) => ["metal-prices", quote, from, to] as const,
 
   accounts: (p: string) => ["p", p, "accounts"] as const,
   cycles: (p: string) => ["p", p, "statements", "cycles"] as const,

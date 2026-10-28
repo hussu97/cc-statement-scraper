@@ -3,7 +3,7 @@
 // Every value, cost, gain, return and share is the server's (holdings_valuation, holding_detail,
 // holding_returns, net_worth, cash_flow_savings; CLAUDE.md §2.2): these helpers only parse what
 // the user types into decimal strings, group what the server sent, and word it.
-import { formatDate, isISODate, todayDubai, type ISODate } from "./dates";
+import { addDays, formatDate, isISODate, todayDubai, type ISODate } from "./dates";
 import { formatTotal, toAmount, type MoneyInput } from "./money";
 import { formatPct, parseDecimal, trimDecimal } from "./holdings";
 
@@ -411,12 +411,60 @@ export function validateFlowForm(
 
 // ── returns ────────────────────────────────────────────────────────────────
 
+/** A holding's own page: all time, this year, 12 months. */
 export const RETURN_PERIODS = [
   { value: "all", label: "All time" },
   { value: "ytd", label: "This year" },
   { value: "12m", label: "12 months" },
 ] as const;
-export type ReturnPeriod = (typeof RETURN_PERIODS)[number]["value"];
+
+/**
+ * Investments' one period, for the value chart and the returns alike (`?period=`). Each value is
+ * holding_returns' p_period; "12m" is the last 365 days.
+ */
+export const INVESTMENT_PERIODS = [
+  { value: "30d", label: "30 days" },
+  { value: "90d", label: "90 days" },
+  { value: "ytd", label: "YTD" },
+  { value: "12m", label: "365 days" },
+] as const;
+export type InvestmentPeriod = (typeof INVESTMENT_PERIODS)[number]["value"];
+export type ReturnPeriod = (typeof RETURN_PERIODS)[number]["value"] | InvestmentPeriod;
+
+/** The default period, left out of the URL. */
+export const DEFAULT_INVESTMENT_PERIOD: InvestmentPeriod = "90d";
+
+export function investmentPeriod(raw: unknown): InvestmentPeriod {
+  return INVESTMENT_PERIODS.some((p) => p.value === raw) ? (raw as InvestmentPeriod) : DEFAULT_INVESTMENT_PERIOD;
+}
+
+/**
+ * `/wealth/investments?period=`: a known period other than the default. Otherwise undefined,
+ * explicitly: the router lays validated search over the raw URL, so an unknown one must not survive.
+ */
+export function parseInvestmentsSearch(raw: Record<string, unknown>): { period?: InvestmentPeriod } {
+  const p = investmentPeriod(raw.period);
+  return { period: raw.period === p && p !== DEFAULT_INVESTMENT_PERIOD ? p : undefined };
+}
+
+/** The `?period=` value for a choice: undefined for the default. */
+export function investmentPeriodParam(p: InvestmentPeriod): InvestmentPeriod | undefined {
+  return p === DEFAULT_INVESTMENT_PERIOD ? undefined : p;
+}
+
+/**
+ * The days a period covers, as holding_returns counts them (its `from` to today): 30 or 90 days
+ * back, 1 January, or 365 days back. The value chart draws the same span.
+ */
+export function investmentPeriodRange(p: InvestmentPeriod, today: ISODate = todayDubai()): { from: ISODate; to: ISODate } {
+  if (p === "ytd") return { from: `${today.slice(0, 4)}-01-01`, to: today };
+  return { from: addDays(today, p === "30d" ? -30 : p === "90d" ? -90 : -365), to: today };
+}
+
+/** The chart's eyebrow for a period. */
+export function investmentPeriodTitle(p: InvestmentPeriod): string {
+  return { "30d": "Last 30 days", "90d": "Last 90 days", ytd: "This year", "12m": "Last 365 days" }[p];
+}
 
 export interface ReturnFigures {
   start_value_aed: string | null;

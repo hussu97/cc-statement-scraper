@@ -1,6 +1,6 @@
 // Investments (Wealth mode): holdings of every kind, metal prices, flows, values, returns and links.
-// holdings_valuation, holding_detail, holding_returns, holdings_value_series, metal_price_series
-// and cash_flow_savings return jsonb (Json in the generated types), so the shapes are declared here
+// holdings_valuation, holding_detail, holding_returns, holdings_value_series and
+// cash_flow_savings return jsonb (Json in the generated types), so the shapes are declared here
 // from the migrations (20261021070429_metal_prices_and_holdings.sql,
 // 20261021093154_holdings_flows_and_returns.sql).
 // Money and prices are decimal strings; the server computes every figure (CLAUDE.md §2.2).
@@ -117,23 +117,6 @@ export function useHoldingsValueSeries(profileCode: string, range: { from: strin
     queryFn: async () => {
       const args: RpcArgs<"holdings_value_series"> = { p_profile_code: profileCode, p_from: range.from, p_to: range.to };
       return must(await supabase.rpc("holdings_value_series", args)) as unknown as HoldingsDay[];
-    },
-  });
-}
-
-export interface PriceDay {
-  date: string;
-  aed_per_gram: string | null;
-}
-
-/** A quote's last price per Dubai day (global reference data, not per ledger). */
-export function useMetalPriceSeries(quote: string, range: { from: string; to: string }, enabled = true) {
-  return useQuery({
-    queryKey: keys.metalPriceSeries(quote, range.from, range.to),
-    enabled,
-    queryFn: async () => {
-      const args: RpcArgs<"metal_price_series"> = { p_quote: quote, p_from: range.from, p_to: range.to };
-      return must(await supabase.rpc("metal_price_series", args)) as unknown as PriceDay[];
     },
   });
 }

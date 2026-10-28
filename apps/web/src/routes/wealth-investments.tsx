@@ -1,11 +1,14 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
+import { wealthInvestmentsRoute } from "@/router";
 import { useActiveProfile } from "@/data/profile";
 import { useHoldingsValuation, type Holding } from "@/data/holdings";
 import { useBrokerAccounts } from "@/data/broker";
 import { brokerHoldingCodes } from "@/lib/broker-accounts";
-import { kindOf } from "@/lib/investments";
+import { INVESTMENT_PERIODS, investmentPeriod, investmentPeriodParam } from "@/lib/investments";
 import { PageHeader } from "@/components/ui/display";
-import { InvestmentsChartCard, InvestmentsSummary, PriceStrip } from "@/components/wealth/investments";
+import { Segmented } from "@/components/ui/segmented";
+import { InvestmentsChartCard, InvestmentsSummary } from "@/components/wealth/investments";
 import { HoldingsListCard } from "@/components/wealth/holdings-list";
 import { CloseHoldingDialog, HoldingDialog } from "@/components/wealth/holding-dialogs";
 import { UpdateValueDialog } from "@/components/wealth/holding-value-dialogs";
@@ -23,8 +26,10 @@ export function InvestmentsPage() {
   const [editing, setEditing] = useState<{ holding: Holding | null } | null>(null);
   const [closing, setClosing] = useState<Holding | null>(null);
   const [updating, setUpdating] = useState<Holding | null>(null);
-  // Metal prices matter once there is gold or silver (or nothing yet, to show what's offered).
-  const showPrices = !q.data || q.data.holdings.length === 0 || q.data.holdings.some((h) => kindOf(h) === "metal");
+  // One period for the value chart and the returns, in the URL (?period=, 90 days when absent).
+  const period = investmentPeriod(wealthInvestmentsRoute.useSearch().period);
+  const navigate = useNavigate({ from: "/wealth/investments" });
+  const setPeriod = (p: typeof period) => void navigate({ search: (s) => ({ ...s, period: investmentPeriodParam(p) }), replace: true, resetScroll: false });
 
   return (
     <div className="animate-fade-in flex flex-col gap-6">
@@ -41,9 +46,16 @@ export function InvestmentsPage() {
         brokers={{ accounts, covered, loading: brokers.isLoading }}
       />
       <NotesCard profileCode={profileCode} covered={covered} coveredLoading={brokers.isLoading} />
-      <ReturnsCard profileCode={profileCode} />
-      <InvestmentsChartCard profileCode={profileCode} />
-      {showPrices && <PriceStrip q={q} />}
+      <section aria-labelledby="investments-performance" className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 id="investments-performance" className="text-[15px] font-semibold text-ink">
+            How they've done
+          </h2>
+          <Segmented ariaLabel="Period" value={period} onChange={setPeriod} options={[...INVESTMENT_PERIODS]} />
+        </div>
+        <InvestmentsChartCard profileCode={profileCode} period={period} />
+        <ReturnsCard profileCode={profileCode} period={period} />
+      </section>
       {isOwner && <HoldingDialog profileCode={profileCode} open={!!editing} holding={editing?.holding ?? null} onClose={() => setEditing(null)} />}
       {isOwner && <CloseHoldingDialog profileCode={profileCode} holding={closing} onClose={() => setClosing(null)} />}
       {isOwner && <UpdateValueDialog profileCode={profileCode} holding={updating} onClose={() => setUpdating(null)} />}

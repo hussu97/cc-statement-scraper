@@ -1,30 +1,16 @@
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useMemo } from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, Coins, LineChart } from "lucide-react";
-import { useHoldingsValuation, useHoldingsValueSeries, useMetalPriceSeries, type HoldingsValuation, type MetalPrice } from "@/data/holdings";
-import {
-  PRICE_CHART_QUOTES,
-  PRICE_STRIP,
-  formatPct,
-  gainNote,
-  holdingsPoints,
-  investmentNotes,
-  investmentRange,
-  partialDaysNote,
-  pricePoints,
-  quoteLabel,
-  signTone,
-} from "@/lib/holdings";
-import { formatRelative } from "@/lib/dates";
-import { formatMoney, formatTotal, type MoneyInput } from "@/lib/money";
+import { useHoldingsValuation, useHoldingsValueSeries, type HoldingsValuation } from "@/data/holdings";
+import { formatPct, gainNote, holdingsPoints, investmentNotes, partialDaysNote, signTone } from "@/lib/holdings";
+import { investmentPeriodRange, investmentPeriodTitle, type InvestmentPeriod } from "@/lib/investments";
+import { formatTotal, type MoneyInput } from "@/lib/money";
 import { cn } from "@/lib/cn";
-import { Badge, Card, CardHeader, Skeleton } from "@/components/ui/display";
-import { Segmented } from "@/components/ui/segmented";
+import { Card, CardHeader, Skeleton } from "@/components/ui/display";
 import { EmptyState, ErrorState, LoadingBlock, LoadingRows } from "@/components/ui/states";
 import { HeroAmount } from "@/components/ledger";
 
 const HoldingsValueChart = lazy(() => import("./holdings-chart").then((m) => ({ default: m.HoldingsValueChart })));
-const MetalPriceChart = lazy(() => import("./holdings-chart").then((m) => ({ default: m.MetalPriceChart })));
 
 export const TONE_TEXT = { positive: "text-positive", danger: "text-danger", neutral: "text-ink" } as const;
 
@@ -97,107 +83,37 @@ function SummaryBody({ v }: { v: HoldingsValuation }) {
   );
 }
 
-// ── prices ─────────────────────────────────────────────────────────────────
-
-/** Today's Dubai retail rates per gram, with the 24-hour change and the age of each. */
-export function PriceStrip({ q }: { q: ReturnType<typeof useHoldingsValuation> }) {
-  return (
-    <Card>
-      <CardHeader eyebrow="Dubai retail, per gram" title="Prices" />
-      {q.isLoading ? (
-        <LoadingRows rows={1} />
-      ) : q.isError || !q.data ? (
-        <ErrorState error={q.error} onRetry={() => void q.refetch()} />
-      ) : PRICE_STRIP.every((k) => !q.data.prices[k]) ? (
-        <EmptyState icon={<Coins />} title="No prices yet">
-          Bank Ledger fetches gold and silver prices every 6 hours. They appear after the first fetch.
-        </EmptyState>
-      ) : (
-        <ul className="grid grid-cols-2 gap-px border-t border-border bg-border lg:grid-cols-5">
-          {PRICE_STRIP.map((k) => (
-            <PriceTile key={k} label={quoteLabel(k)} price={q.data.prices[k]} />
-          ))}
-        </ul>
-      )}
-      <p className="px-5 py-3 text-[11px] text-subtle">Gold: Dubai Jewellery Group rates. Silver: Dubai retail rate. Refreshed every 6 hours.</p>
-    </Card>
-  );
-}
-
-function PriceTile({ label, price }: { label: string; price: MetalPrice | undefined }) {
-  const change = price ? formatPct(price.change_24h_pct, { signed: true }) : null;
-  return (
-    <li className="flex flex-col gap-0.5 bg-surface px-5 py-3 last:odd:col-span-2 lg:last:odd:col-span-1">
-      <span className="text-[12px] text-subtle">{label}</span>
-      {price ? (
-        <>
-          <span className="tabular text-base font-medium text-ink">{formatMoney(price.aed_per_gram)}</span>
-          <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-subtle">
-            {change && <span className={cn("tabular", TONE_TEXT[signTone(price.change_24h_pct)])}>{change} 24h</span>}
-            <span>{formatRelative(price.as_of)}</span>
-            {price.is_stale && <Badge tone="warn">Stale</Badge>}
-          </span>
-        </>
-      ) : (
-        <span className="text-sm text-muted">No price yet</span>
-      )}
-    </li>
-  );
-}
-
 // ── chart ──────────────────────────────────────────────────────────────────
 
-type ChartView = "value" | (typeof PRICE_CHART_QUOTES)[number]["value"];
-const CHART_VIEWS: { value: ChartView; label: string }[] = [{ value: "value", label: "Value vs put in" }, ...PRICE_CHART_QUOTES];
-
-/** 90 days: the holdings' value against what was paid, or the 24K / silver price. */
-export function InvestmentsChartCard({ profileCode }: { profileCode: string }) {
-  const [view, setView] = useState<ChartView>("value");
-  const range = useMemo(() => investmentRange(), []);
-  const value = useHoldingsValueSeries(profileCode, range);
-  const price = useMetalPriceSeries(view === "value" ? "gold_24k" : view, range, view !== "value");
-  const valuePoints = useMemo(() => holdingsPoints(value.data ?? []), [value.data]);
-  const prices = useMemo(() => pricePoints(price.data ?? []), [price.data]);
-  const q = view === "value" ? value : price;
-  const empty = view === "value" ? !valuePoints.some((p) => p.value !== null) : !prices.some((p) => p.price !== null);
-  const label = CHART_VIEWS.find((c) => c.value === view)?.label ?? "";
+/** The holdings' value against what was paid, over Investments' period (the returns' too). */
+export function InvestmentsChartCard({ profileCode, period }: { profileCode: string; period: InvestmentPeriod }) {
+  const range = useMemo(() => investmentPeriodRange(period), [period]);
+  const q = useHoldingsValueSeries(profileCode, range);
+  const points = useMemo(() => holdingsPoints(q.data ?? []), [q.data]);
+  const empty = !points.some((p) => p.value !== null);
 
   return (
     <Card>
-      <CardHeader
-        eyebrow="Last 90 days"
-        title={view === "value" ? "Value over time" : `${label} per gram`}
-        action={
-          // A wrapper hides it on phones: Segmented's own inline-flex would win over `hidden` (cn doesn't merge).
-          <div className="hidden sm:block">
-            <Segmented ariaLabel="Chart" value={view} onChange={setView} options={CHART_VIEWS} />
-          </div>
-        }
-      />
-      <div className="px-5 pb-3 sm:hidden">
-        <Segmented ariaLabel="Chart" value={view} onChange={setView} options={CHART_VIEWS} />
-      </div>
+      <CardHeader eyebrow={investmentPeriodTitle(period)} title="Value over time" />
       <div className="px-3 pb-4 md:px-4">
         {q.isLoading ? (
           <LoadingBlock className="h-56" />
         ) : q.isError ? (
           <ErrorState error={q.error} onRetry={() => void q.refetch()} />
         ) : empty ? (
-          <EmptyState icon={<LineChart />} title={view === "value" ? "Nothing to chart yet" : "No prices yet"} className="h-56">
-            {view === "value"
-              ? "Add an investment: the chart shows what your holdings were worth each day, from when each began, against what you put in."
-              : "The price history fills in from the first fetch, every 6 hours."}
+          <EmptyState icon={<LineChart />} title="Nothing to chart yet" className="h-56">
+            Add an investment: the chart shows what your holdings were worth each day, from when each began, against what you put in.
           </EmptyState>
         ) : (
           <Suspense fallback={<LoadingBlock className="h-56" />}>
-            {view === "value" ? <HoldingsValueChart points={valuePoints} /> : <MetalPriceChart points={prices} label={label} />}
+            <HoldingsValueChart points={points} />
           </Suspense>
         )}
       </div>
-      {view === "value" && !empty && (
+      {!q.isLoading && !q.isError && !empty && (
         <div className="px-5 pb-4 text-[11px] text-subtle">
           <p>Your holdings at each day's prices and values. The dashed line is what you had put in by then.</p>
-          {partialDaysNote(valuePoints) && <p className="mt-1 text-muted">{partialDaysNote(valuePoints)}</p>}
+          {partialDaysNote(points) && <p className="mt-1 text-muted">{partialDaysNote(points)}</p>}
         </div>
       )}
     </Card>

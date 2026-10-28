@@ -13,19 +13,21 @@ import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
 import { TONE_TEXT } from "./investments";
 
 /**
- * Returns for all time, this year or the last 12 months (holding_returns): what was added, what it
- * grew by and the money-weighted yearly return, in total and per holding. With `holdingCode`, one
- * holding's figures only. Every figure is the server's.
+ * Returns for a period (holding_returns): what was added, what it grew by and the money-weighted
+ * yearly return, in total and per holding. With `period`, the page's period (Investments: one
+ * choice for the chart and the returns); without, its own switch of all time, this year and 12
+ * months. With `holdingCode`, one holding's figures only. Every figure is the server's.
  */
-export function ReturnsCard({ profileCode, holdingCode }: { profileCode: string; holdingCode?: string }) {
-  const [period, setPeriod] = useState<ReturnPeriod>("all");
+export function ReturnsCard({ profileCode, holdingCode, period: shared }: { profileCode: string; holdingCode?: string; period?: ReturnPeriod }) {
+  const [own, setOwn] = useState<ReturnPeriod>("all");
+  const period = shared ?? own;
   const q = useHoldingReturns(profileCode, period);
   const one = holdingCode ? q.data?.holdings.find((h) => h.holding_code === holdingCode) : undefined;
-  const switcher = <Segmented ariaLabel="Period" value={period} onChange={setPeriod} options={[...RETURN_PERIODS]} />;
+  const switcher = shared ? null : <Segmented ariaLabel="Period" value={own} onChange={setOwn} options={[...RETURN_PERIODS]} />;
   return (
     <Card>
-      <CardHeader eyebrow="Returns" title={holdingCode ? "How it has done" : "New money and growth"} action={<div className="hidden sm:block">{switcher}</div>} />
-      <div className="px-5 pb-3 sm:hidden">{switcher}</div>
+      <CardHeader eyebrow="Returns" title={holdingCode ? "How it has done" : "New money and growth"} action={switcher && <div className="hidden sm:block">{switcher}</div>} />
+      {switcher && <div className="px-5 pb-3 sm:hidden">{switcher}</div>}
       {q.isLoading ? (
         <LoadingRows rows={3} />
       ) : q.isError || !q.data ? (
