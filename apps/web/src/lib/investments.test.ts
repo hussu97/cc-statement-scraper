@@ -11,6 +11,7 @@ import {
   emptyInvestmentForm,
   flowSign,
   formatOwnValue,
+  holdingValueLines,
   formatRate,
   formatUnitPrice,
   formatUnits,
@@ -194,6 +195,20 @@ describe("values and flows", () => {
     expect(validateFlowForm("AED", f, TODAY)).toEqual({ ok: true, input: { kind: "income", flow_date: "2026-10-01", amount: "120", notes: "Dividend" } });
     expect(validateFlowForm("AED", { ...f, amount: "0" }, TODAY)).toMatchObject({ ok: false });
     expect(validateFlowForm("AED", { ...f, date: "2026-10-22" }, TODAY)).toMatchObject({ ok: false });
+  });
+});
+
+describe("a holding's value on Investments", () => {
+  it("leads with AED, its own currency second", () => {
+    expect(holdingValueLines({ kind: "security", currency: "USD", value: "14650.00", value_aed: "53800.00" })).toEqual({ main: "AED 53,800", own: "USD 14,650", known: true });
+    expect(holdingValueLines({ kind: "metal", currency: "AED", value: "12000.00", value_aed: "12000.00" })).toEqual({ main: "AED 12,000", own: null, known: true });
+    expect(holdingValueLines({ kind: "metal", value_aed: "12000.00" })).toEqual({ main: "AED 12,000", own: null, known: true });
+  });
+
+  it("falls back to its own currency before an AED value, then to why there is none", () => {
+    expect(holdingValueLines({ kind: "plan", currency: "USD", value: "100.00", value_aed: null })).toEqual({ main: "USD 100", own: null, known: true });
+    expect(holdingValueLines({ kind: "metal", value_aed: null })).toEqual({ main: "No price yet", own: null, known: false });
+    expect(holdingValueLines({ kind: "deposit", currency: "AED", value: null, value_aed: null })).toEqual({ main: "Not started yet", own: null, known: false });
   });
 });
 

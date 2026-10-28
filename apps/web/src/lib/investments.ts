@@ -125,6 +125,19 @@ export function aedEquivalent(valueAed: MoneyInput, currency: string | null | un
   return `≈ ${formatTotal(valueAed)}`;
 }
 
+/**
+ * A holding's value on Investments: AED first and its own currency second ("AED 53,800" over
+ * "USD 14,650"). Before an AED value, its own-currency value (if any) is the main line, else why
+ * there is none.
+ */
+export function holdingValueLines(h: { kind?: string | null; currency?: string | null; value?: string | null; value_aed: string | null }): { main: string; own: string | null; known: boolean } {
+  const foreign = !!h.currency && h.currency !== "AED";
+  const own = foreign ? formatOwnValue(h.value, h.currency) : null;
+  if (toAmount(h.value_aed) !== null) return { main: formatTotal(h.value_aed), own, known: true };
+  if (own) return { main: own, own: null, known: true };
+  return { main: noValueText(h.kind), own: null, known: false };
+}
+
 /** Why a holding has no value yet, by kind. */
 export function noValueText(kind: string | null | undefined): string {
   if (kind === "metal") return "No price yet";

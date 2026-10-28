@@ -1,9 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import { ChevronRight, Coins, Plus } from "lucide-react";
 import type { Holding, useHoldingsValuation } from "@/data/holdings";
-import { brokerAccountLine, outsideBrokers, type BrokerAccountSummary } from "@/lib/broker-accounts";
+import { brokerRowFigures, outsideBrokers, type BrokerAccountSummary } from "@/lib/broker-accounts";
 import { formatPct, formatWeight, holdingKind, quoteLabel, signTone } from "@/lib/holdings";
-import { aedEquivalent, formatOwnValue, groupHoldings, investmentFacts, kindOf, linkRuleText, noValueText, valueInput } from "@/lib/investments";
+import { groupHoldings, holdingValueLines, investmentFacts, kindOf, linkRuleText, valueInput } from "@/lib/investments";
 import { formatDate, formatRelative } from "@/lib/dates";
 import { formatMoney, formatTotal } from "@/lib/money";
 import { cn } from "@/lib/cn";
@@ -29,8 +29,8 @@ export interface BrokerGroups {
 }
 
 /**
- * Every holding, grouped by kind, each with its value (own currency and AED), its date, cost and
- * gain. A synced broker account (Swissquote, Zerodha) is one row at the top, linking to its
+ * Every holding, grouped by kind, each with its value (AED first, its own currency second), its
+ * date, cost and gain, every row in the same type and layout. A synced broker account (Swissquote, Zerodha) is one row at the top, linking to its
  * portfolio; the holdings it covers aren't listed again.
  */
 export function HoldingsListCard({
@@ -112,21 +112,42 @@ export function HoldingsListCard({
   );
 }
 
+/** Every row's main figure: one size and weight, whether or not there is a value (only the colour says which). */
+function valueClass(known: boolean): string {
+  return cn("tabular text-sm font-medium whitespace-nowrap", known ? "text-ink" : "text-muted");
+}
+
+/** A synced broker account: AED worth and profit first, its own currency second, and the last 24 hours. */
 function BrokerRow({ a }: { a: BrokerAccountSummary }) {
+  const f = brokerRowFigures(a);
+  const sub = [f.own, f.notes].filter(Boolean).join(" · ");
   return (
     <li>
       <Link
         to="/wealth/investments/accounts/$accountCode"
         params={{ accountCode: a.account_code }}
-        className="tap group flex items-center gap-3 px-5 py-3.5 hover:bg-surface-2/60 focus-visible:bg-surface-2/60"
+        className="tap group flex items-start gap-3 px-5 py-3.5 hover:bg-surface-2/60 focus-visible:bg-surface-2/60"
       >
         <BankLogo bankCode={a.bank_code} decorative />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-ink group-hover:text-accent">{a.name}</p>
-          <p className="tabular mt-0.5 text-[12px] text-ink-2">{brokerAccountLine(a)}</p>
+          {sub && <p className="tabular mt-0.5 text-[12px] text-ink-2">{sub}</p>}
           {a.sync_status === "error" && <p className="mt-0.5 text-[11px] text-warn">The last sync failed: open the portfolio to see why.</p>}
         </div>
-        <ChevronRight className="size-4 shrink-0 text-subtle group-hover:text-ink-2" />
+        <div className="flex shrink-0 flex-col items-end gap-0.5 text-right">
+          <p className={valueClass(f.value !== null)}>{f.value ?? "No value yet"}</p>
+          {f.profit && <p className={cn("tabular text-[12px]", TONE_TEXT[signTone(f.profitTone)])}>{f.profit}</p>}
+          {f.change && (
+            <p className="text-[11px] text-subtle">
+              <span className={cn("tabular", TONE_TEXT[signTone(f.changeTone)])}>
+                {f.change}
+                {f.changePct && ` (${f.changePct})`}
+              </span>{" "}
+              24h
+            </p>
+          )}
+        </div>
+        <ChevronRight className="mt-0.5 size-4 shrink-0 text-subtle group-hover:text-ink-2" />
       </Link>
     </li>
   );
@@ -167,8 +188,7 @@ export function ValueSource({ h }: { h: Holding }) {
 function HoldingRow({ h, actions }: { h: Holding; actions: HoldingActions }) {
   const gainPct = formatPct(h.gain_pct, { signed: true });
   const kind = kindOf(h);
-  const own = h.currency && h.currency !== "AED" ? formatOwnValue(h.value, h.currency) : null;
-  const aed = aedEquivalent(h.value_aed, h.currency);
+  const v = holdingValueLines(h);
   // A structured note is changed from its own page (cancel_structured_note), never the holding form.
   const { onEdit, onClose, onUpdateValue } = kind === "structured_note" ? ({} as HoldingActions) : actions;
   return (
@@ -192,10 +212,8 @@ function HoldingRow({ h, actions }: { h: Holding; actions: HoldingActions }) {
         </div>
       </div>
       <div className="flex shrink-0 flex-col gap-0.5 pl-15 sm:items-end sm:pl-0 sm:text-right">
-        <p className={cn("tabular text-sm", h.value_aed === null ? "text-muted" : "font-medium text-ink")}>
-          {h.value_aed === null ? noValueText(kind) : (own ?? formatTotal(h.value_aed))}
-        </p>
-        {own && aed && <p className="tabular text-[11px] text-subtle">{aed}</p>}
+        <p className={valueClass(v.known)}>{v.main}</p>
+        {v.own && <p className="tabular text-[11px] text-subtle">{v.own}</p>}
         <p className="text-[12px]">
           {h.gain_aed === null ? (
             <span className="text-subtle">{h.cost_aed === null ? "No cost recorded" : "Gain not known yet"}</span>
