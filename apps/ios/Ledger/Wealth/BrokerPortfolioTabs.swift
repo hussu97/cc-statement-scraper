@@ -5,6 +5,8 @@ import SwiftUI
 enum AccountRoute: Hashable, Identifiable {
     case note(String)
     case holding(String)
+    /// A Kite or Coin position, by ISIN.
+    case position(String)
     var id: Self { self }
 }
 

@@ -1,0 +1,283 @@
+{
+ "cash": "18643.80",
+ "fees": "0",
+ "sips": [],
+ "sync": {
+  "error": null,
+  "status": "ok",
+  "last_synced_at": "2026-10-28T07:28:37.780087+00:00",
+  "last_attempt_at": "2026-10-28T07:28:37.780087+00:00"
+ },
+ "as_of": "2026-10-28",
+ "basis": "cost",
+ "total": "101564.21",
+ "closed": [],
+ "income": "0",
+ "profit": "44499.33",
+ "series": [
+  {
+   "cash": "18643.80",
+   "as_of": "2026-10-27",
+   "total": "101564.21",
+   "invested": "38421.08",
+   "segments": {
+    "kite": {
+     "value": "82920.41",
+     "invested": "38421.08"
+    }
+   },
+   "estimated": false,
+   "positions": "82920.41",
+   "net_deposits": "57064.88"
+  },
+  {
+   "cash": "18643.80",
+   "as_of": "2026-10-28",
+   "total": "101564.21",
+   "invested": "38421.08",
+   "segments": {
+    "kite": {
+     "value": "82920.41",
+     "invested": "38421.08"
+    }
+   },
+   "estimated": false,
+   "positions": "82920.41",
+   "net_deposits": "57064.88"
+  }
+ ],
+ "issuers": [],
+ "currency": "INR",
+ "invested": "38421.08",
+ "provider": "zerodha",
+ "segments": [
+  {
+   "value": "82920.41",
+   "profit": "44499.33",
+   "segment": "kite",
+   "invested": "38421.08",
+   "positions": "3",
+   "value_aed": "3466.07",
+   "return_pct": "115.82"
+  }
+ ],
+ "positions": [
+  {
+   "cost": "15346.70",
+   "isin": "INE000F01012",
+   "kind": "security",
+   "name": "PLACEHOLDER FOODS",
+   "note": null,
+   "as_of": "2026-10-28",
+   "folio": null,
+   "price": "240.05",
+   "value": "30006.25",
+   "income": "0",
+   "issuer": null,
+   "profit": "14659.55",
+   "symbol": "PHDAIRY",
+   "segment": "kite",
+   "category": null,
+   "currency": "INR",
+   "exchange": "NSE",
+   "invested": "15346.70",
+   "quantity": "125",
+   "sell_now": {
+    "total": "30006.25",
+    "profit": "14659.55",
+    "return_pct": "95.52"
+   },
+   "value_aed": "1254.26",
+   "cost_price": "122.7736",
+   "day_change": "-300.00",
+   "prev_price": "242.45",
+   "price_date": null,
+   "return_pct": "95.52",
+   "weight_pct": "36.19",
+   "asset_class": "stock",
+   "holding_code": "hld_01k60pjcyjqhss609983vm8cm8",
+   "price_in_pct": false,
+   "product_type": "EQUITY",
+   "security_name": "PLACEHOLDER FOODS",
+   "day_change_pct": "-0.99"
+  },
+  {
+   "cost": "6834.00",
+   "isin": "INE000E01011",
+   "kind": "security",
+   "name": "TESTSHOP",
+   "note": null,
+   "as_of": "2026-10-28",
+   "folio": null,
+   "price": "2860.2",
+   "value": "28602.00",
+   "income": "0",
+   "issuer": null,
+   "profit": "21768.00",
+   "symbol": "TESTSHOP",
+   "segment": "kite",
+   "category": null,
+   "currency": "INR",
+   "exchange": "BSE",
+   "invested": "6834.00",
+   "quantity": "10",
+   "sell_now": {
+    "total": "28602.00",
+    "profit": "21768.00",
+    "return_pct": "318.53"
+   },
+   "value_aed": "1195.56",
+   "cost_price": "683.4",
+   "day_change": "302.00",
+   "prev_price": "2830",
+   "price_date": null,
+   "return_pct": "318.53",
+   "weight_pct": "34.49",
+   "asset_class": "stock",
+   "holding_code": "hld_01k60pjcygjyyc6yc9vjh4q2d0",
+   "price_in_pct": false,
+   "product_type": "EQUITY",
+   "security_name": "TESTSHOP",
+   "day_change_pct": "1.07"
+  },
+  {
+   "cost": "16240.38",
+   "isin": "INF204KB14I2",
+   "kind": "security",
+   "name": "NIPPON INDIA ETF NIFTY BEES",
+   "note": null,
+   "as_of": "2026-10-28",
+   "folio": null,
+   "price": "258.64",
+   "value": "24312.16",
+   "income": "0",
+   "issuer": null,
+   "profit": "8071.78",
+   "symbol": "NIFTYBEES",
+   "segment": "kite",
+   "category": null,
+   "currency": "INR",
+   "exchange": "NSE",
+   "invested": "16240.38",
+   "quantity": "94",
+   "sell_now": {
+    "total": "24312.16",
+    "profit": "8071.78",
+    "return_pct": "49.70"
+   },
+   "value_aed": "1016.25",
+   "cost_price": "172.77",
+   "day_change": null,
+   "prev_price": null,
+   "price_date": null,
+   "return_pct": "49.70",
+   "weight_pct": "29.32",
+   "asset_class": "etf",
+   "holding_code": "hld_01k60pjcyk44v9nre9aw4cg1ah",
+   "price_in_pct": false,
+   "product_type": "EQUITY",
+   "security_name": "NIPPON INDIA ETF NIFTY BEES",
+   "day_change_pct": null
+  }
+ ],
+ "total_aed": "4245.38",
+ "allocation": [
+  {
+   "key": "stock",
+   "label": "Stocks",
+   "value": "58608.25",
+   "profit": "36427.55",
+   "invested": "22180.70",
+   "positions": "2",
+   "return_pct": "164.23",
+   "weight_pct": "70.68"
+  },
+  {
+   "key": "etf",
+   "label": "ETFs",
+   "value": "24312.16",
+   "profit": "8071.78",
+   "invested": "16240.38",
+   "positions": "1",
+   "return_pct": "49.70",
+   "weight_pct": "29.32"
+  }
+ ],
+ "day_change": "2.00",
+ "highlights": {
+  "best": [
+   {
+    "isin": "INE000E01011",
+    "name": "TESTSHOP",
+    "value": "28602.00",
+    "profit": "21768.00",
+    "symbol": "TESTSHOP",
+    "day_change": "302.00",
+    "return_pct": "318.53",
+    "holding_code": "hld_01k60pjcygjyyc6yc9vjh4q2d0",
+    "day_change_pct": "1.07"
+   },
+   {
+    "isin": "INE000F01012",
+    "name": "PLACEHOLDER FOODS",
+    "value": "30006.25",
+    "profit": "14659.55",
+    "symbol": "PHDAIRY",
+    "day_change": "-300.00",
+    "return_pct": "95.52",
+    "holding_code": "hld_01k60pjcyjqhss609983vm8cm8",
+    "day_change_pct": "-0.99"
+   },
+   {
+    "isin": "INF204KB14I2",
+    "name": "NIPPON INDIA ETF NIFTY BEES",
+    "value": "24312.16",
+    "profit": "8071.78",
+    "symbol": "NIFTYBEES",
+    "day_change": null,
+    "return_pct": "49.70",
+    "holding_code": "hld_01k60pjcyk44v9nre9aw4cg1ah",
+    "day_change_pct": null
+   }
+  ],
+  "worst": [],
+  "losers_today": [
+   {
+    "isin": "INE000F01012",
+    "name": "PLACEHOLDER FOODS",
+    "value": "30006.25",
+    "profit": "14659.55",
+    "symbol": "PHDAIRY",
+    "day_change": "-300.00",
+    "return_pct": "95.52",
+    "holding_code": "hld_01k60pjcyjqhss609983vm8cm8",
+    "day_change_pct": "-0.99"
+   }
+  ],
+  "gainers_today": [
+   {
+    "isin": "INE000E01011",
+    "name": "TESTSHOP",
+    "value": "28602.00",
+    "profit": "21768.00",
+    "symbol": "TESTSHOP",
+    "day_change": "302.00",
+    "return_pct": "318.53",
+    "holding_code": "hld_01k60pjcygjyyc6yc9vjh4q2d0",
+    "day_change_pct": "1.07"
+   }
+  ],
+  "top5_weight_pct": null
+ },
+ "account_code": "acc_01k60pjcyddj8en3476wmj6af1",
+ "closed_total": {
+  "count": "0",
+  "profit": "0",
+  "invested": "0",
+  "received": "0"
+ },
+ "net_deposits": "57064.88",
+ "portfolio_ref": "FX1234-KITE",
+ "day_change_pct": "0.00",
+ "positions_value": "82920.41"
+}

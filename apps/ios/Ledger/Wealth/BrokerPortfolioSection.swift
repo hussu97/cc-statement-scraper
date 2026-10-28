@@ -17,14 +17,18 @@ struct BrokerPortfolioStatus: View {
     }
 }
 
-/// The three numbers a broker account leads with (total value with AED under it, profit on what
-/// was put in, cash), Kite and Coin a line each at Zerodha, and how fresh they are, in one small line.
+/// The numbers a broker account leads with (total value with AED under it, profit on what was put
+/// in, today's move at Zerodha, cash), Kite and Coin a line each on an old single Zerodha account,
+/// and how fresh they are, in one small line.
 struct BrokerSummaryCard: View {
     let p: BrokerPortfolioPresentation
 
     var body: some View {
         Card {
-            HStack(alignment: .top, spacing: 12) {
+            // Three across; four (Zerodha's Today beside Cash) two by two, so none is cut short.
+            let columns = Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .topLeading),
+                                count: p.figures.count > 3 ? 2 : max(p.figures.count, 1))
+            LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
                 ForEach(p.figures) { figure in
                     VStack(alignment: .leading, spacing: 3) {
                         Text(figure.label.uppercased()).font(Typography.caption).tracking(0.8).foregroundStyle(Palette.muted)

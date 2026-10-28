@@ -317,6 +317,12 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         if let error = lock.withLock({ brokerAccountsError }) { throw error }
         return lock.withLock { brokerAccountsFixture }
     }
+    /// `broker_position_detail`'s answer.
+    var brokerPositionFixture: BrokerPositionDetail?
+    func brokerPosition(profileCode: String, accountCode: String, isin: String) async throws -> BrokerPositionDetail? {
+        count("brokerPosition")
+        return lock.withLock { brokerPositionFixture }
+    }
     func netWorth(profileCode: String) async throws -> NetWorth {
         count("netWorth")
         guard let fixture = lock.withLock({ netWorthFixture }) else { throw LedgerAPIError.network("-1009") }

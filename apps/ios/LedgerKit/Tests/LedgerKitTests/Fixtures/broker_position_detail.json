@@ -1,0 +1,68 @@
+{
+ "isin": "INF000B01014",
+ "name": "NORTHWIND SMALL CAP FUND - DIRECT PLAN",
+ "sips": [],
+ "series": [
+  {
+   "cost": "114395.60",
+   "as_of": "2026-10-27",
+   "price": "191.889",
+   "value": "350303.16",
+   "quantity": "1825.551",
+   "price_date": "2026-10-26"
+  },
+  {
+   "cost": "114395.60",
+   "as_of": "2026-10-28",
+   "price": "193.8273",
+   "value": "353841.62",
+   "quantity": "1825.551",
+   "price_date": "2026-10-27"
+  }
+ ],
+ "symbol": "INF000B01014",
+ "currency": "INR",
+ "position": {
+  "cost": "114395.60",
+  "isin": "INF000B01014",
+  "kind": "security",
+  "name": "NORTHWIND SMALL CAP FUND - DIRECT PLAN",
+  "note": null,
+  "as_of": "2026-10-28",
+  "folio": "100000000012",
+  "price": "193.8273",
+  "value": "353841.62",
+  "income": "0",
+  "issuer": "Northwind Mutual Fund",
+  "profit": "239446.02",
+  "symbol": "INF000B01014",
+  "segment": "coin",
+  "category": "Equity",
+  "currency": "INR",
+  "exchange": null,
+  "invested": "114395.60",
+  "quantity": "1825.551",
+  "sell_now": {
+   "total": "353841.62",
+   "profit": "239446.02",
+   "return_pct": "209.31"
+  },
+  "value_aed": "14790.58",
+  "cost_price": "62.6636",
+  "day_change": "3538.47",
+  "prev_price": "191.889",
+  "price_date": "2026-10-27",
+  "return_pct": "209.31",
+  "weight_pct": "73.70",
+  "asset_class": "fund",
+  "holding_code": "hld_01k60pjcypt8yckx6hjj71k38a",
+  "price_in_pct": false,
+  "product_type": "MUTUAL_FUND",
+  "security_name": "NORTHWIND SMALL CAP FUND - DIRECT PLAN",
+  "day_change_pct": "1.01"
+ },
+ "provider": "zerodha",
+ "account_code": "acc_01k60pjcyexjbx165svgetwd53",
+ "holding_code": "hld_01k60pjcypt8yckx6hjj71k38a",
+ "last_marked_on": "2026-10-28"
+}

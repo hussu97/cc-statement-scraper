@@ -71,11 +71,21 @@ public struct BrokerValueChart: Sendable, Hashable {
     public var lineLabel: String { byCost ? "Invested" : Self.depositsLabel }
 
     /// Under the chart.
+    /// Against cost, what the caption calls the line (a single position says "its").
+    private var costNote = "The holdings' worth each day against what they cost."
+
+    /// The same chart, captioned for one position.
+    public func forOnePosition() -> BrokerValueChart {
+        var chart = self
+        chart.costNote = "Its worth each day against what it cost."
+        return chart
+    }
+
     public var note: String {
         guard showsChart else { return "The chart fills in as the daily syncs come in." }
         guard hasEstimated, let first = points.first(where: \.estimated)?.asOf,
               let last = points.last(where: \.estimated)?.asOf else {
-            return byCost ? "The holdings' worth each day against what they cost."
+            return byCost ? costNote
                 : "The account's value each day against the money put in to date."
         }
         return "The account's value each day against the money put in to date. Dashed: rebuilt from the broker's "

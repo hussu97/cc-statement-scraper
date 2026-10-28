@@ -32,6 +32,11 @@
 
 - **docs** parse-v1 documents the Mashreq layout under bank-account statements; plan and review in `tasks/todo.md` §13.
 
+### iOS
+
+- **feat** India → Kite and Coin: **Today** beside value and P&L (the four figures two by two; Coin's nil cash left out), **Allocation** (by type, or by fund house on Coin), **Highlights** (best and worst since bought, today's biggest moves, the five largest positions' share) and, on Coin, **SIPs** with any rejected instalment and its date in India. LedgerKit decodes `broker_portfolio`'s new fields (`BrokerDetail.swift`) and words them (`BrokerDetailPresentation`).
+- **feat** The **Holdings** tab lists every position sortable by value, P&L %, today, weight or name; each row shows the figure it is sorted by. A row opens the position's screen (`broker_position_detail`): value with its price or dated NAV, P&L, today, share of the account, its worth against its cost over time, the details and the fund's SIPs.
+
 ## India mode; Investments periods; broker 24h — 2026-10-28
 
 ### Backend (Supabase)

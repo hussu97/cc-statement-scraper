@@ -31,17 +31,24 @@ public struct BrokerPortfolioPresentation: Sendable, Hashable {
         }
     }
 
-    /// The three numbers: total value (≈ AED under it), profit on what was put in (against cost:
-    /// the P&L on what was invested), and cash.
+    /// The headline numbers: total value (≈ AED under it), profit on what was put in (against cost:
+    /// the P&L on what was invested), today's move when the server has one (Zerodha), and cash
+    /// (left out against cost when there is none: Coin).
     public var figures: [NoteStat] {
         let aed = currency == "AED" ? nil : portfolio.totalAed.map { "≈ \(MoneyFormat.aed($0, fractionDigits: 0))" }
         let on = byCost ? portfolio.invested.map { "on \(whole($0)) invested" } : "on \(whole(portfolio.netDeposits)) put in"
+        let move = portfolio.detail.dayChange.map {
+            NoteStat("Today", NoteText.signedWhole($0, currency: currency),
+                     sub: portfolio.detail.dayChangePct.map { NoteText.signedPct($0, digits: 2) }, tone: NoteText.profitTone($0))
+        }
+        let noCash = byCost && (portfolio.cash ?? 0) == 0
+        let cash = noCash ? nil : NoteStat("Cash", portfolio.cash.map(whole) ?? "—", sub: portfolio.cash == nil ? "No cash figure yet" : nil)
         return [
             NoteStat("Total value", whole(portfolio.total), sub: aed),
             NoteStat(byCost ? "P&L" : "Profit", NoteText.signedWhole(portfolio.profit, currency: currency),
                      sub: on, tone: NoteText.profitTone(portfolio.profit)),
-            NoteStat("Cash", portfolio.cash.map(whole) ?? "—", sub: portfolio.cash == nil ? "No cash figure yet" : nil),
-        ]
+            move, cash,
+        ].compactMap { $0 }
     }
 
     // MARK: Sync
@@ -79,7 +86,7 @@ public struct BrokerPortfolioPresentation: Sendable, Hashable {
     /// `"Portfolio"`, `"Transactions"`, `"Past notes (6)"`.
     public func title(_ tab: BrokerTab) -> String {
         switch tab {
-        case .portfolio: "Portfolio"
+        case .portfolio: byCost ? "Holdings" : "Portfolio"
         case .transactions: "Transactions"
         case .pastNotes: "\(byCost ? "Sold" : "Past notes") (\(portfolio.closed.count))"
         }

@@ -44,12 +44,22 @@ struct AccountLedgerView: View {
             } else if case .loaded(let p) = section {
                 BrokerSummaryCard(p: p).padding(.top, 8)
                 BrokerValueChartCard(chart: p.chart)
+                if p.showsDetail {
+                    BrokerAllocationCard(p: p)
+                    BrokerHighlightsCard(p: p) { route = .position($0) }
+                    BrokerSipsCard(rows: p.sipRows, missedText: p.missedSipsText)
+                }
                 Picker("Show", selection: $tab) {
                     ForEach(p.tabs) { Text(p.title($0)).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 switch p.tabs.contains(tab) ? tab : .portfolio {
-                case .portfolio: BrokerPortfolioTab(p: p) { route = $0 }
+                case .portfolio:
+                    if p.showsDetail {
+                        BrokerHoldingsList(p: p) { route = .position($0) }
+                    } else {
+                        BrokerPortfolioTab(p: p) { route = $0 }
+                    }
                 case .transactions: transactions(isBroker: true)
                 case .pastNotes: BrokerPastNotesTab(p: p) { route = $0 }
                 }
@@ -81,6 +91,8 @@ struct AccountLedgerView: View {
                 NoteDetailView(notes: notes, holdingCode: code, profileCode: profileCode, canEdit: canEdit)
             case .holding(let code):
                 HoldingDetailView(investments: investments, holdingCode: code, profileCode: profileCode, canEdit: canEdit)
+            case .position(let isin):
+                BrokerPositionView(model: model.positionModel(), accountCode: model.accountCode, isin: isin, profileCode: profileCode)
             }
         }
         .sheet(item: $opened) { txn in

@@ -1,0 +1,334 @@
+{
+ "cash": "0.00",
+ "fees": "0",
+ "sips": [
+  {
+   "day": "5",
+   "fund": "Initech Large & Mid Cap Fund - Direct Plan",
+   "isin": "INF000C01012",
+   "amount": "2184.00",
+   "missed": true,
+   "status": "active",
+   "step_up": {
+    "10-02": "3"
+   },
+   "currency": "INR",
+   "sip_code": "bsp_01k60pjcyxqnjg4qe5f0dz7axm",
+   "completed": "68",
+   "frequency": "monthly",
+   "last_order": {
+    "at": "2026-10-04T20:20:30+00:00",
+    "status": "rejected",
+    "message": "Payment not received."
+   },
+   "started_at": null,
+   "holding_code": "hld_01k60pjcyq88vybk49mwx0yths",
+   "last_instalment": null,
+   "next_instalment": "2026-11-05"
+  },
+  {
+   "day": "5",
+   "fund": "Acme Liquid Fund - Direct Plan",
+   "isin": "INF000D01010",
+   "amount": "3000.00",
+   "missed": null,
+   "status": "paused",
+   "step_up": null,
+   "currency": "INR",
+   "sip_code": "bsp_01k60pjcyynzhzky033x08v9zf",
+   "completed": "3",
+   "frequency": "monthly",
+   "last_order": null,
+   "started_at": null,
+   "holding_code": "hld_01k60pjcyqew9e0v18f3j73pr2",
+   "last_instalment": null,
+   "next_instalment": null
+  }
+ ],
+ "sync": {
+  "error": null,
+  "status": "ok",
+  "last_synced_at": "2026-10-28T07:28:37.780087+00:00",
+  "last_attempt_at": "2026-10-28T07:28:37.780087+00:00"
+ },
+ "as_of": "2026-10-28",
+ "basis": "cost",
+ "total": "480122.97",
+ "closed": [],
+ "income": "0",
+ "profit": "304754.46",
+ "series": [
+  {
+   "cash": "0.00",
+   "as_of": "2026-10-27",
+   "total": "476584.51",
+   "invested": "175368.51",
+   "segments": {
+    "coin": {
+     "value": "476584.51",
+     "invested": "175368.51"
+    }
+   },
+   "estimated": false,
+   "positions": "476584.51",
+   "net_deposits": "175368.51"
+  },
+  {
+   "cash": "0.00",
+   "as_of": "2026-10-28",
+   "total": "480122.97",
+   "invested": "175368.51",
+   "segments": {
+    "coin": {
+     "value": "480122.97",
+     "invested": "175368.51"
+    }
+   },
+   "estimated": false,
+   "positions": "480122.97",
+   "net_deposits": "175368.51"
+  }
+ ],
+ "issuers": [
+  {
+   "value": "353841.62",
+   "issuer": "Northwind Mutual Fund",
+   "positions": "1",
+   "weight_pct": "73.70"
+  },
+  {
+   "value": "118906.35",
+   "issuer": "Initech Mutual Fund",
+   "positions": "1",
+   "weight_pct": "24.77"
+  },
+  {
+   "value": "7375.00",
+   "issuer": "Acme Mutual Fund",
+   "positions": "1",
+   "weight_pct": "1.54"
+  }
+ ],
+ "currency": "INR",
+ "invested": "175368.51",
+ "provider": "zerodha",
+ "segments": [
+  {
+   "value": "480122.97",
+   "profit": "304754.46",
+   "segment": "coin",
+   "invested": "175368.51",
+   "positions": "3",
+   "value_aed": "20069.14",
+   "return_pct": "173.78"
+  }
+ ],
+ "positions": [
+  {
+   "cost": "114395.60",
+   "isin": "INF000B01014",
+   "kind": "security",
+   "name": "NORTHWIND SMALL CAP FUND - DIRECT PLAN",
+   "note": null,
+   "as_of": "2026-10-28",
+   "folio": "100000000012",
+   "price": "193.8273",
+   "value": "353841.62",
+   "income": "0",
+   "issuer": "Northwind Mutual Fund",
+   "profit": "239446.02",
+   "symbol": "INF000B01014",
+   "segment": "coin",
+   "category": "Equity",
+   "currency": "INR",
+   "exchange": null,
+   "invested": "114395.60",
+   "quantity": "1825.551",
+   "sell_now": {
+    "total": "353841.62",
+    "profit": "239446.02",
+    "return_pct": "209.31"
+   },
+   "value_aed": "14790.58",
+   "cost_price": "62.6636",
+   "day_change": "3538.47",
+   "prev_price": "191.889",
+   "price_date": "2026-10-27",
+   "return_pct": "209.31",
+   "weight_pct": "73.70",
+   "asset_class": "fund",
+   "holding_code": "hld_01k60pjcypt8yckx6hjj71k38a",
+   "price_in_pct": false,
+   "product_type": "MUTUAL_FUND",
+   "security_name": "NORTHWIND SMALL CAP FUND - DIRECT PLAN",
+   "day_change_pct": "1.01"
+  },
+  {
+   "cost": "53222.91",
+   "isin": "INF000C01012",
+   "kind": "security",
+   "name": "INITECH LARGE & MID CAP FUND - DIRECT PLAN",
+   "note": null,
+   "as_of": "2026-10-28",
+   "folio": "1000014",
+   "price": "123.1",
+   "value": "118906.35",
+   "income": "0",
+   "issuer": "Initech Mutual Fund",
+   "profit": "65683.44",
+   "symbol": "INF000C01012",
+   "segment": "coin",
+   "category": "Equity",
+   "currency": "INR",
+   "exchange": null,
+   "invested": "53222.91",
+   "quantity": "965.933",
+   "sell_now": {
+    "total": "118906.35",
+    "profit": "65683.44",
+    "return_pct": "123.41"
+   },
+   "value_aed": "4970.29",
+   "cost_price": "55.1",
+   "day_change": null,
+   "prev_price": null,
+   "price_date": "2026-10-25",
+   "return_pct": "123.41",
+   "weight_pct": "24.77",
+   "asset_class": "fund",
+   "holding_code": "hld_01k60pjcyq88vybk49mwx0yths",
+   "price_in_pct": false,
+   "product_type": "MUTUAL_FUND",
+   "security_name": "INITECH LARGE & MID CAP FUND - DIRECT PLAN",
+   "day_change_pct": null
+  },
+  {
+   "cost": "7750.00",
+   "isin": "INF000D01010",
+   "kind": "security",
+   "name": "ACME LIQUID FUND - DIRECT PLAN",
+   "note": null,
+   "as_of": "2026-10-28",
+   "folio": "1000000013",
+   "price": "2950",
+   "value": "7375.00",
+   "income": "0",
+   "issuer": "Acme Mutual Fund",
+   "profit": "-375.00",
+   "symbol": "INF000D01010",
+   "segment": "coin",
+   "category": "Debt",
+   "currency": "INR",
+   "exchange": null,
+   "invested": "7750.00",
+   "quantity": "2.5",
+   "sell_now": {
+    "total": "7375.00",
+    "profit": "-375.00",
+    "return_pct": "-4.84"
+   },
+   "value_aed": "308.28",
+   "cost_price": "3100",
+   "day_change": null,
+   "prev_price": null,
+   "price_date": "2026-10-27",
+   "return_pct": "-4.84",
+   "weight_pct": "1.54",
+   "asset_class": "fund",
+   "holding_code": "hld_01k60pjcyqew9e0v18f3j73pr2",
+   "price_in_pct": false,
+   "product_type": "MUTUAL_FUND",
+   "security_name": "ACME LIQUID FUND - DIRECT PLAN",
+   "day_change_pct": null
+  }
+ ],
+ "total_aed": "20069.14",
+ "allocation": [
+  {
+   "key": "fund:Equity",
+   "label": "Equity",
+   "value": "472747.97",
+   "profit": "305129.46",
+   "invested": "167618.51",
+   "positions": "2",
+   "return_pct": "182.04",
+   "weight_pct": "98.46"
+  },
+  {
+   "key": "fund:Debt",
+   "label": "Debt",
+   "value": "7375.00",
+   "profit": "-375.00",
+   "invested": "7750.00",
+   "positions": "1",
+   "return_pct": "-4.84",
+   "weight_pct": "1.54"
+  }
+ ],
+ "day_change": "3538.47",
+ "highlights": {
+  "best": [
+   {
+    "isin": "INF000B01014",
+    "name": "NORTHWIND SMALL CAP FUND - DIRECT PLAN",
+    "value": "353841.62",
+    "profit": "239446.02",
+    "symbol": "INF000B01014",
+    "day_change": "3538.47",
+    "return_pct": "209.31",
+    "holding_code": "hld_01k60pjcypt8yckx6hjj71k38a",
+    "day_change_pct": "1.01"
+   },
+   {
+    "isin": "INF000C01012",
+    "name": "INITECH LARGE & MID CAP FUND - DIRECT PLAN",
+    "value": "118906.35",
+    "profit": "65683.44",
+    "symbol": "INF000C01012",
+    "day_change": null,
+    "return_pct": "123.41",
+    "holding_code": "hld_01k60pjcyq88vybk49mwx0yths",
+    "day_change_pct": null
+   }
+  ],
+  "worst": [
+   {
+    "isin": "INF000D01010",
+    "name": "ACME LIQUID FUND - DIRECT PLAN",
+    "value": "7375.00",
+    "profit": "-375.00",
+    "symbol": "INF000D01010",
+    "day_change": null,
+    "return_pct": "-4.84",
+    "holding_code": "hld_01k60pjcyqew9e0v18f3j73pr2",
+    "day_change_pct": null
+   }
+  ],
+  "losers_today": [],
+  "gainers_today": [
+   {
+    "isin": "INF000B01014",
+    "name": "NORTHWIND SMALL CAP FUND - DIRECT PLAN",
+    "value": "353841.62",
+    "profit": "239446.02",
+    "symbol": "INF000B01014",
+    "day_change": "3538.47",
+    "return_pct": "209.31",
+    "holding_code": "hld_01k60pjcypt8yckx6hjj71k38a",
+    "day_change_pct": "1.01"
+   }
+  ],
+  "top5_weight_pct": null
+ },
+ "account_code": "acc_01k60pjcyexjbx165svgetwd53",
+ "closed_total": {
+  "count": "0",
+  "profit": "0",
+  "invested": "0",
+  "received": "0"
+ },
+ "net_deposits": "175368.51",
+ "portfolio_ref": "FX1234-COIN",
+ "day_change_pct": "1.01",
+ "positions_value": "480122.97"
+}

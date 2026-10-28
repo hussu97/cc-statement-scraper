@@ -113,6 +113,8 @@ public struct BrokerPortfolio: Decodable, Sendable, Hashable {
         public let note: Note?
         /// Zerodha: `kite` or `coin`; nil elsewhere and from an older server.
         public let segment: String?
+        /// Zerodha's detail (asset class, today's move, weight, …; `BrokerDetail.swift`).
+        public let detail: BrokerPositionFields
 
         enum CodingKeys: String, CodingKey {
             case holdingCode, kind, name, isin, securityName, symbol, productType, quantity, price, priceInPct
@@ -142,6 +144,7 @@ public struct BrokerPortfolio: Decodable, Sendable, Hashable {
             sellNow = try c.decodeIfPresent(SellNow.self, forKey: .sellNow)
             note = try c.decodeIfPresent(Note.self, forKey: .note)
             segment = try c.decodeIfPresent(String.self, forKey: .segment)
+            detail = try BrokerPositionFields(from: decoder)
         }
     }
 
@@ -269,6 +272,8 @@ public struct BrokerPortfolio: Decodable, Sendable, Hashable {
     /// Nil from an older server.
     public let closedTotal: ClosedTotal?
     public let series: [Point]
+    /// Zerodha's account detail: today's move, allocation, fund houses, highlights, SIPs.
+    public let detail: BrokerPortfolioDetail
 
     enum CodingKeys: String, CodingKey {
         case accountCode, provider, portfolioRef, currency, basis, sync, asOf, cash, positionsValue, total, totalAed
@@ -298,6 +303,7 @@ public struct BrokerPortfolio: Decodable, Sendable, Hashable {
         closed = try c.decodeIfPresent([ClosedPosition].self, forKey: .closed) ?? []
         closedTotal = try c.decodeIfPresent(ClosedTotal.self, forKey: .closedTotal)
         series = try c.decodeIfPresent([Point].self, forKey: .series) ?? []
+        detail = try BrokerPortfolioDetail(from: decoder)
     }
 
     /// Every holding the account shows, live or ended: other lists leave them out.
