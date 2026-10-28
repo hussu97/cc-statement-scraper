@@ -1,6 +1,7 @@
 import Foundation
 
-/// The broker account's value per day against the money put in to date (`broker_portfolio.series`).
+/// The broker account's value per day against the money put in to date (`broker_portfolio.series`);
+/// against cost (Zerodha), the holdings' worth against what they cost, cash aside.
 /// Days rebuilt from the broker's performance index (`estimated`) are drawn apart from the synced
 /// ones: the value line is cut into runs of one kind, each run starting at the previous run's last
 /// day so the line stays joined. Every point is the server's.
@@ -25,11 +26,19 @@ public struct BrokerValueChart: Sendable, Hashable {
     public let deposits: [DepositMark]
     private let points: [BrokerPortfolio.Point]
     private let currency: String
+    private let byCost: Bool
 
-    public init(_ series: [BrokerPortfolio.Point], currency: String) {
-        let sorted = series.sorted { $0.asOf < $1.asOf }
+    public init(_ series: [BrokerPortfolio.Point], currency: String, basis: BrokerPortfolio.Basis = .deposits) {
+        let byCost = basis == .cost
+        // Against cost: the holdings (cash aside) against what they cost.
+        let sorted = series.sorted { $0.asOf < $1.asOf }.map { p in
+            byCost ? BrokerPortfolio.Point(asOf: p.asOf, total: p.positions ?? p.total, cash: p.cash, positions: p.positions,
+                                           netDeposits: p.invested ?? p.netDeposits, invested: p.invested,
+                                           estimated: p.estimated) : p
+        }
         points = sorted
         self.currency = currency
+        self.byCost = byCost
         var marks: [ValueMark] = []
         var run = -1
         var previous: BrokerPortfolio.Point?
@@ -58,12 +67,16 @@ public struct BrokerValueChart: Sendable, Hashable {
     public static let estimatedLabel = "Value (rebuilt)"
     public static let depositsLabel = "Net deposits"
 
+    /// The second line's name: what the value is measured against.
+    public var lineLabel: String { byCost ? "Invested" : Self.depositsLabel }
+
     /// Under the chart.
     public var note: String {
         guard showsChart else { return "The chart fills in as the daily syncs come in." }
         guard hasEstimated, let first = points.first(where: \.estimated)?.asOf,
               let last = points.last(where: \.estimated)?.asOf else {
-            return "The account's value each day against the money put in to date."
+            return byCost ? "The holdings' worth each day against what they cost."
+                : "The account's value each day against the money put in to date."
         }
         return "The account's value each day against the money put in to date. Dashed: rebuilt from the broker's "
             + "performance index (\(LedgerDates.fullDayLabel(first)) to \(LedgerDates.fullDayLabel(last))), before daily syncs."
@@ -78,6 +91,6 @@ public struct BrokerValueChart: Sendable, Hashable {
     public var accessibilityValue: String {
         guard let last = points.last else { return "No history yet" }
         return "\(LedgerDates.fullDayLabel(last.asOf)): \(MoneyFormat.amount(last.total, currency: currency)) "
-            + "against \(MoneyFormat.amount(last.netDeposits, currency: currency)) put in"
+            + "against \(MoneyFormat.amount(last.netDeposits, currency: currency)) \(byCost ? "invested" : "put in")"
     }
 }

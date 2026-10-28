@@ -2,7 +2,7 @@ import Charts
 import LedgerKit
 import SwiftUI
 
-/// The broker account's value per day against its net deposits. Days rebuilt from the broker's
+/// The broker account's value per day against its net deposits (at Zerodha, the holdings against their cost). Days rebuilt from the broker's
 /// performance index are dashed and lighter; the synced ones solid. Every point is the server's.
 struct BrokerValueChartCard: View {
     let chart: BrokerValueChart
@@ -25,7 +25,7 @@ struct BrokerValueChartCard: View {
             if chart.hasEstimated {
                 LegendKey(label: BrokerValueChart.estimatedLabel, color: Palette.accent.opacity(0.55), dashed: true)
             }
-            LegendKey(label: BrokerValueChart.depositsLabel, color: Palette.muted, dashed: false)
+            LegendKey(label: chart.lineLabel, color: Palette.muted, dashed: false)
         }
         .accessibilityHidden(true)
     }
@@ -66,7 +66,7 @@ struct BrokerValueChartCard: View {
         }
         .frame(height: 200)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Value over time against net deposits")
+        .accessibilityLabel("Value over time against \(chart.lineLabel.lowercased())")
         .accessibilityValue(chart.accessibilityValue)
     }
 }

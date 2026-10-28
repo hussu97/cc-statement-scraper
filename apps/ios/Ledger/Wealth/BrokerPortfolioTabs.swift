@@ -9,12 +9,34 @@ enum AccountRoute: Hashable, Identifiable {
 }
 
 /// Portfolio: "Your notes", a card per live note (its verdict, two numbers, its stocks on bars),
-/// then "Other holdings", a line each. The words and which row goes where are LedgerKit's.
+/// then "Other holdings", a line each. At Zerodha, a card per segment (Kite, Coin) instead, each
+/// holding with its units and cost. The words and which row goes where are LedgerKit's.
 struct BrokerPortfolioTab: View {
     let p: BrokerPortfolioPresentation
     let open: (AccountRoute) -> Void
 
     var body: some View {
+        let groups = p.segmentGroups
+        if groups.isEmpty {
+            notesAndOthers
+        } else {
+            ForEach(groups) { group in
+                Card {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(group.eyebrow).font(Typography.caption).tracking(0.8).foregroundStyle(Palette.muted)
+                        SectionHeader(title: group.title, trailing: "\(group.rows.count)")
+                    }
+                    ForEach(group.rows) { row in
+                        if row.id != group.rows.first?.id { Divider().overlay(Palette.border) }
+                        Button { open(.holding(row.holdingCode)) } label: { HoldingLine(row: row) }
+                            .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var notesAndOthers: some View {
         let notes = p.notes
         let others = p.otherHoldings
         if notes.isEmpty && others.isEmpty {
@@ -89,7 +111,12 @@ private struct HoldingLine: View {
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
             AdaptiveRow(alignment: .center) {
-                Text(row.title).font(Typography.rowMeta).foregroundStyle(Palette.ink).lineLimit(2)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(row.title).font(Typography.rowMeta).foregroundStyle(Palette.ink).lineLimit(2)
+                    if let detail = row.detailText {
+                        Text(detail).font(Typography.caption).foregroundStyle(Palette.muted).lineLimit(1)
+                    }
+                }
             } trailing: {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(row.valueText).font(Typography.amount).foregroundStyle(Palette.ink).moneyLine()

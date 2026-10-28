@@ -3,8 +3,9 @@ import Foundation
 /// What a synced broker account's screen shows, worded. Up top, always: three numbers (total
 /// value, profit against what was put in, cash), how fresh they are, and the value over time.
 /// Then a choice of Portfolio (a card per live note, a line per other holding), Transactions
-/// (the account's ledger) and Past notes (what ended, with the total). Every figure is the
-/// server's (`broker_portfolio`); nothing here adds money up (CLAUDE.md §2.2).
+/// (the account's ledger) and Past notes (what ended, with the total). Against cost (Zerodha):
+/// the P&L on what was invested, Kite and Coin one line each, a card per segment, and "Sold".
+/// Every figure is the server's (`broker_portfolio`); nothing here adds money up (CLAUDE.md §2.2).
 public struct BrokerPortfolioPresentation: Sendable, Hashable {
     public let portfolio: BrokerPortfolio
     public let now: Date
@@ -15,6 +16,7 @@ public struct BrokerPortfolioPresentation: Sendable, Hashable {
     }
 
     private var currency: String { portfolio.currency }
+    private var byCost: Bool { portfolio.basis == .cost }
     private var today: CalendarDay { LedgerDates.today(now: now) }
     private func whole(_ v: Decimal) -> String { NoteText.whole(v, currency: currency) }
 
@@ -24,17 +26,20 @@ public struct BrokerPortfolioPresentation: Sendable, Hashable {
     public var providerName: String {
         switch portfolio.provider {
         case "swissquote": "Swissquote"
+        case "zerodha": "Zerodha"
         default: portfolio.provider.replacingOccurrences(of: "_", with: " ").capitalized
         }
     }
 
-    /// The three numbers: total value (≈ AED under it), profit on what was put in, and cash.
+    /// The three numbers: total value (≈ AED under it), profit on what was put in (against cost:
+    /// the P&L on what was invested), and cash.
     public var figures: [NoteStat] {
         let aed = currency == "AED" ? nil : portfolio.totalAed.map { "≈ \(MoneyFormat.aed($0, fractionDigits: 0))" }
+        let on = byCost ? portfolio.invested.map { "on \(whole($0)) invested" } : "on \(whole(portfolio.netDeposits)) put in"
         return [
             NoteStat("Total value", whole(portfolio.total), sub: aed),
-            NoteStat("Profit", NoteText.signedWhole(portfolio.profit, currency: currency),
-                     sub: "on \(whole(portfolio.netDeposits)) put in", tone: NoteText.profitTone(portfolio.profit)),
+            NoteStat(byCost ? "P&L" : "Profit", NoteText.signedWhole(portfolio.profit, currency: currency),
+                     sub: on, tone: NoteText.profitTone(portfolio.profit)),
             NoteStat("Cash", portfolio.cash.map(whole) ?? "—", sub: portfolio.cash == nil ? "No cash figure yet" : nil),
         ]
     }
@@ -76,9 +81,18 @@ public struct BrokerPortfolioPresentation: Sendable, Hashable {
         switch tab {
         case .portfolio: "Portfolio"
         case .transactions: "Transactions"
-        case .pastNotes: "Past notes (\(portfolio.closed.count))"
+        case .pastNotes: "\(byCost ? "Sold" : "Past notes") (\(portfolio.closed.count))"
         }
     }
+
+    // MARK: Segments (Zerodha)
+
+    /// Kite and Coin, one line each under the three numbers; empty for other brokers.
+    public var segments: [BrokerSegmentLine] { portfolio.segments.map { BrokerSegmentLine($0, currency: currency) } }
+
+    /// Against cost, the Portfolio tab is a card per segment (largest value first within each);
+    /// empty otherwise, when the tab shows notes and other holdings.
+    public var segmentGroups: [BrokerSegmentGroup] { byCost ? BrokerSegmentGroup.groups(sortedPositions) : [] }
 
     // MARK: Portfolio
 
@@ -89,7 +103,7 @@ public struct BrokerPortfolioPresentation: Sendable, Hashable {
 
     /// "Other holdings": everything else (shares, notes the ledger has no terms for), one line each.
     public var otherHoldings: [BrokerHoldingRow] {
-        sortedPositions.filter { !Self.isLiveNote($0) }.map(BrokerHoldingRow.init)
+        sortedPositions.filter { !Self.isLiveNote($0) }.map { BrokerHoldingRow($0) }
     }
 
     /// A structured note with terms that hasn't ended.
@@ -136,7 +150,7 @@ public struct BrokerPortfolioPresentation: Sendable, Hashable {
 
     // MARK: Chart
 
-    public var chart: BrokerValueChart { BrokerValueChart(portfolio.series, currency: currency) }
+    public var chart: BrokerValueChart { BrokerValueChart(portfolio.series, currency: currency, basis: portfolio.basis) }
 }
 
 /// The account screen's three views of a synced broker account.
@@ -146,7 +160,7 @@ public enum BrokerTab: String, Sendable, Hashable, CaseIterable, Identifiable {
 }
 
 /// What the account screen shows of the broker portfolio. Every account asks
-/// (`broker_portfolio` answers null without a sync), so only a broker account (Swissquote, where
+/// (`broker_portfolio` answers null without a sync), so only a broker account (Swissquote, Zerodha, where
 /// the sync runs) shows its loading and failure; any other account shows nothing until a
 /// portfolio arrives.
 public enum BrokerSection: Sendable, Hashable {
@@ -156,7 +170,7 @@ public enum BrokerSection: Sendable, Hashable {
     case loaded(BrokerPortfolioPresentation)
 
     /// The banks whose accounts sync from a broker.
-    public static let brokerBanks: Set<String> = ["SWQ"]
+    public static let brokerBanks: Set<String> = ["SWQ", "ZRD"]
 
     public init(_ state: LoadState<BrokerPortfolio?>, bankCode: String?, now: Date = .now) {
         if case .some(.some(let portfolio)) = state.value {

@@ -53,11 +53,16 @@ public struct BrokerHoldingRow: Sendable, Hashable, Identifiable {
     public let profitTone: Tone
     /// A structured note with terms opens the note screen; anything else its holding screen.
     public let opensNote: Bool
+    /// Against cost (Zerodha): `"30 units · invested INR 42,603"`; nil otherwise.
+    public let detailText: String?
 
-    init(_ p: BrokerPortfolio.Position) {
+    init(_ p: BrokerPortfolio.Position, showsCost: Bool = false) {
         holdingCode = p.holdingCode
         title = p.name
         opensNote = p.note != nil
+        let detail = [p.quantity.map(HoldingsText.units), p.cost.map { "invested \(NoteText.whole($0, currency: p.currency))" }]
+            .compactMap { $0 }.joined(separator: " · ")
+        detailText = showsCost && !detail.isEmpty ? detail : nil
         valueText = p.value.map { NoteText.whole($0, currency: p.currency) } ?? "No price"
         if let s = p.sellNow {
             profitText = "\(NoteText.signedWhole(s.profit, currency: p.currency)) (\(NoteText.signedPct(s.returnPct, digits: 1)))"
@@ -69,7 +74,7 @@ public struct BrokerHoldingRow: Sendable, Hashable, Identifiable {
     }
 
     /// For VoiceOver.
-    public var accessibilityLabel: String { [title, valueText, profitText].compactMap { $0 }.joined(separator: ", ") }
+    public var accessibilityLabel: String { [title, detailText, valueText, profitText].compactMap { $0 }.joined(separator: ", ") }
 }
 
 /// A position that ended, in one line: name, how long it was held, profit and the return.

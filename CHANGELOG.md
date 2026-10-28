@@ -21,9 +21,13 @@
   - Tabs: **Portfolio** (a card per segment, each holding with its units, cost, worth and P&L), **Transactions** and **Sold**.
 - Investments lists Zerodha as one row; its holdings count in the totals, returns and net worth.
 
+### iOS
+
+- **feat** The same Zerodha account screen: P&L on what was invested, Kite and Coin a line each, a card per segment on Portfolio (each holding with units and cost), the holdings against their cost on the chart, and **Sold**. Wording is in LedgerKit (`BrokerSegmentLine`, `BrokerSegmentGroup`, `BrokerPortfolio.Basis`); an older server's payload still reads as before.
+
 ### Docs
 
-- **docs** ARCHITECTURE (Zerodha sync), PRODUCTION (`ZERODHA_LOGINS`, authorising the Kite app, the cron job, the deploy list), README (env, endpoints), `scripts/cutover/zerodha-logins.py`, tasks/todo.md §12.
+- **docs** README (the Zerodha account screen), ARCHITECTURE (Zerodha sync), PRODUCTION (`ZERODHA_LOGINS`, authorising the Kite app, the cron job, the deploy list), README (env, endpoints), `scripts/cutover/zerodha-logins.py`, tasks/todo.md §12.
 
 ## Notes and Swissquote, simpler: one answer per screen; ended notes and term-sheet upload out of the way — 2026-10-27
 

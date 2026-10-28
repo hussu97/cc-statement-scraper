@@ -1,0 +1,262 @@
+{
+  "cash": "12500.50",
+  "fees": "0",
+  "sync": {
+    "status": "ok",
+    "error": null,
+    "last_synced_at": "2026-10-27T18:02:00+00:00",
+    "last_attempt_at": "2026-10-27T18:02:00+00:00"
+  },
+  "as_of": "2026-10-28",
+  "basis": "cost",
+  "total": "559347.27",
+  "closed": [
+    {
+      "isin": "INE040A01034",
+      "kind": "security",
+      "name": "HDFCBANK",
+      "income": "0",
+      "profit": "3037.90",
+      "invested": "15000.00",
+      "returned": "18037.90",
+      "closed_on": "2026-10-23",
+      "opened_on": "2026-09-28",
+      "return_pct": "20.25",
+      "note_status": null,
+      "holding_code": "hld_00000000000000000000000091",
+      "annualised_pct": "1377.01"
+    }
+  ],
+  "income": "0",
+  "profit": "131947.38",
+  "series": [
+    {
+      "cash": "12500.50",
+      "as_of": "2026-10-26",
+      "total": "559842.08",
+      "invested": "414899.39",
+      "segments": {
+        "coin": {
+          "value": "360378.13",
+          "invested": "255526.39"
+        },
+        "kite": {
+          "value": "186963.45",
+          "invested": "159373.00"
+        }
+      },
+      "estimated": false,
+      "positions": "547341.58",
+      "net_deposits": "427399.89"
+    },
+    {
+      "cash": "12500.50",
+      "as_of": "2026-10-27",
+      "total": "561349.01",
+      "invested": "414899.39",
+      "segments": {
+        "coin": {
+          "value": "361445.96",
+          "invested": "255526.39"
+        },
+        "kite": {
+          "value": "187402.55",
+          "invested": "159373.00"
+        }
+      },
+      "estimated": false,
+      "positions": "548848.51",
+      "net_deposits": "427399.89"
+    },
+    {
+      "cash": "12500.50",
+      "as_of": "2026-10-28",
+      "total": "559347.27",
+      "invested": "414899.39",
+      "segments": {
+        "coin": {
+          "value": "360026.77",
+          "invested": "255526.39"
+        },
+        "kite": {
+          "value": "186820.00",
+          "invested": "159373.00"
+        }
+      },
+      "estimated": false,
+      "positions": "546846.77",
+      "net_deposits": "427399.89"
+    }
+  ],
+  "currency": "INR",
+  "invested": "414899.39",
+  "provider": "zerodha",
+  "segments": [
+    {
+      "value": "186820.00",
+      "profit": "27447.00",
+      "segment": "kite",
+      "invested": "159373.00",
+      "positions": "3",
+      "value_aed": "8164.03",
+      "return_pct": "17.22"
+    },
+    {
+      "value": "360026.77",
+      "profit": "104500.38",
+      "segment": "coin",
+      "invested": "255526.39",
+      "positions": "2",
+      "value_aed": "15733.17",
+      "return_pct": "40.90"
+    }
+  ],
+  "positions": [
+    {
+      "cost": "179928.30",
+      "isin": "INF109K016L0",
+      "kind": "security",
+      "name": "ICICI Prudential Nifty 50 Index Fund - Direct Growth",
+      "note": null,
+      "as_of": "2026-10-28",
+      "price": "281.344",
+      "value": "237794.76",
+      "income": "0",
+      "profit": "57866.46",
+      "symbol": "INF109K016L0",
+      "segment": "coin",
+      "currency": "INR",
+      "invested": "179928.30",
+      "quantity": "845.21",
+      "sell_now": {
+        "total": "237794.76",
+        "profit": "57866.46",
+        "return_pct": "32.16"
+      },
+      "value_aed": "10391.63",
+      "holding_code": "hld_00000000000000000000000001",
+      "price_in_pct": false,
+      "product_type": "MUTUAL_FUND",
+      "security_name": "ICICI Prudential Nifty 50 Index Fund - Direct Growth"
+    },
+    {
+      "cost": "75598.09",
+      "isin": "INF879O01027",
+      "kind": "security",
+      "name": "Parag Parikh Flexi Cap Fund - Direct Plan - Growth",
+      "note": null,
+      "as_of": "2026-10-28",
+      "price": "99.008",
+      "value": "122232.01",
+      "income": "0",
+      "profit": "46633.92",
+      "symbol": "INF879O01027",
+      "segment": "coin",
+      "currency": "INR",
+      "invested": "75598.09",
+      "quantity": "1234.567",
+      "sell_now": {
+        "total": "122232.01",
+        "profit": "46633.92",
+        "return_pct": "61.69"
+      },
+      "value_aed": "5341.54",
+      "holding_code": "hld_00000000000000000000000002",
+      "price_in_pct": false,
+      "product_type": "MUTUAL_FUND",
+      "security_name": "Parag Parikh Flexi Cap Fund - Direct Plan - Growth"
+    },
+    {
+      "cost": "96520.00",
+      "isin": "INF204KB14I2",
+      "kind": "security",
+      "name": "NIFTYBEES",
+      "note": null,
+      "as_of": "2026-10-28",
+      "price": "300.16",
+      "value": "120064.00",
+      "income": "0",
+      "profit": "23544.00",
+      "symbol": "NIFTYBEES",
+      "segment": "kite",
+      "currency": "INR",
+      "invested": "96520.00",
+      "quantity": "400",
+      "sell_now": {
+        "total": "120064.00",
+        "profit": "23544.00",
+        "return_pct": "24.39"
+      },
+      "value_aed": "5246.80",
+      "holding_code": "hld_00000000000000000000000003",
+      "price_in_pct": false,
+      "product_type": "EQUITY",
+      "security_name": "NIFTYBEES"
+    },
+    {
+      "cost": "42603.00",
+      "isin": "INE009A01021",
+      "kind": "security",
+      "name": "INFY",
+      "note": null,
+      "as_of": "2026-10-28",
+      "price": "1657.6",
+      "value": "49728.00",
+      "income": "0",
+      "profit": "7125.00",
+      "symbol": "INFY",
+      "segment": "kite",
+      "currency": "INR",
+      "invested": "42603.00",
+      "quantity": "30",
+      "sell_now": {
+        "total": "49728.00",
+        "profit": "7125.00",
+        "return_pct": "16.72"
+      },
+      "value_aed": "2173.11",
+      "holding_code": "hld_00000000000000000000000004",
+      "price_in_pct": false,
+      "product_type": "EQUITY",
+      "security_name": "INFY"
+    },
+    {
+      "cost": "20250.00",
+      "isin": "INE002A01018",
+      "kind": "security",
+      "name": "RELIANCE",
+      "note": null,
+      "as_of": "2026-10-28",
+      "price": "1135.2",
+      "value": "17028.00",
+      "income": "0",
+      "profit": "-3222.00",
+      "symbol": "RELIANCE",
+      "segment": "kite",
+      "currency": "INR",
+      "invested": "20250.00",
+      "quantity": "15",
+      "sell_now": {
+        "total": "17028.00",
+        "profit": "-3222.00",
+        "return_pct": "-15.91"
+      },
+      "value_aed": "744.12",
+      "holding_code": "hld_00000000000000000000000005",
+      "price_in_pct": false,
+      "product_type": "EQUITY",
+      "security_name": "RELIANCE"
+    }
+  ],
+  "total_aed": "24443.48",
+  "account_code": "acc_00000000000000000000000009",
+  "closed_total": {
+    "count": "1",
+    "profit": "3037.90",
+    "invested": "15000.00",
+    "received": "18037.90"
+  },
+  "net_deposits": "427399.89",
+  "portfolio_ref": "ZX1234",
+  "positions_value": "546846.77"
+}

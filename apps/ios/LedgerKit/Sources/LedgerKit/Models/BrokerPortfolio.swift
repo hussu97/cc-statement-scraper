@@ -5,8 +5,43 @@ import Foundation
 /// for a note what it fetches sold today against what it pays if called at its next autocall
 /// date, the positions that ended with their result, the value per day against the net deposits,
 /// and how the last sync went. Null from the server when the account has no sync. Every figure is
-/// the server's decimal string; `BrokerPortfolioPresentation` words it.
+/// the server's decimal string; `BrokerPortfolioPresentation` words it. Zerodha
+/// (`20261027202923_zerodha_sync.sql`) is measured against cost and split into Kite and Coin.
 public struct BrokerPortfolio: Decodable, Sendable, Hashable {
+    /// What the profit is measured against: the net deposits (Swissquote) or what the positions
+    /// cost (Zerodha, which has no deposit history). An unknown or missing basis reads as deposits.
+    public enum Basis: String, Sendable, Hashable {
+        case deposits, cost
+        init(raw: String?) { self = raw.flatMap(Basis.init(rawValue:)) ?? .deposits }
+    }
+
+    /// Zerodha's Kite (stocks, ETFs) or Coin (mutual funds) in one line.
+    public struct Segment: Decodable, Sendable, Hashable, Identifiable {
+        public var id: String { segment }
+        /// `kite`, `coin`; raw (an unknown one is shown as "Other").
+        public let segment: String
+        public let positions: Int
+        public let invested: Decimal
+        public let value: Decimal
+        public let valueAed: Decimal?
+        public let profit: Decimal
+        public let returnPct: Decimal?
+
+        enum CodingKeys: String, CodingKey { case segment, positions, invested, value, valueAed, profit, returnPct }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            segment = try c.decode(String.self, forKey: .segment)
+            // The count arrives as a decimal string, like every figure.
+            positions = NSDecimalNumber(decimal: try c.decodeIfPresent(Decimal.self, forKey: .positions) ?? 0).intValue
+            invested = try c.decodeIfPresent(Decimal.self, forKey: .invested) ?? 0
+            value = try c.decodeIfPresent(Decimal.self, forKey: .value) ?? 0
+            valueAed = try c.decodeIfPresent(Decimal.self, forKey: .valueAed)
+            profit = try c.decodeIfPresent(Decimal.self, forKey: .profit) ?? 0
+            returnPct = try c.decodeIfPresent(Decimal.self, forKey: .returnPct)
+        }
+    }
+
     /// How the last sync went (`broker_connections.last_*`).
     public struct Sync: Decodable, Sendable, Hashable {
         public let lastSyncedAt: Date?
@@ -76,10 +111,12 @@ public struct BrokerPortfolio: Decodable, Sendable, Hashable {
         public let income: Decimal
         public let sellNow: SellNow?
         public let note: Note?
+        /// Zerodha: `kite` or `coin`; nil elsewhere and from an older server.
+        public let segment: String?
 
         enum CodingKeys: String, CodingKey {
             case holdingCode, kind, name, isin, securityName, symbol, productType, quantity, price, priceInPct
-            case currency, value, valueAed, asOf, cost, profit, invested, income, sellNow, note
+            case currency, value, valueAed, asOf, cost, profit, invested, income, sellNow, note, segment
         }
 
         public init(from decoder: any Decoder) throws {
@@ -104,6 +141,7 @@ public struct BrokerPortfolio: Decodable, Sendable, Hashable {
             income = try c.decodeIfPresent(Decimal.self, forKey: .income) ?? 0
             sellNow = try c.decodeIfPresent(SellNow.self, forKey: .sellNow)
             note = try c.decodeIfPresent(Note.self, forKey: .note)
+            segment = try c.decodeIfPresent(String.self, forKey: .segment)
         }
     }
 
@@ -176,19 +214,22 @@ public struct BrokerPortfolio: Decodable, Sendable, Hashable {
         public let cash: Decimal?
         public let positions: Decimal?
         public let netDeposits: Decimal
+        /// What the positions held that day cost (nil from an older server).
+        public let invested: Decimal?
         public let estimated: Bool
 
         public init(asOf: CalendarDay, total: Decimal, cash: Decimal? = nil, positions: Decimal? = nil,
-                    netDeposits: Decimal, estimated: Bool) {
+                    netDeposits: Decimal, invested: Decimal? = nil, estimated: Bool) {
             self.asOf = asOf
             self.total = total
             self.cash = cash
             self.positions = positions
             self.netDeposits = netDeposits
+            self.invested = invested
             self.estimated = estimated
         }
 
-        enum CodingKeys: String, CodingKey { case asOf, total, cash, positions, netDeposits, estimated }
+        enum CodingKeys: String, CodingKey { case asOf, total, cash, positions, netDeposits, invested, estimated }
 
         public init(from decoder: any Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -197,15 +238,17 @@ public struct BrokerPortfolio: Decodable, Sendable, Hashable {
             cash = try c.decodeIfPresent(Decimal.self, forKey: .cash)
             positions = try c.decodeIfPresent(Decimal.self, forKey: .positions)
             netDeposits = try c.decodeIfPresent(Decimal.self, forKey: .netDeposits) ?? 0
+            invested = try c.decodeIfPresent(Decimal.self, forKey: .invested)
             estimated = try c.decodeIfPresent(Bool.self, forKey: .estimated) ?? false
         }
     }
 
     public let accountCode: String
-    /// `swissquote`; raw (a provider this build doesn't know is shown by its name).
+    /// `swissquote`, `zerodha`; raw (a provider this build doesn't know is shown by its name).
     public let provider: String
     public let portfolioRef: String?
     public let currency: String
+    public let basis: Basis
     public let sync: Sync
     /// The day of the latest marks; nil before the first positions arrive.
     public let asOf: CalendarDay?
@@ -214,18 +257,22 @@ public struct BrokerPortfolio: Decodable, Sendable, Hashable {
     public let total: Decimal
     public let totalAed: Decimal?
     public let netDeposits: Decimal
+    /// What the open positions cost (nil from an older server).
+    public let invested: Decimal?
     public let profit: Decimal
     public let income: Decimal
     public let fees: Decimal
     public let positions: [Position]
+    /// Kite and Coin (Zerodha); empty elsewhere.
+    public let segments: [Segment]
     public let closed: [ClosedPosition]
     /// Nil from an older server.
     public let closedTotal: ClosedTotal?
     public let series: [Point]
 
     enum CodingKeys: String, CodingKey {
-        case accountCode, provider, portfolioRef, currency, sync, asOf, cash, positionsValue, total, totalAed
-        case netDeposits, profit, income, fees, positions, closed, closedTotal, series
+        case accountCode, provider, portfolioRef, currency, basis, sync, asOf, cash, positionsValue, total, totalAed
+        case netDeposits, invested, profit, income, fees, positions, segments, closed, closedTotal, series
     }
 
     public init(from decoder: any Decoder) throws {
@@ -234,6 +281,7 @@ public struct BrokerPortfolio: Decodable, Sendable, Hashable {
         provider = try c.decodeIfPresent(String.self, forKey: .provider) ?? "broker"
         portfolioRef = try c.decodeIfPresent(String.self, forKey: .portfolioRef)
         currency = try c.decodeIfPresent(String.self, forKey: .currency) ?? "USD"
+        basis = Basis(raw: try c.decodeIfPresent(String.self, forKey: .basis))
         sync = try c.decodeIfPresent(Sync.self, forKey: .sync) ?? Sync()
         asOf = try c.decodeIfPresent(CalendarDay.self, forKey: .asOf)
         cash = try c.decodeIfPresent(Decimal.self, forKey: .cash)
@@ -241,10 +289,12 @@ public struct BrokerPortfolio: Decodable, Sendable, Hashable {
         total = try c.decode(Decimal.self, forKey: .total)
         totalAed = try c.decodeIfPresent(Decimal.self, forKey: .totalAed)
         netDeposits = try c.decodeIfPresent(Decimal.self, forKey: .netDeposits) ?? 0
+        invested = try c.decodeIfPresent(Decimal.self, forKey: .invested)
         profit = try c.decode(Decimal.self, forKey: .profit)
         income = try c.decodeIfPresent(Decimal.self, forKey: .income) ?? 0
         fees = try c.decodeIfPresent(Decimal.self, forKey: .fees) ?? 0
         positions = try c.decodeIfPresent([Position].self, forKey: .positions) ?? []
+        segments = try c.decodeIfPresent([Segment].self, forKey: .segments) ?? []
         closed = try c.decodeIfPresent([ClosedPosition].self, forKey: .closed) ?? []
         closedTotal = try c.decodeIfPresent(ClosedTotal.self, forKey: .closedTotal)
         series = try c.decodeIfPresent([Point].self, forKey: .series) ?? []
