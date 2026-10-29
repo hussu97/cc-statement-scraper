@@ -38,8 +38,9 @@ on:
       - '.github/workflows/deploy-supabase.yml'
   workflow_dispatch:
     inputs:
-      confirm_project_ref:
-        description: "Type the production project ref to confirm"
+      # Not the project ref: dispatch inputs are visible on a public repository.
+      confirm:
+        description: "Type 'deploy' to deploy to production"
         required: true
         type: string
       db_push:
@@ -213,7 +214,7 @@ jobs:
       - name: Verify secrets and confirmation
         env:
           EVENT: ${{ github.event_name }}
-          CONFIRM: ${{ inputs.confirm_project_ref }}
+          CONFIRM: ${{ inputs.confirm }}
         run: |
           missing=()
           for v in SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD PROJECT_REF; do
@@ -223,8 +224,8 @@ jobs:
             echo "::error::Missing secrets on the production environment: ${missing[*]} (docs/ci-cd.md)"
             exit 1
           fi
-          if [ "$EVENT" = "workflow_dispatch" ] && [ "$CONFIRM" != "$PROJECT_REF" ]; then
-            echo "::error::Confirmation does not match the production project ref; nothing deployed."
+          if [ "$EVENT" = "workflow_dispatch" ] && [ "$CONFIRM" != "deploy" ]; then
+            echo "::error::Type 'deploy' to confirm; nothing deployed."
             exit 1
           fi
 

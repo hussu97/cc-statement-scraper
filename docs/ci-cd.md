@@ -106,7 +106,7 @@ Manual: Actions → Deploy Supabase → Run workflow (from `main`) → type the 
 `dry_run` to only see what would run.
 
 ```bash
-gh workflow run deploy-supabase.yml --ref main -f confirm_project_ref=<project-ref> -f dry_run=true
+gh workflow run deploy-supabase.yml --ref main -f confirm=deploy -f dry_run=true
 ```
 
 **Rollback:** migrations do not roll back. Write a new migration that undoes the change and
