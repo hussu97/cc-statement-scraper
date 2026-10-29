@@ -1,5 +1,39 @@
 # Changelog
 
+## Public repository: no real data or production identity, no crawlers — 2026-10-29
+
+### Backend (Supabase)
+
+- **security** `config.toml` `[remotes.production]` reads the project ref and site URL through `env(SUPABASE_PROD_PROJECT_REF)` / `env(SUPABASE_PROD_SITE_URL)` (gitignored `supabase/.env`, template `supabase/.env.example`); CI sets placeholders that never match a real project. The guard hook refuses `supabase config push` unless `supabase/.env` holds both, so a push can never fall back to local auth values.
+- **security** Test fixtures, SMS template examples and comments use synthetic data: names, card and account digits, BINs, IBANs, salaries, holdings, instrument names and ISINs, broker ids and production row codes are replaced consistently (relationships and sort order kept). The `stock-prices` / `metal-prices` user agent no longer names the web host.
+
+### Web
+
+- **security** No crawling, indexing or AI use: `robots.txt` disallows everything, `X-Robots-Tag` and a robots meta say `noindex, nofollow, noarchive, nosnippet, noimageindex, notranslate, noai, noimageai`, known crawler user agents are redirected to `robots.txt` (never `/.well-known/`), and the meta and manifest descriptions are gone.
+- **security** `vercel.json` names no production host: its CSP allows `*.supabase.co`, and the build adds a meta CSP that pins `connect-src`/`img-src` to the one `VITE_SUPABASE_URL` host (`scripts/deploy-config.ts`). The passkey `apple-app-site-association` file is generated at build time from `LEDGER_APPLE_APP_IDS` (Vercel env), not committed.
+
+### Tooling
+
+- **security** `.gitignore` covers the local-only `backend/`, `tasks/todo.md` and the `docs/audit` reports (untracked; they quote real balances and digits), statements and exports (`*.pdf`, `*.csv`, `*.xlsx`), keys and profiles (`*.p8`, `*.p12`, `*.pem`, `*.key`, `*.mobileprovision`), IPAs and dumps.
+- **security** pre-commit refuses added lines that match the local denylist `$(git rev-parse --git-common-dir)/info/sensitive-patterns` (real values; never committed). `.worktreeinclude` copies `supabase/.env` and `apps/ios/Config/Identity.xcconfig` into new worktrees.
+- **security** Workflows name no host or project: `web-smoke` reads `PRODUCTION_URL` / `SUPABASE_PROJECT_REF_PUBLIC` secrets and now also checks the meta CSP, noindex and the crawler redirect; `deploy-parser` prefers `GCP_*` secrets (masked in public logs) over variables; `scripts/cutover/*` take the ref and review email from env, `supabase/.env` or `git config ledger.*`.
+
+### Docs
+
+- **docs** CLAUDE.md §14 (public repository rules and their guards); README's production-identity table; PRODUCTION and docs/ci-cd use placeholders for the project ref, hosts, GCP project and Apple team, and list the new secrets.
+
+## iOS identity out of git; the staged TestFlight IPA is encrypted — 2026-10-29
+
+### iOS
+
+- **security** The repository is going public, so the app's identity leaves git. `Config/Base.xcconfig` holds neutral defaults (`com.example.ledger`, `example.com`, no team) and includes the gitignored `Config/Identity.xcconfig` last (template `Identity.example.xcconfig`); `project.yml`, the generated `project.pbxproj` and `Info.plist` carry no team or bundle id (background tasks are `$(LEDGER_BUNDLE_PREFIX).outbox-refresh` / `.outbox-send`, and LedgerKit `OutboxSync.TaskIDs` derives them from the bundle id at run time). The "Check release config" phase and the archive/IPA check fail a Release build whose bundle id, team or passkey domain is still a default; `IdentityGuardTests` fails if a real value lands in the committed project files again.
+- **security** `testflight.sh` and `testflight-distribute.mjs` have no default App Store Connect issuer or bundle id: `ASC_ISSUER_ID` is required to upload or distribute, and the team and bundle id come from `Identity.xcconfig` (or `APPLE_TEAM_ID` / `LEDGER_BUNDLE_PREFIX` / `LEDGER_BUNDLE_ID`).
+- **security** `publish-build.sh` stages `Ledger.ipa.enc` instead of `Ledger.ipa` on the (public) `ios-ledger-staged` release: AES-256-CBC with a PBKDF2-SHA256 key (`scripts/ipa-crypt.sh`, `openssl enc`, key via `-pass env:`), round trip proven before upload, a leftover plaintext `Ledger.ipa` deleted. The key is the login keychain item `ledger-ipa-encryption-key`; `build-meta.json` drops the bundle id and adds `enc_sha256` / `ipa_sha256`. `ios-testflight.yml` checks both hashes, decrypts with the new `testflight` secret `IPA_ENCRYPTION_KEY` and checks the bundle id against the new secret `LEDGER_BUNDLE_ID` before uploading. Tested in `release_checks_test.sh` (round trip on LibreSSL and OpenSSL 3, wrong key, key never on argv).
+
+### Docs
+
+- **docs** README, apps/ios README and CLAUDE.md, docs/ci-cd.md and PRODUCTION §7 describe `Identity.xcconfig`, the encrypted staging and the one-time key setup; the pre-commit secrets guard also refuses `Identity.xcconfig` and `*.ipa`.
+
 ## Credit-linked notes: a second note type, and the two Example Bank N CLNs — 2026-10-28
 
 ### Backend (Supabase)

@@ -9,6 +9,7 @@
 
 | When | Lesson |
 |---|---|
+| 2026-10-29 | [A public repository publishes every commit, PR ref, log and release: redact with one map, prove it with a denylist scan](#a-public-repository-publishes-every-commit-pr-ref-log-and-release-redact-with-one-map-prove-it-with-a-denylist-scan) |
 | 2026-10-28 | [One SMS reaches the server once per automation: dedup by content at ingest, not by `client_msg_id`](#one-sms-reaches-the-server-once-per-automation-dedup-by-content-at-ingest-not-by-client_msg_id) |
 | 2026-10-28 | [Deployed Edge code imports no jsr: package: Supabase's bundler fetches it at deploy time and times out](#deployed-edge-code-imports-no-jsr-package-supabases-bundler-fetches-it-at-deploy-time-and-times-out) |
 | 2026-10-27 | [A note bought after issue did not get the coupons paid before: evaluate income from the trade date](#a-note-bought-after-issue-did-not-get-the-coupons-paid-before-evaluate-income-from-the-trade-date) |
@@ -51,6 +52,21 @@
 | 2026-10-08 | [Tooling defaults that don't work here: `gh` account, Supabase MCP, `localhost`, pip](#tooling-defaults-that-dont-work-here-gh-account-supabase-mcp-localhost-pip) |
 
 ## Lessons
+
+### A public repository publishes every commit, PR ref, log and release: redact with one map, prove it with a denylist scan
+- **What went wrong**: before going public, the repo held the owner's real SMS (names, card and
+  account digits, salary), a real IBAN, holdings, production refs and hosts, a statement password
+  in an old test, in fixtures copied from production, migrations, docs and commit messages. A
+  fresh "clean" commit would not have helped: visibility publishes the whole history, the
+  `refs/pull/*` of every PR (only GitHub Support can purge those), Actions logs and release assets
+  (the staged signed IPA). Hand-editing ~170 files also broke tests that sort cards and codes.
+- **The rule**: never commit a real value, even as an example (CLAUDE.md §14). To clean, build one
+  deterministic map (real → synthetic, order- and shape-preserving), apply it to the tree and with
+  `git filter-repo --file-info-callback/--message-callback` to every ref, then scan every blob,
+  path and message of the result against the denylist before pushing. Delete old workflow runs,
+  artifacts and releases, and ask GitHub to purge PR refs.
+- **Enforced by**: the pre-commit public-repo denylist (`.git/info/sensitive-patterns`, local);
+  `guard.py` `check_config_push`; `vercel-config.test.ts`; iOS `IdentityGuardTests`.
 
 ### One SMS reaches the server once per automation: dedup by content at ingest, not by `client_msg_id`
 - **What went wrong**: each Shortcuts automation run hands the app the message with a fresh

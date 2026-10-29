@@ -117,7 +117,7 @@ No variations and no `Co-Authored-By` trailer of any kind.
 
 ## 11. Production, deploys and secrets
 
-The production project is Supabase `cc-statement-scraper` (ref `<project-ref>`); the parser is Cloud Run `ccs-parser` (`<gcp-project>`, `me-central1`); the web app is Vercel `cc-statement-scraper`; iOS ships through TestFlight. Production data is irreplaceable.
+Production is a Supabase project, the parser on Cloud Run `ccs-parser` (`me-central1`), the web app on Vercel, and iOS through TestFlight. The repository is public and names none of their identifiers (§14): the project ref, hosts, GCP project and Apple team live in `supabase/.env`, `apps/ios/Config/Identity.xcconfig`, `git config ledger.*` and CI secrets. Production data is irreplaceable.
 
 1. **Every production action needs an explicit yes in chat, each time**: `supabase db push`, `functions deploy`, `secrets set`, `config push` (pushes the whole `config.toml`, no dry run, no prompt off a TTY; prod-only values belong in `[remotes.production]`, see `supabase/CLAUDE.md`), Vault writes, any write through `--linked` or the prod DB URL, `scripts/cutover/*`, `gcloud run deploy`/traffic changes, Secret Manager, Vercel deploys and env, `gh secret`/`variable set`, `gh workflow run deploy-*`, TestFlight uploads. Read-only inspection (`supabase migration list --linked`, `db push --dry-run`) is fine. The Supabase MCP connector reaches this project when it is connected to the `cc-statement-scraper` organisation (check with `list_projects`): read-only `execute_sql` is inspection; anything that writes is a production action. Otherwise use the CLI.
 2. **A push or merge to `main` is a production deploy**, with no reviewer gate: `deploy-supabase` (migrations + functions), `deploy-parser`, Vercel Production, and a TestFlight build when the iOS app changed (`docs/ci-cd.md`). Ask before pushing to `main`; say what will deploy.
@@ -155,3 +155,15 @@ The production project is Supabase `cc-statement-scraper` (ref `<project-ref>`);
 | Pushed Edge secrets: no placeholder, local-only key or glued `KEY=` in a value (§11.4) | `scripts/cutover/set-edge-secrets.sh`, tested by `set-edge-secrets_test.sh` |
 | Commit author, no co-author trailer (§9) | `prepare-commit-msg`, `commit-msg`, `.claude/hooks/guard.py` |
 | Explicit staging, production confirmation, no secret printing, `legacy`/`backend/` kept (§9, §11) | `.claude/hooks/guard.py` (Claude Code PreToolUse), tested by `guard_test.py` |
+| No real personal or production values in commits (§14) | pre-commit public-repo denylist (local `.git/info/sensitive-patterns`) |
+| `supabase config push` only with the production identity in `supabase/.env` (§14.2) | `.claude/hooks/guard.py` `check_config_push` |
+| No crawling or indexing of the web app (§14.3) | `apps/web/src/test/vercel-config.test.ts`, `scripts/ci/web-smoke.sh` |
+
+## 14. Public repository
+
+The repository is public (free CI minutes). Nothing in it, or in a commit message, may identify the owner's data or production.
+
+1. **No real values, not even as examples**: names of people, card or account digits, BINs, IBANs, balances or salaries, holdings and instrument identifiers, SMS bodies, profile/row codes from production, the Supabase ref, web host, GCP project, Apple team or bundle id. Tests and docs use synthetic data (the `92xx` card range, `310001`-style account tails, `XS00000…` ISINs, Alice/Bob); a fixture copied from production is rewritten before it is committed.
+2. **Production identity lives in gitignored config**: `supabase/.env` (`env()` in `config.toml`), `apps/ios/Config/Identity.xcconfig`, `git config ledger.webUrl` / `ledger.supabaseRef` for scripts, Vercel env (`LEDGER_APPLE_APP_IDS`) and GitHub secrets (masked in public logs; prefer secrets over variables). `.worktreeinclude` copies the local files into new worktrees.
+3. **The web app is not for crawlers**: `robots.txt` disallows everything, `X-Robots-Tag`/robots meta say noindex, and crawler user agents are redirected (`apps/web/vercel.json`); no meta description, Open Graph, sitemap or structured data.
+4. **Enforced locally**: the pre-commit denylist reads `$(git rev-parse --git-common-dir)/info/sensitive-patterns` (real values, never committed); keep it current when a new real value appears.

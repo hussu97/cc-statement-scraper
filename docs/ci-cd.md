@@ -2,8 +2,8 @@
 
 How code gets from a laptop to production, and what checks it on the way. The patterns come
 from `mm-ecommerce` (path-filtered CI, a pre-push hook that mirrors CI, queued deploys behind
-an environment, job summaries) and `another app` (iOS built and signed on the Mac, uploaded to
-TestFlight by a Linux runner).
+an environment, job summaries) and another app on the same Apple team (iOS built and signed
+on the Mac, uploaded to TestFlight by a Linux runner).
 
 ```
  commit ──► pre-commit      staged files only: secrets guard, append-only migrations,
@@ -171,27 +171,47 @@ Vercel setting to confirm: Project → Settings → Git → GitHub deployment st
 
 ### 2.4 iOS (TestFlight)
 
-Built and signed on the Mac (free), uploaded by a Linux runner (1x), as in another app:
+Built and signed on the Mac (free), uploaded by a Linux runner (1x):
 
 1. Commit iOS changes, `git push` to `main`.
 2. The **pre-push hook**, after every check passes, sees app code changed
    (`apps/ios/{Ledger,LedgerKit,ShareExtension,Ledger.xcodeproj,Config}/` or
    `apps/ios/project.yml`; never `build-number.json` alone) and `exec`s
    `apps/ios/scripts/publish-build.sh`, which bumps the build number, tests, archives, signs,
-   checks the release config, sends dSYMs and the release to Sentry, stages `Ledger.ipa` +
-   `build-meta.json` on the rolling prerelease **`ios-ledger-staged`**, and commits
-   `apps/ios/build-number.json`. `SKIP_RELEASE=1 git push` skips the release (checks still run).
+   checks the release config, sends dSYMs and the release to Sentry, encrypts the IPA, stages
+   `Ledger.ipa.enc` + `build-meta.json` on the rolling prerelease **`ios-ledger-staged`**, and
+   commits `apps/ios/build-number.json`. `SKIP_RELEASE=1 git push` skips the release (checks
+   still run).
+
+   Identity. The repository is public: the Apple team, bundle prefix and passkey host live only
+   in the gitignored `apps/ios/Config/Identity.xcconfig` (template
+   `Identity.example.xcconfig`); `Base.xcconfig` has neutral defaults (`com.example.ledger`,
+   `example.com`, no team) and includes it last. The release check below fails a Release build
+   that still carries a default, and LedgerKit `IdentityGuardTests` fails if a real value lands
+   in `project.pbxproj`, `project.yml` or `Base.xcconfig`.
+
+   Staged IPA encryption. A public repository's release assets are world-downloadable, so
+   `publish-build.sh` stages the IPA encrypted (`apps/ios/scripts/ipa-crypt.sh`: `openssl enc
+   -aes-256-cbc -pbkdf2 -iter 200000 -md sha256 -salt`, key via `-pass env:IPA_ENCRYPTION_KEY`,
+   never argv), proves the round trip before uploading, and removes a plaintext `Ledger.ipa` an
+   older build left on the release. The key exists only in the Mac's login keychain item
+   `ledger-ipa-encryption-key` (or `IPA_ENCRYPTION_KEY` in the shell) and the `testflight`
+   environment secret `IPA_ENCRYPTION_KEY` (one-time setup: §4 and `apps/ios/README.md`).
 
    Release config (BACKLOG IOS-21r). A Release build reads only the gitignored
    `apps/ios/Config/Secrets.Release.xcconfig`; the local `Secrets.xcconfig` is included from
    `Debug.xcconfig` only, so a key dropped from the release file is empty, never a local value.
    Three checks, all in `apps/ios/scripts/release-config-check.sh`, shape only, no value printed:
    - the **"Check release config"** Run Script phase (every target, `project.yml`) fails a
-     Release build whose `LEDGER_*` settings are empty, local, not `production` or a placeholder;
+     Release build whose `LEDGER_*` settings are empty, local, not `production` or a placeholder,
+     or whose identity (`LEDGER_BUNDLE_PREFIX`, `DEVELOPMENT_TEAM`, `LEDGER_PASSKEY_DOMAIN`) is
+     still the neutral default;
    - `testflight.sh` runs it on the archive, and `publish-build.sh` on the IPA it stages:
      `plutil` reads the app's **and** every extension's Info.plist (share extension, widgets) (`LedgerSupabaseURL`
      https and not local/private, `LedgerEnvironment` = `production`,
-     `LedgerSupabasePublishableKey` `sb_publishable_…`, `LedgerSentryDSN` non-empty).
+     `LedgerSupabasePublishableKey` `sb_publishable_…`, `LedgerSentryDSN` non-empty, bundle id
+     not `com.example.…`, a team prefix on `LedgerKeychainGroup`, the app's
+     `LedgerPasskeyDomain` not `example.com`).
 
    Sentry (`apps/ios/scripts/sentry-release.sh`, run by `testflight.sh` after the check):
    uploads dSYMs, then `sentry-cli releases new` / `set-commits --auto --ignore-missing` /
@@ -204,22 +224,30 @@ Built and signed on the Mac (free), uploaded by a Linux runner (1x), as in anoth
    refuses a `Secrets.Release.xcconfig` that still defines it. `SENTRY_ORG` / `SENTRY_PROJECT`
    (not secrets) come from the shell or `Secrets.Release.xcconfig`; the project defaults to the
    DSN's project id. `apps/ios/scripts/release_checks_test.sh` tests all of it against fixture
-   plists and fake `sentry-cli` / `security` (pre-push `tooling`, macOS only).
+   plists and fake `sentry-cli` / `security`, plus the `ipa-crypt.sh` round trip (LibreSSL and
+   OpenSSL 3) and `testflight-distribute.mjs`'s refusals (pre-push `tooling`, macOS only).
 3. The push triggers `ios-testflight.yml`:
    - `stage` (no secrets): downloads `build-meta.json`; ships only if its `commit` is this
      commit or differs from it **only** by `apps/ios/build-number.json`. Otherwise it says so in
      the summary and stops (not a failure).
    - `upload` (`testflight` env): re-checks the staged commit is the one `stage` approved,
-     uploads with `apple-actions/upload-testflight-build@v5` (App Store Connect API key).
+     checks the encrypted asset against `enc_sha256`, decrypts it with `IPA_ENCRYPTION_KEY`,
+     checks the IPA against `ipa_sha256` (taken on the Mac before encrypting: CBC is not
+     authenticated, and without the key nobody can make a ciphertext that matches) and its
+     bundle id against `LEDGER_BUNDLE_ID`, then uploads with
+     `apple-actions/upload-testflight-build@v5` (App Store Connect API key).
    - `distribute`: `node apps/ios/scripts/testflight-distribute.mjs --build <n> --timeout 35`
      waits for processing, attaches the build to "Friends & Family", submits for Beta App Review.
      Internal testers get it automatically.
 
 Contract with `apps/ios/scripts/publish-build.sh` (owned by the iOS release): release tag
-`ios-ledger-staged`; assets `Ledger.ipa` and `build-meta.json` with
-`{"build": <int>, "commit": "<sha>", "apps": [{"scheme": "Ledger", "ipa": "Ledger.ipa", ...}]}`;
-it commits `apps/ios/build-number.json` itself; `--keep-build` reuses the number.
-`testflight-distribute.mjs` accepts `ASC_KEY_P8` as PEM or base64.
+`ios-ledger-staged`; assets `Ledger.ipa.enc` and `build-meta.json` with
+`{"build": <int>, "commit": "<sha>", "apps": [{"scheme": "Ledger", "asset": "Ledger.ipa.enc",
+"ipa": "Ledger.ipa", "encryption": "…", "enc_sha256": "<hex>", "ipa_sha256": "<hex>"}]}` (public:
+no bundle id, team or other identity); it commits `apps/ios/build-number.json` itself;
+`--keep-build` reuses the number. `testflight-distribute.mjs` accepts `ASC_KEY_P8` as PEM or
+base64 and needs `ASC_ISSUER_ID` and the bundle id (`LEDGER_BUNDLE_ID`, else
+`Config/Identity.xcconfig`): neither has a default.
 
 Without the hook (another machine, no Xcode): `git pull && apps/ios/scripts/publish-build.sh`,
 push the counter commit (or re-run the workflow). To build and upload entirely from the Mac:
@@ -268,12 +296,16 @@ Repository: `hussu97/cc-statement-scraper`. Names only; values never go in the r
 | `SUPABASE_ACCESS_TOKEN` | secret | env `production` | deploy-supabase | supabase.com → Account → Access Tokens |
 | `SUPABASE_DB_PASSWORD` | secret | env `production` | deploy-supabase | project DB password |
 | `SUPABASE_PROJECT_REF` | secret | env `production` | deploy-supabase, deploy-parser | `<project-ref>` |
-| `GCP_WIF_PROVIDER` | variable | repo | deploy-parser | `projects/<number>/locations/global/workloadIdentityPools/github/providers/github-oidc` (§5) |
-| `GCP_DEPLOY_SA` | variable | repo | deploy-parser | `github-deployer@<gcp-project>.iam.gserviceaccount.com` (§5) |
-| `GCP_PROJECT_ID` | variable | repo | deploy-parser | optional; defaults to `<gcp-project>` |
-| `ASC_KEY_ID` | secret | repo or env `testflight` | ios-testflight | App Store Connect → Users and Access → Integrations → key id (same key as another app) |
+| `GCP_WIF_PROVIDER` | secret (variable still read as a fallback) | repo | deploy-parser | `projects/<number>/locations/global/workloadIdentityPools/github/providers/github-oidc` (§5). A secret so public logs mask it |
+| `GCP_DEPLOY_SA` | secret (variable fallback) | repo | deploy-parser | `github-deployer@<gcp-project>.iam.gserviceaccount.com` (§5) |
+| `GCP_PROJECT_ID` | secret (variable fallback) | repo | deploy-parser | `<gcp-project>` |
+| `PRODUCTION_URL` | secret | repo | web-smoke | the web app's production origin (`https://<web-host>`); the repository names no host |
+| `SUPABASE_PROJECT_REF_PUBLIC` | secret | repo | web-smoke | the production ref, so the smoke test can check the build's meta CSP pins it (optional) |
+| `ASC_KEY_ID` | secret | repo or env `testflight` | ios-testflight | App Store Connect → Users and Access → Integrations → key id (the team's key, shared with another app) |
 | `ASC_ISSUER_ID` | secret | repo or env `testflight` | ios-testflight | issuer id on the same page |
 | `ASC_KEY_P8` | secret | repo or env `testflight` | ios-testflight | the `.p8` file (PEM or base64) |
+| `IPA_ENCRYPTION_KEY` | secret | env `testflight` | ios-testflight (`upload`) | the key the Mac encrypts the staged IPA with: the login keychain item `ledger-ipa-encryption-key` (`openssl rand -base64 32`, §2.4) |
+| `LEDGER_BUNDLE_ID` | secret | env `testflight` | ios-testflight (`upload`, `distribute`) | the app's bundle id (`LEDGER_BUNDLE_PREFIX` in `apps/ios/Config/Identity.xcconfig`); a secret so public logs mask it |
 | `AUTO_DEPLOY` | variable | repo | deploy-supabase, deploy-parser | optional; `false` = push runs plan-only / skipped |
 
 ```bash
@@ -293,14 +325,29 @@ gh secret set SUPABASE_ACCESS_TOKEN -R $R --env production
 gh secret set SUPABASE_DB_PASSWORD  -R $R --env production
 gh secret set SUPABASE_PROJECT_REF  -R $R --env production --body <project-ref>
 
-# GCP via WIF (after §5)
-gh variable set GCP_WIF_PROVIDER -R $R --body "projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/github/providers/github-oidc"
-gh variable set GCP_DEPLOY_SA    -R $R --body "github-deployer@<gcp-project>.iam.gserviceaccount.com"
+# GCP via WIF (after §5). Secrets, not variables: Actions masks secrets in the public logs.
+gh secret set GCP_WIF_PROVIDER -R $R   # prompts: projects/<number>/locations/global/workloadIdentityPools/github/providers/github-oidc
+gh secret set GCP_DEPLOY_SA    -R $R   # prompts: github-deployer@<gcp-project>.iam.gserviceaccount.com
+gh secret set GCP_PROJECT_ID   -R $R   # prompts: <gcp-project>
 
-# App Store Connect (same key as another app)
+# Web smoke test target (prompted)
+gh secret set PRODUCTION_URL              -R $R
+gh secret set SUPABASE_PROJECT_REF_PUBLIC -R $R
+
+# App Store Connect (the team's key, shared with another app)
 gh secret set ASC_KEY_ID    -R $R --body '<key id>'
 gh secret set ASC_ISSUER_ID -R $R --body '<issuer id>'
 gh secret set ASC_KEY_P8    -R $R < ~/.appstoreconnect/private_keys/AuthKey_<key id>.p8
+
+# Staged IPA encryption key: generate once, keep in the login keychain, copy to the env.
+# Values travel through stdin (no --body), so they never reach a command line.
+openssl rand -base64 32 | pbcopy
+security add-generic-password -U -s ledger-ipa-encryption-key -a "$USER" -w   # paste at the prompt
+pbcopy < /dev/null
+security find-generic-password -s ledger-ipa-encryption-key -w \
+  | gh secret set IPA_ENCRYPTION_KEY -R $R --env testflight
+sed -n 's/^LEDGER_BUNDLE_PREFIX *= *//p' apps/ios/Config/Identity.xcconfig \
+  | gh secret set LEDGER_BUNDLE_ID -R $R --env testflight
 
 # Cleanup from v1
 gh variable delete LEGACY_DEPLOYS_ENABLED -R $R
@@ -323,8 +370,10 @@ protection are not available.
 | `testflight` environment | repo | exists, no rules |
 | `SUPABASE_PROJECT_REF`, `SUPABASE_DB_PASSWORD` | env `production` | set |
 | `SUPABASE_ACCESS_TOKEN` | env `production` | set 2026-10-08 (token `github-actions-<project>-prod`). `supabase link` needs read access to secret API keys and the Auth / PostgREST / network config as well as Edge Functions + secrets write; see PRODUCTION §10.1 |
-| `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8` | env `testflight` | set (same key as another app) |
-| `GCP_WIF_PROVIDER`, `GCP_DEPLOY_SA`, `GCP_PROJECT_ID`, `AUTO_DEPLOY` (`true`) | repo variables | set |
+| `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8` | env `testflight` | set (the team's key) |
+| `IPA_ENCRYPTION_KEY`, `LEDGER_BUNDLE_ID` | env `testflight` | **not yet set**: needed before the next TestFlight upload (§2.4); until then `upload` fails at "Verify required secrets" |
+| `GCP_WIF_PROVIDER`, `GCP_DEPLOY_SA`, `GCP_PROJECT_ID`, `AUTO_DEPLOY` (`true`) | repo variables | set; move the three `GCP_*` to secrets before the repo goes public (the workflow reads secrets first), then delete the variables |
+| `PRODUCTION_URL`, `SUPABASE_PROJECT_REF_PUBLIC` | repo secrets | **not yet set**: `web-smoke` fails without `PRODUCTION_URL` |
 | `LEGACY_DEPLOYS_ENABLED` | repo variable | absent |
 | Legacy repo secrets (`CCS_*`, `GCP_PROJECT_ID`, `RENDER_DEPLOY_HOOK`, `VERCEL_DEPLOY_HOOK`) | repo | still present; unused by v2. `GCP_SA_KEY` was **deleted** (2026-10-09): `deploy-parser` authenticates with WIF only |
 | WIF pool `github`, provider `github-oidc` | GCP | created; condition: this repo and environment `production` or `Production` (the claim may carry the stored capitalisation) |

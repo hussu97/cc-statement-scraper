@@ -160,6 +160,7 @@ Request an email code for `demo@ledger.local` and read it in Inbucket
 
 ```bash
 cp apps/ios/Config/Secrets.example.xcconfig apps/ios/Config/Secrets.xcconfig   # paste ANON_KEY
+cp apps/ios/Config/Identity.example.xcconfig apps/ios/Config/Identity.xcconfig # team + bundle id (device/TestFlight)
 cd apps/ios && xcodegen generate && open Ledger.xcodeproj
 ```
 
@@ -198,7 +199,7 @@ Create a service token in web Settings → Sources & health → Tokens, or with
 `bash scripts/install-hooks.sh` (or `pnpm hooks:install`) installs the git hooks; details in
 [docs/ci-cd.md](docs/ci-cd.md) §3:
 - **pre-commit (fast, staged files only):** secrets guard (`.env*`, `*.p8`, provisioning
-  profiles), append-only migrations, eslint / `deno lint` / ruff / shellcheck / actionlint on
+  profiles, `Secrets*.xcconfig`, the iOS `Identity.xcconfig`, `*.ipa`), append-only migrations, eslint / `deno lint` / ruff / shellcheck / actionlint on
   the staged files.
 - **pre-push (full CI mirror for the changed areas):** the same lint, typecheck, test and build
   steps as `ci.yml` (incl. `deno fmt --check` and `deno check`; pgTAP only when the local stack runs), then on a
@@ -225,6 +226,19 @@ approval), Vercel's Git integration + `web-smoke.yml`, and `ios-testflight.yml`.
 | `VITE_SENTRY_RELEASE` | Release name (defaults to `VERCEL_GIT_COMMIT_SHA` for source maps) |
 | `VITE_TESTFLIGHT_URL` | Optional public TestFlight link (`https://testflight.apple.com/join/…`). Shows *Get the Bank Ledger app (TestFlight)* in Settings → iPhone SMS; hidden when unset or not a TestFlight URL |
 | `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` | Build-time only: uploads source maps when the token is set. `SENTRY_PROJECT` defaults to `credit-card-ledger-apps`. |
+| `LEDGER_APPLE_APP_IDS` | Build-time only (Vercel): `TEAMID.bundle.id`, comma-separated. The build writes `/.well-known/apple-app-site-association` (passkeys) from it; nothing is served when unset |
+
+### Production identity (local only; the repository is public and names none of it)
+
+| Where | Keys | Used by |
+|---|---|---|
+| `supabase/.env` (copy `supabase/.env.example`) | `SUPABASE_PROD_PROJECT_REF`, `SUPABASE_PROD_SITE_URL` | `env()` in `supabase/config.toml` `[remotes.production]`; required for `supabase config push` |
+| `apps/ios/Config/Identity.xcconfig` (copy `Identity.example.xcconfig`) | `LEDGER_BUNDLE_PREFIX`, `LEDGER_PASSKEY_DOMAIN`, `DEVELOPMENT_TEAM` | iOS builds; Release refuses the placeholders |
+| `git config --local` | `ledger.webUrl`, `ledger.supabaseRef` | `scripts/ci/web-smoke.sh`, `scripts/cutover/set-edge-secrets.sh` |
+| GitHub secrets | `PRODUCTION_URL`, `SUPABASE_PROJECT_REF_PUBLIC`, `GCP_*` | workflows (`docs/ci-cd.md`) |
+
+`.worktreeinclude` copies the two local files into new worktrees. The pre-commit hook refuses added
+lines that match `$(git rev-parse --git-common-dir)/info/sensitive-patterns` (local, never committed).
 
 ### Edge Functions (`supabase/functions/.env` locally; production: `supabase/functions/.env.production` pushed with `scripts/cutover/set-edge-secrets.sh`)
 
@@ -289,13 +303,30 @@ JWTs. The service client logs which source it used (never the value).
 | `LEDGER_SENTRY_DSN` | Sentry `credit-card-ledger-apps` DSN (empty disables Sentry) |
 | `LEDGER_ENVIRONMENT` | `local` / `production`. Sentry starts only in Release builds with an environment other than local/development/dev/test |
 
+Identity (`apps/ios/Config/Identity.xcconfig`, gitignored, template `Identity.example.xcconfig`;
+the public repository carries only the neutral defaults in `Base.xcconfig`, and a Release build
+with a default fails):
+
+| Key | Purpose |
+|---|---|
+| `LEDGER_BUNDLE_PREFIX` | The app's bundle id (extensions, App Group, keychain group and background tasks derive from it); default `com.example.ledger` |
+| `LEDGER_PASSKEY_DOMAIN` | Passkey relying party, the web app's host; default `example.com` |
+| `DEVELOPMENT_TEAM` | Apple Developer Team ID; default empty |
+
 `apps/ios/scripts/testflight.sh` (and `publish-build.sh`, which calls it) also reads these:
 - `SENTRY_AUTH_TOKEN` for dSYMs and the Sentry release, from the environment or the login
   keychain item `ledger-sentry-auth-token` (never an xcconfig); `SENTRY_ORG` and `SENTRY_PROJECT`
   (default `credit-card-ledger-apps`) from the environment or else `Secrets.Release.xcconfig`.
   The token is never printed, and Sentry failing never fails the release
 - `ASC_KEY_ID` and `ASC_ISSUER_ID` (with the AuthKey `.p8`) for the TestFlight upload and
-  `testflight-distribute.mjs`; both default to the single key in `~/.appstoreconnect/private_keys`
+  `testflight-distribute.mjs`; `ASC_KEY_ID` defaults to the single key in
+  `~/.appstoreconnect/private_keys`, `ASC_ISSUER_ID` has no default (required to upload or distribute)
+- `APPLE_TEAM_ID` / `LEDGER_BUNDLE_PREFIX` override `Identity.xcconfig` for `testflight.sh`;
+  `LEDGER_BUNDLE_ID` (else `Identity.xcconfig`) tells `testflight-distribute.mjs` which app to release
+- `IPA_ENCRYPTION_KEY` (`publish-build.sh` only), else the login keychain item
+  `ledger-ipa-encryption-key`: encrypts the IPA staged on the public `ios-ledger-staged`
+  release. The same value is the `testflight` environment secret `IPA_ENCRYPTION_KEY`, and
+  `LEDGER_BUNDLE_ID` is a secret there too (docs/ci-cd.md §4)
 - `LEDGER_REVIEW_EMAIL` and `LEDGER_REVIEW_PASSWORD` for `testflight-distribute.mjs --review-account`
   (the App Review demo account), from the gitignored `.env.review-demo` that
   `scripts/cutover/create-review-demo.sh` writes (PRODUCTION §7)

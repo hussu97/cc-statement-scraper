@@ -16,7 +16,7 @@ cutover from legacy v1 (§10). Read [ARCHITECTURE.md](ARCHITECTURE.md) first.
 | Database, Auth, Storage, Edge Functions, Realtime, Vault, pg_cron, pgmq | Supabase Free | project **`cc-statement-scraper`**, ref **`<project-ref>`** (also holds the read-only `legacy` schema) |
 | Statement parser | GCP Cloud Run | GCP project `<gcp-project>`, service `ccs-parser`, region `me-central1` (Doha), min instances 0 |
 | Web app | Vercel Hobby | root directory `apps/web` |
-| iPhone app | TestFlight | bundle `com.example.ledger`, team `<apple-team-id>` |
+| iPhone app | TestFlight | bundle `com.example.ledger`, team `<apple-team-id>` (placeholders: the real values live only in the gitignored `apps/ios/Config/Identity.xcconfig`, §7) |
 | Gmail push | GCP Pub/Sub | topic `ccs-gmail-push`, push subscription → `gmail-push` function |
 | Outlook | Azure app registration (personal accounts) | polled by `outlook-poll` |
 | Error tracking | Sentry (free) | projects `credit-card-ledger-backend`, `credit-card-ledger-apps` |
@@ -489,6 +489,7 @@ echo "$PARSER_URL"; curl -s "$PARSER_URL/health"      # the URL is not a secret
 | `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` | source-map upload (build only) |
 | `SENTRY_PROJECT` | `credit-card-ledger-apps` (also the `vite.config.ts` default) |
 | `VITE_TESTFLIGHT_URL` | optional: the Friends & Family public TestFlight link (§7). Shows the TestFlight button in Settings → iPhone SMS; leave unset to hide it |
+| `LEDGER_APPLE_APP_IDS` | `<apple-team-id>.<bundle-prefix>` (comma-separated for more apps): the build writes `/.well-known/apple-app-site-association` from it (passkeys' `webcredentials`). **Required**: without it the file is not served and iOS passkeys stop working |
 
 The production values are in the gitignored `apps/web/.env.production.local`, which holds
 exactly these names: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SENTRY_DSN`,
@@ -506,7 +507,7 @@ env as production (only `VITE_SENTRY_ENVIRONMENT` differs), so it would run unre
 code against the production Supabase project and its real data, under the production CSP,
 and its magic-link redirects aren't in the Auth allow-list anyway. There is no non-production
 Supabase project to point previews at, and PR checks don't need them (`ci.yml` → `web` lints,
-type-checks, tests and builds every PR). To apply: Vercel → `cc-statement-scraper` → Settings →
+type-checks, tests and builds every PR). To apply: Vercel → the project → Settings →
 Git → **Ignored Build Step** → "Only build production" (or the custom command
 `[ "$VERCEL_ENV" != "production" ]`, which skips every non-production build). Revisit only
 together with a separate staging Supabase project whose URL the Preview env and CSP use.
@@ -521,14 +522,20 @@ together with a separate staging Supabase project whose URL the Preview env and 
   `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: DENY`, a restrictive
   `Permissions-Policy`, and a CSP:
   - `script-src 'self'` plus the sha256 of the inline theme script in `index.html`
-  - `connect-src` the project's Supabase URL over `https://` (REST, Auth, Storage, Functions)
-    and `wss://` (Realtime), plus Sentry ingest (`*.ingest[.us|.de].sentry.io`)
+  - `connect-src` / `img-src` allow `https://*.supabase.co` (and `wss://` for Realtime) plus
+    Sentry ingest (`*.ingest[.us|.de].sentry.io`); the build adds a `<meta>` CSP that pins both
+    to the one `VITE_SUPABASE_URL` host (`apps/web/scripts/deploy-config.ts`), and a browser
+    enforces both policies, so the effective policy is that host only
   - `font-src 'self'` (Inter and Fraunces are self-hosted via `@fontsource`; no Google Fonts)
   - `worker-src blob:` for the Sentry Replay worker; `frame-src 'self' blob:` for the
     term-sheet PDF viewer (`object-src 'none'`); `frame-ancestors 'none'`
-- The CSP hard-codes the project ref (`<project-ref>`). If `VITE_SUPABASE_URL` ever
-  points elsewhere, update `connect-src`. If the inline script in `index.html` changes, update
-  its hash. The vitest guard `src/test/vercel-config.test.ts` fails until both match.
+- **No crawling or indexing**: `X-Robots-Tag: noindex, nofollow, noarchive, nosnippet, …`,
+  `public/robots.txt` disallows everything, and known crawler user agents are redirected to
+  `/robots.txt` (never `/.well-known/`, which Apple's AASA fetcher reads). For more, turn on
+  Vercel → Firewall → Bot Protection / AI Bots (dashboard; not in `vercel.json`).
+- The file names no production host (the repository is public, CLAUDE.md §14). If the inline
+  script in `index.html` changes, update its hash; the vitest guard
+  `src/test/vercel-config.test.ts` fails until it matches.
 
 There is no `/api` proxy: the app talks to Supabase directly.
 
@@ -657,6 +664,10 @@ it. `PROJECT=<gcp-project>`, `URL=https://<project-ref>.supabase.co/functions/v1
    LEDGER_SUPABASE_PUBLISHABLE_KEY = <sb_publishable_… key>
    LEDGER_SENTRY_DSN = <credit-card-ledger-apps DSN>
    ```
+   and `apps/ios/Config/Identity.xcconfig` (gitignored; copy `Identity.example.xcconfig`): the
+   real `LEDGER_BUNDLE_PREFIX`, `LEDGER_PASSKEY_DOMAIN` and `DEVELOPMENT_TEAM`. The repository
+   is public, so `Base.xcconfig` holds only neutral defaults, and a Release build that still has
+   one fails "Check release config".
 2. One-time App Store Connect setup (bundle ids `com.example.ledger` + `.share` are already
    registered with App Groups; Xcode assigns `group.com.example.ledger` on the first archive;
    `.widgets`, the WidgetKit extension, needs the App Groups capability with the same group, which
@@ -666,7 +677,8 @@ it. `PROJECT=<gcp-project>`, `URL=https://<project-ref>.supabase.co/functions/v1
    TestFlight an internal group **Bank Ledger Internal** (automatic distribution) and an external
    group **Friends & Family** (public link), and fill *Test Information* (beta description,
    feedback email, privacy policy URL, review contact incl. phone).
-3. Release (same flow as another app; the API key is the one in `~/.appstoreconnect/private_keys`):
+3. Release (the API key is the team's one in `~/.appstoreconnect/private_keys`; export
+   `ASC_ISSUER_ID`, which has no default, to upload or distribute):
    ```bash
    # Sentry (dSYMs + release ledger-ios@<version>+<build> → credit-card-ledger-apps):
    # SENTRY_AUTH_TOKEN from the shell or the login keychain item ledger-sentry-auth-token,
@@ -686,9 +698,14 @@ it. `PROJECT=<gcp-project>`, `URL=https://<project-ref>.supabase.co/functions/v1
      only, nothing printed). `publish-build.sh` repeats it on the IPA it stages.
    - Sentry unreachable or unconfigured is a warning, never a failed release
      (`scripts/sentry-release.sh`).
-   - `apps/ios/scripts/publish-build.sh` instead builds with `--no-upload`, stages the IPA and
-     `build-meta.json` on the `ios-ledger-staged` GitHub release for the TestFlight workflow,
-     and commits the build number itself.
+   - `apps/ios/scripts/publish-build.sh` instead builds with `--no-upload`, stages the IPA
+     **encrypted** (`Ledger.ipa.enc`, `scripts/ipa-crypt.sh`) and `build-meta.json` (no
+     identity) on the public `ios-ledger-staged` GitHub release for the TestFlight workflow,
+     and commits the build number itself. The key is the login keychain item
+     `ledger-ipa-encryption-key` (or `IPA_ENCRYPTION_KEY` in the shell); the workflow decrypts
+     with the `testflight` environment secret `IPA_ENCRYPTION_KEY` and checks the bundle id
+     against the secret `LEDGER_BUNDLE_ID`. One-time setup (production action, values via
+     stdin, never `--body`): `apps/ios/README.md` "TestFlight" and docs/ci-cd.md §4.
 4. On each phone, after installing from TestFlight:
    - Sign in.
    - Settings → *SMS go to*: pick the ledger SMS and shared PDFs are filed to (owned ledgers
@@ -790,7 +807,8 @@ builds and stages the TestFlight IPA. `SKIP_PRE_PUSH=1 git push` skips the hook,
 `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `SUPABASE_PROJECT_REF` (env `production`);
 `GCP_WIF_PROVIDER`, `GCP_DEPLOY_SA` (repo variables; WIF setup in docs/ci-cd.md §5; the parser deploy is WIF-only, there is no
 service-account key secret), optional `GCP_PROJECT_ID`; `ASC_KEY_ID`,
-`ASC_ISSUER_ID`, `ASC_KEY_P8` (App Store Connect); optional `AUTO_DEPLOY`. The deployer SA
+`ASC_ISSUER_ID`, `ASC_KEY_P8` (App Store Connect), `IPA_ENCRYPTION_KEY` (staged IPA key) and
+`LEDGER_BUNDLE_ID` (env `testflight`); optional `AUTO_DEPLOY`. The deployer SA
 needs `run.admin`, `artifactregistry.writer` and `iam.serviceAccountUser` on `ccs-parser@`.
 
 The legacy repository variable `LEGACY_DEPLOYS_ENABLED` is gone (no workflow read it).
@@ -861,6 +879,8 @@ history):
 | `scraper/.env` | `CCS_SCRAPER_SUPABASE_PUBLISHABLE_KEY` (+ service tokens, bank credentials) | `ccs-scraper upload` (`apikey` header) |
 | `.env.cutover` | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `LEDGER_DB_URL`, …; `SUPABASE_SERVICE_ROLE_KEY` is legacy (kept until §2.8 step 3, unused by the code) | cutover scripts and one-off admin calls (secret key on `apikey` only, never from a browser) |
 | `apps/ios/Config/Secrets.Release.xcconfig` | `LEDGER_SUPABASE_URL`, `LEDGER_SUPABASE_PUBLISHABLE_KEY`, `LEDGER_SENTRY_DSN`, `LEDGER_ENVIRONMENT` (all required: Release has no fallback); optionally `SENTRY_ORG`/`SENTRY_PROJECT` when the shell doesn't set them. Never `SENTRY_AUTH_TOKEN`: it lives in the shell or the login keychain item `ledger-sentry-auth-token` (BACKLOG IOS-21r) | TestFlight builds (§7) |
+| `apps/ios/Config/Identity.xcconfig` | `LEDGER_BUNDLE_PREFIX`, `LEDGER_PASSKEY_DOMAIN`, `DEVELOPMENT_TEAM` (identifiers, not secrets, kept out of the public repository) | every signed build; `testflight.sh`, `testflight-distribute.mjs` (§7) |
+| login keychain item `ledger-ipa-encryption-key` | the staged-IPA encryption key (same value as the `testflight` secret `IPA_ENCRYPTION_KEY`) | `publish-build.sh` (§7) |
 
 ### 10.1 Release 2026-10-08 (main `10703b4`, iOS build 5)
 
