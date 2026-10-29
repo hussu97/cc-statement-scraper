@@ -393,7 +393,13 @@ Deno.test("normalizeSips: each SIP with its latest order (by instruction_id); ba
 
 Deno.test("enrich: names, fund types, AMFI NAVs and SIPs; each failure is a note, not an error", async () => {
   const positions = [
-    ...normalizeEquity([{ tradingsymbol: "ACMEAD", exchange: "NSE", isin: "INE000G01010", quantity: 2, last_price: 1 }]),
+    ...normalizeEquity([{
+      tradingsymbol: "ACMEAD",
+      exchange: "NSE",
+      isin: "INE000G01010",
+      quantity: 2,
+      last_price: 1,
+    }]),
     ...normalizeEquity([{ tradingsymbol: "TCS", exchange: "BSE", isin: "INE467B01029", quantity: 1, last_price: 1 }]),
     ...normalizeMf([{ fund: "PPFAS", tradingsymbol: "INF879O01027", quantity: 1, last_price: 80, average_price: 50 }]),
   ];
