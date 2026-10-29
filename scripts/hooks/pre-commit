@@ -3,7 +3,9 @@
 # suite (tests, builds, pgTAP, swift test) runs in pre-push and CI.
 #
 #   * secrets guard  refuse staged .env* (not .env.example), *.p8, *.p12,
-#                    Secrets*.xcconfig other than the example
+#                    Secrets*.xcconfig other than the example, the iOS
+#                    Identity.xcconfig (team, bundle id), *.ipa
+#   * denylist       refuse added lines matching the local .git/info/sensitive-patterns
 #   * migrations     refuse edits/deletes of migrations already on origin/main
 #   * web            eslint on the staged apps/web .ts/.tsx files
 #   * edge           deno lint on the staged supabase/functions .ts files
@@ -42,12 +44,31 @@ staged() {
 }
 
 # --- secrets guard ----------------------------------------------------------
-LEAKS="$(staged '(^|/)\.env(\..+)?$|\.p8$|\.p12$|\.mobileprovision$|(^|/)Secrets[^/]*\.xcconfig$' \
+LEAKS="$(staged '(^|/)\.env(\..+)?$|\.p8$|\.p12$|\.mobileprovision$|(^|/)Secrets[^/]*\.xcconfig$|(^|/)Identity\.xcconfig$|\.ipa$' \
   | grep -vE '(^|/)\.env\.example$|Secrets\.example\.xcconfig$' || true)"
 if [ -n "$LEAKS" ]; then
   fail "secrets guard — these must never be committed:"
   # shellcheck disable=SC2086 # one path per word
   printf '       %s\n' $LEAKS
+fi
+
+# --- public-repo denylist ---------------------------------------------------
+# The repository is public. $GIT_COMMON_DIR/info/sensitive-patterns (local only, never
+# committed: it holds the real values) lists ERE patterns for real names, card and account
+# digits, project refs and hosts; an added line matching one is refused. Lines are not echoed.
+DENY_FILE="$(git rev-parse --git-common-dir)/info/sensitive-patterns"
+if [ -s "$DENY_FILE" ]; then
+  DENY_HITS="$(git diff --cached -U0 --no-color --diff-filter=ACMR -- . ':(exclude)pnpm-lock.yaml' \
+    | awk '/^\+\+\+ b\//{f=substr($0,7); next} /^\+/{print f "\t" substr($0,2)}' \
+    | grep -E -f <(grep -v '^#' "$DENY_FILE" | grep -v '^$') | cut -f1 | sort | uniq -c || true)"
+  if [ -n "$DENY_HITS" ]; then
+    fail "public-repo denylist — added lines match $DENY_FILE (real personal or production values):"
+    printf '%s\n' "$DENY_HITS" | sed 's/^/       /'
+  else
+    ok "public-repo denylist"
+  fi
+else
+  skip "public-repo denylist ($DENY_FILE missing)"
 fi
 
 # --- migrations are append-only ---------------------------------------------

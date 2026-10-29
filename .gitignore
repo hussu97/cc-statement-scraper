@@ -58,7 +58,40 @@ apps/ios/Config/Secrets.xcconfig
 supabase/functions/.env
 apps/ios/build/
 apps/ios/Config/Secrets.Release.xcconfig
+# The app's identity (team, bundle id, passkey host); template Identity.example.xcconfig.
+apps/ios/Config/Identity.xcconfig
 .vercel/
 .vercel
 .env*
 !.env.example
+
+# Public repository: local-only material that is never committed (CLAUDE.md §11.3–11.4).
+# The v1 tree with private PDFs, backups and logs (main checkout only; never deleted).
+/backend/
+# Personal plans and audit reports: they quote real balances, holdings and card digits.
+/tasks/todo.md
+/docs/audit/0*.md
+# Statements, exports and dumps
+*.pdf
+*.PDF
+*.csv
+*.xlsx
+*.xls
+*.dump
+dump.sql
+*.sql.gz
+# Keys, certificates, profiles and signed builds
+*.p8
+*.p12
+*.pem
+*.key
+*.mobileprovision
+*.ipa
+*.ipa.enc
+id_rsa*
+id_ed25519*
+service-account*.json
+*-sa-key.json
+# Scraper state (normally under downloads/)
+scraper/state/
+**/state/uploaded.json

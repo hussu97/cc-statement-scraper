@@ -70,6 +70,10 @@ concurrency:
 
 env:
   SUPABASE_CLI_VERSION: 2.109.1
+  # config.toml's [remotes.production] reads these (supabase/.env.example). Placeholders:
+  # no workflow pushes config.toml, and the block must never match a real project here.
+  SUPABASE_PROD_PROJECT_REF: aaaaaaaaaaaaaaaaaaaa
+  SUPABASE_PROD_SITE_URL: https://example.invalid
 
 jobs:
   plan:
@@ -197,7 +201,6 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: production
-      url: https://supabase.com/dashboard/project/<project-ref>
     timeout-minutes: 30
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}

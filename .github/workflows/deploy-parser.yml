@@ -1,7 +1,7 @@
 name: Deploy Parser
 
 # Builds services/parser, pushes it to Artifact Registry and rolls it out to the
-# `ccs-parser` Cloud Run service (project <gcp-project>, me-central1).
+# `ccs-parser` Cloud Run service (project $GCP_PROJECT_ID, me-central1).
 #
 #   test     ruff + pytest. No secrets.
 #   deploy   `production` environment. The new revision is deployed with
@@ -45,7 +45,7 @@ concurrency:
 env:
   SERVICE: ccs-parser
   REGION: me-central1
-  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID || '<gcp-project>' }}
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || vars.GCP_PROJECT_ID }}
 
 jobs:
   test:
@@ -109,8 +109,8 @@ jobs:
       id-token: write # Workload Identity Federation
     env:
       PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
-      WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
-      DEPLOY_SA: ${{ vars.GCP_DEPLOY_SA }}
+      WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER || vars.GCP_WIF_PROVIDER }}
+      DEPLOY_SA: ${{ secrets.GCP_DEPLOY_SA || vars.GCP_DEPLOY_SA }}
     steps:
       - name: Verify configuration
         run: |
@@ -118,7 +118,7 @@ jobs:
             echo "::error::Secret SUPABASE_PROJECT_REF is not set on the production environment (docs/ci-cd.md)"; exit 1
           fi
           if [ -z "$WIF_PROVIDER" ] || [ -z "$DEPLOY_SA" ]; then
-            echo "::error::Set the repository variables GCP_WIF_PROVIDER and GCP_DEPLOY_SA (docs/ci-cd.md §5)"; exit 1
+            echo "::error::Set the repository secrets GCP_WIF_PROVIDER and GCP_DEPLOY_SA (docs/ci-cd.md §5)"; exit 1
           fi
 
       - uses: actions/checkout@v4

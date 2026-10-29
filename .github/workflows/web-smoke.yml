@@ -1,7 +1,6 @@
 name: Web smoke (Vercel)
 
-# The web app is deployed by Vercel's Git integration (project
-# cc-statement-scraper, root apps/web): every push to main builds Production,
+# The web app is deployed by Vercel's Git integration (root apps/web): every push to main builds Production,
 # every PR gets a Preview. This workflow does NOT deploy; adding a CLI deploy
 # here would double-deploy. It verifies what Vercel shipped.
 #
@@ -9,7 +8,7 @@ name: Web smoke (Vercel)
 # Production deployment of that commit (GitHub Deployments API), then probes
 # the production URL with
 # scripts/ci/web-smoke.sh: 200 + <title>Bank Ledger</title>, CSP and security
-# headers, an SPA deep link, a hashed asset (immutable) and a missing asset
+# headers, no indexing and crawlers sent to robots.txt, an SPA deep link, a hashed asset (immutable) and a missing asset
 # (404). It also runs daily, so a broken alias or expired domain is noticed
 # without a deploy. Rollback: Vercel dashboard → Deployments → previous
 # Production deployment → "Instant Rollback" (docs/ci-cd.md).
@@ -31,9 +30,8 @@ on:
   workflow_dispatch:
     inputs:
       url:
-        description: "Base URL to test"
+        description: "Base URL to test (default: the PRODUCTION_URL secret)"
         type: string
-        default: https://<web-host>
 
 permissions:
   contents: read
@@ -44,8 +42,10 @@ concurrency:
   group: web-smoke
   cancel-in-progress: true
 
+# Secrets, so the host stays out of the repository and is masked in public logs.
 env:
-  PRODUCTION_URL: https://<web-host>
+  PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+  SUPABASE_PROJECT_REF_PUBLIC: ${{ secrets.SUPABASE_PROJECT_REF_PUBLIC }}
 
 jobs:
   smoke:
@@ -115,6 +115,6 @@ jobs:
             [ -n "$DEPLOY_URL" ] && echo "| Vercel deployment | $DEPLOY_URL |"
             echo ""
             if [ "$OUTCOME" != "success" ]; then
-              echo "Roll back: Vercel → cc-statement-scraper → Deployments → last good Production → Instant Rollback."
+              echo "Roll back: Vercel → the project → Deployments → last good Production → Instant Rollback."
             fi
           } >> "$GITHUB_STEP_SUMMARY"

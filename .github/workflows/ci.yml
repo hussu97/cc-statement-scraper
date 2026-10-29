@@ -28,6 +28,10 @@ env:
   # Pinned so `supabase gen types` output is stable for the drift check.
   # Bump together with a `pnpm db:types` regeneration (and in deploy-supabase.yml).
   SUPABASE_CLI_VERSION: 2.109.1
+  # config.toml's [remotes.production] reads these (supabase/.env.example). Placeholders:
+  # no workflow pushes config.toml, and the block must never match a real project here.
+  SUPABASE_PROD_PROJECT_REF: aaaaaaaaaaaaaaaaaaaa
+  SUPABASE_PROD_SITE_URL: https://example.invalid
   PYTHON_VERSION: "3.12"
   NODE_VERSION: "22"
 

@@ -3,9 +3,15 @@
 #
 #   scripts/ci/web-smoke.sh [base-url]
 #
+# The repository names no production host: the base URL comes from the argument,
+# $PRODUCTION_URL (a CI secret) or `git config ledger.webUrl`, and the Supabase ref
+# from $SUPABASE_PROJECT_REF_PUBLIC or `git config ledger.supabaseRef` (optional).
+#
 # Checks, each with retries for a just-promoted deployment:
-#   * /            200, <title>Bank Ledger</title>, security headers (CSP pointing at
-#                  the Supabase project, X-Frame-Options, nosniff, HSTS)
+#   * /            200, <title>Bank Ledger</title>, security headers (CSP header allowing
+#                  *.supabase.co, the build's meta CSP pinning the one Supabase host,
+#                  X-Frame-Options, nosniff, HSTS) and no indexing (X-Robots-Tag)
+#   * crawlers     /robots.txt disallows everything; a crawler user agent is sent there
 #   * /activity    200 HTML (SPA deep link served by the vercel.json rewrite)
 #   * a hashed /assets/*.js from index.html: 200 and cached immutable
 #   * /assets/<missing>.js: 404 (the rewrite must not turn assets into HTML)
@@ -16,9 +22,10 @@
 
 set -euo pipefail
 
-BASE="${1:-https://<web-host>}"
+BASE="${1:-${PRODUCTION_URL:-$(git config --get ledger.webUrl || true)}}"
 BASE="${BASE%/}"
-PROJECT_REF="${SUPABASE_PROJECT_REF_PUBLIC:-<project-ref>}"
+[ -n "$BASE" ] || { echo "usage: $0 <base-url> (or set PRODUCTION_URL / git config ledger.webUrl)" >&2; exit 2; }
+PROJECT_REF="${SUPABASE_PROJECT_REF_PUBLIC:-$(git config --get ledger.supabaseRef || true)}"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
@@ -49,11 +56,21 @@ if [ -z "$csp" ]; then
 else
   ok "CSP present"
   grep -q "default-src 'self'" <<<"$csp" || bad "CSP lacks default-src 'self'"
-  grep -q "https://$PROJECT_REF.supabase.co" <<<"$csp" || bad "CSP connect-src does not allow https://$PROJECT_REF.supabase.co"
-# Bank logos load from the public bank-logos Storage bucket.
-grep -Eq "img-src[^;]*https://$PROJECT_REF\.supabase\.co" <<<"$csp" || bad "CSP img-src does not allow https://$PROJECT_REF.supabase.co (bank logos)"
+  grep -Eq "connect-src[^;]*https://\*\.supabase\.co" <<<"$csp" || bad "CSP connect-src does not allow https://*.supabase.co"
+  # Bank logos load from the public bank-logos Storage bucket.
+  grep -Eq "img-src[^;]*https://\*\.supabase\.co" <<<"$csp" || bad "CSP img-src does not allow https://*.supabase.co (bank logos)"
   grep -q "frame-ancestors 'none'" <<<"$csp" || bad "CSP lacks frame-ancestors 'none'"
 fi
+# The build pins Supabase to one host in a meta CSP (apps/web/scripts/deploy-config.ts).
+meta="$(grep -o '<meta http-equiv="Content-Security-Policy" content="[^"]*"' "$TMP/index.body" || true)"
+host_re="https://${PROJECT_REF:-[a-z0-9]{20}}\.supabase\.co"
+if grep -Eq "connect-src[^;]*$host_re" <<<"$meta" && grep -Eq "img-src[^;]*$host_re" <<<"$meta"; then
+  ok "meta CSP pins the Supabase host"
+else
+  bad "index.html has no meta CSP pinning connect-src/img-src to ${PROJECT_REF:-the} Supabase host"
+fi
+grep -q noindex <<<"$(header index x-robots-tag)" && ok "X-Robots-Tag noindex" || bad "X-Robots-Tag lacks noindex"
+grep -q '<meta name="robots" content="noindex' "$TMP/index.body" && ok "robots meta noindex" || bad "index.html has no robots noindex meta"
 [ "$(header index x-frame-options)" = DENY ] && ok "X-Frame-Options DENY" || bad "X-Frame-Options is not DENY"
 [ "$(header index x-content-type-options)" = nosniff ] && ok "nosniff" || bad "X-Content-Type-Options is not nosniff"
 [ -n "$(header index strict-transport-security)" ] && ok "HSTS" || bad "Strict-Transport-Security missing"
@@ -75,6 +92,11 @@ else
   [ "$code" = 200 ] && ok "$asset -> 200" || bad "$asset returned $code"
   grep -q immutable <<<"$cache" && ok "asset cached immutable" || bad "$asset cache-control is '$cache'"
 fi
+
+code="$(fetch /robots.txt robots)"
+[ "$code" = 200 ] && grep -q '^Disallow: /$' "$TMP/robots.body" && ok "robots.txt disallows everything" || bad "robots.txt returned $code or does not disallow /"
+bot="$(curl -sS --max-time 20 -o /dev/null -w '%{http_code} %{redirect_url}' -A 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)' "$BASE/" || echo 000)"
+[[ "$bot" =~ ^30[78]\ .*/robots\.txt$ ]] && ok "crawler user agent -> robots.txt" || bad "a crawler user agent got '$bot', not a redirect to robots.txt"
 
 code="$(fetch /assets/__ledger-smoke-missing__.js missing)"
 [ "$code" = 404 ] && ok "missing asset -> 404" || bad "missing asset returned $code (SPA rewrite swallowing /assets?)"

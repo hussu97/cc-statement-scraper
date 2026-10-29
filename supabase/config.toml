@@ -191,9 +191,8 @@ minimum_password_length = 6
 # are: `letters_digits`, `lower_upper_letters_digits`, `lower_upper_letters_digits_symbols`
 password_requirements = ""
 
-# Passkey sign-in (WebAuthn). Production: rp_id = the web app host
-# (<web-host>), which also serves the iOS app's
-# apple-app-site-association (apps/web/public/.well-known). Browsers reject an
+# Passkey sign-in (WebAuthn). Production: rp_id = the web app host, which also
+# serves the iOS app's apple-app-site-association (built by apps/web/scripts/deploy-config.ts). Browsers reject an
 # IP address as an RP ID, so locally open the web app at http://localhost:5173
 # (`pnpm web:dev -- --host localhost`, not 127.0.0.1) to try passkeys. Changing rp_id strands existing passkeys.
 [auth.passkey]
@@ -496,10 +495,17 @@ verify_jwt = false
 # differs between local and production is pinned here: a push of this file to
 # the production ref can only ever write production's own values (plus the
 # shared email templates above). Passkeys/WebAuthn are managed in the
-# dashboard (Authentication → Passkeys; rp_id <web-host>).
+# dashboard (Authentication → Passkeys; rp_id = the web app host).
 # See PRODUCTION.md §2.7.
+#
+# The repository names no production project or host: both come from
+# SUPABASE_PROD_PROJECT_REF / SUPABASE_PROD_SITE_URL, which the CLI reads from the
+# environment or the gitignored supabase/.env (copy supabase/.env.example). CI sets
+# placeholders, so this block never matches there. `supabase config push` is refused
+# by .claude/hooks/guard.py unless supabase/.env holds both (a missing value would
+# leave production unmatched and push the local values).
 [remotes.production]
-project_id = "<project-ref>"
+project_id = "env(SUPABASE_PROD_PROJECT_REF)"
 
 [remotes.production.api]
 max_rows = 2000
@@ -508,8 +514,8 @@ max_rows = 2000
 enabled = false
 
 [remotes.production.auth]
-site_url = "https://<web-host>"
-additional_redirect_urls = ["https://<web-host>"]
+site_url = "env(SUPABASE_PROD_SITE_URL)"
+additional_redirect_urls = ["env(SUPABASE_PROD_SITE_URL)"]
 
 [remotes.production.auth.email]
 enable_confirmations = true

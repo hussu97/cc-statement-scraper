@@ -63,11 +63,23 @@ class Production(unittest.TestCase):
                     "gcloud run services update-traffic ccs-parser --to-latest", "vercel --prod",
                     "gh secret set SUPABASE_ACCESS_TOKEN --env production",
                     "gh workflow run deploy-supabase.yml --ref main", "gh pr merge 12",
-                    "apps/ios/scripts/publish-build.sh", "supabase config push",
-                    "echo n | supabase config push --project-ref x", 'psql "$LEDGER_DB_URL" -c "select 1"',
+                    "apps/ios/scripts/publish-build.sh", 'psql "$LEDGER_DB_URL" -c "select 1"',
                     "supabase db query --linked 'update x set y=1'",
                     "GH_TOKEN=$(gh auth token --user hussu97) gh api -X PUT repos/hussu97/cc-statement-scraper/x"]:
             self.assertEqual(bash(cmd), "ask", cmd)
+
+    def test_config_push_needs_the_production_identity(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as root:
+            for cmd in ["supabase config push", "echo n | supabase config push --project-ref x"]:
+                self.assertEqual(bash(cmd, cwd=root), "deny", cmd)
+            os.makedirs(os.path.join(root, "supabase"))
+            with open(os.path.join(root, "supabase", ".env"), "w") as fh:
+                fh.write("SUPABASE_PROD_PROJECT_REF=abcdefghijklmnopqrst\n")
+            self.assertEqual(bash("supabase config push", cwd=root), "deny")
+            with open(os.path.join(root, "supabase", ".env"), "a") as fh:
+                fh.write("SUPABASE_PROD_SITE_URL=https://app.example.com\n")
+            self.assertEqual(bash("supabase config push", cwd=root), "ask")
 
     def test_reads_and_local_are_allowed(self):
         for cmd in ["supabase db push --dry-run", "supabase migration list --linked", "supabase db reset",

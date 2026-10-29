@@ -27,6 +27,10 @@ set -uo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT" || exit 1
+
+# config.toml's [remotes.production] needs a project ref to load at all; a checkout without
+# supabase/.env (a fresh worktree) gets a placeholder that never matches a real project.
+grep -qs '^SUPABASE_PROD_PROJECT_REF=.' supabase/.env || export SUPABASE_PROD_PROJECT_REF="${SUPABASE_PROD_PROJECT_REF:-aaaaaaaaaaaaaaaaaaaa}"
 # Git exports GIT_DIR to hooks; in a worktree it is the absolute .git/worktrees/<name>.
 # Every child git then uses this repository, so SwiftPM's package checkouts (swift test,
 # xcodebuild, publish-build.sh) fail with "unable to read tree". From the repo root git
@@ -153,7 +157,7 @@ else
 fi
 want() { case "$AREAS" in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 
-# iOS release trigger (another app rule): app code on a push to main. Never the
+# iOS release trigger (same rule as another app): app code on a push to main. Never the
 # build-number counter on its own (publish-build.sh commits it).
 IOS_RELEASE=""
 if [ -n "$PUSH_TO_MAIN" ] && grep -qE '^apps/ios/(Ledger|LedgerKit|ShareExtension|Ledger\.xcodeproj|Config)/|^apps/ios/project\.yml$' <<<"$CHANGED"; then

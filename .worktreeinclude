@@ -1,0 +1,5 @@
+# Gitignored local files that new Claude Code worktrees copy from the main checkout.
+# They name the production identity (no secrets): see supabase/.env.example and
+# apps/ios/Config/Identity.example.xcconfig.
+supabase/.env
+apps/ios/Config/Identity.xcconfig

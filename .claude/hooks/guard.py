@@ -29,7 +29,9 @@ import shlex
 import subprocess
 import sys
 
-PROD_REF = "<project-ref>"
+
+# A hosted Supabase project's ref (the repository names none; production is the only one).
+PROD_REF_RE = r"[a-z0-9]{20}"
 
 # A secret file: any .env / .env.* except .env.example, any Secrets*.xcconfig except the
 # example, Apple keys and provisioning profiles.
@@ -52,7 +54,7 @@ ASK_PROD = [
     (r"\bsupabase\s+(config\s+push|migration\s+repair|storage\s+(rm|mv|cp))\b", "changes the remote Supabase project"),
     (r"scripts/cutover/", "production secret/Vault helper"),
     (r"\bvault_upsert\b|\bvault\.(create|update)_secret\b", "writes a Vault secret"),
-    (r"pooler\.supabase\.com|db\." + PROD_REF + r"|\$\{?LEDGER_DB_URL\b", "SQL against the production database"),
+    (r"pooler\.supabase\.com|db\." + PROD_REF_RE + r"\.supabase\.co|\$\{?LEDGER_DB_URL\b", "SQL against the production database"),
     (r"\bgcloud\s+run\s+(deploy|services\s+(update|update-traffic|delete|replace))\b", "changes the Cloud Run parser"),
     (r"\bgcloud\s+(secrets\s+(create|delete|versions\s+(add|destroy|disable))|builds\s+submit)\b", "changes GCP secrets/builds"),
     (r"\bgcloud\s+(iam|projects\s+(add|remove)-iam-policy-binding)\b", "changes GCP IAM"),
@@ -391,6 +393,27 @@ def check_recursive_search(command: str, cwd: str) -> tuple[str, str] | None:
     return None
 
 
+def check_config_push(command: str, cwd: str) -> tuple[str, str] | None:
+    """config.toml's [remotes.production] names its project and host only through env(): without
+    them in supabase/.env the block cannot match production and a push would send local values."""
+    if not re.search(r"\bsupabase\s+config\s+push\b", command):
+        return None
+    root = subprocess.run(["git", "-C", cwd, "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+    env = os.path.join(root.stdout.strip() if root.returncode == 0 else cwd, "supabase", ".env")
+    try:
+        with open(env, encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
+    except OSError:
+        lines = []
+    have_ref = any(re.fullmatch(r"SUPABASE_PROD_PROJECT_REF=[a-z0-9]{20}", ln) for ln in lines)
+    have_url = any(re.fullmatch(r"SUPABASE_PROD_SITE_URL=https://\S+", ln) for ln in lines)
+    if have_ref and have_url:
+        return None
+    return "deny", ("`supabase config push` needs SUPABASE_PROD_PROJECT_REF and SUPABASE_PROD_SITE_URL in "
+                    "supabase/.env (supabase/.env.example): without them [remotes.production] cannot match "
+                    "and production would get the local auth values (supabase/CLAUDE.md).")
+
+
 def decide_bash(raw: str, cwd: str) -> tuple[str, str] | None:
     command = strip_messages(raw)
     for pat, reason in DENY:
@@ -406,13 +429,13 @@ def decide_bash(raw: str, cwd: str) -> tuple[str, str] | None:
         hit = check_git(seg, raw, cwd) or check_secret_read(seg)
         if hit:
             return hit
-    hit = check_recursive_search(command, cwd)
+    hit = check_recursive_search(command, cwd) or check_config_push(command, cwd)
     if hit:
         return hit
     for pat, reason in ASK_PROD:
         if re.search(pat, command, re.I):
             return "ask", f"Production action: {reason}. Needs an explicit yes in chat (CLAUDE.md §11.1)."
-    if (re.search(r"--linked\b|--project-ref\b|" + PROD_REF, command)) and not LINKED_READONLY.search(command):
+    if (re.search(r"--linked\b|--project-ref\b|\b" + PROD_REF_RE + r"\.supabase\.co\b", command)) and not LINKED_READONLY.search(command):
         return "ask", "Command targets the production Supabase project (CLAUDE.md §11.1)."
     return None
 

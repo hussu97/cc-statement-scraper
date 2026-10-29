@@ -4,7 +4,7 @@
 #   scripts/cutover/create-review-demo.sh [--env-file PATH] [--email ADDRESS] [--yes]
 #
 # Defaults: --env-file .env.cutover (needs SUPABASE_URL, SUPABASE_SECRET_KEY,
-#           LEDGER_DB_URL), --email app-review@<web-host>.
+#           LEDGER_DB_URL), --email $LEDGER_REVIEW_EMAIL from that file (required).
 #
 # 1. Creates the auth user with a generated password through the Auth admin API
 #    (sign-ups stay disabled; the admin API works regardless). If the user exists,
@@ -25,7 +25,7 @@ set -euo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 ENV_FILE="$REPO_ROOT/.env.cutover"
 OUT_FILE="$REPO_ROOT/.env.review-demo"
-EMAIL="app-review@<web-host>"
+EMAIL=""
 YES=0
 
 while [[ $# -gt 0 ]]; do
@@ -51,6 +51,8 @@ DB_URL="$(val LEDGER_DB_URL)"
 [[ -n "$SUPABASE_URL" && -n "$SECRET_KEY" && -n "$DB_URL" ]] \
   || die "$ENV_FILE needs SUPABASE_URL, SUPABASE_SECRET_KEY and LEDGER_DB_URL"
 [[ "$SECRET_KEY" == sb_secret_* ]] || die "SUPABASE_SECRET_KEY is not an sb_secret_ key"
+[[ -n "$EMAIL" ]] || EMAIL="$(val LEDGER_REVIEW_EMAIL)"
+[[ -n "$EMAIL" ]] || die "pass --email or set LEDGER_REVIEW_EMAIL in $ENV_FILE"
 EMAIL="$(printf '%s' "$EMAIL" | tr '[:upper:]' '[:lower:]')"
 
 umask 077

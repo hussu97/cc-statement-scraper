@@ -5,7 +5,7 @@
 #                                       [--sentry-release SHA] [--dry-run] [--yes]
 #
 # Defaults: --env-file supabase/functions/.env.production (gitignored),
-#           --project-ref $SUPABASE_PROJECT_REF or <project-ref>.
+#           --project-ref $SUPABASE_PROJECT_REF or `git config ledger.supabaseRef`.
 #
 # The script refuses to push anything if:
 #   - any value is empty or still a placeholder (contains `<...>`),
@@ -30,7 +30,7 @@ set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 ENV_FILE="$REPO_ROOT/supabase/functions/.env.production"
-PROJECT_REF="${SUPABASE_PROJECT_REF:-<project-ref>}"
+PROJECT_REF="${SUPABASE_PROJECT_REF:-$(git config --get ledger.supabaseRef || true)}"
 SENTRY_RELEASE_OVERRIDE=""
 DRY_RUN=0
 ASSUME_YES=0

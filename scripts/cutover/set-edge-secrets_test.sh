@@ -11,6 +11,8 @@ TMP="$(mktemp -d "${TMPDIR:-/tmp}/edge-secrets-test.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT
 
 FAILS=0
+# The script reads the production ref from the environment or git config; the repo names none.
+export SUPABASE_PROJECT_REF="abcdefghijklmnopqrst"
 CRON="cron0123456789abcdef0123456789abcdef"
 SECRET="GOCSPX-abcdefghijklmnopqrstuvwxyz12"
 
