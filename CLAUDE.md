@@ -155,7 +155,7 @@ Production is a Supabase project, the parser on Cloud Run `ccs-parser` (`me-cent
 | Pushed Edge secrets: no placeholder, local-only key or glued `KEY=` in a value (§11.4) | `scripts/cutover/set-edge-secrets.sh`, tested by `set-edge-secrets_test.sh` |
 | Commit author, no co-author trailer (§9) | `prepare-commit-msg`, `commit-msg`, `.claude/hooks/guard.py` |
 | Explicit staging, production confirmation, no secret printing, `legacy`/`backend/` kept (§9, §11) | `.claude/hooks/guard.py` (Claude Code PreToolUse), tested by `guard_test.py` |
-| No real personal or production values in commits (§14) | pre-commit public-repo denylist (local `.git/info/sensitive-patterns`) |
+| No real personal or production values in commits (§14) | pre-commit and pre-push public-repo denylist (local `.git/info/sensitive-patterns`) |
 | `supabase config push` only with the production identity in `supabase/.env` (§14.2) | `.claude/hooks/guard.py` `check_config_push` |
 | No crawling or indexing of the web app (§14.3) | `apps/web/src/test/vercel-config.test.ts`, `scripts/ci/web-smoke.sh` |
 
@@ -166,4 +166,4 @@ The repository is public (free CI minutes). Nothing in it, or in a commit messag
 1. **No real values, not even as examples**: names of people, card or account digits, BINs, IBANs, balances or salaries, holdings and instrument identifiers, SMS bodies, profile/row codes from production, the Supabase ref, web host, GCP project, Apple team or bundle id. Tests and docs use synthetic data (the `92xx` card range, `310001`-style account tails, `XS00000…` ISINs, Alice/Bob); a fixture copied from production is rewritten before it is committed.
 2. **Production identity lives in gitignored config**: `supabase/.env` (`env()` in `config.toml`), `apps/ios/Config/Identity.xcconfig`, `git config ledger.webUrl` / `ledger.supabaseRef` for scripts, Vercel env (`LEDGER_APPLE_APP_IDS`) and GitHub secrets (masked in public logs; prefer secrets over variables). `.worktreeinclude` copies the local files into new worktrees.
 3. **The web app is not for crawlers**: `robots.txt` disallows everything, `X-Robots-Tag`/robots meta say noindex, and crawler user agents are redirected (`apps/web/vercel.json`); no meta description, Open Graph, sitemap or structured data.
-4. **Enforced locally**: the pre-commit denylist reads `$(git rev-parse --git-common-dir)/info/sensitive-patterns` (real values, never committed); keep it current when a new real value appears.
+4. **Enforced locally**: the pre-commit and pre-push denylist (pre-push also refuses a branch still on the pre-rewrite history) reads `$(git rev-parse --git-common-dir)/info/sensitive-patterns` (real values, never committed); keep it current when a new real value appears.

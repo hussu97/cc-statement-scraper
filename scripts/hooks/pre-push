@@ -109,6 +109,7 @@ else
     [ "$local_sha" = "$ZERO" ] && continue # deleting a ref
     [ "$remote_ref" = "refs/heads/main" ] && PUSH_TO_MAIN=1
     PUSH_SHA="$local_sha"
+    PUSHED_SHAS="${PUSHED_SHAS:-} $local_sha"
     if [ "$remote_sha" = "$ZERO" ] || ! git cat-file -e "${remote_sha}^{commit}" 2>/dev/null; then
       # New remote branch (or unknown remote tip): diff against origin/main.
       if git rev-parse -q --verify refs/remotes/origin/main >/dev/null; then
@@ -123,6 +124,21 @@ else
 fi
 
 CHANGED="$(printf '%s\n' "$CHANGED" | grep -v '^$' | sort -u || true)"
+
+# Public-repo denylist (CLAUDE.md §14): no commit that is new to origin may add a real value,
+# in its diff or its message. Catches a branch still on the pre-rewrite history, which the
+# pre-commit check never saw. The patterns file is local only; lines are not echoed.
+DENY_FILE="$(git rev-parse --git-common-dir)/info/sensitive-patterns"
+if [ -n "${PUSHED_SHAS:-}" ] && [ -s "$DENY_FILE" ]; then
+  # shellcheck disable=SC2086 # one sha per word
+  deny_hits="$(git log -p --no-color --format='%B' $PUSHED_SHAS --not --remotes=origin -- . ':(exclude)pnpm-lock.yaml' \
+    | grep -cE -f <(grep -v '^#' "$DENY_FILE" | grep -v '^$') || true)"
+  if [ "${deny_hits:-0}" -gt 0 ]; then
+    echo "${RED}FAIL${NC} public-repo denylist — $deny_hits added line(s) in the pushed commits match $DENY_FILE." >&2
+    echo "       A branch still on the pre-rewrite history? Rebase its own commits onto the rewritten main." >&2
+    exit 1
+  fi
+fi
 
 # area_of <path>: prints the areas a path belongs to (mirror of ci.yml `changes`).
 area_of() {
