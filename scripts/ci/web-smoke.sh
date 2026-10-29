@@ -62,12 +62,15 @@ else
   grep -q "frame-ancestors 'none'" <<<"$csp" || bad "CSP lacks frame-ancestors 'none'"
 fi
 # The build pins Supabase to one host in a meta CSP (apps/web/scripts/deploy-config.ts).
-meta="$(grep -o '<meta http-equiv="Content-Security-Policy" content="[^"]*"' "$TMP/index.body" || true)"
-host_re="https://${PROJECT_REF:-[a-z0-9]{20}}\.supabase\.co"
+# Vite writes the quotes as &#39;, whose ';' would end a directive: decode it first.
+meta="$(grep -o '<meta http-equiv="Content-Security-Policy" content="[^"]*"' "$TMP/index.body" | sed "s/&#39;/'/g" || true)"
+ref_re="$PROJECT_REF"
+[ -n "$ref_re" ] || ref_re='[a-z0-9]{20}'
+host_re="https://$ref_re\.supabase\.co"
 if grep -Eq "connect-src[^;]*$host_re" <<<"$meta" && grep -Eq "img-src[^;]*$host_re" <<<"$meta"; then
   ok "meta CSP pins the Supabase host"
 else
-  bad "index.html has no meta CSP pinning connect-src/img-src to ${PROJECT_REF:-the} Supabase host"
+  bad "index.html has no meta CSP pinning connect-src/img-src to the Supabase host"
 fi
 grep -q noindex <<<"$(header index x-robots-tag)" && ok "X-Robots-Tag noindex" || bad "X-Robots-Tag lacks noindex"
 grep -q '<meta name="robots" content="noindex' "$TMP/index.body" && ok "robots meta noindex" || bad "index.html has no robots noindex meta"
