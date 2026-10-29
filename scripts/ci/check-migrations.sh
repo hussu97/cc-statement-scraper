@@ -191,6 +191,8 @@ mode_remote() {
   # config.toml references files (auth email templates); the CLI refuses to load it without them.
   [ -d supabase/templates ] && cp -R supabase/templates "$scratch/supabase/"
   [ -d supabase/.temp ] && cp -R supabase/.temp "$scratch/supabase/"
+  # config.toml's [remotes.production] reads env() from supabase/.env (CI sets the env instead).
+  [ -f supabase/.env ] && cp supabase/.env "$scratch/supabase/"
   if ! (cd "$scratch" && supabase migration fetch "$flag" --yes >/dev/null 2>&1); then
     rm -rf "$scratch"
     die "supabase migration fetch $flag failed"
