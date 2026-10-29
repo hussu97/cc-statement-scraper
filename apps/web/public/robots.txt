@@ -1,0 +1,3 @@
+# A private app: nothing here is for crawlers, search engines or AI training.
+User-agent: *
+Disallow: /

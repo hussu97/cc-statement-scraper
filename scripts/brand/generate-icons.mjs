@@ -128,7 +128,6 @@ function opaqueRgbPng(image) {
 const manifest = {
   name: "Bank Ledger",
   short_name: "Bank Ledger",
-  description: "Credit-card spending from statements and bank SMS.",
   start_url: "/",
   scope: "/",
   display: "standalone",

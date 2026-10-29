@@ -5,6 +5,7 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { sentryVitePlugin } from "@sentry/vite-plugin";
 import { bundleBudget } from "./scripts/bundle-budget.ts";
+import { deployConfig } from "./scripts/deploy-config.ts";
 
 // Source maps are uploaded to Sentry (and then deleted from the bundle) only
 // when SENTRY_AUTH_TOKEN is present, i.e. in the Vercel/CI build.
@@ -32,7 +33,7 @@ const buildStamp: PluginOption = {
 };
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), buildStamp, bundleBudget(), ...sentryPlugins],
+  plugins: [react(), tailwindcss(), buildStamp, deployConfig(), bundleBudget(), ...sentryPlugins],
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   build: {
     sourcemap: process.env.SENTRY_AUTH_TOKEN ? "hidden" : false,

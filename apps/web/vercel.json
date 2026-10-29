@@ -1,5 +1,19 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "redirects": [
+    {
+      "source": "/((?!\\.well-known/|robots\\.txt$).*)",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*([Bb]ot|[Cc]rawl|[Ss]pider|[Ss]lurp|[Ss]craper|facebookexternalhit|meta-externalagent|anthropic-ai|Claude-Web|cohere-ai|WhatsApp|ia_archiver|Archive-It|HeadlessChrome|PhantomJS|Lighthouse|Google-InspectionTool|GoogleOther|Diffbot|Omgili).*"
+        }
+      ],
+      "destination": "/robots.txt",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
       "source": "/((?!assets/|\\.well-known/).*)",
@@ -11,8 +25,12 @@
       "source": "/(.*)",
       "headers": [
         {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow, noarchive, nosnippet, noimageindex, notranslate, noai, noimageai"
+        },
+        {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'sha256-e1qzKy1fZfHfZmx/izuRl3LZnTmzQIoY77QmQEJrx9k='; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: https://<project-ref>.supabase.co; connect-src 'self' https://<project-ref>.supabase.co wss://<project-ref>.supabase.co https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://*.ingest.de.sentry.io; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
+          "value": "default-src 'self'; script-src 'self' 'sha256-e1qzKy1fZfHfZmx/izuRl3LZnTmzQIoY77QmQEJrx9k='; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://*.ingest.de.sentry.io; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
         },
         {
           "key": "X-Content-Type-Options",
