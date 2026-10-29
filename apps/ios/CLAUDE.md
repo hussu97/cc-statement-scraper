@@ -53,6 +53,18 @@ and §11; layout and setup are in [README.md](README.md).
   the phase's `showEnvVars: false`: otherwise the build log prints every build setting.
 - The app holds only the publishable key (`LEDGER_SUPABASE_PUBLISHABLE_KEY`, `sb_publishable_…`);
   `LedgerConfig` refuses an `sb_secret_…` key, and so does the release check.
+- **The repository is public: no identity in git.** The Apple team, bundle prefix and passkey
+  host live only in the gitignored `Config/Identity.xcconfig` (template
+  `Identity.example.xcconfig`), which `Base.xcconfig` includes last over neutral defaults
+  (`com.example.ledger`, `example.com`, no team). Never write a real value into `Base.xcconfig`,
+  `project.yml`, `Info.plist`, Swift, scripts, tests or docs; derive from the bundle id at run
+  time (`OutboxSync.TaskIDs`) or `$(LEDGER_BUNDLE_PREFIX)` instead. Pick the team in
+  `Identity.xcconfig`, not in Xcode's Signing pane (it writes the pbxproj).
+  `IdentityGuardTests` and the release check enforce it.
+- The IPA staged on the public `ios-ledger-staged` release is encrypted
+  (`scripts/ipa-crypt.sh`); its key is the login keychain item `ledger-ipa-encryption-key` and
+  the `testflight` secret `IPA_ENCRYPTION_KEY`, nowhere else. Never print it or pass it on a
+  command line; `build-meta.json` stays free of anything sensitive.
 - `SENTRY_AUTH_TOKEN` lives in the shell or the login keychain item `ledger-sentry-auth-token`
   (`security add-generic-password -U -s ledger-sentry-auth-token -a "$USER" -w`, prompts), never
   an xcconfig, where it becomes an Xcode build setting visible in build logs (audit X-28,

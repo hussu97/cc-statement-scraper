@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 //
 // Release a finished TestFlight build of Ledger to the external tester group,
-// so people who joined through the public link actually receive it. A port of
-// another app/scripts/testflight-distribute.mjs for one app, plus "What to Test".
+// so people who joined through the public link actually receive it. The same
+// script as another app on the same Apple team, for one app, plus "What to Test".
 //
 // Uploading a build only makes it appear in App Store Connect; external
 // testers see nothing until it is attached to their group AND cleared by Beta
@@ -30,9 +30,13 @@
 // commit that touched apps/ios outside build-number.json. Not set when neither exists.
 //
 // Credentials — the same App Store Connect API key the upload uses:
-//   ASC_KEY_ID, ASC_ISSUER_ID, and either
+//   ASC_KEY_ID, ASC_ISSUER_ID (required, no default: the repository is public), and either
 //   ~/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8   (local; ASC_KEY_ID may be
 //   omitted when it is the only key there)  or ASC_KEY_P8 holding the PEM or its base64 (CI)
+//
+// The app — its bundle id, kept out of git: $LEDGER_BUNDLE_ID (CI: the `testflight`
+// environment secret), else LEDGER_BUNDLE_PREFIX from the gitignored
+// apps/ios/Config/Identity.xcconfig (local).
 
 import { execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
@@ -41,9 +45,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { withRetry } from './asc-retry.mjs';
 
-const APP = { scheme: 'Ledger', bundleId: 'com.example.ledger', label: 'Bank Ledger (iPhone)' };
 const DEFAULT_GROUP = 'Friends & Family';
-const DEFAULT_ISSUER = '<asc-issuer-id>';
 
 // ── args ───────────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
@@ -62,15 +64,38 @@ const fail = (msg) => {
   process.exit(1);
 };
 
+// ── the app (identity from the environment or the gitignored Identity.xcconfig) ──
+const IOS_DIR = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+function identityValue(key) {
+  const file = path.join(IOS_DIR, 'Config', 'Identity.xcconfig');
+  if (!fs.existsSync(file)) return '';
+  let value = '';
+  for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+    const m = line.match(new RegExp(`^\\s*${key}\\s*=\\s*(.*?)\\s*$`));
+    if (m) value = m[1];
+  }
+  return value;
+}
+function bundleId() {
+  const id = process.env.LEDGER_BUNDLE_ID || identityValue('LEDGER_BUNDLE_PREFIX');
+  if (!id || id.startsWith('com.example.') || id.includes('<')) {
+    fail(
+      'no bundle id. Set LEDGER_BUNDLE_ID, or LEDGER_BUNDLE_PREFIX in apps/ios/Config/Identity.xcconfig\n' +
+        '  (copy Config/Identity.example.xcconfig; in CI it is the testflight environment secret).'
+    );
+  }
+  return id;
+}
+const APP = { scheme: 'Ledger', bundleId: bundleId(), label: 'Bank Ledger (iPhone)' };
+
 function whatToTest() {
   const explicit = opt('--what-to-test', null) ?? process.env.LEDGER_WHAT_TO_TEST;
   if (explicit) return explicit.slice(0, 4000);
   try {
-    const repo = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
     const subject = execFileSync(
       'git',
       ['log', '-1', '--format=%s', '--', '.', ':(exclude)build-number.json'],
-      { cwd: repo, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }
+      { cwd: IOS_DIR, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }
     ).trim();
     return subject || null;
   } catch {
@@ -80,7 +105,10 @@ function whatToTest() {
 
 // ── auth ───────────────────────────────────────────────────────────────────
 const KEY_DIR = path.join(os.homedir(), '.appstoreconnect', 'private_keys');
-const ISSUER_ID = process.env.ASC_ISSUER_ID || DEFAULT_ISSUER;
+const ISSUER_ID = process.env.ASC_ISSUER_ID;
+if (!ISSUER_ID) {
+  fail('ASC_ISSUER_ID must be set (App Store Connect → Users and Access → Integrations → Issuer ID).');
+}
 let KEY_ID = process.env.ASC_KEY_ID;
 if (!KEY_ID && !process.env.ASC_KEY_P8 && fs.existsSync(KEY_DIR)) {
   const keys = fs.readdirSync(KEY_DIR).filter((n) => /^AuthKey_.+\.p8$/.test(n));

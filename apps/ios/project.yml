@@ -3,6 +3,9 @@
 # Ledger.xcodeproj is committed too so a fresh clone opens without XcodeGen.
 name: Ledger
 options:
+  # Every target sets PRODUCT_BUNDLE_IDENTIFIER from LEDGER_BUNDLE_PREFIX
+  # (Config/Base.xcconfig, overridden by the gitignored Config/Identity.xcconfig);
+  # this is only XcodeGen's fallback and must stay neutral.
   bundleIdPrefix: com.example.ledger
   deploymentTarget:
     iOS: "18.0"
@@ -88,11 +91,13 @@ targets:
         # Settings → Privacy → Require Face ID (LedgerKit AppLock, BACKLOG IOS-22).
         NSFaceIDUsageDescription: Bank Ledger asks for Face ID to unlock when you turn on Require Face ID in Settings.
         # SMS saved with no data are sent from background tasks once a
-        # connection is back (LedgerKit OutboxSync; IDs must match).
+        # connection is back. LedgerKit OutboxSync derives the same IDs from the
+        # bundle id at run time (OutboxSync.TaskIDs), and the bundle id is
+        # $(LEDGER_BUNDLE_PREFIX): keep the suffixes in step.
         UIBackgroundModes: [fetch, processing]
         BGTaskSchedulerPermittedIdentifiers:
-          - com.example.ledger.outbox-refresh
-          - com.example.ledger.outbox-send
+          - $(LEDGER_BUNDLE_PREFIX).outbox-refresh
+          - $(LEDGER_BUNDLE_PREFIX).outbox-send
         # Deep links: ledger://review, ledger://uncategorised, ledger://add-statement
         # (LedgerKit AppLink, routed by TabRouter; IOS-07r, N-4).
         CFBundleURLTypes:

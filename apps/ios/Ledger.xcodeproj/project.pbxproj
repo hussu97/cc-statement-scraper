@@ -729,15 +729,15 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					4C63ED7EA67F3DD405FABA36 = {
-						DevelopmentTeam = <apple-team-id>;
+						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
 					D468CAE437FD24070010A5CD = {
-						DevelopmentTeam = <apple-team-id>;
+						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
 					E6D8A3C59AE470EED95533AC = {
-						DevelopmentTeam = <apple-team-id>;
+						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
 				};

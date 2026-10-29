@@ -1,6 +1,8 @@
 # Secrets
 Config/Secrets.xcconfig
 Config/Secrets.Release.xcconfig
+# Identity (team, bundle id, passkey host): kept out of the public repo
+Config/Identity.xcconfig
 *.mobileprovision
 *.p12
 

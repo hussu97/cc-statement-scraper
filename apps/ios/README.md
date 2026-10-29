@@ -52,7 +52,8 @@ per request, `Paginator`), plus the **Log Bank SMS** and **Log Card Payment** Ap
 apps/ios/
 ├── project.yml              XcodeGen spec (source of truth for Ledger.xcodeproj)
 ├── Ledger.xcodeproj         generated, committed so a clone opens without XcodeGen
-├── Config/                  Base/Debug/Release.xcconfig, Secrets.example.xcconfig
+├── Config/                  Base/Debug/Release.xcconfig, Secrets.example.xcconfig,
+│                            Identity.example.xcconfig
 ├── LedgerKit/               Swift package: every decision the app makes (swift test)
 │   ├── Sources/LedgerKit/
 │   │   ├── API/             LedgerAPI protocol, SupabaseLedgerAPI (+Review, +Statements), LedgerJSON
@@ -78,7 +79,8 @@ apps/ios/
 ├── Widgets/                 Home and Lock Screen widgets and Controls — layout only (+ PrivacyInfo.xcprivacy)
 ├── Shared/                  the Controls' intents, compiled into the app and the widgets
 └── scripts/                testflight.sh (archive → export → dSYMs → upload), publish-build.sh
-                             (stage for CI), testflight-distribute.mjs (external testers)
+                             (stage for CI), ipa-crypt.sh (staged IPA encryption),
+                             testflight-distribute.mjs (external testers)
 ```
 
 Views hold layout only; any rule (what a badge says, which screen to show, when a
@@ -95,8 +97,29 @@ message is dropped) lives in LedgerKit and is unit-tested.
 All three share the App Group `group.com.example.ledger` (SMS outbox, viewed ledger, "SMS go to"
 ledger, last capture, pending uploads, the widget snapshot); the app and the share extension also
 share the keychain group `<TeamID>.com.example.ledger.shared` (Supabase
-session). The widgets' App ID needs the App Group capability with the same group. Change the prefix in `Config/Base.xcconfig`; register the App Group in the
-developer portal (automatic signing does it on first archive).
+session). The widgets' App ID needs the App Group capability with the same group. The prefix
+in `Config/Base.xcconfig` is a neutral default; the real one goes in the gitignored
+`Config/Identity.xcconfig` (below). Register the App Group in the developer portal (automatic
+signing does it on first archive). The background tasks are `<prefix>.outbox-refresh` and
+`<prefix>.outbox-send`: Info.plist lists them as `$(LEDGER_BUNDLE_PREFIX).…` and LedgerKit
+`OutboxSync.TaskIDs` derives the same from the bundle id at run time.
+
+### Identity (`Config/Identity.xcconfig`, gitignored)
+
+The repository is public, so it names no Apple team, bundle id or passkey host.
+`Config/Base.xcconfig` holds neutral defaults and includes `Config/Identity.xcconfig` last;
+copy `Config/Identity.example.xcconfig` and fill it in. Debug builds for the simulator work
+without it; a Release build that still has a default fails "Check release config"
+(`scripts/release-config-check.sh`), and the TestFlight scripts read the team and bundle id
+from it. A guard test (`IdentityGuardTests`) fails if `project.pbxproj`, `project.yml` or
+`Base.xcconfig` ever carries a real value again (e.g. after `xcodegen generate` or a change in
+Xcode's Signing pane: pick the team in `Identity.xcconfig`, not in Xcode).
+
+| Key | Default (`Base.xcconfig`) | Set to |
+|---|---|---|
+| `LEDGER_BUNDLE_PREFIX` | `com.example.ledger` | the app's bundle id registered with Apple |
+| `LEDGER_PASSKEY_DOMAIN` | `example.com` | the web app's host (Supabase `[auth.webauthn]` rp_id) |
+| `DEVELOPMENT_TEAM` | empty | the Apple Developer Team ID |
 
 ## Setup
 
@@ -104,6 +127,7 @@ developer portal (automatic signing does it on first archive).
 brew install xcodegen
 supabase start                                 # from the repo root
 cp apps/ios/Config/Secrets.example.xcconfig apps/ios/Config/Secrets.xcconfig
+cp apps/ios/Config/Identity.example.xcconfig apps/ios/Config/Identity.xcconfig  # device/TestFlight builds
 supabase status -o json | jq -r .PUBLISHABLE_KEY # paste into LEDGER_SUPABASE_PUBLISHABLE_KEY
 cd apps/ios && xcodegen generate && open Ledger.xcodeproj
 ```
@@ -270,7 +294,7 @@ becomes active (a failed load keeps the ones already pending).
 
 ## TestFlight
 
-Same flow as another app (another app's CI notes): build and sign on the Mac, upload over the
+The same flow as another app on the same Apple team: build and sign on the Mac, upload over the
 App Store Connect API key (no Apple ID password), release to two groups. The App Store
 Connect / TestFlight name and the home-screen name are both **Bank Ledger** (share extension:
 **Add to Bank Ledger**).
@@ -289,13 +313,16 @@ apps/ios/scripts/publish-build.sh [--keep-build]  # testflight.sh --no-upload, s
                                                # `ios-ledger-staged` release, commit build-number.json
 ```
 
-* **Signing**: team `<apple-team-id>`, automatic, `-allowProvisioningUpdates` (needs an Apple
-  Distribution identity in the keychain). Bundle ids `com.example.ledger` and
+* **Signing**: the team in `Config/Identity.xcconfig` (or `APPLE_TEAM_ID`), automatic,
+  `-allowProvisioningUpdates` (needs an Apple Distribution identity in the keychain). Bundle ids `com.example.ledger` and
   `com.example.ledger.share` are registered with App Groups enabled; Xcode assigns
   `group.com.example.ledger` to both on the first archive.
 * **API key**: `ASC_KEY_ID` / `ASC_ISSUER_ID` and `~/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8`
-  (CI: `ASC_KEY_P8`). Both scripts default to the single key in that directory and the
-  team's issuer, i.e. the key another app uses.
+  (CI: `ASC_KEY_P8`). Both scripts default to the single key in that directory, the team's
+  key shared with another app. `ASC_ISSUER_ID` has no default (the repository is public):
+  export it to upload or distribute (`testflight.sh --no-upload`, hence `publish-build.sh`,
+  does not need it). `testflight-distribute.mjs` finds the app by `LEDGER_BUNDLE_ID`, else
+  `LEDGER_BUNDLE_PREFIX` in `Config/Identity.xcconfig`.
 * **Sentry** (`scripts/sentry-release.sh`): dSYMs, then release `ledger-ios@<version>+<build>`
   (`releases new` / `set-commits --auto` / `finalize`); needs `sentry-cli`. `SENTRY_AUTH_TOKEN`
   from the environment or the login keychain item `ledger-sentry-auth-token`
@@ -316,8 +343,32 @@ apps/ios/scripts/publish-build.sh [--keep-build]  # testflight.sh --no-upload, s
 * **"What to Test"**: `--what-to-test`, else `$LEDGER_WHAT_TO_TEST`, else the last commit
   subject touching `apps/ios`.
 * **CI contract** (`publish-build.sh` → workflow): release `ios-ledger-staged` holds
-  `Ledger.ipa` + `build-meta.json` (`{build, commit, apps:[{scheme, ipa, bundle_id}]}`). The
+  `Ledger.ipa.enc` + `build-meta.json` (`{build, commit, apps:[{scheme, asset, ipa,
+  encryption, enc_sha256, ipa_sha256}]}`, nothing sensitive: the release is public). The
   workflow ships it only if `commit` equals the pushed sha or differs from it **only** by
-  `apps/ios/build-number.json`, uploads with the API key, then runs
+  `apps/ios/build-number.json`; it checks `enc_sha256`, decrypts with `IPA_ENCRYPTION_KEY`,
+  checks the IPA against `ipa_sha256` and its bundle id against `LEDGER_BUNDLE_ID`, uploads
+  with the API key, then runs
   `node apps/ios/scripts/testflight-distribute.mjs --build <build> --timeout 35` with
-  `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`.
+  `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`, `LEDGER_BUNDLE_ID`.
+* **Staged IPA encryption** (`scripts/ipa-crypt.sh`): on a public repository the staged
+  release is world-downloadable, so `publish-build.sh` stages only `Ledger.ipa.enc`
+  (AES-256-CBC, PBKDF2-SHA256 200 000 iterations, `openssl enc`; the key reaches openssl as
+  `-pass env:…`, never argv), proves the round trip before uploading, and deletes a plaintext
+  `Ledger.ipa` left on the release by older builds. The key lives in the login keychain item
+  `ledger-ipa-encryption-key` (or `IPA_ENCRYPTION_KEY` in the shell) and in the `testflight`
+  environment secret `IPA_ENCRYPTION_KEY`; nowhere else. One-time setup (or to rotate):
+
+  ```bash
+  openssl rand -base64 32 | pbcopy              # a fresh key, on the clipboard only
+  security add-generic-password -U -s ledger-ipa-encryption-key -a "$USER" -w   # paste at the prompt
+  pbcopy < /dev/null                            # clear the clipboard
+  security find-generic-password -s ledger-ipa-encryption-key -w \
+    | GH_TOKEN=$(gh auth token --user hussu97) gh secret set IPA_ENCRYPTION_KEY --env testflight
+  # The bundle id distribute and the upload check use (a secret: masked in public logs):
+  sed -n 's/^LEDGER_BUNDLE_PREFIX *= *//p' apps/ios/Config/Identity.xcconfig \
+    | GH_TOKEN=$(gh auth token --user hussu97) gh secret set LEDGER_BUNDLE_ID --env testflight
+  ```
+
+  `gh secret set` without `--body` reads the value from stdin, so it never appears on a command
+  line. Both are production actions (root CLAUDE.md §11.1).

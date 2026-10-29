@@ -2,8 +2,10 @@ name: iOS TestFlight
 
 # Uploads the Ledger IPA that the pre-push hook already built and signed on the
 # Mac (apps/ios/scripts/publish-build.sh → rolling prerelease
-# `ios-ledger-staged`: Ledger.ipa + build-meta.json), then releases it to the
-# external testers. Modeled on another app/.github/workflows/testflight.yml.
+# `ios-ledger-staged`: Ledger.ipa.enc + build-meta.json), then releases it to the
+# external testers. The repository is public, so the staged IPA is encrypted
+# (apps/ios/scripts/ipa-crypt.sh) and only `upload`, inside the `testflight`
+# environment, decrypts it.
 #
 # Nothing here runs on macOS: the upload uses the App Store Connect API
 # (apple-actions/upload-testflight-build, plain HTTPS) and distribution is plain
@@ -13,13 +15,17 @@ name: iOS TestFlight
 #   stage      is there a staged build for THIS source? No secrets. A push with
 #              nothing staged (pushed without the hook, or from a machine
 #              without Xcode) is not a failure: it says so and stops.
-#   upload     downloads, re-verifies against what `stage` approved, uploads.
+#   upload     downloads, re-verifies against what `stage` approved (commit,
+#              then the encrypted asset's SHA-256), decrypts, checks the IPA's
+#              SHA-256 and bundle id, uploads.
 #   distribute waits for processing, attaches the build to "Friends & Family"
 #              and submits it for Beta App Review
 #              (apps/ios/scripts/testflight-distribute.mjs).
 #
 # Secrets: ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8 (repository or `testflight`
-# environment). Docs: docs/ci-cd.md.
+# environment); IPA_ENCRYPTION_KEY and LEDGER_BUNDLE_ID (`testflight`
+# environment). Secrets, not variables: Actions masks them in this public
+# repository's logs. Docs: docs/ci-cd.md.
 
 on:
   push:
@@ -139,9 +145,11 @@ jobs:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          IPA_ENCRYPTION_KEY: ${{ secrets.IPA_ENCRYPTION_KEY }}
+          LEDGER_BUNDLE_ID: ${{ secrets.LEDGER_BUNDLE_ID }}
         run: |
           missing=()
-          for v in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8; do
+          for v in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8 IPA_ENCRYPTION_KEY LEDGER_BUNDLE_ID; do
             [[ -n "${!v}" ]] || missing+=("$v")
           done
           if (( ${#missing[@]} )); then
@@ -149,12 +157,19 @@ jobs:
             exit 1
           fi
 
+      # Only the decryption script: nothing from the checkout is built or run otherwise.
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: apps/ios/scripts/ipa-crypt.sh
+          sparse-checkout-cone-mode: false
+
       - name: Fetch the staged build
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p staged
-          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir staged --clobber
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir staged --clobber \
+            --pattern 'build-meta.json' --pattern '*.enc'
           ls -lh staged
 
       - name: Re-check the artifact is the one the gate approved
@@ -167,9 +182,38 @@ jobs:
           STAGED_COMMIT=$(jq -r .commit staged/build-meta.json)
           [[ "$STAGED_COMMIT" == "$APPROVED" ]] \
             || { echo "::error::staged release changed under this run (gate saw $APPROVED, now $STAGED_COMMIT)"; exit 1; }
-          IPA="staged/$(jq -r '.apps[0].ipa' staged/build-meta.json)"
-          [[ -f "$IPA" ]] || { echo "::error::$IPA is missing from the staged release"; exit 1; }
-          echo "IPA=$IPA" >> "$GITHUB_ENV"
+          # Encrypted asset: present, and the bytes build-meta.json names.
+          ENC="staged/$(jq -r '.apps[0].asset // empty' staged/build-meta.json)"
+          [[ "$ENC" == staged/*.enc && -f "$ENC" ]] \
+            || { echo "::error::no encrypted IPA in the staged release (stage it with a current publish-build.sh)"; exit 1; }
+          [[ "$(sha256sum "$ENC" | cut -d' ' -f1)" == "$(jq -r '.apps[0].enc_sha256' staged/build-meta.json)" ]] \
+            || { echo "::error::$ENC does not match build-meta.json's enc_sha256"; exit 1; }
+          # Never ship a plaintext IPA from the public release, even if one is there.
+          rm -f staged/*.ipa
+          echo "ENC=$ENC" >> "$GITHUB_ENV"
+          echo "IPA=staged/$(jq -r '.apps[0].ipa' staged/build-meta.json)" >> "$GITHUB_ENV"
+
+      - name: Decrypt the IPA
+        env:
+          IPA_ENCRYPTION_KEY: ${{ secrets.IPA_ENCRYPTION_KEY }}
+          LEDGER_BUNDLE_ID: ${{ secrets.LEDGER_BUNDLE_ID }}
+        run: |
+          # The key reaches openssl through the environment, never argv.
+          bash apps/ios/scripts/ipa-crypt.sh decrypt "$ENC" "$IPA"
+          # The plaintext's SHA-256 was taken on the Mac before encrypting: a wrong
+          # key or a tampered ciphertext cannot reproduce it.
+          [[ "$(sha256sum "$IPA" | cut -d' ' -f1)" == "$(jq -r '.apps[0].ipa_sha256' staged/build-meta.json)" ]] \
+            || { echo "::error::decrypted IPA does not match build-meta.json's ipa_sha256"; exit 1; }
+          # The app inside is the one this environment ships (masked: a secret).
+          unzip -q -o "$IPA" 'Payload/*.app/Info.plist' -d unpacked
+          python3 - <<'PY'
+          import glob, os, plistlib, sys
+          plists = glob.glob('unpacked/Payload/*.app/Info.plist')
+          ok = len(plists) == 1 and plistlib.load(open(plists[0], 'rb')).get('CFBundleIdentifier') == os.environ['LEDGER_BUNDLE_ID']
+          sys.exit(0 if ok else "::error::the IPA's bundle id is not LEDGER_BUNDLE_ID")
+          PY
+          rm -rf unpacked
+          ls -lh "$IPA"
 
       - name: Normalise the App Store Connect key
         env:
@@ -239,6 +283,7 @@ jobs:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          LEDGER_BUNDLE_ID: ${{ secrets.LEDGER_BUNDLE_ID }}
           BUILD: ${{ needs.stage.outputs.build }}
         run: node apps/ios/scripts/testflight-distribute.mjs --build "$BUILD" --timeout 35
 

@@ -69,7 +69,7 @@ struct AppLinkTests {
         ("ledger://review?from=shortcut#x", true),
         ("ledger://settings", false),
         ("ledger://", false),
-        ("https://<web-host>/review", false),
+        ("https://example.com/review", false),
         ("ledgers://review", false),
     ])
     func parse(raw: String, isReview: Bool) throws {

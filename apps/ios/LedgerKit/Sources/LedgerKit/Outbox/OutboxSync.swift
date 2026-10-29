@@ -9,9 +9,32 @@ import Foundation
 ///   network connection, so iOS starts it once one is back, even when the app
 ///   isn't running.
 public actor OutboxSync {
-    /// Listed in Info.plist `BGTaskSchedulerPermittedIdentifiers`.
-    public static let refreshTaskID = "com.example.ledger.outbox-refresh"
-    public static let processingTaskID = "com.example.ledger.outbox-send"
+    /// The background task identifiers, derived from the app's bundle id so no
+    /// identity is hard-coded (the bundle prefix lives in the gitignored
+    /// `Config/Identity.xcconfig`). Info.plist `BGTaskSchedulerPermittedIdentifiers`
+    /// lists the same two as `$(LEDGER_BUNDLE_PREFIX).outbox-refresh` / `.outbox-send`,
+    /// and the app's bundle id is `$(LEDGER_BUNDLE_PREFIX)`.
+    public struct TaskIDs: Sendable, Equatable {
+        public static let refreshSuffix = "outbox-refresh"
+        public static let processingSuffix = "outbox-send"
+
+        public let refresh: String
+        public let processing: String
+
+        public init(bundleIdentifier: String) {
+            refresh = "\(bundleIdentifier).\(Self.refreshSuffix)"
+            processing = "\(bundleIdentifier).\(Self.processingSuffix)"
+        }
+
+        public var all: [String] { [refresh, processing] }
+    }
+
+    /// The IDs for this process's bundle (the app: the intent runs in it too).
+    public static var taskIDs: TaskIDs {
+        TaskIDs(bundleIdentifier: Bundle.main.bundleIdentifier ?? "ledger")
+    }
+    public static var refreshTaskID: String { taskIDs.refresh }
+    public static var processingTaskID: String { taskIDs.processing }
 
     /// What to ask `BGTaskScheduler` for.
     public struct Plan: Sendable, Equatable {

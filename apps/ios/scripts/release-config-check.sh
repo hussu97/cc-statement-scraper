@@ -18,6 +18,13 @@
 #   LedgerSentryDSN               non-empty, https://
 #   LedgerEnvironment             exactly `production`
 # and no value is an unresolved $(…) or an example placeholder (<…>).
+#
+# And the identity, which lives only in the gitignored Config/Identity.xcconfig
+# (Base.xcconfig carries neutral defaults: the repository is public):
+#   bundle id (LEDGER_BUNDLE_PREFIX / CFBundleIdentifier)  not com.example.…
+#   team (DEVELOPMENT_TEAM / LedgerKeychainGroup's prefix)  ten characters A-Z 0-9
+#   passkey host (LEDGER_PASSKEY_DOMAIN / LedgerPasskeyDomain, the app only)
+#                                                           not example.com
 set -euo pipefail
 
 ERRORS=0
@@ -81,13 +88,37 @@ check_bundle() {
   fi
 }
 
+# check_identity LABEL BUNDLE_ID TEAM PASSKEY_DOMAIN — an argument passed as `-`
+# is not checked (an extension has no passkey domain). Values are never printed.
+check_identity() {
+  local label="$1" bundle="$2" team="$3" domain="$4"
+  if [[ "$bundle" != - ]]; then
+    if [[ -z "$bundle" || "$bundle" == *"\$("* || "$bundle" == *'<'* ]]; then
+      fail "$label: bundle id is empty or unresolved (LEDGER_BUNDLE_PREFIX in Config/Identity.xcconfig)"
+    elif [[ "$bundle" == com.example.* ]]; then
+      fail "$label: bundle id is the neutral default com.example.…; set LEDGER_BUNDLE_PREFIX in Config/Identity.xcconfig"
+    fi
+  fi
+  if [[ "$team" != - && ! "$team" =~ ^[A-Z0-9]{10}$ ]]; then
+    fail "$label: no Apple team ID (DEVELOPMENT_TEAM in Config/Identity.xcconfig)"
+  fi
+  if [[ "$domain" != - ]]; then
+    if [[ -z "$domain" || "$domain" == *"\$("* || "$domain" == *'<'* ]]; then
+      fail "$label: passkey domain is empty or unresolved (LEDGER_PASSKEY_DOMAIN in Config/Identity.xcconfig)"
+    elif [[ "$domain" == example.com || "$domain" == *.example.com ]]; then
+      fail "$label: passkey domain is the neutral default example.com; set LEDGER_PASSKEY_DOMAIN in Config/Identity.xcconfig"
+    fi
+  fi
+}
+
 # plist_value PLIST KEY → the raw string, or empty when absent. Never echoed by callers.
 plist_value() {
   plutil -extract "$2" raw -o - "$1" 2>/dev/null || true
 }
 
+# check_plist LABEL PLIST app|appex
 check_plist() {
-  local label="$1" plist="$2"
+  local label="$1" plist="$2" kind="$3" group domain=-
   if [[ ! -f "$plist" ]]; then
     fail "$label: no Info.plist"
     return
@@ -97,15 +128,19 @@ check_plist() {
     "$(plist_value "$plist" LedgerSupabasePublishableKey)" \
     "$(plist_value "$plist" LedgerSentryDSN)" \
     "$(plist_value "$plist" LedgerEnvironment)"
+  # LedgerKeychainGroup is $(AppIdentifierPrefix)<prefix>.shared: the team ID and a dot.
+  group="$(plist_value "$plist" LedgerKeychainGroup)"
+  [[ "$kind" == app ]] && domain="$(plist_value "$plist" LedgerPasskeyDomain)"
+  check_identity "$label" "$(plist_value "$plist" CFBundleIdentifier)" "${group%%.*}" "$domain"
 }
 
 check_app() {
   local app="$1" appex count=0
-  check_plist "$(basename "$app")" "$app/Info.plist"
+  check_plist "$(basename "$app")" "$app/Info.plist" app
   for appex in "$app"/PlugIns/*.appex; do
     [[ -d "$appex" ]] || continue
     count=$((count + 1))
-    check_plist "$(basename "$app")/PlugIns/$(basename "$appex")" "$appex/Info.plist"
+    check_plist "$(basename "$app")/PlugIns/$(basename "$appex")" "$appex/Info.plist" appex
   done
   # The share extension ships in every build: a check that found no .appex
   # checked less than it claims.
@@ -120,6 +155,8 @@ case "$mode" in
     check_bundle "${TARGET_NAME:-build settings} (${CONFIGURATION:-?})" \
       "${LEDGER_SUPABASE_URL:-}" "${LEDGER_SUPABASE_PUBLISHABLE_KEY:-}" \
       "${LEDGER_SENTRY_DSN:-}" "${LEDGER_ENVIRONMENT:-}"
+    check_identity "${TARGET_NAME:-build settings} (${CONFIGURATION:-?})" \
+      "${LEDGER_BUNDLE_PREFIX:-}" "${DEVELOPMENT_TEAM:-}" "${LEDGER_PASSKEY_DOMAIN:-}"
     ;;
   archive)
     path="${2:-}"
@@ -149,7 +186,8 @@ esac
 
 if [[ $ERRORS -gt 0 ]]; then
   echo "error: $ERRORS release config problem(s). A Release build reads only Config/Secrets.Release.xcconfig" >&2
-  echo "       (copy Config/Secrets.example.xcconfig); values were not printed." >&2
+  echo "       (copy Config/Secrets.example.xcconfig) and its identity from Config/Identity.xcconfig" >&2
+  echo "       (copy Config/Identity.example.xcconfig); values were not printed." >&2
   exit 1
 fi
-echo "==> Release config OK ($mode${2:+: $(basename "$2")}): https non-local URL, production, keys present"
+echo "==> Release config OK ($mode${2:+: $(basename "$2")}): https non-local URL, production, keys and identity present"

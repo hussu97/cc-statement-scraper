@@ -125,6 +125,17 @@ struct OutboxOfflineTests {
         #expect(api.calls.isEmpty)
     }
 
+    @Test("background task IDs are derived from the bundle id, never hard-coded")
+    func taskIDsFollowBundleID() {
+        let ids = OutboxSync.TaskIDs(bundleIdentifier: "com.example.ledger")
+        #expect(ids.refresh == "com.example.ledger.outbox-refresh")
+        #expect(ids.processing == "com.example.ledger.outbox-send")
+        #expect(ids.all == [ids.refresh, ids.processing])
+        // The convenience reads this process's bundle and keeps the same suffixes.
+        #expect(OutboxSync.refreshTaskID.hasSuffix(".outbox-refresh"))
+        #expect(OutboxSync.processingTaskID.hasSuffix(".outbox-send"))
+    }
+
     @Test("background task IDs and modes are declared in the app's Info.plist")
     func infoPlistDeclaresTasks() throws {
         let url = URL(fileURLWithPath: #filePath)
@@ -132,8 +143,10 @@ struct OutboxOfflineTests {
             .deletingLastPathComponent().appendingPathComponent("Ledger/Info.plist")
         let plist = try #require(
             try PropertyListSerialization.propertyList(from: Data(contentsOf: url), format: nil) as? [String: Any])
+        // The app's bundle id is $(LEDGER_BUNDLE_PREFIX) (project.yml), so the IDs
+        // derived from it at run time are the ones the Info.plist expands to.
         let ids = plist["BGTaskSchedulerPermittedIdentifiers"] as? [String] ?? []
-        #expect(Set(ids) == [OutboxSync.refreshTaskID, OutboxSync.processingTaskID])
+        #expect(Set(ids) == Set(OutboxSync.TaskIDs(bundleIdentifier: "$(LEDGER_BUNDLE_PREFIX)").all))
         let modes = plist["UIBackgroundModes"] as? [String] ?? []
         #expect(modes.contains("fetch") && modes.contains("processing"))
     }

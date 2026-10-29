@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
-# Tests for release-config-check.sh, sentry-release.sh and asc-retry.mjs against fixture
-# Info.plists and fake `sentry-cli` / `security` binaries: nothing here reaches
-# Sentry, the keychain or a real build. macOS only (plutil).
+# Tests for release-config-check.sh, sentry-release.sh, ipa-crypt.sh, asc-retry.mjs and
+# testflight-distribute.mjs's refusals against fixture Info.plists and fake `sentry-cli` /
+# `security` binaries: nothing here reaches Sentry, App Store Connect, the keychain or a
+# real build. macOS only (plutil).
 #
 #   apps/ios/scripts/release_checks_test.sh
 set -euo pipefail
@@ -10,6 +11,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 CHECK="$HERE/release-config-check.sh"
 SENTRY="$HERE/sentry-release.sh"
+CRYPT="$HERE/ipa-crypt.sh"
 T="$(mktemp -d)"
 trap 'rm -rf "$T"' EXIT
 
@@ -23,7 +25,13 @@ URL_OK="https://fixtureref0123.supabase.co"
 KEY_OK="sb_publishable_FIXTUREKEY0123456789"
 DSN_OK="https://fixturedsnpublic0123@o1.ingest.sentry.io/4242"
 TOKEN="sntrys_FIXTURETOKEN0123456789"
-SECRETS=("fixtureref0123" "FIXTUREKEY0123456789" "fixturedsnpublic0123" "FIXTURETOKEN0123456789")
+# Identity: never printed either (the build log of a public repository's CI may be shared).
+BUNDLE_OK="org.fixtureident.ledger"
+TEAM_OK="FXTEAM0123"
+PASSKEY_OK="fixturepasskeyhost.dev"
+IPA_KEY="FIXTUREIPAKEY0123456789abcdefghijklmnopqrstuv"
+SECRETS=("fixtureref0123" "FIXTUREKEY0123456789" "fixturedsnpublic0123" "FIXTURETOKEN0123456789"
+         "fixtureident" "FXTEAM0123" "fixturepasskeyhost" "FIXTUREIPAKEY0123456789")
 
 no_values() { # FILE LABEL
   local s
@@ -50,6 +58,9 @@ good_kv() {
   echo "LedgerSupabasePublishableKey=$KEY_OK"
   echo "LedgerSentryDSN=$DSN_OK"
   echo "LedgerEnvironment=production"
+  echo "CFBundleIdentifier=$BUNDLE_OK"
+  echo "LedgerKeychainGroup=$TEAM_OK.$BUNDLE_OK.shared"
+  echo "LedgerPasskeyDomain=$PASSKEY_OK"
 }
 # archive NAME [override KEY=VALUE for the app] -- [override for the appex]
 archive() {
@@ -136,6 +147,21 @@ A="$(archive no-appex)"
 rm -rf "$A/Products/Applications/Ledger.app/PlugIns"
 expect fail "no appex" "no embedded .appex" -- "$CHECK" archive "$A"
 
+# Identity: the neutral defaults of the public Base.xcconfig never ship.
+A="$(archive bundle-default CFBundleIdentifier=com.example.ledger)"
+expect fail "app bundle id is the neutral default" "Ledger.app: bundle id is the neutral default" -- "$CHECK" archive "$A"
+A="$(archive appex-bundle-default -- CFBundleIdentifier=com.example.ledger.share)"
+expect fail "appex bundle id is the neutral default" "LedgerShare.appex: bundle id is the neutral default" -- "$CHECK" archive "$A"
+A="$(archive no-team LedgerKeychainGroup=.$BUNDLE_OK.shared)"
+expect fail "no team: keychain group has no team prefix" "Ledger.app: no Apple team ID" -- "$CHECK" archive "$A"
+A="$(archive passkey-default LedgerPasskeyDomain=example.com)"
+expect fail "passkey domain is the neutral default" "Ledger.app: passkey domain is the neutral default" -- "$CHECK" archive "$A"
+A="$(archive passkey-missing LedgerPasskeyDomain=)"
+expect fail "app passkey domain missing" "Ledger.app: passkey domain is empty" -- "$CHECK" archive "$A"
+# An extension has no passkey domain and needs none.
+A="$(archive appex-no-passkey -- LedgerPasskeyDomain=)"
+expect pass "appex without a passkey domain" "Release config OK" -- "$CHECK" archive "$A"
+
 # The IPA publish-build.sh stages.
 A="$(archive ipa-good)"
 mkdir -p "$T/ipa-good/Payload" && cp -R "$A/Products/Applications/Ledger.app" "$T/ipa-good/Payload/"
@@ -148,13 +174,27 @@ expect fail "IPA appex environment local" "LedgerShare.appex: LedgerEnvironment"
 
 # ── release-config-check.sh settings (the Xcode Run Script phase) ─────────
 settings() { env -i PATH="$PATH" CONFIGURATION=Release TARGET_NAME=Ledger "$@" "$CHECK" settings; }
-expect pass "settings good" "Release config OK" -- settings \
+# What Config/Identity.xcconfig provides; the tests below override one at a time.
+ID_OK=(LEDGER_BUNDLE_PREFIX="$BUNDLE_OK" DEVELOPMENT_TEAM="$TEAM_OK" LEDGER_PASSKEY_DOMAIN="$PASSKEY_OK")
+expect pass "settings good" "Release config OK" -- settings "${ID_OK[@]}" \
   LEDGER_SUPABASE_URL="$URL_OK" LEDGER_SUPABASE_PUBLISHABLE_KEY="$KEY_OK" \
   LEDGER_SENTRY_DSN="$DSN_OK" LEDGER_ENVIRONMENT=production
-expect fail "settings: URL dropped from Secrets.Release" "LedgerSupabaseURL is empty" -- settings \
+expect fail "settings: URL dropped from Secrets.Release" "LedgerSupabaseURL is empty" -- settings "${ID_OK[@]}" \
   LEDGER_SUPABASE_URL="" LEDGER_SUPABASE_PUBLISHABLE_KEY="$KEY_OK" \
   LEDGER_SENTRY_DSN="$DSN_OK" LEDGER_ENVIRONMENT=production
-expect fail "settings: no secrets file at all" "release config problem" -- settings LEDGER_ENVIRONMENT=production
+expect fail "settings: no secrets file at all" "release config problem" -- settings "${ID_OK[@]}" LEDGER_ENVIRONMENT=production
+# No Identity.xcconfig: Base.xcconfig's neutral defaults reach the build.
+good_settings=(LEDGER_SUPABASE_URL="$URL_OK" LEDGER_SUPABASE_PUBLISHABLE_KEY="$KEY_OK"
+               LEDGER_SENTRY_DSN="$DSN_OK" LEDGER_ENVIRONMENT=production)
+expect fail "settings: default bundle prefix" "bundle id is the neutral default" -- settings "${good_settings[@]}" \
+  LEDGER_BUNDLE_PREFIX=com.example.ledger DEVELOPMENT_TEAM="$TEAM_OK" LEDGER_PASSKEY_DOMAIN="$PASSKEY_OK"
+expect fail "settings: empty team" "no Apple team ID" -- settings "${good_settings[@]}" \
+  LEDGER_BUNDLE_PREFIX="$BUNDLE_OK" DEVELOPMENT_TEAM= LEDGER_PASSKEY_DOMAIN="$PASSKEY_OK"
+expect fail "settings: placeholder team" "no Apple team ID" -- settings "${good_settings[@]}" \
+  LEDGER_BUNDLE_PREFIX="$BUNDLE_OK" "DEVELOPMENT_TEAM=<apple-team-id>" LEDGER_PASSKEY_DOMAIN="$PASSKEY_OK"
+expect fail "settings: default passkey domain" "passkey domain is the neutral default" -- settings "${good_settings[@]}" \
+  LEDGER_BUNDLE_PREFIX="$BUNDLE_OK" DEVELOPMENT_TEAM="$TEAM_OK" LEDGER_PASSKEY_DOMAIN=example.com
+expect fail "settings: no identity at all" "release config problem" -- settings "${good_settings[@]}"
 
 # ── sentry-release.sh (fake sentry-cli and security) ─────────────────────
 FAKE="$T/bin"; mkdir -p "$FAKE"
@@ -208,6 +248,56 @@ expect pass "no org: warn, skip" "SENTRY_ORG not set" -- sentry_run SENTRY_AUTH_
 expect pass "org + project from env" "credit-card-ledger-apps" -- \
   sentry_run SENTRY_AUTH_TOKEN="$TOKEN" SENTRY_ORG=env-org SENTRY_PROJECT=credit-card-ledger-apps
 log_has "releases new --org env-org --project credit-card-ledger-apps ledger-ios@1.0.0+42" "env org/project"
+
+# ── ipa-crypt.sh: the exact commands publish-build.sh and ios-testflight.yml run ──
+head -c 300000 /dev/urandom > "$T/plain.ipa"
+crypt() { env -u IPA_ENCRYPTION_KEY "$@"; }
+expect pass "encrypt" "" -- crypt IPA_ENCRYPTION_KEY="$IPA_KEY" "$CRYPT" encrypt "$T/plain.ipa" "$T/plain.ipa.enc"
+if cmp -s "$T/plain.ipa" "$T/plain.ipa.enc"; then bad "encrypt: output equals the input"; else ok; fi
+expect pass "decrypt" "" -- crypt IPA_ENCRYPTION_KEY="$IPA_KEY" "$CRYPT" decrypt "$T/plain.ipa.enc" "$T/round.ipa"
+if cmp -s "$T/plain.ipa" "$T/round.ipa"; then ok; else bad "round trip: decrypted file differs"; fi
+# The CI runner has OpenSSL 3, this Mac's /usr/bin/openssl is LibreSSL: either decrypts the other.
+for alt in /usr/bin/openssl /opt/homebrew/opt/openssl@3/bin/openssl; do
+  [[ -x "$alt" ]] || continue
+  rm -f "$T/round-alt.ipa"
+  expect pass "decrypt with $alt" "" -- crypt OPENSSL="$alt" IPA_ENCRYPTION_KEY="$IPA_KEY" "$CRYPT" decrypt "$T/plain.ipa.enc" "$T/round-alt.ipa"
+  if cmp -s "$T/plain.ipa" "$T/round-alt.ipa"; then ok; else bad "round trip via $alt differs"; fi
+done
+# A wrong key almost always fails the padding check (then no file is left behind);
+# about 1 in 256 times the padding happens to look valid and garbage comes out,
+# which the workflow's ipa_sha256 comparison rejects. Either way, never the IPA.
+rc=0
+crypt IPA_ENCRYPTION_KEY="WRONGKEY0123456789abcdefghijklmnopqrstuvwx" "$CRYPT" decrypt \
+  "$T/plain.ipa.enc" "$T/wrong.ipa" > "$T/wrong.log" 2>&1 || rc=$?
+if [[ $rc -ne 0 ]]; then
+  if [[ -e "$T/wrong.ipa" ]]; then bad "wrong key left a partial file"; else ok; fi
+  if grep -q "could not decrypt" "$T/wrong.log"; then ok; else bad "wrong key: no clear error"; fi
+elif cmp -s "$T/plain.ipa" "$T/wrong.ipa"; then
+  bad "wrong key decrypted to the original"
+else
+  ok
+fi
+no_values "$T/wrong.log" "wrong key output"
+expect fail "no key" "IPA_ENCRYPTION_KEY is not set" -- crypt "$CRYPT" encrypt "$T/plain.ipa" "$T/x.enc"
+expect fail "short key" "shorter than 32" -- crypt IPA_ENCRYPTION_KEY=short "$CRYPT" encrypt "$T/plain.ipa" "$T/x.enc"
+# The key never reaches openssl's argv: a fake openssl records its arguments.
+mkdir -p "$T/fakessl"
+cat > "$T/fakessl/openssl" <<'SH'
+#!/usr/bin/env bash
+echo "argv: $*" >> "$FAKE_LOG"
+exit 0
+SH
+chmod +x "$T/fakessl/openssl"
+: > "$T/ssl.log"
+crypt OPENSSL="$T/fakessl/openssl" FAKE_LOG="$T/ssl.log" IPA_ENCRYPTION_KEY="$IPA_KEY" "$CRYPT" encrypt "$T/plain.ipa" "$T/y.enc"
+if grep -q -- "-pass env:IPA_ENCRYPTION_KEY" "$T/ssl.log"; then ok; else bad "openssl does not read the key from env"; fi
+no_values "$T/ssl.log" "openssl argv"
+
+# ── testflight-distribute.mjs refuses to guess an identity (exits before any request) ──
+DIST="$HERE/testflight-distribute.mjs"
+dist() { env -u ASC_ISSUER_ID -u LEDGER_BUNDLE_ID -u ASC_KEY_P8 ASC_KEY_ID=FIXTUREKID "$@" node "$DIST" --no-submit; }
+expect fail "distribute: no ASC_ISSUER_ID" "ASC_ISSUER_ID must be set" -- dist LEDGER_BUNDLE_ID="$BUNDLE_OK"
+expect fail "distribute: neutral bundle id" "no bundle id" -- dist LEDGER_BUNDLE_ID=com.example.ledger ASC_ISSUER_ID=fixture-issuer
 
 # testflight-distribute.mjs's App Store Connect retries (no network).
 if node --test "$HERE/asc-retry.test.mjs" > "$T/node-test.log" 2>&1; then ok; else cat "$T/node-test.log" >&2; bad "asc-retry.test.mjs"; fi

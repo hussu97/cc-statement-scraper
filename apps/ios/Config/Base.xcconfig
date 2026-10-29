@@ -2,16 +2,22 @@
 // holds the local defaults (+ the gitignored Secrets.xcconfig), Release.xcconfig reads
 // only the gitignored Secrets.Release.xcconfig (BACKLOG IOS-21r).
 
-// Bundle ids: app = prefix, share extension = prefix.share.
+// Identity. Neutral defaults so a fresh clone builds for the simulator; the real
+// values (the bundle prefix registered with Apple, the passkey host, the Apple team)
+// live only in the gitignored Identity.xcconfig (copy Identity.example.xcconfig),
+// included at the end of this file so it overrides them. A Release build that still
+// carries a default fails "Check release config" (scripts/release-config-check.sh).
+//
+// Bundle ids: app = prefix, share extension = prefix.share, widgets = prefix.widgets.
 LEDGER_BUNDLE_PREFIX = com.example.ledger
 LEDGER_APP_GROUP = group.$(LEDGER_BUNDLE_PREFIX)
 LEDGER_KEYCHAIN_GROUP = $(LEDGER_BUNDLE_PREFIX).shared
 // Passkey relying party (= Supabase [auth.webauthn] rp_id = the web app host).
-LEDGER_PASSKEY_DOMAIN = <web-host>
+LEDGER_PASSKEY_DOMAIN = example.com
 
-// Same Apple team as another app. The Team ID is the certificate's OU, not the
-// ten characters in its common name.
-DEVELOPMENT_TEAM = <apple-team-id>
+// The Apple team that signs the app. The Team ID is the certificate's OU, not the
+// ten characters in its common name. Empty here: set it in Identity.xcconfig.
+DEVELOPMENT_TEAM =
 CODE_SIGN_STYLE = Automatic
 
 MARKETING_VERSION = 1.0.0
@@ -21,3 +27,7 @@ CURRENT_PROJECT_VERSION = 1
 IPHONEOS_DEPLOYMENT_TARGET = 18.0
 SWIFT_VERSION = 6.0
 TARGETED_DEVICE_FAMILY = 1
+
+// Last, so it overrides the identity defaults above. Gitignored; optional so a
+// fresh clone still builds (unsigned, for the simulator).
+#include? "Identity.xcconfig"

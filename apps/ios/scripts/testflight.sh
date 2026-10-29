@@ -3,7 +3,7 @@
 # Build and sign Ledger (app + "Add to Ledger" share extension) on this Mac,
 # upload its dSYMs to Sentry, and optionally ship it to TestFlight.
 #
-# The same script as another app/scripts/testflight.sh, for one app instead of two.
+# The same flow as another app on the same Apple team, for one app instead of two.
 # Your Mac does this for free; a GitHub-hosted macOS runner bills at 10x. See
 # scripts/publish-build.sh for the split this exists to serve.
 #
@@ -24,10 +24,14 @@
 #       security add-generic-password -U -s ledger-sentry-auth-token -a "$USER" -w
 #     (prompts for the value); SENTRY_ORG / SENTRY_PROJECT from the environment or
 #     Secrets.Release.xcconfig (not secrets). Sentry being down only warns.
+#   * Config/Identity.xcconfig (gitignored; copy Config/Identity.example.xcconfig): the
+#     Apple team (DEVELOPMENT_TEAM) and the bundle prefix (LEDGER_BUNDLE_PREFIX). The
+#     environment's APPLE_TEAM_ID / LEDGER_BUNDLE_PREFIX override it.
 #   * Upload — an App Store Connect API key, no password, no 2FA prompt:
 #       ASC_KEY_ID, ASC_ISSUER_ID and ~/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8
-#     ASC_KEY_ID defaults to the one key in that directory, ASC_ISSUER_ID to the
-#     team's issuer — the same key another app uses.
+#     ASC_KEY_ID defaults to the one key in that directory. ASC_ISSUER_ID (App Store
+#     Connect → Users and Access → Integrations) has no default: export it. Only an
+#     upload (or ASC_SIGN_WITH_KEY=1) needs it; --no-upload does not.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -47,12 +51,27 @@ for arg in "$@"; do
 done
 
 # ── team id + bundle ───────────────────────────────────────────────────────
-# Both are pinned in Config/Base.xcconfig, so this only has to agree with it.
-# The Team ID is the certificate's OU field, not the ten characters in its
-# common name ("Apple Distribution: Name (XXXXXXXXXX)" names the certificate).
-APPLE_TEAM_ID="${APPLE_TEAM_ID:-$(sed -n 's/^DEVELOPMENT_TEAM *= *//p' Config/Base.xcconfig)}"
-BUNDLE_PREFIX="$(sed -n 's/^LEDGER_BUNDLE_PREFIX *= *//p' Config/Base.xcconfig)"
-echo "==> Team $APPLE_TEAM_ID, bundle $BUNDLE_PREFIX"
+# Both live in the gitignored Config/Identity.xcconfig (Base.xcconfig holds only
+# neutral defaults: the repository is public). The Team ID is the certificate's
+# OU field, not the ten characters in its common name ("Apple Distribution: Name
+# (XXXXXXXXXX)" names the certificate). Neither is printed: build logs may be shared.
+identity_value() { # KEY → its value in Config/Identity.xcconfig, or empty
+  [[ -f Config/Identity.xcconfig ]] || return 0
+  sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" Config/Identity.xcconfig | tail -1 | sed 's/[[:space:]]*$//'
+}
+APPLE_TEAM_ID="${APPLE_TEAM_ID:-$(identity_value DEVELOPMENT_TEAM)}"
+BUNDLE_PREFIX="${LEDGER_BUNDLE_PREFIX:-$(identity_value LEDGER_BUNDLE_PREFIX)}"
+if [[ ! "$APPLE_TEAM_ID" =~ ^[A-Z0-9]{10}$ ]]; then
+  echo "error: no Apple team ID. Copy Config/Identity.example.xcconfig to Config/Identity.xcconfig" >&2
+  echo "       and set DEVELOPMENT_TEAM (or export APPLE_TEAM_ID)." >&2
+  exit 1
+fi
+if [[ -z "$BUNDLE_PREFIX" || "$BUNDLE_PREFIX" == com.example.* ]]; then
+  echo "error: no bundle prefix. Set LEDGER_BUNDLE_PREFIX in Config/Identity.xcconfig" >&2
+  echo "       (template: Config/Identity.example.xcconfig)." >&2
+  exit 1
+fi
+echo "==> Team and bundle prefix from Config/Identity.xcconfig (not printed)"
 
 if ! security find-identity -p codesigning -v | grep -q "Apple Distribution"; then
   echo "error: no Apple Distribution identity in your keychain." >&2
@@ -83,7 +102,7 @@ fi
 
 # ── App Store Connect key (checked before the slow part, not after it) ─────
 # Used for the upload. Signing uses the Apple ID signed in to Xcode (Settings →
-# Accounts), as another app does; with none, archive fails with "No Accounts".
+# Accounts); with none, archive fails with "No Accounts".
 # ASC_SIGN_WITH_KEY=1 hands the API key to xcodebuild instead (needs an Admin
 # key; with Xcode 27 and this key it failed with "Authentication failed").
 KEY_DIR="$HOME/.appstoreconnect/private_keys"
@@ -93,9 +112,17 @@ if [[ -z "${ASC_KEY_ID:-}" ]]; then
     ASC_KEY_ID="$(basename "${keys[0]}" .p8)"; ASC_KEY_ID="${ASC_KEY_ID#AuthKey_}"
   fi
 fi
-ASC_ISSUER_ID="${ASC_ISSUER_ID:-<asc-issuer-id>}"
+ASC_ISSUER_ID="${ASC_ISSUER_ID:-}"
 KEY_FILE="$KEY_DIR/AuthKey_${ASC_KEY_ID:-none}.p8"
 SIGN_AUTH=()
+if [[ -z "$ASC_ISSUER_ID" && ( $UPLOAD -eq 1 || "${ASC_SIGN_WITH_KEY:-0}" == 1 ) ]]; then
+  cat >&2 <<'MSG'
+error: ASC_ISSUER_ID is not set. It has no default (the repository is public):
+  export ASC_ISSUER_ID=<issuer-uuid>   # App Store Connect → Users and Access → Integrations
+  — or pass --no-upload.
+MSG
+  exit 1
+fi
 if [[ -n "${ASC_KEY_ID:-}" && -f "$KEY_FILE" ]]; then
   export ASC_KEY_ID ASC_ISSUER_ID
   [[ "${ASC_SIGN_WITH_KEY:-0}" == 1 ]] && SIGN_AUTH=(-authenticationKeyPath "$KEY_FILE" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")

@@ -1,0 +1,22 @@
+// Template for the gitignored Config/Identity.xcconfig: who this build is, kept out of
+// git so the public repository names no Apple team, bundle id or passkey host.
+// Copy it, fill it in, never commit the copy:
+//   cp Config/Identity.example.xcconfig Config/Identity.xcconfig
+// Base.xcconfig includes it last, so these override its neutral defaults
+// (com.example.ledger, example.com, no team). Debug builds for the simulator work
+// without it; a Release build that still carries a default fails "Check release
+// config" (scripts/release-config-check.sh), and scripts/testflight.sh,
+// publish-build.sh and testflight-distribute.mjs read the bundle id and team from it.
+
+// The app's bundle id as registered with Apple. The share extension is <prefix>.share,
+// the widgets <prefix>.widgets, the App Group group.<prefix>, the keychain group
+// <prefix>.shared and the background tasks <prefix>.outbox-refresh / .outbox-send.
+LEDGER_BUNDLE_PREFIX = com.example.ledger
+
+// Passkey relying party: the web app's host, which serves
+// /.well-known/apple-app-site-association (= Supabase [auth.webauthn] rp_id).
+LEDGER_PASSKEY_DOMAIN = example.com
+
+// Apple Developer Team ID (developer.apple.com → Membership details), ten characters.
+// It is the signing certificate's OU, not the ten characters in its common name.
+DEVELOPMENT_TEAM = <apple-team-id>
