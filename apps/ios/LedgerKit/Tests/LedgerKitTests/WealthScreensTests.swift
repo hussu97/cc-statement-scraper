@@ -32,7 +32,7 @@ struct WealthScreensTests {
         #expect(content.netWorth.netAed == dec("144700.53"))
         #expect(content.series.count == 3 && content.showsChart)
         #expect(content.position?.accounts.count == 2)
-        #expect(content.thisMonth?.month == day("2026-10-01") && content.thisMonth?.net == dec("16298.90"))
+        #expect(content.thisMonth?.month == day("2026-10-01") && content.thisMonth?.net == dec("20398.90"))
         #expect(content.insights.map(\.kind) == ["balance_stale"])
         #expect(content.owingCards.count == 3)
         #expect(api.cashFlowRanges.last?.from == day("2026-10-01") && api.cashFlowRanges.last?.to == day("2026-10-31"))

@@ -162,7 +162,7 @@ public struct CashFlowMonth: Sendable, Hashable, Identifiable {
 
     public var title: String { LedgerDates.monthTitle(month) }
 
-    /// `"+AED 16,298.90"`, `"−AED 5,341.48"`, `"AED 0.00"`.
+    /// `"+AED 20,398.90"`, `"−AED 5,341.48"`, `"AED 0.00"`.
     public var netText: String? { net.map(CashFlow.signed) }
 
     /// A partial month's net is card spend with no income beside it: not a loss, so not red.

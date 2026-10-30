@@ -24,16 +24,16 @@ import { accountLabel } from "@/data/overview";
 
 const row = (month: string, flow: string, amount: string | number, n = 1): CashFlowRow => ({ month, flow, amount_aed: amount, txn_count: n });
 
-// The demo ledger's October: salary 50,000, support 23,700, saving 7,400, an unfiled 1,500 out.
+// The demo ledger's October: salary 50,000, support 21,450, saving 5,550, an unfiled 1,500 out.
 const OCT = [
   row("2026-10-01", "income", 50000),
-  row("2026-10-01", "support", 23700),
-  row("2026-10-01", "saving", 7400),
+  row("2026-10-01", "support", 21450),
+  row("2026-10-01", "saving", 5550),
   row("2026-10-01", "money_out", 1500),
   row("2026-10-01", "spend", "812.40", 9),
   row("2026-10-01", "card_repayment", 3000),
   row("2026-10-01", "internal_out", 2000),
-  row("2026-10-01", "net", "16587.60", 15),
+  row("2026-10-01", "net", "20687.60", 15),
   row("2026-09-01", "spend", 400, 3),
   row("2026-09-01", "net", -400, 3),
 ];
@@ -49,8 +49,8 @@ describe("flow groups", () => {
     const m = monthFlows(OCT, "2026-10-01");
     expect(m.groups.map((g) => g.key)).toEqual(["in", "committed", "spent", "unfiled_out", "moves"]);
     expect(m.groups[0]!.lines.map((l) => l.flow)).toEqual(["income"]);
-    expect(m.groups[1]!.lines.map((l) => [l.flow, l.amount])).toEqual([["support", 23700], ["saving", 7400]]);
-    expect(m.net).toBe("16587.60");
+    expect(m.groups[1]!.lines.map((l) => [l.flow, l.amount])).toEqual([["support", 21450], ["saving", 5550]]);
+    expect(m.net).toBe("20687.60");
     expect(m.hasMovements).toBe(true);
   });
 
@@ -103,14 +103,14 @@ describe("flow chips", () => {
 describe("formatting", () => {
   it("signs money in and out", () => {
     expect(formatFlow(50000, "in")).toBe("+AED 50,000");
-    expect(formatFlow("23700.00", "out")).toBe("−AED 23,700");
+    expect(formatFlow("21450.00", "out")).toBe("−AED 21,450");
     // Refunds above spend: a negative out reads as money in.
     expect(formatFlow(-120, "out")).toBe("+AED 120");
     expect(formatFlow(null, "out")).toBe("—");
   });
 
   it("formats and tones the net", () => {
-    expect(formatNet("16587.60")).toBe("+AED 16,588");
+    expect(formatNet("20687.60")).toBe("+AED 20,688");
     expect(formatNet(-400)).toBe("−AED 400");
     expect(formatNet(null)).toBe("—");
     expect(netTone(1)).toBe("positive");
@@ -129,7 +129,7 @@ describe("months", () => {
   it("lists six months of net, newest first, null where nothing moved", () => {
     const rows = netByMonth(OCT, "2026-10-01");
     expect(rows.map((r) => r.month)).toEqual(["2026-10-01", "2026-09-01", "2026-08-01", "2026-07-01", "2026-06-01", "2026-05-01"]);
-    expect(rows.map((r) => r.net)).toEqual(["16587.60", -400, null, null, null, null]);
+    expect(rows.map((r) => r.net)).toEqual(["20687.60", -400, null, null, null, null]);
     expect(rows[0]!.label).toMatch(/Oct/);
   });
 

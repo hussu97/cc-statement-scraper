@@ -48,14 +48,14 @@ select pg_temp.set('m', date_trunc('month', public.dubai_date(now()) - 40)::date
 select pg_temp.set('m0', (pg_temp.v('m')::date - interval '1 month')::date::text);
 
 -- ── one month on the current account, two checkpoints ───────────────────────
---   m+0  salary   +50,000      → 53,700   (anchored on cp1: 30,000 + 50,000 − 26,300)
---   m+1  support  −23,700      → 30,000
+--   m+0  salary   +50,000      → 51,450   (anchored on cp1: 30,000 + 21,450)
+--   m+1  support  −21,450      → 30,000
 --   m+2  cp1 (manual) 30,000 at noon
 --   m+3  debit buy −40         → 29,000   (anchored on cp2, the next checkpoint: the bank's figure wins)
 --   m+5  cp2 (manual) 29,000
 --   m+6  transfer in +1,000    → 30,000   (after the latest checkpoint)
 select pg_temp.set('t1', pg_temp.txn('bank', 'transfer_in', 'credit', 50000.00, pg_temp.v('m')::date, 'Salary'));
-select pg_temp.set('t2', pg_temp.txn('bank', 'transfer_out', 'debit', 23700.00, pg_temp.v('m')::date + 1, 'Family support'));
+select pg_temp.set('t2', pg_temp.txn('bank', 'transfer_out', 'debit', 21450.00, pg_temp.v('m')::date + 1, 'Family support'));
 select pg_temp.set('t3', pg_temp.txn('bank', 'purchase', 'debit', 40.00, pg_temp.v('m')::date + 3));
 select pg_temp.set('t4', pg_temp.txn('bank', 'transfer_in', 'credit', 1000.00, pg_temp.v('m')::date + 6));
 select pg_temp.set('c1', pg_temp.txn('card', 'purchase', 'debit', 100.00, pg_temp.v('m')::date + 2));
@@ -88,8 +88,8 @@ select throws_ok($$ select public.activity_summary(pg_temp.v('p'), p_scope => 'w
 select results_eq(
   $$ select l->>'opening_balance', l->>'closing_balance', l->>'money_in', l->>'money_out', (l->>'unpriced_count')::int
      from (select public.account_ledger(pg_temp.v('p'), pg_temp.v('bank'), pg_temp.v('m')::date, pg_temp.v('m')::date + 27) l) x $$,
-  $$ values ('3700.00'::text, '30000.00'::text, '51000.00'::text, '23740.00'::text, 0) $$,
-  'opening 3,700, closing 30,000, 51,000 in, 23,740 out');
+  $$ values ('1450.00'::text, '30000.00'::text, '51000.00'::text, '21490.00'::text, 0) $$,
+  'opening 1,450, closing 30,000, 51,000 in, 21,490 out');
 select results_eq(
   $$ select r->>'txn_code', r->>'flow', r->>'amount', r->>'balance_after'
      from jsonb_array_elements(public.account_ledger(pg_temp.v('p'), pg_temp.v('bank'), pg_temp.v('m')::date,
@@ -97,8 +97,8 @@ select results_eq(
      order by n $$,
   $$ values (pg_temp.v('t4'), 'money_in'::text, '1000.00'::text, '30000.00'::text),
             (pg_temp.v('t3'), 'spend', '40.00', '29000.00'),
-            (pg_temp.v('t2'), 'support', '23700.00', '30000.00'),
-            (pg_temp.v('t1'), 'income', '50000.00', '53700.00') $$,
+            (pg_temp.v('t2'), 'support', '21450.00', '30000.00'),
+            (pg_temp.v('t1'), 'income', '50000.00', '51450.00') $$,
   'newest first, each with its flow and the balance after it, anchored on the next checkpoint');
 select is(jsonb_array_length(public.account_ledger(pg_temp.v('p'), pg_temp.v('bank'), pg_temp.v('m')::date + 1,
                                                    pg_temp.v('m')::date + 1)->'rows'), 1, 'the period bounds the rows');
@@ -110,7 +110,7 @@ select results_eq(
   $$ select x->>'date', x->>'balance'
      from jsonb_array_elements(public.bank_balance_series(pg_temp.v('p'), pg_temp.v('bank'), pg_temp.v('m')::date - 1,
                                                           pg_temp.v('m')::date + 6)) x $$,
-  $$ values ((pg_temp.v('m')::date - 1)::text, null::text), (pg_temp.v('m')::date::text, '53700.00'),
+  $$ values ((pg_temp.v('m')::date - 1)::text, null::text), (pg_temp.v('m')::date::text, '51450.00'),
             ((pg_temp.v('m')::date + 1)::text, '30000.00'), ((pg_temp.v('m')::date + 2)::text, '29040.00'),
             ((pg_temp.v('m')::date + 3)::text, '29000.00'), ((pg_temp.v('m')::date + 4)::text, '29000.00'),
             ((pg_temp.v('m')::date + 5)::text, '29000.00'), ((pg_temp.v('m')::date + 6)::text, '30000.00') $$,
@@ -155,13 +155,13 @@ select results_eq(
      from public.cash_flow(pg_temp.v('p'), pg_temp.v('m0')::date, pg_temp.v('m')::date + 27) where flow in ('net', 'spend')
      order by month, flow $$,
   $$ values (pg_temp.v('m0')::date, 'net'::text, -75.00::numeric, true), (pg_temp.v('m0')::date, 'spend', 75.00, true),
-            (pg_temp.v('m')::date, 'net', 27160.00, false), (pg_temp.v('m')::date, 'spend', 140.00, false) $$,
+            (pg_temp.v('m')::date, 'net', 29410.00, false), (pg_temp.v('m')::date, 'spend', 140.00, false) $$,
   'the month before any bank evidence is partial; the first covered month is not');
 select results_eq(
   $$ select flow, amount_aed from public.cash_flow(pg_temp.v('p'), pg_temp.v('m')::date, pg_temp.v('m')::date + 27,
                                                     pg_temp.v('bank')) order by flow $$,
-  $$ values ('income'::text, 50000.00::numeric), ('money_in', 1000.00), ('net', 27260.00), ('spend', 40.00),
-            ('support', 23700.00) $$,
+  $$ values ('income'::text, 50000.00::numeric), ('money_in', 1000.00), ('net', 29510.00), ('spend', 40.00),
+            ('support', 21450.00) $$,
   'one account: its own flows, without the card''s spend');
 reset role;
 

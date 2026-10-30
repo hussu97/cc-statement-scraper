@@ -128,10 +128,10 @@ struct CashFlowTests {
         #expect(oct.groups.map(\.kind) == [.moneyIn, .committed, .spent, .unfiledOut])
         #expect(oct.groups.map { $0.lines.map(\.flow) } == [["income"], ["support", "saving"], ["spend"], ["money_out"]])
         #expect(oct.groups[1].lines.map(\.label) == ["Support", "Saving & investing"])
-        #expect(oct.groups[1].lines[0].amountText == "AED 23,700.00" && oct.groups[1].lines[0].countText == "1 transaction")
+        #expect(oct.groups[1].lines[0].amountText == "AED 21,450.00" && oct.groups[1].lines[0].countText == "1 transaction")
         #expect(oct.groups[2].lines[0].amountAed == dec("1101.10") && oct.groups[2].lines[0].countText == "14 transactions")
         // Net is the server's row, never a sum of the groups.
-        #expect(oct.net == dec("16298.90") && oct.netText == "+AED 16,298.90" && oct.netTone == .positive)
+        #expect(oct.net == dec("20398.90") && oct.netText == "+AED 20,398.90" && oct.netTone == .positive)
         #expect(oct.title == "October 2026" && !oct.isEmpty)
 
         let aug = months[2]
@@ -268,9 +268,9 @@ struct CashModelTests {
         #expect(api.calls("cashPosition") == 1 && api.calls("cashFlow") == 1)
         #expect(api.cashFlowRanges.first! == (day("2026-05-01"), day("2026-10-31")))
         #expect(model.state.value?.position.accounts.count == 2 && model.state.value?.flowError == nil)
-        #expect(model.selected?.month == day("2026-10-01") && model.selected?.net == dec("16298.90"))
+        #expect(model.selected?.month == day("2026-10-01") && model.selected?.net == dec("20398.90"))
         #expect(model.monthNets.map(\.month) == CashFlow.monthChoices(today: day("2026-10-20")))
-        #expect(model.monthNets.map(\.netText) == ["+AED 16,298.90", "−AED 10,729.97", "−AED 9,111.51", nil, nil, nil])
+        #expect(model.monthNets.map(\.netText) == ["+AED 20,398.90", "−AED 10,729.97", "−AED 9,111.51", nil, nil, nil])
         model.selectedMonth = day("2026-07-01")
         #expect(model.selected?.isEmpty == true)
         #expect(model.emptyMessage(for: model.selectedMonth) == "No money moved in July 2026.")

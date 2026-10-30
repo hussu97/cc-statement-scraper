@@ -17,9 +17,9 @@ create function pg_temp.txn(p_aed numeric, p_day date, p_usd numeric) returns te
   returning txn_code $$;
 create function pg_temp.premiums() returns jsonb language sql as $$
   select jsonb_build_array(
-    jsonb_build_object('ref', 'premium:p1', 'date', pg_temp.v('today')::date - 70, 'amount', '2000.00'),
-    jsonb_build_object('ref', 'premium:p2', 'date', pg_temp.v('today')::date - 40, 'amount', '2000.00'),
-    jsonb_build_object('ref', 'premium:p3', 'date', pg_temp.v('today')::date - 10, 'amount', '2000.00')) $$;
+    jsonb_build_object('ref', 'premium:p1', 'date', pg_temp.v('today')::date - 70, 'amount', '1500.00'),
+    jsonb_build_object('ref', 'premium:p2', 'date', pg_temp.v('today')::date - 40, 'amount', '1500.00'),
+    jsonb_build_object('ref', 'premium:p3', 'date', pg_temp.v('today')::date - 10, 'amount', '1500.00')) $$;
 create function pg_temp.sync(p_values jsonb default '[]', p_premiums jsonb default pg_temp.premiums()) returns jsonb
 language sql as $$
   select public.import_holding_data(pg_temp.v('p'), 'RL360', 'RS00000001', 'USD', pg_temp.v('start')::date,
@@ -48,7 +48,7 @@ select set_config('request.jwt.claims', '', true);
 insert into public.accounts (profile_code, bank_code, nickname) values (pg_temp.v('p'), 'ENBD', 'ENBD card')
 returning pg_temp.set('card', account_code);
 -- The card payment for premium p3, linked by the plan's rule.
-select pg_temp.set('rl3', pg_temp.txn(7345.00, pg_temp.v('today')::date - 9, 2000));
+select pg_temp.set('rl3', pg_temp.txn(5508.75, pg_temp.v('today')::date - 9, 1500));
 select is((select source from public.holding_flows where txn_code = pg_temp.v('rl3')), 'rule', 'the p3 payment is linked by rule');
 
 -- ── callers ─────────────────────────────────────────────────────────────────
@@ -71,9 +71,9 @@ select is((pg_temp.v('r1')::jsonb)->>'values_added', '1', 'today''s value is sto
 select is((select source from public.holding_valuations where holding_code = pg_temp.v('plan')), 'import', '… as an import');
 select is((pg_temp.v('r1')::jsonb)->'premiums', '{"imported": 2, "revived": 0, "superseded": 0, "matched_to_payments": 1}'::jsonb,
           'p3 is the linked card payment; p1 and p2 are imported');
-select is(pg_temp.active_total(), 6000.00::numeric, 'three premiums of USD 2,000, none counted twice');
+select is(pg_temp.active_total(), 4500.00::numeric, 'three premiums of USD 1,500, none counted twice');
 select is((select amount_aed from public.holding_flows where holding_code = pg_temp.v('plan') and external_ref = 'premium:p1'),
-          7345.00::numeric, 'an imported premium is in AED at the peg');
+          5508.75::numeric, 'an imported premium is in AED at the peg');
 select is(jsonb_array_length((pg_temp.v('r1')::jsonb)->'missing_month_ends'), 3, 'three month-ends since the start have no value');
 
 -- ── re-runs are idempotent ──────────────────────────────────────────────────
@@ -101,7 +101,7 @@ select throws_ok($$ select pg_temp.sync(jsonb_build_array(jsonb_build_object('as
                  '22023', null, 'a value cannot be in the future');
 
 -- ── a payment linked later stands for its premium; unlinked, the import returns ──
-select pg_temp.set('rl1', pg_temp.txn(7345.00, pg_temp.v('today')::date - 69, 2000));
+select pg_temp.set('rl1', pg_temp.txn(5508.75, pg_temp.v('today')::date - 69, 1500));
 select pg_temp.as_owner();
 set local role authenticated;
 select public.link_transaction(pg_temp.v('p'), pg_temp.v('rl1'), pg_temp.v('plan'));
@@ -111,14 +111,14 @@ select is((pg_temp.sync())->'premiums', '{"imported": 0, "revived": 0, "supersed
           'the p1 import gives way to the linked payment');
 select is((select superseded_by from public.holding_flows where holding_code = pg_temp.v('plan') and external_ref = 'premium:p1'),
           (select flow_code from public.holding_flows where txn_code = pg_temp.v('rl1')), '… which it names');
-select is(pg_temp.active_total(), 6000.00::numeric, 'still USD 6,000 in');
+select is(pg_temp.active_total(), 4500.00::numeric, 'still USD 4,500 in');
 select pg_temp.as_owner();
 set local role authenticated;
 select public.link_transaction(pg_temp.v('p'), pg_temp.v('rl1'), null);
 reset role;
 select set_config('request.jwt.claims', '', true);
 select is((pg_temp.sync())->'premiums'->>'revived', '1', 'unlinked, the payment gives p1 back to the import');
-select is(pg_temp.active_total(), 6000.00::numeric, 'still USD 6,000 in');
+select is(pg_temp.active_total(), 4500.00::numeric, 'still USD 4,500 in');
 
 -- ── a premium the user removed stays removed ────────────────────────────────
 select pg_temp.as_owner();
@@ -129,7 +129,7 @@ reset role;
 select set_config('request.jwt.claims', '', true);
 select is((pg_temp.sync())->'premiums', '{"imported": 0, "revived": 0, "superseded": 0, "matched_to_payments": 1}'::jsonb,
           'the removed premium is neither imported nor revived');
-select is(pg_temp.active_total(), 4000.00::numeric, 'USD 4,000 in without it');
+select is(pg_temp.active_total(), 3000.00::numeric, 'USD 3,000 in without it');
 
 -- ── mismatches ──────────────────────────────────────────────────────────────
 select throws_ok($$ select public.import_holding_data(pg_temp.v('p'), 'RL360', 'RS00000001', 'EUR', null, '[]') $$,
