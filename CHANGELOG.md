@@ -1,5 +1,11 @@
 # Changelog
 
+## SIB SMS from both card systems are read — 2026-10-30
+
+### Backend (Supabase)
+
+- **fix** SIB alerts the templates missed are now read (migration `20261030152122`): the purchase alert from before SIB's card-system update ("… for AED  12.50 on 05-Aug at 19:42  is approved", no year, so the transaction takes the SMS's own time); the newer alert that prints "Card" without "Covered" (the seeded template's pattern widened, guarded on its old text); the payment confirmation with a doubled space and no final period; and the cashback credit (a `refund`, as SIB's statements print it). A zero-amount card check, a failed attempt, the older due reminder and card notices (activation, Apple Pay, PIN, system update) are ignored. pgTAP `81_sib_sms_formats`; the shared OTP fixture in `38` lists the new examples.
+
 ## Tests and SMS template examples use synthetic Wio amounts — 2026-10-30
 
 ### Backend (Supabase)
