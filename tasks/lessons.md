@@ -9,6 +9,7 @@
 
 | When | Lesson |
 |---|---|
+| 2026-10-30 | [Synthetic test data must not echo the real case it was built for](#synthetic-test-data-must-not-echo-the-real-case-it-was-built-for) |
 | 2026-10-29 | [A public repository publishes every commit, PR ref, log and release: redact with one map, prove it with a denylist scan](#a-public-repository-publishes-every-commit-pr-ref-log-and-release-redact-with-one-map-prove-it-with-a-denylist-scan) |
 | 2026-10-28 | [One SMS reaches the server once per automation: dedup by content at ingest, not by `client_msg_id`](#one-sms-reaches-the-server-once-per-automation-dedup-by-content-at-ingest-not-by-client_msg_id) |
 | 2026-10-28 | [Deployed Edge code imports no jsr: package: Supabase's bundler fetches it at deploy time and times out](#deployed-edge-code-imports-no-jsr-package-supabases-bundler-fetches-it-at-deploy-time-and-times-out) |
@@ -52,6 +53,16 @@
 | 2026-10-08 | [Tooling defaults that don't work here: `gh` account, Supabase MCP, `localhost`, pip](#tooling-defaults-that-dont-work-here-gh-account-supabase-mcp-localhost-pip) |
 
 ## Lessons
+
+### Synthetic test data must not echo the real case it was built for
+- **What went wrong**: a pgTAP case written for a real holding reused its real share count
+  and an "employer shares" label, and the CHANGELOG named the same use case. No real name or
+  number from the denylist appeared, but anyone who knew the owner could match it. It was
+  caught before the push.
+- **The rule**: CLAUDE.md §14.5. Tests, docs, comments and commit text describe the general
+  case with unrelated numbers; the real values go only into production.
+- **Enforced by**: a check by eye before each commit (a near copy is not something a denylist
+  can match); the §14.4 denylist for exact values.
 
 ### A public repository publishes every commit, PR ref, log and release: redact with one map, prove it with a denylist scan
 - **What went wrong**: before going public, the repo held the owner's real SMS (names, card and
