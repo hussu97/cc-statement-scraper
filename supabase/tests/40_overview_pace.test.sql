@@ -163,8 +163,12 @@ select is(public.overview(pg_temp.v('p'), '2025-10-01') - array['recent', 'accou
                                                                   'outstanding_has_estimate', 'pending_count',
                                                                   'pending_amount', 'pending_unpriced_count',
                                                                   'uncategorized_count', 'payments'],
+          -- spend_prev_month_to_date runs to today's day of the month (prev_month_to_date_end):
+          -- 1 September only, until the 30th brings in September's 30th.
           jsonb_build_object('month', '2025-10-01', 'spend', '60.00', 'spend_prev_month', '1200.00',
-                             'spend_prev_month_to_date', '300.00', 'spend_avg_3m', '816.67',
+                             'spend_prev_month_to_date',
+                             case when extract(day from public.dubai_date(now())) >= 30 then '1200.00' else '300.00' end,
+                             'spend_avg_3m', '816.67',
                              'spend_avg_3m_to_date', '816.67', 'projected_month_end', '60.00',
                              'change_vs_prev_month_to_date', '-0.9500', 'change_vs_avg_3m', '-0.9265'),
           'overview of a past month: whole-month baseline, projection = spend, decimal strings');
