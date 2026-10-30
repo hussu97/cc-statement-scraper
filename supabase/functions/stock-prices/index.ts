@@ -1,11 +1,13 @@
 // stock-prices: daily closes of every share a structured note follows (and shares a note
-// delivered) → public.security_prices, then settles the notes (private.settle_structured_note:
-// coupons, autocalls and maturities onto the funding account).
+// delivered, and shares entered by hand with a symbol) → public.security_prices, then settles
+// the notes (private.settle_structured_note: coupons, autocalls and maturities onto the funding
+// account).
 //
 // Callers:
 //   * pg_cron with x-cron-secret (job `ledger-stock-prices`, 30 22 * * 1-6 UTC, after the US
 //     close): every symbol, from 5 days before its last stored close (a corrected close is
-//     replaced), or from 7 days before a note's strike when the stored closes start later.
+//     replaced), or from 7 days before a note's strike (a hand-entered share's acquired date)
+//     when the stored closes start later.
 //   * a ledger owner (user JWT, body {"profile_code"}): right after adding a note, so its past
 //     observations have closes. Runs synchronously and returns what was stored.
 // Source: Yahoo Finance's chart endpoint (./yahoo.ts); query2 when query1 refuses.

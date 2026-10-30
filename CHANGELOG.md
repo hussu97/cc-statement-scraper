@@ -1,5 +1,11 @@
 # Changelog
 
+## Hand-entered shares follow the market — 2026-10-30
+
+### Backend (Supabase)
+
+- **feature** A share entered by hand (a `security` holding with a symbol and no broker sync behind it) is now priced by the daily `stock-prices` job: `price_symbols` lists it from a week before its acquired date (or the day it was added), so the first run backfills its closes and its value follows the latest close from then on. Broker-synced shares (Swissquote, Zerodha) keep their broker's price. pgTAP `79_manual_share_prices`.
+
 ## Public repository: no real data or production identity, no crawlers — 2026-10-29
 
 ### Backend (Supabase)

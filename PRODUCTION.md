@@ -294,7 +294,7 @@ curl -s -X POST https://<project-ref>.supabase.co/functions/v1/worker \
 | `ledger-recategorize-sweep` | `17 */3 * * *` | stale `rules_version` sweep |
 | `ledger-fx-rates` | `0 21 * * *` | `fx-rates` function |
 | `ledger-metal-prices` | `7 */6 * * *` | `metal-prices` function (gold/silver prices; no secret beyond `CRON_SECRET`) |
-| `ledger-stock-prices` | `30 22 * * 1-6` | `stock-prices` function (closes of the shares structured notes follow, from Yahoo Finance, no key; then settles the notes) |
+| `ledger-stock-prices` | `30 22 * * 1-6` | `stock-prices` function (closes of the shares structured notes follow and of hand-entered shares with a symbol, from Yahoo Finance, no key; then settles the notes) |
 | `ledger-rl360-sync` | `20 2 * * *` (06:20 Dubai) | `rl360-sync` function (RL360 plan values and premiums; needs `RL360_LOGINS`, skips when unset) |
 | `ledger-swissquote-sync` | `30 21 * * *` (01:30 Dubai) | `swissquote-sync` function (the Swissquote cash account, positions, values and note terms; needs `SWISSQUOTE_LOGINS`, skips when unset) |
 | `ledger-zerodha-sync` | `0 18 * * 1-5` (23:30 IST, 22:00 Dubai) | `zerodha-sync` function (Kite and Coin holdings, Funds cash and the day's value; needs `ZERODHA_LOGINS`, skips when unset) |

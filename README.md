@@ -417,7 +417,7 @@ Used for the production Edge Function secrets and Vault entries, and for secret 
 | `gmail-push` | POST (Pub/Sub envelope) | Google OIDC token | Gmail notifications → documents (200 done or permanent failure acked, 503 budget used up, 500 transient: Pub/Sub redelivers) |
 | `member-invite` | POST JSON `{profile_code, email, role?, action?, redirect_to?}` (`action`: `invite` or `resend`) | User JWT (owner) | Add a member and send the Auth invite email (sign-ups are off), or resend it. `redirect_to` must be on the caller's own origin |
 | `termsheet-extract` | POST multipart (`profile_code`, `file`: one PDF) | User JWT (owner) | Read a structured note's term sheet into draft terms with warnings (`docs/contracts/termsheet-v1.md`); the PDF goes to the private `term-sheets` bucket. No app calls it since the 27 Oct redesign (the Swissquote sync reads term sheets itself); kept for scripts |
-| `stock-prices` | POST JSON `{profile_code}` | User JWT (owner) | Fetch the closes a ledger's notes need (backfill after adding one) and settle the notes; returns `{symbols, stored, settled, failed}` |
+| `stock-prices` | POST JSON `{profile_code}` | User JWT (owner) | Fetch the closes a ledger's notes and hand-entered shares need (backfill after adding one) and settle the notes; returns `{symbols, stored, settled, failed}` |
 | `worker`, `gmail-watch-renew`, `outlook-poll`, `ops-monitor`, `fx-rates`, `metal-prices`, `stock-prices`, `rl360-sync`, `swissquote-sync`, `zerodha-sync` | POST | `x-cron-secret` | pg_cron-driven jobs |
 
 ### RPCs (`supabase.rpc(...)`, PostgREST)
