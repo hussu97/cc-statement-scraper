@@ -4,7 +4,7 @@
  {"month":"2026-09-01","flow":"spend","amount_aed":10729.97,"txn_count":61,"is_partial":false}, 
  {"month":"2026-10-01","flow":"income","amount_aed":50000.0,"txn_count":1,"is_partial":false}, 
  {"month":"2026-10-01","flow":"money_out","amount_aed":1500.0,"txn_count":1,"is_partial":false}, 
- {"month":"2026-10-01","flow":"net","amount_aed":16298.9,"txn_count":18,"is_partial":false}, 
- {"month":"2026-10-01","flow":"saving","amount_aed":7400.0,"txn_count":1,"is_partial":false}, 
+ {"month":"2026-10-01","flow":"net","amount_aed":20398.9,"txn_count":18,"is_partial":false}, 
+ {"month":"2026-10-01","flow":"saving","amount_aed":5550.0,"txn_count":1,"is_partial":false}, 
  {"month":"2026-10-01","flow":"spend","amount_aed":1101.1,"txn_count":14,"is_partial":false}, 
- {"month":"2026-10-01","flow":"support","amount_aed":23700.0,"txn_count":1,"is_partial":false}]
+ {"month":"2026-10-01","flow":"support","amount_aed":21450.0,"txn_count":1,"is_partial":false}]

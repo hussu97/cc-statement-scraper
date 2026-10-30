@@ -44,10 +44,10 @@ insert into public.metal_prices (quote, aed_per_gram, source, as_of) values ('go
 select pg_temp.set('today', public.dubai_date(now())::text);
 
 -- Two RL360 payments already in the ledger (filed under Investment, a spend category).
-select pg_temp.set('rl1', pg_temp.txn('card', 'purchase', 'debit', 7575.70, pg_temp.v('today')::date - 40,
-                                      '*RL360 DOUGLAS GBR', 2000, 'USD', 'Investment'));
-select pg_temp.set('rl2', pg_temp.txn('card', 'purchase', 'debit', 7575.90, pg_temp.v('today')::date - 10,
-                                      '*RL360 DOUGLAS GBR', 2000, 'USD', 'Investment'));
+select pg_temp.set('rl1', pg_temp.txn('card', 'purchase', 'debit', 5681.78, pg_temp.v('today')::date - 40,
+                                      '*RL360 DOUGLAS GBR', 1500, 'USD', 'Investment'));
+select pg_temp.set('rl2', pg_temp.txn('card', 'purchase', 'debit', 5681.93, pg_temp.v('today')::date - 10,
+                                      '*RL360 DOUGLAS GBR', 1500, 'USD', 'Investment'));
 select is((select count(*)::int from public.v_spend where txn_code in (pg_temp.v('rl1'), pg_temp.v('rl2'))), 2,
           'before any holding, RL360 counts as spend');
 
@@ -82,26 +82,26 @@ reset role;
 select results_eq(
   $$ select txn_code, kind, amount, amount_aed, source from public.holding_flows
      where holding_code = pg_temp.v('rl360') order by flow_date $$,
-  $$ values (pg_temp.v('rl1'), 'contribution'::text, 2000.00::numeric, 7575.70::numeric, 'rule'::text),
-            (pg_temp.v('rl2'), 'contribution', 2000.00, 7575.90, 'rule') $$,
+  $$ values (pg_temp.v('rl1'), 'contribution'::text, 1500.00::numeric, 5681.78::numeric, 'rule'::text),
+            (pg_temp.v('rl2'), 'contribution', 1500.00, 5681.93, 'rule') $$,
   'saving the rule links the existing RL360 payments, in USD and AED');
-select pg_temp.set('rl3', pg_temp.txn('card', 'purchase', 'debit', 7576.10, pg_temp.v('today')::date - 1,
-                                      '*RL360 DOUGLAS GBR', 2000, 'USD', 'Investment'));
+select pg_temp.set('rl3', pg_temp.txn('card', 'purchase', 'debit', 5682.08, pg_temp.v('today')::date - 1,
+                                      '*RL360 DOUGLAS GBR', 1500, 'USD', 'Investment'));
 select is((select holding_code from public.holding_flows where txn_code = pg_temp.v('rl3')), pg_temp.v('rl360'),
           'a new payment is linked as it arrives');
-update public.transactions set amount_aed = 7577.00 where txn_code = pg_temp.v('rl3');
-select is((select amount_aed from public.holding_flows where txn_code = pg_temp.v('rl3')), 7577.00::numeric,
+update public.transactions set amount_aed = 5683.00 where txn_code = pg_temp.v('rl3');
+select is((select amount_aed from public.holding_flows where txn_code = pg_temp.v('rl3')), 5683.00::numeric,
           'a linked flow follows its transaction''s amount');
 select is((select count(*)::int from public.v_spend where txn_code in (pg_temp.v('rl1'), pg_temp.v('rl2'), pg_temp.v('rl3'))), 0,
           'linked payments leave spend');
 select results_eq(
   $$ select flow, holding_code, amount_aed from public.v_cash_flow where txn_code = pg_temp.v('rl2') $$,
-  $$ values ('saving'::text, pg_temp.v('rl360'), 7575.90::numeric) $$,
+  $$ values ('saving'::text, pg_temp.v('rl360'), 5681.93::numeric) $$,
   'and are saving in cash flow, with their holding');
 select is((select holding_name from public.v_transactions where txn_code = pg_temp.v('rl1')), 'RL360 plan',
           'v_transactions names the holding');
 -- An exact rule: Wio prints RL360 as just "RI".
-select pg_temp.set('ri', pg_temp.txn('card', 'purchase', 'debit', 7400.00, pg_temp.v('today')::date - 3, 'RI', 2000, 'USD'));
+select pg_temp.set('ri', pg_temp.txn('card', 'purchase', 'debit', 5550.00, pg_temp.v('today')::date - 3, 'RI', 1500, 'USD'));
 select pg_temp.set('pride', pg_temp.txn('card', 'purchase', 'debit', 50.00, pg_temp.v('today')::date - 3, 'PRIDE CAFE'));
 select pg_temp.as_user('uid');
 set local role authenticated;
@@ -125,7 +125,7 @@ select public.link_transaction(pg_temp.v('p'), pg_temp.v('xfer'), pg_temp.v('fun
 reset role;
 select is((select count(*)::int from public.v_spend where txn_code = pg_temp.v('rl3')), 1,
           'an unlinked payment is spend again');
-update public.transactions set amount_aed = 7578.00 where txn_code = pg_temp.v('rl3');
+update public.transactions set amount_aed = 5684.00 where txn_code = pg_temp.v('rl3');
 select is((select removed_at is not null from public.holding_flows where txn_code = pg_temp.v('rl3')), true,
           'and the rule does not link it again');
 select results_eq(
@@ -149,7 +149,7 @@ select results_eq(
      from jsonb_array_elements(public.holdings_valuation(pg_temp.v('p'))->'holdings') h order by h->>'name' $$,
   $$ values ('100 g bar'::text, '50000.00'::text, '50000.00'::text, '40000.00'::text, '0.00'::text, '10000.00'::text, false),
             ('ADCB deposit', '100800.00', '100800.00', '100000.00', '0.00', '800.00', true),
-            ('RL360 plan', '6500.00', '23871.25', '15151.60', '0.00', '8719.65', false),
+            ('RL360 plan', '6500.00', '23871.25', '11363.71', '0.00', '12507.54', false),
             ('World fund', '1305.00', '4792.61', '5000.00', '73.45', '-133.94', false) $$,
   'value in each currency and AED; cost = contributions − withdrawals; gain adds income; a deposit accrues');
 select is((select count(*)::int from jsonb_array_elements(public.holding_detail(pg_temp.v('p'), pg_temp.v('rl360'))->'flows')), 2,
@@ -176,7 +176,7 @@ select results_eq(
   $$ select x->>'holding_name', sum((x->>'amount_aed')::numeric)
      from jsonb_array_elements(public.cash_flow_savings(pg_temp.v('p'), pg_temp.v('today')::date - 60, pg_temp.v('today')::date)) x
      group by 1 order by 1 $$,
-  $$ values ('RL360 plan'::text, 15151.60::numeric), ('World fund', 5000.00) $$,
+  $$ values ('RL360 plan'::text, 11363.71::numeric), ('World fund', 5000.00) $$,
   'saving by holding');
 select results_eq(
   $$ select x->>'class', x->>'value_aed' from jsonb_array_elements(public.net_worth(pg_temp.v('p'))->'allocation') x $$,

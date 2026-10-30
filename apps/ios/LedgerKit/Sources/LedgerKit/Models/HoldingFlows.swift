@@ -99,7 +99,7 @@ public struct HoldingFlow: Decodable, Sendable, Hashable, Identifiable {
         return parts.joined(separator: " · ")
     }
 
-    /// `"+USD 2,000.00"` in, `"−AED 500.00"` out, `"USD 120.00"` income (paid to you, not in or out).
+    /// `"+USD 1,500.00"` in, `"−AED 500.00"` out, `"USD 120.00"` income (paid to you, not in or out).
     public func amountText(currency: String) -> String {
         let sign = switch kind {
         case .contribution: "+"

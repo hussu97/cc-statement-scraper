@@ -57,8 +57,8 @@ select results_eq(
 select pg_temp.set('card_buy', pg_temp.txn('card', 'purchase', 'debit', 100.00, 2));
 select pg_temp.set('debit_buy', pg_temp.txn('bank', 'purchase', 'debit', 40.00, 3, null, pg_temp.v('debit_card')));
 select pg_temp.txn('bank', 'transfer_in', 'credit', 50000.00, 1, 'Salary');
-select pg_temp.txn('bank', 'transfer_out', 'debit', 23700.00, 2, 'Family support');
-select pg_temp.txn('bank', 'transfer_out', 'debit', 7400.00, 2, 'Savings & investing');
+select pg_temp.txn('bank', 'transfer_out', 'debit', 21450.00, 2, 'Family support');
+select pg_temp.txn('bank', 'transfer_out', 'debit', 5550.00, 2, 'Savings & investing');
 select pg_temp.set('repay_out', pg_temp.txn('bank', 'transfer_out', 'debit', 7065.00, 10));
 select pg_temp.set('repay_in', pg_temp.txn('card', 'payment', 'credit', 7065.00, 11));
 select pg_temp.txn('bank', 'transfer_out', 'debit', 500.00, 12);
@@ -96,9 +96,9 @@ select results_eq(
   $$ select flow, amount_aed from public.cash_flow(pg_temp.v('p'), pg_temp.v('m')::date, pg_temp.v('m')::date + 27)
      order by flow $$,
   $$ values ('card_repayment'::text, 7065.00::numeric), ('income', 50000.00), ('internal_in', 1000.00),
-            ('money_out', 500.00), ('net', 17060.00), ('saving', 7400.00), ('spend', 140.00),
-            ('spend_transfer', 1200.00), ('support', 23700.00) $$,
-  'each flow, and net = 50,000 in − 140 spend − 1,200 by transfer − 23,700 support − 7,400 saving − 500 unfiled');
+            ('money_out', 500.00), ('net', 21160.00), ('saving', 5550.00), ('spend', 140.00),
+            ('spend_transfer', 1200.00), ('support', 21450.00) $$,
+  'each flow, and net = 50,000 in − 140 spend − 1,200 by transfer − 21,450 support − 5,550 saving − 500 unfiled');
 reset role;
 
 select pg_temp.as_user('uid2');

@@ -1,5 +1,19 @@
 # Changelog
 
+## Tests and SMS template examples use synthetic Wio amounts — 2026-10-30
+
+### Backend (Supabase)
+
+- **security** The Wio SMS template examples (local transfer, international transfer, autopay, cashback, card payment with credit money, statement summary and notices) carried real alert amounts and statement dates with only the names swapped. Migration `20261030135148` replaces them with unrelated amounts (CLAUDE.md §14.5); pgTAP `38`, `62`, `63`, `64`, `65`, `67` and `68` use the same synthetic figures, including the cash-flow support and saving amounts and the RL360 premium.
+
+### Web
+
+- **security** `cash-flow.test.ts` and the `formatFlow` doc example use the synthetic support and saving amounts.
+
+### iOS
+
+- **security** LedgerKit's cash-flow fixture, `CashTests` and the `HoldingFlows` doc example use the synthetic amounts.
+
 ## Wio Credit statements and SMS count each transfer once — 2026-10-30
 
 ### Backend (Supabase)

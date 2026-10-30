@@ -64,16 +64,16 @@ select throws_ok(
   '23514', null, 'pays_from_current_account is for payments only');
 
 -- ── last month on Wio Credit ────────────────────────────────────────────────
-select pg_temp.sms('Payment of USD 2,000 (AED 7,400) was done at RI using your Wio Personal card 9207 with Credit money',
+select pg_temp.sms('Payment of USD 1,500 (AED 5,550) was done at RI using your Wio Personal card 9207 with Credit money',
                    pg_temp.at(pg_temp.v('close')::date - 10, '12:00'));
-select pg_temp.sms('Your local transfer of AED 468 to John Quincy Public from your account number 39XXXX9214 was processed.',
+select pg_temp.sms('Your local transfer of AED 436 to John Quincy Public from your account number 39XXXX9214 was processed.',
                    pg_temp.at(pg_temp.v('close')::date - 8, '12:00'));
 select is((select anchor_kind from public.v_account_balances where account_code = pg_temp.v('credit')), 'none',
           'before the statement SMS, Wio Credit has no anchor');
 select is((select private.net_worth(pg_temp.v('p'))->>'owed_complete'), 'false', 'so what is owed is incomplete');
 
 -- ── the due-today SMS is the statement ──────────────────────────────────────
-select pg_temp.set('due_sms', 'Your credit payment is due today. Statement amount: AED 19,082. Auto-pay will be processed at 9:00 PM tonight. You can adjust the repayment amount in the app before then.');
+select pg_temp.set('due_sms', 'Your credit payment is due today. Statement amount: AED 12,640. Auto-pay will be processed at 9:00 PM tonight. You can adjust the repayment amount in the app before then.');
 select is(pg_temp.sms(pg_temp.v('due_sms'), pg_temp.at(pg_temp.v('due')::date, '09:00'))->>'status', 'statement',
           'the due-today SMS makes a statement');
 select results_eq(
@@ -82,22 +82,22 @@ select results_eq(
      from public.statements st where st.profile_code = pg_temp.v('p') $$,
   $$ values (pg_temp.v('credit'), 'statement'::text, pg_temp.v('close')::date,
              date_trunc('month', pg_temp.v('close')::date)::date, pg_temp.v('close')::date, pg_temp.v('due')::date,
-             19082.00::numeric, true, true) $$,
-  'on Wio Credit: the cycle that closed at month end, due the day the SMS came, AED 19,082');
+             12640.00::numeric, true, true) $$,
+  'on Wio Credit: the cycle that closed at month end, due the day the SMS came, AED 12,640');
 select is((select parsed_fields->>'due_date' from public.sms_messages
            where profile_code = pg_temp.v('p') and body = pg_temp.v('due_sms')), pg_temp.v('due'),
           'the SMS records the due date it was given');
 select results_eq(
   $$ select anchor_kind, anchor_date, anchor_balance, outstanding_aed from public.v_account_balances
      where account_code = pg_temp.v('credit') $$,
-  $$ values ('statement'::text, pg_temp.v('close')::date, 19082.00::numeric, 19082.00::numeric) $$,
+  $$ values ('statement'::text, pg_temp.v('close')::date, 12640.00::numeric, 12640.00::numeric) $$,
   'v_account_balances anchors Wio Credit on it');
 select is((select private.net_worth(pg_temp.v('p'))->>'owed_complete'), 'true', 'what is owed is now complete');
 select is(pg_temp.sms(pg_temp.v('due_sms'), pg_temp.at(pg_temp.v('due')::date, '15:00'))->>'status', 'statement_exists',
           'a second due-today SMS the same day leaves the statement alone');
 
 -- ── the autopay: two legs, counted once ─────────────────────────────────────
-select pg_temp.set('autopay', 'You''ve made an autopay of AED 19,082 towards your Wio Credit balance.');
+select pg_temp.set('autopay', 'You''ve made an autopay of AED 12,640 towards your Wio Credit balance.');
 select is(pg_temp.sms(pg_temp.v('autopay'), pg_temp.at(pg_temp.v('due')::date, '21:00'))->>'status', 'created',
           'the autopay is captured');
 select pg_temp.set('payment', (select e.txn_code from public.transaction_evidence e join public.sms_messages s using (sms_code)
@@ -105,12 +105,12 @@ select pg_temp.set('payment', (select e.txn_code from public.transaction_evidenc
 select pg_temp.set('leg', (select txn_code from public.transactions where leg_of_txn_code = pg_temp.v('payment')));
 select results_eq(
   $$ select account_code, kind, direction, status, amount_aed from public.transactions where txn_code = pg_temp.v('payment') $$,
-  $$ values (pg_temp.v('credit'), 'payment'::text, 'credit'::text, 'pending'::text, 19082.00::numeric) $$,
+  $$ values (pg_temp.v('credit'), 'payment'::text, 'credit'::text, 'pending'::text, 12640.00::numeric) $$,
   'a payment on Wio Credit');
 select results_eq(
   $$ select account_code, kind, direction, status, amount_aed, txn_date, txn_at, description
      from public.transactions where txn_code = pg_temp.v('leg') $$,
-  $$ values (pg_temp.v('debit'), 'transfer_out'::text, 'debit'::text, 'posted'::text, 19082.00::numeric,
+  $$ values (pg_temp.v('debit'), 'transfer_out'::text, 'debit'::text, 'posted'::text, 12640.00::numeric,
              pg_temp.v('due')::date, pg_temp.at(pg_temp.v('due')::date, '21:00'), 'AUTOPAY WIO CREDIT'::text) $$,
   'and a posted transfer_out of the same money from the Wio debit account, at the same moment');
 select results_eq(
@@ -120,15 +120,15 @@ select results_eq(
 select results_eq(
   $$ select txn_code, flow, amount_aed from public.v_cash_flow
      where profile_code = pg_temp.v('p') and txn_code in (pg_temp.v('leg'), pg_temp.v('payment')) $$,
-  $$ values (pg_temp.v('leg'), 'card_repayment'::text, 19082.00::numeric) $$,
+  $$ values (pg_temp.v('leg'), 'card_repayment'::text, 12640.00::numeric) $$,
   'cash flow: one card repayment');
 select is((select outstanding_aed from public.v_account_balances where account_code = pg_temp.v('credit')), 0.00::numeric,
           'Wio Credit owes nothing after the autopay');
-select is((select balance_aed from public.v_bank_balances where account_code = pg_temp.v('debit')), 30918.00::numeric,
-          'the debit account is 19,082 lower');
+select is((select balance_aed from public.v_bank_balances where account_code = pg_temp.v('debit')), 37360.00::numeric,
+          'the debit account is 12,640 lower');
 select is((select (r->>'balance_after') from jsonb_array_elements(
              public.account_ledger(pg_temp.v('p'), pg_temp.v('debit'), pg_temp.v('close')::date - 10, pg_temp.v('due')::date + 1)->'rows') r
-           where r->>'txn_code' = pg_temp.v('leg')), '30918.00',
+           where r->>'txn_code' = pg_temp.v('leg')), '37360.00',
           'the account ledger shows the autopay with its running balance');
 select is((select (r->>'flow') from jsonb_array_elements(
              public.account_ledger(pg_temp.v('p'), pg_temp.v('debit'), pg_temp.v('close')::date - 10, pg_temp.v('due')::date + 1)->'rows') r
@@ -136,7 +136,7 @@ select is((select (r->>'flow') from jsonb_array_elements(
 
 -- The bank's next balance agrees: no drift.
 insert into public.balance_checkpoints (profile_code, account_code, as_of, balance, source, sms_code)
-values (pg_temp.v('p'), pg_temp.v('debit'), pg_temp.at(pg_temp.v('due')::date + 1, '08:00'), 30918, 'sms',
+values (pg_temp.v('p'), pg_temp.v('debit'), pg_temp.at(pg_temp.v('due')::date + 1, '08:00'), 37360, 'sms',
         (select sms_code from public.sms_messages where profile_code = pg_temp.v('p') and body = pg_temp.v('autopay')));
 select private.generate_wealth_insights(pg_temp.v('p'));
 select is((select count(*)::int from public.insights where profile_code = pg_temp.v('p') and kind = 'balance_drift'), 0,

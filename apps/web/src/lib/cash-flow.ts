@@ -112,7 +112,7 @@ export function monthFlows(rows: readonly CashFlowRow[], month: ISODate): MonthF
   return { groups, net: net ? net.amount_aed : null, hasMovements: groups.length > 0, partial: mine.some((r) => r.is_partial === true) };
 }
 
-/** "+AED 50,000" for money in, "−AED 23,700" for money out (a negative out, e.g. refunds, reads "+"). */
+/** "+AED 50,000" for money in, "−AED 21,450" for money out (a negative out, e.g. refunds, reads "+"). */
 export function formatFlow(amount: MoneyInput, direction: "in" | "out"): string {
   const n = toAmount(amount);
   if (n === null) return "—";
