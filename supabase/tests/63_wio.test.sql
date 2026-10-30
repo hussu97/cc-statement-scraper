@@ -42,8 +42,8 @@ select is(pg_temp.sms(pg_temp.v('pay_sib'), pg_temp.v('t0')::timestamptz)->>'sta
           'a local transfer from Wio Credit is captured');
 select results_eq(
   $$ select account_code, kind, direction, status, amount_aed, description from pg_temp.txn(pg_temp.v('pay_sib')) $$,
-  $$ values (pg_temp.v('credit'), 'transfer_out'::text, 'debit'::text, 'posted'::text, 468.00::numeric, 'JOHN QUINCY PUBLIC'::text) $$,
-  'on Wio Credit (…9214, a credit_card account), posted');
+  $$ values (pg_temp.v('credit'), 'transfer_out'::text, 'debit'::text, 'pending'::text, 468.00::numeric, 'JOHN QUINCY PUBLIC'::text) $$,
+  'on Wio Credit (…9214, a credit_card account), pending until its statement line (20261030131029)');
 insert into public.transactions (profile_code, account_code, status, kind, direction, txn_date, description,
                                  amount_original, currency_original, amount_aed, amount_source)
 values (pg_temp.v('p'), pg_temp.v('sib'), 'posted', 'payment', 'credit',

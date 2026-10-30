@@ -201,8 +201,9 @@ select set_eq(
     'private.india_accounts', 'private.broker_positions_portfolio', 'public.cash_flow_savings',
     -- a savings account shown as an investment (20261028082732): bank accounts only
     'public.track_account_as_investment',
-    -- a card payment's leg on the same bank's current account (20261020170933)
-    'private.add_payment_leg',
+    -- a card payment's leg on the same bank's current account (20261020170933), and whether a
+    -- card account's autopay is one (20261030131029: cards only)
+    'private.add_payment_leg', 'private.is_current_account_autopay',
     -- consolidated statements (20261021115816): a bank statement's account (bank accounts only),
     -- a card summary's account (cards only), the balance equation's direction (either)
     'private.resolve_bank_statement_account', 'private.apply_card_summaries', 'private.reconcile_statement',

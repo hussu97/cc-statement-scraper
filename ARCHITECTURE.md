@@ -608,9 +608,13 @@ Credit" alert is an `account_credit` described SALARY CREDIT, which a seed rule 
 **Wio** has a debit account and Wio Credit, a credit line (a `credit_card` account with an
 `account_ref`): an alert's account digits may name it, so Wio Credit's "local transfer" paying
 another card is a `transfer_out` there, paired with that card's payment through `card_transfers`
-and outside cash flow (debt moving between cards). The monthly autopay is a payment on Wio Credit
+and outside cash flow (debt moving between cards). The transfer is `pending` until the Wio
+credit statement's "<beneficiary> payment" line posts it (`20261030131029`); one the statement
+does not print is flagged `missing_from_statement`. The monthly autopay is a payment on Wio Credit
 drawn from the debit account: its template has `pays_from_current_account`, so
-`private.add_payment_leg` adds the other leg, a posted `transfer_out` on the bank's one active
+`private.add_payment_leg` adds the other leg (from the SMS, or from the statement's
+"Credit Repayment Autopay" line through trigger `transactions_payment_leg`; a manual "Credit
+Repayment" gets none), a posted `transfer_out` on the bank's one active
 current account with `transactions.leg_of_txn_code` = the payment, paired with it in
 `card_transfers` (one `card_repayment` in cash flow). The SMS is the payment's evidence (one
 active evidence row per SMS), so `refresh_transaction` derives the leg's facts from the payment
