@@ -1,5 +1,12 @@
 # Changelog
 
+## Wio Credit statements and SMS count each transfer once — 2026-10-30
+
+### Backend (Supabase)
+
+- **fix** A local transfer out of Wio Credit (the credit line paying another bank's card) is `pending` from its SMS until the Wio credit statement's "<beneficiary> payment" line posts it, like any card SMS. It was posted on arrival, on the assumption that a credit line's transfers never reach a statement; they do, so an SMS the line failed to match stayed as a second debit that reconciliation never flagged. It still pairs with the card payment it made while pending, and one the statement does not print is flagged `missing_from_statement`.
+- **feature** A Wio credit statement's "Credit Repayment Autopay" line gets its current-account leg (the debit from the Wio account, paired with the payment) even with no autopay SMS, through trigger `transactions_payment_leg` on any autopay from a bank whose autopay template has `pays_from_current_account`; an autopay SMS arriving after the statement adds no second leg. Existing autopay payments without a leg get one. pgTAP `80_wio_credit_statement`; `63_wio` expects the pending transfer.
+
 ## Hand-entered shares follow the market — 2026-10-30
 
 ### Backend (Supabase)
