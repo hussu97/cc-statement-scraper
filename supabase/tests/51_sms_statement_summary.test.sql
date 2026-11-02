@@ -126,7 +126,9 @@ select is((pg_temp.v('d')::jsonb#>>'{statement,from_sms}', pg_temp.v('d')::jsonb
 select is((select (anchor_stmt_code, outstanding_aed)::text from public.v_account_balances where account_code = pg_temp.v('acc')),
           '(' || pg_temp.v('stmt') || ',1005.00)',
           'outstanding = SMS closing + spends after the close + the close day''s pending charge (the 11th''s is inside it)');
-select is((select payment_status from public.v_statement_payments where stmt_code = pg_temp.v('stmt')), 'unpaid',
+-- Due 30 Oct 2026 with nothing paid: unpaid until then, overdue after.
+select is((select payment_status from public.v_statement_payments where stmt_code = pg_temp.v('stmt')),
+          case when (now() at time zone 'Asia/Dubai')::date > date '2026-10-30' then 'overdue' else 'unpaid' end,
           'the SMS statement has a payment status');
 
 -- ── reminders, unknown cycles, month ends ──────────────────────────────────
