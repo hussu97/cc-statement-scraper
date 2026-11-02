@@ -9,6 +9,7 @@
 
 | When | Lesson |
 |---|---|
+| 2026-11-02 | [An SMS that names no account is booked where the bank's statement books it: check statements before choosing a template's kind](#an-sms-that-names-no-account-is-booked-where-the-banks-statement-books-it-check-statements-before-choosing-a-templates-kind) |
 | 2026-10-30 | [Synthetic test data must not echo the real case it was built for](#synthetic-test-data-must-not-echo-the-real-case-it-was-built-for) |
 | 2026-10-29 | [A public repository publishes every commit, PR ref, log and release: redact with one map, prove it with a denylist scan](#a-public-repository-publishes-every-commit-pr-ref-log-and-release-redact-with-one-map-prove-it-with-a-denylist-scan) |
 | 2026-10-28 | [One SMS reaches the server once per automation: dedup by content at ingest, not by `client_msg_id`](#one-sms-reaches-the-server-once-per-automation-dedup-by-content-at-ingest-not-by-client_msg_id) |
@@ -53,6 +54,18 @@
 | 2026-10-08 | [Tooling defaults that don't work here: `gh` account, Supabase MCP, `localhost`, pip](#tooling-defaults-that-dont-work-here-gh-account-supabase-mcp-localhost-pip) |
 
 ## Lessons
+
+### An SMS that names no account is booked where the bank's statement books it: check statements before choosing a template's kind
+- **What went wrong**: a bank's standing-instruction SMS ("Your standing instructions of AED … to
+  <payee> …") names no card or account. It was seeded as an account debit, so it landed on the
+  bank account as a transfer out, hidden from spend. The bank charges it to its credit card, and
+  every earlier card statement listed it as a purchase on the same day.
+- **The rule**: before seeding a template for a message that names no account, look for the same
+  payments in that bank's statement lines (payee, day of month, amounts) and pick the `msg_kind`
+  that books it on that account. A card `purchase` with no card goes to the bank's one active
+  credit card account.
+- **Enforced by**: a check by eye when seeding a template; pgTAP `82_sms_unparsed_audit` pins
+  this one.
 
 ### Synthetic test data must not echo the real case it was built for
 - **What went wrong**: a pgTAP case written for a real holding reused its real share count
