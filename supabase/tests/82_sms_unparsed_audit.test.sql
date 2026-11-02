@@ -51,16 +51,28 @@ select pg_temp.set('out', pg_temp.sms(pg_temp.v('p'), 'FAB',
   E'Outward Remittance \nDebit  \nAccount XXXX3101 \nAED 40.00\nDate ' || pg_temp.v('d') || E' \nBalance AED 1194.50')->>'sms_code');
 select is((pg_temp.row(pg_temp.v('out'))).msg_kind, 'account_debit', 'a split "Outward Remittance / Debit" too');
 
--- ── 2. FAB standing instruction ─────────────────────────────────────────────
+-- ── 2. FAB standing instruction (20261102105907: charged to the credit card) ─
+-- A profile without a FAB card account: the charge has no account to go to.
+select pg_temp.set('si_q', pg_temp.sms(pg_temp.v('q'), 'FAB',
+  'Dear Customer, Your standing instructions of AED 55.00 to SAMPLE UTILITY for consumer number 1000000002 has been processed on '
+  || pg_temp.v('d') || '.')->>'sms_code');
+select ok(exists (select 1 from public.match_reviews where subject_code = pg_temp.v('si_q') and reason = 'unknown_card'),
+  'a standing instruction with no FAB card account asks which card');
+insert into public.accounts (profile_code, bank_code, nickname) values (pg_temp.v('p'), 'FAB', 'FAB card')
+returning pg_temp.set('fabcard', account_code);
 select pg_temp.set('si', pg_temp.sms(pg_temp.v('p'), 'FAB',
   'Dear Customer, Your standing instructions of AED 123.40 to SAMPLE UTILITY for consumer number 1000000001 has been processed on '
   || pg_temp.v('d') || '.')->>'sms_code');
 select results_eq(
   $$ select parse_status, msg_kind, amount, description, account_code, parsed_fields ? 'counterparty_ref'
      from public.sms_messages where sms_code = pg_temp.v('si') $$,
-  $$ values ('parsed'::text, 'account_debit'::text, 123.40::numeric(14,2), 'SAMPLE UTILITY'::text, pg_temp.v('fab'), false) $$,
-  'a standing instruction is a debit of the FAB account to its payee, without the consumer number as a transfer ref');
-select is((pg_temp.txn(pg_temp.v('si'))).account_code, pg_temp.v('fab'), 'and a transaction on it');
+  $$ values ('parsed'::text, 'purchase'::text, 123.40::numeric(14,2), 'SAMPLE UTILITY'::text, pg_temp.v('fabcard'), false) $$,
+  'a standing instruction is a purchase on the FAB credit card from its payee, not a debit of the FAB bank account');
+select results_eq(
+  $$ select account_code, kind, direction, amount_aed from public.transactions
+     where txn_code = (pg_temp.txn(pg_temp.v('si'))).txn_code $$,
+  $$ values (pg_temp.v('fabcard'), 'purchase'::text, 'debit'::text, 123.40::numeric(14,2)) $$,
+  'and a card purchase on that account');
 
 -- ── 3. Liv: waits for an ENBD bank account, then lands on it ─────────────────
 select pg_temp.set('liv', pg_temp.sms(pg_temp.v('p'), 'Liv',

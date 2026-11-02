@@ -1,5 +1,11 @@
 # Changelog
 
+## FAB standing instructions are credit card purchases — 2026-11-02
+
+### Backend (Supabase)
+
+- **fix** FAB's standing-instruction SMS is a purchase on the FAB credit card, which is where the bank charges it (its statement lists it as "FAB - <payee>"), not a debit of the FAB bank account (migration `20261102105907`). The SMS names no card, so it goes to the bank's one active credit card account, or to an `unknown_card` review. Standing instructions that `20261102080341` put on a bank account as transfers out move, with their transactions, to that card account. pgTAP `82_sms_unparsed_audit`.
+
 ## Unparsed SMS: lost formats read, noise ignored, one proposal per format — 2026-11-02
 
 ### Backend (Supabase)
