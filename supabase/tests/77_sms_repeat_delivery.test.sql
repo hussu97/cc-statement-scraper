@@ -93,7 +93,7 @@ select is((select count(*)::int from public.balance_checkpoints where account_co
           'and two FAB checkpoints (salary, transfer out)');
 
 -- ── an unparsed alert twice goes to the LLM fallback once ───────────────────────────────────
-select pg_temp.set('odd', 'Reminder: Please update your new Covered Card details with the merchants you pay by card.');
+select pg_temp.set('odd', 'Reminder: your branch appointment is booked for tomorrow at 10:00.');
 select pg_temp.set('odd1', pg_temp.sms('SIB', pg_temp.v('odd'), pg_temp.at(200))::text);
 select pg_temp.set('odd2', pg_temp.sms('SIB', pg_temp.v('odd'), pg_temp.at(200) + interval '3 seconds')::text);
 select is(pg_temp.v('odd1')::jsonb->>'status', 'unparsed', 'the first copy is unparsed');

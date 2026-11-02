@@ -106,7 +106,7 @@ Deno.test("sms_fallback: a message without a sender is skipped before the LLM, n
   assertEquals(llmCalls - callsBefore, 0, "no model call");
 });
 
-Deno.test("sms_fallback: propose_sms_template 22023 (sender not the bank's) dead-letters once", async () => {
+Deno.test("sms_fallback: propose_sms_template 22023 (a template that fails its example) dead-letters once", async () => {
   answer = {
     bank_code: "ADCB",
     name: "purchase alert",
@@ -122,15 +122,16 @@ Deno.test("sms_fallback: propose_sms_template 22023 (sender not the bank's) dead
       worker_sms_context: () => ({
         data: {
           parse_status: "unparsed",
-          sender: "SPOOF",
+          sender: "ADCBAlert",
           body: "synthetic",
           banks: [{ bank_code: "ADCB", senders: ["ADCBAlert"] }],
         },
         error: null,
       }),
+      reuse_sms_proposal: () => ({ data: null, error: null }),
       propose_sms_template: () => ({
         data: null,
-        error: { code: "22023", message: "sender SPOOF is not a sender of ADCB" },
+        error: { code: "22023", message: "sms template does not match its example" },
       }),
       queue_to_dlq: () => ({ data: null, error: null }),
     },
@@ -144,4 +145,79 @@ Deno.test("sms_fallback: propose_sms_template 22023 (sender not the bank's) dead
   const dlq = db.rpcCalls("queue_to_dlq");
   assertEquals(dlq.length, 1, "no retry");
   assertEquals(dlq[0].p_reason, "PROPOSE_22023: propose_sms_template sqlstate 22023", "no SMS text in the reason");
+});
+
+Deno.test("sms_fallback: a message an open proposal already reads joins it, without an LLM call", async () => {
+  const callsBefore = llmCalls;
+  const db = new FakeDb({
+    rpcs: {
+      worker_sms_context: () => ({
+        data: {
+          parse_status: "unparsed",
+          sender: "FAB",
+          body: "synthetic",
+          banks: [{ bank_code: "FAB", senders: ["FAB"] }],
+        },
+        error: null,
+      }),
+      reuse_sms_proposal: () => ({ data: "tpl_01k4dn3c7qgdx1x3cnq438bxv1", error: null }),
+      queue_delete: () => ({ data: true, error: null }),
+    },
+  });
+  const r = await processSmsFallback(db.asDb(), {
+    msg_id: 7,
+    read_ct: 1,
+    message: { sms_code: "sms_01k4rcavc3xxeanad83pcwbwgd" },
+  });
+  assertEquals(r, { queue: "sms_fallback", outcome: "done", code: "PROPOSAL_REUSED" });
+  assertEquals(db.rpcCalls("reuse_sms_proposal")[0].p_sms_code, "sms_01k4rcavc3xxeanad83pcwbwgd");
+  assertEquals(db.rpcCalls("propose_sms_template").length, 0);
+  assertEquals(db.rpcCalls("queue_delete").length, 1);
+  assertEquals(llmCalls - callsBefore, 0, "no model call");
+});
+
+Deno.test("sms_fallback: the LLM's 'not a transaction' is recorded on the message", async () => {
+  answer = {
+    bank_code: "FAB",
+    name: "biller receipt",
+    sender_pattern: ".*",
+    body_pattern: "payment received",
+    field_groups: {
+      amount: null,
+      currency: null,
+      last4: null,
+      merchant: null,
+      date: null,
+      time: null,
+      available: null,
+    },
+    date_format: null,
+    msg_kind: "other",
+    expect: { amount: null },
+  };
+  const db = new FakeDb({
+    rpcs: {
+      worker_sms_context: () => ({
+        data: {
+          parse_status: "unparsed",
+          sender: "SomeBiller",
+          body: "synthetic",
+          banks: [{ bank_code: "FAB", senders: ["FAB"] }],
+        },
+        error: null,
+      }),
+      reuse_sms_proposal: () => ({ data: null, error: null }),
+      mark_sms_not_transaction: () => ({ data: true, error: null }),
+      queue_delete: () => ({ data: true, error: null }),
+    },
+  });
+  const r = await processSmsFallback(db.asDb(), {
+    msg_id: 8,
+    read_ct: 1,
+    message: { sms_code: "sms_01k4rcavc3xxeanad83pcwbwge" },
+  });
+  assertEquals(r, { queue: "sms_fallback", outcome: "skipped", code: "NOT_A_TRANSACTION" });
+  assertEquals(db.rpcCalls("mark_sms_not_transaction")[0].p_sms_code, "sms_01k4rcavc3xxeanad83pcwbwge");
+  assertEquals(db.rpcCalls("queue_delete").length, 1);
+  assertEquals(db.rpcCalls("queue_to_dlq").length, 0);
 });

@@ -4711,6 +4711,10 @@ export type Database = {
         }
         Returns: string
       }
+      mark_sms_not_transaction: {
+        Args: { p_sms_code: string }
+        Returns: boolean
+      }
       merchant_context: {
         Args: { p_merchant_code: string; p_profile_code: string }
         Returns: Json
@@ -4913,6 +4917,7 @@ export type Database = {
         Args: { p_review_code: string }
         Returns: undefined
       }
+      reuse_sms_proposal: { Args: { p_sms_code: string }; Returns: string }
       review_context: {
         Args: { p_profile_code: string; p_review_codes: string[] }
         Returns: {

@@ -39,7 +39,7 @@ insert into cases values
  ('ENBD recovery', 'EmiratesNBD', 'Dear Bob, you''ve initiated a request to recover access to your ENBD X profile. If this wasn''t you, please call +971 600 54 0000 and report fraud.',
   'other', 'ENBD account recovery notice (ignored)', '{}'),
  ('ENBD mini statement (existing)', 'EmiratesNBD', 'Emirates NBD Credit Card Mini Stmt for Card ending 9201: Statement date 12/09/26. Total Amt Due AED 8007.80, Due Date 07/10/26. Min Amt Due AED 474.93',
-  'other', 'ENBD credit card mini statement (ignored)', '{}');
+  'statement_summary', 'ENBD credit card mini statement', '{"statement_date":"2026-09-12"}');
 
 select is(m.msg_kind, c.kind, c.label || ': kind')
 from cases c left join lateral private.match_sms_template(c.sender, c.body) m on true

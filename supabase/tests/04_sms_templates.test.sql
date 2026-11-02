@@ -24,7 +24,7 @@ $$, '22023', null, 'a purchase template whose example yields no amount is reject
 
 select is((select sms_senders from public.banks where bank_code = 'ADCB'), array['ADCBAlert'], 'ADCB real sender id');
 select is((select sms_senders from public.banks where bank_code = 'FAB'), array['FAB'], 'FAB real sender id');
-select is((select sms_senders from public.banks where bank_code = 'ENBD'), array['EmiratesNBD'], 'ENBD real sender id');
+select is((select sms_senders from public.banks where bank_code = 'ENBD'), array['EmiratesNBD', 'Liv'], 'ENBD real sender ids (Liv is its digital bank)');
 select is((select sms_senders from public.banks where bank_code = 'SIB'), array['SIB'], 'SIB real sender id');
 
 -- ── every real sample → intended template, kind and fields ─────────────────
@@ -84,7 +84,8 @@ insert into cases values
   'refund', 'ENBD credit card refund',
   '{"amount":"91.00","currency":"AED","last4":"9219","merchant":"NAMSHI","available":"19532.39"}'),
  ('ENBD e', 'EmiratesNBD', 'Emirates NBD Credit Card Mini Stmt for Card ending 9219: Statement date 28/08/26. Total Amt Due AED 48.77, Due Date 22/09/26. Min Amt Due AED 48.77',
-  'other', 'ENBD credit card mini statement (ignored)', '{"last4":"9219"}'),
+  'statement_summary', 'ENBD credit card mini statement',
+  '{"last4":"9219","statement_date":"2026-08-28","amount":"48.77","due_date":"2026-09-22","min_due":"48.77"}'),
  ('ENBD f', 'EmiratesNBD', 'Payment for Credit Card ending 9219 is due on 22/09/26. Total Amt - AED 48.77; Min Amt - AED 48.77. Please pay by due date to avoid charges.',
   'other', 'ENBD credit card due reminder (ignored)', '{"last4":"9219"}'),
  ('ENBD g', 'EmiratesNBD', 'A payment on your card needs confirmation. Please check your Emirates NBD app.',

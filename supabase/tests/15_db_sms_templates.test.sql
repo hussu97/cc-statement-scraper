@@ -60,8 +60,12 @@ select is((select sender_pattern || ' ' || scope_profile_code from public.sms_te
           '^(ADCBAlert) ' || pg_temp.v('pa'),
           'the proposal''s sender pattern comes from the bank''s senders and it is scoped to the profile');
 select pg_temp.set('sx', pg_temp.sms(pg_temp.v('pa'), 'SomeoneElse', pg_temp.weird('1.00'))->>'sms_code');
-select throws_ok($$ select public.propose_sms_template(pg_temp.v('sx'), pg_temp.proposal()) $$, '22023', null,
-                 'a proposal for a message from an unknown sender is rejected');
+select is(public.propose_sms_template(pg_temp.v('sx'), pg_temp.proposal()), null,
+          'no template is proposed for a message from a sender the bank doesn''t list');
+select is((select candidates from public.match_reviews
+           where subject_code = pg_temp.v('sx') and reason = 'unparsed_sms' and status = 'open'),
+          jsonb_build_array(jsonb_build_object('bank_code', 'ADCB', 'unknown_sender', 'SomeoneElse')),
+          'it gets an open review naming the sender instead');
 
 select pg_temp.as_user(pg_temp.v('ua'));
 set local role authenticated;

@@ -320,7 +320,8 @@ or `failed` with `reason = error:<sqlstate>` when processing raised (the message
 `parse_status = failed`). Clients (the iOS outbox) park only that message. `process_sms`:
 
 0. A sender starting `AD-` (the TDRA prefix UAE senders must put on adverts; no alert uses it)
-   is stored `ignored` with `ignore_reason = 'promotion'`, before any template or LLM call.
+   or ending `-P` (India's DLT suffix for promotional headers) is stored `ignored` with
+   `ignore_reason = 'promotion'`, before any template or LLM call.
 1. `match_sms_template` takes the first active template by `priority` whose sender and body
    regex match. A template whose date fields don't form a real date (`31/02/26`) does not
    apply; it never raises.
@@ -1193,7 +1194,15 @@ Bank SMS → Shortcuts automation → LogBankSMSIntent (openAppWhenRun = false, 
 - **LLM fallback.** An `unparsed` message is sent to Claude, which proposes a template. The
   proposal is stored **inactive** (`source = llm`) with the message as its example, so it must
   parse before it can be saved. An `unparsed_sms` review opens, and the template goes live only
-  when an owner approves it (`set_sms_template_active`).
+  when an owner approves it (`set_sms_template_active`). Before calling Claude the worker asks
+  `reuse_sms_proposal` for an open proposal of the same profile that already reads the message:
+  the message joins it with a review of its own, so one format makes one proposal. When a
+  message parses, its other open `unparsed_sms` reviews close (`sms_parsed`) and a proposal left
+  with no open review is deleted. A proposal from a sender the bank doesn't list makes no
+  template: the message gets an `unparsed_sms` review naming the sender (`unknown_sender`), to
+  be added to `banks.sms_senders`. When Claude finds the message is not a transaction (a
+  biller's receipt, a balance notice), `mark_sms_not_transaction` stores it `ignored`
+  (`llm_not_txn`).
 - **Privacy.** SMS bodies are never logged or sent to Sentry.
 
 ---

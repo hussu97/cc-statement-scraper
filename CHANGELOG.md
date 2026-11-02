@@ -1,5 +1,15 @@
 # Changelog
 
+## Unparsed SMS: lost formats read, noise ignored, one proposal per format — 2026-11-02
+
+### Backend (Supabase)
+
+- **fix** Formats that were dropped are now read (migration `20261102080341`): a FAB remittance whose first line breaks ("Inward Remittance / Credit") was hidden by the FAB catch-all and is now a credit or debit of the account it names; FAB's standing-instruction debit is an account debit described by its payee (the consumer number is not read as a transfer reference); Liv, Emirates NBD's digital bank, texts as "Liv", which joins ENBD's senders with its debit-card purchase template (the alert waits as `no_bank_account` until the profile has an ENBD bank account). Messages an earlier rule had stored are re-run.
+- **feature** Emirates NBD's mini statement is a statement summary. Templates gain a `statement_date` field, and `apply_sms_statement` takes the cycle from the date the SMS prints instead of the account's close day.
+- **fix** Noise no longer stays `unparsed`: an Indian sender ending `-P` (DLT promotional) is a promotion; SIB's "update your new Covered Card details" reminder is an ignored notice; a message the LLM fallback finds is not a transaction is stored `ignored` (`llm_not_txn`, `mark_sms_not_transaction`). Unparsed messages that already went past the LLM are queued again, 15 minutes after the migration.
+- **fix** One LLM proposal per format: `reuse_sms_proposal` attaches a message to an open proposal that reads it before any LLM call. A message that parses closes its other open `unparsed_sms` reviews, and a proposal left without an open review is deleted. A proposal from a sender the bank doesn't list opens an `unparsed_sms` review naming the sender instead of dead-lettering. pgTAP `82_sms_unparsed_audit`; `04`, `15`, `35`, `38` and `77` follow the new behaviour.
+- **feature** The `worker`'s `sms_fallback` calls `reuse_sms_proposal` before Claude and `mark_sms_not_transaction` when Claude finds no transaction (`llm_jobs_test`).
+
 ## SIB SMS from both card systems are read — 2026-10-30
 
 ### Backend (Supabase)

@@ -152,6 +152,14 @@ export async function processSmsFallback(svc: Db, msg: QueueMessage): Promise<Jo
     await queueDelete(svc, SMS_QUEUE, msg.msg_id);
     return { queue: SMS_QUEUE, outcome: "skipped", code: "NO_SENDER" };
   }
+  // A proposal already waiting for approval may read this message too: it joins that proposal's
+  // review instead of the LLM making the same format again.
+  const { data: reused, error: reuseErr } = await svc.rpc("reuse_sms_proposal", { p_sms_code: smsCode });
+  if (reuseErr) throw new Error(`reuse_sms_proposal failed (${reuseErr.code})`);
+  if (reused) {
+    await queueDelete(svc, SMS_QUEUE, msg.msg_id);
+    return { queue: SMS_QUEUE, outcome: "done", code: "PROPOSAL_REUSED" };
+  }
   const banks = (ctx.banks ?? []) as { bank_code: string; senders: string[] }[];
   const bankCodes = banks.map((b) => b.bank_code);
   if (bankCodes.length === 0) {
@@ -169,8 +177,10 @@ export async function processSmsFallback(svc: Db, msg: QueueMessage): Promise<Jo
     proposal = validateTemplateProposal(raw, bankCodes);
   } catch (e) {
     if (e instanceof LlmNotApplicable) {
-      // Not a card transaction (OTP, promotion, the e2e probe): nothing to learn. The SMS
-      // stays 'unparsed' for the review UI; no DLQ, no alert.
+      // Not a transaction (a biller's receipt, a balance notice, the e2e probe): nothing to
+      // learn. The SMS is stored ignored ('llm_not_txn'); no DLQ, no alert.
+      const { error: markErr } = await svc.rpc("mark_sms_not_transaction", { p_sms_code: smsCode });
+      if (markErr) throw new Error(`mark_sms_not_transaction failed (${markErr.code})`);
       await queueDelete(svc, SMS_QUEUE, msg.msg_id);
       return { queue: SMS_QUEUE, outcome: "skipped", code: "NOT_A_TRANSACTION" };
     }
@@ -186,9 +196,9 @@ export async function processSmsFallback(svc: Db, msg: QueueMessage): Promise<Jo
   const { error: propErr } = await svc.rpc("propose_sms_template", { p_sms_code: smsCode, p_template: proposal });
   if (propErr) {
     // The DB validates the template against this very message; its error text quotes
-    // the SMS, so only the SQLSTATE is ever recorded. 22023 includes "the sender is not
-    // one of the bank's senders" (the DB ignores the model's sender regex): retrying the
-    // same message can never succeed, so these dead-letter once.
+    // the SMS, so only the SQLSTATE is ever recorded. 22023 is a template that fails its own
+    // example: retrying the same message can never succeed, so these dead-letter once. (A
+    // sender the bank doesn't list is not an error: the DB opens a review and returns null.)
     const code = `PROPOSE_${propErr.code ?? "ERROR"}`;
     const reason = `propose_sms_template sqlstate ${propErr.code ?? "unknown"}`;
     if (["22023", "23503", "23514", "2201B", "22P02"].includes(propErr.code ?? "")) {
