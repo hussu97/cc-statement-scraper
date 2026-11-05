@@ -131,8 +131,10 @@ PY
 
 echo
 echo "==> Staging Ledger build $BUILD ($COMMIT) on release $RELEASE_TAG"
+# --target: GitHub makes the tag on its own main. Without it gh uses a local tag of the same
+# name, and the clone's `ios-ledger-staged` from before the history rewrite must never be pushed.
 gh release view "$RELEASE_TAG" >/dev/null 2>&1 || \
-  gh release create "$RELEASE_TAG" \
+  gh release create "$RELEASE_TAG" --target main \
     --title "Staged Ledger iOS build" \
     --notes "Rolling artifacts consumed by the Ledger TestFlight workflow. Replaced on every release build; not a version history." \
     --prerelease
