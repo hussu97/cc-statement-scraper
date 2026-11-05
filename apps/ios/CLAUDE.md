@@ -35,6 +35,10 @@ and §11; layout and setup are in [README.md](README.md).
 - The capture intents' parameters are all optional: a required one that arrives empty makes
   iOS ask for a value mid-automation instead of running the intent (build 32 hang, Sentry
   7796165023). LedgerKit refuses empty input (`BackgroundIntentParameterGuardTests`).
+- The capture intents return a value and no dialog (no `ProvidesDialog`, `requestValue`,
+  `requestConfirmation`): a background automation can't show one, and iOS 26 posts the dropped
+  dialog as an error notification on every run. Tell the person through `LocalNotifications`
+  (same guard).
 - Never log, print, breadcrumb or persist an SMS body outside the App Group outbox. Sentry
   scrubbing is tested in `TelemetryScrubberTests`.
 

@@ -9,6 +9,7 @@
 
 | When | Lesson |
 |---|---|
+| 2026-11-05 | [A background automation can't show a dialog: capture intents return a value and notify](#a-background-automation-cant-show-a-dialog-capture-intents-return-a-value-and-notify) |
 | 2026-11-02 | [An SMS that names no account is booked where the bank's statement books it: check statements before choosing a template's kind](#an-sms-that-names-no-account-is-booked-where-the-banks-statement-books-it-check-statements-before-choosing-a-templates-kind) |
 | 2026-10-30 | [Synthetic test data must not echo the real case it was built for](#synthetic-test-data-must-not-echo-the-real-case-it-was-built-for) |
 | 2026-10-29 | [A public repository publishes every commit, PR ref, log and release: redact with one map, prove it with a denylist scan](#a-public-repository-publishes-every-commit-pr-ref-log-and-release-redact-with-one-map-prove-it-with-a-denylist-scan) |
@@ -54,6 +55,17 @@
 | 2026-10-08 | [Tooling defaults that don't work here: `gh` account, Supabase MCP, `localhost`, pip](#tooling-defaults-that-dont-work-here-gh-account-supabase-mcp-localhost-pip) |
 
 ## Lessons
+
+### A background automation can't show a dialog: capture intents return a value and notify
+- **What went wrong**: Log Bank SMS returned a one-line dialog on every run. Run by a personal
+  automation in the background, iOS 26 had no handler for it and posted "ToolKit client
+  implementation did not implement a ToolDialogHandler and dropped an incoming dialog request…"
+  as a notification. The SMS itself was logged; the person saw an error anyway.
+- **The rule**: an intent an automation runs in the background returns a value only: no
+  `ProvidesDialog`, `requestValue`, `requestConfirmation` or `requestDisambiguation`. Anything the
+  person must know goes through `LocalNotifications`.
+- **Enforced by**: LedgerKit `BackgroundIntentParameterGuardTests` ("the capture intents return
+  no dialog").
 
 ### An SMS that names no account is booked where the bank's statement books it: check statements before choosing a template's kind
 - **What went wrong**: a bank's standing-instruction SMS ("Your standing instructions of AED … to

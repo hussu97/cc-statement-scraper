@@ -220,12 +220,16 @@ first one you own — never simply the ledger on screen. PDFs shared to "Add to 
    returns while the process runs (`NWPathMonitor`), or by a background task iOS starts once
    there is a network (`OutboxSync`; Info.plist `BGTaskSchedulerPermittedIdentifiers`,
    `UIBackgroundModes` fetch + processing). `received_at` stays the time the Shortcut ran.
-5. Shortcuts shows a one-line result naming the ledger and, for unknown cards or held
-   matches, "Needs a look in Review" (Overview → Needs attention). The body is never logged,
-   echoed or sent to Sentry. The intent never opens the app: it runs in the background for every
-   alert. To jump to the screen, open `ledger://review` (deep link, handled by `AppLink`): in
-   Shortcuts, add **Open URL** with `ledger://review` (e.g. after an **If** on the intent's
-   result being `delivered_unknown_card` or `delivered_held`), or tap it from Notes or Safari.
+5. The intent shows nothing: it returns the outcome as its value (`delivered_parsed`,
+   `delivered_unknown_card`, …) and no dialog, because a background automation has nothing to
+   show one with (iOS 26 posts "…did not implement a ToolDialogHandler…" for every dropped
+   dialog; guarded by `BackgroundIntentParameterGuardTests`). What needs the person (an unknown
+   card, a held match, signed out, not sent) comes as a local notification, and every run's
+   one-line outcome is under Settings → SMS → **Recent captures**. The body is never logged,
+   echoed or sent to Sentry. The intent never opens the app. To jump to Review, open
+   `ledger://review` (deep link, handled by `AppLink`): in Shortcuts, add **Open URL** with
+   `ledger://review` (e.g. after an **If** on the intent's result being
+   `delivered_unknown_card` or `delivered_held`), or tap it from Notes or Safari.
 
 ## Card payment capture
 
@@ -243,7 +247,7 @@ Tap-to-pay payments reach Bank Ledger through a second Shortcuts personal automa
    Amount. The in-app guide is Settings → Card names for payment shortcut → **Set up card payments**.
 3. In Bank Ledger, Settings → **Card names for payment shortcut** → Card names: type each card's
    name exactly as the phone's card shows it (capitals don't matter). If a payment arrives first,
-   Shortcuts shows "no card is named “…”" with the name it passed; setting that name files the
+   a "Card not recognised" notification names the card it passed; setting that name files the
    waiting payment on the card.
 
 Enabling it for a card that also sends SMS alerts is safe: the server links the alert and the

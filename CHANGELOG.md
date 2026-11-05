@@ -1,5 +1,11 @@
 # Changelog
 
+## Log Bank SMS and Log Card Payment show no dialog — 2026-11-05
+
+### iOS
+
+- **fix** The capture intents return their outcome as a value and no dialog. A personal automation runs them in the background with nothing to show a dialog, and iOS 26 posted "ToolKit client implementation did not implement a ToolDialogHandler…" as a notification after each run (the message was still logged). What needs the person still comes as a local notification; each run's outcome is in Settings → SMS → Recent captures. `BackgroundIntentParameterGuardTests` refuses a dialog in either intent.
+
 ## FAB standing instructions are credit card purchases — 2026-11-02
 
 ### Backend (Supabase)
