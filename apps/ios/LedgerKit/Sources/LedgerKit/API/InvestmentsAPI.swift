@@ -25,6 +25,16 @@ public protocol InvestmentsAPI: Sendable {
     func closeHolding(profileCode: String, holdingCode: String) async throws
     /// `rpc('holding_detail')`: a holding's active flows (with the paying transaction) and recorded values.
     func holdingDetail(profileCode: String, holdingCode: String) async throws -> HoldingDetail
+    /// Uploads a file to `upload.storagePath` in the private `holding-attachments` bucket (its
+    /// content type, never overwriting), then `rpc('add_holding_attachment')` records it; returns
+    /// the attachment code. An object whose record fails is removed again (owners;
+    /// SupabaseLedgerAPI+HoldingAttachments.swift).
+    func uploadHoldingAttachment(profileCode: String, upload: HoldingAttachmentUpload) async throws -> String
+    /// A short-lived signed URL for an attachment's `storage_path` (members).
+    func holdingAttachmentURL(path: String) async throws -> URL
+    /// `rpc('remove_holding_attachment')`, then deletes the object at the path it returns (owners;
+    /// P0002 when already removed).
+    func removeHoldingAttachment(profileCode: String, attachmentCode: String) async throws
     /// `rpc('holding_returns')`: per holding and in total for a period (start, added, income, growth, %, XIRR).
     func holdingReturns(profileCode: String, period: ReturnsPeriod) async throws -> HoldingReturns
     /// `rpc('record_holding_value')`: a plan's or broker account's value, or a unit price (owners).

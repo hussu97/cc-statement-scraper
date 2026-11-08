@@ -6,6 +6,7 @@ import SwiftUI
 /// payment naming its description and bank. Owners add a flow, swipe one to remove it (or unlink
 /// its payment), update the value and edit or close the holding. A savings account instead shows
 /// the bank account it is valued at (`SavingsAccountSection`): its flows are that account's.
+/// Attachments (invoices, certificates) close the list (`HoldingAttachmentsSection`).
 /// `HoldingDetailModel` and `HoldingActions` decide.
 struct HoldingDetailView: View {
     let investments: InvestmentsModel
@@ -20,6 +21,7 @@ struct HoldingDetailView: View {
     @State private var error: String?
     @State private var period: ReturnsPeriod = .all
     @State private var showAllValues = false
+    @State private var attachmentRequests = AttachmentRequests()
     @Environment(\.dismiss) private var dismiss
     @Environment(BankCatalog.self) private var catalog: BankCatalog?
     @Environment(CashModel.self) private var cash
@@ -66,6 +68,8 @@ struct HoldingDetailView: View {
         .sheet(item: $updating) { draft in
             UpdateValueSheet(model: model, draft: draft, profileCode: profileCode, canEdit: canEdit)
         }
+        .modifier(HoldingAttachmentPresentations(model: model, profileCode: profileCode, canEdit: canEdit,
+                                                 requests: $attachmentRequests))
         .alert("Couldn't change it", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -110,6 +114,7 @@ struct HoldingDetailView: View {
             }
             if model.showsValueHistory(for: holding) { valuesSection(holding) }
             if holding.kind.listsFlows || !model.flows.isEmpty { flowsSection(holding) }
+            HoldingAttachmentsSection(model: model, canEdit: canEdit, requests: $attachmentRequests)
         }
         .scrollContentBackground(.hidden)
     }

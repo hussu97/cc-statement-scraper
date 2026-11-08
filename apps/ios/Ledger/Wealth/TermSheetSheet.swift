@@ -62,8 +62,9 @@ struct TermSheetRow: View {
     }
 }
 
-/// PDF bytes for `ShareLink`, exported as a `.pdf` file named after the original.
-private struct SharedPDF: Transferable {
+/// PDF bytes for `ShareLink`, exported as a `.pdf` file named after the original (term sheets,
+/// holding attachments).
+struct SharedPDF: Transferable {
     let data: Data
     let filename: String
 

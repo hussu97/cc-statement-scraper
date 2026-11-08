@@ -422,6 +422,31 @@ final class StubAPI: LedgerAPI, @unchecked Sendable {
         if let savingsError { throw savingsError }
         return savingsFixture
     }
+    // MARK: Holding attachments: each upload and removal, and the signed URLs
+    /// Thrown by the attachment writes (upload, remove) when set.
+    var attachmentError: (any Error)?
+    private(set) var uploadedAttachments: [HoldingAttachmentUpload] = []
+    private(set) var removedAttachments: [String] = []
+    /// `holdingAttachmentURL`'s answer by storage path; a missing path is a storage "not found".
+    var attachmentURLs: [String: URL] = [:]
+    private(set) var attachmentURLRequests: [String] = []
+    func uploadHoldingAttachment(profileCode: String, upload: HoldingAttachmentUpload) async throws -> String {
+        if let error = lock.withLock({ attachmentError }) { throw error }
+        lock.withLock { uploadedAttachments.append(upload) }
+        return "hat_01k9z0000000000000000000aa"
+    }
+    func holdingAttachmentURL(path: String) async throws -> URL {
+        let answer = lock.withLock {
+            attachmentURLRequests.append(path)
+            return attachmentURLs[path]
+        }
+        guard let answer else { throw HoldingAttachments.Failure.storage("Object not found") }
+        return answer
+    }
+    func removeHoldingAttachment(profileCode: String, attachmentCode: String) async throws {
+        if let error = lock.withLock({ attachmentError }) { throw error }
+        lock.withLock { removedAttachments.append(attachmentCode) }
+    }
     // MARK: Structured notes: scripted answers, and each write
     /// `structured_notes_summary`'s answer; nil throws (offline).
     var notesFixture: [NoteSummary]?

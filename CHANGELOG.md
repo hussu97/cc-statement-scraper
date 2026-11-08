@@ -10,6 +10,10 @@
 
 - **feature** A holding's page has an **Attachments** card: photo and PDF tiles (JPEG/PNG/WebP previewed; HEIC and PDF as a file), opened full size in the app with Download. The owner adds files (several at once; type, 10 MB and 20-per-holding checked before upload) and removes them with a confirmation. Files load through the signed-in user's Storage access, never a public URL. Tests: `holding-attachments.test.ts`, `holdings.test.ts`.
 
+### iOS
+
+- **feature** A holding's screen ends with **Attachments** (`holding_detail.attachments`, newest first, with date and size). Tapping one opens it from memory through a short-lived signed URL: a photo full screen with pinch to zoom, a PDF in PDFKit, each with Share. Owners add a photo from the library (PhotosPicker, no permission prompt; JPEG, longer side at most 4096 px) or a PDF from Files, checked for type, 10 MB and 20 files first, and swipe or long-press to remove one. The rules live in LedgerKit (`HoldingAttachments`, `HoldingDetailModel+Attachments`, `HoldingAttachmentViewer`), tested by `HoldingAttachmentsTests`. Written without a Swift toolchain: `swift test` and the app build run first in the Mac's pre-push hook, and `xcodegen generate` may renumber the two new view files in the project.
+
 ## Log Bank SMS and Log Card Payment show no dialog — 2026-11-05
 
 ### iOS

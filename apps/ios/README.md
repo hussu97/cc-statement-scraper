@@ -18,6 +18,13 @@ per request, `Paginator`), plus the **Log Bank SMS** and **Log Card Payment** Ap
   reason instead of blocking the rest. Tapping a cycle opens its **detail** (header, printed totals,
   reconciliation checks in sentences, debit and credit lines; a matched line opens the transaction
   sheet); tapping an upload opens its processing log.
+- **Holding attachments** (Investments → a holding → Attachments): invoice photos and PDFs,
+  certificates, newest first with their date and size (`holding_detail.attachments`). Tapping one
+  opens it from memory (a short-lived signed URL from the private `holding-attachments` bucket):
+  a photo full screen with pinch to zoom, a PDF in PDFKit, each with Share. Owners add a photo
+  from the library (`PhotosPicker`, no permission prompt; sent as JPEG, its longer side at most
+  4096 px) or a PDF from Files, up to 10 MB and 20 files a holding, and swipe or long-press a file
+  to remove it. `HoldingDetailModel+Attachments` and `HoldingAttachments` (LedgerKit) decide.
 - **Insights → Monthly spend** splits by None / Category / Bank / Merchant (`spend_breakdown`, top
   10 + Others): stacked bars, legend, tap a month for its callout (AED and share of the month), and
   each group's total and share for the range. Charts carry VoiceOver chart descriptors.

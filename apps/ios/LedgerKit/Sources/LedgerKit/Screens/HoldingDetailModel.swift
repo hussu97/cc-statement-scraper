@@ -3,7 +3,8 @@ import Observation
 
 /// One holding's screen: its flows (with the payment that paid each) and recorded values
 /// (`holding_detail`), its returns for every period (`holding_returns`), and the owner's Add money
-/// in / out / income, Remove or Unlink a flow, and Update value. The summary is the Investments
+/// in / out / income, Remove or Unlink a flow, and Update value. Its attachments (invoices,
+/// certificates) are `HoldingDetailModel+Attachments.swift`. The summary is the Investments
 /// tab's row for it, so a write here refreshes that tab (`onChange`). Every figure is the server's.
 @MainActor
 @Observable
@@ -15,18 +16,24 @@ public final class HoldingDetailModel {
     public private(set) var isSaving = false
     /// The last write's outcome, shown at the top.
     public var notice: InvestmentsModel.Notice?
+    /// Opens an attachment (signed URL, bytes in memory while the viewer shows them).
+    public let attachmentViewer: HoldingAttachmentViewer
+    /// An attachment is uploading: the section shows "Adding…".
+    public internal(set) var isAddingAttachment = false
 
     private let api: any LedgerAPI
-    private let today: @Sendable () -> CalendarDay
+    let today: @Sendable () -> CalendarDay
     private let onChange: @MainActor (String) async -> Void
 
     public init(holdingCode: String, api: any LedgerAPI,
                 today: @escaping @Sendable () -> CalendarDay = { LedgerDates.today() },
-                onChange: @escaping @MainActor (String) async -> Void = { _ in }) {
+                onChange: @escaping @MainActor (String) async -> Void = { _ in },
+                fetchFile: @escaping StatementPDF.Fetch = StatementPDF.download) {
         self.holdingCode = holdingCode
         self.api = api
         self.today = today
         self.onChange = onChange
+        attachmentViewer = HoldingAttachmentViewer(api: api, fetch: fetchFile)
     }
 
     public func load(profileCode: String) async {
@@ -141,19 +148,25 @@ public final class HoldingDetailModel {
         }
     }
 
-    private func write(profileCode: String, saved: String,
-                       _ call: (any LedgerAPI) async throws -> Void) async -> String? {
+    /// Whose words a failed write is told in.
+    enum WriteErrors { case holding, attachment }
+
+    /// Runs one owner write, then reloads the screen; the Investments tab reloads too unless the
+    /// write can't change its figures (`refreshesTab` false: attachments). Nil when it worked, else
+    /// the sentence to show.
+    func write(profileCode: String, saved: String, errors: WriteErrors = .holding, refreshesTab: Bool = true,
+               _ call: (any LedgerAPI) async throws -> Void) async -> String? {
         guard !isSaving else { return nil }
         isSaving = true
         defer { isSaving = false }
         do {
             try await call(api)
         } catch {
-            return HoldingDraft.message(for: error)
+            return errors == .attachment ? HoldingAttachments.message(for: error) : HoldingDraft.message(for: error)
         }
         notice = InvestmentsModel.Notice(text: saved, isError: false)
         await load(profileCode: profileCode)
-        await onChange(profileCode)
+        if refreshesTab { await onChange(profileCode) }
         return nil
     }
 }

@@ -25,15 +25,28 @@ public enum HoldingFlowKind: String, CaseIterable, Identifiable, Hashable, Senda
     }
 }
 
-/// `rpc('holding_detail')`: a holding's active flows (with the transaction that paid each) and its
-/// recorded values, newest first.
+/// `rpc('holding_detail')`: a holding's active flows (with the transaction that paid each), its
+/// recorded values and its attachments (`HoldingAttachment`), newest first. A server from before
+/// attachments sends none: the key reads as empty.
 public struct HoldingDetail: Decodable, Sendable, Hashable {
     public let flows: [HoldingFlow]
     public let valuations: [HoldingValuationRecord]
+    public let attachments: [HoldingAttachment]
 
-    public init(flows: [HoldingFlow] = [], valuations: [HoldingValuationRecord] = []) {
+    public init(flows: [HoldingFlow] = [], valuations: [HoldingValuationRecord] = [],
+                attachments: [HoldingAttachment] = []) {
         self.flows = flows
         self.valuations = valuations
+        self.attachments = attachments
+    }
+
+    private enum CodingKeys: String, CodingKey { case flows, valuations, attachments }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        flows = try c.decode([HoldingFlow].self, forKey: .flows)
+        valuations = try c.decode([HoldingValuationRecord].self, forKey: .valuations)
+        attachments = try c.decodeIfPresent([HoldingAttachment].self, forKey: .attachments) ?? []
     }
 }
 
