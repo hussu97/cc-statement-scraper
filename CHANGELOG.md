@@ -1,5 +1,11 @@
 # Changelog
 
+## Invoices and certificates kept with a holding — 2026-11-08
+
+### Backend (Supabase)
+
+- **feature** A holding keeps attachments, such as a purchase invoice photo or a bar certificate (migration `20261108112842`): a private `holding-attachments` bucket (10 MB, JPEG/PNG/WebP/HEIC/PDF) at `<profile>/<holding>/<file>`, where members read and owners upload and delete; `holding_attachments` rows written only by `add_holding_attachment` (checks the object is in the holding's folder, and takes its type and size from Storage) and `remove_holding_attachment` (returns the path to delete). `holding_detail` returns `attachments`. pgTAP `83_holding_attachments`; `11_privileges` lists the new read grant.
+
 ## Log Bank SMS and Log Card Payment show no dialog — 2026-11-05
 
 ### iOS

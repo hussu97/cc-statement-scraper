@@ -1605,6 +1605,60 @@ export type Database = {
         }
         Relationships: []
       }
+      holding_attachments: {
+        Row: {
+          attachment_code: string
+          caption: string | null
+          created_at: string
+          created_by: string | null
+          file_name: string
+          holding_code: string
+          mime_type: string
+          profile_code: string
+          size_bytes: number
+          storage_path: string
+        }
+        Insert: {
+          attachment_code?: string
+          caption?: string | null
+          created_at?: string
+          created_by?: string | null
+          file_name: string
+          holding_code: string
+          mime_type: string
+          profile_code: string
+          size_bytes: number
+          storage_path: string
+        }
+        Update: {
+          attachment_code?: string
+          caption?: string | null
+          created_at?: string
+          created_by?: string | null
+          file_name?: string
+          holding_code?: string
+          mime_type?: string
+          profile_code?: string
+          size_bytes?: number
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "holding_attachments_holding_code_fkey"
+            columns: ["holding_code"]
+            isOneToOne: false
+            referencedRelation: "holdings"
+            referencedColumns: ["holding_code"]
+          },
+          {
+            foreignKeyName: "holding_attachments_profile_code_fkey"
+            columns: ["profile_code"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["profile_code"]
+          },
+        ]
+      }
       holding_flows: {
         Row: {
           amount: number
@@ -4387,6 +4441,16 @@ export type Database = {
         }
         Returns: string
       }
+      add_holding_attachment: {
+        Args: {
+          p_caption?: string
+          p_file_name: string
+          p_holding_code: string
+          p_profile_code: string
+          p_storage_path: string
+        }
+        Returns: string
+      }
       add_holding_flow: {
         Args: {
           p_amount: string
@@ -4887,6 +4951,10 @@ export type Database = {
       remove_account_entry: {
         Args: { p_entry_code: string; p_profile_code: string }
         Returns: undefined
+      }
+      remove_holding_attachment: {
+        Args: { p_attachment_code: string; p_profile_code: string }
+        Returns: string
       }
       remove_holding_flow: {
         Args: { p_flow_code: string; p_profile_code: string }

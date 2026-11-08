@@ -105,7 +105,7 @@ select set_eq(
     'email_mailboxes:authenticated:INSERT', 'email_mailboxes:authenticated:SELECT', 'email_routes.attachment_filename_regex:authenticated:UPDATE',
     'email_routes.enabled:authenticated:UPDATE', 'email_routes.gmail_label_filter:authenticated:UPDATE', 'email_routes.mailbox_code:authenticated:UPDATE',
     'email_routes.sender_allowlist:authenticated:UPDATE', 'email_routes.subject_keywords:authenticated:UPDATE', 'email_routes:authenticated:DELETE',
-    'email_routes:authenticated:INSERT', 'email_routes:authenticated:SELECT', 'fx_rates:authenticated:SELECT', 'holding_flows:authenticated:SELECT', 'holding_valuations:authenticated:SELECT', 'holdings:authenticated:SELECT',
+    'email_routes:authenticated:INSERT', 'email_routes:authenticated:SELECT', 'fx_rates:authenticated:SELECT', 'holding_attachments:authenticated:SELECT', 'holding_flows:authenticated:SELECT', 'holding_valuations:authenticated:SELECT', 'holdings:authenticated:SELECT',
     'account_entries:authenticated:SELECT', 'broker_connections:authenticated:SELECT', 'broker_positions:authenticated:SELECT', 'broker_sips:authenticated:SELECT',
     'broker_snapshots:authenticated:SELECT', 'broker_transactions:authenticated:SELECT', 'security_prices:authenticated:SELECT', 'structured_note_credit_terms:authenticated:SELECT', 'structured_note_events:authenticated:SELECT',
     'structured_note_observations:authenticated:SELECT', 'structured_note_payout_branches:authenticated:SELECT',

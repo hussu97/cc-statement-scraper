@@ -155,7 +155,10 @@ DLQ tools.
 Storage: private bucket `statements` (25 MB limit, `application/pdf`). Members can read their
 profile's folder. Only Edge Functions write to it. Public bucket `bank-logos` (1 MB, PNG/SVG/
 WebP/JPEG) holds the bank logos named by `banks.logo_path`; no policy lets clients write it,
-the operator uploads them (PRODUCTION §11).
+the operator uploads them (PRODUCTION §11). Private bucket `holding-attachments` (10 MB,
+JPEG/PNG/WebP/HEIC/PDF) keeps proof of purchase for holdings at
+`<profile_code>/<holding_code>/<file>`: members read their profile's folder, owners upload and
+delete there directly from the apps (the only bucket clients write).
 
 ---
 
@@ -692,6 +695,14 @@ growth or gain again, and not a cash flow of the XIRR). Counted once: `net_worth
 account out of cash (`private.account_is_invested`) and counts the holding (allocation class
 `savings_account`); `cash_position` lists the account with `investment_holding_code` and leaves
 it out of `total_aed`. Closing the holding puts the account back in cash.
+
+**Holding attachments** (`20261108112842`). `holding_attachments` lists files kept with a holding
+(an invoice photo or PDF, a certificate) in the `holding-attachments` bucket. The app uploads the
+object, then `add_holding_attachment` (owner) records it after checking it is in the bucket under
+that holding's folder, taking its type and size from Storage; at most 20 per holding.
+`remove_holding_attachment` deletes the row and returns the path, which the app then removes
+from Storage (Storage refuses SQL deletes). `holding_detail` returns `attachments`, newest first;
+the apps open them through short-lived signed URLs.
 
 **Structured notes and broker cash** (`20261027124257`). Swissquote (`SWQ`) is a bank; its cash is
 a USD `current` account, and every non-AED bank account now counts in cash and net worth
