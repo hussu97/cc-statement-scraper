@@ -38,13 +38,14 @@ import { CloseHoldingDialog, HoldingDialog } from "@/components/wealth/holding-d
 import { BackingAccountCard, TrackAccountDialog, type TrackTarget } from "@/components/wealth/account-investment";
 import { AddFlowDialog, RemoveFlowDialog, UpdateValueDialog } from "@/components/wealth/holding-value-dialogs";
 import { ReturnsCard } from "@/components/wealth/returns";
+import { AttachmentsCard } from "@/components/wealth/holding-attachments";
 import { TONE_TEXT } from "@/components/wealth/investments";
 import { NoteView } from "@/components/notes/note-view";
 import { useNotesSummary } from "@/data/notes";
 
 const HLD_RE = /^hld_[0-9a-z]{26}$/;
 
-/** One holding (Wealth → Investments): value, cost, income and gain, returns, flows and value history. */
+/** One holding (Wealth → Investments): value, cost, income and gain, returns, flows, value history and attachments. */
 export function HoldingPage() {
   const { holdingCode } = wealthHoldingRoute.useParams();
   if (!HLD_RE.test(holdingCode)) return <HoldingNotFound />;
@@ -169,6 +170,8 @@ function HoldingView({ holdingCode }: { holdingCode: string }) {
           <ValuesCard h={h} detail={detail} onUpdate={isOwner && h && valueInput(h.kind) ? () => setUpdating(true) : undefined} />
         )}
       </div>
+
+      {h && <AttachmentsCard profileCode={profileCode} holdingCode={holdingCode} detail={detail} isOwner={isOwner} />}
 
       {isOwner && h && (
         <>

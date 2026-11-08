@@ -9,6 +9,12 @@ describe("holdingErrorMessage", () => {
     expect(holdingErrorMessage({ code: "23514", message: "violates check" })).toMatch(/out of range/);
   });
 
+  it("explains attachment refusals", () => {
+    expect(holdingErrorMessage(new ApiError("attachment not found", { code: "P0002" }))).toBe("That file was already removed.");
+    expect(holdingErrorMessage(new ApiError("the file has not been uploaded", { code: "P0002" }))).toMatch(/didn't finish uploading/);
+    expect(holdingErrorMessage(new ApiError("a holding keeps at most 20 attachments", { code: "22023" }))).toBe("A holding keeps at most 20 attachments.");
+  });
+
   it("passes the server's readable 22023 message through, as a sentence", () => {
     expect(holdingErrorMessage(new ApiError("grams must be above 0", { code: "22023" }))).toBe("Grams must be above 0.");
     expect(holdingErrorMessage(new ApiError("", { code: "22023" }))).toMatch(/Check the holding/);

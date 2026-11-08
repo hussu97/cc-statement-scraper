@@ -40,6 +40,8 @@ export const keys = {
   holdings: (p: string) => ["p", p, "cash", "holdings"] as const,
   holdingsSeries: (p: string, from: string, to: string) => ["p", p, "cash", "holdings-series", from, to] as const,
   holdingDetail: (p: string, holding: string) => ["p", p, "cash", "holding", holding] as const,
+  /** A holding attachment's file (paths are unique per upload: never stale). Outside "cash", so a ledger refresh doesn't refetch it. */
+  holdingAttachment: (p: string, path: string) => ["p", p, "holding-attachment", path] as const,
   /** Structured notes (20261027124257): under "cash", so a note, a price backfill or an entry refreshes net worth too. */
   notes: (p: string) => ["p", p, "cash", "notes"] as const,
   noteDetail: (p: string, holding: string) => ["p", p, "cash", "note", holding] as const,

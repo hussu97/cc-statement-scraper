@@ -2,11 +2,12 @@
 // holdings_valuation, holding_detail, holding_returns, holdings_value_series and
 // cash_flow_savings return jsonb (Json in the generated types), so the shapes are declared here
 // from the migrations (20261021070429_metal_prices_and_holdings.sql,
-// 20261021093154_holdings_flows_and_returns.sql).
+// 20261021093154_holdings_flows_and_returns.sql, 20261108112842_holding_attachments.sql).
 // Money and prices are decimal strings; the server computes every figure (CLAUDE.md §2.2).
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, type RpcArgs } from "@/lib/supabase";
 import type { HoldingInput } from "@/lib/holdings";
+import { attachmentPath } from "@/lib/holding-attachments";
 import type { FlowFormInput, InvestmentInput, ReturnFigures, ReturnPeriod, SavingRow } from "@/lib/investments";
 import { keys, LEDGER_DOMAINS } from "./keys";
 import { ApiError, errorMessage, must } from "./api";
@@ -234,10 +235,23 @@ export interface HoldingValuation {
   source: string;
 }
 
-/** public.holding_detail: active flows (with the paying transaction) and recorded values, newest first. */
+/** A file kept with a holding (20261108112842_holding_attachments): an invoice photo, a certificate. */
+export interface HoldingAttachment {
+  attachment_code: string;
+  /** `<profile>/<holding>/<file>` in the private `holding-attachments` bucket. */
+  storage_path: string;
+  file_name: string;
+  mime_type: string;
+  size_bytes: number;
+  caption: string | null;
+  created_at: string;
+}
+
+/** public.holding_detail: active flows (with the paying transaction), recorded values and attachments, newest first. */
 export interface HoldingDetail {
   flows: HoldingFlow[];
   valuations: HoldingValuation[];
+  attachments: HoldingAttachment[];
 }
 
 export function useHoldingDetail(profileCode: string, holdingCode: string) {
@@ -246,7 +260,75 @@ export function useHoldingDetail(profileCode: string, holdingCode: string) {
     retry: (n, e) => codeOf(e) !== "P0002" && n < 2,
     queryFn: async () => {
       const args: RpcArgs<"holding_detail"> = { p_profile_code: profileCode, p_holding_code: holdingCode };
-      return must(await supabase.rpc("holding_detail", args)) as unknown as HoldingDetail;
+      const d = must(await supabase.rpc("holding_detail", args)) as unknown as HoldingDetail;
+      return { ...d, attachments: d.attachments ?? [] };
+    },
+  });
+}
+
+// ── attachments ────────────────────────────────────────────────────────────
+
+const ATTACHMENTS_BUCKET = "holding-attachments";
+
+/**
+ * Upload files to `<profile>/<holding>/<uuid>.<ext>`, then record each with add_holding_attachment.
+ * One at a time, so a failure names its file; an object whose record fails is removed again.
+ */
+export function useUploadHoldingAttachments(profileCode: string, holdingCode: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (files: { file: File; type: string }[]) => {
+      const codes: string[] = [];
+      for (const { file, type } of files) {
+        const path = attachmentPath(profileCode, holdingCode, crypto.randomUUID(), type);
+        const up = await supabase.storage.from(ATTACHMENTS_BUCKET).upload(path, file, { contentType: type, upsert: false });
+        if (up.error) throw new ApiError(`${file.name}: ${up.error.message}`);
+        const args: RpcArgs<"add_holding_attachment"> = {
+          p_profile_code: profileCode,
+          p_holding_code: holdingCode,
+          p_storage_path: path,
+          p_file_name: file.name,
+        };
+        const res = await supabase.rpc("add_holding_attachment", args);
+        if (res.error) {
+          await supabase.storage.from(ATTACHMENTS_BUCKET).remove([path]);
+          throw res.error;
+        }
+        codes.push(res.data);
+      }
+      return codes;
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.holdingDetail(profileCode, holdingCode) }),
+  });
+}
+
+/** Forget an attachment, then delete its file (a file left behind is only unreachable, never shown). */
+export function useRemoveHoldingAttachment(profileCode: string, holdingCode: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (attachmentCode: string) => {
+      const args: RpcArgs<"remove_holding_attachment"> = { p_profile_code: profileCode, p_attachment_code: attachmentCode };
+      const path = must(await supabase.rpc("remove_holding_attachment", args)) as string;
+      await supabase.storage.from(ATTACHMENTS_BUCKET).remove([path]);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.holdingDetail(profileCode, holdingCode) }),
+  });
+}
+
+/** An attachment's bytes (Storage RLS: members only). Paths are unique per upload, so never stale. */
+export function useHoldingAttachmentBlob(profileCode: string, path: string | null, enabled = true) {
+  return useQuery({
+    queryKey: keys.holdingAttachment(profileCode, path ?? ""),
+    enabled: enabled && !!path,
+    staleTime: Infinity,
+    gcTime: 5 * 60_000,
+    retry: 1,
+    queryFn: async () => {
+      const { data, error } = await supabase.storage.from(ATTACHMENTS_BUCKET).download(path!);
+      if (error || !data) {
+        throw new ApiError(/not.?found/i.test(error?.message ?? "") ? "The file isn't in storage." : (error?.message ?? "Couldn't open the file."));
+      }
+      return data;
     },
   });
 }
@@ -366,6 +448,8 @@ export function holdingErrorMessage(e: unknown): string {
       const m = errorMessage(e);
       if (/flow/i.test(m)) return "That entry was already removed. A metal's purchase cost is changed by editing the holding.";
       if (/transaction/i.test(m)) return "That transaction isn't in this ledger any more.";
+      if (/attachment/i.test(m)) return "That file was already removed.";
+      if (/uploaded/i.test(m)) return "The file didn't finish uploading. Try again.";
       return "That holding isn't in this ledger any more, or it was closed.";
     }
     case "22023": {

@@ -6,6 +6,10 @@
 
 - **feature** A holding keeps attachments, such as a purchase invoice photo or a bar certificate (migration `20261108112842`): a private `holding-attachments` bucket (10 MB, JPEG/PNG/WebP/HEIC/PDF) at `<profile>/<holding>/<file>`, where members read and owners upload and delete; `holding_attachments` rows written only by `add_holding_attachment` (checks the object is in the holding's folder, and takes its type and size from Storage) and `remove_holding_attachment` (returns the path to delete). `holding_detail` returns `attachments`. pgTAP `83_holding_attachments`; `11_privileges` lists the new read grant.
 
+### Web
+
+- **feature** A holding's page has an **Attachments** card: photo and PDF tiles (JPEG/PNG/WebP previewed; HEIC and PDF as a file), opened full size in the app with Download. The owner adds files (several at once; type, 10 MB and 20-per-holding checked before upload) and removes them with a confirmation. Files load through the signed-in user's Storage access, never a public URL. Tests: `holding-attachments.test.ts`, `holdings.test.ts`.
+
 ## Log Bank SMS and Log Card Payment show no dialog — 2026-11-05
 
 ### iOS
