@@ -1,4 +1,5 @@
-// Card transfers (public.card_transfers via v_transactions): a payment from one card to another,
+// Linked transfers (public.card_transfers via v_transactions): a card repayment, or a move between
+// two of the ledger's own bank accounts (the peer then has no card, and `last4` is its account_ref),
 // linked by the server. Pure display helpers; the pairing itself is never decided here (§2.2).
 
 export interface TransferPeer {
@@ -16,7 +17,7 @@ interface TransferFields {
   transfer_card_last4: string | null;
 }
 
-/** The other side of a card transfer, or null when the row is not one. */
+/** The other side of a linked transfer, or null when the row is not one. */
 export function transferPeer(t: TransferFields): TransferPeer | null {
   if (!t.transfer_txn_code) return null;
   return {

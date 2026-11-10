@@ -204,6 +204,8 @@ select set_eq(
     -- a card payment's leg on the same bank's current account (20261020170933), and whether a
     -- card account's autopay is one (20261030131029: cards only)
     'private.add_payment_leg', 'private.is_current_account_autopay',
+    -- a move between two own accounts (20261110090321): both legs on current/savings accounts
+    'private.transfer_pair_ok',
     -- consolidated statements (20261021115816): a bank statement's account (bank accounts only),
     -- a card summary's account (cards only), the balance equation's direction (either)
     'private.resolve_bank_statement_account', 'private.apply_card_summaries', 'private.reconcile_statement',

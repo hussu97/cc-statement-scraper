@@ -1,5 +1,15 @@
 # Changelog
 
+## Transfers between your own accounts are linked — 2026-11-10
+
+### Backend (Supabase)
+
+- **fix** A transfer out of one of your bank accounts and the same amount into another (say, from a savings account to a current account) are now linked in `card_transfers`, which until now paired only card repayments (migration `20261110090321`). The pair rule (`private.transfer_pair_ok`) is shared by matching and by the check that keeps a link: two current/savings accounts, opposite directions, the same AED amount, at most 3 days apart, each the other's only candidate, and each leg unfiled or filed under a transfer category, so a credit filed as income never pairs (filing a leg changes its link). `v_transactions.transfer_card_last4` falls back to the other account's `account_ref`; `v_cash_flow` keeps `card_repayment` for card payments only. Existing transfers are linked by the migration. pgTAP `84_own_account_transfers`.
+
+### Web
+
+- **change** The transaction drawer's linked-transfer section is headed **Transfer** (was "Card transfer"), since it now also shows the other side of a move between your own accounts.
+
 ## Invoices and certificates kept with a holding — 2026-11-08
 
 ### Backend (Supabase)
